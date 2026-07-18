@@ -36,10 +36,8 @@ pub(super) async fn run_status_line_command(
     let mut stdout_pipe = child.stdout.take().context("status line command missing stdout pipe")?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        let payload =
-            StatusLineCommandPayload::new(workspace, model_id, model_display, reasoning, git);
-        let mut payload_bytes =
-            serde_json::to_vec(&payload).context("failed to serialize status line payload")?;
+        let payload = StatusLineCommandPayload::new(workspace, model_id, model_display, reasoning, git);
+        let mut payload_bytes = serde_json::to_vec(&payload).context("failed to serialize status line payload")?;
         payload_bytes.push(b'\n');
 
         stdin
@@ -58,15 +56,15 @@ pub(super) async fn run_status_line_command(
     };
 
     let status = match wait_result {
-        Ok(status_res) => status_res
-            .with_context(|| format!("failed to wait for status line command `{command}`"))?,
+        Ok(status_res) => status_res.with_context(|| format!("failed to wait for status line command `{command}`"))?,
         Err(_) => {
-            child.start_kill().with_context(|| {
-                format!("failed to kill timed out status line command `{command}`")
-            })?;
-            child.wait().await.with_context(|| {
-                format!("failed to wait for killed status line command `{command}` after timeout")
-            })?;
+            child
+                .start_kill()
+                .with_context(|| format!("failed to kill timed out status line command `{command}`"))?;
+            child
+                .wait()
+                .await
+                .with_context(|| format!("failed to wait for killed status line command `{command}` after timeout"))?;
             return Err(anyhow!("status line command `{command}` timed out after {timeout_ms}ms"));
         }
     };
@@ -206,8 +204,7 @@ mod tests {
         remove_env_var(IDE_CONTEXT_ENV_VAR);
         remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
 
-        let payload =
-            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
         assert_eq!(value["workspace"]["dominant_language"], Value::String("Rust".to_string()));
@@ -246,8 +243,7 @@ mod tests {
 
         set_env_var(IDE_CONTEXT_ENV_VAR, &snapshot_path);
 
-        let payload =
-            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
         assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));
@@ -284,8 +280,7 @@ mod tests {
 
         remove_env_var(IDE_CONTEXT_ENV_VAR);
 
-        let payload =
-            StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
+        let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
         assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));

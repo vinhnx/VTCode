@@ -21,21 +21,15 @@ use thiserror::Error;
 
 use crate::config::CommandsConfig;
 use crate::config::constants::tools;
-use crate::dotfile_protection::{
-    AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian,
-};
+use crate::dotfile_protection::{AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian};
 use crate::tools::apply_patch::{Patch, PatchOperation, decode_apply_patch_input};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::invocation::ToolInvocationId;
-use crate::tools::rate_limit_config::{
-    tool_calls_per_minute_from_env, tool_calls_per_second_from_env,
-};
-use crate::tools::registry::{
-    RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
-};
+use crate::tools::rate_limit_config::{tool_calls_per_minute_from_env, tool_calls_per_second_from_env};
+use crate::tools::registry::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 use crate::tools::tool_intent::{
-    action_qualified_policy_name, classify_tool_intent, command_session_action_in,
-    command_session_action_is, file_operation_action_is,
+    action_qualified_policy_name, classify_tool_intent, command_session_action_in, command_session_action_is,
+    file_operation_action_is,
 };
 use vtcode_config::core::DotfileProtectionConfig;
 
@@ -228,11 +222,7 @@ fn destination_path_arg(args: &Value) -> Option<&str> {
     args.get("destination").and_then(|value| value.as_str())
 }
 
-fn push_file_access_target(
-    targets: &mut Vec<FileAccessTarget>,
-    path: &str,
-    access_type: AccessType,
-) {
+fn push_file_access_target(targets: &mut Vec<FileAccessTarget>, path: &str, access_type: AccessType) {
     let path_str = path.trim();
     if path_str.is_empty() {
         return;
@@ -254,15 +244,9 @@ fn push_file_access_target(
 fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
     match tool_name {
         tools::EXEC_COMMAND => crate::tools::command_args::command_text(args).ok().flatten(),
-        tools::WRITE_STDIN => {
-            crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
-        }
-        tools::SHELL | tools::RUN_PTY_CMD => {
-            crate::tools::command_args::command_text(args).ok().flatten()
-        }
-        tools::SEND_PTY_INPUT => {
-            crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
-        }
+        tools::WRITE_STDIN => crate::tools::command_args::interactive_input_text(args).map(str::to_owned),
+        tools::SHELL | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args).ok().flatten(),
+        tools::SEND_PTY_INPUT => crate::tools::command_args::interactive_input_text(args).map(str::to_owned),
         tools::UNIFIED_EXEC if command_session_action_is(args, "run") => {
             crate::tools::command_args::command_text(args).ok().flatten()
         }
@@ -292,9 +276,7 @@ fn patch_file_access_targets(args: &Value) -> Vec<FileAccessTarget> {
             }
             PatchOperation::UpdateFile { path, new_path, .. } => {
                 push_file_access_target(&mut targets, path, AccessType::Modify);
-                if let Some(destination) =
-                    new_path.as_deref().filter(|candidate| *candidate != path)
-                {
+                if let Some(destination) = new_path.as_deref().filter(|candidate| *candidate != path) {
                     push_file_access_target(&mut targets, destination, AccessType::Write);
                 }
             }
@@ -426,10 +408,7 @@ impl SafetyGateway {
     }
 
     /// Create and set a dotfile guardian from configuration
-    pub async fn with_dotfile_protection(
-        mut self,
-        config: DotfileProtectionConfig,
-    ) -> anyhow::Result<Self> {
+    pub async fn with_dotfile_protection(mut self, config: DotfileProtectionConfig) -> anyhow::Result<Self> {
         let guardian = DotfileGuardian::new(config).await?;
         self.dotfile_guardian = Some(Arc::new(guardian));
         Ok(self)
@@ -465,11 +444,7 @@ impl SafetyGateway {
     }
 
     /// Update rate-limiter thresholds.
-    pub fn set_rate_limits(
-        &self,
-        rate_limit_per_second: usize,
-        rate_limit_per_minute: Option<usize>,
-    ) {
+    pub fn set_rate_limits(&self, rate_limit_per_second: usize, rate_limit_per_minute: Option<usize>) {
         let mut config = self.config.write();
         if rate_limit_per_second > 0 {
             config.rate_limit_per_second = rate_limit_per_second;
@@ -578,12 +553,7 @@ impl SafetyGateway {
     ///
     /// This avoids split check/record races by validating rate limits and recording
     /// execution under a single lock acquisition.
-    pub async fn check_and_record(
-        &self,
-        ctx: &SafetyContext,
-        tool_name: &str,
-        args: &Value,
-    ) -> SafetyCheckResult {
+    pub async fn check_and_record(&self, ctx: &SafetyContext, tool_name: &str, args: &Value) -> SafetyCheckResult {
         self.check_and_record_with_id(ctx, tool_name, args, None).await
     }
 
@@ -637,9 +607,7 @@ impl SafetyGateway {
         args: &Value,
         inv_id: &str,
     ) -> SafetyDecision {
-        if let Some(decision) =
-            self.check_dotfile_protection(tool_name, args, &ctx.session_id).await
-        {
+        if let Some(decision) = self.check_dotfile_protection(tool_name, args, &ctx.session_id).await {
             tracing::info!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
@@ -649,9 +617,8 @@ impl SafetyGateway {
         }
 
         if self.config.read().planning_active && self.is_mutating_call(tool_name, args) {
-            let reason = format!(
-                "Tool '{tool_name}' is blocked in planning workflow (read-only). Finish planning to execute."
-            );
+            let reason =
+                format!("Tool '{tool_name}' is blocked in planning workflow (read-only). Finish planning to execute.");
             tracing::info!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
@@ -695,10 +662,7 @@ impl SafetyGateway {
         let risk_ctx = self.build_risk_context(tool_name, args);
         let risk_level = ToolRiskScorer::calculate_risk(&risk_ctx);
 
-        if ToolRiskScorer::requires_justification(
-            risk_level,
-            self.config.read().approval_risk_threshold,
-        ) {
+        if ToolRiskScorer::requires_justification(risk_level, self.config.read().approval_risk_threshold) {
             let justification = self.build_approval_justification(tool_name, &risk_level, args);
             tracing::info!(
                 invocation_id = %inv_id,
@@ -710,9 +674,7 @@ impl SafetyGateway {
         }
 
         if self.is_destructive_call(tool_name, args) {
-            let justification = format!(
-                "Tool '{tool_name}' is destructive and may modify files or execute commands."
-            );
+            let justification = format!("Tool '{tool_name}' is destructive and may modify files or execute commands.");
             tracing::info!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
@@ -736,11 +698,7 @@ impl SafetyGateway {
         self.check_rate_limits_locked(&mut state, Instant::now())
     }
 
-    fn check_rate_limits_locked(
-        &self,
-        state: &mut RateLimiterState,
-        now: Instant,
-    ) -> Result<(), SafetyError> {
+    fn check_rate_limits_locked(&self, state: &mut RateLimiterState, now: Instant) -> Result<(), SafetyError> {
         let config = self.config.read();
         self.prune_rate_windows(state, now);
 
@@ -844,9 +802,8 @@ impl SafetyGateway {
                 continue;
             }
 
-            let context =
-                AccessContext::new(&target.path, target.access_type, tool_name, session_id)
-                    .with_proposed_changes(&proposed_changes);
+            let context = AccessContext::new(&target.path, target.access_type, tool_name, session_id)
+                .with_proposed_changes(&proposed_changes);
 
             match guardian.request_access(&context).await {
                 Ok(ProtectionDecision::Allowed) => continue,
@@ -858,11 +815,7 @@ impl SafetyGateway {
                         Reason: {}\n\n\
                         Proposed changes:\n{}\n\n\
                         {}",
-                        req.file_path,
-                        req.access_type,
-                        req.protection_reason,
-                        req.proposed_changes,
-                        req.warning
+                        req.file_path, req.access_type, req.protection_reason, req.proposed_changes, req.warning
                     )));
                 }
                 Ok(ProtectionDecision::RequiresSecondaryAuth(req)) => {
@@ -874,11 +827,7 @@ impl SafetyGateway {
                         This file is on the whitelist but requires secondary authentication.\n\n\
                         Proposed changes:\n{}\n\n\
                         {}",
-                        req.file_path,
-                        req.access_type,
-                        req.protection_reason,
-                        req.proposed_changes,
-                        req.warning
+                        req.file_path, req.access_type, req.protection_reason, req.proposed_changes, req.warning
                     )));
                 }
                 Ok(ProtectionDecision::Blocked(violation)) => {
@@ -901,9 +850,7 @@ impl SafetyGateway {
                 }
                 Err(e) => {
                     tracing::error!("Dotfile protection check failed: {}", e);
-                    return Some(SafetyDecision::Deny(format!(
-                        "Dotfile protection check failed: {e}"
-                    )));
+                    return Some(SafetyDecision::Deny(format!("Dotfile protection check failed: {e}")));
                 }
             }
         }
@@ -926,14 +873,9 @@ impl SafetyGateway {
             ToolSource::Internal
         };
 
-        let risk_tool_name =
-            action_qualified_policy_name(tool_name, Some(args)).unwrap_or(tool_name);
+        let risk_tool_name = action_qualified_policy_name(tool_name, Some(args)).unwrap_or(tool_name);
 
-        let mut ctx = ToolRiskContext::new(
-            risk_tool_name.to_string(),
-            source,
-            self.config.read().workspace_trust,
-        );
+        let mut ctx = ToolRiskContext::new(risk_tool_name.to_string(), source, self.config.read().workspace_trust);
 
         // Set flags based on tool type
         if self.is_mutating_call(tool_name, args) {
@@ -956,12 +898,7 @@ impl SafetyGateway {
     }
 
     /// Build justification message for approval prompt
-    fn build_approval_justification(
-        &self,
-        tool_name: &str,
-        risk_level: &RiskLevel,
-        args: &Value,
-    ) -> String {
+    fn build_approval_justification(&self, tool_name: &str, risk_level: &RiskLevel, args: &Value) -> String {
         let mut parts = Vec::new();
 
         parts.push(format!("Tool: {tool_name}"));

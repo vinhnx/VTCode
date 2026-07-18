@@ -11,9 +11,7 @@ use better_panic::{Settings as BetterPanicSettings, Verbosity as BetterPanicVerb
 use human_panic::{Metadata as HumanPanicMetadata, handle_dump as human_panic_dump, print_msg};
 use ratatui::crossterm::{
     cursor::{MoveToColumn, RestorePosition, SetCursorStyle, Show},
-    event::{
-        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, PopKeyboardEnhancementFlags,
-    },
+    event::{DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, PopKeyboardEnhancementFlags},
     execute,
     terminal::{Clear, ClearType, LeaveAlternateScreen, disable_raw_mode},
 };
@@ -28,8 +26,7 @@ static PANIC_HOOK_ONCE: Once = Once::new();
 #[cfg(debug_assertions)]
 static COLOR_EYRE_SETUP_ONCE: Once = Once::new();
 #[cfg(debug_assertions)]
-static COLOR_EYRE_PANIC_HOOK: std::sync::OnceLock<color_eyre::config::PanicHook> =
-    std::sync::OnceLock::new();
+static COLOR_EYRE_PANIC_HOOK: std::sync::OnceLock<color_eyre::config::PanicHook> = std::sync::OnceLock::new();
 static APP_METADATA: std::sync::OnceLock<AppMetadata> = std::sync::OnceLock::new();
 
 #[derive(Clone, Debug)]
@@ -195,8 +192,7 @@ pub fn init_panic_hook() {
                     .authors(format!("authored by {}", metadata.authors));
 
                 if let Some(repository) = metadata.repository {
-                    report_metadata =
-                        report_metadata.support(format!("Open a support request at {repository}"));
+                    report_metadata = report_metadata.support(format!("Open a support request at {repository}"));
                 }
 
                 let file_path = human_panic_dump(&report_metadata, panic_info);
@@ -357,10 +353,7 @@ mod tests {
             // Drop happens automatically when leaving scope
         }
 
-        assert!(
-            !TUI_INITIALIZED.load(Ordering::SeqCst),
-            "TUI should be marked as deinitialized after guard drops"
-        );
+        assert!(!TUI_INITIALIZED.load(Ordering::SeqCst), "TUI should be marked as deinitialized after guard drops");
     }
 
     #[test]

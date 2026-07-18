@@ -11,8 +11,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::context::{
-    PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-    TurnProcessingResult,
+    PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
 };
 use crate::agent::runloop::unified::turn::guards::handle_turn_balancer;
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
@@ -24,8 +23,7 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub processing_result: TurnProcessingResult,
     pub response_streamed: bool,
     pub step_count: usize,
-    pub repeated_tool_attempts:
-        &'a mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
+    pub repeated_tool_attempts: &'a mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
     /// Pre-computed max tool loops limit for efficiency.
     pub max_tool_loops: usize,
@@ -33,10 +31,7 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub tool_repeat_limit: usize,
 }
 
-fn should_suppress_pre_tool_result_claim(
-    assistant_text: &str,
-    tool_calls: &[PreparedAssistantToolCall],
-) -> bool {
+fn should_suppress_pre_tool_result_claim(assistant_text: &str, tool_calls: &[PreparedAssistantToolCall]) -> bool {
     if assistant_text.trim().is_empty() {
         return false;
     }
@@ -75,9 +70,9 @@ fn record_assistant_tool_calls(
         .collect::<Vec<_>>();
 
     let appended_assistant_message = history.len() > history_len_before_assistant
-        && history.last().is_some_and(|message| {
-            message.role == uni::MessageRole::Assistant && message.tool_calls.is_none()
-        });
+        && history
+            .last()
+            .is_some_and(|message| message.role == uni::MessageRole::Assistant && message.tool_calls.is_none());
 
     if appended_assistant_message {
         if let Some(last) = history.last_mut() {
@@ -106,9 +101,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             reasoning,
             reasoning_details,
         } => {
-            if params.ctx.is_recovery_active()
-                && params.ctx.recovery_pass_used()
-                && params.ctx.recovery_is_tool_free()
+            if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() && params.ctx.recovery_is_tool_free()
             {
                 // Preserve any accompanying prose so an exhausted-retries
                 // fallback can salvage it instead of discarding the turn.
@@ -121,12 +114,11 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }));
             }
 
-            let assistant_text =
-                if should_suppress_pre_tool_result_claim(&assistant_text, &tool_calls) {
-                    String::new()
-                } else {
-                    assistant_text
-                };
+            let assistant_text = if should_suppress_pre_tool_result_claim(&assistant_text, &tool_calls) {
+                String::new()
+            } else {
+                assistant_text
+            };
             let assistant_text_len = assistant_text.len();
             let reasoning_segments = reasoning.len();
             let reasoning_details_count = reasoning_details.as_ref().map_or(0, Vec::len);
@@ -138,11 +130,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 params.response_streamed,
                 Some(uni::AssistantPhase::Commentary),
             )?;
-            record_assistant_tool_calls(
-                params.ctx.working_history,
-                &tool_calls,
-                history_len_before_assistant,
-            );
+            record_assistant_tool_calls(params.ctx.working_history, &tool_calls, history_len_before_assistant);
             tracing::info!(
                 target: "vtcode.turn.metrics",
                 metric = "tool_call_turn_start",
@@ -163,11 +151,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     turn_modified_files: &mut *params.turn_modified_files,
                 };
 
-                crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(
-                    &mut t_ctx_inner,
-                    &tool_calls,
-                )
-                .await?
+                crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls(&mut t_ctx_inner, &tool_calls)
+                    .await?
             };
 
             if let Some(res) = outcome {
@@ -204,34 +189,25 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             );
             Ok(balancer_outcome)
         }
-        TurnProcessingResult::TextResponse {
-            text,
-            reasoning,
-            reasoning_details,
-            proposed_plan,
-        } => {
+        TurnProcessingResult::TextResponse { text, reasoning, reasoning_details, proposed_plan } => {
             if params.ctx.is_recovery_active()
                 && params.ctx.recovery_pass_used()
                 && params.ctx.recovery_is_tool_free()
                 && (crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
                     || crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(&text))
             {
-                let cleaned =
-                    crate::agent::runloop::text_tools::strip_dsml_markup(&text).trim().to_string();
+                let cleaned = crate::agent::runloop::text_tools::strip_dsml_markup(&text).trim().to_string();
                 // If DSML stripping produced a clean, markup-free text, use it.
                 // Otherwise try stripping the entire detected non-DSML tool-call
                 // region while preserving surrounding prose.
                 if !cleaned.is_empty()
-                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
-                        .is_none()
-                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(
-                        &cleaned,
-                    )
+                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned).is_none()
+                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(&cleaned)
                 {
-                    let _ = params.ctx.renderer.line(
-                        MessageStyle::Info,
-                        "[i] Cleaned recovery response (removed tool-call markup).",
-                    );
+                    let _ = params
+                        .ctx
+                        .renderer
+                        .line(MessageStyle::Info, "[i] Cleaned recovery response (removed tool-call markup).");
                     return params
                         .ctx
                         .handle_text_response(
@@ -243,21 +219,17 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                         )
                         .await;
                 }
-                let cleaned =
-                    crate::agent::runloop::text_tools::strip_textual_tool_call_regions(&text)
-                        .trim()
-                        .to_string();
+                let cleaned = crate::agent::runloop::text_tools::strip_textual_tool_call_regions(&text)
+                    .trim()
+                    .to_string();
                 if !cleaned.is_empty()
-                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned)
-                        .is_none()
-                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(
-                        &cleaned,
-                    )
+                    && crate::agent::runloop::text_tools::detect_textual_tool_call(&cleaned).is_none()
+                    && !crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(&cleaned)
                 {
-                    let _ = params.ctx.renderer.line(
-                        MessageStyle::Info,
-                        "[i] Cleaned recovery response (removed tool-call markup).",
-                    );
+                    let _ = params
+                        .ctx
+                        .renderer
+                        .line(MessageStyle::Info, "[i] Cleaned recovery response (removed tool-call markup).");
                     return params
                         .ctx
                         .handle_text_response(
@@ -285,13 +257,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
 
             params
                 .ctx
-                .handle_text_response(
-                    text,
-                    reasoning,
-                    reasoning_details,
-                    proposed_plan,
-                    params.response_streamed,
-                )
+                .handle_text_response(text, reasoning, reasoning_details, proposed_plan, params.response_streamed)
                 .await
         }
         TurnProcessingResult::Empty => {
@@ -358,8 +324,8 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        HandleTurnProcessingResultParams, handle_turn_processing_result,
-        record_assistant_tool_calls, should_suppress_pre_tool_result_claim,
+        HandleTurnProcessingResultParams, handle_turn_processing_result, record_assistant_tool_calls,
+        should_suppress_pre_tool_result_claim,
     };
     use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
     use crate::agent::runloop::unified::turn::context::{
@@ -381,10 +347,7 @@ mod tests {
     #[test]
     fn suppresses_result_claims_before_run_tool_output() {
         let tool_calls = vec![prepared_command_tool_call()];
-        assert!(should_suppress_pre_tool_result_claim(
-            "Found 3 clippy warnings. Let me fix them.",
-            &tool_calls
-        ));
+        assert!(should_suppress_pre_tool_result_claim("Found 3 clippy warnings. Let me fix them.", &tool_calls));
     }
 
     #[test]
@@ -411,10 +374,7 @@ mod tests {
         let last = history.last().expect("assistant message");
         assert_eq!(last.role, uni::MessageRole::Assistant);
         assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
-        assert_eq!(
-            last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(),
-            Some("call_1")
-        );
+        assert_eq!(last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(), Some("call_1"));
     }
 
     #[test]
@@ -434,10 +394,7 @@ mod tests {
         assert_eq!(last.role, uni::MessageRole::Assistant);
         assert_eq!(last.content.as_text(), "");
         assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
-        assert_eq!(
-            last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(),
-            Some("call_1")
-        );
+        assert_eq!(last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(), Some("call_1"));
     }
 
     #[tokio::test]
@@ -514,14 +471,10 @@ mod tests {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.push(uni::Message::user("tell me more".to_string()));
-        ctx.working_history.push(uni::Message::tool_response(
-            "call_1".to_string(),
-            "first tool output".to_string(),
-        ));
-        ctx.working_history.push(uni::Message::tool_response(
-            "call_2".to_string(),
-            "second tool output".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::tool_response("call_1".to_string(), "first tool output".to_string()));
+        ctx.working_history
+            .push(uni::Message::tool_response("call_2".to_string(), "second tool output".to_string()));
         ctx.activate_recovery("loop detector");
         assert!(ctx.consume_recovery_pass());
 
@@ -622,9 +575,11 @@ mod tests {
         .expect("recovery retry empty response should be handled");
 
         assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
-        assert!(backing.last_history_message_contains(
-            "I couldn't continue because the model returned no answer twice in a row."
-        ));
+        assert!(
+            backing.last_history_message_contains(
+                "I couldn't continue because the model returned no answer twice in a row."
+            )
+        );
     }
 
     #[tokio::test]
@@ -707,9 +662,9 @@ Please re-run with tools enabled."#
         .expect("recovery textual tool markup should be stripped");
 
         assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
-        assert!(backing.last_history_message_contains(
-            "The requested change was not applied because tools were disabled."
-        ));
+        assert!(
+            backing.last_history_message_contains("The requested change was not applied because tools were disabled.")
+        );
         assert!(backing.last_history_message_contains("Please re-run with tools enabled."));
         assert!(!backing.last_history_message_contains("<invoke"));
     }
@@ -749,15 +704,14 @@ Please re-run with tools enabled."#
 
         let outcome = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history.push(
-                uni::Message::assistant("Running cargo fmt now.".to_string()).with_tool_calls(
-                    vec![uni::ToolCall::function(
+            ctx.working_history
+                .push(uni::Message::assistant("Running cargo fmt now.".to_string()).with_tool_calls(vec![
+                    uni::ToolCall::function(
                         "call_1".to_string(),
                         "exec_command".to_string(),
                         r#"{"action":"run","command":"cargo fmt"}"#.to_string(),
-                    )],
-                ),
-            );
+                    ),
+                ]));
             ctx.working_history
                 .push(uni::Message::tool_response("call_1".to_string(), "formatted".to_string()));
 

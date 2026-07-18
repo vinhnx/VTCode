@@ -264,10 +264,7 @@ mod tests {
         let send = send_input_parameters();
         let wait = wait_agent_parameters();
 
-        assert_eq!(
-            spawn["properties"]["message"]["description"],
-            json!("Task prompt for the child agent.")
-        );
+        assert_eq!(spawn["properties"]["message"]["description"], json!("Task prompt for the child agent."));
         assert_eq!(send["properties"]["id"]["description"], json!("Child agent id to message."));
         assert_eq!(
             spawn["properties"]["background"]["description"],
@@ -285,9 +282,7 @@ mod tests {
         );
         assert_eq!(
             wait["properties"]["timeout_ms"]["description"],
-            json!(
-                "Optional wait timeout in milliseconds. Uses the session default timeout when omitted."
-            )
+            json!("Optional wait timeout in milliseconds. Uses the session default timeout when omitted.")
         );
     }
 
@@ -301,8 +296,7 @@ mod tests {
             json!(["label", "description"])
         );
         assert_eq!(
-            schema["properties"]["questions"]["items"]["properties"]["options"]["items"]["properties"]
-                ["description"]["type"],
+            schema["properties"]["questions"]["items"]["properties"]["options"]["items"]["properties"]["description"]["type"],
             json!("string")
         );
     }

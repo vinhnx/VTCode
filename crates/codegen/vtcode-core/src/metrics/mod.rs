@@ -9,9 +9,10 @@
 // - PII detection (pattern matches, audit trail)
 
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 pub mod discovery_metrics;
@@ -69,101 +70,83 @@ impl MetricsCollector {
     // ========== Discovery Metrics ==========
 
     /// Record a tool discovery query
-    pub fn record_discovery_query(
-        &self,
-        keyword: String,
-        result_count: u64,
-        response_time_ms: u64,
-    ) {
-        if let Ok(mut metrics) = self.discovery.lock() {
-            metrics.record_query(keyword, result_count, response_time_ms);
-        }
+    pub fn record_discovery_query(&self, keyword: String, result_count: u64, response_time_ms: u64) {
+        let mut metrics = self.discovery.lock();
+        metrics.record_query(keyword, result_count, response_time_ms);
     }
 
     /// Record a failed discovery query
     pub fn record_discovery_failure(&self, keyword: String) {
-        if let Ok(mut metrics) = self.discovery.lock() {
-            metrics.record_failure(keyword);
-        }
+        let mut metrics = self.discovery.lock();
+        metrics.record_failure(keyword);
     }
 
     /// Record a discovery cache hit
     pub fn record_discovery_cache_hit(&self) {
-        if let Ok(mut metrics) = self.discovery.lock() {
-            metrics.record_cache_hit();
-        }
+        let mut metrics = self.discovery.lock();
+        metrics.record_cache_hit();
     }
 
     // ========== Execution Metrics ==========
 
     /// Record the start of a code execution
     pub fn record_execution_start(&self, language: String) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_start(language);
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_start(language);
     }
 
     /// Record successful execution completion
     pub fn record_execution_complete(&self, language: String, duration_ms: u64, memory_mb: u64) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_complete(language, duration_ms, memory_mb, true);
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_complete(language, duration_ms, memory_mb, true);
     }
 
     /// Record failed execution
     pub fn record_execution_failure(&self, language: String, duration_ms: u64) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_failure(language, duration_ms);
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_failure(language, duration_ms);
     }
 
     /// Record execution timeout
     pub fn record_execution_timeout(&self, language: String, duration_ms: u64) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_timeout(language, duration_ms);
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_timeout(language, duration_ms);
     }
 
     /// Record a retry attempt for execution-related workflows.
     pub fn record_retry_attempt(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_retry_attempt();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_retry_attempt();
     }
 
     /// Record a successful retry that eventually recovered.
     pub fn record_retry_success(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_retry_success();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_retry_success();
     }
 
     /// Record an execution that exhausted all retry attempts.
     pub fn record_retry_exhausted(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_retry_exhausted();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_retry_exhausted();
     }
 
     /// Record that a circuit breaker entered the open state.
     pub fn record_circuit_open(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_circuit_open();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_circuit_open();
     }
 
     /// Record that a circuit breaker transitioned to half-open.
     pub fn record_half_open(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_half_open();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_half_open();
     }
 
     /// Record a denied request caused by an open circuit breaker.
     pub fn record_breaker_denial(&self) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_breaker_denial();
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_breaker_denial();
     }
 
     // ========== Circuit Breaker Helper Methods ==========
@@ -193,33 +176,29 @@ impl MetricsCollector {
 
     /// Record result size for filtering calculation
     pub fn record_result_size(&self, size_bytes: usize) {
-        if let Ok(mut metrics) = self.execution.lock() {
-            metrics.record_result_size(size_bytes);
-        }
+        let mut metrics = self.execution.lock();
+        metrics.record_result_size(size_bytes);
     }
 
     // ========== SDK Metrics ==========
 
     /// Record SDK generation
     pub fn record_sdk_generation(&self, generation_time_ms: u64, tools_count: u64) {
-        if let Ok(mut metrics) = self.sdk.lock() {
-            metrics.record_generation(generation_time_ms, tools_count);
-        }
+        let mut metrics = self.sdk.lock();
+        metrics.record_generation(generation_time_ms, tools_count);
     }
 
     /// Record SDK cache utilization
     pub fn record_sdk_cache_hit(&self) {
-        if let Ok(mut metrics) = self.sdk.lock() {
-            metrics.record_cache_hit();
-        }
+        let mut metrics = self.sdk.lock();
+        metrics.record_cache_hit();
     }
 
     /// Record the estimated token overhead of the tool definitions sent in a
     /// request, accumulated across the session for transparency reporting.
     pub fn record_sdk_tool_definition_tokens(&self, tokens: u64) {
-        if let Ok(mut metrics) = self.sdk.lock() {
-            metrics.record_tool_definition_tokens(tokens);
-        }
+        let mut metrics = self.sdk.lock();
+        metrics.record_tool_definition_tokens(tokens);
     }
 
     // ========== Filtering Metrics ==========
@@ -232,99 +211,80 @@ impl MetricsCollector {
         output_size: u64,
         duration_ms: u64,
     ) {
-        if let Ok(mut metrics) = self.filtering.lock() {
-            metrics.record_operation(operation_type, input_size, output_size, duration_ms);
-        }
+        let mut metrics = self.filtering.lock();
+        metrics.record_operation(operation_type, input_size, output_size, duration_ms);
     }
 
     // ========== Skill Metrics ==========
 
     /// Record skill execution
     pub fn record_skill_execution(&self, skill_name: String, duration_ms: u64, success: bool) {
-        if let Ok(mut metrics) = self.skills.lock() {
-            metrics.record_execution(skill_name, duration_ms, success);
-        }
+        let mut metrics = self.skills.lock();
+        metrics.record_execution(skill_name, duration_ms, success);
     }
 
     /// Record skill creation
     pub fn record_skill_created(&self, skill_name: String, language: String) {
-        if let Ok(mut metrics) = self.skills.lock() {
-            metrics.record_created(skill_name, language);
-        }
+        let mut metrics = self.skills.lock();
+        metrics.record_created(skill_name, language);
     }
 
     /// Record skill deletion
     pub fn record_skill_deleted(&self, skill_name: String) {
-        if let Ok(mut metrics) = self.skills.lock() {
-            metrics.record_deleted(skill_name);
-        }
+        let mut metrics = self.skills.lock();
+        metrics.record_deleted(skill_name);
     }
 
     // ========== Security Metrics ==========
 
     /// Record PII pattern detection
     pub fn record_pii_detection(&self, pattern_type: String) {
-        if let Ok(mut metrics) = self.security.lock() {
-            metrics.record_detection(pattern_type);
-        }
+        let mut metrics = self.security.lock();
+        metrics.record_detection(pattern_type);
     }
 
     /// Record tokenization
     pub fn record_pii_tokenization(&self, token_count: usize) {
-        if let Ok(mut metrics) = self.security.lock() {
-            metrics.record_tokenization(token_count);
-        }
+        let mut metrics = self.security.lock();
+        metrics.record_tokenization(token_count);
     }
 
     /// Record audit event
     pub fn record_audit_event(&self, event_type: String, severity: String) {
-        if let Ok(mut metrics) = self.security.lock() {
-            metrics.record_audit_event(event_type, severity);
-        }
+        let mut metrics = self.security.lock();
+        metrics.record_audit_event(event_type, severity);
     }
 
     // ========== Queries ==========
 
     /// Get current discovery metrics snapshot
     pub fn get_discovery_metrics(&self) -> DiscoveryMetrics {
-        self.discovery
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| DiscoveryMetrics::new())
+        self.discovery.lock().clone()
     }
 
     /// Get current execution metrics snapshot
     pub fn get_execution_metrics(&self) -> ExecutionMetrics {
-        self.execution
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| ExecutionMetrics::new())
+        self.execution.lock().clone()
     }
 
     /// Get current SDK metrics snapshot
     pub fn get_sdk_metrics(&self) -> SdkMetrics {
-        self.sdk.lock().map(|m| m.clone()).unwrap_or_else(|_| SdkMetrics::new())
+        self.sdk.lock().clone()
     }
 
     /// Get current filtering metrics snapshot
     pub fn get_filtering_metrics(&self) -> FilteringMetrics {
-        self.filtering
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| FilteringMetrics::new())
+        self.filtering.lock().clone()
     }
 
     /// Get current skill metrics snapshot
     pub fn get_skill_metrics(&self) -> SkillMetrics {
-        self.skills.lock().map(|m| m.clone()).unwrap_or_else(|_| SkillMetrics::new())
+        self.skills.lock().clone()
     }
 
     /// Get current security metrics snapshot
     pub fn get_security_metrics(&self) -> SecurityMetrics {
-        self.security
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| SecurityMetrics::new())
+        self.security.lock().clone()
     }
 
     /// Get comprehensive summary of all metrics

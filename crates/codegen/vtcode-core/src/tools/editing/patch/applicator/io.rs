@@ -16,10 +16,7 @@ pub(crate) struct AtomicWriter {
 }
 
 impl AtomicWriter {
-    pub(crate) async fn create(
-        path: &Path,
-        permissions: Option<Permissions>,
-    ) -> Result<Self, PatchError> {
+    pub(crate) async fn create(path: &Path, permissions: Option<Permissions>) -> Result<Self, PatchError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await.map_err(|err| PatchError::Io {
                 action: "create directories",
@@ -60,13 +57,13 @@ impl AtomicWriter {
         drop(self.writer);
 
         if let Some(permissions) = self.permissions {
-            fs::set_permissions(&self.temp_path, permissions).await.map_err(|err| {
-                PatchError::Io {
+            fs::set_permissions(&self.temp_path, permissions)
+                .await
+                .map_err(|err| PatchError::Io {
                     action: "set permissions",
                     path: self.temp_path.clone(),
                     source: err,
-                }
-            })?;
+                })?;
         }
 
         match fs::rename(&self.temp_path, &self.path).await {

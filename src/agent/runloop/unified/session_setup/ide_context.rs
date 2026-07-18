@@ -7,21 +7,12 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use tracing::{debug, warn};
 use vtcode_config::IdeContextConfig;
-use vtcode_core::ide_context::{
-    EditorContextSnapshot, IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR,
-};
+use vtcode_core::ide_context::{EditorContextSnapshot, IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR};
 use vtcode_core::tools::dominant_workspace_language;
 
 const WORKSPACE_IDE_CONTEXT_JSON_FILE: &str = ".vtcode/ide-context.json";
 const WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE: &str = ".vtcode/ide-context.md";
-const VSCODE_COMPATIBLE_STORAGE_DIRS: &[&str] = &[
-    "Code",
-    "Code - Insiders",
-    "Cursor",
-    "Windsurf",
-    "VSCodium",
-    "Kiro",
-];
+const VSCODE_COMPATIBLE_STORAGE_DIRS: &[&str] = &["Code", "Code - Insiders", "Cursor", "Windsurf", "VSCodium", "Kiro"];
 const VSCODE_COMPATIBLE_EXTENSION_ID: &str = "nguyenxuanvinh.vtcode-companion";
 const VSCODE_COMPATIBLE_JSON_FILE: &str = "vtcode-ide-context.json";
 const VSCODE_COMPATIBLE_MARKDOWN_FILE: &str = "vtcode-ide-context.md";
@@ -43,9 +34,7 @@ impl IdeContextBridge {
         }
     }
 
-    pub(crate) fn refresh(
-        &mut self,
-    ) -> Result<(Option<EditorContextSnapshot>, IdeContextRefreshState)> {
+    pub(crate) fn refresh(&mut self) -> Result<(Option<EditorContextSnapshot>, IdeContextRefreshState)> {
         let resolved = read_current_ide_context_snapshot(&self.workspace_root)?;
         let snapshot = resolved.snapshot;
         let digest = compute_snapshot_digest(snapshot.as_ref());
@@ -56,17 +45,10 @@ impl IdeContextBridge {
             self.last_digest = digest;
             self.snapshot = snapshot;
             self.source = source;
-            log_refresh_result(
-                &self.workspace_root,
-                self.source.as_deref(),
-                self.snapshot.as_ref(),
-            );
+            log_refresh_result(&self.workspace_root, self.source.as_deref(), self.snapshot.as_ref());
         }
 
-        Ok((
-            self.snapshot.clone(),
-            IdeContextRefreshState { changed, available: self.snapshot.is_some() },
-        ))
+        Ok((self.snapshot.clone(), IdeContextRefreshState { changed, available: self.snapshot.is_some() }))
     }
 
     pub(crate) fn snapshot(&self) -> Option<&EditorContextSnapshot> {
@@ -153,14 +135,10 @@ pub(crate) fn status_line_editor_label(
         }
     }
 
-    display_ide_context_source(workspace, source)
-        .map(|compact| format_status_line_ide_context_label(&prefix, &compact))
+    display_ide_context_source(workspace, source).map(|compact| format_status_line_ide_context_label(&prefix, &compact))
 }
 
-fn compact_tui_label_prefix(
-    snapshot: Option<&EditorContextSnapshot>,
-    source: Option<&Path>,
-) -> String {
+fn compact_tui_label_prefix(snapshot: Option<&EditorContextSnapshot>, source: Option<&Path>) -> String {
     snapshot
         .and_then(|snapshot| snapshot.editor_name.as_deref())
         .and_then(normalize_ide_display_name)
@@ -190,10 +168,7 @@ fn normalize_ide_display_name(name: &str) -> Option<&'static str> {
         || normalized.contains("insider")
     {
         Some("VS Code Insiders")
-    } else if normalized.contains("vs code")
-        || normalized.contains("visual studio code")
-        || normalized == "code"
-    {
+    } else if normalized.contains("vs code") || normalized.contains("visual studio code") || normalized == "code" {
         Some("VS Code")
     } else {
         None
@@ -281,9 +256,7 @@ fn read_env_ide_context_snapshot() -> Result<Option<(EditorContextSnapshot, Path
     Ok(None)
 }
 
-fn read_workspace_ide_context_snapshot(
-    workspace: &Path,
-) -> Result<Option<(EditorContextSnapshot, PathBuf)>> {
+fn read_workspace_ide_context_snapshot(workspace: &Path) -> Result<Option<(EditorContextSnapshot, PathBuf)>> {
     let json_path = workspace.join(WORKSPACE_IDE_CONTEXT_JSON_FILE);
     if let Some(snapshot) = EditorContextSnapshot::read_json_file(&json_path)? {
         return Ok(Some((snapshot, json_path)));
@@ -294,9 +267,7 @@ fn read_workspace_ide_context_snapshot(
         .map(|snapshot| (snapshot, legacy_markdown_path)))
 }
 
-fn read_vscode_compatible_global_storage_snapshot(
-    workspace: &Path,
-) -> Option<(EditorContextSnapshot, PathBuf)> {
+fn read_vscode_compatible_global_storage_snapshot(workspace: &Path) -> Option<(EditorContextSnapshot, PathBuf)> {
     let roots = vscode_compatible_global_storage_roots();
     read_vscode_compatible_snapshot_from_roots(workspace, &roots)
 }
@@ -320,11 +291,7 @@ fn read_vscode_compatible_snapshot_from_roots(
     None
 }
 
-fn try_read_discovered_snapshot(
-    workspace: &Path,
-    path: &Path,
-    is_json: bool,
-) -> Option<EditorContextSnapshot> {
+fn try_read_discovered_snapshot(workspace: &Path, path: &Path, is_json: bool) -> Option<EditorContextSnapshot> {
     if !path.is_file() {
         return None;
     }
@@ -412,11 +379,7 @@ fn snapshot_path_from_env(env_var: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn log_refresh_result(
-    workspace: &Path,
-    source: Option<&Path>,
-    snapshot: Option<&EditorContextSnapshot>,
-) {
+fn log_refresh_result(workspace: &Path, source: Option<&Path>, snapshot: Option<&EditorContextSnapshot>) {
     let Some(snapshot) = snapshot else {
         debug!(
             workspace = %workspace.display(),
@@ -460,10 +423,9 @@ fn compute_snapshot_digest(snapshot: Option<&EditorContextSnapshot>) -> Option<u
 #[cfg(test)]
 mod tests {
     use super::{
-        IdeContextBridge, VSCODE_COMPATIBLE_JSON_FILE, configured_snapshot,
-        preferred_display_language_for_workspace,
-        preferred_display_language_for_workspace_with_snapshot,
-        read_vscode_compatible_snapshot_from_roots, status_line_editor_label, tui_header_summary,
+        IdeContextBridge, VSCODE_COMPATIBLE_JSON_FILE, configured_snapshot, preferred_display_language_for_workspace,
+        preferred_display_language_for_workspace_with_snapshot, read_vscode_compatible_snapshot_from_roots,
+        status_line_editor_label, tui_header_summary,
     };
     use serial_test::serial;
     use std::fs;
@@ -492,10 +454,7 @@ mod tests {
         };
 
         assert_eq!(
-            preferred_display_language_for_workspace_with_snapshot(
-                workspace.path(),
-                Some(&snapshot)
-            ),
+            preferred_display_language_for_workspace_with_snapshot(workspace.path(), Some(&snapshot)),
             Some("Python".to_string())
         );
     }
@@ -529,10 +488,7 @@ mod tests {
 
         let config = IdeContextConfig { show_in_tui: false, ..IdeContextConfig::default() };
 
-        assert_eq!(
-            tui_header_summary(Path::new("/workspace"), Some(&config), Some(&snapshot)),
-            None
-        );
+        assert_eq!(tui_header_summary(Path::new("/workspace"), Some(&config), Some(&snapshot)), None);
     }
 
     #[test]
@@ -652,13 +608,8 @@ mod tests {
         let source = Path::new("/workspace/.vtcode/ide-context.json");
 
         assert_eq!(
-            status_line_editor_label(
-                workspace,
-                Some(&IdeContextConfig::default()),
-                Some(&snapshot),
-                Some(source),
-            )
-            .as_deref(),
+            status_line_editor_label(workspace, Some(&IdeContextConfig::default()), Some(&snapshot), Some(source),)
+                .as_deref(),
             Some("IDE Context (Cursor): .vtcode/ide-context.json")
         );
     }
@@ -697,18 +648,13 @@ mod tests {
         )
         .expect("write snapshot");
 
-        let (snapshot, source) = read_vscode_compatible_snapshot_from_roots(
-            workspace.path(),
-            &[storage_root.path().to_path_buf()],
-        )
-        .expect("snapshot");
+        let (snapshot, source) =
+            read_vscode_compatible_snapshot_from_roots(workspace.path(), &[storage_root.path().to_path_buf()])
+                .expect("snapshot");
 
         let expected_path = format!("{}/docs/project/TODO.md", workspace.path().display());
         assert_eq!(source, snapshot_path);
-        assert_eq!(
-            snapshot.active_file.as_ref().map(|file| file.path.as_str()),
-            Some(expected_path.as_str())
-        );
+        assert_eq!(snapshot.active_file.as_ref().map(|file| file.path.as_str()), Some(expected_path.as_str()));
         assert!(snapshot.has_explicit_selection());
     }
 
@@ -739,11 +685,8 @@ mod tests {
         .expect("write snapshot");
 
         assert!(
-            read_vscode_compatible_snapshot_from_roots(
-                workspace.path(),
-                &[storage_root.path().to_path_buf()],
-            )
-            .is_none()
+            read_vscode_compatible_snapshot_from_roots(workspace.path(), &[storage_root.path().to_path_buf()],)
+                .is_none()
         );
     }
 
@@ -770,10 +713,7 @@ mod tests {
 
         set_env_var(IDE_CONTEXT_ENV_VAR, &path);
 
-        assert_eq!(
-            preferred_display_language_for_workspace(workspace.path()),
-            Some("Python".to_string())
-        );
+        assert_eq!(preferred_display_language_for_workspace(workspace.path()), Some("Python".to_string()));
 
         remove_env_var(IDE_CONTEXT_ENV_VAR);
     }
@@ -802,9 +742,6 @@ mod tests {
 
         remove_env_var(IDE_CONTEXT_ENV_VAR);
 
-        assert_eq!(
-            preferred_display_language_for_workspace(workspace.path()),
-            Some("Python".to_string())
-        );
+        assert_eq!(preferred_display_language_for_workspace(workspace.path()), Some("Python".to_string()));
     }
 }

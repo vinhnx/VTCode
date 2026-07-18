@@ -99,17 +99,16 @@ static MODEL_OPTION_INDEXES_BY_PROVIDER: Lazy<HashMap<Provider, Box<[usize]>>> =
         .collect()
 });
 
-static MODEL_OPTION_INDEX_BY_PROVIDER_MODEL: Lazy<HashMap<Provider, HashMap<String, usize>>> =
-    Lazy::new(|| {
-        let mut index = HashMap::new();
-        for (option_index, option) in MODEL_OPTIONS.iter().enumerate() {
-            index
-                .entry(option.provider)
-                .or_insert_with(HashMap::new)
-                .insert(option.id.to_ascii_lowercase(), option_index);
-        }
+static MODEL_OPTION_INDEX_BY_PROVIDER_MODEL: Lazy<HashMap<Provider, HashMap<String, usize>>> = Lazy::new(|| {
+    let mut index = HashMap::new();
+    for (option_index, option) in MODEL_OPTIONS.iter().enumerate() {
         index
-    });
+            .entry(option.provider)
+            .or_insert_with(HashMap::new)
+            .insert(option.id.to_ascii_lowercase(), option_index);
+    }
+    index
+});
 
 pub(super) fn option_indexes_for_provider(provider: Provider) -> &'static [usize] {
     MODEL_OPTION_INDEXES_BY_PROVIDER

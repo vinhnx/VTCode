@@ -170,8 +170,7 @@ impl PromptCache {
         let total_usage = self.cache.values().map(|e| e.usage_count).sum::<u32>();
         let total_tokens_saved = self.cache.values().filter_map(|e| e.tokens_saved).sum::<u32>();
         let avg_quality = if !self.cache.is_empty() {
-            self.cache.values().filter_map(|e| e.quality_score).sum::<f64>()
-                / self.cache.len() as f64
+            self.cache.values().filter_map(|e| e.quality_score).sum::<f64>() / self.cache.len() as f64
         } else {
             0.0
         };
@@ -209,8 +208,7 @@ impl PromptCache {
         fs::create_dir_all(&self.config.cache_dir).await.map_err(PromptCacheError::Io)?;
 
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
-        let data =
-            serde_json::to_string_pretty(&self.cache).map_err(PromptCacheError::Serialization)?;
+        let data = serde_json::to_string_pretty(&self.cache).map_err(PromptCacheError::Serialization)?;
 
         fs::write(cache_path, data).await.map_err(PromptCacheError::Io)?;
 
@@ -353,8 +351,7 @@ impl PromptOptimizer {
         }
 
         // Generate optimized prompt
-        let optimized =
-            self.generate_optimized_prompt(original_prompt, target_model, context).await?;
+        let optimized = self.generate_optimized_prompt(original_prompt, target_model, context).await?;
 
         // Calculate tokens saved (rough estimate)
         let original_tokens = estimate_tokens(original_prompt);

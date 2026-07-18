@@ -9,10 +9,7 @@ use serde::Deserializer;
 /// Structured response from the planner LLM.
 #[derive(Debug, Deserialize)]
 pub(super) struct PlannerResponse {
-    #[serde(
-        alias = "execution_spec",
-        deserialize_with = "deserialize_string_or_object"
-    )]
+    #[serde(alias = "execution_spec", deserialize_with = "deserialize_string_or_object")]
     pub(super) spec_markdown: Option<String>,
     #[serde(
         default,
@@ -69,9 +66,7 @@ where
     }
 }
 
-pub(super) fn deserialize_string_or_object<'de, D>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error>
+pub(super) fn deserialize_string_or_object<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
 {

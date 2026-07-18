@@ -2,9 +2,8 @@ use super::*;
 use crate::tui::config::constants::ui;
 use crate::tui::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::tui::core_tui::session::list_panel::{
-    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel,
-    SharedSearchField, fixed_section_rows, input_styles_from_theme, render_shared_list_panel,
-    rows_to_u16,
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, SharedSearchField,
+    fixed_section_rows, input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
 use ratatui::widgets::Clear;
 
@@ -62,22 +61,11 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
                 } else {
                     blank_gutter.clone()
                 };
-                let cursor_style = if is_selected {
-                    self.highlight_style
-                } else {
-                    dim_style
-                };
-                let text_style = if is_selected {
-                    self.highlight_style
-                } else {
-                    dim_style
-                };
+                let cursor_style = if is_selected { self.highlight_style } else { dim_style };
+                let text_style = if is_selected { self.highlight_style } else { dim_style };
                 (
                     InlineListRow::single(
-                        Line::from(vec![
-                            Span::styled(cursor, cursor_style),
-                            Span::styled(truncated, text_style),
-                        ]),
+                        Line::from(vec![Span::styled(cursor, cursor_style), Span::styled(truncated, text_style)]),
                         dim_style,
                     ),
                     1_u16,
@@ -137,11 +125,7 @@ pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (R
 }
 
 pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if area.height == 0
-        || area.width == 0
-        || !session.inline_lists_visible()
-        || !session.history_picker_visible()
-    {
+    if area.height == 0 || area.width == 0 || !session.inline_lists_visible() || !session.history_picker_visible() {
         session.history_picker_state.navigator.set_visible_rows(0);
         return;
     }

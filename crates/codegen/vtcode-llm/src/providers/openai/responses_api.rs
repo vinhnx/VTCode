@@ -1,7 +1,7 @@
 use crate::error_display;
 use crate::provider::{
-    AssistantPhase, ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent,
-    MessageRole, ToolCall, Usage,
+    AssistantPhase, ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent, MessageRole,
+    ToolCall, Usage,
 };
 use crate::providers::common::append_normalized_reasoning_detail_items;
 use crate::providers::openai::types::OpenAIResponsesPayload;
@@ -74,12 +74,7 @@ fn parse_responses_function_tool_call(item: &Value) -> Option<ToolCall> {
         }
     });
 
-    Some(ToolCall::function_with_namespace(
-        call_id.to_string(),
-        namespace,
-        name.to_string(),
-        serialized,
-    ))
+    Some(ToolCall::function_with_namespace(call_id.to_string(), namespace, name.to_string(), serialized))
 }
 
 fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &MessageContent) {
@@ -249,8 +244,7 @@ fn append_tool_result_to_instructions(
         Some(id) if !id.is_empty() => (None, 26 + id.len()),
         _ => (Some("Previous tool result:"), 0),
     };
-    let mut s =
-        String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
+    let mut s = String::with_capacity(heading_str.map_or(heading_cap, |h| h.len()) + 1 + text.len());
     match heading_str {
         Some(h) => s.push_str(h),
         None => {
@@ -269,14 +263,11 @@ pub fn parse_responses_payload(
     model: String,
     include_cached_prompt_metrics: bool,
 ) -> Result<LLMResponse, LLMError> {
-    let output =
-        response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                "Invalid Responses API format: missing output array",
-            );
-            LLMError::Provider { message: formatted_error, metadata: None }
-        })?;
+    let output = response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
+        let formatted_error =
+            error_display::format_llm_error("OpenAI", "Invalid Responses API format: missing output array");
+        LLMError::Provider { message: formatted_error, metadata: None }
+    })?;
 
     if output.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No output in response");
@@ -294,24 +285,20 @@ pub fn parse_responses_payload(
 
         match item_type {
             "message" => {
-                if let Some(content_array) = item.get("content").and_then(|value| value.as_array())
-                {
+                if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
                     for entry in content_array {
-                        let entry_type =
-                            entry.get("type").and_then(|value| value.as_str()).unwrap_or("");
+                        let entry_type = entry.get("type").and_then(|value| value.as_str()).unwrap_or("");
 
                         match entry_type {
                             "text" | "output_text" => {
-                                if let Some(text) =
-                                    entry.get("text").and_then(|value| value.as_str())
+                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
                                     && !text.is_empty()
                                 {
                                     content_fragments.push(text.to_string());
                                 }
                             }
                             "reasoning" => {
-                                if let Some(text) =
-                                    entry.get("text").and_then(|value| value.as_str())
+                                if let Some(text) = entry.get("text").and_then(|value| value.as_str())
                                     && !text.is_empty()
                                 {
                                     reasoning_text_fragments.push(text.to_string());
@@ -326,8 +313,7 @@ pub fn parse_responses_payload(
                                 }
                             }
                             "refusal" => {
-                                if let Some(refusal_text) =
-                                    entry.get("refusal").and_then(|value| value.as_str())
+                                if let Some(refusal_text) = entry.get("refusal").and_then(|value| value.as_str())
                                     && !refusal_text.is_empty()
                                 {
                                     content_fragments.push(format!("[Refusal: {refusal_text}]"));
@@ -351,8 +337,7 @@ pub fn parse_responses_payload(
                     let citations: Vec<String> = results
                         .iter()
                         .filter_map(|r| {
-                            let title =
-                                r.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
+                            let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
                             let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
                             if !url.is_empty() {
                                 Some(format!("[{title}]({url})"))
@@ -418,8 +403,7 @@ pub fn parse_responses_payload(
     };
 
     let usage = response_json.get("usage").map(|usage_value| {
-        let cached_prompt_tokens =
-            parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
+        let cached_prompt_tokens = parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         Usage {
             prompt_tokens: usage_value
@@ -510,9 +494,7 @@ pub fn build_standard_responses_payload(
             }
             MessageRole::Assistant => {
                 // Inject any persisted reasoning items from previous turns
-                if include_structured_history_in_input
-                    && let Some(reasoning_details) = &msg.reasoning_details
-                {
+                if include_structured_history_in_input && let Some(reasoning_details) = &msg.reasoning_details {
                     append_normalized_reasoning_detail_items(&mut input, reasoning_details);
                 }
 
@@ -525,10 +507,7 @@ pub fn build_standard_responses_payload(
                             "text": msg.content.as_text()
                         }));
                     } else {
-                        append_assistant_text_to_instructions(
-                            &mut instructions_segments,
-                            &msg.content.as_text(),
-                        );
+                        append_assistant_text_to_instructions(&mut instructions_segments, &msg.content.as_text());
                     }
                 }
 
@@ -555,9 +534,7 @@ pub fn build_standard_responses_payload(
                                     }),
                                 };
                                 tool_call_items.push(replay_item);
-                                if let Some(deferred_output) =
-                                    deferred_tool_outputs.remove(&call.id)
-                                {
+                                if let Some(deferred_output) = deferred_tool_outputs.remove(&call.id) {
                                     active_tool_calls.remove(&call.id);
                                     tool_call_items.push(json!({
                                         "type": responses_tool_call_output_type(call_kind),
@@ -586,20 +563,14 @@ pub fn build_standard_responses_payload(
 
                 if !active_tool_calls.contains_key(tool_call_id) {
                     if include_structured_history_in_input {
-                        deferred_tool_outputs.insert(
-                            tool_call_id.clone(),
-                            function_output_value_from_message_content(&msg.content),
-                        );
+                        deferred_tool_outputs
+                            .insert(tool_call_id.clone(), function_output_value_from_message_content(&msg.content));
                     }
                     continue;
                 }
 
                 if !include_structured_history_in_input {
-                    append_tool_result_to_instructions(
-                        &mut instructions_segments,
-                        Some(tool_call_id),
-                        &msg.content,
-                    );
+                    append_tool_result_to_instructions(&mut instructions_segments, Some(tool_call_id), &msg.content);
                     active_tool_calls.remove(tool_call_id);
                     continue;
                 }
@@ -691,8 +662,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["type"], "compaction");
     }
@@ -719,8 +689,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
         assert_multimodal_tool_result(payload);
     }
 
@@ -748,8 +717,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
 
         assert_eq!(payload.input.len(), 4);
         assert_eq!(payload.input[0]["role"], "user");
@@ -758,10 +726,7 @@ mod tests {
         assert_eq!(payload.input[1]["call_id"], "direct_exec_command_1");
         assert_eq!(payload.input[2]["type"], "function_call_output");
         assert_eq!(payload.input[2]["call_id"], "direct_exec_command_1");
-        assert_eq!(
-            payload.input[2]["output"],
-            "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}"
-        );
+        assert_eq!(payload.input[2]["output"], "{\"output\":\"\",\"exit_code\":0,\"backend\":\"pipe\"}");
         assert_eq!(payload.input[3]["role"], "assistant");
     }
 
@@ -785,8 +750,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
 
         assert!(payload.input.iter().any(|item| {
             item.get("type").and_then(Value::as_str) == Some("function_call")
@@ -819,8 +783,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
 
         let call_index = payload
             .input
@@ -870,18 +833,14 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
         let function_call = payload
             .input
             .iter()
             .find(|item| item.get("type").and_then(Value::as_str) == Some("function_call"))
             .expect("function_call item should exist");
 
-        assert_eq!(
-            function_call.get("call_id").and_then(Value::as_str),
-            Some("call_T4IsdQtJifUHQUXutDlwoFLd")
-        );
+        assert_eq!(function_call.get("call_id").and_then(Value::as_str), Some("call_T4IsdQtJifUHQUXutDlwoFLd"));
         assert!(function_call.get("id").is_none(), "function_call replay items should omit id");
     }
 
@@ -899,16 +858,13 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
         let tool_calls = parsed.tool_calls.expect("tool calls should exist");
         assert_eq!(tool_calls.len(), 1);
         assert_eq!(tool_calls[0].id, "call_123");
-        assert_eq!(
-            tool_calls[0].function.as_ref().map(|function| function.name.as_str()),
-            Some("exec_command")
-        );
+        assert_eq!(tool_calls[0].function.as_ref().map(|function| function.name.as_str()), Some("exec_command"));
     }
 
     #[test]
@@ -926,8 +882,8 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
         let tool_calls = parsed.tool_calls.expect("tool calls should exist");
         let namespace = tool_calls[0]
@@ -952,8 +908,8 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
         let tool_calls = parsed.tool_calls.expect("tool calls should exist");
         assert_eq!(tool_calls.len(), 1);
@@ -984,8 +940,8 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
         assert_eq!(parsed.content.as_deref(), Some("done"));
         assert_eq!(parsed.reasoning.as_deref(), Some("checked constraints"));
@@ -1032,8 +988,8 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
         let preserved_items = parsed_reasoning_details(&parsed);
         assert!(preserved_items.iter().any(|item| item == &unknown_replay_item));
@@ -1070,8 +1026,8 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
         let tool_calls = parsed.tool_calls.expect("tool calls should exist");
 
         assert_eq!(tool_calls.len(), 1);
@@ -1122,8 +1078,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, true).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
 
         assert_eq!(payload.input.len(), 3);
         assert_eq!(payload.input[1]["type"], "custom_tool_call");
@@ -1162,13 +1117,10 @@ mod tests {
             ]
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5.3-codex".to_string(), false)
-            .expect("payload should parse");
+        let parsed =
+            parse_responses_payload(response, "gpt-5.3-codex".to_string(), false).expect("payload should parse");
 
-        assert_eq!(
-            parsed.tool_references,
-            vec!["exec_command".to_string(), "write_file".to_string()]
-        );
+        assert_eq!(parsed.tool_references, vec!["exec_command".to_string(), "write_file".to_string()]);
     }
 
     #[test]
@@ -1184,8 +1136,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, false).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, false).expect("payload should build");
 
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["role"], "user");
@@ -1201,21 +1152,18 @@ mod tests {
         let request = LLMRequest {
             model: "gpt-5.2-codex".to_string(),
             messages: vec![
-                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![
-                    json!({
-                        "type": "reasoning",
-                        "id": "rs_1",
-                        "summary": [{"type":"summary_text","text":"opaque"}]
-                    }),
-                ])),
+                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!({
+                    "type": "reasoning",
+                    "id": "rs_1",
+                    "summary": [{"type":"summary_text","text":"opaque"}]
+                })])),
                 Message::user("next".to_string()),
             ]
             .into(),
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, false).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, false).expect("payload should build");
 
         assert_eq!(payload.input.len(), 1);
         assert_eq!(payload.input[0]["role"], "user");
@@ -1246,8 +1194,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload =
-            build_standard_responses_payload(&request, false).expect("payload should build");
+        let payload = build_standard_responses_payload(&request, false).expect("payload should build");
 
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["role"], "user");
@@ -1255,10 +1202,7 @@ mod tests {
         let instructions = payload.instructions.expect("instructions should exist");
         assert!(instructions.contains("Previous tool result (call_1):"));
         assert!(instructions.contains("Finished `dev` profile"));
-        assert!(
-            instructions
-                .contains("Previous assistant response:\ncargo check completed successfully.")
-        );
+        assert!(instructions.contains("Previous assistant response:\ncargo check completed successfully."));
     }
 
     #[test]
@@ -1286,8 +1230,7 @@ mod tests {
             ]
         });
 
-        let parsed =
-            parse_responses_payload(response, "gpt-5".to_string(), false).expect("should parse");
+        let parsed = parse_responses_payload(response, "gpt-5".to_string(), false).expect("should parse");
 
         assert_eq!(parsed.content.as_deref(), Some("Done."));
         assert!(parsed.tool_calls.unwrap_or_default().is_empty());
@@ -1314,8 +1257,7 @@ mod tests {
             }
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
-            .expect("payload should parse");
+        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true).expect("payload should parse");
 
         assert_eq!(parsed.usage.and_then(|usage| usage.cached_prompt_tokens), Some(42));
     }
@@ -1338,8 +1280,7 @@ mod tests {
             }
         });
 
-        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
-            .expect("payload should parse");
+        let parsed = parse_responses_payload(response, "gpt-5".to_string(), true).expect("payload should parse");
 
         assert_eq!(parsed.usage.and_then(|usage| usage.cached_prompt_tokens), None);
     }
@@ -1347,25 +1288,13 @@ mod tests {
     #[test]
     fn parse_cached_prompt_tokens_supports_responses_fallback_shapes() {
         assert_eq!(
-            parse_cached_prompt_tokens_from_usage(
-                &json!({"prompt_tokens_details": {"cached_tokens": 17}}),
-                true
-            ),
+            parse_cached_prompt_tokens_from_usage(&json!({"prompt_tokens_details": {"cached_tokens": 17}}), true),
             Some(17)
         );
+        assert_eq!(parse_cached_prompt_tokens_from_usage(&json!({"prompt_cache_hit_tokens": 23}), true), Some(23));
+        assert_eq!(parse_cached_prompt_tokens_from_usage(&json!({"cached_tokens": 29}), true), Some(29));
         assert_eq!(
-            parse_cached_prompt_tokens_from_usage(&json!({"prompt_cache_hit_tokens": 23}), true),
-            Some(23)
-        );
-        assert_eq!(
-            parse_cached_prompt_tokens_from_usage(&json!({"cached_tokens": 29}), true),
-            Some(29)
-        );
-        assert_eq!(
-            parse_cached_prompt_tokens_from_usage(
-                &json!({"input_tokens_details": {"cached_tokens": 31}}),
-                false
-            ),
+            parse_cached_prompt_tokens_from_usage(&json!({"input_tokens_details": {"cached_tokens": 31}}), false),
             None
         );
     }

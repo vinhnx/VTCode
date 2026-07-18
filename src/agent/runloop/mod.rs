@@ -16,6 +16,4 @@ mod welcome;
 mod welcome_tests;
 
 pub(crate) use crate::agent::agents::ResumeSession;
-pub(crate) use skills_commands::{
-    SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command,
-};
+pub(crate) use skills_commands::{SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command};

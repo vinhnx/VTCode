@@ -5,16 +5,8 @@ use vtcode_core::notifications::{
 
 use crate::startup::StartupContext;
 
-pub async fn handle_notify_command(
-    startup: &StartupContext,
-    title: Option<String>,
-    message: String,
-) -> Result<()> {
+pub async fn handle_notify_command(startup: &StartupContext, title: Option<String>, message: String) -> Result<()> {
     apply_global_notification_config_from_vtcode(&startup.config)?;
-    send_global_notification(NotificationEvent::Custom {
-        title: title.unwrap_or_default(),
-        message,
-    })
-    .await?;
+    send_global_notification(NotificationEvent::Custom { title: title.unwrap_or_default(), message }).await?;
     Ok(())
 }

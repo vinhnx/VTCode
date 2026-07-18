@@ -17,7 +17,6 @@ pub use auth_handler::{AuthHandler, AuthMethod};
 
 // Re-export config auth types for convenience
 pub use vtcode_config::auth::{
-    AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
-    exchange_code_for_token, generate_pkce_challenge, get_auth_status, get_auth_url,
-    load_oauth_token, save_oauth_token,
+    AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token, exchange_code_for_token,
+    generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
 };

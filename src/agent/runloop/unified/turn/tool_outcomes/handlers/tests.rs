@@ -1,31 +1,25 @@
 use super::fallbacks::{
-    build_validation_error_content_with_fallback, preflight_validation_fallback,
-    recovery_fallback_for_tool,
+    build_validation_error_content_with_fallback, preflight_validation_fallback, recovery_fallback_for_tool,
 };
 use super::looping::{
-    low_signal_family_key, shell_run_signature, spool_chunk_read_path,
-    task_tracker_create_signature,
+    low_signal_family_key, shell_run_signature, spool_chunk_read_path, task_tracker_create_signature,
 };
 use super::recovery;
 use super::{
-    ToolOutcomeContext, ValidationResult, apply_reused_read_only_loop_metadata,
-    build_tool_permissions_context, enforce_blocked_tool_call_guard,
-    enforce_duplicate_task_tracker_create_guard, enforce_repeated_shell_run_guard,
+    ToolOutcomeContext, ValidationResult, apply_reused_read_only_loop_metadata, build_tool_permissions_context,
+    enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard, enforce_repeated_shell_run_guard,
     flush_budget_synthesis_directives, handle_prepared_tool_call, handle_single_tool_call,
     max_consecutive_blocked_tool_calls_per_turn, validate_tool_call,
 };
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::run_loop_context::{
-    HarnessTurnState, ToolBudgetExhaustion, TurnId, TurnRunId,
-};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, ToolBudgetExhaustion, TurnId, TurnRunId};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::turn::context::{
-    PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-    TurnProcessingContextParts,
+    PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingContextParts,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::handle_tool_calls;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
@@ -41,9 +35,7 @@ use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault
 use vtcode_config::{SubagentSource, SubagentSpec, builtin_primary_build_agent};
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::config::types::{
-    AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
-};
+use vtcode_core::config::types::{AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -113,8 +105,7 @@ struct TestContextBacking {
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     approval_recorder: Arc<ApprovalRecorder>,
     session_stats: SessionStats,
-    plan_session:
-        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+    plan_session: crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     mcp_panel_state: McpPanelState,
     context_manager: ContextManager,
     last_forced_redraw: Instant,
@@ -155,8 +146,7 @@ impl TestContextBacking {
         let tools = Arc::new(RwLock::new(Vec::new()));
         let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state =
-            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+        let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
@@ -170,10 +160,7 @@ impl TestContextBacking {
         let mut session = create_headless_session();
         session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
-        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(
-            handle.clone(),
-            Default::default(),
-        );
+        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
@@ -182,11 +169,9 @@ impl TestContextBacking {
         let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
         let rate_limiter = Arc::new(AdaptiveRateLimiter::default());
         let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
-        let autonomous_executor =
-            Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
-        let error_recovery = Arc::new(RwLock::new(
-            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
-        ));
+        let autonomous_executor = Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
+        let error_recovery =
+            Arc::new(RwLock::new(vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default()));
         let harness_state = HarnessTurnState::new(
             TurnRunId("run-test".to_string()),
             TurnId("turn-test".to_string()),

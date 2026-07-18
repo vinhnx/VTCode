@@ -59,10 +59,7 @@ mod error_scenarios {
         for cat in &categories {
             let kind: UnifiedErrorKind = UnifiedErrorKind::from(*cat);
             let back: ErrorCategory = ErrorCategory::from(kind);
-            assert!(
-                !back.user_label().is_empty(),
-                "Round-trip for {cat:?} via UnifiedErrorKind produced empty label"
-            );
+            assert!(!back.user_label().is_empty(), "Round-trip for {cat:?} via UnifiedErrorKind produced empty label");
         }
     }
 
@@ -85,10 +82,7 @@ mod error_scenarios {
 
         for (msg, expected) in cases {
             let actual = vtcode_commons::classify_error_message(msg);
-            assert_eq!(
-                actual, expected,
-                "classify_error_message({msg:?}) = {actual:?}, expected {expected:?}"
-            );
+            assert_eq!(actual, expected, "classify_error_message({msg:?}) = {actual:?}, expected {expected:?}");
         }
     }
 
@@ -108,10 +102,7 @@ mod error_scenarios {
         for cat in &retryable {
             match cat.retryability() {
                 Retryability::Retryable { max_attempts, backoff } => {
-                    assert!(
-                        (1..=10).contains(&max_attempts),
-                        "{cat:?} has unreasonable max_attempts={max_attempts}"
-                    );
+                    assert!((1..=10).contains(&max_attempts), "{cat:?} has unreasonable max_attempts={max_attempts}");
                     // Verify backoff strategy is set
                     match backoff {
                         BackoffStrategy::Exponential { .. } | BackoffStrategy::Fixed { .. } => {}
@@ -191,21 +182,14 @@ mod error_scenarios {
             let label = cat.user_label();
             assert!(!label.is_empty(), "{cat:?} has empty user_label");
             assert!(label.len() <= 40, "{cat:?} label too long: {label:?}");
-            assert!(
-                label.contains(' ') || label.len() >= 6,
-                "{cat:?} label should be descriptive: {label:?}"
-            );
+            assert!(label.contains(' ') || label.len() >= 6, "{cat:?} label should be descriptive: {label:?}");
         }
     }
 
     #[test]
     fn retry_policy_surfaces_circuit_open_backoff() {
         let policy = vtcode_core::retry::RetryPolicy::default();
-        let decision = policy.decision_for_category(
-            ErrorCategory::CircuitOpen,
-            0,
-            Some(Duration::from_secs(7)),
-        );
+        let decision = policy.decision_for_category(ErrorCategory::CircuitOpen, 0, Some(Duration::from_secs(7)));
 
         assert!(decision.retryable);
         assert_eq!(decision.delay, Some(Duration::from_secs(7)));
@@ -278,20 +262,13 @@ mod error_scenarios {
             );
 
             let cat = vtcode_commons::classify_error_message(msg);
-            assert!(
-                cat.is_retryable(),
-                "classify_error_message({msg:?}) = {cat:?} should be retryable"
-            );
+            assert!(cat.is_retryable(), "classify_error_message({msg:?}) = {cat:?} should be retryable");
         }
     }
 
     #[test]
     fn non_retryable_errors_are_consistent() {
-        let non_retryable_messages = [
-            "invalid api key",
-            "permission denied",
-            "authentication failed",
-        ];
+        let non_retryable_messages = ["invalid api key", "permission denied", "authentication failed"];
 
         for msg in &non_retryable_messages {
             assert!(
@@ -300,10 +277,7 @@ mod error_scenarios {
             );
 
             let cat = vtcode_commons::classify_error_message(msg);
-            assert!(
-                !cat.is_retryable(),
-                "classify_error_message({msg:?}) = {cat:?} should be non-retryable"
-            );
+            assert!(!cat.is_retryable(), "classify_error_message({msg:?}) = {cat:?} should be non-retryable");
         }
     }
 
@@ -314,8 +288,7 @@ mod error_scenarios {
     #[test]
     fn classify_anyhow_error_with_context() {
         let inner = std::io::Error::new(std::io::ErrorKind::TimedOut, "connection timed out");
-        let anyhow_err =
-            anyhow::Error::new(inner).context("request timed out while fetching resource");
+        let anyhow_err = anyhow::Error::new(inner).context("request timed out while fetching resource");
 
         let cat = vtcode_commons::classify_anyhow_error(&anyhow_err);
         assert_eq!(cat, ErrorCategory::Timeout, "Expected Timeout, got {cat:?}");

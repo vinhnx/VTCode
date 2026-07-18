@@ -45,11 +45,7 @@ impl MemoryPool {
     }
 
     /// Create a new memory pool with custom sizes
-    pub fn with_capacities(
-        string_capacity: usize,
-        value_capacity: usize,
-        vec_capacity: usize,
-    ) -> Self {
+    pub fn with_capacities(string_capacity: usize, value_capacity: usize, vec_capacity: usize) -> Self {
         Self {
             string_pool: Mutex::new(VecDeque::with_capacity(string_capacity)),
             value_pool: Mutex::new(VecDeque::with_capacity(value_capacity)),
@@ -197,10 +193,8 @@ impl MemoryPool {
         };
 
         // Calculate current pool utilization
-        let string_utilization =
-            self.string_pool.lock().len() as f64 / config.max_string_pool_size as f64;
-        let value_utilization =
-            self.value_pool.lock().len() as f64 / config.max_value_pool_size as f64;
+        let string_utilization = self.string_pool.lock().len() as f64 / config.max_string_pool_size as f64;
+        let value_utilization = self.value_pool.lock().len() as f64 / config.max_value_pool_size as f64;
         let vec_utilization = self.vec_pool.lock().len() as f64 / config.max_vec_pool_size as f64;
 
         // Generate tuning recommendations
@@ -234,11 +228,7 @@ impl MemoryPool {
 }
 
 /// Calculate size recommendation based on hit rate and utilization
-fn calculate_size_recommendation(
-    hit_rate: f64,
-    utilization: f64,
-    current_size: usize,
-) -> SizeRecommendation {
+fn calculate_size_recommendation(hit_rate: f64, utilization: f64, current_size: usize) -> SizeRecommendation {
     if hit_rate < 0.3 {
         // Low hit rate - pool might be too small or not used effectively
         if utilization > 0.8 {
@@ -378,8 +368,7 @@ impl MemoryPool {
 }
 
 /// Global memory pool instance
-static MEMORY_POOL: once_cell::sync::Lazy<Arc<MemoryPool>> =
-    once_cell::sync::Lazy::new(|| Arc::new(MemoryPool::new()));
+static MEMORY_POOL: once_cell::sync::Lazy<Arc<MemoryPool>> = once_cell::sync::Lazy::new(|| Arc::new(MemoryPool::new()));
 
 /// Get the global memory pool
 pub fn global_pool() -> Arc<MemoryPool> {

@@ -73,12 +73,7 @@ pub fn capture(workspace: &Path, max_file_bytes: u64) -> io::Result<WorkspaceSna
     Ok(WorkspaceSnapshot { files, captured_at: now_rfc3339() })
 }
 
-fn collect(
-    root: &Path,
-    dir: &Path,
-    max_file_bytes: u64,
-    out: &mut BTreeMap<String, FileStat>,
-) -> io::Result<()> {
+fn collect(root: &Path, dir: &Path, max_file_bytes: u64, out: &mut BTreeMap<String, FileStat>) -> io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -104,11 +99,7 @@ fn collect(
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                         .map(|d| d.as_nanos() as i64)
                         .unwrap_or(0);
-                    let head_hash = if size <= max_file_bytes {
-                        hash_head(&path)
-                    } else {
-                        0
-                    };
+                    let head_hash = if size <= max_file_bytes { hash_head(&path) } else { 0 };
                     out.insert(rel, FileStat { size, mtime_ns, head_hash });
                 }
                 Err(_) => continue,
@@ -166,8 +157,7 @@ pub fn save_json(snapshot: &WorkspaceSnapshot, path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let bytes = serde_json::to_vec_pretty(snapshot)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes = serde_json::to_vec_pretty(snapshot).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     std::fs::write(path, bytes)
 }
 

@@ -157,9 +157,7 @@ impl OpenAIHostedShellNetworkPolicy {
                 }
             }
             OpenAIHostedShellNetworkPolicyType::Allowlist => {
-                if let Some(index) =
-                    self.allowed_domains.iter().position(|value| value.trim().is_empty())
-                {
+                if let Some(index) = self.allowed_domains.iter().position(|value| value.trim().is_empty()) {
                     return Some(format!(
                         "`provider.openai.hosted_shell.network_policy.allowed_domains[{index}]` must not be empty when set."
                     ));
@@ -254,24 +252,18 @@ impl OpenAIHostedSkill {
     pub fn validation_error(&self, index: usize) -> Option<String> {
         match self {
             Self::SkillReference { skill_id, version } => {
-                let skill_id_path =
-                    format!("provider.openai.hosted_shell.skills[{index}].skill_id");
+                let skill_id_path = format!("provider.openai.hosted_shell.skills[{index}].skill_id");
                 if skill_id.trim().is_empty() {
-                    return Some(format!(
-                        "`{skill_id_path}` must not be empty when `type = \"skill_reference\"`."
-                    ));
+                    return Some(format!("`{skill_id_path}` must not be empty when `type = \"skill_reference\"`."));
                 }
 
                 let version_path = format!("provider.openai.hosted_shell.skills[{index}].version");
                 version.validation_error(&version_path)
             }
             Self::Inline { bundle_b64, .. } => {
-                let bundle_path =
-                    format!("provider.openai.hosted_shell.skills[{index}].bundle_b64");
+                let bundle_path = format!("provider.openai.hosted_shell.skills[{index}].bundle_b64");
                 if bundle_b64.trim().is_empty() {
-                    return Some(format!(
-                        "`{bundle_path}` must not be empty when `type = \"inline\"`."
-                    ));
+                    return Some(format!("`{bundle_path}` must not be empty when `type = \"inline\"`."));
                 }
                 None
             }
@@ -349,9 +341,7 @@ impl OpenAIHostedShellConfig {
     }
 
     pub fn is_valid_for_runtime(&self) -> bool {
-        self.has_valid_reference_target()
-            && self.has_valid_skill_mounts()
-            && self.has_valid_network_policy()
+        self.has_valid_reference_target() && self.has_valid_skill_mounts() && self.has_valid_network_policy()
     }
 }
 
@@ -665,9 +655,9 @@ fn default_task_budget_beta() -> String {
 mod tests {
     use super::{
         AnthropicConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
-        OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
-        OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
-        OpenAIManualCompactionConfig, OpenAIServiceTier, ToolSearchAlgorithm,
+        OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType,
+        OpenAIHostedSkill, OpenAIHostedSkillVersion, OpenAIManualCompactionConfig, OpenAIServiceTier,
+        ToolSearchAlgorithm,
     };
 
     #[test]
@@ -692,15 +682,13 @@ mod tests {
 
     #[test]
     fn anthropic_config_parses_native_memory_opt_in() {
-        let parsed: AnthropicConfig =
-            toml::from_str("[memory]\nenabled = true").expect("config should parse");
+        let parsed: AnthropicConfig = toml::from_str("[memory]\nenabled = true").expect("config should parse");
         assert!(parsed.memory.enabled);
     }
 
     #[test]
     fn openai_config_parses_websocket_mode_opt_in() {
-        let parsed: OpenAIConfig =
-            toml::from_str("websocket_mode = true").expect("config should parse");
+        let parsed: OpenAIConfig = toml::from_str("websocket_mode = true").expect("config should parse");
         assert!(parsed.websocket_mode);
         assert_eq!(parsed.responses_store, None);
         assert!(parsed.responses_include.is_empty());
@@ -742,23 +730,18 @@ instructions = "Preserve the bug reproduction steps."
         )
         .expect("config should parse");
 
-        assert_eq!(
-            parsed.manual_compaction.instructions.as_deref(),
-            Some("Preserve the bug reproduction steps.")
-        );
+        assert_eq!(parsed.manual_compaction.instructions.as_deref(), Some("Preserve the bug reproduction steps."));
     }
 
     #[test]
     fn openai_config_parses_service_tier() {
-        let parsed: OpenAIConfig =
-            toml::from_str(r#"service_tier = "priority""#).expect("config should parse");
+        let parsed: OpenAIConfig = toml::from_str(r#"service_tier = "priority""#).expect("config should parse");
         assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Priority));
     }
 
     #[test]
     fn openai_config_parses_flex_service_tier() {
-        let parsed: OpenAIConfig =
-            toml::from_str(r#"service_tier = "flex""#).expect("config should parse");
+        let parsed: OpenAIConfig = toml::from_str(r#"service_tier = "flex""#).expect("config should parse");
         assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Flex));
     }
 
@@ -917,8 +900,7 @@ always_available_tools = ["code_search", "custom_tool"]
             network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 
-        let message =
-            config.first_invalid_skill_message().expect("invalid mount should be reported");
+        let message = config.first_invalid_skill_message().expect("invalid mount should be reported");
 
         assert!(message.contains("provider.openai.hosted_shell.skills[0].skill_id"));
         assert!(!config.has_valid_skill_mounts());

@@ -10,14 +10,9 @@ use crate::llm::provider::{FinishReason, Message, ResponsesContinuationState};
 use vtcode_exec_events::Usage;
 
 /// Record the terminal turn event (TurnCompleted or TurnFailed) based on outcome.
-pub(super) fn record_terminal_turn_event(
-    event_recorder: &mut ExecEventRecorder,
-    outcome: &TaskOutcome,
-    usage: Usage,
-) {
+pub(super) fn record_terminal_turn_event(event_recorder: &mut ExecEventRecorder, outcome: &TaskOutcome, usage: Usage) {
     if outcome.is_success() {
-        event_recorder
-            .record_thread_event(ThreadEvent::TurnCompleted(TurnCompletedEvent { usage }));
+        event_recorder.record_thread_event(ThreadEvent::TurnCompleted(TurnCompletedEvent { usage }));
     } else {
         event_recorder.record_thread_event(ThreadEvent::TurnFailed(TurnFailedEvent {
             message: outcome.description(),

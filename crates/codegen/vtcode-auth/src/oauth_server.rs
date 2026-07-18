@@ -561,14 +561,9 @@ mod tests {
         let port = listener.local_addr().expect("local addr").port();
         drop(listener);
 
-        let server = start_auth_code_callback_server(
-            port,
-            5,
-            OAuthCallbackPage::new(OAuthProvider::OpenAi),
-            None,
-        )
-        .await
-        .expect("start callback server");
+        let server = start_auth_code_callback_server(port, 5, OAuthCallbackPage::new(OAuthProvider::OpenAi), None)
+            .await
+            .expect("start callback server");
         let client = Client::builder().no_proxy().build().expect("build http client");
 
         let health = client
@@ -585,9 +580,6 @@ mod tests {
             .expect("cancel request should succeed");
         assert!(cancel.status().is_success());
 
-        assert!(matches!(
-            server.wait().await.expect("wait for callback outcome"),
-            AuthCallbackOutcome::Cancelled
-        ));
+        assert!(matches!(server.wait().await.expect("wait for callback outcome"), AuthCallbackOutcome::Cancelled));
     }
 }

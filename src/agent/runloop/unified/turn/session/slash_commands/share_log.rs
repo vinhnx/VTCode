@@ -18,12 +18,10 @@ mod timeline;
 
 use timeline::{build_timeline_export, redact_timeline_export, render_session_timeline_html};
 
-static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b").expect("valid email regex")
-});
-static USER_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?P<prefix>/(?:Users|home)/)[^/\s]+").expect("valid user path regex")
-});
+static EMAIL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b").expect("valid email regex"));
+static USER_PATH_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?P<prefix>/(?:Users|home)/)[^/\s]+").expect("valid user path regex"));
 
 fn build_session_log_messages(messages: &[uni::Message]) -> Vec<Value> {
     messages
@@ -66,11 +64,7 @@ fn render_session_log_markdown(
     markdown.push_str("# VT Code Session Log\n\n");
     let _ = writeln!(markdown, "- Exported at: {exported_at}");
     let _ = writeln!(markdown, "- Model: `{model}`");
-    let _ = writeln!(
-        markdown,
-        "- Workspace: `{}`",
-        redact_sensitive_text(&workspace.display().to_string())
-    );
+    let _ = writeln!(markdown, "- Workspace: `{}`", redact_sensitive_text(&workspace.display().to_string()));
     let _ = writeln!(markdown, "- Total messages: {}\n", messages.len());
     markdown.push_str("## Messages\n\n");
 
@@ -105,8 +99,8 @@ fn render_session_log_markdown(
                 let _ = writeln!(markdown, "- `{id}`: `{function_name}`");
 
                 if let Some(arguments) = function.and_then(|value| value.get("arguments")) {
-                    let arguments_text = serde_json::to_string_pretty(arguments)
-                        .unwrap_or_else(|_| arguments.to_string());
+                    let arguments_text =
+                        serde_json::to_string_pretty(arguments).unwrap_or_else(|_| arguments.to_string());
                     markdown.push_str("```json\n");
                     markdown.push_str(&arguments_text);
                     markdown.push_str("\n```\n");
@@ -141,9 +135,9 @@ fn redact_json_value(value: &Value) -> Value {
     match value {
         Value::String(text) => Value::String(redact_sensitive_text(text)),
         Value::Array(items) => Value::Array(items.iter().map(redact_json_value).collect()),
-        Value::Object(map) => Value::Object(
-            map.iter().map(|(key, value)| (key.clone(), redact_json_value(value))).collect(),
-        ),
+        Value::Object(map) => {
+            Value::Object(map.iter().map(|(key, value)| (key.clone(), redact_json_value(value))).collect())
+        }
         _ => value.clone(),
     }
 }
@@ -174,16 +168,13 @@ pub(crate) async fn handle_share_log(
         "total_messages": redacted_log_messages.len(),
         "messages": redacted_log_messages,
     });
-    let json_output_path =
-        ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.json"));
-    let markdown_output_path =
-        ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.md"));
-    let html_output_path =
-        ctx.config.workspace.join(format!("vtcode-session-timeline-{timestamp}.html"));
+    let json_output_path = ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.json"));
+    let markdown_output_path = ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.md"));
+    let html_output_path = ctx.config.workspace.join(format!("vtcode-session-timeline-{timestamp}.html"));
 
     if matches!(format, SessionLogExportFormat::Both | SessionLogExportFormat::Json) {
-        let json = serde_json::to_string_pretty(&redacted_session_log_export)
-            .context("Failed to serialize session log")?;
+        let json =
+            serde_json::to_string_pretty(&redacted_session_log_export).context("Failed to serialize session log")?;
         write_file_with_context_sync(&json_output_path, &json, "session log")?;
     }
 
@@ -248,11 +239,7 @@ pub(crate) async fn handle_share_log(
         SessionLogExportFormat::Markdown => {
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "Session log exported to: {} ({})",
-                    markdown_output_path.display(),
-                    "Markdown"
-                ),
+                &format!("Session log exported to: {} ({})", markdown_output_path.display(), "Markdown"),
             )?;
             ctx.renderer
                 .line(MessageStyle::Info, "You can share this file for debugging purposes.")?;

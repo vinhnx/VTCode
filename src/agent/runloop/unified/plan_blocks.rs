@@ -53,10 +53,7 @@ impl ProposedPlanStreamParser {
                     }
 
                     let keep_tail = OPEN_TAG.len().saturating_sub(1).min(self.pending.len());
-                    let emit_len = safe_char_boundary(
-                        &self.pending,
-                        self.pending.len().saturating_sub(keep_tail),
-                    );
+                    let emit_len = safe_char_boundary(&self.pending, self.pending.len().saturating_sub(keep_tail));
                     visible.push_str(&self.pending[..emit_len]);
                     self.pending.drain(..emit_len);
                     break;
@@ -70,10 +67,7 @@ impl ProposedPlanStreamParser {
                     }
 
                     let keep_tail = CLOSE_TAG.len().saturating_sub(1).min(self.pending.len());
-                    let append_len = safe_char_boundary(
-                        &self.pending,
-                        self.pending.len().saturating_sub(keep_tail),
-                    );
+                    let append_len = safe_char_boundary(&self.pending, self.pending.len().saturating_sub(keep_tail));
                     self.plan_buffer.push_str(&self.pending[..append_len]);
                     self.pending.drain(..append_len);
                     break;
@@ -184,8 +178,7 @@ mod tests {
 
     #[test]
     fn extracts_single_proposed_plan_block() {
-        let extraction =
-            extract_proposed_plan("Intro\n<proposed_plan>\n- A\n- B\n</proposed_plan>\nOutro");
+        let extraction = extract_proposed_plan("Intro\n<proposed_plan>\n- A\n- B\n</proposed_plan>\nOutro");
         assert_eq!(extraction.stripped_text, "Intro\n\nOutro");
         assert_eq!(extraction.plan_text.as_deref(), Some("- A\n- B"));
     }

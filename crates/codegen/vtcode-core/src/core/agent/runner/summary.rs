@@ -76,9 +76,7 @@ impl AgentRunner {
                 .find(|message| message.role == MessageRole::Assistant)
                 .is_some_and(|message| {
                     let content = message.content.as_text();
-                    content.contains("completed")
-                        || content.contains("done")
-                        || content.contains("finished")
+                    content.contains("completed") || content.contains("done") || content.contains("finished")
                 })
         {
             resolved_outcome = TaskOutcome::Success;

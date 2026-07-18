@@ -23,13 +23,8 @@ impl ComprehensiveSkillValidator {
     }
 
     /// Validate a skill manifest comprehensively
-    pub fn validate_manifest(
-        &self,
-        manifest: &SkillManifest,
-        skill_path: &Path,
-    ) -> SkillValidationReport {
-        let mut report =
-            SkillValidationReport::new(manifest.name.clone(), skill_path.to_path_buf());
+    pub fn validate_manifest(&self, manifest: &SkillManifest, skill_path: &Path) -> SkillValidationReport {
+        let mut report = SkillValidationReport::new(manifest.name.clone(), skill_path.to_path_buf());
 
         // Validate name field
         self.validate_name_field(manifest, &mut report);
@@ -54,11 +49,7 @@ impl ComprehensiveSkillValidator {
     fn validate_name_field(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
         // Check empty
         if manifest.name.is_empty() {
-            report.add_error(
-                Some("name".to_string()),
-                "name is required and must not be empty".to_string(),
-                None,
-            );
+            report.add_error(Some("name".to_string()), "name is required and must not be empty".to_string(), None);
             return;
         }
 
@@ -114,29 +105,19 @@ impl ComprehensiveSkillValidator {
         if manifest.name.contains("anthropic") || manifest.name.contains("claude") {
             report.add_error(
                 Some("name".to_string()),
-                format!(
-                    "name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'",
-                    manifest.name
-                ),
+                format!("name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'", manifest.name),
                 Some("Choose a different name without these words".to_string()),
             );
         }
     }
 
     /// Validate description field
-    fn validate_description_field(
-        &self,
-        manifest: &SkillManifest,
-        report: &mut SkillValidationReport,
-    ) {
+    fn validate_description_field(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
         if manifest.description.is_empty() {
             report.add_error(
                 Some("description".to_string()),
                 "description is required and must not be empty".to_string(),
-                Some(
-                    "Add a description explaining what the skill does and when to use it"
-                        .to_string(),
-                ),
+                Some("Add a description explaining what the skill does and when to use it".to_string()),
             );
             return;
         }
@@ -144,20 +125,14 @@ impl ComprehensiveSkillValidator {
         if manifest.description.len() > 1024 {
             report.add_error(
                 Some("description".to_string()),
-                format!(
-                    "description exceeds maximum length: {} characters (max 1024)",
-                    manifest.description.len()
-                ),
+                format!("description exceeds maximum length: {} characters (max 1024)", manifest.description.len()),
                 Some("Shorten the description to 1024 characters or less".to_string()),
             );
         }
 
         // Suggest longer description if too short
         if manifest.description.len() < 50 {
-            report.add_suggestion(
-                Some("description".to_string()),
-                "Description is very short".to_string(),
-            );
+            report.add_suggestion(Some("description".to_string()), "Description is very short".to_string());
         }
     }
 
@@ -172,20 +147,13 @@ impl ComprehensiveSkillValidator {
             report.add_warning(
                 Some("name".to_string()),
                 e.to_string(),
-                Some(
-                    "Rename the skill directory to match the name field, or rename the skill"
-                        .to_string(),
-                ),
+                Some("Rename the skill directory to match the name field, or rename the skill".to_string()),
             );
         }
     }
 
     /// Validate all optional fields
-    fn validate_optional_fields(
-        &self,
-        manifest: &SkillManifest,
-        report: &mut SkillValidationReport,
-    ) {
+    fn validate_optional_fields(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
         // Validate allowed-tools field
         if let Some(allowed_tools) = &manifest.allowed_tools {
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
@@ -193,10 +161,7 @@ impl ComprehensiveSkillValidator {
             if tools.len() > 16 {
                 report.add_error(
                     Some("allowed-tools".to_string()),
-                    format!(
-                        "allowed-tools exceeds maximum tool count: {} tools (max 16)",
-                        tools.len()
-                    ),
+                    format!("allowed-tools exceeds maximum tool count: {} tools (max 16)", tools.len()),
                     Some("Reduce the number of tools to 16 or fewer".to_string()),
                 );
             }
@@ -227,17 +192,12 @@ impl ComprehensiveSkillValidator {
                 report.add_error(
                     Some("compatibility".to_string()),
                     "compatibility must not be empty if specified".to_string(),
-                    Some(
-                        "Either remove the field or add meaningful compatibility info".to_string(),
-                    ),
+                    Some("Either remove the field or add meaningful compatibility info".to_string()),
                 );
             } else if compatibility.len() > 500 {
                 report.add_error(
                     Some("compatibility".to_string()),
-                    format!(
-                        "compatibility exceeds maximum length: {} characters (max 500)",
-                        compatibility.len()
-                    ),
+                    format!("compatibility exceeds maximum length: {} characters (max 500)", compatibility.len()),
                     Some("Shorten the compatibility field".to_string()),
                 );
             }
@@ -245,17 +205,13 @@ impl ComprehensiveSkillValidator {
 
         // Suggest adding optional fields if missing
         if manifest.license.is_none() {
-            report.add_suggestion(
-                Some("license".to_string()),
-                "Consider adding a license field".to_string(),
-            );
+            report.add_suggestion(Some("license".to_string()), "Consider adding a license field".to_string());
         }
 
         if manifest.compatibility.is_none() {
             report.add_suggestion(
                 Some("compatibility".to_string()),
-                "Consider adding a compatibility field if the skill has specific requirements"
-                    .to_string(),
+                "Consider adding a compatibility field if the skill has specific requirements".to_string(),
             );
         }
 
@@ -277,26 +233,16 @@ impl ComprehensiveSkillValidator {
         remediation: &str,
     ) {
         if self.strict_mode {
-            report.add_error(
-                Some(field.to_string()),
-                message.to_string(),
-                Some(remediation.to_string()),
-            );
+            report.add_error(Some(field.to_string()), message.to_string(), Some(remediation.to_string()));
         } else {
-            report.add_warning(
-                Some(field.to_string()),
-                message.to_string(),
-                Some(remediation.to_string()),
-            );
+            report.add_warning(Some(field.to_string()), message.to_string(), Some(remediation.to_string()));
         }
     }
 
     fn description_has_routing_signals(&self, description: &str) -> bool {
         let text = description.to_lowercase();
-        let has_trigger_hint = text.contains("when")
-            || text.contains("if ")
-            || text.contains("for ")
-            || text.contains("trigger");
+        let has_trigger_hint =
+            text.contains("when") || text.contains("if ") || text.contains("for ") || text.contains("trigger");
         let has_output_hint = text.contains("output")
             || text.contains("returns")
             || text.contains("result")
@@ -314,16 +260,9 @@ impl ComprehensiveSkillValidator {
     }
 
     /// Validate instructions length (suggest keeping under 500 lines)
-    fn validate_instructions_length(
-        &self,
-        _manifest: &SkillManifest,
-        report: &mut SkillValidationReport,
-    ) {
+    fn validate_instructions_length(&self, _manifest: &SkillManifest, report: &mut SkillValidationReport) {
         // This is a suggestion based on the spec recommendation
-        report.add_suggestion(
-            None,
-            "Keep SKILL.md under 500 lines for optimal context usage".to_string(),
-        );
+        report.add_suggestion(None, "Keep SKILL.md under 500 lines for optimal context usage".to_string());
     }
 
     /// Validate file references in instructions
@@ -358,8 +297,7 @@ impl ComprehensiveSkillValidator {
         // List valid references as info
         let valid_refs = validator.list_valid_references();
         if !valid_refs.is_empty() {
-            let ref_list: Vec<String> =
-                valid_refs.iter().map(|p| p.to_string_lossy().to_string()).collect();
+            let ref_list: Vec<String> = valid_refs.iter().map(|p| p.to_string_lossy().to_string()).collect();
             report.add_suggestion(
                 None,
                 format!("Found {} valid file references: {}", ref_list.len(), ref_list.join(", ")),
@@ -394,8 +332,7 @@ mod tests {
 
         // Note: We can't easily test directory validation without creating temp dirs
         // So we'll test with a non-existent path which should generate warnings
-        let report =
-            validator.validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path());
+        let report = validator.validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path());
 
         // Should have some suggestions for missing fields
         assert!(report.suggestions.iter().any(|s| s.field == Some("license".to_string())));

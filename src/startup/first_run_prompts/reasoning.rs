@@ -9,18 +9,14 @@ pub(crate) fn prompt_reasoning_effort(
     renderer: &mut AnsiRenderer,
     default: ReasoningEffortLevel,
 ) -> Result<ReasoningEffortLevel> {
-    renderer
-        .line(MessageStyle::Status, "Choose reasoning effort level for models that support it:")?;
+    renderer.line(MessageStyle::Status, "Choose reasoning effort level for models that support it:")?;
 
     let levels = [
         (ReasoningEffortLevel::None, "None – lowest latency, good default for GPT-5.4"),
         (ReasoningEffortLevel::Low, "Low – faster responses, less reasoning"),
         (ReasoningEffortLevel::Medium, "Medium – balanced reasoning for harder multi-step work"),
         (ReasoningEffortLevel::High, "High – deeper reasoning, slower responses"),
-        (
-            ReasoningEffortLevel::XHigh,
-            "Extra High – best default for advanced coding and agentic work",
-        ),
+        (ReasoningEffortLevel::XHigh, "Extra High – best default for advanced coding and agentic work"),
         (
             ReasoningEffortLevel::Max,
             "Max – highest adaptive effort for supported Anthropic models, highest latency and token use",
@@ -30,8 +26,7 @@ pub(crate) fn prompt_reasoning_effort(
     match select_reasoning_with_ratatui(&levels, default) {
         Ok(level) => Ok(level),
         Err(error) => {
-            renderer
-                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_reasoning_effort_text(renderer, &levels, default)
         }
     }

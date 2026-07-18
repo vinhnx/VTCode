@@ -15,17 +15,10 @@ impl PanelContentLine {
     }
 }
 
-pub(crate) fn render_left_border_panel(
-    renderer: &mut AnsiRenderer,
-    lines: Vec<PanelContentLine>,
-) -> Result<()> {
+pub(crate) fn render_left_border_panel(renderer: &mut AnsiRenderer, lines: Vec<PanelContentLine>) -> Result<()> {
     for line in lines {
         if let Some(override_style) = line.override_style {
-            renderer.line_with_override_style(
-                line.style,
-                override_style,
-                line.rendered.as_str(),
-            )?;
+            renderer.line_with_override_style(line.style, override_style, line.rendered.as_str())?;
         } else {
             renderer.line(line.style, line.rendered.as_str())?;
         }

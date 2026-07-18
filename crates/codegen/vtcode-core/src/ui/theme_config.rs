@@ -37,8 +37,8 @@ impl ThemeConfig {
         let content = read_file_with_context_sync(path, "theme file")
             .with_context(|| format!("Failed to read theme file: {}", path.display()))?;
 
-        let config: ThemeConfig = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse theme file: {}", path.display()))?;
+        let config: ThemeConfig =
+            toml::from_str(&content).with_context(|| format!("Failed to parse theme file: {}", path.display()))?;
 
         Ok(config)
     }
@@ -312,9 +312,9 @@ impl ThemeConfig {
         let parser = CachedStyleParser::default();
         let mut extension_styles = hashbrown::HashMap::new();
         for (ext, color_str) in &self.files.extensions {
-            let style = parser.parse_flexible(color_str).with_context(|| {
-                format!("Failed to parse style for extension '{ext}': {color_str}")
-            })?;
+            let style = parser
+                .parse_flexible(color_str)
+                .with_context(|| format!("Failed to parse style for extension '{ext}': {color_str}"))?;
             extension_styles.insert(ext.clone(), style);
         }
 

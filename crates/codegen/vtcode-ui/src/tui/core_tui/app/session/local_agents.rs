@@ -156,24 +156,15 @@ impl AppSession {
                 self.mark_dirty();
                 LocalAgentsKeyResult::Handled
             }
-            KeyCode::Char('o') | KeyCode::Char('O')
-                if key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                self.selected_local_agent_transcript_event()
-                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
-            }
-            KeyCode::Char('k') | KeyCode::Char('K')
-                if key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.selected_local_agent_stop_event()
-                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
-            }
-            KeyCode::Char('x') | KeyCode::Char('X')
-                if key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                self.selected_local_agent_force_cancel_event()
-                    .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit)
-            }
+            KeyCode::Char('o') | KeyCode::Char('O') if key.modifiers.contains(KeyModifiers::ALT) => self
+                .selected_local_agent_transcript_event()
+                .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
+            KeyCode::Char('k') | KeyCode::Char('K') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_local_agent_stop_event()
+                .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
+            KeyCode::Char('x') | KeyCode::Char('X') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_local_agent_force_cancel_event()
+                .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
             KeyCode::Enter => self
                 .selected_local_agent_inspect_event()
                 .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),

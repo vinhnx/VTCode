@@ -8,10 +8,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 #[cold]
 pub(super) fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
-    let formatted_error = error_display::format_llm_error(
-        provider_name,
-        &format!("Failed to render streaming output: {err}"),
-    );
+    let formatted_error =
+        error_display::format_llm_error(provider_name, &format!("Failed to render streaming output: {err}"));
     uni::LLMError::Provider { message: formatted_error, metadata: None }
 }
 
@@ -25,9 +23,7 @@ pub(super) fn reasoning_matches_content(reasoning: &str, content: &str) -> bool 
 
     let cleaned_reasoning = normalize_for_compare(reasoning);
     let cleaned_content = normalize_for_compare(content);
-    !cleaned_reasoning.is_empty()
-        && !cleaned_content.is_empty()
-        && cleaned_reasoning == cleaned_content
+    !cleaned_reasoning.is_empty() && !cleaned_content.is_empty() && cleaned_reasoning == cleaned_content
 }
 
 pub(crate) fn common_prefix_len(a: &str, b: &str) -> usize {
@@ -46,10 +42,7 @@ pub(crate) fn common_prefix_len(a: &str, b: &str) -> usize {
 ///
 /// Returns `true` if any line was rendered. Blank lines are preserved as single
 /// paragraph breaks so structure is kept without blank-line spam.
-pub(super) fn render_compact_reasoning_block(
-    renderer: &mut AnsiRenderer,
-    text: &str,
-) -> Result<bool> {
+pub(super) fn render_compact_reasoning_block(renderer: &mut AnsiRenderer, text: &str) -> Result<bool> {
     let compact = compact_reasoning_text(text);
     if compact.trim().is_empty() {
         return Ok(false);

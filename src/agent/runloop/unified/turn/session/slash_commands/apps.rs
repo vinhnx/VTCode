@@ -8,8 +8,8 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest,
-    TransientSubmission, WizardModalMode, WizardStep,
+    InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
+    WizardModalMode, WizardStep,
 };
 
 use vtcode_core::hooks::SessionEndReason;
@@ -19,16 +19,12 @@ use crate::agent::runloop::unified::external_url_guard::{
     ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
 };
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
-use crate::agent::runloop::unified::palettes::{
-    ActivePalette, refresh_runtime_config_from_manager,
-};
+use crate::agent::runloop::unified::palettes::{ActivePalette, refresh_runtime_config_from_manager};
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, resolve_settings_view_path, show_settings_palette,
 };
 use crate::agent::runloop::unified::url_guard::open_external_url;
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 
 /// Time to wait for the event stream to fully stop before launching an external editor.
 /// Covers the 100ms stop timeout + processing delay in the drive loop.
@@ -48,9 +44,7 @@ const WORKFLOW_DISABLED: &str = "disabled";
 const WORKFLOW_DONE: &str = "done";
 const WORKFLOW_FILE_OPENER: &str = "file_opener";
 
-pub(crate) async fn handle_new_session(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "Starting new session...")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::NewSession))
 }
@@ -63,10 +57,8 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
     .await?
     {
         ExternalUrlOpenOutcome::Opened => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Opening documentation in browser: {DOCS_URL}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("Opening documentation in browser: {DOCS_URL}"))?;
         }
         ExternalUrlOpenOutcome::OpenFailed(err) => {
             ctx.renderer
@@ -88,9 +80,7 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_open_donate_links(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_open_donate_links(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let request = TransientRequest::List(ListOverlayRequest {
         title: "Support VT Code".to_string(),
         lines: vec![
@@ -122,22 +112,18 @@ pub(crate) async fn handle_open_donate_links(
         hotkeys: Vec::new(),
     });
 
-    let outcome = show_overlay_and_wait(
-        ctx.handle,
-        ctx.session,
-        request,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::ConfigAction(url))
-                if url == DONATE_URL || url == PROJECT_URL =>
-            {
-                Some(url)
+    let outcome =
+        show_overlay_and_wait(ctx.handle, ctx.session, request, ctx.ctrl_c_state, ctx.ctrl_c_notify, |submission| {
+            match submission {
+                TransientSubmission::Selection(InlineListSelection::ConfigAction(url))
+                    if url == DONATE_URL || url == PROJECT_URL =>
+                {
+                    Some(url)
+                }
+                _ => None,
             }
-            _ => None,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     ctx.handle.close_modal();
     ctx.handle.force_redraw();
@@ -180,10 +166,8 @@ pub(crate) async fn launch_editor_from_context(
         .map(|config| config.tools.editor.clone())
         .unwrap_or_default();
     if !editor_config.enabled {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "External editor is disabled (`tools.editor.enabled = false`).",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "External editor is disabled (`tools.editor.enabled = false`).")?;
         ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
         return Ok(SlashCommandControl::Continue);
     }
@@ -192,10 +176,8 @@ pub(crate) async fn launch_editor_from_context(
         Some(value) => match resolve_editor_target(value, &ctx.config.workspace) {
             Some(target) => Some(target),
             None => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Invalid file target for `/edit`: {value}"),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("Invalid file target for `/edit`: {value}"))?;
                 ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
                 return Ok(SlashCommandControl::Continue);
             }
@@ -220,11 +202,9 @@ pub(crate) async fn launch_editor_from_context(
 
     let launch_config = launch_config_from_settings(&editor_config, wait_for_editor);
 
-    let launch_result = run_with_event_loop_suspended(
-        ctx.handle,
-        editor_config.suspend_tui && wait_for_editor,
-        || launcher.launch_editor_target_with_config(file_target, launch_config),
-    )
+    let launch_result = run_with_event_loop_suspended(ctx.handle, editor_config.suspend_tui && wait_for_editor, || {
+        launcher.launch_editor_target_with_config(file_target, launch_config)
+    })
     .await;
 
     if launch_result.is_ok() && is_transient_open {
@@ -247,9 +227,7 @@ pub(crate) async fn launch_editor_from_context(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_configure_editor(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_configure_editor(ctx: &mut SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let editor_config = ctx
         .vt_cfg
         .as_ref()
@@ -312,19 +290,14 @@ pub(crate) async fn handle_configure_editor(
         let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
         settings_state.view_path = Some(resolve_settings_view_path(FILE_OPENER_SETTINGS_PATH));
         if show_settings_palette(ctx.renderer, &settings_state, None)? {
-            *ctx.palette_state =
-                Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
+            *ctx.palette_state = Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
         }
     }
 
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn run_with_event_loop_suspended<T, F>(
-    handle: &InlineHandle,
-    suspend_tui: bool,
-    launch: F,
-) -> T
+pub(crate) async fn run_with_event_loop_suspended<T, F>(handle: &InlineHandle, suspend_tui: bool, launch: F) -> T
 where
     F: FnOnce() -> T,
 {
@@ -378,8 +351,7 @@ fn editor_command_from_settings(editor_config: &EditorToolConfig) -> Option<Stri
 }
 
 fn editor_command_requires_terminal(command: &str) -> bool {
-    let Some(program) = shell_words::split(command).ok().and_then(|tokens| tokens.first().cloned())
-    else {
+    let Some(program) = shell_words::split(command).ok().and_then(|tokens| tokens.first().cloned()) else {
         return false;
     };
     let normalized = Path::new(&program)
@@ -388,16 +360,10 @@ fn editor_command_requires_terminal(command: &str) -> bool {
         .unwrap_or(&program)
         .to_ascii_lowercase();
 
-    matches!(
-        normalized.as_str(),
-        "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix"
-    )
+    matches!(normalized.as_str(), "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix")
 }
 
-fn launch_config_from_settings(
-    editor_config: &EditorToolConfig,
-    wait_for_editor: bool,
-) -> EditorLaunchConfig {
+fn launch_config_from_settings(editor_config: &EditorToolConfig, wait_for_editor: bool) -> EditorLaunchConfig {
     EditorLaunchConfig {
         preferred_editor: (!editor_config.preferred_editor.trim().is_empty())
             .then(|| editor_config.preferred_editor.clone()),
@@ -500,15 +466,9 @@ impl EditorPreset {
 
     fn picker_subtitle(self) -> String {
         match self {
-            Self::Auto => {
-                "Use env vars when set; otherwise probe installed editors with VS Code first."
-                    .to_string()
-            }
+            Self::Auto => "Use env vars when set; otherwise probe installed editors with VS Code first.".to_string(),
             Self::Custom => "Enter a raw editor command in the next step.".to_string(),
-            _ => format!(
-                "Save `{}` as the preferred editor command.",
-                self.default_command().unwrap_or_default()
-            ),
+            _ => format!("Save `{}` as the preferred editor command.", self.default_command().unwrap_or_default()),
         }
     }
 
@@ -532,20 +492,13 @@ struct EditorWorkflowChoices {
     open_file_opener_settings: bool,
 }
 
-fn build_editor_config_steps(
-    editor_config: &EditorToolConfig,
-    current_preset: EditorPreset,
-) -> Vec<WizardStep> {
+fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: EditorPreset) -> Vec<WizardStep> {
     vec![
         WizardStep {
             title: "Enable".to_string(),
             question: format!(
                 "External editor launch is currently {}.",
-                if editor_config.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                }
+                if editor_config.enabled { "enabled" } else { "disabled" }
             ),
             items: vec![
                 request_choice_item(
@@ -595,11 +548,7 @@ fn build_editor_config_steps(
             title: "Suspend TUI".to_string(),
             question: format!(
                 "Suspending the event loop is currently {}.",
-                if editor_config.suspend_tui {
-                    "on"
-                } else {
-                    "off"
-                }
+                if editor_config.suspend_tui { "on" } else { "off" }
             ),
             items: vec![
                 request_choice_item(
@@ -632,8 +581,7 @@ fn build_editor_config_steps(
         },
         WizardStep {
             title: "Next".to_string(),
-            question: "Do you also want to jump to terminal hyperlink settings after saving?"
-                .to_string(),
+            question: "Do you also want to jump to terminal hyperlink settings after saving?".to_string(),
             items: vec![
                 request_choice_item(
                     EDITOR_FOLLOW_UP_ID,
@@ -705,10 +653,8 @@ async fn prompt_for_custom_editor_command(
     };
 
     if submitted && value.is_none() {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "Custom editor command was not saved because the command was empty.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "Custom editor command was not saved because the command was empty.")?;
     }
 
     Ok(value)
@@ -717,8 +663,7 @@ async fn prompt_for_custom_editor_command(
 fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
     WizardStep {
         title: "Custom command".to_string(),
-        question: "Enter the raw editor command. Include any flags you want VT Code to keep using."
-            .to_string(),
+        question: "Enter the raw editor command. Include any flags you want VT Code to keep using.".to_string(),
         items: vec![InlineListItem {
             title: "Save command".to_string(),
             subtitle: Some("Press Tab to type the command, then Enter to save.".to_string()),
@@ -740,9 +685,7 @@ fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
     }
 }
 
-fn parse_editor_workflow_answers(
-    selections: &[InlineListSelection],
-) -> Option<EditorWorkflowChoices> {
+fn parse_editor_workflow_answers(selections: &[InlineListSelection]) -> Option<EditorWorkflowChoices> {
     let enabled = request_answer_value(selections, EDITOR_ENABLED_ID)?;
     let preset = EditorPreset::from_value(&request_answer_value(selections, EDITOR_PRESET_ID)?)?;
     let suspend_tui = request_answer_value(selections, EDITOR_SUSPEND_ID)?;
@@ -764,25 +707,20 @@ fn preset_choice_item(preset: EditorPreset) -> InlineListItem {
 
 fn request_answer_value(selections: &[InlineListSelection], question_id: &str) -> Option<String> {
     selections.iter().find_map(|selection| match selection {
-        InlineListSelection::RequestUserInputAnswer {
-            question_id: current_id,
-            selected,
-            other,
-        } if current_id == question_id => other
-            .as_ref()
-            .filter(|value| !value.trim().is_empty())
-            .cloned()
-            .or_else(|| selected.first().cloned()),
+        InlineListSelection::RequestUserInputAnswer { question_id: current_id, selected, other }
+            if current_id == question_id =>
+        {
+            other
+                .as_ref()
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .or_else(|| selected.first().cloned())
+        }
         _ => None,
     })
 }
 
-fn request_choice_item(
-    question_id: &str,
-    title: &str,
-    subtitle: &str,
-    value: &str,
-) -> InlineListItem {
+fn request_choice_item(question_id: &str, title: &str, subtitle: &str, value: &str) -> InlineListItem {
     InlineListItem {
         title: title.to_string(),
         subtitle: Some(subtitle.to_string()),
@@ -876,8 +814,7 @@ mod tests {
         )
         .expect("persist editor workflow choices");
 
-        let manager =
-            ConfigManager::load_from_workspace(workspace.path()).expect("load saved config");
+        let manager = ConfigManager::load_from_workspace(workspace.path()).expect("load saved config");
         let config = manager.config();
         assert!(config.tools.editor.enabled);
         assert_eq!(config.tools.editor.preferred_editor, "code --wait");

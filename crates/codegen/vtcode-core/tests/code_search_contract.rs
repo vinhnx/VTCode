@@ -106,10 +106,7 @@ async fn code_search_validates_five_property_contract() -> Result<()> {
         let error = registry
             .preflight_validate_call(tools::CODE_SEARCH, &invalid)
             .expect_err("invalid request must fail preflight");
-        assert!(
-            error.to_string().contains("Invalid arguments for tool 'code_search'"),
-            "{invalid}: {error}"
-        );
+        assert!(error.to_string().contains("Invalid arguments for tool 'code_search'"), "{invalid}: {error}");
     }
     Ok(())
 }
@@ -137,17 +134,7 @@ async fn code_search_registry_executor_returns_normalised_typed_response() -> Re
         .map(String::as_str)
         .collect::<Vec<_>>();
     top_level_fields.sort_unstable();
-    assert_eq!(
-        top_level_fields,
-        [
-            "filters",
-            "hints",
-            "query",
-            "results",
-            "returned",
-            "truncated"
-        ]
-    );
+    assert_eq!(top_level_fields, ["filters", "hints", "query", "results", "returned", "truncated"]);
     assert_eq!(response["query"], "Widget");
     assert_eq!(response["filters"]["path"], ".");
     assert_eq!(response["filters"]["file_types"], json!(["rust"]));

@@ -12,9 +12,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext};
 
-use super::persistent_memory::{
-    apply_persistent_memory_header_guide, load_persistent_memory_status,
-};
+use super::persistent_memory::{apply_persistent_memory_header_guide, load_persistent_memory_status};
 
 pub(super) struct HeaderContextInit<'a> {
     pub(super) config: &'a CoreAgentConfig,
@@ -59,9 +57,7 @@ pub(super) async fn initialize_header_context(
     maybe_render_openai_priority_notice(renderer, config, vt_cfg)?;
     maybe_render_system_prompt_budget_warning(renderer, vt_cfg, session_bootstrap)?;
 
-    handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(
-        &vtcode_core::ui::theme::active_styles(),
-    ));
+    handle.set_theme(vtcode_core::ui::inline_theme_from_core_styles(&vtcode_core::ui::theme::active_styles()));
     palettes::apply_prompt_style(handle);
 
     let reasoning_label = vt_cfg
@@ -118,13 +114,10 @@ fn maybe_render_openai_priority_notice(
     let default_auth = vtcode_auth::OpenAIAuthConfig::default();
     let auth_cfg = vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
     let storage_mode = vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
-    let api_key = vtcode_core::config::api_keys::get_api_key(
-        "openai",
-        &vtcode_core::config::api_keys::ApiKeySources::default(),
-    )
-    .ok();
-    let overview =
-        vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
+    let api_key =
+        vtcode_core::config::api_keys::get_api_key("openai", &vtcode_core::config::api_keys::ApiKeySources::default())
+            .ok();
+    let overview = vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
     let Some(notice) = overview.notice.as_deref() else {
         return Ok(());
     };
@@ -178,8 +171,7 @@ pub(crate) fn apply_ide_context_snapshot(
 ) {
     let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
     context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
-    let effective_ide_context_config =
-        context_manager.effective_ide_context_config_with_base(ide_context_config);
+    let effective_ide_context_config = context_manager.effective_ide_context_config_with_base(ide_context_config);
     header_context.editor_context =
         tui_header_summary(workspace, Some(&effective_ide_context_config), snapshot.as_ref());
     handle.set_header_context(header_context.clone());
@@ -204,12 +196,6 @@ pub(crate) fn ide_context_status_label_from_bridge(
     ide_context_bridge: Option<&IdeContextBridge>,
 ) -> Option<String> {
     ide_context_bridge.and_then(|bridge| {
-        ide_context_status_label(
-            context_manager,
-            workspace,
-            vt_cfg,
-            bridge.snapshot(),
-            bridge.snapshot_source(),
-        )
+        ide_context_status_label(context_manager, workspace, vt_cfg, bridge.snapshot(), bridge.snapshot_source())
     })
 }

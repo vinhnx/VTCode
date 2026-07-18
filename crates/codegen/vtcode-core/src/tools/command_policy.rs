@@ -24,20 +24,14 @@ pub struct CommandPolicyEvaluator {
 
 impl CommandPolicyEvaluator {
     pub fn from_config(config: &CommandsConfig) -> Self {
-        let allow_prefixes =
-            crate::utils::merge_env_patterns(&config.allow_list, "VTCODE_COMMANDS_ALLOW_LIST");
-        let deny_prefixes =
-            crate::utils::merge_env_patterns(&config.deny_list, "VTCODE_COMMANDS_DENY_LIST");
+        let allow_prefixes = crate::utils::merge_env_patterns(&config.allow_list, "VTCODE_COMMANDS_ALLOW_LIST");
+        let deny_prefixes = crate::utils::merge_env_patterns(&config.deny_list, "VTCODE_COMMANDS_DENY_LIST");
 
-        let allow_regex_patterns =
-            crate::utils::merge_env_patterns(&config.allow_regex, "VTCODE_COMMANDS_ALLOW_REGEX");
-        let deny_regex_patterns =
-            crate::utils::merge_env_patterns(&config.deny_regex, "VTCODE_COMMANDS_DENY_REGEX");
+        let allow_regex_patterns = crate::utils::merge_env_patterns(&config.allow_regex, "VTCODE_COMMANDS_ALLOW_REGEX");
+        let deny_regex_patterns = crate::utils::merge_env_patterns(&config.deny_regex, "VTCODE_COMMANDS_DENY_REGEX");
 
-        let allow_glob_patterns =
-            crate::utils::merge_env_patterns(&config.allow_glob, "VTCODE_COMMANDS_ALLOW_GLOB");
-        let deny_glob_patterns =
-            crate::utils::merge_env_patterns(&config.deny_glob, "VTCODE_COMMANDS_DENY_GLOB");
+        let allow_glob_patterns = crate::utils::merge_env_patterns(&config.allow_glob, "VTCODE_COMMANDS_ALLOW_GLOB");
+        let deny_glob_patterns = crate::utils::merge_env_patterns(&config.deny_glob, "VTCODE_COMMANDS_DENY_GLOB");
 
         let allow_regexes = compile_regexes(&allow_regex_patterns);
         let deny_regexes = compile_regexes(&deny_regex_patterns);
@@ -123,10 +117,7 @@ impl CommandPolicyEvaluator {
 
     /// Enhanced async evaluation with command resolution and caching
     /// Returns (allowed, resolved_path, reason, decision)
-    pub fn evaluate_with_resolution(
-        &self,
-        command_text: &str,
-    ) -> (bool, Option<PathBuf>, String, PermissionDecision) {
+    pub fn evaluate_with_resolution(&self, command_text: &str) -> (bool, Option<PathBuf>, String, PermissionDecision) {
         let cmd = command_text.trim();
 
         // Check cache first

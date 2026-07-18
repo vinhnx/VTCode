@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, ErrorKind};
 use std::path::Path;
 use std::time::Duration;
-use vtcode_commons::fs::{
-    read_json_file, read_json_file_sync, write_json_file, write_json_file_sync,
-};
+use vtcode_commons::fs::{read_json_file, read_json_file_sync, write_json_file, write_json_file_sync};
 
 use super::model_presets::ModelInfo;
 

@@ -104,18 +104,11 @@ impl TimeoutsConfig {
             (0.1..=1.0).contains(&self.adaptive_decay_ratio),
             "timeouts.adaptive_decay_ratio must be between 0.1 and 1.0"
         );
-        ensure!(
-            self.adaptive_success_streak > 0,
-            "timeouts.adaptive_success_streak must be at least 1"
-        );
-        ensure!(
-            self.adaptive_min_floor_ms >= 100,
-            "timeouts.adaptive_min_floor_ms must be at least 100ms"
-        );
+        ensure!(self.adaptive_success_streak > 0, "timeouts.adaptive_success_streak must be at least 1");
+        ensure!(self.adaptive_min_floor_ms >= 100, "timeouts.adaptive_min_floor_ms must be at least 100ms");
 
         ensure!(
-            self.default_ceiling_seconds == 0
-                || self.default_ceiling_seconds >= Self::MIN_CEILING_SECONDS,
+            self.default_ceiling_seconds == 0 || self.default_ceiling_seconds >= Self::MIN_CEILING_SECONDS,
             "timeouts.default_ceiling_seconds must be at least {} seconds (or 0 to disable)",
             Self::MIN_CEILING_SECONDS
         );
@@ -133,8 +126,7 @@ impl TimeoutsConfig {
         );
 
         ensure!(
-            self.streaming_ceiling_seconds == 0
-                || self.streaming_ceiling_seconds >= Self::MIN_CEILING_SECONDS,
+            self.streaming_ceiling_seconds == 0 || self.streaming_ceiling_seconds >= Self::MIN_CEILING_SECONDS,
             "timeouts.streaming_ceiling_seconds must be at least {} seconds (or 0 to disable)",
             Self::MIN_CEILING_SECONDS
         );

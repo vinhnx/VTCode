@@ -159,10 +159,7 @@ impl SkillContainer {
     /// Returns error if adding skill would exceed maximum of 8 skills
     pub fn add_skill(&mut self, spec: SkillSpec) -> anyhow::Result<()> {
         if self.skills.len() >= 8 {
-            anyhow::bail!(
-                "Container already has maximum skills (8), cannot add '{}'",
-                spec.skill_id
-            );
+            anyhow::bail!("Container already has maximum skills (8), cannot add '{}'", spec.skill_id);
         }
         self.skills.push(spec);
         Ok(())
@@ -319,8 +316,7 @@ mod tests {
 
     #[test]
     fn test_skill_spec_with_version() {
-        let spec = SkillSpec::custom("my-skill")
-            .with_version(SkillVersion::Specific("1759178010641129".to_string()));
+        let spec = SkillSpec::custom("my-skill").with_version(SkillVersion::Specific("1759178010641129".to_string()));
         assert_eq!(spec.version.as_str(), "1759178010641129");
         assert!(!spec.version.is_latest());
     }

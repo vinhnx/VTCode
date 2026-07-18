@@ -248,10 +248,7 @@ impl ToolRiskScorer {
             tools::APPLY_PATCH | tools::DELETE_FILE => 25,
 
             // PTY/interactive commands (base: 35)
-            tools::CREATE_PTY_SESSION
-            | tools::RUN_PTY_CMD
-            | tools::SEND_PTY_INPUT
-            | tools::UNIFIED_EXEC => 35,
+            tools::CREATE_PTY_SESSION | tools::RUN_PTY_CMD | tools::SEND_PTY_INPUT | tools::UNIFIED_EXEC => 35,
 
             // Network operations (base: 40)
             tools::WEB_SEARCH
@@ -286,21 +283,13 @@ mod tests {
     #[test]
     fn test_risk_calculation() {
         // Read-only operation in trusted workspace
-        let ctx = ToolRiskContext::new(
-            tools::READ_FILE.to_string(),
-            ToolSource::Internal,
-            WorkspaceTrust::Trusted,
-        );
+        let ctx = ToolRiskContext::new(tools::READ_FILE.to_string(), ToolSource::Internal, WorkspaceTrust::Trusted);
         let risk = ToolRiskScorer::calculate_risk(&ctx);
         assert_eq!(risk, RiskLevel::Low);
 
         // Write operation in untrusted workspace
-        let ctx = ToolRiskContext::new(
-            tools::WRITE_FILE.to_string(),
-            ToolSource::External,
-            WorkspaceTrust::Untrusted,
-        )
-        .as_write();
+        let ctx = ToolRiskContext::new(tools::WRITE_FILE.to_string(), ToolSource::External, WorkspaceTrust::Untrusted)
+            .as_write();
         let risk = ToolRiskScorer::calculate_risk(&ctx);
         assert!(risk >= RiskLevel::High);
     }
@@ -322,12 +311,8 @@ mod tests {
         // Mirrors the policy auto-approval path: trusted workspace + network
         // flag. Must stay above Low so HITL approval is required.
         for tool in [tools::WEB_FETCH, "mcp:connect", "mcp:disconnect"] {
-            let ctx = ToolRiskContext::new(
-                tool.to_string(),
-                ToolSource::Internal,
-                WorkspaceTrust::Trusted,
-            )
-            .accesses_network();
+            let ctx = ToolRiskContext::new(tool.to_string(), ToolSource::Internal, WorkspaceTrust::Trusted)
+                .accesses_network();
             let risk = ToolRiskScorer::calculate_risk(&ctx);
             assert!(
                 risk > RiskLevel::Low,
@@ -338,11 +323,8 @@ mod tests {
 
     #[test]
     fn test_approval_history_reduces_risk() {
-        let mut ctx = ToolRiskContext::new(
-            tools::RUN_PTY_CMD.to_string(),
-            ToolSource::Internal,
-            WorkspaceTrust::Untrusted,
-        );
+        let mut ctx =
+            ToolRiskContext::new(tools::RUN_PTY_CMD.to_string(), ToolSource::Internal, WorkspaceTrust::Untrusted);
 
         let risk_before = ToolRiskScorer::calculate_risk(&ctx);
 
@@ -354,15 +336,10 @@ mod tests {
 
     #[test]
     fn test_source_multiplier() {
-        let base = ToolRiskContext::new(
-            "mcp_tool".to_string(),
-            ToolSource::Internal,
-            WorkspaceTrust::Trusted,
-        );
+        let base = ToolRiskContext::new("mcp_tool".to_string(), ToolSource::Internal, WorkspaceTrust::Trusted);
         let base_risk = ToolRiskScorer::calculate_risk(&base);
 
-        let mcp =
-            ToolRiskContext::new("mcp_tool".to_string(), ToolSource::Mcp, WorkspaceTrust::Trusted);
+        let mcp = ToolRiskContext::new("mcp_tool".to_string(), ToolSource::Mcp, WorkspaceTrust::Trusted);
         let mcp_risk = ToolRiskScorer::calculate_risk(&mcp);
 
         // MCP tool should have higher risk

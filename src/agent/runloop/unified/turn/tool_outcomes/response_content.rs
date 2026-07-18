@@ -5,8 +5,7 @@ use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
 use vtcode_core::llm::{
-    LightweightFeature, collect_single_response, create_provider_for_model_route,
-    resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route, resolve_lightweight_route,
 };
 use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::validation::unified_path::validate_and_resolve_path;
@@ -31,8 +30,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
         return output;
     };
 
-    let next_continue_args =
-        obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value);
+    let next_continue_args = obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value);
     let next_read_args = obj.get("next_read_args").and_then(ReadChunkContinuationArgs::from_value);
     let session_id = obj.get("session_id").and_then(serde_json::Value::as_str);
     let process_session_id = session_id.or_else(|| {
@@ -40,8 +38,7 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             .as_ref()
             .map(|next_continue| next_continue.session_id.as_str())
     });
-    let loop_detected =
-        obj.get("loop_detected").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let loop_detected = obj.get("loop_detected").and_then(serde_json::Value::as_bool).unwrap_or(false);
     let is_exec_like = obj.contains_key("command")
         || obj.contains_key("working_directory")
         || session_id.is_some()
@@ -65,8 +62,8 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
     let mut sanitized = serde_json::Map::with_capacity(obj.len());
     for (key, value) in obj {
         let skip = match key.as_str() {
-            "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args"
-            | "rows" | "cols" | "wall_time" | "modified_files" => true,
+            "message" | "metadata" | "no_spool" | "follow_up_prompt" | "next_poll_args" | "rows" | "cols"
+            | "wall_time" | "modified_files" => true,
             "success" => value.as_bool().unwrap_or(false),
             "status" => value.as_str().is_some_and(|status| status == "success"),
             "spool_hint" | "spooled_bytes" | "spooled_to_file" => true,
@@ -106,15 +103,12 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
             "loop_detected" => true,
             "truncated" | "auto_recovered" | "query_truncated" => is_false_bool(value),
             "stdout" => {
-                (is_exec_like && output_trimmed.is_some())
-                    || output_trimmed == value.as_str().map(str::trim_end)
+                (is_exec_like && output_trimmed.is_some()) || output_trimmed == value.as_str().map(str::trim_end)
             }
             "process_id" => is_exec_like || process_session_id.is_some_and(|sid| value == sid),
             "is_exited" => {
                 is_exec_like
-                    && (value.as_bool().is_some()
-                        || next_continue_args.is_some()
-                        || obj.get("exit_code").is_some())
+                    && (value.as_bool().is_some() || next_continue_args.is_some() || obj.get("exit_code").is_some())
             }
             _ => false,
         };
@@ -259,11 +253,7 @@ fn is_large_read_summary_output(tool_name: &str, output: &serde_json::Value) -> 
         || (tool_name == tool_names::UNIFIED_FILE && read_summary_source_path(output).is_some())
 }
 
-fn build_spooled_tool_summary_excerpt(
-    tool_name: &str,
-    output: &serde_json::Value,
-    spool_content: &str,
-) -> String {
+fn build_spooled_tool_summary_excerpt(tool_name: &str, output: &serde_json::Value, spool_content: &str) -> String {
     let mut sections = Vec::new();
 
     if should_prefer_spool_reference_only(tool_name, output) {
@@ -276,11 +266,7 @@ fn build_spooled_tool_summary_excerpt(
         }
         sections.push(format!(
             "tail_excerpt:\n{}",
-            tail_preview_text(
-                spool_content,
-                TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES,
-                TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES,
-            )
+            tail_preview_text(spool_content, TOOL_OUTPUT_SUMMARY_EXEC_TAIL_BYTES, TOOL_OUTPUT_SUMMARY_EXEC_MAX_LINES,)
         ));
         return sections.join("\n\n");
     }
@@ -310,11 +296,7 @@ fn build_spooled_tool_summary_excerpt(
     )
 }
 
-fn build_spooled_tool_summary_input(
-    tool_name: &str,
-    output: &serde_json::Value,
-    spool_content: &str,
-) -> String {
+fn build_spooled_tool_summary_input(tool_name: &str, output: &serde_json::Value, spool_content: &str) -> String {
     let metadata = maybe_inline_spooled(tool_name, output);
     let excerpt = build_spooled_tool_summary_excerpt(tool_name, output, spool_content);
     if excerpt.trim().is_empty() {
@@ -386,8 +368,7 @@ fn tool_output_summary_feature(
         .unwrap_or_default();
 
     let is_large_read = matches!(tool_name, tool_names::READ_FILE)
-        || (tool_name == tool_names::UNIFIED_FILE
-            && matches!(action, Some("read" | "read_chunk" | "cat")));
+        || (tool_name == tool_names::UNIFIED_FILE && matches!(action, Some("read" | "read_chunk" | "cat")));
     if is_large_read {
         // Spooled output is genuinely huge (already offloaded to disk); always
         // summarize regardless of how the read was scoped.
@@ -465,13 +446,7 @@ async fn summarize_tool_output_with_route(
     }
 
     let provider = create_provider_for_model_route(route, ctx.config, ctx.vt_cfg)?;
-    summarize_tool_output_with_provider(
-        provider.as_ref(),
-        &route.model,
-        tool_name,
-        serialized_output,
-    )
-    .await
+    summarize_tool_output_with_provider(provider.as_ref(), &route.model, tool_name, serialized_output).await
 }
 
 fn summarized_tool_response_payload(
@@ -494,8 +469,7 @@ fn summarized_tool_response_payload(
 
         // Add read-once guidance for file reads to prevent redundant re-reads
         let action = args_val.get("action").and_then(serde_json::Value::as_str).unwrap_or("");
-        let is_file_read = (tool_name == tool_names::UNIFIED_FILE
-            || tool_name == tool_names::READ_FILE)
+        let is_file_read = (tool_name == tool_names::UNIFIED_FILE || tool_name == tool_names::READ_FILE)
             && (action == "read" || action.is_empty());
         if is_file_read {
             obj.insert(
@@ -522,24 +496,15 @@ pub(super) async fn prepare_tool_response_content(
     // Skip LLM summarization when raw=true is requested
     if args_val.get("raw").and_then(serde_json::Value::as_bool).unwrap_or(false) {
         let workspace_root = ctx.tool_registry.workspace_root().clone();
-        return maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output)
-            .await;
+        return maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output).await;
     }
 
     let workspace_root = ctx.tool_registry.workspace_root().clone();
-    let fallback =
-        maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output).await;
+    let fallback = maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output).await;
     let serialized_output = serialize_json_for_model(output);
-    let summary_input = tool_output_summary_input_or_serialized(
-        workspace_root.as_path(),
-        tool_name,
-        output,
-        &serialized_output,
-    )
-    .await;
-    let Some(feature) =
-        tool_output_summary_feature(tool_name, args_val, output, serialized_output.len())
-    else {
+    let summary_input =
+        tool_output_summary_input_or_serialized(workspace_root.as_path(), tool_name, output, &serialized_output).await;
+    let Some(feature) = tool_output_summary_feature(tool_name, args_val, output, serialized_output.len()) else {
         return fallback;
     };
 
@@ -548,9 +513,7 @@ pub(super) async fn prepare_tool_response_content(
         tracing::warn!(warning = %warning, tool = %tool_name, "tool output route adjusted");
     }
 
-    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &summary_input)
-        .await
-    {
+    match summarize_tool_output_with_route(ctx, &resolution.primary, tool_name, &summary_input).await {
         Ok(summary) if !summary.trim().is_empty() => {
             return summarized_tool_response_payload(tool_name, args_val, output, summary.trim());
         }
@@ -564,21 +527,9 @@ pub(super) async fn prepare_tool_response_content(
                     error = %primary_err,
                     "tool output summarization failed on lightweight route; retrying with main model"
                 );
-                match summarize_tool_output_with_route(
-                    ctx,
-                    fallback_route,
-                    tool_name,
-                    &summary_input,
-                )
-                .await
-                {
+                match summarize_tool_output_with_route(ctx, fallback_route, tool_name, &summary_input).await {
                     Ok(summary) if !summary.trim().is_empty() => {
-                        return summarized_tool_response_payload(
-                            tool_name,
-                            args_val,
-                            output,
-                            summary.trim(),
-                        );
+                        return summarized_tool_response_payload(tool_name, args_val, output, summary.trim());
                     }
                     Ok(_) => {}
                     Err(fallback_err) => {
@@ -671,8 +622,7 @@ fn has_error_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
 }
 
 fn is_recoverable_failure_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
-    has_error_payload(obj)
-        && obj.get("is_recoverable").and_then(serde_json::Value::as_bool) == Some(true)
+    has_error_payload(obj) && obj.get("is_recoverable").and_then(serde_json::Value::as_bool) == Some(true)
 }
 
 fn should_keep_exec_success_critical_note(
@@ -682,29 +632,25 @@ fn should_keep_exec_success_critical_note(
     is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "critical_note")
 }
 
-fn should_keep_exec_success_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    is_exec_like: bool,
-) -> bool {
+fn should_keep_exec_success_next_action(obj: &serde_json::Map<String, serde_json::Value>, is_exec_like: bool) -> bool {
     is_exec_like && !has_error_payload(obj) && has_non_empty_string_field(obj, "next_action")
 }
 
-fn should_keep_recoverable_failure_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> bool {
+fn should_keep_recoverable_failure_next_action(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
     is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
 }
 
-fn should_keep_search_recovery_success_next_action(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> bool {
+fn should_keep_search_recovery_success_next_action(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
     !has_error_payload(obj)
-        && obj.get("backend").and_then(serde_json::Value::as_str) == Some("ast-grep")
         && obj.get("is_recoverable").and_then(serde_json::Value::as_bool) == Some(true)
-        && obj
+        && (obj
             .get("matches")
             .and_then(serde_json::Value::as_array)
             .is_some_and(|matches| matches.is_empty())
+            || obj
+                .get("results")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|results| results.is_empty()))
         && has_non_empty_string_field(obj, "hint")
         && has_non_empty_string_field(obj, "next_action")
 }
@@ -721,12 +667,7 @@ mod tests {
     #[test]
     fn whole_file_read_over_threshold_is_summarized() {
         let args = json!({ "action": "read", "path": "src/cli/mod.rs" });
-        let feature = tool_output_summary_feature(
-            tool_names::UNIFIED_FILE,
-            &args,
-            &big_read_output(),
-            10_000,
-        );
+        let feature = tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 10_000);
         assert!(matches!(feature, Some(LightweightFeature::LargeReadSummary)));
     }
 
@@ -734,27 +675,15 @@ mod tests {
     fn bounded_read_is_not_summarized_even_when_large() {
         // Reproduces the turn_640 waste: a ranged read got summarized, forcing
         // a wasteful raw re-read of the identical `offset`/`limit` slice.
-        let args =
-            json!({ "action": "read", "path": "src/cli/mod.rs", "offset": 81, "limit": 189 });
-        let feature = tool_output_summary_feature(
-            tool_names::UNIFIED_FILE,
-            &args,
-            &big_read_output(),
-            10_000,
-        );
+        let args = json!({ "action": "read", "path": "src/cli/mod.rs", "offset": 81, "limit": 189 });
+        let feature = tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 10_000);
         assert!(feature.is_none(), "bounded reads must be returned verbatim, not summarized");
     }
 
     #[test]
     fn bounded_read_via_start_line_is_not_summarized() {
-        let args =
-            json!({ "action": "read", "path": "src/cli/mod.rs", "start_line": 10, "end_line": 40 });
-        let feature = tool_output_summary_feature(
-            tool_names::UNIFIED_FILE,
-            &args,
-            &big_read_output(),
-            10_000,
-        );
+        let args = json!({ "action": "read", "path": "src/cli/mod.rs", "start_line": 10, "end_line": 40 });
+        let feature = tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 10_000);
         assert!(feature.is_none());
     }
 
@@ -768,16 +697,14 @@ mod tests {
             "path": "big.log",
             "spool_path": ".vtcode/context/tool_outputs/big.log"
         });
-        let feature =
-            tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &output, 200_000);
+        let feature = tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &output, 200_000);
         assert!(matches!(feature, Some(LightweightFeature::LargeReadSummary)));
     }
 
     #[test]
     fn small_whole_file_read_is_not_summarized() {
         let args = json!({ "action": "read", "path": "small.rs" });
-        let feature =
-            tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 500);
+        let feature = tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &big_read_output(), 500);
         assert!(feature.is_none());
     }
 
@@ -789,9 +716,6 @@ mod tests {
             "modified_files": ["/workspace/src/widget.rs"]
         }));
 
-        assert_eq!(
-            compacted,
-            json!({"applied": [{"path": "src/widget.rs", "operation": "update"}]})
-        );
+        assert_eq!(compacted, json!({"applied": [{"path": "src/widget.rs", "operation": "update"}]}));
     }
 }

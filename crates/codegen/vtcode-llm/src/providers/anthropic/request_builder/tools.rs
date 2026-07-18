@@ -1,7 +1,7 @@
 use crate::provider::{LLMError, LLMRequest, ToolDefinition};
 use crate::providers::anthropic_types::{
-    AnthropicCodeExecutionTool, AnthropicFunctionTool, AnthropicMemoryTool, AnthropicTool,
-    AnthropicToolSearchTool, AnthropicWebSearchTool, CacheControl, ThinkingConfig,
+    AnthropicCodeExecutionTool, AnthropicFunctionTool, AnthropicMemoryTool, AnthropicTool, AnthropicToolSearchTool,
+    AnthropicWebSearchTool, CacheControl, ThinkingConfig,
 };
 use serde_json::{Map, Value, json};
 
@@ -30,10 +30,7 @@ pub(crate) fn build_tools_via_formatter(tools: &[ToolDefinition]) -> Option<Valu
     serde_json::to_value(built_tools).ok()
 }
 
-fn push_anthropic_tool(
-    built_tools: &mut Vec<AnthropicTool>,
-    tool: &ToolDefinition,
-) -> Result<(), LLMError> {
+fn push_anthropic_tool(built_tools: &mut Vec<AnthropicTool>, tool: &ToolDefinition) -> Result<(), LLMError> {
     if tool.is_tool_search() {
         let Some(func) = tool.function.as_ref() else {
             return Ok(());
@@ -124,7 +121,8 @@ fn anthropic_web_search_options(tool: &ToolDefinition) -> Result<Map<String, Val
         Some(Value::Object(config)) => {
             if config.contains_key("allowed_domains") && config.contains_key("blocked_domains") {
                 return Err(LLMError::Provider {
-                    message: "anthropic web_search tools cannot set both allowed_domains and blocked_domains".to_string(),
+                    message: "anthropic web_search tools cannot set both allowed_domains and blocked_domains"
+                        .to_string(),
                     metadata: None,
                 });
             }
@@ -139,12 +137,8 @@ fn anthropic_web_search_options(tool: &ToolDefinition) -> Result<Map<String, Val
     }
 }
 
-pub(crate) fn build_tool_choice(
-    request: &LLMRequest,
-    thinking_val: &Option<ThinkingConfig>,
-) -> Option<Value> {
-    let mut final_tool_choice =
-        request.tool_choice.as_ref().map(|tc| tc.to_provider_format("anthropic"));
+pub(crate) fn build_tool_choice(request: &LLMRequest, thinking_val: &Option<ThinkingConfig>) -> Option<Value> {
+    let mut final_tool_choice = request.tool_choice.as_ref().map(|tc| tc.to_provider_format("anthropic"));
 
     if thinking_val.is_some()
         && let Some(ref choice) = final_tool_choice
@@ -173,9 +167,7 @@ pub(crate) fn build_tool_choice(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{
-        LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition, ToolNamespace,
-    };
+    use crate::provider::{LLMRequest, Message, ParallelToolConfig, ToolChoice, ToolDefinition, ToolNamespace};
     use std::sync::Arc;
     use vtcode_config::constants::models;
 
@@ -183,9 +175,7 @@ mod tests {
     fn build_tools_keeps_apply_patch_as_function_tool() {
         let request = LLMRequest {
             messages: vec![Message::user("patch this file".to_string())].into(),
-            tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
-                "Apply VT Code patches".to_string(),
-            )])),
+            tools: Some(Arc::new(vec![ToolDefinition::apply_patch("Apply VT Code patches".to_string())])),
             model: models::anthropic::DEFAULT_MODEL.to_string(),
             ..Default::default()
         };

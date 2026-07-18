@@ -11,8 +11,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 type ResponsesSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
-const WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX: &str =
-    "Conversation already has an active response in progress:";
+const WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX: &str = "Conversation already has an active response in progress:";
 const OPENAI_BETA_RESPONSES_WEBSOCKET_V2: &str = "responses=v2";
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE: &str = "previous_response_not_found";
@@ -27,9 +26,7 @@ const WEBSOCKET_AUTH_RETRY_STATUSES: [&str; 2] = ["401", "403"];
 fn is_websocket_active_response_error(err: &LLMError) -> bool {
     let message = match err {
         LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
-        LLMError::Authentication { .. }
-        | LLMError::RateLimit { .. }
-        | LLMError::InvalidRequest { .. } => return false,
+        LLMError::Authentication { .. } | LLMError::RateLimit { .. } | LLMError::InvalidRequest { .. } => return false,
     };
 
     message.contains(WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX)
@@ -39,9 +36,7 @@ fn is_websocket_active_response_error(err: &LLMError) -> bool {
 pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
     let message = match err {
         LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
-        LLMError::Authentication { .. }
-        | LLMError::RateLimit { .. }
-        | LLMError::InvalidRequest { .. } => return false,
+        LLMError::Authentication { .. } | LLMError::RateLimit { .. } | LLMError::InvalidRequest { .. } => return false,
     };
 
     message.contains(WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE)
@@ -50,9 +45,7 @@ pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
 pub(super) fn is_websocket_previous_response_not_found_error(err: &LLMError) -> bool {
     let message = match err {
         LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
-        LLMError::Authentication { .. }
-        | LLMError::RateLimit { .. }
-        | LLMError::InvalidRequest { .. } => return false,
+        LLMError::Authentication { .. } | LLMError::RateLimit { .. } | LLMError::InvalidRequest { .. } => return false,
     };
 
     message.contains(PREVIOUS_RESPONSE_NOT_FOUND_CODE)
@@ -99,9 +92,7 @@ impl OpenAIResponsesWebSocketContinuationCache {
             .get("instructions")
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .or_else(|| {
-                prepared.event.get("instructions").and_then(Value::as_str).map(str::to_owned)
-            });
+            .or_else(|| prepared.event.get("instructions").and_then(Value::as_str).map(str::to_owned));
         let tools = prepared.event.get("tools").cloned();
         Some(Self {
             response_id,
@@ -128,8 +119,7 @@ impl OpenAIResponsesWebSocketContinuationCache {
             return false;
         }
 
-        let current_instructions =
-            payload.get("instructions").and_then(Value::as_str).map(str::to_owned);
+        let current_instructions = payload.get("instructions").and_then(Value::as_str).map(str::to_owned);
         if self.instructions != current_instructions {
             return false;
         }
@@ -165,10 +155,7 @@ struct PreparedWebSocketEvent {
 }
 
 impl OpenAIProvider {
-    pub(super) async fn generate_via_responses_websocket(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<LLMResponse, LLMError> {
+    pub(super) async fn generate_via_responses_websocket(&self, request: &LLMRequest) -> Result<LLMResponse, LLMError> {
         let payload = self.convert_to_openai_responses_format(request)?;
         let mut retried_active_response = false;
         let mut retried_reconnect = false;
@@ -183,12 +170,7 @@ impl OpenAIProvider {
                 let warmup_prepared = prepare_websocket_event(payload.clone(), None, true)?;
                 match send_websocket_event(session, &warmup_prepared.event).await {
                     Ok(response_json) => {
-                        self.update_websocket_continuation(
-                            &response_json,
-                            request,
-                            &warmup_prepared,
-                            &self.model,
-                        );
+                        self.update_websocket_continuation(&response_json, request, &warmup_prepared, &self.model);
                     }
                     Err(err) => {
                         *session_guard = None;
@@ -207,16 +189,8 @@ impl OpenAIProvider {
 
             match send_websocket_event(session, &prepared.event).await {
                 Ok(response_json) => {
-                    let parsed = self.parse_openai_responses_response(
-                        response_json.clone(),
-                        request.model.clone(),
-                    )?;
-                    self.update_websocket_continuation(
-                        &response_json,
-                        request,
-                        &prepared,
-                        &self.model,
-                    );
+                    let parsed = self.parse_openai_responses_response(response_json.clone(), request.model.clone())?;
+                    self.update_websocket_continuation(&response_json, request, &prepared, &self.model);
                     return Ok(parsed);
                 }
                 Err(err) => {
@@ -256,20 +230,19 @@ impl OpenAIProvider {
         if session_guard.is_none() {
             let ws_url = responses_websocket_url(&self.base_url)?;
             let build_request = |api_key: &str| -> Result<_, LLMError> {
-                let mut ws_request = ws_url.clone().into_client_request().map_err(|err| {
-                    format_provider_error(format!("Invalid OpenAI WebSocket request: {err}"))
-                })?;
+                let mut ws_request = ws_url
+                    .clone()
+                    .into_client_request()
+                    .map_err(|err| format_provider_error(format!("Invalid OpenAI WebSocket request: {err}")))?;
 
                 ws_request.headers_mut().insert(
                     "Authorization",
-                    HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|err| {
-                        format_provider_error(format!("Invalid OpenAI authorization header: {err}"))
-                    })?,
+                    HeaderValue::from_str(&format!("Bearer {api_key}"))
+                        .map_err(|err| format_provider_error(format!("Invalid OpenAI authorization header: {err}")))?,
                 );
-                ws_request.headers_mut().insert(
-                    "OpenAI-Beta",
-                    HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
-                );
+                ws_request
+                    .headers_mut()
+                    .insert("OpenAI-Beta", HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2));
                 if let Some(metadata) = &request.metadata
                     && let Ok(metadata_str) = serde_json::to_string(metadata)
                     && let Ok(value) = HeaderValue::from_str(&metadata_str)
@@ -288,24 +261,20 @@ impl OpenAIProvider {
                     let retry_api_key = self.refresh_api_key_for_retry().await?;
                     let retry_request = build_request(&retry_api_key)?;
                     let (socket, _) = connect_async(retry_request).await.map_err(|retry_err| {
-                        format_network_error(format!(
-                            "Failed to connect OpenAI WebSocket: {retry_err}"
-                        ))
+                        format_network_error(format!("Failed to connect OpenAI WebSocket: {retry_err}"))
                     })?;
                     socket
                 }
                 Err(err) => {
-                    return Err(format_network_error(format!(
-                        "Failed to connect OpenAI WebSocket: {err}"
-                    )));
+                    return Err(format_network_error(format!("Failed to connect OpenAI WebSocket: {err}")));
                 }
             };
             *session_guard = Some(OpenAIResponsesWebSocketSession::new(socket));
         }
 
-        session_guard.as_mut().ok_or_else(|| {
-            format_provider_error("OpenAI WebSocket session unexpectedly missing".to_string())
-        })
+        session_guard
+            .as_mut()
+            .ok_or_else(|| format_provider_error("OpenAI WebSocket session unexpectedly missing".to_string()))
     }
 
     fn websocket_continuation_snapshot(&self) -> Option<OpenAIResponsesWebSocketContinuationCache> {
@@ -322,12 +291,8 @@ impl OpenAIProvider {
         prepared: &PreparedWebSocketEvent,
         fallback_model: &str,
     ) {
-        let cache = OpenAIResponsesWebSocketContinuationCache::from_response(
-            response_json,
-            request,
-            prepared,
-            fallback_model,
-        );
+        let cache =
+            OpenAIResponsesWebSocketContinuationCache::from_response(response_json, request, prepared, fallback_model);
         *self
             .websocket_continuation_cache
             .lock()
@@ -397,10 +362,7 @@ fn prepare_websocket_event(
         && continuation.can_continue_from(&Value::Object(request_obj.clone()))
     {
         if !continuation.response_id.is_empty() {
-            request_obj.insert(
-                "previous_response_id".to_string(),
-                Value::String(continuation.response_id.clone()),
-            );
+            request_obj.insert("previous_response_id".to_string(), Value::String(continuation.response_id.clone()));
             let incremental = full_input[continuation.full_input.len()..].to_vec();
             request_obj.insert("input".to_string(), Value::Array(incremental));
             used_previous_response_id = true;
@@ -418,33 +380,23 @@ fn prepare_websocket_event(
     Ok(PreparedWebSocketEvent { event, full_input, used_previous_response_id })
 }
 
-async fn send_websocket_event(
-    session: &mut OpenAIResponsesWebSocketSession,
-    event: &Value,
-) -> Result<Value, LLMError> {
+async fn send_websocket_event(session: &mut OpenAIResponsesWebSocketSession, event: &Value) -> Result<Value, LLMError> {
     session
         .socket
         .send(Message::Text(event.to_string().into()))
         .await
-        .map_err(|err| {
-            format_network_error(format!("Failed to send OpenAI WebSocket payload: {err}"))
-        })?;
+        .map_err(|err| format_network_error(format!("Failed to send OpenAI WebSocket payload: {err}")))?;
     read_websocket_response(session).await
 }
 
-async fn read_websocket_response(
-    session: &mut OpenAIResponsesWebSocketSession,
-) -> Result<Value, LLMError> {
+async fn read_websocket_response(session: &mut OpenAIResponsesWebSocketSession) -> Result<Value, LLMError> {
     while let Some(message) = session.socket.next().await {
-        let message = message.map_err(|err| {
-            format_network_error(format!("OpenAI WebSocket receive failed: {err}"))
-        })?;
+        let message = message.map_err(|err| format_network_error(format!("OpenAI WebSocket receive failed: {err}")))?;
 
         match message {
             Message::Text(text) => {
-                let event: Value = serde_json::from_str(text.as_ref()).map_err(|err| {
-                    format_provider_error(format!("Invalid OpenAI WebSocket event JSON: {err}"))
-                })?;
+                let event: Value = serde_json::from_str(text.as_ref())
+                    .map_err(|err| format_provider_error(format!("Invalid OpenAI WebSocket event JSON: {err}")))?;
 
                 let event_type = event.get("type").and_then(Value::as_str).unwrap_or("");
                 match event_type {
@@ -477,17 +429,17 @@ async fn read_websocket_response(
                 }
             }
             Message::Ping(payload) => {
-                session.socket.send(Message::Pong(payload)).await.map_err(|err| {
-                    format_network_error(format!("Failed to reply to OpenAI WebSocket ping: {err}"))
-                })?;
+                session
+                    .socket
+                    .send(Message::Pong(payload))
+                    .await
+                    .map_err(|err| format_network_error(format!("Failed to reply to OpenAI WebSocket ping: {err}")))?;
             }
             Message::Close(frame) => {
                 let reason = frame
                     .map(|frame| frame.reason.to_string())
                     .unwrap_or_else(|| "connection closed".to_string());
-                return Err(format_network_error(format!(
-                    "OpenAI WebSocket connection closed: {reason}"
-                )));
+                return Err(format_network_error(format!("OpenAI WebSocket connection closed: {reason}")));
             }
             _ => {}
         }
@@ -497,9 +449,8 @@ async fn read_websocket_response(
 }
 
 fn responses_websocket_url(base_url: &str) -> Result<String, LLMError> {
-    let mut url = url::Url::parse(base_url).map_err(|err| {
-        format_provider_error(format!("Invalid OpenAI base URL for WebSocket mode: {err}"))
-    })?;
+    let mut url = url::Url::parse(base_url)
+        .map_err(|err| format_provider_error(format!("Invalid OpenAI base URL for WebSocket mode: {err}")))?;
 
     match url.scheme() {
         "https" => {
@@ -510,9 +461,7 @@ fn responses_websocket_url(base_url: &str) -> Result<String, LLMError> {
         }
         "wss" | "ws" => {}
         other => {
-            return Err(format_provider_error(format!(
-                "Unsupported URL scheme for WebSocket mode: {other}"
-            )));
+            return Err(format_provider_error(format!("Unsupported URL scheme for WebSocket mode: {other}")));
         }
     }
 
@@ -551,8 +500,7 @@ mod tests {
         PREVIOUS_RESPONSE_NOT_FOUND_CODE, WEBSOCKET_ACTIVE_RESPONSE_ERROR_PREFIX,
         WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE, apply_generate_mode, input_is_incremental,
         is_websocket_active_response_error, is_websocket_connection_limit_error,
-        is_websocket_previous_response_not_found_error, prepare_websocket_event,
-        responses_websocket_url,
+        is_websocket_previous_response_not_found_error, prepare_websocket_event, responses_websocket_url,
     };
     use crate::provider::LLMError;
     use crate::provider::{LLMProvider, LLMRequest, Message as ProviderMessage};
@@ -570,8 +518,7 @@ mod tests {
 
     #[test]
     fn websocket_url_is_derived_from_http_base() {
-        let ws = responses_websocket_url("https://api.openai.com/v1")
-            .expect("websocket url should be built");
+        let ws = responses_websocket_url("https://api.openai.com/v1").expect("websocket url should be built");
         assert_eq!(ws, "wss://api.openai.com/v1/responses");
     }
 
@@ -583,9 +530,7 @@ mod tests {
     #[test]
     fn websocket_connection_limit_error_is_detected() {
         let err = LLMError::Network {
-            message: format!(
-                "OpenAI error: {WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE}: limit reached"
-            ),
+            message: format!("OpenAI error: {WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE}: limit reached"),
             metadata: None,
         };
         assert!(is_websocket_connection_limit_error(&err));
@@ -623,9 +568,7 @@ mod tests {
     #[test]
     fn websocket_previous_response_not_found_error_is_detected() {
         let err = LLMError::Provider {
-            message: format!(
-                "OpenAI error: {PREVIOUS_RESPONSE_NOT_FOUND_CODE}: previous response missing"
-            ),
+            message: format!("OpenAI error: {PREVIOUS_RESPONSE_NOT_FOUND_CODE}: previous response missing"),
             metadata: None,
         };
         assert!(is_websocket_previous_response_not_found_error(&err));
@@ -677,10 +620,7 @@ mod tests {
             None,
             "fresh websocket chain should not reuse caller-supplied response ids"
         );
-        assert_eq!(
-            prepared.event.get("input").and_then(Value::as_array),
-            Some(&prepared.full_input)
-        );
+        assert_eq!(prepared.event.get("input").and_then(Value::as_array), Some(&prepared.full_input));
         assert_eq!(prepared.event.get("store").and_then(Value::as_bool), Some(false));
         assert!(!prepared.used_previous_response_id);
     }
@@ -705,10 +645,7 @@ mod tests {
 
         let prepared = prepare_websocket_event(payload, Some(&continuation), false).expect("event");
 
-        assert_eq!(
-            prepared.event.get("previous_response_id").and_then(Value::as_str),
-            Some("resp_prev")
-        );
+        assert_eq!(prepared.event.get("previous_response_id").and_then(Value::as_str), Some("resp_prev"));
         assert_eq!(
             prepared.event.get("input").and_then(Value::as_array),
             Some(&vec![json!({"role": "user", "content": "continue"})])
@@ -734,10 +671,7 @@ mod tests {
         let prepared = prepare_websocket_event(payload, Some(&continuation), false).expect("event");
 
         assert!(prepared.event.get("previous_response_id").is_none());
-        assert_eq!(
-            prepared.event.get("input").and_then(Value::as_array),
-            Some(&prepared.full_input)
-        );
+        assert_eq!(prepared.event.get("input").and_then(Value::as_array), Some(&prepared.full_input));
         assert_eq!(prepared.event.get("store").and_then(Value::as_bool), Some(false));
         assert!(!prepared.used_previous_response_id);
     }
@@ -784,8 +718,7 @@ mod tests {
                     let Message::Text(text) = message else {
                         panic!("expected text websocket payload");
                     };
-                    let payload: Value =
-                        serde_json::from_str(text.as_ref()).expect("payload should be valid json");
+                    let payload: Value = serde_json::from_str(text.as_ref()).expect("payload should be valid json");
                     recorded_handle.lock().expect("recorded lock").push(payload);
 
                     match reply {
@@ -880,17 +813,11 @@ mod tests {
         }
     }
 
-    fn seed_continuation_cache(
-        provider: &OpenAIProvider,
-        request: &LLMRequest,
-        response_id: &str,
-        store: bool,
-    ) {
+    fn seed_continuation_cache(provider: &OpenAIProvider, request: &LLMRequest, response_id: &str, store: bool) {
         let payload = provider
             .convert_to_openai_responses_format(request)
             .expect("payload should serialize");
-        let full_input =
-            payload.get("input").and_then(Value::as_array).cloned().expect("full input");
+        let full_input = payload.get("input").and_then(Value::as_array).cloned().expect("full input");
         let mut event = payload;
         event["store"] = Value::Bool(store);
 
@@ -950,16 +877,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
-            assert_eq!(
-                recorded[0].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_cached")
-            );
+            assert_eq!(recorded[0].get("previous_response_id").and_then(Value::as_str), Some("resp_cached"));
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
             assert!(
                 recorded
                     .iter()
@@ -993,10 +914,7 @@ mod tests {
             assert_eq!(recorded.len(), 2);
             assert_eq!(recorded[0].get("generate").and_then(Value::as_bool), Some(false));
             assert!(recorded[0].get("previous_response_id").is_none());
-            assert_eq!(
-                recorded[1].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[1].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }
@@ -1032,16 +950,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
-            assert_eq!(
-                recorded[0].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_cached")
-            );
+            assert_eq!(recorded[0].get("previous_response_id").and_then(Value::as_str), Some("resp_cached"));
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }
@@ -1074,16 +986,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
-            assert_eq!(
-                recorded[0].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_cached")
-            );
+            assert_eq!(recorded[0].get("previous_response_id").and_then(Value::as_str), Some("resp_cached"));
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }
@@ -1116,16 +1022,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
-            assert_eq!(
-                recorded[0].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_cached")
-            );
+            assert_eq!(recorded[0].get("previous_response_id").and_then(Value::as_str), Some("resp_cached"));
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }
@@ -1160,10 +1060,7 @@ mod tests {
             assert_eq!(recorded.len(), 3);
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }
@@ -1196,16 +1093,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
-            assert_eq!(
-                recorded[0].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_cached")
-            );
+            assert_eq!(recorded[0].get("previous_response_id").and_then(Value::as_str), Some("resp_cached"));
             assert!(recorded[1].get("previous_response_id").is_none());
             assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
-            assert_eq!(
-                recorded[2].get("previous_response_id").and_then(Value::as_str),
-                Some("resp_warmup")
-            );
+            assert_eq!(recorded[2].get("previous_response_id").and_then(Value::as_str), Some("resp_warmup"));
         }
         handle.await.expect("server task");
     }

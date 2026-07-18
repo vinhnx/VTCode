@@ -106,8 +106,7 @@ impl OllamaPullProgressReporter for CliPullProgressReporter {
                     let done_gb = (sum_completed as f64) / (1024.0 * 1024.0 * 1024.0);
                     let total_gb = (sum_total as f64) / (1024.0 * 1024.0 * 1024.0);
                     let pct = (sum_completed as f64) * 100.0 / (sum_total as f64);
-                    let text =
-                        format!("{done_gb:.2}/{total_gb:.2} GB ({pct:.1}%) {speed_mb_s:.1} MB/s");
+                    let text = format!("{done_gb:.2}/{total_gb:.2} GB ({pct:.1}%) {speed_mb_s:.1} MB/s");
                     let pad = self.last_line_len.saturating_sub(text.len());
                     let line = format!("\r{text}{}", " ".repeat(pad));
                     self.last_line_len = text.len();

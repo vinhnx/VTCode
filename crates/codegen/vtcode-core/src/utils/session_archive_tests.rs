@@ -7,8 +7,7 @@ use std::mem::size_of;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-static SESSION_HISTORY_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(()));
+static SESSION_HISTORY_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 struct EnvGuard {
     key: &'static str,
@@ -63,28 +62,20 @@ async fn session_archive_persists_snapshot() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    )
-    .with_external_thread_id("thread-123");
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium")
+            .with_external_thread_id("thread-123");
     let archive = SessionArchive::new(metadata.clone(), None).await?;
     let transcript = vec!["line one".to_owned(), "line two".to_owned()];
     let messages = vec![
         SessionMessage::new(MessageRole::User, "Hello world"),
         SessionMessage::new(MessageRole::Assistant, "Hi there"),
     ];
-    let path =
-        archive.finalize(transcript.clone(), 4, vec!["tool_a".to_owned()], messages.clone())?;
+    let path = archive.finalize(transcript.clone(), 4, vec!["tool_a".to_owned()], messages.clone())?;
 
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     assert_eq!(snapshot.metadata, metadata);
     assert_eq!(snapshot.transcript, transcript);
@@ -102,22 +93,15 @@ async fn session_archive_persists_budget_limit_continuation_metadata() -> Result
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    )
-    .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(2.5, 2.7, true)));
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium")
+            .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(2.5, 2.7, true)));
     let archive = SessionArchive::new(metadata.clone(), None).await?;
 
     let path = archive.finalize(Vec::new(), 0, Vec::new(), Vec::new())?;
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     let continuation = snapshot
         .metadata
@@ -149,8 +133,7 @@ fn session_message_converts_back_and_forth() {
 
 #[test]
 fn session_message_roundtrip_preserves_commentary_phase() {
-    let original =
-        Message::assistant("Working".to_owned()).with_phase(Some(AssistantPhase::Commentary));
+    let original = Message::assistant("Working".to_owned()).with_phase(Some(AssistantPhase::Commentary));
     let stored = SessionMessage::from(&original);
     let restored = Message::from(&stored);
 
@@ -275,14 +258,8 @@ async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
     let archive = SessionArchive::new(metadata, None).await?;
     let full = vec![
         SessionMessage::new(MessageRole::User, "first"),
@@ -302,10 +279,9 @@ async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
         loaded_skills: None,
     })?;
 
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     assert_eq!(snapshot.messages, full);
     let progress = snapshot.progress.expect("progress should exist");
@@ -326,14 +302,8 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
     let archive = SessionArchive::new(metadata, None).await?;
     let mut assistant = SessionMessage::new(MessageRole::Assistant, "done");
     assistant.reasoning = Some(Box::new("reasoned".to_string()));
@@ -355,10 +325,9 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
         loaded_skills: None,
     })?;
 
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     assert_eq!(snapshot.transcript, vec!["run cargo check".to_string(), "done".to_string()]);
     Ok(())
@@ -381,13 +350,10 @@ fn archive_transcript_cleaner_filters_recovery_noise_and_duplicate_tool_blocks()
         "  └ Action: list".to_string(),
         "  └ Path: /tmp/project/src".to_string(),
         "  └ Filter: files".to_string(),
-        "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass."
-            .to_string(),
-        "  I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
-            .to_string(),
+        "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass.".to_string(),
+        "  I couldn't produce a final synthesis because the model returned no answer on the recovery pass.".to_string(),
         "  Latest tool output: {\"output\":\"...\"}".to_string(),
-        "  Reuse the latest tool outputs already collected in this turn before retrying."
-            .to_string(),
+        "  Reuse the latest tool outputs already collected in this turn before retrying.".to_string(),
         "run cargo fmt and report me".to_string(),
         "• Ran cd /tmp/project &&".to_string(),
         "  │ cargo fmt 2>&1".to_string(),
@@ -448,14 +414,8 @@ async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
     let archive = SessionArchive::new(metadata, None).await?;
     let recent = vec![SessionMessage::new(MessageRole::Assistant, "done")];
 
@@ -484,10 +444,9 @@ async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<
         loaded_skills: None,
     })?;
 
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     assert_eq!(snapshot.distinct_tools, vec![tool_names::UNIFIED_EXEC.to_string()]);
     let progress = snapshot.progress.expect("progress should exist");
@@ -503,14 +462,7 @@ async fn find_session_by_identifier_returns_match() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "Sample",
-        "/tmp/sample",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata = SessionArchiveMetadata::new("Sample", "/tmp/sample", "model-x", "provider-y", "dark", "medium");
     let archive = SessionArchive::new(metadata.clone(), None).await?;
     let messages = vec![
         SessionMessage::new(MessageRole::User, "Hi"),
@@ -538,14 +490,8 @@ async fn session_archive_path_collision_adds_suffix() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
 
     let started_at = Utc
         .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
@@ -568,14 +514,8 @@ async fn session_archive_path_collision_adds_suffix() -> Result<()> {
 #[test]
 fn session_archive_filename_includes_microseconds_and_pid() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium");
 
     let started_at = Utc
         .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
@@ -604,15 +544,9 @@ async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
     let session_id = reserve_session_archive_identifier("ExampleWorkspace", None).await?;
     assert!(session_id.starts_with("session-exampleworkspace-"));
 
-    let metadata = SessionArchiveMetadata::new(
-        "ExampleWorkspace",
-        "/tmp/example",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    )
-    .with_debug_log_path(Some("/tmp/debug-session.log".to_string()));
+    let metadata =
+        SessionArchiveMetadata::new("ExampleWorkspace", "/tmp/example", "model-x", "provider-y", "dark", "medium")
+            .with_debug_log_path(Some("/tmp/debug-session.log".to_string()));
     let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
         .await
         .context("failed to create archive with reserved session id")?;
@@ -622,10 +556,9 @@ async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
         vec![],
         vec![SessionMessage::new(MessageRole::User, "hello")],
     )?;
-    let stored = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read stored session: {}", path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let stored =
+        fs::read_to_string(&path).with_context(|| format!("failed to read stored session: {}", path.display()))?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
     let stem = path
         .file_stem()
@@ -639,8 +572,7 @@ async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
 
 #[test]
 fn generated_session_identifier_includes_workspace_and_custom_suffix() {
-    let generated =
-        generate_session_archive_identifier("Example Workspace", Some("branch".to_string()));
+    let generated = generate_session_archive_identifier("Example Workspace", Some("branch".to_string()));
 
     assert!(generated.starts_with("session-example-workspace-"));
     assert!(generated.ends_with("-branch"));
@@ -690,8 +622,7 @@ async fn resume_from_listing_reuses_existing_archive_path() -> Result<()> {
     assert_eq!(resumed_path, original_path);
     let stored = fs::read_to_string(&resumed_path)
         .with_context(|| format!("failed to read stored session: {}", resumed_path.display()))?;
-    let snapshot: SessionSnapshot =
-        serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+    let snapshot: SessionSnapshot = serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
     assert_eq!(snapshot.total_messages, 2);
     assert_eq!(snapshot.messages.len(), 2);
 
@@ -706,14 +637,7 @@ async fn list_recent_sessions_orders_entries() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let first_metadata = SessionArchiveMetadata::new(
-        "First",
-        "/tmp/first",
-        "model-a",
-        "provider-a",
-        "light",
-        "medium",
-    );
+    let first_metadata = SessionArchiveMetadata::new("First", "/tmp/first", "model-a", "provider-a", "light", "medium");
     let first_archive = SessionArchive::new(first_metadata.clone(), None).await?;
     first_archive.finalize(
         vec!["first".to_owned()],
@@ -724,14 +648,7 @@ async fn list_recent_sessions_orders_entries() -> Result<()> {
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    let second_metadata = SessionArchiveMetadata::new(
-        "Second",
-        "/tmp/second",
-        "model-b",
-        "provider-b",
-        "dark",
-        "high",
-    );
+    let second_metadata = SessionArchiveMetadata::new("Second", "/tmp/second", "model-b", "provider-b", "dark", "high");
     let second_archive = SessionArchive::new(second_metadata.clone(), None).await?;
     second_archive.finalize(
         vec!["second".to_owned()],
@@ -771,9 +688,7 @@ fn session_archive_retention_prunes_oldest_by_count() -> Result<()> {
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-        .filter_map(|path| {
-            path.file_name().and_then(|name| name.to_str()).map(|name| name.to_string())
-        })
+        .filter_map(|path| path.file_name().and_then(|name| name.to_str()).map(|name| name.to_string()))
         .collect::<Vec<_>>();
     remaining.sort();
 
@@ -787,8 +702,7 @@ fn session_archive_retention_prunes_by_total_size() -> Result<()> {
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     for idx in 0..2 {
         let path = temp_dir.path().join(format!("session-{idx}.json"));
-        fs::write(&path, "x".repeat(800_000))
-            .with_context(|| format!("failed to write {}", path.display()))?;
+        fs::write(&path, "x".repeat(800_000)).with_context(|| format!("failed to write {}", path.display()))?;
         std::thread::sleep(Duration::from_millis(5));
     }
 
@@ -809,16 +723,14 @@ fn session_archive_retention_prunes_by_total_size() -> Result<()> {
         .collect::<Vec<_>>();
 
     assert_eq!(remaining.len(), 1);
-    let remaining_name =
-        remaining[0].file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    let remaining_name = remaining[0].file_name().and_then(|name| name.to_str()).unwrap_or_default();
     assert_eq!(remaining_name, "session-1.json");
     Ok(())
 }
 
 #[test]
 fn listing_previews_return_first_non_empty_lines() {
-    let metadata =
-        SessionArchiveMetadata::new("Workspace", "/tmp/ws", "model", "provider", "dark", "medium");
+    let metadata = SessionArchiveMetadata::new("Workspace", "/tmp/ws", "model", "provider", "dark", "medium");
     let long_response = "response snippet ".repeat(6);
     let snapshot = SessionSnapshot {
         metadata,
@@ -878,14 +790,8 @@ async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> 
     let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
     let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
-    let metadata = SessionArchiveMetadata::new(
-        "NoHistory",
-        "/tmp/no-history",
-        "model-x",
-        "provider-y",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("NoHistory", "/tmp/no-history", "model-x", "provider-y", "dark", "medium");
     let archive = SessionArchive::new(metadata, None).await?;
     let path = archive.finalize(
         vec!["line one".to_owned()],
@@ -902,14 +808,7 @@ async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> 
 #[test]
 fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
     let snapshot = SessionSnapshot {
-        metadata: SessionArchiveMetadata::new(
-            "Workspace",
-            "/tmp/workspace",
-            "model",
-            "provider",
-            "dark",
-            "medium",
-        ),
+        metadata: SessionArchiveMetadata::new("Workspace", "/tmp/workspace", "model", "provider", "dark", "medium"),
         started_at: Utc::now(),
         ended_at: Utc::now(),
         total_messages: 1,
@@ -935,10 +834,7 @@ fn snapshot_compaction_shrinks_large_single_message_payloads() -> Result<()> {
         }],
         progress: Some(Box::new(SessionProgress {
             turn_number: 1,
-            recent_messages: vec![SessionMessage::new(
-                MessageRole::Assistant,
-                "recent ".repeat(500),
-            )],
+            recent_messages: vec![SessionMessage::new(MessageRole::Assistant, "recent ".repeat(500))],
             tool_summaries: vec!["summary ".repeat(100)],
             token_usage: Some("token ".repeat(200)),
             max_context_tokens: Some(128_000),

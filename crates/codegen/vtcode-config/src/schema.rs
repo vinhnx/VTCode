@@ -17,6 +17,5 @@ pub fn vtcode_config_schema_json() -> Result<serde_json::Value> {
 /// Render the configuration schema as a pretty-printed JSON string.
 pub fn vtcode_config_schema_pretty() -> Result<String> {
     let value = vtcode_config_schema_json()?;
-    serde_json::to_string_pretty(&value)
-        .context("failed to serialize vtcode-config schema to pretty JSON string")
+    serde_json::to_string_pretty(&value).context("failed to serialize vtcode-config schema to pretty JSON string")
 }

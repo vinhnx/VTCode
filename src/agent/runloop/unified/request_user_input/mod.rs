@@ -22,8 +22,7 @@ mod tests {
         RequestUserInputQuestion {
             id: "system_prompt_plan".to_string(),
             header: "Direction".to_string(),
-            question: "Which area should we prioritize to improve planning workflow behavior?"
-                .to_string(),
+            question: "Which area should we prioritize to improve planning workflow behavior?".to_string(),
             options: None,
             focus_area: Some("system prompt".to_string()),
             analysis_hints: vec!["navigation loop".to_string(), "stream timeout".to_string()],
@@ -61,9 +60,7 @@ mod tests {
         let options = generate_suggested_options(&question).expect("expected generated options");
         assert!((1..=3).contains(&options.len()));
         assert!(options.iter().any(|opt| {
-            opt.label.contains("redundancy")
-                || opt.label.contains("Failure pattern")
-                || opt.label.contains("Prompt")
+            opt.label.contains("redundancy") || opt.label.contains("Failure pattern") || opt.label.contains("Prompt")
         }));
     }
 
@@ -110,8 +107,7 @@ mod tests {
         let verification_question = RequestUserInputQuestion {
             id: "q3".to_string(),
             header: "Q3".to_string(),
-            question: "For each step, what exact command or manual check proves it is complete?"
-                .to_string(),
+            question: "For each step, what exact command or manual check proves it is complete?".to_string(),
             options: None,
             focus_area: Some("system_prompt".to_string()),
             analysis_hints: vec![
@@ -122,13 +118,11 @@ mod tests {
 
         let outcome = generate_suggested_options(&outcome_question).expect("outcome options");
         let steps = generate_suggested_options(&steps_question).expect("step options");
-        let verification =
-            generate_suggested_options(&verification_question).expect("verification options");
+        let verification = generate_suggested_options(&verification_question).expect("verification options");
 
         let outcome_labels = outcome.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
         let step_labels = steps.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
-        let verification_labels =
-            verification.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
+        let verification_labels = verification.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
 
         assert_ne!(outcome_labels, step_labels);
         assert_ne!(step_labels, verification_labels);
@@ -252,8 +246,7 @@ mod tests {
         let question = RequestUserInputQuestion {
             id: "constraints".to_string(),
             header: "Plan".to_string(),
-            question: "For each step, what exact command or manual check proves it is complete?"
-                .to_string(),
+            question: "For each step, what exact command or manual check proves it is complete?".to_string(),
             options: None,
             focus_area: None,
             analysis_hints: Vec::new(),
@@ -377,15 +370,12 @@ mod tests {
             ]
         });
 
-        let normalized = normalize_request_user_input_fallback_args(&legacy_args)
-            .expect("fallback should normalize legacy shape");
+        let normalized =
+            normalize_request_user_input_fallback_args(&legacy_args).expect("fallback should normalize legacy shape");
         assert_eq!(normalized["questions"][0]["id"], "scope");
         assert_eq!(normalized["questions"][0]["header"], "Scope");
         assert_eq!(normalized["questions"][0]["question"], "Choose one");
-        assert_eq!(
-            normalized["questions"][0]["options"].as_array().map(|options| options.len()),
-            Some(2)
-        );
+        assert_eq!(normalized["questions"][0]["options"].as_array().map(|options| options.len()), Some(2));
     }
 
     #[test]
@@ -396,15 +386,12 @@ mod tests {
             "options": ["Minimal", "Full", "Minimal"]
         });
 
-        let normalized = normalize_request_user_input_fallback_args(&args)
-            .expect("fallback should normalize shorthand");
+        let normalized =
+            normalize_request_user_input_fallback_args(&args).expect("fallback should normalize shorthand");
         assert_eq!(normalized["questions"][0]["id"], "question_1");
         assert_eq!(normalized["questions"][0]["header"], "Scope");
         assert_eq!(normalized["questions"][0]["question"], "Which direction should we take?");
-        assert_eq!(
-            normalized["questions"][0]["options"].as_array().map(|options| options.len()),
-            Some(2)
-        );
+        assert_eq!(normalized["questions"][0]["options"].as_array().map(|options| options.len()), Some(2));
     }
 
     #[test]

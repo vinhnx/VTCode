@@ -7,19 +7,17 @@ pub use crate::tui::core_tui::app::types as app_types;
 pub use crate::tui::core_tui::session::terminal_capabilities;
 pub use crate::tui::core_tui::types::{InlineCommand, InlineEvent};
 pub use crate::tui::core_tui::types::{
-    InlineHeaderBadge, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget,
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle,
-    InlineTheme, ListOverlayRequest, LocalAgentEntry, OverlayEvent, OverlayHotkey,
-    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySubmission, WizardModalMode,
-    WizardOverlayRequest, WizardStep,
+    InlineHeaderBadge, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkTarget, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
+    LocalAgentEntry, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 pub use crate::tui::core_tui::widgets::TranscriptWidget;
 pub use crate::tui::ui::tui::session::message::RenderedTranscriptLink;
 pub use anstyle::Color as AnsiColorEnum;
 pub use anstyle::RgbColor;
 pub use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
-    MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 #[cfg(target_os = "macos")]
 pub use ratatui::crossterm::event::{KeyEventKind, ModifierKeyCode};
@@ -208,23 +206,23 @@ pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, works
                 if parent.display().to_string() != dir_str {
                     continue;
                 }
-                let is_dir =
-                    files.iter().any(|other| other != f && other.starts_with(&format!("{f}/")));
+                let is_dir = files.iter().any(|other| other != f && other.starts_with(&format!("{f}/")));
                 out.push((PathBuf::from(f), is_dir));
             }
             out.sort_by(|a, b| {
-                b.1.cmp(&a.1).then_with(|| {
-                    a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase())
-                })
+                b.1.cmp(&a.1)
+                    .then_with(|| a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase()))
             });
             out
         }
     });
 
     session.handle_command(app_types::InlineCommand::ShowTransient {
-        request: Box::new(app_types::TransientRequest::FilePalette(
-            app_types::FilePaletteTransientRequest { dir_lister, workspace, visible: None },
-        )),
+        request: Box::new(app_types::TransientRequest::FilePalette(app_types::FilePaletteTransientRequest {
+            dir_lister,
+            workspace,
+            visible: None,
+        })),
     });
     // Mirror the runtime: the recursive index is delivered after configuration.
     session.handle_command(app_types::InlineCommand::UpdateFilePaletteSearch { files });
@@ -368,11 +366,7 @@ pub fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
         .collect()
 }
 
-pub fn rendered_transcript_widget_lines(
-    session: &mut Session,
-    width: u16,
-    height: u16,
-) -> Vec<String> {
+pub fn rendered_transcript_widget_lines(session: &mut Session, width: u16, height: u16) -> Vec<String> {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
     TranscriptWidget::new(session).render(area, &mut buf);
@@ -453,8 +447,7 @@ pub fn transcript_file_fixture_absolute_path() -> String {
 
 pub fn quoted_transcript_temp_file_path() -> PathBuf {
     let unique = TRANSCRIPT_TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir()
-        .join(format!("vtcode transcript quoted path {} {unique}.txt", std::process::id()))
+    std::env::temp_dir().join(format!("vtcode transcript quoted path {} {unique}.txt", std::process::id()))
 }
 
 #[cfg(target_os = "macos")]
@@ -469,29 +462,17 @@ pub fn open_file_click_modifiers() -> KeyModifiers {
 
 #[cfg(target_os = "macos")]
 pub fn command_modifier_press_event() -> KeyEvent {
-    KeyEvent::new_with_kind(
-        KeyCode::Modifier(ModifierKeyCode::LeftSuper),
-        KeyModifiers::SUPER,
-        KeyEventKind::Press,
-    )
+    KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftSuper), KeyModifiers::SUPER, KeyEventKind::Press)
 }
 
 #[cfg(target_os = "macos")]
 pub fn command_modifier_release_event() -> KeyEvent {
-    KeyEvent::new_with_kind(
-        KeyCode::Modifier(ModifierKeyCode::LeftSuper),
-        KeyModifiers::SUPER,
-        KeyEventKind::Release,
-    )
+    KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftSuper), KeyModifiers::SUPER, KeyEventKind::Release)
 }
 
 #[cfg(target_os = "macos")]
 pub fn meta_modifier_press_event() -> KeyEvent {
-    KeyEvent::new_with_kind(
-        KeyCode::Modifier(ModifierKeyCode::LeftMeta),
-        KeyModifiers::META,
-        KeyEventKind::Press,
-    )
+    KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftMeta), KeyModifiers::META, KeyEventKind::Press)
 }
 
 pub fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
@@ -570,9 +551,7 @@ pub fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::Pl
                 },
                 InlineListItem {
                     title: "Yes, manually approve edits".to_string(),
-                    subtitle: Some(
-                        "Keep context and confirm each edit before applying.".to_string(),
-                    ),
+                    subtitle: Some("Keep context and confirm each edit before applying.".to_string()),
                     badge: None,
                     indent: 0,
                     selection: Some(InlineListSelection::PlanApprovalExecute),
@@ -719,8 +698,5 @@ pub fn set_app_session_queued_inputs(session: &mut AppSession, entries: Vec<Stri
 pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
     let view = visible_transcript(session);
     let footer: Vec<String> = view.iter().rev().take(take_from_bottom as usize).cloned().collect();
-    assert!(
-        footer.iter().any(|line| line.contains(needle)),
-        "expected footer to contain: {needle}"
-    );
+    assert!(footer.iter().any(|line| line.contains(needle)), "expected footer to contain: {needle}");
 }

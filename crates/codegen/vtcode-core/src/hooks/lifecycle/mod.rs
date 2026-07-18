@@ -9,9 +9,8 @@ mod tests;
 
 pub use engine::LifecycleHookEngine;
 pub use types::{
-    HookMessage, HookMessageLevel, NotificationHookType, PermissionDecisionBehavior,
-    PermissionDecisionScope, PermissionRequestHookDecision, PermissionRequestHookOutcome,
-    PermissionUpdateDestination, PermissionUpdateKind, PermissionUpdateRequest,
-    PreCompactHookOutcome, PreToolHookDecision, SessionEndReason, SessionStartTrigger,
+    HookMessage, HookMessageLevel, NotificationHookType, PermissionDecisionBehavior, PermissionDecisionScope,
+    PermissionRequestHookDecision, PermissionRequestHookOutcome, PermissionUpdateDestination, PermissionUpdateKind,
+    PermissionUpdateRequest, PreCompactHookOutcome, PreToolHookDecision, SessionEndReason, SessionStartTrigger,
     StopHookOutcome,
 };

@@ -77,11 +77,7 @@ pub struct Input {
         deserialize_with = "deserialize_opt_maybe_quoted"
     )]
     pub offset_bytes: Option<u64>,
-    #[serde(
-        default,
-        alias = "line_offset",
-        deserialize_with = "deserialize_opt_maybe_quoted"
-    )]
+    #[serde(default, alias = "line_offset", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub offset_lines: Option<usize>,
     #[serde(
         default,
@@ -90,22 +86,13 @@ pub struct Input {
         deserialize_with = "deserialize_opt_maybe_quoted"
     )]
     pub page_size_bytes: Option<usize>,
-    #[serde(
-        default,
-        alias = "line_page_size",
-        deserialize_with = "deserialize_opt_maybe_quoted"
-    )]
+    #[serde(default, alias = "line_page_size", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page_size_lines: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct WriteInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
     #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
@@ -119,12 +106,7 @@ pub struct WriteInput {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
     #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
@@ -134,12 +116,7 @@ pub struct CreateInput {
 
 #[derive(Debug, Deserialize)]
 pub struct DeleteInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
     #[serde(default)]
     pub recursive: bool,
@@ -149,12 +126,7 @@ pub struct DeleteInput {
 
 #[derive(Debug, Deserialize)]
 pub struct MoveInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
     pub destination: String,
     #[serde(default)]
@@ -163,12 +135,7 @@ pub struct MoveInput {
 
 #[derive(Debug, Deserialize)]
 pub struct CopyInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
     pub destination: String,
     #[serde(default)]
@@ -189,19 +156,9 @@ pub struct PathArgs {
 
 #[derive(Debug, Deserialize)]
 pub struct EditInput {
-    #[serde(
-        alias = "file_path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path", alias = "file")]
     pub path: String,
-    #[serde(
-        alias = "old_text",
-        alias = "original",
-        alias = "target",
-        alias = "from"
-    )]
+    #[serde(alias = "old_text", alias = "original", alias = "target", alias = "from")]
     pub old_str: String,
     #[serde(alias = "new_text", alias = "replacement", alias = "to")]
     pub new_str: String,
@@ -213,10 +170,7 @@ pub struct EditInput {
 pub struct ListInput {
     #[serde(default = "default_list_path")]
     pub path: String,
-    #[serde(
-        default = "default_max_items",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "default_max_items", deserialize_with = "deserialize_maybe_quoted")]
     pub max_items: usize,
     /// Optional page number for pagination (1-based)
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]

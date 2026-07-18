@@ -28,10 +28,7 @@ impl ToolRegistry {
 
         if let Some(reg) = self.inventory.get_registration(&resolved_name) {
             if let Some(behavior) = reg.metadata().behavior() {
-                return !matches!(
-                    behavior.mutation_model,
-                    crate::tools::tool_intent::ToolMutationModel::ReadOnly
-                );
+                return !matches!(behavior.mutation_model, crate::tools::tool_intent::ToolMutationModel::ReadOnly);
             }
 
             if let super::ToolHandler::TraitObject(tool) = reg.handler() {
@@ -177,16 +174,8 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        assert!(registry.is_retry_safe_call(
-            tools::UNIFIED_FILE,
-            &json!({"action": "read", "path": "README.md"})
-        ));
-        assert!(
-            registry.is_retry_safe_call(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "poll", "session_id": 42})
-            )
-        );
+        assert!(registry.is_retry_safe_call(tools::UNIFIED_FILE, &json!({"action": "read", "path": "README.md"})));
+        assert!(registry.is_retry_safe_call(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": 42})));
         assert!(registry.is_retry_safe_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
@@ -201,18 +190,14 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        assert!(!registry.is_retry_safe_call(
-            tools::UNIFIED_FILE,
-            &json!({"action": "write", "path": "foo.txt", "content": "x"})
-        ));
-        assert!(!registry.is_retry_safe_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "echo hi"})
-        ));
         assert!(
-            !registry
-                .is_retry_safe_call(tools::WRITE_FILE, &json!({"path": "foo.txt", "content": "x"}))
+            !registry.is_retry_safe_call(
+                tools::UNIFIED_FILE,
+                &json!({"action": "write", "path": "foo.txt", "content": "x"})
+            )
         );
+        assert!(!registry.is_retry_safe_call(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"})));
+        assert!(!registry.is_retry_safe_call(tools::WRITE_FILE, &json!({"path": "foo.txt", "content": "x"})));
 
         Ok(())
     }
@@ -223,9 +208,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.enable_planning();
 
-        assert!(
-            registry.is_planning_active_allowed(tools::TASK_TRACKER, &json!({"action": "list"}))
-        );
+        assert!(registry.is_planning_active_allowed(tools::TASK_TRACKER, &json!({"action": "list"})));
         Ok(())
     }
 
@@ -235,18 +218,16 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.enable_planning();
 
-        assert!(registry.is_planning_active_allowed(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "ls -la"})
-        ));
+        assert!(
+            registry.is_planning_active_allowed(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "ls -la"}))
+        );
         assert!(registry.is_planning_active_allowed(
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "npm install --dry-run"})
         ));
-        assert!(!registry.is_planning_active_allowed(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "echo hi"})
-        ));
+        assert!(
+            !registry.is_planning_active_allowed(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}))
+        );
 
         Ok(())
     }

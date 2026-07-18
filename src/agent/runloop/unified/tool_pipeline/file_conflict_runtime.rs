@@ -1,7 +1,5 @@
 use serde_json::Value;
-use vtcode_core::tools::edited_file_monitor::{
-    FILE_CONFLICT_DETECTED_FIELD, FILE_CONFLICT_PATH_FIELD,
-};
+use vtcode_core::tools::edited_file_monitor::{FILE_CONFLICT_DETECTED_FIELD, FILE_CONFLICT_PATH_FIELD};
 use vtcode_core::tools::tool_intent::is_edited_file_conflict_guarded_call;
 
 use super::status::ToolExecutionStatus;
@@ -23,20 +21,16 @@ impl PendingFileConflictStatus {
             return None;
         }
 
-        let display_path =
-            output.get(FILE_CONFLICT_PATH_FIELD).and_then(Value::as_str)?.to_string();
+        let display_path = output.get(FILE_CONFLICT_PATH_FIELD).and_then(Value::as_str)?.to_string();
         let message = output
             .get("message")
             .and_then(Value::as_str)
             .unwrap_or("File changed on disk since the agent last read it.")
             .to_string();
         let approved_snapshot = output.get("disk_snapshot").cloned().filter(Value::is_object);
-        let disk_content =
-            output.get("disk_content").and_then(Value::as_str).map(ToOwned::to_owned);
-        let intended_content =
-            output.get("intended_content").and_then(Value::as_str).map(ToOwned::to_owned);
-        let emit_hitl_notification =
-            output.get("emit_hitl_notification").and_then(Value::as_bool).unwrap_or(false);
+        let disk_content = output.get("disk_content").and_then(Value::as_str).map(ToOwned::to_owned);
+        let intended_content = output.get("intended_content").and_then(Value::as_str).map(ToOwned::to_owned);
+        let emit_hitl_notification = output.get("emit_hitl_notification").and_then(Value::as_bool).unwrap_or(false);
 
         Some(Self {
             output,
@@ -109,17 +103,13 @@ mod tests {
             "conflict_path": "sample.txt"
         });
 
-        let wrapped = into_runtime_tool_execution(
-            tools::READ_FILE,
-            &json!({"path": "sample.txt"}),
-            success(output.clone()),
-        );
+        let wrapped =
+            into_runtime_tool_execution(tools::READ_FILE, &json!({"path": "sample.txt"}), success(output.clone()));
 
         match wrapped {
-            RuntimeToolExecution::Completed(ToolExecutionStatus::Success {
-                output: observed,
-                ..
-            }) => assert_eq!(observed, output),
+            RuntimeToolExecution::Completed(ToolExecutionStatus::Success { output: observed, .. }) => {
+                assert_eq!(observed, output)
+            }
             other => panic!("unexpected runtime execution: {other:?}"),
         }
     }
@@ -139,10 +129,9 @@ mod tests {
         );
 
         match wrapped {
-            RuntimeToolExecution::Completed(ToolExecutionStatus::Success {
-                output: observed,
-                ..
-            }) => assert_eq!(observed, output),
+            RuntimeToolExecution::Completed(ToolExecutionStatus::Success { output: observed, .. }) => {
+                assert_eq!(observed, output)
+            }
             other => panic!("unexpected runtime execution: {other:?}"),
         }
     }

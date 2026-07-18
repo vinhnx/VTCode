@@ -141,19 +141,14 @@ pub fn validate_prompt_catalog_alignment(
         } else {
             PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE
         };
-        if !system_instruction.contains(expected_line)
-            || system_instruction.contains(unexpected_line)
-        {
+        if !system_instruction.contains(expected_line) || system_instruction.contains(unexpected_line) {
             return Err(AlignmentError::PlanningWorkflowPromptPolicyMismatch { expected_line });
         }
 
-        const MUTATING_HINTS: &[&str] =
-            &["apply_patch", "file_operation write", "file_operation edit"];
+        const MUTATING_HINTS: &[&str] = &["apply_patch", "file_operation write", "file_operation edit"];
         for &hint in MUTATING_HINTS {
             if system_instruction.contains(hint) {
-                return Err(AlignmentError::MutatingToolInPlanningWorkflowPrompt {
-                    tool_name: hint,
-                });
+                return Err(AlignmentError::MutatingToolInPlanningWorkflowPrompt { tool_name: hint });
             }
         }
     }
@@ -161,9 +156,7 @@ pub fn validate_prompt_catalog_alignment(
     Ok(())
 }
 
-fn parse_runtime_tool_catalog_metadata(
-    system_instruction: &str,
-) -> Option<RuntimeToolCatalogMetadata> {
+fn parse_runtime_tool_catalog_metadata(system_instruction: &str) -> Option<RuntimeToolCatalogMetadata> {
     let start = system_instruction.rfind("[Runtime Tool Catalog]")?;
     let mut metadata = RuntimeToolCatalogMetadata::default();
 
@@ -204,11 +197,7 @@ fn validate_runtime_tool_catalog_metadata(
 ) -> Result<(), AlignmentError> {
     validate_metadata_value("version", metadata.version, tool_snapshot.version)?;
     validate_metadata_value("epoch", metadata.epoch, tool_snapshot.epoch)?;
-    validate_metadata_value(
-        "available_tools",
-        metadata.available_tools,
-        tool_snapshot.available_tools(),
-    )?;
+    validate_metadata_value("available_tools", metadata.available_tools, tool_snapshot.available_tools())?;
     validate_metadata_value(
         "request_user_input_enabled",
         metadata.request_user_input_enabled,
@@ -246,14 +235,7 @@ mod tests {
     use std::sync::Arc;
 
     fn snapshot(planning_active: bool) -> SessionToolCatalogSnapshot {
-        SessionToolCatalogSnapshot::new(
-            1,
-            1,
-            planning_active,
-            false,
-            Some(Arc::new(Vec::new())),
-            false,
-        )
+        SessionToolCatalogSnapshot::new(1, 1, planning_active, false, Some(Arc::new(Vec::new())), false)
     }
 
     #[tokio::test]
@@ -326,30 +308,19 @@ mod tests {
     #[test]
     fn mutating_tool_in_planning_workflow_prompt_detected() {
         let err = validate_prompt_catalog_alignment(
-            &format!(
-                "{PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE}\nyou may call apply_patch to write files"
-            ),
+            &format!("{PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE}\nyou may call apply_patch to write files"),
             &snapshot(true),
             true,
             false,
         )
         .expect_err("canary should fire");
-        assert_eq!(
-            err,
-            AlignmentError::MutatingToolInPlanningWorkflowPrompt { tool_name: "apply_patch" }
-        );
+        assert_eq!(err, AlignmentError::MutatingToolInPlanningWorkflowPrompt { tool_name: "apply_patch" });
     }
 
     #[test]
     fn no_false_positive_in_normal_mode_with_apply_patch() {
         // Mentioning apply_patch in a normal-mode prompt is fine.
-        validate_prompt_catalog_alignment(
-            "you may call apply_patch",
-            &snapshot(false),
-            false,
-            false,
-        )
-        .unwrap();
+        validate_prompt_catalog_alignment("you may call apply_patch", &snapshot(false), false, false).unwrap();
     }
 
     #[test]

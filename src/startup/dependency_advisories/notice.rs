@@ -29,17 +29,13 @@ impl OptionalSearchToolsNotice {
     ) -> Option<Self> {
         let ripgrep = match ripgrep_status {
             RipgrepStatus::Available { .. } => None,
-            RipgrepStatus::NotFound if config.dependency_notices.ripgrep_missing_notice_shown => {
-                None
-            }
+            RipgrepStatus::NotFound if config.dependency_notices.ripgrep_missing_notice_shown => None,
             RipgrepStatus::NotFound => Some(DependencyIssue::Missing),
             RipgrepStatus::Error { reason } => Some(DependencyIssue::Error(reason)),
         };
         let ast_grep = match ast_grep_status {
             AstGrepStatus::Available { .. } => None,
-            AstGrepStatus::NotFound if config.dependency_notices.ast_grep_missing_notice_shown => {
-                None
-            }
+            AstGrepStatus::NotFound if config.dependency_notices.ast_grep_missing_notice_shown => None,
             AstGrepStatus::NotFound => Some(DependencyIssue::Missing),
             AstGrepStatus::Error { reason } => Some(DependencyIssue::Error(reason)),
         };
@@ -102,9 +98,7 @@ impl OptionalSearchToolsNotice {
         }
 
         lines.push(format!("Install both with `{SEARCH_TOOLS_INSTALL_COMMAND}`."));
-        lines.push(format!(
-            "Native installer bundle: use `{SEARCH_TOOLS_INSTALLER_FLAG}` during curl installs."
-        ));
+        lines.push(format!("Native installer bundle: use `{SEARCH_TOOLS_INSTALLER_FLAG}` during curl installs."));
 
         lines
     }
@@ -146,12 +140,9 @@ mod tests {
         let mut config = DotConfig::default();
         config.dependency_notices.ripgrep_missing_notice_shown = true;
 
-        let notice = OptionalSearchToolsNotice::from_snapshot(
-            &config,
-            RipgrepStatus::NotFound,
-            AstGrepStatus::NotFound,
-        )
-        .expect("ast-grep notice should remain");
+        let notice =
+            OptionalSearchToolsNotice::from_snapshot(&config, RipgrepStatus::NotFound, AstGrepStatus::NotFound)
+                .expect("ast-grep notice should remain");
 
         assert_eq!(notice.ripgrep, None);
         assert_eq!(notice.ast_grep, Some(DependencyIssue::Missing));

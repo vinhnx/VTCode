@@ -12,10 +12,7 @@ impl SuggestionRanker {
     }
 
     /// Rank and filter suggestions based on confidence and relevance
-    pub fn rank_suggestions(
-        &self,
-        mut suggestions: Vec<CompletionSuggestion>,
-    ) -> Vec<CompletionSuggestion> {
+    pub fn rank_suggestions(&self, mut suggestions: Vec<CompletionSuggestion>) -> Vec<CompletionSuggestion> {
         // Filter by confidence threshold
         suggestions.retain(|s| s.confidence >= self.confidence_threshold);
 

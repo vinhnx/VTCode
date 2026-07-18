@@ -2,9 +2,7 @@ use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
 use crate::permissions::PermissionToolContext;
-use crate::reports::{
-    TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL, TOOL_SUCCESS_LABEL, ToolExecutionReport,
-};
+use crate::reports::{TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL, TOOL_SUCCESS_LABEL, ToolExecutionReport};
 use crate::tooling::{SupportedTool, ToolDescriptor};
 use crate::zed::connection::ConnectionHandle;
 use anyhow::Result;
@@ -34,10 +32,7 @@ impl ZedAgent {
                 .map(|call| {
                     Self::tool_call_result_from_report(
                         call,
-                        ToolExecutionReport::failure(
-                            Self::tool_name_from_call(call),
-                            "Client connection unavailable",
-                        ),
+                        ToolExecutionReport::failure(Self::tool_name_from_call(call), "Client connection unavailable"),
                     )
                 })
                 .collect());
@@ -63,19 +58,14 @@ impl ZedAgent {
         let Some(func_ref) = call.function.as_ref() else {
             return Ok(Self::tool_call_result_from_report(
                 call,
-                ToolExecutionReport::failure(
-                    "unknown",
-                    "Malformed tool call: missing function payload",
-                ),
+                ToolExecutionReport::failure("unknown", "Malformed tool call: missing function payload"),
             ));
         };
         let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
         let args_value_result: Result<Value, _> = serde_json::from_str(&func_ref.arguments);
         let args_value_for_input = args_value_result.as_ref().ok().cloned();
         let title = match (tool_descriptor, args_value_for_input.as_ref()) {
-            (Some(descriptor), Some(args)) => {
-                self.acp_tool_registry.render_title(descriptor, &func_ref.name, args)
-            }
+            (Some(descriptor), Some(args)) => self.acp_tool_registry.render_title(descriptor, &func_ref.name, args),
             (Some(descriptor), None) => {
                 let null_args = Value::Null;
                 self.acp_tool_registry.render_title(descriptor, &func_ref.name, &null_args)
@@ -117,8 +107,7 @@ impl ZedAgent {
 
         let cancel_after_permission = session.cancel_flag.load(Ordering::Relaxed);
         if tool_descriptor.is_some() && permission_override.is_none() && !cancel_after_permission {
-            let in_progress_fields =
-                acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
+            let in_progress_fields = acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
             let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
             self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(progress_update))
                 .await?;
@@ -142,16 +131,13 @@ impl ZedAgent {
                     .await
                 }
                 (None, Ok(_)) => ToolExecutionReport::failure(&func_ref.name, "Unsupported tool"),
-                (_, Err(error)) => ToolExecutionReport::failure(
-                    &func_ref.name,
-                    &format!("Invalid JSON arguments: {error}"),
-                ),
+                (_, Err(error)) => {
+                    ToolExecutionReport::failure(&func_ref.name, &format!("Invalid JSON arguments: {error}"))
+                }
             }
         };
 
-        if session.cancel_flag.load(Ordering::Relaxed)
-            && matches!(report.status, acp::ToolCallStatus::Completed)
-        {
+        if session.cancel_flag.load(Ordering::Relaxed) && matches!(report.status, acp::ToolCallStatus::Completed) {
             report = ToolExecutionReport::cancelled(&func_ref.name);
         }
 
@@ -192,10 +178,7 @@ impl ZedAgent {
             .unwrap_or("unknown")
     }
 
-    fn tool_call_result_from_report(
-        call: &ProviderToolCall,
-        report: ToolExecutionReport,
-    ) -> ToolCallResult {
+    fn tool_call_result_from_report(call: &ProviderToolCall, report: ToolExecutionReport) -> ToolCallResult {
         ToolCallResult {
             tool_call_id: call.id.clone(),
             llm_response: report.llm_response,
@@ -226,16 +209,13 @@ impl ZedAgent {
         args: &Value,
     ) -> ToolExecutionReport {
         if should_route_terminal_via_client(tool_name, args)
-            && let Some(report) =
-                self.execute_terminal_via_client(tool_name, client, session_id, args).await
+            && let Some(report) = self.execute_terminal_via_client(tool_name, client, session_id, args).await
         {
             return report;
         }
 
         match descriptor {
-            ToolDescriptor::Acp(tool) => {
-                self.execute_acp_tool(tool, client, session_id, args).await
-            }
+            ToolDescriptor::Acp(tool) => self.execute_acp_tool(tool, client, session_id, args).await,
             ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id).await,
         }
     }
@@ -348,9 +328,10 @@ impl ZedAgent {
                 .run_read_file(client, session_id, args)
                 .await
                 .unwrap_or_else(|message| ToolExecutionReport::failure(tools::READ_FILE, &message)),
-            SupportedTool::ListFiles => self.run_list_files(args).await.unwrap_or_else(|message| {
-                ToolExecutionReport::failure(tools::LIST_FILES, &message)
-            }),
+            SupportedTool::ListFiles => self
+                .run_list_files(args)
+                .await
+                .unwrap_or_else(|message| ToolExecutionReport::failure(tools::LIST_FILES, &message)),
         }
     }
 }

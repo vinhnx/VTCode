@@ -215,8 +215,7 @@ impl Default for FallbackConfig {
 impl ImprovementsConfig {
     /// Load configuration from TOML file
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
-        let content =
-            read_file_with_context_sync(std::path::Path::new(path), "improvements config")?;
+        let content = read_file_with_context_sync(std::path::Path::new(path), "improvements config")?;
         toml::from_str(&content).map_err(|e| anyhow::anyhow!("failed to parse config: {e}"))
     }
 

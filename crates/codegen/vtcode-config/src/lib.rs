@@ -57,107 +57,95 @@ pub mod update;
 pub mod workspace_env;
 
 pub use acp::{
-    AcpAuthMethod, AgentClientProtocolConfig, AgentClientProtocolTransport,
-    AgentClientProtocolZedConfig, AgentClientProtocolZedToolsConfig,
-    AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
+    AcpAuthMethod, AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
+    AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig,
-    AuthConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig,
-    BundledSkillsConfig, CommandsConfig, CopilotAuthConfig, CustomProviderCommandAuthConfig,
-    DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
-    FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, MicroVmProvider,
-    ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig, NetworkPolicy, OpenAIAuthConfig,
-    OpenAIConfig, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret,
-    OpenAIHostedShellEnvironment, OpenAIHostedShellNetworkPolicy,
-    OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIManualCompactionConfig,
-    OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
-    PluginRuntimeConfig, PluginTrustLevel, PromptCacheRetention, PromptCachingConfig,
-    ProviderOverrideConfig, ProviderPromptCachingConfig, ResourceLimitsConfig,
-    ResourceLimitsPreset, SandboxConfig, SandboxPolicy, SeccompConfig, SeccompProfilePreset,
-    SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ThinkingDisplayMode,
-    ToolPolicy, ToolProfile, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode,
+    AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AuthConfig,
+    AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig, BundledSkillsConfig, CommandsConfig,
+    CopilotAuthConfig, CustomProviderCommandAuthConfig, DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig,
+    ExternalSandboxType, FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, MicroVmProvider,
+    ModelConfig, NetworkAllowlistEntryConfig, NetworkConfig, NetworkPolicy, OpenAIAuthConfig, OpenAIConfig,
+    OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
+    OpenAIManualCompactionConfig, OpenAIPreferredMethod, OpenAIServiceTier, OpenResponsesConfig, OpenRouterAuthConfig,
+    PluginRuntimeConfig, PluginTrustLevel, PromptCacheRetention, PromptCachingConfig, ProviderOverrideConfig,
+    ProviderPromptCachingConfig, ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxPolicy,
+    SeccompConfig, SeccompProfilePreset, SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode,
+    ThinkingDisplayMode, ToolPolicy, ToolProfile, ToolSearchAlgorithm, ToolsConfig, WebFetchConfig, WebFetchMode,
     WebSearchConfig, WebSearchProvider,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
-    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
-    SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults, get_config_dir,
-    get_data_dir, install_config_defaults_provider, reset_to_default_config_defaults,
-    with_config_defaults,
+    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults, SyntaxHighlightingDefaults,
+    WorkspacePathsDefaults, current_config_defaults, get_config_dir, get_data_dir, install_config_defaults_provider,
+    reset_to_default_config_defaults, with_config_defaults,
 };
-pub use hooks::{
-    HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig,
-};
+pub use hooks::{HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig};
 pub use ide_context::{
     IdeContextConfig, IdeContextProviderConfig, IdeContextProviderFamily, IdeContextProviderMode,
     IdeContextProvidersConfig,
 };
 pub use loader::layers::{
-    ConfigLayerEntry, ConfigLayerLoadError, ConfigLayerMetadata, ConfigLayerSource,
-    ConfigLayerStack, LayerDisabledReason,
+    ConfigLayerEntry, ConfigLayerLoadError, ConfigLayerMetadata, ConfigLayerSource, ConfigLayerStack,
+    LayerDisabledReason,
 };
 pub use loader::{
-    ConfigBuilder, ConfigManager, ConfigWatcher, FeaturesConfig, SimpleConfigWatcher,
-    SyntaxHighlightingConfig, VTCodeConfig, WorkspaceConfig, fingerprint_str,
-    fingerprint_toml_value, merge_toml_values, merge_toml_values_with_origins,
+    ConfigBuilder, ConfigManager, ConfigWatcher, FeaturesConfig, SimpleConfigWatcher, SyntaxHighlightingConfig,
+    VTCodeConfig, WorkspaceConfig, fingerprint_str, fingerprint_toml_value, merge_toml_values,
+    merge_toml_values_with_origins,
 };
 pub use mcp::{
-    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig,
-    McpLifecycleConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
-    McpUiMode,
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpLifecycleConfig, McpProviderConfig,
+    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use models::{MiMoAuthMethod, ModelId, OpenRouterMetadata};
 pub use network_allowlist::{
-    AiProviderCategories, AllowlistEntry, AllowlistMeta, DEFAULT_ALLOWLIST_TOML,
-    LocalAiProviderEntry, NetworkAllowlist, SearchCategories,
+    AiProviderCategories, AllowlistEntry, AllowlistMeta, DEFAULT_ALLOWLIST_TOML, LocalAiProviderEntry,
+    NetworkAllowlist, SearchCategories,
 };
 pub use optimization::{
-    AgentExecutionConfig, AsyncPipelineConfig, CommandCacheConfig, FileReadCacheConfig,
-    LLMClientConfig, MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
+    AgentExecutionConfig, AsyncPipelineConfig, CommandCacheConfig, FileReadCacheConfig, LLMClientConfig,
+    MemoryPoolConfig, OptimizationConfig, ProfilingConfig, ToolRegistryConfig,
 };
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{
-    AskQuestionsConfig, ChatConfig, LayoutModeOverride, NotificationBackend,
-    NotificationDeliveryMode, PtyConfig, ReasoningDisplayMode, ToolOutputMode, UiConfig,
-    UiDisplayMode, UiFullscreenConfig, UiNotificationsConfig,
+    AskQuestionsConfig, ChatConfig, LayoutModeOverride, NotificationBackend, NotificationDeliveryMode, PtyConfig,
+    ReasoningDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode, UiFullscreenConfig, UiNotificationsConfig,
 };
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
-    AgentMode, DiscoveredSubagents, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer,
-    SubagentMemoryScope, SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent,
-    builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent,
-    builtin_subagents, discover_subagents, load_subagent_from_file,
+    AgentMode, DiscoveredSubagents, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
+    SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent, builtin_primary_auto_agent,
+    builtin_primary_build_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
+    load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
-    ReasoningEffortLevel, ResolvedShellPromptProfile, ShellProfilePlatform, ShellPromptProfile,
-    SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel,
+    ReasoningEffortLevel, ResolvedShellPromptProfile, ShellProfilePlatform, ShellPromptProfile, SystemPromptMode,
+    ToolDocumentationMode, UiSurfacePreference, VerbosityLevel,
 };
 pub use vtcode_commons::ui_protocol::ThinkingBlockState;
 pub use workspace_env::{
-    read_workspace_env_value, workspace_env_path, workspace_env_path_display,
-    write_workspace_env_value,
+    read_workspace_env_value, workspace_env_path, workspace_env_path_display, write_workspace_env_value,
 };
 
 // Re-export auth module types
 pub use auth::{
-    AuthStatus, CopilotAuthConfig as AuthCopilotConfig, McpOAuthConfig, McpOAuthService,
-    McpOAuthStatus, McpOAuthToken, OpenAIAccountAuthService, OpenAIChatGptAuthHandle,
-    OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterOAuthConfig, OpenRouterToken,
-    PkceChallenge, clear_oauth_token, clear_openai_chatgpt_session, generate_pkce_challenge,
-    get_auth_status, get_auth_url, get_openai_chatgpt_auth_status, get_openai_chatgpt_auth_url,
-    load_oauth_token, load_openai_chatgpt_session, resolve_openai_auth, save_oauth_token,
+    AuthStatus, CopilotAuthConfig as AuthCopilotConfig, McpOAuthConfig, McpOAuthService, McpOAuthStatus, McpOAuthToken,
+    OpenAIAccountAuthService, OpenAIChatGptAuthHandle, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
+    OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token, clear_openai_chatgpt_session,
+    generate_pkce_challenge, get_auth_status, get_auth_url, get_openai_chatgpt_auth_status,
+    get_openai_chatgpt_auth_url, load_oauth_token, load_openai_chatgpt_session, resolve_openai_auth, save_oauth_token,
     save_openai_chatgpt_session,
 };
 pub use codex::{
-    FileOpener, HistoryConfig, HistoryPersistence, NotificationCondition,
-    TerminalNotificationMethod, TuiAlternateScreen, TuiConfig, TuiNotificationEvent,
-    TuiNotificationsConfig,
+    FileOpener, HistoryConfig, HistoryPersistence, NotificationCondition, TerminalNotificationMethod,
+    TuiAlternateScreen, TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,
 };

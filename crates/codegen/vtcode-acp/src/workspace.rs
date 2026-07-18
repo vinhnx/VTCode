@@ -57,9 +57,7 @@ pub async fn ensure_workspace_trust_level_silent(
             return Ok(WorkspaceTrustSyncOutcome::AlreadyMatches(level));
         }
 
-        if level == WorkspaceTrustLevel::FullAuto
-            && desired_level == WorkspaceTrustLevel::ToolsPolicy
-        {
+        if level == WorkspaceTrustLevel::FullAuto && desired_level == WorkspaceTrustLevel::ToolsPolicy {
             return Ok(WorkspaceTrustSyncOutcome::SkippedDowngrade(level));
         }
     }

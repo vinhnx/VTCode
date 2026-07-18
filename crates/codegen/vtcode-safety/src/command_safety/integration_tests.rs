@@ -81,11 +81,7 @@ mod tests {
     #[tokio::test]
     async fn test_dangerous_mkfs_commands() {
         let evaluator = UnifiedCommandEvaluator::new();
-        let dangerous_commands = vec![
-            vec!["mkfs"],
-            vec!["mkfs", "/dev/sda"],
-            vec!["mkfs.ext4", "/dev/sda1"],
-        ];
+        let dangerous_commands = vec![vec!["mkfs"], vec!["mkfs", "/dev/sda"], vec!["mkfs.ext4", "/dev/sda1"]];
 
         for cmd in dangerous_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
@@ -129,11 +125,7 @@ mod tests {
     #[tokio::test]
     async fn test_safe_cargo_commands() {
         let evaluator = UnifiedCommandEvaluator::new();
-        let safe_commands = vec![
-            vec!["cargo", "build"],
-            vec!["cargo", "check"],
-            vec!["cargo", "clippy"],
-        ];
+        let safe_commands = vec![vec!["cargo", "build"], vec!["cargo", "check"], vec!["cargo", "clippy"]];
 
         for cmd in safe_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
@@ -378,12 +370,7 @@ mod tests {
         let _ = result1;
 
         // Dangerous command with sudo
-        let cmd2 = vec![
-            "sudo".to_string(),
-            "rm".to_string(),
-            "-rf".to_string(),
-            "/".to_string(),
-        ];
+        let cmd2 = vec!["sudo".to_string(), "rm".to_string(), "-rf".to_string(), "/".to_string()];
         let result2 = evaluator.evaluate(&cmd2).await.unwrap();
         assert!(!result2.allowed);
     }

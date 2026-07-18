@@ -113,23 +113,14 @@ mod tests {
     #[test]
     fn select_prefers_learned_success_over_untried() {
         let mut engine = RlEngine::from_config(&cfg());
-        let actions = vec![
-            Action { id: "edge".to_string() },
-            Action { id: "cloud".to_string() },
-        ];
+        let actions = vec![Action { id: "edge".to_string() }, Action { id: "cloud".to_string() }];
         let ctx = PolicyContext { exploration: 0.0 };
         // Both untried → first (UCB INFINITY) wins; learn that "cloud" fails.
         assert_eq!(engine.select(&actions, &ctx), Some(0));
-        engine.apply_reward(
-            "cloud",
-            RewardSignal { success: false, latency_secs: 5.0, cost_usd: 0.1 },
-        );
+        engine.apply_reward("cloud", RewardSignal { success: false, latency_secs: 5.0, cost_usd: 0.1 });
         // Now "edge" (untried) should be preferred over the failed "cloud".
         assert_eq!(engine.select(&actions, &ctx), Some(0));
-        engine.apply_reward(
-            "edge",
-            RewardSignal { success: true, latency_secs: 0.2, cost_usd: 0.001 },
-        );
+        engine.apply_reward("edge", RewardSignal { success: true, latency_secs: 0.2, cost_usd: 0.001 });
         assert_eq!(engine.select(&actions, &ctx), Some(0));
     }
 

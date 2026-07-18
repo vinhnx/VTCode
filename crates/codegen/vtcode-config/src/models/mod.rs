@@ -13,8 +13,7 @@ mod provider;
 pub use errors::ModelParseError;
 pub use mimo_auth::{MiMoAuthMethod, detect_mimo_auth_method};
 pub use model_id::{
-    ModelCatalogEntry, ModelId, ModelPricing, catalog_provider_keys, model_catalog_entry,
-    supported_models_for_provider,
+    ModelCatalogEntry, ModelId, ModelPricing, catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
 };
 pub use openrouter::OpenRouterMetadata;
 pub use openrouter::openrouter_generated;

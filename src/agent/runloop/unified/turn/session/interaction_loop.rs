@@ -52,45 +52,38 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub agent_touched_paths: &'a mut BTreeSet<PathBuf>,
-    pub decision_ledger:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub decision_ledger: &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub active_primary_agent: &'a mut ActivePrimaryAgentState,
     pub session_stats: &'a mut SessionStats,
     pub plan_session: &'a mut PlanningWorkflowSessionState,
     pub mcp_panel_state: &'a mut crate::agent::runloop::mcp_events::McpPanelState,
-    pub linked_directories:
-        &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
+    pub linked_directories: &'a mut Vec<crate::agent::runloop::unified::workspace_links::LinkedDirectory>,
     pub lifecycle_hooks: &'a mut Option<LifecycleHookEngine>,
     pub full_auto: bool,
     pub skip_confirmations: bool,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub permissions_state: &'a Arc<tokio::sync::RwLock<vtcode_core::config::PermissionsConfig>>,
-    pub loaded_skills:
-        &'a Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::Skill>>>,
+    pub loaded_skills: &'a Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::Skill>>>,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
     pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
-    pub harness_emitter:
-        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
-    pub safety_validator:
-        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
+    pub harness_emitter: Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub safety_validator: &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
-    pub error_recovery:
-        &'a Arc<tokio::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub error_recovery: &'a Arc<tokio::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub last_forced_redraw: &'a mut Instant,
     pub turn_metadata_cache: &'a mut Option<Option<serde_json::Value>>,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub runtime_steering: &'a mut RuntimeSteering,
-    pub startup_update_notice_rx:
-        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    pub startup_update_notice_rx: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
 }
 
 impl<'a> InteractionLoopContext<'a> {
@@ -153,12 +146,7 @@ impl<'a> InteractionLoopContext<'a> {
         };
 
         crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(
-            crate::agent::runloop::unified::turn::context::TurnProcessingContextParts {
-                tool,
-                llm,
-                ui,
-                state,
-            },
+            crate::agent::runloop::unified::turn::context::TurnProcessingContextParts { tool, llm, ui, state },
         )
     }
 }

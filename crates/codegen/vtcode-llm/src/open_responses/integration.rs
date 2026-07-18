@@ -10,9 +10,7 @@ use crate::provider::NormalizedStreamEvent;
 use vtcode_config::OpenResponsesConfig;
 use vtcode_exec_events::ThreadEvent;
 
-use super::{
-    OpenUsage, OutputItem, Response, ResponseBuilder, ResponseStreamEvent, VecStreamEmitter,
-};
+use super::{OpenUsage, OutputItem, Response, ResponseBuilder, ResponseStreamEvent, VecStreamEmitter};
 
 /// Callback type for receiving Open Responses streaming events.
 pub type OpenResponsesCallback = Arc<Mutex<Box<dyn FnMut(ResponseStreamEvent) + Send>>>;
@@ -151,12 +149,14 @@ impl OpenResponsesIntegration {
             | ResponseStreamEvent::ResponseIncomplete { .. } => true,
 
             // Filter output items based on config
-            ResponseStreamEvent::OutputItemAdded { item, .. }
-            | ResponseStreamEvent::OutputItemDone { item, .. } => self.should_include_item(item),
+            ResponseStreamEvent::OutputItemAdded { item, .. } | ResponseStreamEvent::OutputItemDone { item, .. } => {
+                self.should_include_item(item)
+            }
 
             // Reasoning events
-            ResponseStreamEvent::ReasoningDelta { .. }
-            | ResponseStreamEvent::ReasoningDone { .. } => self.config.include_reasoning,
+            ResponseStreamEvent::ReasoningDelta { .. } | ResponseStreamEvent::ReasoningDone { .. } => {
+                self.config.include_reasoning
+            }
 
             // Function call events
             ResponseStreamEvent::FunctionCallArgumentsDelta { .. }
@@ -173,9 +173,7 @@ impl OpenResponsesIntegration {
     fn should_include_item(&self, item: &OutputItem) -> bool {
         match item {
             OutputItem::Reasoning(_) => self.config.include_reasoning,
-            OutputItem::FunctionCall(_) | OutputItem::FunctionCallOutput(_) => {
-                self.config.map_tool_calls
-            }
+            OutputItem::FunctionCall(_) | OutputItem::FunctionCallOutput(_) => self.config.map_tool_calls,
             OutputItem::Custom(_) => self.config.include_extensions,
             OutputItem::Message(_) => true,
         }
@@ -255,10 +253,7 @@ impl ToOpenResponse for crate::provider::LLMResponse {
             for tc in tool_calls {
                 // Extract name and arguments from the function field
                 let (name, arguments) = if let Some(ref func) = tc.function {
-                    (
-                        func.name.clone(),
-                        serde_json::from_str(&func.arguments).unwrap_or(serde_json::json!({})),
-                    )
+                    (func.name.clone(), serde_json::from_str(&func.arguments).unwrap_or(serde_json::json!({})))
                 } else {
                     (tc.call_type.clone(), serde_json::json!({}))
                 };
@@ -322,9 +317,7 @@ mod tests {
         });
         integration.start_response("gpt-5");
 
-        integration.process_normalized_event(&NormalizedStreamEvent::TextDelta {
-            delta: "hello".to_string(),
-        });
+        integration.process_normalized_event(&NormalizedStreamEvent::TextDelta { delta: "hello".to_string() });
         integration.process_normalized_event(&NormalizedStreamEvent::Done {
             response: Box::new(LLMResponse {
                 content: Some("hello".to_string()),

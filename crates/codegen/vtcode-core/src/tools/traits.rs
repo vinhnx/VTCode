@@ -168,13 +168,8 @@ pub trait Tool: Send + Sync {
     }
 
     /// Resolve a path relative to workspace root and validate it is within bounds
-    async fn resolve_and_validate_path(
-        &self,
-        workspace_root: &std::path::Path,
-        path: &str,
-    ) -> Result<PathBuf> {
-        crate::tools::validation::unified_path::validate_and_resolve_path(workspace_root, path)
-            .await
+    async fn resolve_and_validate_path(&self, workspace_root: &std::path::Path, path: &str) -> Result<PathBuf> {
+        crate::tools::validation::unified_path::validate_and_resolve_path(workspace_root, path).await
     }
 }
 

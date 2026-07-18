@@ -4,9 +4,7 @@ use std::time::Instant;
 use crate::tools::circuit_breaker::{CircuitState, ToolCircuitDiagnostics};
 
 // Re-export from vtcode-config so call sites outside this module keep compiling.
-pub use vtcode_config::constants::execution::{
-    DEFAULT_MAX_OPEN_CIRCUITS, DEFAULT_MAX_RECENT_ERRORS,
-};
+pub use vtcode_config::constants::execution::{DEFAULT_MAX_OPEN_CIRCUITS, DEFAULT_MAX_RECENT_ERRORS};
 
 #[derive(Debug, Clone)]
 pub struct ErrorRecoveryState {
@@ -131,11 +129,7 @@ impl ErrorRecoveryState {
 
     /// Records events derived from a circuit-breaker state transition,
     /// including state changes and newly blocked calls.
-    pub fn record_circuit_transition(
-        &mut self,
-        before: &ToolCircuitDiagnostics,
-        after: &ToolCircuitDiagnostics,
-    ) {
+    pub fn record_circuit_transition(&mut self, before: &ToolCircuitDiagnostics, after: &ToolCircuitDiagnostics) {
         debug_assert_eq!(before.tool_name, after.tool_name);
 
         let backoff_duration = after.remaining_backoff.unwrap_or(after.current_backoff);
@@ -146,33 +140,18 @@ impl ErrorRecoveryState {
                 CircuitState::HalfOpen => "half_open",
                 CircuitState::Closed => "reset",
             };
-            self.record_circuit_event(
-                &after.tool_name,
-                state,
-                after.failure_count,
-                backoff_duration,
-            );
+            self.record_circuit_event(&after.tool_name, state, after.failure_count, backoff_duration);
         }
 
         if after.denied_requests > before.denied_requests {
-            self.record_circuit_event(
-                &after.tool_name,
-                "blocked_call",
-                after.failure_count,
-                backoff_duration,
-            );
+            self.record_circuit_event(&after.tool_name, "blocked_call", after.failure_count, backoff_duration);
         }
     }
 
     /// Builds a diagnostic summary from the current state, including whether
     /// the agent should pause for user guidance.
-    pub fn get_diagnostics(
-        &self,
-        open_circuits: &[String],
-        max_recent_errors: usize,
-    ) -> RecoveryDiagnostics {
-        let recent_errors: Vec<RecentError> =
-            self.recent_errors.iter().take(max_recent_errors).cloned().collect();
+    pub fn get_diagnostics(&self, open_circuits: &[String], max_recent_errors: usize) -> RecoveryDiagnostics {
+        let recent_errors: Vec<RecentError> = self.recent_errors.iter().take(max_recent_errors).cloned().collect();
 
         let error_patterns = self.detect_error_patterns();
 
@@ -197,10 +176,8 @@ impl ErrorRecoveryState {
     }
 
     fn detect_error_patterns(&self) -> Vec<ErrorPattern> {
-        let mut tool_errors: hashbrown::HashMap<
-            String,
-            (usize, String, hashbrown::HashSet<ErrorType>),
-        > = hashbrown::HashMap::new();
+        let mut tool_errors: hashbrown::HashMap<String, (usize, String, hashbrown::HashSet<ErrorType>)> =
+            hashbrown::HashMap::new();
 
         for error in &self.recent_errors {
             let entry = tool_errors.entry(error.tool_name.clone()).or_insert((
@@ -266,11 +243,7 @@ mod tests {
     fn test_record_error() {
         let mut state = ErrorRecoveryState::new();
 
-        state.record_error(
-            tools::GREP_FILE,
-            "Pattern not found".to_string(),
-            ErrorType::ToolExecution,
-        );
+        state.record_error(tools::GREP_FILE, "Pattern not found".to_string(), ErrorType::ToolExecution);
 
         assert_eq!(state.recent_errors.len(), 1);
         assert_eq!(state.recent_errors[0].tool_name, tools::GREP_FILE);
@@ -281,11 +254,7 @@ mod tests {
         let mut state = ErrorRecoveryState::new();
 
         for i in 0..15 {
-            state.record_error(
-                &format!("tool_{}", i % 3),
-                format!("error {i}"),
-                ErrorType::ToolExecution,
-            );
+            state.record_error(&format!("tool_{}", i % 3), format!("error {i}"), ErrorType::ToolExecution);
         }
 
         assert_eq!(state.recent_errors.len(), DEFAULT_MAX_RECENT_ERRORS);
@@ -333,11 +302,7 @@ mod tests {
         let mut state = ErrorRecoveryState::new();
 
         for _i in 0..3 {
-            state.record_error(
-                tools::GREP_FILE,
-                "Pattern not found".to_string(),
-                ErrorType::ToolExecution,
-            );
+            state.record_error(tools::GREP_FILE, "Pattern not found".to_string(), ErrorType::ToolExecution);
         }
 
         state.record_error("read_file", "File not found".to_string(), ErrorType::ResourceNotFound);
@@ -356,11 +321,7 @@ mod tests {
         let diagnostics = state.get_diagnostics(&open_circuits, 10);
         assert!(!diagnostics.should_pause);
 
-        let open_circuits = vec![
-            "tool1".to_string(),
-            "tool2".to_string(),
-            "tool3".to_string(),
-        ];
+        let open_circuits = vec!["tool1".to_string(), "tool2".to_string(), "tool3".to_string()];
         let diagnostics = state.get_diagnostics(&open_circuits, 10);
         assert!(diagnostics.should_pause);
     }

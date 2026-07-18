@@ -84,8 +84,7 @@ const NAME_MATCH_BOOST: f64 = 2.0;
 /// rule so the index and query are tokenized identically (DRY).
 fn tokenize(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split_whitespace().filter_map(|raw| {
-        let normalized =
-            raw.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+        let normalized = raw.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string();
         (!normalized.is_empty() && normalized.len() > 1).then_some(normalized)
     })
 }
@@ -178,8 +177,7 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
                     let idf = ((n - df + 0.5) / (df + 0.5)).max(0.01);
 
                     // TF-IDF with BM25 length normalization
-                    let tf_component = (tf * (BM25_K1 + 1.0))
-                        / (tf + BM25_K1 * (1.0 - BM25_B + BM25_B * dl / avg_dl));
+                    let tf_component = (tf * (BM25_K1 + 1.0)) / (tf + BM25_K1 * (1.0 - BM25_B + BM25_B * dl / avg_dl));
 
                     // Boost for name matches (name is more important than description)
                     let name_match_boost = if entry.name.to_lowercase().contains(query_term) {
@@ -223,10 +221,7 @@ mod tests {
         let tools = vec![
             tool_with_desc("read_file", "Read the contents of a file from disk"),
             tool_with_desc("write_file", "Write content to a file on disk"),
-            tool_with_desc(
-                "search_code",
-                "Search for code patterns using regex or structural search",
-            ),
+            tool_with_desc("search_code", "Search for code patterns using regex or structural search"),
             tool_with_desc("run_command", "Execute a shell command and return its output"),
         ];
 

@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::instructions::{
-    InstructionBundle, InstructionDiscoveryOptions, InstructionSegment,
-    extract_instruction_highlights, read_instruction_bundle, render_instruction_summary_markdown,
+    InstructionBundle, InstructionDiscoveryOptions, InstructionSegment, extract_instruction_highlights,
+    read_instruction_bundle, render_instruction_summary_markdown,
 };
 use crate::persistent_memory::{
     MEMORY_FILENAME, MEMORY_SUMMARY_FILENAME, PersistentMemoryExcerpt, extract_memory_highlights,
@@ -20,7 +20,8 @@ use vtcode_config::core::AgentConfig;
 pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
 pub const PERSISTENT_MEMORY_SEPARATOR: &str = "\n\n--- persistent-memory ---\n\n";
 const PROJECT_DOC_SUMMARY_TITLE: &str = "PROJECT DOCUMENTATION";
-const PROJECT_DOC_TRUNCATION_NOTE: &str = "Some instruction files exceeded the configured prompt budget and were indexed instead of fully inlined.";
+const PROJECT_DOC_TRUNCATION_NOTE: &str =
+    "Some instruction files exceeded the configured prompt budget and were indexed instead of fully inlined.";
 const PERSISTENT_MEMORY_TRUNCATION_NOTE: &str =
     "Persistent memory was truncated to the configured startup excerpt budget.";
 const PERSISTENT_MEMORY_HIGHLIGHT_LIMIT: usize = 3;
@@ -61,9 +62,7 @@ pub struct InstructionAppendixBundle {
     pub home_dir: Option<PathBuf>,
 }
 
-pub async fn read_project_doc_with_options(
-    options: &ProjectDocOptions<'_>,
-) -> Result<Option<ProjectDocBundle>> {
+pub async fn read_project_doc_with_options(options: &ProjectDocOptions<'_>) -> Result<Option<ProjectDocBundle>> {
     if options.max_bytes == 0 {
         return Ok(None);
     }
@@ -158,11 +157,10 @@ pub async fn load_instruction_appendix(
     .await
     .ok()
     .flatten();
-    let persistent_memory =
-        read_persistent_memory_excerpt(&config.persistent_memory, &project_root)
-            .await
-            .ok()
-            .flatten();
+    let persistent_memory = read_persistent_memory_excerpt(&config.persistent_memory, &project_root)
+        .await
+        .ok()
+        .flatten();
 
     let contents = render_instruction_appendix(
         config.user_instructions.as_deref(),
@@ -217,9 +215,7 @@ pub fn render_instruction_appendix(
         );
     }
 
-    if let Some(memory_section) =
-        persistent_memory.and_then(render_persistent_memory_summary_markdown)
-    {
+    if let Some(memory_section) = persistent_memory.and_then(render_persistent_memory_summary_markdown) {
         if !section.is_empty() {
             section.push_str(PERSISTENT_MEMORY_SEPARATOR);
         }
@@ -227,11 +223,7 @@ pub fn render_instruction_appendix(
         section.push_str(memory_section.trim_end());
     }
 
-    if section.is_empty() {
-        None
-    } else {
-        Some(section)
-    }
+    if section.is_empty() { None } else { Some(section) }
 }
 
 fn render_persistent_memory_summary_markdown(memory: &PersistentMemoryExcerpt) -> Option<String> {
@@ -253,9 +245,8 @@ fn render_persistent_memory_summary_markdown(memory: &PersistentMemoryExcerpt) -
         }
     }
 
-    section.push_str(
-        "\n### On-demand loading\n- Open `memory_summary.md` or `MEMORY.md` when exact wording matters.\n",
-    );
+    section
+        .push_str("\n### On-demand loading\n- Open `memory_summary.md` or `MEMORY.md` when exact wording matters.\n");
 
     if memory.truncated {
         let _ = writeln!(section, "\n_{PERSISTENT_MEMORY_TRUNCATION_NOTE}_");
@@ -265,10 +256,7 @@ fn render_persistent_memory_summary_markdown(memory: &PersistentMemoryExcerpt) -
     Some(section)
 }
 
-pub fn merge_project_docs_with_skills(
-    project_doc: Option<String>,
-    skills_section: Option<String>,
-) -> Option<String> {
+pub fn merge_project_docs_with_skills(project_doc: Option<String>, skills_section: Option<String>) -> Option<String> {
     match (project_doc, skills_section) {
         (Some(doc), Some(skills)) => Some(format!("{doc}\n\n{skills}")),
         (Some(doc), None) => Some(doc),
@@ -300,9 +288,8 @@ async fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
             Ok(_) => return Ok(cursor),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => {
-                return Err(err).with_context(|| {
-                    format!("Failed to inspect potential git root {}", git_marker.display())
-                });
+                return Err(err)
+                    .with_context(|| format!("Failed to inspect potential git root {}", git_marker.display()));
             }
         }
 
@@ -411,13 +398,10 @@ mod tests {
             ..Default::default()
         };
 
-        let appendix = build_instruction_appendix_with_context(
-            &config,
-            &nested,
-            &[repo.path().join("nested/sub/file.rs")],
-        )
-        .await
-        .expect("instruction appendix");
+        let appendix =
+            build_instruction_appendix_with_context(&config, &nested, &[repo.path().join("nested/sub/file.rs")])
+                .await
+                .expect("instruction appendix");
 
         assert!(appendix.starts_with("user note"));
         assert!(appendix.contains("--- project-doc ---"));
@@ -441,11 +425,8 @@ mod tests {
     async fn instruction_appendix_marks_truncation() {
         let repo = tempdir().expect("repo");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("write git");
-        write_doc(
-            repo.path(),
-            "- Root summary\n\nThis detail should stay out of the prompt appendix.\n",
-        )
-        .expect("write doc");
+        write_doc(repo.path(), "- Root summary\n\nThis detail should stay out of the prompt appendix.\n")
+            .expect("write doc");
 
         let config = AgentConfig { instruction_max_bytes: 16, ..Default::default() };
 
@@ -513,13 +494,11 @@ mod tests {
     async fn renders_compact_instruction_appendix() {
         let repo = tempdir().expect("failed to unwrap");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("failed to unwrap");
-        write_doc(repo.path(), "- Root summary\n\nFollow the repository-level guidance first.\n")
-            .expect("write doc");
+        write_doc(repo.path(), "- Root summary\n\nFollow the repository-level guidance first.\n").expect("write doc");
 
         let nested = repo.path().join("nested/sub");
         std::fs::create_dir_all(&nested).expect("failed to unwrap");
-        write_doc(&nested, "- Nested summary\n\nFollow the nested guidance last.\n")
-            .expect("write doc");
+        write_doc(&nested, "- Nested summary\n\nFollow the nested guidance last.\n").expect("write doc");
 
         let instructions = get_user_instructions(&AgentConfig::default(), &nested, None)
             .await

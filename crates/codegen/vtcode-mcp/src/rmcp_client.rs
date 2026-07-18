@@ -7,20 +7,15 @@ use jsonschema::Validator;
 use rmcp::handler::client::ClientHandler;
 #[allow(deprecated)]
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult, CustomResult,
-    ElicitRequestParams, ElicitationAction, GetPromptRequestParams, GetPromptResult,
-    InitializeRequestParams, InitializeResult, ListRootsResult, LoggingLevel,
-    LoggingMessageNotificationParam, Meta, ProgressNotificationParam, Prompt,
-    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceTemplate,
-    ResourceUpdatedNotificationParam, Root, ServerNotification, ServerRequest, Tool,
+    CallToolRequestParams, CallToolResult, CancelledNotificationParam, ClientResult, CustomResult, ElicitRequestParams,
+    ElicitationAction, GetPromptRequestParams, GetPromptResult, InitializeRequestParams, InitializeResult,
+    ListRootsResult, LoggingLevel, LoggingMessageNotificationParam, Meta, ProgressNotificationParam, Prompt,
+    ReadResourceRequestParams, ReadResourceResult, Resource, ResourceTemplate, ResourceUpdatedNotificationParam, Root,
+    ServerNotification, ServerRequest, Tool,
 };
-use rmcp::service::{
-    self, NotificationContext, RequestContext, RoleClient, RunningService, Service,
-};
+use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService, Service};
 use rmcp::transport::child_process::TokioChildProcess;
-use rmcp::transport::streamable_http_client::{
-    StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
-};
+use rmcp::transport::streamable_http_client::{StreamableHttpClientTransport, StreamableHttpClientTransportConfig};
 use rmcp_reqwest::header::HeaderMap;
 use serde_json::{Value, json};
 use std::ffi::OsString;
@@ -111,8 +106,7 @@ impl RmcpClient {
         let env = create_env_for_mcp_server(env);
 
         // Use rmcp_transport helper to create transport with stderr capture
-        let (transport, stderr) =
-            create_stdio_transport_with_stderr(&program, &args, working_dir.as_ref(), &env)?;
+        let (transport, stderr) = create_stdio_transport_with_stderr(&program, &args, working_dir.as_ref(), &env)?;
 
         // Spawn async task to log MCP server stderr
         let stderr_task = if let Some(stderr) = stderr {
@@ -190,9 +184,9 @@ impl RmcpClient {
             .pool_idle_timeout(Duration::from_secs(300))
             .tcp_keepalive(Some(Duration::from_secs(60)));
 
-        let http_client = client_builder.build().with_context(|| {
-            format!("failed to construct reqwest client for MCP provider '{provider_name}'")
-        })?;
+        let http_client = client_builder
+            .build()
+            .with_context(|| format!("failed to construct reqwest client for MCP provider '{provider_name}'"))?;
 
         let transport = StreamableHttpClientTransport::with_client(http_client, config);
         Ok(Self {
@@ -230,17 +224,11 @@ impl RmcpClient {
                         (service::serve_client(service_handler.clone(), transport).boxed(), "http")
                     }
                     None => {
-                        return Err(anyhow!(
-                            "MCP client for {} already initializing",
-                            handler.provider_name()
-                        ));
+                        return Err(anyhow!("MCP client for {} already initializing", handler.provider_name()));
                     }
                 },
                 ClientState::Ready { .. } => {
-                    return Err(anyhow!(
-                        "MCP client for {} already initialized",
-                        handler.provider_name()
-                    ));
+                    return Err(anyhow!("MCP client for {} already initialized", handler.provider_name()));
                 }
                 ClientState::Stopped => return Err(anyhow!("MCP client has been shut down")),
                 ClientState::Disconnected => {
@@ -253,11 +241,9 @@ impl RmcpClient {
         };
 
         let service = match timeout {
-            Some(duration) => {
-                time::timeout(duration, transport_future).await.with_context(|| {
-                    format!("Timed out establishing {service_label} MCP transport")
-                })??
-            }
+            Some(duration) => time::timeout(duration, transport_future)
+                .await
+                .with_context(|| format!("Timed out establishing {service_label} MCP transport"))??,
             None => transport_future.await?,
         };
 
@@ -288,10 +274,7 @@ impl RmcpClient {
         Ok(prompts)
     }
 
-    pub(super) async fn list_all_resources(
-        &self,
-        timeout: Option<Duration>,
-    ) -> Result<Vec<Resource>> {
+    pub(super) async fn list_all_resources(&self, timeout: Option<Duration>) -> Result<Vec<Resource>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_resources();
         let resources = run_with_timeout(rmcp_future, timeout, "resources/list").await?;
@@ -299,10 +282,7 @@ impl RmcpClient {
     }
 
     #[expect(dead_code)]
-    pub(super) async fn list_all_resource_templates(
-        &self,
-        timeout: Option<Duration>,
-    ) -> Result<Vec<ResourceTemplate>> {
+    pub(super) async fn list_all_resource_templates(&self, timeout: Option<Duration>) -> Result<Vec<ResourceTemplate>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_resource_templates();
         let templates = run_with_timeout(rmcp_future, timeout, "resources/templates/list").await?;
@@ -325,9 +305,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<ReadResourceResult> {
         let service = self.service().await?;
-        let result =
-            run_with_timeout(service.peer().read_resource(params), timeout, "resources/read")
-                .await?;
+        let result = run_with_timeout(service.peer().read_resource(params), timeout, "resources/read").await?;
         Ok(result)
     }
 
@@ -337,8 +315,7 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<GetPromptResult> {
         let service = self.service().await?;
-        let result =
-            run_with_timeout(service.peer().get_prompt(params), timeout, "prompts/get").await?;
+        let result = run_with_timeout(service.peer().get_prompt(params), timeout, "prompts/get").await?;
         Ok(result)
     }
 
@@ -366,22 +343,14 @@ impl RmcpClient {
             ClientState::Ready { service } => {
                 // Detect if the underlying transport has died (server crash / network loss).
                 if service.is_closed() {
-                    warn!(
-                        provider = self.provider_name.as_str(),
-                        "MCP service closed — marking disconnected"
-                    );
+                    warn!(provider = self.provider_name.as_str(), "MCP service closed — marking disconnected");
                     *guard = ClientState::Disconnected;
-                    return Err(anyhow!(
-                        "MCP client for '{}' has disconnected",
-                        self.provider_name
-                    ));
+                    return Err(anyhow!("MCP client for '{}' has disconnected", self.provider_name));
                 }
                 Ok(service.clone())
             }
             ClientState::Connecting { .. } => Err(anyhow!("MCP client not initialized")),
-            ClientState::Disconnected => {
-                Err(anyhow!("MCP client for '{}' has disconnected", self.provider_name))
-            }
+            ClientState::Disconnected => Err(anyhow!("MCP client for '{}' has disconnected", self.provider_name)),
             ClientState::Stopped => Err(anyhow!("MCP client has been shut down")),
         }
     }
@@ -447,12 +416,7 @@ impl Service<RoleClient> for ElicitationClientService {
                 Ok(ClientResult::CustomResult(elicitation_response_result(response)?))
             }
             request => {
-                <LoggingClientHandler as Service<RoleClient>>::handle_request(
-                    &self.handler,
-                    request,
-                    context,
-                )
-                .await
+                <LoggingClientHandler as Service<RoleClient>>::handle_request(&self.handler, request, context).await
             }
         }
     }
@@ -462,12 +426,7 @@ impl Service<RoleClient> for ElicitationClientService {
         notification: ServerNotification,
         context: NotificationContext<RoleClient>,
     ) -> Result<(), rmcp::ErrorData> {
-        <LoggingClientHandler as Service<RoleClient>>::handle_notification(
-            &self.handler,
-            notification,
-            context,
-        )
-        .await
+        <LoggingClientHandler as Service<RoleClient>>::handle_notification(&self.handler, notification, context).await
     }
 
     fn get_info(&self) -> rmcp::model::ClientInfo {
@@ -528,11 +487,7 @@ impl LoggingClientHandler {
                             Value::Null
                         }
                     };
-                    (
-                        message.clone(),
-                        schema_value,
-                        serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
-                    )
+                    (message.clone(), schema_value, serialize_elicitation_meta(provider.as_str(), meta.as_ref()))
                 }
                 ElicitRequestParams::UrlElicitationParams { meta, message, url, .. } => {
                     let schema_value = json!({
@@ -544,22 +499,14 @@ impl LoggingClientHandler {
                             }
                         }
                     });
-                    (
-                        message.clone(),
-                        schema_value,
-                        serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
-                    )
+                    (message.clone(), schema_value, serialize_elicitation_meta(provider.as_str(), meta.as_ref()))
                 }
                 _ => {
                     warn!(
                         provider = provider.as_str(),
                         "Unknown elicitation request type; using default empty response"
                     );
-                    (
-                        "".to_owned(),
-                        Value::Null,
-                        serialize_elicitation_meta(provider.as_str(), None),
-                    )
+                    ("".to_owned(), Value::Null, serialize_elicitation_meta(provider.as_str(), None))
                 }
             };
 
@@ -643,10 +590,7 @@ impl LoggingClientHandler {
                 payload = ?params.data,
                 "MCP provider warning"
             ),
-            LoggingLevel::Error
-            | LoggingLevel::Critical
-            | LoggingLevel::Alert
-            | LoggingLevel::Emergency => error!(
+            LoggingLevel::Error | LoggingLevel::Critical | LoggingLevel::Alert | LoggingLevel::Emergency => error!(
                 provider = self.provider.as_str(),
                 logger = logger.as_str(),
                 summary = %summary,
@@ -776,10 +720,7 @@ impl ClientHandler for LoggingClientHandler {
         async move {}
     }
 
-    fn on_tool_list_changed(
-        &self,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl Future<Output = ()> + Send + '_ {
+    fn on_tool_list_changed(&self, _context: NotificationContext<RoleClient>) -> impl Future<Output = ()> + Send + '_ {
         self.list_changed_state.mark_tools_changed();
         info!(provider = self.provider.as_str(), "MCP provider reported tool list change");
         async move {}
@@ -801,18 +742,12 @@ impl ClientHandler for LoggingClientHandler {
                 error = %error,
                 "Failed to convert MCP initialize params; using fallback client info"
             );
-            rmcp::model::ClientInfo::new(
-                Default::default(),
-                super::utils::build_client_implementation(),
-            )
+            rmcp::model::ClientInfo::new(Default::default(), super::utils::build_client_implementation())
         })
     }
 }
 
-fn restore_context_meta(
-    mut request: ElicitRequestParams,
-    mut context_meta: Meta,
-) -> ElicitRequestParams {
+fn restore_context_meta(mut request: ElicitRequestParams, mut context_meta: Meta) -> ElicitRequestParams {
     context_meta.remove(MCP_PROGRESS_TOKEN_META_KEY);
     if context_meta.is_empty() {
         return request;
@@ -839,9 +774,7 @@ struct CreateElicitationResultWithMeta {
     meta: Option<Value>,
 }
 
-fn elicitation_response_result(
-    response: super::McpElicitationResponse,
-) -> Result<CustomResult, rmcp::ErrorData> {
+fn elicitation_response_result(response: super::McpElicitationResponse) -> Result<CustomResult, rmcp::ErrorData> {
     let result = CreateElicitationResultWithMeta {
         action: response.action,
         content: response.content,
@@ -901,15 +834,11 @@ pub(crate) fn validate_elicitation_payload(
 
     let Some(payload) = content else {
         warn!(provider = provider, "MCP elicitation accept action missing response content");
-        return Err(rmcp::ErrorData::invalid_params(
-            "Elicitation response missing content for accept action",
-            None,
-        ));
+        return Err(rmcp::ErrorData::invalid_params("Elicitation response missing content for accept action", None));
     };
 
     if !validator.is_valid(payload) {
-        let messages: Vec<String> =
-            validator.iter_errors(payload).map(|err| err.to_string()).collect();
+        let messages: Vec<String> = validator.iter_errors(payload).map(|err| err.to_string()).collect();
         warn!(
             provider = provider,
             errors = ?messages,
@@ -963,8 +892,7 @@ mod tests {
         };
 
         assert_eq!(
-            serde_json::to_value(meta.expect("meta should be present"))
-                .expect("meta should serialize"),
+            serde_json::to_value(meta.expect("meta should be present")).expect("meta should serialize"),
             json!({
                 "existing": true,
                 "persist": "always"
@@ -1019,10 +947,7 @@ mod tests {
             meta,
             message: "Confirm?".to_string(),
             requested_schema: ElicitationSchema::builder()
-                .required_property(
-                    "confirmed",
-                    PrimitiveSchemaDefinition::Boolean(BooleanSchema::new()),
-                )
+                .required_property("confirmed", PrimitiveSchemaDefinition::Boolean(BooleanSchema::new()))
                 .build()
                 .expect("schema should build"),
         }

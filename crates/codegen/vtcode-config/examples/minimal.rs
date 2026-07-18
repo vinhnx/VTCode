@@ -4,9 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use vtcode_commons::reference::StaticWorkspacePaths;
 use vtcode_config::ConfigManager;
-use vtcode_config::defaults::{
-    ConfigDefaultsProvider, WorkspacePathsDefaults, install_config_defaults_provider,
-};
+use vtcode_config::defaults::{ConfigDefaultsProvider, WorkspacePathsDefaults, install_config_defaults_provider};
 
 fn main() -> anyhow::Result<()> {
     // Create a disposable workspace that mimics a downstream project layout.
@@ -35,11 +33,7 @@ fn main() -> anyhow::Result<()> {
         .with_config_file_name("settings.toml")
         .with_home_paths(Vec::<PathBuf>::new())
         .with_syntax_theme("tokyonight_night")
-        .with_syntax_languages(vec![
-            "rust".to_string(),
-            "python".to_string(),
-            "typescript".to_string(),
-        ]);
+        .with_syntax_languages(vec!["rust".to_string(), "python".to_string(), "typescript".to_string()]);
     let defaults: Arc<dyn ConfigDefaultsProvider> = Arc::new(defaults);
 
     // Swap the provider during the configuration load so downstream adopters

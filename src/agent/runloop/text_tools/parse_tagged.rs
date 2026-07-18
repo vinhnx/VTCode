@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 
 use crate::agent::runloop::text_tools::parse_args::{
-    find_matching_delimiter, normalize_command_string, parse_key_value_arguments,
-    parse_scalar_value, split_indexed_key,
+    find_matching_delimiter, normalize_command_string, parse_key_value_arguments, parse_scalar_value, split_indexed_key,
 };
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
@@ -93,9 +92,7 @@ fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
             if let Some(json_start) = content.find('{') {
                 let json_content = &content[json_start..];
                 // Use shared delimiter matcher to find matching closing brace
-                if let Some(json_end) =
-                    find_matching_delimiter(json_content, 0, '{', '}', MAX_TAGGED_NESTING_DEPTH)
-                {
+                if let Some(json_end) = find_matching_delimiter(json_content, 0, '{', '}', MAX_TAGGED_NESTING_DEPTH) {
                     if let Ok(parsed) = serde_json::from_str::<Value>(&json_content[..json_end + 1])
                         && let Some(obj) = parsed.as_object()
                     {
@@ -159,8 +156,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
     // Strip provider noise (e.g. MiniMax `]<]minimax[>[`) so tag boundaries
     // parse cleanly. Delegates to the centralized provider-noise module so the
     // noise vocabulary stays in one place.
-    let cleaned_text =
-        crate::agent::runloop::unified::turn::provider_noise::strip_provider_noise(text);
+    let cleaned_text = crate::agent::runloop::unified::turn::provider_noise::strip_provider_noise(text);
     let working_text = cleaned_text.as_str();
 
     let invoke_start = working_text.find(INVOKE_TAG)?;
@@ -335,12 +331,7 @@ pub(super) fn collect_tagged_regions(text: &str, regions: &mut Vec<(usize, usize
     collect_enclosed_regions(text, "<invoke name=\"", "</invoke>", regions);
 }
 
-fn collect_enclosed_regions(
-    text: &str,
-    open_marker: &str,
-    close_marker: &str,
-    regions: &mut Vec<(usize, usize)>,
-) {
+fn collect_enclosed_regions(text: &str, open_marker: &str, close_marker: &str, regions: &mut Vec<(usize, usize)>) {
     let mut search_start = 0usize;
     while let Some(relative_start) = text[search_start..].find(open_marker) {
         let start = search_start + relative_start;

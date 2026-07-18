@@ -21,8 +21,8 @@ impl CachedStyleParser {
             return Ok(cached);
         }
 
-        let result = anstyle_git::parse(input)
-            .map_err(|e| anyhow::anyhow!("Failed to parse Git style '{input}': {e:?}"))?;
+        let result =
+            anstyle_git::parse(input).map_err(|e| anyhow::anyhow!("Failed to parse Git style '{input}': {e:?}"))?;
 
         self.git_cache.insert(input.to_string(), result);
         Ok(result)
@@ -33,8 +33,7 @@ impl CachedStyleParser {
             return Ok(cached);
         }
 
-        let result = anstyle_ls::parse(input)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse LS_COLORS '{input}'"))?;
+        let result = anstyle_ls::parse(input).ok_or_else(|| anyhow::anyhow!("Failed to parse LS_COLORS '{input}'"))?;
 
         self.ls_colors_cache.insert(input.to_string(), result);
         Ok(result)

@@ -36,12 +36,7 @@ pub const TRUNCATION_MARKER: &str = "\n[... content truncated due to size limit 
 /// # Returns
 /// `true` if content was appended, `false` if truncated
 #[inline]
-pub fn collect_with_truncation(
-    output: &mut String,
-    new_content: &str,
-    max_size: usize,
-    truncated: &mut bool,
-) -> bool {
+pub fn collect_with_truncation(output: &mut String, new_content: &str, max_size: usize, truncated: &mut bool) -> bool {
     let new_size = output.len() + new_content.len();
 
     if new_size > max_size {

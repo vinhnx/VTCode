@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 pub use super::SyntaxHighlightingConfig;
 use super::{
-    AcpConfig, AgentConfig, AutomationConfig, ContextConfig, McpConfig, PromptCacheConfig,
-    PtyConfig, SecurityConfig, ToolsConfig, UiConfig,
+    AcpConfig, AgentConfig, AutomationConfig, ContextConfig, McpConfig, PromptCacheConfig, PtyConfig, SecurityConfig,
+    ToolsConfig, UiConfig,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -39,10 +39,8 @@ impl ConfigManager {
         let path = workspace_root.as_ref().join("vtcode.toml");
 
         let config = if path.exists() {
-            let raw = std::fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
-            toml::from_str::<VTCodeConfig>(&raw)
-                .with_context(|| format!("failed to parse {}", path.display()))?
+            let raw = std::fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+            toml::from_str::<VTCodeConfig>(&raw).with_context(|| format!("failed to parse {}", path.display()))?
         } else {
             VTCodeConfig::default()
         };
@@ -56,7 +54,6 @@ impl ConfigManager {
 
     pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
         let rendered = toml::to_string_pretty(config).context("failed to serialize config")?;
-        std::fs::write(&self.path, rendered)
-            .with_context(|| format!("failed to write {}", self.path.display()))
+        std::fs::write(&self.path, rendered).with_context(|| format!("failed to write {}", self.path.display()))
     }
 }

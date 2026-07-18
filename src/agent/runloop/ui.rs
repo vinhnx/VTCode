@@ -11,8 +11,8 @@ use vtcode_core::subagents::SubagentStatusEntry;
 use vtcode_core::tools::search_tool_bundle_status;
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineTextStyle,
+    InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    InlineTextStyle,
 };
 use vtcode_ui::tui::core::ThemeConfigParser;
 
@@ -113,26 +113,25 @@ fn extract_workspace_header_signals(root: &toml::Value) -> WorkspaceHeaderSignal
                 .and_then(toml::Value::as_bool)
         });
 
-    let optimization_label =
-        root.get("optimization").and_then(toml::Value::as_table).and_then(|table| {
-            let enabled = table.get("enabled").and_then(toml::Value::as_bool).unwrap_or(true);
-            if !enabled {
-                return None;
-            }
+    let optimization_label = root.get("optimization").and_then(toml::Value::as_table).and_then(|table| {
+        let enabled = table.get("enabled").and_then(toml::Value::as_bool).unwrap_or(true);
+        if !enabled {
+            return None;
+        }
 
-            let strategy = table.get("strategy").and_then(toml::Value::as_str).or_else(|| {
-                table
-                    .get("agent_execution")
-                    .and_then(toml::Value::as_table)
-                    .and_then(|agent_execution| agent_execution.get("strategy"))
-                    .and_then(toml::Value::as_str)
-            });
-
-            Some(match strategy {
-                Some(raw) => format!("Optimization: {}", format_strategy_label(raw)),
-                None => "Optimization: On".to_string(),
-            })
+        let strategy = table.get("strategy").and_then(toml::Value::as_str).or_else(|| {
+            table
+                .get("agent_execution")
+                .and_then(toml::Value::as_table)
+                .and_then(|agent_execution| agent_execution.get("strategy"))
+                .and_then(toml::Value::as_str)
         });
+
+        Some(match strategy {
+            Some(raw) => format!("Optimization: {}", format_strategy_label(raw)),
+            None => "Optimization: On".to_string(),
+        })
+    });
 
     let custom_hint = root
         .get("header")
@@ -181,9 +180,7 @@ fn non_empty_trimmed(value: &str) -> Option<String> {
 
 fn format_strategy_label(raw: &str) -> String {
     let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
-    if normalized.contains("actor-critic")
-        || (normalized.contains("actor") && normalized.contains("critic"))
-    {
+    if normalized.contains("actor-critic") || (normalized.contains("actor") && normalized.contains("critic")) {
         return "Actor-Critic".to_string();
     }
     if normalized.contains("bandit") {
@@ -288,12 +285,8 @@ pub(crate) async fn build_inline_header_context(
     let trust_value = match session_bootstrap.acp_workspace_trust {
         Some(level) => {
             let level_str = match level {
-                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto => {
-                    "full_auto"
-                }
-                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => {
-                    "tools_policy"
-                }
+                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto => "full_auto",
+                vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy => "tools_policy",
             };
             format!("{}acp:{}", ui::HEADER_TRUST_PREFIX, level_str)
         }
@@ -483,11 +476,7 @@ mod tests {
     use chrono::Utc;
     use vtcode_core::subagents::{SubagentStatus, SubagentStatusEntry};
 
-    fn status_entry(
-        agent_name: &str,
-        color: Option<&str>,
-        status: SubagentStatus,
-    ) -> SubagentStatusEntry {
+    fn status_entry(agent_name: &str, color: Option<&str>, status: SubagentStatus) -> SubagentStatusEntry {
         SubagentStatusEntry {
             id: format!("id-{agent_name}"),
             session_id: "session".to_string(),

@@ -11,8 +11,8 @@ use vtcode_core::tools::edited_file_monitor::FILE_CONFLICT_OVERRIDE_ARG;
 use vtcode_core::tools::registry::{ExecSettlementMode, ToolRegistry};
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_ui::tui::app::{
-    DiffOverlayRequest, DiffPreviewMode, InlineHandle, InlineListItem, InlineListSelection,
-    ListOverlayRequest, TransientRequest, TransientSubmission,
+    DiffOverlayRequest, DiffPreviewMode, InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest,
+    TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -115,9 +115,7 @@ where
     loop {
         let conflict = match execution {
             RuntimeToolExecution::Completed(status) => return Ok(status),
-            RuntimeToolExecution::PendingFileConflict(conflict) => {
-                hydrate_pending_conflict(registry, conflict).await?
-            }
+            RuntimeToolExecution::PendingFileConflict(conflict) => hydrate_pending_conflict(registry, conflict).await?,
         };
 
         match prompt_for_conflict_resolution(
@@ -187,21 +185,13 @@ where
 }
 
 impl PendingFileConflict {
-    fn finalized_output(
-        &self,
-        resolution: &str,
-        message: &str,
-        disk_content: Option<String>,
-    ) -> Value {
+    fn finalized_output(&self, resolution: &str, message: &str, disk_content: Option<String>) -> Value {
         let mut output = self.output.clone();
         if let Some(obj) = output.as_object_mut() {
             obj.insert("resolution".to_string(), json!(resolution));
             obj.insert("message".to_string(), json!(message));
             obj.insert("emit_hitl_notification".to_string(), Value::Bool(false));
-            obj.insert(
-                "disk_content".to_string(),
-                disk_content.map(Value::String).unwrap_or(Value::Null),
-            );
+            obj.insert("disk_content".to_string(), disk_content.map(Value::String).unwrap_or(Value::Null));
         }
         output
     }
@@ -211,8 +201,7 @@ async fn hydrate_pending_conflict(
     registry: &ToolRegistry,
     conflict: PendingFileConflictStatus,
 ) -> Result<PendingFileConflict> {
-    let absolute_path =
-        registry.file_ops_tool().normalize_user_path(&conflict.display_path).await?;
+    let absolute_path = registry.file_ops_tool().normalize_user_path(&conflict.display_path).await?;
 
     Ok(PendingFileConflict {
         output: conflict.output,
@@ -237,9 +226,8 @@ async fn prompt_for_conflict_resolution<S>(
 where
     S: UiSession + ?Sized,
 {
-    let can_show_diff = conflict.approved_snapshot.is_some()
-        && conflict.disk_content.is_some()
-        && conflict.intended_content.is_some();
+    let can_show_diff =
+        conflict.approved_snapshot.is_some() && conflict.disk_content.is_some() && conflict.intended_content.is_some();
     if hitl_notification_bell && conflict.emit_hitl_notification {
         let _ = send_global_notification(NotificationEvent::HumanInTheLoop {
             prompt: "File conflict requires review".to_string(),
@@ -252,7 +240,8 @@ where
         conflict.message.clone(),
         format!("File: {}", conflict.display_path),
         if can_show_diff {
-            "Reload uses the external disk version. View diff shows disk content versus the agent's intended write.".to_string()
+            "Reload uses the external disk version. View diff shows disk content versus the agent's intended write."
+                .to_string()
         } else {
             "Reload uses the external disk version. Diff preview is unavailable for this file content.".to_string()
         },
@@ -278,9 +267,7 @@ where
             TransientSubmission::Selection(InlineListSelection::FileConflictAbort) => {
                 Some(InlineListSelection::FileConflictAbort)
             }
-            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff)
-                if can_show_diff =>
-            {
+            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff) if can_show_diff => {
                 Some(InlineListSelection::FileConflictViewDiff)
             }
             _ => None,
@@ -295,9 +282,7 @@ where
         OverlayWaitOutcome::Submitted(InlineListSelection::FileConflictAbort) => {
             Ok(OverlayWaitOutcome::Submitted(ConflictResolution::Abort))
         }
-        OverlayWaitOutcome::Submitted(InlineListSelection::FileConflictViewDiff)
-            if can_show_diff =>
-        {
+        OverlayWaitOutcome::Submitted(InlineListSelection::FileConflictViewDiff) if can_show_diff => {
             show_overlay_and_wait(
                 handle,
                 session,
@@ -333,9 +318,7 @@ fn conflict_resolution_items(can_show_diff: bool) -> Vec<InlineListItem> {
     let mut items = Vec::with_capacity(if can_show_diff { 3 } else { 2 });
     items.push(InlineListItem {
         title: "Reload from disk".to_string(),
-        subtitle: Some(
-            "Discard pending agent changes and continue from the external version.".to_string(),
-        ),
+        subtitle: Some("Discard pending agent changes and continue from the external version.".to_string()),
         badge: None,
         indent: 0,
         selection: Some(InlineListSelection::FileConflictReload),
@@ -344,9 +327,7 @@ fn conflict_resolution_items(can_show_diff: bool) -> Vec<InlineListItem> {
     if can_show_diff {
         items.push(InlineListItem {
             title: "View unified diff".to_string(),
-            subtitle: Some(
-                "Review external changes against the agent's intended write.".to_string(),
-            ),
+            subtitle: Some("Review external changes against the agent's intended write.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::FileConflictViewDiff),
@@ -367,13 +348,12 @@ fn conflict_resolution_items(can_show_diff: bool) -> Vec<InlineListItem> {
 fn build_override_args(args_val: &Value, conflict: &PendingFileConflict) -> Result<Value> {
     let mut args = args_val.clone();
     let Some(map) = args.as_object_mut() else {
-        return Err(anyhow!(
-            "Cannot override a file-conflict tool call without structured arguments"
-        ));
+        return Err(anyhow!("Cannot override a file-conflict tool call without structured arguments"));
     };
-    let approved_snapshot = conflict.approved_snapshot.clone().ok_or_else(|| {
-        anyhow!("Cannot proceed with a file-conflict write without an approved disk snapshot")
-    })?;
+    let approved_snapshot = conflict
+        .approved_snapshot
+        .clone()
+        .ok_or_else(|| anyhow!("Cannot proceed with a file-conflict write without an approved disk snapshot"))?;
     map.insert(FILE_CONFLICT_OVERRIDE_ARG.to_string(), approved_snapshot);
     Ok(args)
 }
@@ -389,11 +369,7 @@ fn conflict_resolution_status(output: Value, command_success: bool) -> ToolExecu
 
 fn aborted_conflict_status(conflict: &PendingFileConflict) -> ToolExecutionStatus {
     conflict_resolution_status(
-        conflict.finalized_output(
-            "aborted",
-            "Aborted the agent write because the file changed on disk.",
-            None,
-        ),
+        conflict.finalized_output("aborted", "Aborted the agent write because the file changed on disk.", None),
         false,
     )
 }
@@ -432,8 +408,7 @@ mod tests {
         }
     }
 
-    fn test_session()
-    -> (TestUiSession, UnboundedSender<InlineEvent>, UnboundedReceiver<InlineCommand>) {
+    fn test_session() -> (TestUiSession, UnboundedSender<InlineEvent>, UnboundedReceiver<InlineCommand>) {
         let (command_tx, command_rx) = unbounded_channel();
         let (event_tx, event_rx) = unbounded_channel();
         (
@@ -475,9 +450,9 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::Selection(InlineListSelection::FileConflictReload),
-        )))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+            InlineListSelection::FileConflictReload,
+        ))))?;
 
         let status = resolve_file_conflict_status(
             &mut registry,
@@ -524,9 +499,9 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::Selection(InlineListSelection::FileConflictAbort),
-        )))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+            InlineListSelection::FileConflictAbort,
+        ))))?;
 
         let status = resolve_file_conflict_status(
             &mut registry,
@@ -573,12 +548,10 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff),
-        )))?;
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::DiffProceed,
-        )))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+            InlineListSelection::FileConflictViewDiff,
+        ))))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::DiffProceed)))?;
 
         let status = resolve_file_conflict_status(
             &mut registry,
@@ -625,15 +598,13 @@ mod tests {
 
         let (mut session, event_tx, _commands) = test_session();
         let handle = session.inline_handle().clone();
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::Selection(InlineListSelection::FileConflictViewDiff),
-        )))?;
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::DiffProceed,
-        )))?;
-        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(
-            TransientSubmission::Selection(InlineListSelection::FileConflictReload),
-        )))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+            InlineListSelection::FileConflictViewDiff,
+        ))))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::DiffProceed)))?;
+        event_tx.send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+            InlineListSelection::FileConflictReload,
+        ))))?;
 
         let status = resolve_file_conflict_status(
             &mut registry,

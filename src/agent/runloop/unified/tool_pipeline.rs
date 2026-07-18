@@ -31,9 +31,7 @@ mod tests;
 mod timeout;
 pub(crate) mod validation;
 
-pub(crate) use execution::{
-    execute_tool_with_timeout_ref_prevalidated, run_tool_call, run_tool_call_with_args,
-};
+pub(crate) use execution::{execute_tool_with_timeout_ref_prevalidated, run_tool_call, run_tool_call_with_args};
 pub(crate) use execution_run::exec_settlement_mode_for_tool_call;
 pub(crate) use hitl::execute_hitl_tool;
 pub(crate) use pty_stream::PtyStreamRuntime;

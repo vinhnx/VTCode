@@ -3,16 +3,10 @@ use itertools::Itertools;
 use std::path::Path;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::colors::style;
-use vtcode_core::utils::file_utils::{
-    ensure_dir_exists, ensure_dir_exists_sync, write_file_with_context_sync,
-};
+use vtcode_core::utils::file_utils::{ensure_dir_exists, ensure_dir_exists_sync, write_file_with_context_sync};
 
 /// Handle the create-project command
-pub async fn handle_create_project_command(
-    config: &CoreAgentConfig,
-    name: &str,
-    features: &[String],
-) -> Result<()> {
+pub async fn handle_create_project_command(config: &CoreAgentConfig, name: &str, features: &[String]) -> Result<()> {
     println!("{}", style("[CREATE]").cyan().bold());
     println!("  {:16} {}", "name", name);
     println!("  {:16} {}", "workspace", config.workspace.display());

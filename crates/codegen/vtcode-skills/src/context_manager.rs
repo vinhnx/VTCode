@@ -191,9 +191,8 @@ impl ContextManager {
                 "max_cached_skills must be at least 1; using fallback value"
             );
         }
-        let loaded_skills = LruCache::new(
-            std::num::NonZeroUsize::new(max_cached_skills).unwrap_or(std::num::NonZeroUsize::MIN),
-        );
+        let loaded_skills =
+            LruCache::new(std::num::NonZeroUsize::new(max_cached_skills).unwrap_or(std::num::NonZeroUsize::MIN));
 
         Self {
             config: config.clone(),
@@ -219,9 +218,7 @@ impl ContextManager {
         let name = manifest.name.clone();
 
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
-            warn!(
-                "ContextManager write lock poisoned while registering skill metadata; recovering"
-            );
+            warn!("ContextManager write lock poisoned while registering skill metadata; recovering");
             poisoned.into_inner()
         });
 
@@ -254,9 +251,7 @@ impl ContextManager {
     /// Load skill instructions (Level 2 loading)
     pub fn load_skill_instructions(&self, name: &str, instructions: String) -> Result<()> {
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
-            warn!(
-                "ContextManager write lock poisoned while loading skill instructions; recovering"
-            );
+            warn!("ContextManager write lock poisoned while loading skill instructions; recovering");
             poisoned.into_inner()
         });
 
@@ -346,11 +341,7 @@ impl ContextManager {
         let entry_name = entry.name.clone();
         inner.loaded_skills.put(name, entry);
 
-        info!(
-            "Loaded full skill: {} ({} tokens)",
-            entry_name,
-            incremental_cost + self.config.metadata_token_cost
-        );
+        info!("Loaded full skill: {} ({} tokens)", entry_name, incremental_cost + self.config.metadata_token_cost);
 
         Ok(())
     }
@@ -410,9 +401,7 @@ impl ContextManager {
         debug!("Evicted skills: {:?}", evicted_skills);
 
         if freed_tokens < required_tokens {
-            return Err(anyhow!(
-                "Unable to free enough tokens. Required: {required_tokens}, Freed: {freed_tokens}"
-            ));
+            return Err(anyhow!("Unable to free enough tokens. Required: {required_tokens}, Freed: {freed_tokens}"));
         }
 
         Ok(())
@@ -449,8 +438,8 @@ impl ContextManager {
         });
 
         let evicted_count = inner.loaded_skills.len();
-        let evicted_tokens = inner.stats.current_token_usage
-            - (inner.active_skills.len() * self.config.metadata_token_cost);
+        let evicted_tokens =
+            inner.stats.current_token_usage - (inner.active_skills.len() * self.config.metadata_token_cost);
 
         inner.loaded_skills.clear();
         inner.current_token_usage = inner.active_skills.len() * self.config.metadata_token_cost;
@@ -481,11 +470,9 @@ impl ContextManager {
             warn!("ContextManager read lock poisoned while calculating memory usage; recovering");
             poisoned.into_inner()
         });
-        let active_memory: usize =
-            inner.active_skills.values().map(|entry| entry.memory_size).sum();
+        let active_memory: usize = inner.active_skills.values().map(|entry| entry.memory_size).sum();
 
-        let loaded_memory: usize =
-            inner.loaded_skills.iter().map(|(_, entry)| entry.memory_size).sum();
+        let loaded_memory: usize = inner.loaded_skills.iter().map(|(_, entry)| entry.memory_size).sum();
 
         active_memory + loaded_memory
     }
@@ -541,14 +528,8 @@ impl PersistentContextManager {
             .context("Failed to save context manager cache state")?;
         let cache = ContextCache {
             version: 1,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_secs(),
-            active_skills: inner
-                .active_skills
-                .values()
-                .map(|entry| entry.manifest.clone())
-                .collect(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs(),
+            active_skills: inner.active_skills.values().map(|entry| entry.manifest.clone()).collect(),
         };
 
         write_json_file_sync(&self.cache_path, &cache)?;

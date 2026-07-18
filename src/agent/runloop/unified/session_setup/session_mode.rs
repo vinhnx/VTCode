@@ -66,9 +66,7 @@ impl<'a> SessionModeInput<'a> {
 }
 
 /// Resolves the active primary agent ("mode") for a session.
-pub(crate) fn resolve_session_primary_agent(
-    input: SessionModeInput<'_>,
-) -> Result<ActivePrimaryAgentState> {
+pub(crate) fn resolve_session_primary_agent(input: SessionModeInput<'_>) -> Result<ActivePrimaryAgentState> {
     let SessionModeInput {
         specs,
         vt_cfg,
@@ -218,10 +216,8 @@ mod tests {
 
     #[test]
     fn full_auto_without_explicit_selects_effective_auto() {
-        let active = resolve_session_primary_agent(
-            SessionModeInput::new(&[spec("auto")]).with_full_auto(true),
-        )
-        .expect("auto");
+        let active =
+            resolve_session_primary_agent(SessionModeInput::new(&[spec("auto")]).with_full_auto(true)).expect("auto");
 
         assert_eq!(active.active().name(), "auto");
     }

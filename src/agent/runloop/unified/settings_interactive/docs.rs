@@ -4,8 +4,7 @@ use regex::Regex;
 
 use crate::agent::runloop::unified::config_section_headings::normalize_config_path;
 
-const FIELD_REFERENCE_MARKDOWN: &str =
-    include_str!("../../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
+const FIELD_REFERENCE_MARKDOWN: &str = include_str!("../../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FieldDoc {
@@ -28,8 +27,7 @@ impl FieldDocIndex {
     }
 }
 
-static QUOTED_VALUE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"\"([^\"]+)\""#).expect("valid regex"));
+static QUOTED_VALUE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\"([^\"]+)\""#).expect("valid regex"));
 pub(super) static FIELD_DOCS: Lazy<FieldDocIndex> = Lazy::new(parse_field_reference_markdown);
 
 fn parse_field_reference_markdown() -> FieldDocIndex {

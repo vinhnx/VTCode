@@ -117,8 +117,8 @@ mod tests {
     #[test]
     fn errors_when_queue_is_empty() {
         let mut client = StaticResponseClient::new("test");
-        let error = futures::executor::block_on(client.generate("prompt"))
-            .expect_err("expected error when queue is empty");
+        let error =
+            futures::executor::block_on(client.generate("prompt")).expect_err("expected error when queue is empty");
 
         assert!(matches!(error, LLMError::InvalidRequest { .. }));
     }

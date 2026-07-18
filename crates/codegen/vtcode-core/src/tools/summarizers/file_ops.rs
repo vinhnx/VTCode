@@ -70,17 +70,12 @@ impl Summarizer for ReadSummarizer {
             summary.push_str(&format!("\n\nPreview:\n{preview}"));
 
             if stats.total_lines > self.max_preview_lines {
-                summary.push_str(&format!(
-                    "\n[...{} more lines]",
-                    stats.total_lines - self.max_preview_lines
-                ));
+                summary.push_str(&format!("\n[...{} more lines]", stats.total_lines - self.max_preview_lines));
             }
         }
 
         // Add suffix lines if file is long
-        if stats.total_lines > self.max_preview_lines + self.max_suffix_lines
-            && !stats.suffix_lines.is_empty()
-        {
+        if stats.total_lines > self.max_preview_lines + self.max_suffix_lines && !stats.suffix_lines.is_empty() {
             let suffix = stats
                 .suffix_lines
                 .iter()
@@ -131,10 +126,7 @@ impl Summarizer for EditSummarizer {
 
         // Add line change statistics
         if stats.lines_added > 0 || stats.lines_removed > 0 {
-            summary.push_str(&format!(
-                ": +{} lines, -{} lines",
-                stats.lines_added, stats.lines_removed
-            ));
+            summary.push_str(&format!(": +{} lines, -{} lines", stats.lines_added, stats.lines_removed));
         }
 
         // Add affected files
@@ -218,19 +210,16 @@ fn parse_edit_output(output: &str) -> EditStats {
         // Extract file information
         if let Some(files) = json.get("files").and_then(|f| f.as_array()) {
             stats.files_changed = files.len();
-            stats.affected_files =
-                files.iter().filter_map(|f| f.as_str().map(|s| s.to_string())).collect();
+            stats.affected_files = files.iter().filter_map(|f| f.as_str().map(|s| s.to_string())).collect();
         }
 
         // Extract change statistics
         stats.lines_added = json.get("lines_added").and_then(|l| l.as_u64()).unwrap_or(0) as usize;
 
-        stats.lines_removed =
-            json.get("lines_removed").and_then(|l| l.as_u64()).unwrap_or(0) as usize;
+        stats.lines_removed = json.get("lines_removed").and_then(|l| l.as_u64()).unwrap_or(0) as usize;
     } else {
         // Fallback: parse text output
-        stats.success =
-            output.to_lowercase().contains("success") && !output.to_lowercase().contains("error");
+        stats.success = output.to_lowercase().contains("success") && !output.to_lowercase().contains("error");
 
         // Try to count +/- lines in diff-like output
         for line in output.lines() {
@@ -282,11 +271,7 @@ mod tests {
 
         // Should be much shorter than full output
         let savings = summarizer.estimate_savings(&full_output, &summary);
-        assert!(
-            savings.savings_percent > 50.0,
-            "Should save >50% (got {:.1}%)",
-            savings.savings_percent
-        );
+        assert!(savings.savings_percent > 50.0, "Should save >50% (got {:.1}%)", savings.savings_percent);
     }
 
     #[test]

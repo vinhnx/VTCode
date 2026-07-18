@@ -16,9 +16,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("Attempting installation via Cargo");
             return install_via_cargo();
         }
-        Err(anyhow!(
-            "No supported installer found. Install Homebrew or Cargo, or install ripgrep manually."
-        ))
+        Err(anyhow!("No supported installer found. Install Homebrew or Cargo, or install ripgrep manually."))
     }
 
     #[cfg(target_os = "linux")]
@@ -36,9 +34,7 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("Attempting installation via Cargo (fallback)");
             return install_via_cargo();
         }
-        Err(anyhow!(
-            "No supported installer found. Install APT, Cargo, or install ripgrep manually."
-        ))
+        Err(anyhow!("No supported installer found. Install APT, Cargo, or install ripgrep manually."))
     }
 
     #[cfg(target_os = "windows")]
@@ -132,10 +128,7 @@ fn install_via_apt() -> Result<()> {
         }
     } else {
         // Need sudo - log a warning about elevated privileges
-        tracing::warn!(
-            method = "apt",
-            "using sudo to install ripgrep - this requires elevated privileges"
-        );
+        tracing::warn!(method = "apt", "using sudo to install ripgrep - this requires elevated privileges");
 
         // Check if sudo is available
         let sudo_ok = Command::new("sudo")

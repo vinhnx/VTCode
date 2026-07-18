@@ -32,8 +32,7 @@ async fn test_code_search_dual_output_integration() {
     assert!(result.success, "Tool should succeed");
     assert_eq!(result.llm_content, result.ui_content);
 
-    let response: serde_json::Value =
-        serde_json::from_str(&result.llm_content).expect("compact code_search response");
+    let response: serde_json::Value = serde_json::from_str(&result.llm_content).expect("compact code_search response");
     let mut fields = response
         .as_object()
         .expect("response object")
@@ -41,26 +40,13 @@ async fn test_code_search_dual_output_integration() {
         .map(String::as_str)
         .collect::<Vec<_>>();
     fields.sort_unstable();
-    assert_eq!(
-        fields,
-        [
-            "filters",
-            "hints",
-            "query",
-            "results",
-            "returned",
-            "truncated"
-        ]
-    );
+    assert_eq!(fields, ["filters", "hints", "query", "results", "returned", "truncated"]);
     assert_eq!(response["query"], "ToolRegistry");
     assert_eq!(response["filters"]["path"], "src/tools");
     assert_eq!(response["filters"]["file_types"], json!(["rust"]));
     assert_eq!(response["filters"]["result_types"], json!(["definition", "usage", "text"]));
     assert_eq!(response["filters"]["max_results"], 10);
-    assert_eq!(
-        response["returned"].as_u64(),
-        response["results"].as_array().map(|results| results.len() as u64)
-    );
+    assert_eq!(response["returned"].as_u64(), response["results"].as_array().map(|results| results.len() as u64));
 }
 
 #[tokio::test]

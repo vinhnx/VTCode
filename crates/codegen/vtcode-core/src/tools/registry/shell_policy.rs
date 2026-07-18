@@ -58,7 +58,9 @@ impl ShellPolicyChecker {
             let compiled_regexes = deny_regex_patterns
                 .iter()
                 .filter_map(|pattern| {
-                    if pattern.is_empty() { return None; }
+                    if pattern.is_empty() {
+                        return None;
+                    }
                     match Regex::new(pattern) {
                         Ok(re) => Some((pattern.clone(), re)),
                         Err(err) => {
@@ -72,7 +74,9 @@ impl ShellPolicyChecker {
             let compiled_globs = deny_glob_patterns
                 .iter()
                 .filter_map(|pattern| {
-                    if pattern.is_empty() { return None; }
+                    if pattern.is_empty() {
+                        return None;
+                    }
                     let re_pattern = format!("^{}$", regex::escape(pattern).replace(r"\*", ".*").replace(r"\?", "."));
                     match Regex::new(&re_pattern) {
                         Ok(re) => Some((pattern.clone(), re)),

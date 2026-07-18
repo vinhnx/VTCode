@@ -4,10 +4,7 @@ use super::{ToolProgressCallback, ToolRegistry};
 
 impl ToolRegistry {
     /// Replace the callback for streaming tool output and progress, returning the previous callback.
-    pub fn replace_progress_callback(
-        &self,
-        callback: Option<ToolProgressCallback>,
-    ) -> Option<ToolProgressCallback> {
+    pub fn replace_progress_callback(&self, callback: Option<ToolProgressCallback>) -> Option<ToolProgressCallback> {
         let Ok(mut slot) = self.progress_callback.write() else {
             return None;
         };

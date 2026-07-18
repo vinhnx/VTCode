@@ -209,10 +209,7 @@ impl ProcessHandle {
     /// Send bytes to the process stdin.
     ///
     /// Returns an error if the stdin channel is closed.
-    pub async fn write(
-        &self,
-        bytes: impl Into<Vec<u8>>,
-    ) -> Result<(), mpsc::error::SendError<Vec<u8>>> {
+    pub async fn write(&self, bytes: impl Into<Vec<u8>>) -> Result<(), mpsc::error::SendError<Vec<u8>>> {
         self.writer_tx.send(bytes.into()).await
     }
 

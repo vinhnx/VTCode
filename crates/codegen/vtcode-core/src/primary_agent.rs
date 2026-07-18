@@ -8,15 +8,13 @@ use vtcode_config::constants::{defaults::DEFAULT_PRIMARY_AGENT_NAME, tools};
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::core::tools::ToolPolicy;
 use vtcode_config::{
-    DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer,
-    SubagentMemoryScope, SubagentSource, SubagentSpec, builtin_primary_build_agent,
+    DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer, SubagentMemoryScope,
+    SubagentSource, SubagentSpec, builtin_primary_build_agent,
 };
 
 use crate::config::{ReasoningEffortLevel, VTCodeConfig};
 use crate::llm::provider::ToolDefinition;
-use crate::permissions::{
-    PermissionRequest, ResolvedPermissionDecision, evaluate_effective_permissions,
-};
+use crate::permissions::{PermissionRequest, ResolvedPermissionDecision, evaluate_effective_permissions};
 use crate::prompts::PromptContext;
 use crate::subagents::ResolvedAgentRuntimeView;
 use tracing::warn;
@@ -199,9 +197,7 @@ pub fn resolve_primary_agent(
         .find(|spec| spec.is_primary() && spec.name.eq_ignore_ascii_case(requested))
         .or_else(|| specs.iter().find(|spec| spec.is_primary() && spec.matches_name(requested)))
         .map(ActivePrimaryAgent::from_spec)
-        .ok_or_else(|| PrimaryAgentResolutionError::UnknownAgent {
-            requested: requested.to_string(),
-        })
+        .ok_or_else(|| PrimaryAgentResolutionError::UnknownAgent { requested: requested.to_string() })
 }
 
 /// Returns `true` for cleanup-only child-agent tools that must remain
@@ -301,10 +297,7 @@ pub fn apply_primary_agent_tool_policy(
 }
 
 #[must_use]
-pub fn build_primary_agent_runtime_config(
-    parent: &VTCodeConfig,
-    agent: &ActivePrimaryAgent,
-) -> VTCodeConfig {
+pub fn build_primary_agent_runtime_config(parent: &VTCodeConfig, agent: &ActivePrimaryAgent) -> VTCodeConfig {
     let mut config = parent.clone();
     // "inherit" (and empty) are sentinels meaning "use the parent's model" — mirrors
     // resolve_subagent_model's handling in subagents/model.rs. Built-in primary agents
@@ -326,10 +319,7 @@ pub fn build_primary_agent_runtime_config(
 }
 
 #[must_use]
-pub fn build_primary_agent_hook_config(
-    global: &HooksConfig,
-    agent: &ActivePrimaryAgent,
-) -> HooksConfig {
+pub fn build_primary_agent_hook_config(global: &HooksConfig, agent: &ActivePrimaryAgent) -> HooksConfig {
     let mut config = global.clone();
     merge_active_primary_hooks(&mut config, agent.hooks.as_ref());
     config
@@ -393,16 +383,10 @@ fn merge_active_primary_hooks(config: &mut HooksConfig, hooks: Option<&HooksConf
     append_hook_groups(&mut config.lifecycle.session_end, &hooks.lifecycle.session_end);
     append_hook_groups(&mut config.lifecycle.subagent_start, &hooks.lifecycle.subagent_start);
     append_hook_groups(&mut config.lifecycle.subagent_stop, &hooks.lifecycle.subagent_stop);
-    append_hook_groups(
-        &mut config.lifecycle.user_prompt_submit,
-        &hooks.lifecycle.user_prompt_submit,
-    );
+    append_hook_groups(&mut config.lifecycle.user_prompt_submit, &hooks.lifecycle.user_prompt_submit);
     append_hook_groups(&mut config.lifecycle.pre_tool_use, &hooks.lifecycle.pre_tool_use);
     append_hook_groups(&mut config.lifecycle.post_tool_use, &hooks.lifecycle.post_tool_use);
-    append_hook_groups(
-        &mut config.lifecycle.permission_request,
-        &hooks.lifecycle.permission_request,
-    );
+    append_hook_groups(&mut config.lifecycle.permission_request, &hooks.lifecycle.permission_request);
     append_hook_groups(&mut config.lifecycle.pre_compact, &hooks.lifecycle.pre_compact);
     append_hook_groups(&mut config.lifecycle.stop, &hooks.lifecycle.stop);
     append_hook_groups(&mut config.lifecycle.notification, &hooks.lifecycle.notification);
@@ -436,9 +420,8 @@ mod tests {
     use tempfile::TempDir;
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{
-        HookCommandConfig, HooksConfig, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer,
-        SubagentMemoryScope, SubagentSource, builtin_plan_agent, builtin_primary_duck_agent,
-        builtin_subagents, discover_subagents,
+        HookCommandConfig, HooksConfig, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
+        SubagentSource, builtin_plan_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
     };
 
     use crate::config::constants::tools;
@@ -469,15 +452,11 @@ mod tests {
         let current = test_spec("current");
         let specs = vec![current.clone()];
         let mut state = ActivePrimaryAgentState::default();
-        let original =
-            state.select_from_specs(&specs, "current").expect("initial selection").clone();
+        let original = state.select_from_specs(&specs, "current").expect("initial selection").clone();
 
         let error = state.select_from_specs(&specs, "missing").expect_err("unknown agent");
 
-        assert_eq!(
-            error,
-            PrimaryAgentResolutionError::UnknownAgent { requested: "missing".to_string() }
-        );
+        assert_eq!(error, PrimaryAgentResolutionError::UnknownAgent { requested: "missing".to_string() });
         assert_eq!(state.active(), &original);
     }
 
@@ -603,16 +582,14 @@ mod tests {
 
     #[test]
     fn from_specs_with_default_selects_configured_primary_agent() {
-        let active =
-            ActivePrimaryAgentState::from_specs_with_default(&[test_spec("builder")], "builder");
+        let active = ActivePrimaryAgentState::from_specs_with_default(&[test_spec("builder")], "builder");
 
         assert_eq!(active.active().identity.name, "builder");
     }
 
     #[test]
     fn from_specs_with_default_falls_back_to_build_for_missing_configured_agent() {
-        let active =
-            ActivePrimaryAgentState::from_specs_with_default(&[test_spec("builder")], "missing");
+        let active = ActivePrimaryAgentState::from_specs_with_default(&[test_spec("builder")], "missing");
 
         assert_eq!(active.active().identity.name, "build");
         assert_eq!(active.active().identity.source, SubagentSource::Builtin);
@@ -682,38 +659,20 @@ mod tests {
             let name = spec.name.clone();
             let active = ActivePrimaryAgent::from_spec(&spec);
 
-            assert!(
-                primary_agent_allows_tool(&active, tools::CODE_SEARCH),
-                "{name} should expose code_search"
-            );
-            assert!(
-                primary_agent_allows_tool(&active, tools::EXEC_COMMAND),
-                "{name} should expose exec_command"
-            );
+            assert!(primary_agent_allows_tool(&active, tools::CODE_SEARCH), "{name} should expose code_search");
+            assert!(primary_agent_allows_tool(&active, tools::EXEC_COMMAND), "{name} should expose exec_command");
             assert!(primary_agent_allows_tool(&active, tools::REQUEST_USER_INPUT));
 
-            assert!(
-                !primary_agent_allows_tool(&active, tools::APPLY_PATCH),
-                "{name} must not expose apply_patch"
-            );
-            assert!(
-                !primary_agent_allows_tool(&active, tools::RUN_PTY_CMD),
-                "{name} must not expose run_pty_cmd"
-            );
-            assert!(
-                !primary_agent_allows_tool(&active, tools::WRITE_FILE),
-                "{name} must not expose write_file"
-            );
+            assert!(!primary_agent_allows_tool(&active, tools::APPLY_PATCH), "{name} must not expose apply_patch");
+            assert!(!primary_agent_allows_tool(&active, tools::RUN_PTY_CMD), "{name} must not expose run_pty_cmd");
+            assert!(!primary_agent_allows_tool(&active, tools::WRITE_FILE), "{name} must not expose write_file");
         }
     }
 
     #[test]
     fn tool_policy_intersects_allow_list_then_applies_deny_list() {
         let mut spec = test_spec("worker");
-        spec.tools = Some(vec![
-            tools::CODE_SEARCH.to_string(),
-            tools::EXEC_COMMAND.to_string(),
-        ]);
+        spec.tools = Some(vec![tools::CODE_SEARCH.to_string(), tools::EXEC_COMMAND.to_string()]);
         spec.disallowed_tools = vec![tools::CODE_SEARCH.to_ascii_uppercase()];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
@@ -886,13 +845,7 @@ mod tests {
             Some(&json!({"command": "cargo test"})),
         );
         assert_eq!(
-            evaluate_active_primary_agent_permissions(
-                &config,
-                state.active(),
-                workspace.path(),
-                current_dir,
-                &exec,
-            ),
+            evaluate_active_primary_agent_permissions(&config, state.active(), workspace.path(), current_dir, &exec,),
             ResolvedPermissionDecision::Auto
         );
 
@@ -904,13 +857,7 @@ mod tests {
             Some(&json!({"action": "edit", "path": "src/lib.rs"})),
         );
         assert_eq!(
-            evaluate_active_primary_agent_permissions(
-                &config,
-                state.active(),
-                workspace.path(),
-                current_dir,
-                &edit,
-            ),
+            evaluate_active_primary_agent_permissions(&config, state.active(), workspace.path(), current_dir, &edit,),
             ResolvedPermissionDecision::Deny
         );
     }
@@ -961,22 +908,13 @@ mod tests {
 
         let merged = build_primary_agent_hook_config(&global, &active);
 
-        assert_hook_commands(
-            &merged.lifecycle.user_prompt_submit,
-            &["global-user", "primary-user"],
-        );
+        assert_hook_commands(&merged.lifecycle.user_prompt_submit, &["global-user", "primary-user"]);
         assert_hook_commands(&merged.lifecycle.pre_tool_use, &["global-pre", "primary-pre"]);
         assert_hook_commands(&merged.lifecycle.post_tool_use, &["global-post", "primary-post"]);
-        assert_hook_commands(
-            &merged.lifecycle.permission_request,
-            &["global-permission", "primary-permission"],
-        );
+        assert_hook_commands(&merged.lifecycle.permission_request, &["global-permission", "primary-permission"]);
         assert_hook_commands(&merged.lifecycle.pre_compact, &["global-compact", "primary-compact"]);
         assert_hook_commands(&merged.lifecycle.stop, &["global-stop", "primary-stop"]);
-        assert_hook_commands(
-            &merged.lifecycle.notification,
-            &["global-notification", "primary-notification"],
-        );
+        assert_hook_commands(&merged.lifecycle.notification, &["global-notification", "primary-notification"]);
     }
 
     #[test]

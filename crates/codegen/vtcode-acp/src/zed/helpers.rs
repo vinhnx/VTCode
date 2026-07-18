@@ -39,18 +39,14 @@ pub(crate) struct PrimaryAgentCatalog {
 
 impl PrimaryAgentCatalog {
     #[must_use]
-    pub(crate) fn from_specs_with_default(
-        specs: &[SubagentSpec],
-        default_primary_agent: &str,
-    ) -> Self {
+    pub(crate) fn from_specs_with_default(specs: &[SubagentSpec], default_primary_agent: &str) -> Self {
         let mut options = specs
             .iter()
             .filter(|spec| spec.is_primary())
             .map(primary_agent_option_from_spec)
             .collect::<Vec<_>>();
         options.sort_by(|left, right| {
-            primary_agent_order_key(&left.id, &left.label)
-                .cmp(&primary_agent_order_key(&right.id, &right.label))
+            primary_agent_order_key(&left.id, &left.label).cmp(&primary_agent_order_key(&right.id, &right.label))
         });
 
         if options.is_empty() {
@@ -83,9 +79,7 @@ impl PrimaryAgentCatalog {
         let primary_agent = primary_agent.trim();
         self.options
             .iter()
-            .find_map(|option| {
-                option.id.eq_ignore_ascii_case(primary_agent).then_some(option.id.as_str())
-            })
+            .find_map(|option| option.id.eq_ignore_ascii_case(primary_agent).then_some(option.id.as_str()))
             .or_else(|| {
                 self.options.iter().find_map(|option| {
                     option
@@ -117,14 +111,12 @@ impl PrimaryAgentCatalog {
                 let tool_name = tool_name.trim().to_ascii_lowercase();
                 let semantic_name = local_tool_semantic_name(&tool_name);
                 if option.denied_local_tools.contains(&tool_name)
-                    || semantic_name
-                        .is_some_and(|semantic| option.denied_local_tools.contains(semantic))
+                    || semantic_name.is_some_and(|semantic| option.denied_local_tools.contains(semantic))
                 {
                     return false;
                 }
                 option.allowed_local_tools.as_ref().is_none_or(|allowed| {
-                    allowed.contains(&tool_name)
-                        || semantic_name.is_some_and(|semantic| allowed.contains(semantic))
+                    allowed.contains(&tool_name) || semantic_name.is_some_and(|semantic| allowed.contains(semantic))
                 })
             })
     }
@@ -150,12 +142,7 @@ impl PrimaryAgentCatalog {
     /// at dispatch time. A tool that slips past this gate is still subject to
     /// that runtime check.
     #[must_use]
-    pub(crate) fn allows_tool(
-        &self,
-        primary_agent: &str,
-        tool_name: &str,
-        workspace_root: &Path,
-    ) -> bool {
+    pub(crate) fn allows_tool(&self, primary_agent: &str, tool_name: &str, workspace_root: &Path) -> bool {
         let Some(option) = self.option_for(primary_agent) else {
             return false;
         };
@@ -174,12 +161,7 @@ impl PrimaryAgentCatalog {
             .iter()
             .any(|request| {
                 !matches!(
-                    evaluate_agent_permissions(
-                        &option.permissions,
-                        workspace_root,
-                        workspace_root,
-                        request,
-                    ),
+                    evaluate_agent_permissions(&option.permissions, workspace_root, workspace_root, request,),
                     ResolvedPermissionDecision::Deny
                 )
             })
@@ -189,9 +171,7 @@ impl PrimaryAgentCatalog {
     fn select_options(&self) -> Vec<acp::SessionConfigSelectOption> {
         self.options
             .iter()
-            .map(|option| {
-                acp::SessionConfigSelectOption::new(option.id.clone(), option.label.clone())
-            })
+            .map(|option| acp::SessionConfigSelectOption::new(option.id.clone(), option.label.clone()))
             .collect::<Vec<_>>()
     }
 }
@@ -329,9 +309,8 @@ pub(crate) fn session_config_options(
     let thought_level_options = ReasoningEffortLevel::allowed_values()
         .iter()
         .filter_map(|value| {
-            ReasoningEffortLevel::parse(value).map(|level| {
-                acp::SessionConfigSelectOption::new(level.as_str(), reasoning_effort_name(level))
-            })
+            ReasoningEffortLevel::parse(value)
+                .map(|level| acp::SessionConfigSelectOption::new(level.as_str(), reasoning_effort_name(level)))
         })
         .collect::<Vec<_>>();
     let current_primary_agent = primary_agents
@@ -358,14 +337,9 @@ pub(crate) fn session_config_options(
         .description("Controls which LLM provider VT Code uses for this ACP session."),
     );
     config_options.push(
-        acp::SessionConfigOption::select(
-            SESSION_CONFIG_MODEL_ID,
-            "Model",
-            current_model.to_string(),
-            model_options,
-        )
-        .description("Controls which model VT Code uses for this ACP session.")
-        .category(acp::SessionConfigOptionCategory::Model),
+        acp::SessionConfigOption::select(SESSION_CONFIG_MODEL_ID, "Model", current_model.to_string(), model_options)
+            .description("Controls which model VT Code uses for this ACP session.")
+            .category(acp::SessionConfigOptionCategory::Model),
     );
     if include_thought_level {
         config_options.push(
@@ -405,9 +379,7 @@ fn command_input_hint(name: &str) -> Option<String> {
 fn build_available_command(name: &str, description: &str) -> acp::AvailableCommand {
     let mut command = acp::AvailableCommand::new(name.to_string(), description.to_string());
     if let Some(hint) = command_input_hint(name) {
-        command = command.input(acp::AvailableCommandInput::Unstructured(
-            acp::UnstructuredCommandInput::new(hint),
-        ));
+        command = command.input(acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(hint)));
     }
     command
 }
@@ -429,13 +401,9 @@ pub(crate) fn build_available_commands(
         if !seen_names.insert(template.name.clone()) {
             continue;
         }
-        available_commands.push(
-            acp::AvailableCommand::new(template.name.clone(), template.description.clone()).input(
-                acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new(
-                    "Optional template arguments",
-                )),
-            ),
-        );
+        available_commands.push(acp::AvailableCommand::new(template.name.clone(), template.description.clone()).input(
+            acp::AvailableCommandInput::Unstructured(acp::UnstructuredCommandInput::new("Optional template arguments")),
+        ));
     }
 
     available_commands

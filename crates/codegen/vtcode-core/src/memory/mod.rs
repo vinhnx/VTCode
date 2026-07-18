@@ -79,9 +79,7 @@ impl MemoryMonitor {
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(MemoryMonitorState {
-                checkpoints: VecDeque::with_capacity(
-                    vtcode_config::constants::memory::MAX_CHECKPOINT_HISTORY,
-                ),
+                checkpoints: VecDeque::with_capacity(vtcode_config::constants::memory::MAX_CHECKPOINT_HISTORY),
                 last_rss_bytes: 0,
                 last_check_timestamp: 0,
             })),
@@ -101,9 +99,9 @@ impl MemoryMonitor {
             if line.starts_with("VmRSS:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
-                    let kb: usize = parts[1].parse().map_err(|_| {
-                        MemoryError::Parse(format!("invalid VmRSS value: {}", parts[1]))
-                    })?;
+                    let kb: usize = parts[1]
+                        .parse()
+                        .map_err(|_| MemoryError::Parse(format!("invalid VmRSS value: {}", parts[1])))?;
                     return Ok(kb * 1024); // Convert KB to bytes
                 }
             }
@@ -187,15 +185,12 @@ impl MemoryMonitor {
         let rss_bytes = Self::get_rss_bytes()?;
         let pressure = MemoryPressure::from_rss(rss_bytes);
 
-        let soft_limit =
-            vtcode_config::constants::memory::SOFT_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
-        let hard_limit =
-            vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
+        let soft_limit = vtcode_config::constants::memory::SOFT_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
+        let hard_limit = vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64 / (1024.0 * 1024.0);
         let current_rss_mb = rss_bytes as f64 / (1024.0 * 1024.0);
 
         // Use hard limit for percentage calculation (worst case)
-        let usage_percent =
-            (rss_bytes as f64 / vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64) * 100.0;
+        let usage_percent = (rss_bytes as f64 / vtcode_config::constants::memory::HARD_LIMIT_BYTES as f64) * 100.0;
 
         let recent_checkpoints = if let Ok(state) = self.state.lock() {
             state.checkpoints.iter().cloned().collect()
@@ -217,12 +212,8 @@ impl MemoryMonitor {
     pub fn adaptive_ttl_factor(&self) -> f64 {
         match self.check_pressure() {
             Ok(MemoryPressure::Normal) => 1.0,
-            Ok(MemoryPressure::Warning) => {
-                vtcode_config::constants::memory::WARNING_TTL_REDUCTION_FACTOR
-            }
-            Ok(MemoryPressure::Critical) => {
-                vtcode_config::constants::memory::CRITICAL_TTL_REDUCTION_FACTOR
-            }
+            Ok(MemoryPressure::Warning) => vtcode_config::constants::memory::WARNING_TTL_REDUCTION_FACTOR,
+            Ok(MemoryPressure::Critical) => vtcode_config::constants::memory::CRITICAL_TTL_REDUCTION_FACTOR,
             Err(_) => 1.0, // Assume normal if we can't check
         }
     }

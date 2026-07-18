@@ -126,10 +126,7 @@ mod tests {
         assert!(config.host.is_none());
         assert_eq!(config.available_tools, vec!["view", "glob", "grep"]);
         assert!(config.excluded_tools.is_empty());
-        assert_eq!(
-            config.vtcode_tool_allowlist,
-            vec!["exec_command", "write_stdin", "apply_patch", "code_search"]
-        );
+        assert_eq!(config.vtcode_tool_allowlist, vec!["exec_command", "write_stdin", "apply_patch", "code_search"]);
         assert_eq!(config.startup_timeout_secs, 20);
         assert_eq!(config.auth_timeout_secs, 300);
     }

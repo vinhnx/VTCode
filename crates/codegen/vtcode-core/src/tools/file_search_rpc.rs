@@ -201,15 +201,12 @@ impl FileSearchRpcHandler {
     ///
     /// Performs fuzzy file search with the given pattern.
     async fn handle_search_files(params: &Value, _id: Option<Value>) -> Result<Value> {
-        let request: SearchFilesRequest = serde_json::from_value(params.clone())
-            .context("Failed to parse search_files parameters")?;
+        let request: SearchFilesRequest =
+            serde_json::from_value(params.clone()).context("Failed to parse search_files parameters")?;
 
         // Validate workspace root
         if !request.workspace_root.exists() {
-            return Err(anyhow::anyhow!(
-                "Workspace root does not exist: {}",
-                request.workspace_root.display()
-            ));
+            return Err(anyhow::anyhow!("Workspace root does not exist: {}", request.workspace_root.display()));
         }
 
         // Build configuration
@@ -243,15 +240,12 @@ impl FileSearchRpcHandler {
     ///
     /// Lists all files in the workspace with optional exclusions.
     async fn handle_list_files(params: &Value) -> Result<Value> {
-        let request: ListFilesRequest = serde_json::from_value(params.clone())
-            .context("Failed to parse list_files parameters")?;
+        let request: ListFilesRequest =
+            serde_json::from_value(params.clone()).context("Failed to parse list_files parameters")?;
 
         // Validate workspace root
         if !request.workspace_root.exists() {
-            return Err(anyhow::anyhow!(
-                "Workspace root does not exist: {}",
-                request.workspace_root.display()
-            ));
+            return Err(anyhow::anyhow!("Workspace root does not exist: {}", request.workspace_root.display()));
         }
 
         // Build configuration (empty pattern lists all files)
@@ -285,8 +279,8 @@ impl FileSearchRpcHandler {
     async fn handle_find_references(params: &Value) -> Result<Value> {
         // This would require more sophisticated symbol analysis
         // For now, return a placeholder that could be implemented later
-        let _symbol: String = serde_json::from_value(params.clone())
-            .context("Failed to parse find_references parameters")?;
+        let _symbol: String =
+            serde_json::from_value(params.clone()).context("Failed to parse find_references parameters")?;
 
         Ok(json!({
             "matches": [],
@@ -308,8 +302,7 @@ pub fn parse_rpc_request(json_string: &str) -> Result<RpcRequest, Box<RpcRespons
     match serde_json::from_str::<RpcRequest>(json_string) {
         Ok(request) => Ok(request),
         Err(err) => {
-            let error_response =
-                RpcResponse::error(None, RpcError::invalid_request(err.to_string()));
+            let error_response = RpcResponse::error(None, RpcError::invalid_request(err.to_string()));
             Err(Box::new(error_response))
         }
     }

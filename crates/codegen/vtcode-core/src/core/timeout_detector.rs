@@ -177,8 +177,7 @@ impl TimeoutDetector {
         configs_map.insert(OperationType::Processing, TimeoutConfig::analysis());
 
         let configs = Arc::new(RwLock::new(configs_map));
-        let active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>> =
-            Arc::new(RwLock::new(HashMap::new()));
+        let active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>> = Arc::new(RwLock::new(HashMap::new()));
         let stats = Arc::new(RwLock::new(TimeoutStats::default()));
         let (cleanup_tx, cleanup_rx) = mpsc::channel(1024);
 
@@ -209,8 +208,8 @@ impl TimeoutDetector {
                 let duration = event.start_time.elapsed();
                 let mut stats_guard = stats.write().await;
                 if stats_guard.total_operations > 0 {
-                    let total_duration = stats_guard.average_timeout_duration
-                        * (stats_guard.total_operations - 1) as u32;
+                    let total_duration =
+                        stats_guard.average_timeout_duration * (stats_guard.total_operations - 1) as u32;
                     stats_guard.average_timeout_duration =
                         (total_duration + duration) / stats_guard.total_operations as u32;
                 }
@@ -232,11 +231,7 @@ impl TimeoutDetector {
     }
 
     /// Start monitoring an operation
-    pub async fn start_operation(
-        &self,
-        operation_id: String,
-        operation_type: OperationType,
-    ) -> TimeoutHandle {
+    pub async fn start_operation(&self, operation_id: String, operation_type: OperationType) -> TimeoutHandle {
         let config = self.get_config(&operation_type).await;
 
         let event = TimeoutEvent {
@@ -302,10 +297,8 @@ impl TimeoutDetector {
             let mut stats = self.stats.write().await;
             // Update average timeout duration
             if stats.total_operations > 0 {
-                let total_duration =
-                    stats.average_timeout_duration * (stats.total_operations - 1) as u32;
-                stats.average_timeout_duration =
-                    (total_duration + duration) / stats.total_operations as u32;
+                let total_duration = stats.average_timeout_duration * (stats.total_operations - 1) as u32;
+                stats.average_timeout_duration = (total_duration + duration) / stats.total_operations as u32;
             }
         }
     }
@@ -316,11 +309,7 @@ impl TimeoutDetector {
     }
 
     /// Calculate retry delay with exponential backoff and optional jitter
-    pub async fn calculate_retry_delay(
-        &self,
-        operation_type: &OperationType,
-        attempt: u32,
-    ) -> Duration {
+    pub async fn calculate_retry_delay(&self, operation_type: &OperationType, attempt: u32) -> Duration {
         let config = self.get_config(operation_type).await;
 
         let base_delay = config.initial_retry_delay.as_millis() as f64;
@@ -328,8 +317,7 @@ impl TimeoutDetector {
         #[allow(clippy::cast_sign_loss)]
         let delay_ms = (base_delay * multiplier) as u64;
 
-        let mut delay =
-            Duration::from_millis(delay_ms.min(config.max_retry_delay.as_millis() as u64));
+        let mut delay = Duration::from_millis(delay_ms.min(config.max_retry_delay.as_millis() as u64));
 
         // Add jitter if enabled
         if config.use_jitter {
@@ -349,12 +337,7 @@ impl TimeoutDetector {
 
     /// Determine if an error should trigger a retry.
     /// Uses case-insensitive matching to avoid extra string allocations.
-    pub async fn should_retry(
-        &self,
-        operation_type: &OperationType,
-        error: &anyhow::Error,
-        attempt: u32,
-    ) -> bool {
+    pub async fn should_retry(&self, operation_type: &OperationType, error: &anyhow::Error, attempt: u32) -> bool {
         let config = self.get_config(operation_type).await;
 
         if attempt >= config.max_retries {
@@ -409,16 +392,9 @@ impl TimeoutDetector {
             let result = match time::timeout(config.timeout_duration, operation()).await {
                 Ok(result) => result,
                 Err(_) => {
-                    self.record_timeout(
-                        &handle.operation_id,
-                        Some("Operation timed out".to_owned()),
-                    )
-                    .await;
-                    Err(anyhow::anyhow!(
-                        "Operation '{}' timed out after {:?}",
-                        operation_id,
-                        config.timeout_duration
-                    ))
+                    self.record_timeout(&handle.operation_id, Some("Operation timed out".to_owned()))
+                        .await;
+                    Err(anyhow::anyhow!("Operation '{}' timed out after {:?}", operation_id, config.timeout_duration))
                 }
             };
 
@@ -531,14 +507,10 @@ mod tests {
         detector.set_config(OperationType::ApiCall, config).await;
 
         let result = detector
-            .execute_with_timeout_retry(
-                "test_operation".to_owned(),
-                OperationType::ApiCall,
-                || async {
-                    sleep(Duration::from_millis(20)).await;
-                    Ok("success")
-                },
-            )
+            .execute_with_timeout_retry("test_operation".to_owned(), OperationType::ApiCall, || async {
+                sleep(Duration::from_millis(20)).await;
+                Ok("success")
+            })
             .await;
 
         assert!(result.is_err());
@@ -562,25 +534,21 @@ mod tests {
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
         let result = detector
-            .execute_with_timeout_retry(
-                "test_retry".to_owned(),
-                OperationType::ApiCall,
-                move || {
-                    let call_count = call_count_clone.clone();
-                    async move {
-                        let count = call_count.fetch_add(1, Ordering::SeqCst) + 1;
-                        if count == 1 {
-                            // First call fails with timeout
-                            sleep(Duration::from_millis(60)).await;
-                            Ok("should not reach here")
-                        } else {
-                            // Second call succeeds
-                            sleep(Duration::from_millis(10)).await;
-                            Ok("success")
-                        }
+            .execute_with_timeout_retry("test_retry".to_owned(), OperationType::ApiCall, move || {
+                let call_count = call_count_clone.clone();
+                async move {
+                    let count = call_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    if count == 1 {
+                        // First call fails with timeout
+                        sleep(Duration::from_millis(60)).await;
+                        Ok("should not reach here")
+                    } else {
+                        // Second call succeeds
+                        sleep(Duration::from_millis(10)).await;
+                        Ok("success")
                     }
-                },
-            )
+                }
+            })
             .await;
 
         assert!(result.is_ok());

@@ -155,8 +155,7 @@ pub fn build_sanitized_env(
         }
 
         if !writable_roots.is_empty() {
-            let roots: Vec<String> =
-                writable_roots.iter().map(|p| p.display().to_string()).collect();
+            let roots: Vec<String> = writable_roots.iter().map(|p| p.display().to_string()).collect();
             sanitized.insert(VTCODE_SANDBOX_WRITABLE_ROOTS.to_string(), roots.join(":"));
         }
     }
@@ -209,9 +208,7 @@ pub fn setup_parent_death_signal() -> std::io::Result<()> {
 /// This variant should be used in pre_exec hooks where the parent PID
 /// is captured before spawn to avoid race conditions.
 #[cfg(target_os = "linux")]
-pub fn setup_parent_death_signal_with_check(
-    expected_parent_pid: nix::unistd::Pid,
-) -> std::io::Result<()> {
+pub fn setup_parent_death_signal_with_check(expected_parent_pid: nix::unistd::Pid) -> std::io::Result<()> {
     use nix::sys::prctl;
     use nix::sys::signal::{Signal, raise};
     use std::io::Error;

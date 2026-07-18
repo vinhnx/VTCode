@@ -247,9 +247,7 @@ impl RequestBatcher {
     }
 
     /// Execute a single request (placeholder)
-    async fn execute_single_request(
-        _request: OptimizedRequest,
-    ) -> Result<OptimizedResponse, LLMError> {
+    async fn execute_single_request(_request: OptimizedRequest) -> Result<OptimizedResponse, LLMError> {
         // Placeholder implementation
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -400,12 +398,7 @@ impl RateLimiter {
 }
 
 impl OptimizedLLMClient {
-    pub fn new(
-        pool_size: usize,
-        cache_size: usize,
-        requests_per_second: f64,
-        burst_capacity: usize,
-    ) -> Self {
+    pub fn new(pool_size: usize, cache_size: usize, requests_per_second: f64, burst_capacity: usize) -> Self {
         Self {
             connection_pool: Arc::new(ConnectionPool::new(pool_size)),
             request_batcher: Arc::new(RequestBatcher::new(Duration::from_millis(100), 10)),
@@ -418,10 +411,7 @@ impl OptimizedLLMClient {
     }
 
     /// Make an optimized LLM request with caching and batching
-    pub async fn chat_optimized(
-        &self,
-        request: OptimizedRequest,
-    ) -> Result<OptimizedResponse, LLMError> {
+    pub async fn chat_optimized(&self, request: OptimizedRequest) -> Result<OptimizedResponse, LLMError> {
         let start_time = Instant::now();
 
         // Generate cache key
@@ -484,8 +474,8 @@ impl OptimizedLLMClient {
 
         // Update average response time using exponential moving average
         let alpha = 0.1;
-        metrics.avg_response_time_ms = alpha * execution_time.as_millis() as f64
-            + (1.0 - alpha) * metrics.avg_response_time_ms;
+        metrics.avg_response_time_ms =
+            alpha * execution_time.as_millis() as f64 + (1.0 - alpha) * metrics.avg_response_time_ms;
 
         Ok(response)
     }
@@ -539,19 +529,11 @@ mod tests {
             temperature: Some(0.2),
             max_tokens: Some(128),
         };
-        let different_temperature =
-            OptimizedRequest { temperature: Some(0.8), ..base_request.clone() };
-        let different_max_tokens =
-            OptimizedRequest { max_tokens: Some(256), ..base_request.clone() };
+        let different_temperature = OptimizedRequest { temperature: Some(0.8), ..base_request.clone() };
+        let different_max_tokens = OptimizedRequest { max_tokens: Some(256), ..base_request.clone() };
 
-        assert_ne!(
-            client.generate_cache_key(&base_request),
-            client.generate_cache_key(&different_temperature)
-        );
-        assert_ne!(
-            client.generate_cache_key(&base_request),
-            client.generate_cache_key(&different_max_tokens)
-        );
+        assert_ne!(client.generate_cache_key(&base_request), client.generate_cache_key(&different_temperature));
+        assert_ne!(client.generate_cache_key(&base_request), client.generate_cache_key(&different_max_tokens));
     }
 
     #[test]
@@ -565,10 +547,7 @@ mod tests {
         };
         let different_request = OptimizedRequest { temperature: Some(0.8), ..base_request.clone() };
 
-        assert_ne!(
-            batcher.generate_batch_key(&base_request),
-            batcher.generate_batch_key(&different_request)
-        );
+        assert_ne!(batcher.generate_batch_key(&base_request), batcher.generate_batch_key(&different_request));
     }
 
     #[tokio::test]

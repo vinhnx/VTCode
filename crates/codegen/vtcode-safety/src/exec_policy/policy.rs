@@ -47,10 +47,7 @@ impl PrefixRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleMatch {
     /// Matched a prefix rule.
-    PrefixRuleMatch {
-        rule: PrefixRule,
-        decision: Decision,
-    },
+    PrefixRuleMatch { rule: PrefixRule, decision: Decision },
 
     /// Matched via heuristics (no explicit rule).
     HeuristicsRuleMatch { decision: Decision },
@@ -95,11 +92,7 @@ impl Policy {
     }
 
     /// Add a prefix rule to the policy.
-    pub fn add_prefix_rule(
-        &mut self,
-        pattern: &[String],
-        decision: Decision,
-    ) -> anyhow::Result<()> {
+    pub fn add_prefix_rule(&mut self, pattern: &[String], decision: Decision) -> anyhow::Result<()> {
         self.prefix_rules.push(PrefixRule::new(pattern.to_vec(), decision));
         Ok(())
     }
@@ -162,11 +155,7 @@ mod tests {
         let rule = PrefixRule::new(vec!["cargo".to_string(), "build".to_string()], Decision::Allow);
 
         assert!(rule.matches(&["cargo".to_string(), "build".to_string()]));
-        assert!(rule.matches(&[
-            "cargo".to_string(),
-            "build".to_string(),
-            "--release".to_string()
-        ]));
+        assert!(rule.matches(&["cargo".to_string(), "build".to_string(), "--release".to_string()]));
         assert!(!rule.matches(&["cargo".to_string(), "test".to_string()]));
         assert!(!rule.matches(&["cargo".to_string()]));
     }

@@ -16,11 +16,7 @@ pub(crate) fn prompt_model(
 ) -> Result<String> {
     renderer.line(
         MessageStyle::Status,
-        &format!(
-            "Enter the default model for {} (Enter to accept {}).",
-            provider.label(),
-            default_model
-        ),
+        &format!("Enter the default model for {} (Enter to accept {}).", provider.label(), default_model),
     )?;
 
     let options = model_options(provider, default_model);
@@ -28,8 +24,7 @@ pub(crate) fn prompt_model(
     match select_model_with_ratatui(&options, default_model) {
         Ok(model) => Ok(model),
         Err(error) => {
-            renderer
-                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_model_text(renderer, provider, default_model, &options)
         }
     }
@@ -83,8 +78,7 @@ pub(crate) fn prompt_lightweight_model(
     match select_lightweight_model_with_ratatui(&options) {
         Ok(selected) => Ok(selected),
         Err(error) => {
-            renderer
-                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_lightweight_model_text(renderer, &options)
         }
     }
@@ -162,9 +156,8 @@ fn select_model_with_ratatui(options: &[String], default_model: &'static str) ->
 
     let default_index = options.iter().position(|model| model == default_model).unwrap_or(0);
 
-    let instructions = format!(
-        "Default: {default_model}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default."
-    );
+    let instructions =
+        format!("Default: {default_model}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.");
     let selected_index = run_selection("Models", &instructions, &entries, default_index)?;
     Ok(options[selected_index].clone())
 }
@@ -201,25 +194,16 @@ fn prompt_model_text(
     match trimmed.parse::<ModelId>() {
         Ok(id) => Ok(id.as_str().into_owned()),
         Err(_) => {
-            renderer.line(
-                MessageStyle::Info,
-                "Unrecognized model identifier. It will be saved as entered.",
-            )?;
+            renderer.line(MessageStyle::Info, "Unrecognized model identifier. It will be saved as entered.")?;
             Ok(trimmed.to_owned())
         }
     }
 }
 
-fn prompt_lightweight_model_text(
-    renderer: &mut AnsiRenderer,
-    options: &[LightweightModelOption],
-) -> Result<String> {
+fn prompt_lightweight_model_text(renderer: &mut AnsiRenderer, options: &[LightweightModelOption]) -> Result<String> {
     renderer.line(MessageStyle::Info, "Lightweight model options:")?;
     for (index, option) in options.iter().enumerate() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  {:>2}. {} — {}", index + 1, option.label, option.subtitle),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("  {:>2}. {} — {}", index + 1, option.label, option.subtitle))?;
     }
 
     let input = prompt_with_placeholder("Lightweight model [automatic]")?;
@@ -257,9 +241,7 @@ fn explicit_lightweight_subtitle(provider: Provider, model: &str, auto_model: &s
     }
 
     let provider_label = provider.label();
-    format!(
-        "Explicit {provider_label} lightweight route for faster, cheaper memory and suggestion tasks."
-    )
+    format!("Explicit {provider_label} lightweight route for faster, cheaper memory and suggestion tasks.")
 }
 
 #[cfg(test)]

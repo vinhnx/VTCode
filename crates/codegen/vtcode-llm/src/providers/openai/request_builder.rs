@@ -6,9 +6,7 @@ use crate::error_display;
 use crate::provider;
 use crate::providers::common::serialize_message_content_openai_for_model;
 use crate::rig_adapter::RigProviderCapabilities;
-use crate::system_prompt::{
-    default_system_prompt, openai_gpt55_contract_addendum, openai_gpt56_contract_addendum,
-};
+use crate::system_prompt::{default_system_prompt, openai_gpt55_contract_addendum, openai_gpt56_contract_addendum};
 use hashbrown::HashSet;
 use rig::providers::openai::responses_api::{
     AdditionalParameters as RigResponsesAdditionalParameters, Include as RigResponsesInclude,
@@ -23,11 +21,7 @@ use super::responses_api::build_standard_responses_payload;
 use super::tool_serialization;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
 
-const NONE_REASONING_EFFORT_MODELS: &[&str] = &[
-    openai_models::GPT,
-    openai_models::GPT_5_2,
-    openai_models::GPT_5_4,
-];
+const NONE_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT, openai_models::GPT_5_2, openai_models::GPT_5_4];
 const MEDIUM_REASONING_EFFORT_MODELS: &[&str] = &[openai_models::GPT_5, openai_models::GPT_5_4_PRO];
 const HIGH_REASONING_EFFORT_MODELS: &[&str] = &[
     openai_models::GPT_5_6_SOL,
@@ -121,8 +115,7 @@ fn strip_non_native_assistant_phase(input: &mut [Value]) {
 }
 
 fn is_gpt5_codex_model(model: &str) -> bool {
-    model == openai_models::GPT_5_CODEX
-        || (model.starts_with(openai_models::GPT_5) && model.contains("codex"))
+    model == openai_models::GPT_5_CODEX || (model.starts_with(openai_models::GPT_5) && model.contains("codex"))
 }
 
 fn is_gpt55_model(model: &str) -> bool {
@@ -185,9 +178,7 @@ fn rig_include_for_field(field: &str) -> Option<RigResponsesInclude> {
     match field {
         "file_search_call.results" => Some(RigResponsesInclude::FileSearchCallResults),
         "message.input_image.image_url" => Some(RigResponsesInclude::MessageInputImageImageUrl),
-        "computer_call.output.image_url" => {
-            Some(RigResponsesInclude::ComputerCallOutputOutputImageUrl)
-        }
+        "computer_call.output.image_url" => Some(RigResponsesInclude::ComputerCallOutputOutputImageUrl),
         "reasoning.encrypted_content" => Some(RigResponsesInclude::ReasoningEncryptedContent),
         "code_interpreter_call.outputs" => Some(RigResponsesInclude::CodeInterpreterCallOutputs),
         _ => None,
@@ -200,10 +191,7 @@ fn responses_include_value(field: &str) -> Value {
         .unwrap_or_else(|| json!(field))
 }
 
-fn merge_typed_responses_parameters(
-    openai_request: &mut Value,
-    params: RigResponsesAdditionalParameters,
-) {
+fn merge_typed_responses_parameters(openai_request: &mut Value, params: RigResponsesAdditionalParameters) {
     let Ok(Value::Object(fields)) = serde_json::to_value(params) else {
         return;
     };
@@ -300,10 +288,7 @@ pub(crate) fn build_chat_request(
                         "OpenAI",
                         "Chat Completions does not support file_url inputs; use Responses API or file_id/file_data",
                     );
-                    return Err(provider::LLMError::InvalidRequest {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(provider::LLMError::InvalidRequest { message: formatted_error, metadata: None });
                 }
             }
         }
@@ -371,10 +356,7 @@ pub(crate) fn build_chat_request(
 
     if messages.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided");
-        return Err(provider::LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
+        return Err(provider::LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
     let mut openai_request = json!({
@@ -404,8 +386,7 @@ pub(crate) fn build_chat_request(
     }
 
     if ModelProvider::OpenAI.supports_service_tier(&request.model)
-        && let Some(service_tier) =
-            trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
+        && let Some(service_tier) = trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
     {
         openai_request["service_tier"] = json!(service_tier);
     }
@@ -470,10 +451,8 @@ fn build_responses_item_history(
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<OpenAIResponsesPayload, provider::LLMError> {
     let preserve_structured_history = ctx.include_structured_history_in_input
-        || (ctx.preserve_structured_history_on_replay
-            && is_openai_gpt_responses_model(&request.model));
-    let mut responses_payload =
-        build_standard_responses_payload(request, preserve_structured_history)?;
+        || (ctx.preserve_structured_history_on_replay && is_openai_gpt_responses_model(&request.model));
+    let mut responses_payload = build_standard_responses_payload(request, preserve_structured_history)?;
     if responses_payload.instructions.is_none()
         && preserve_structured_history
         && let Some(instructions) = default_replay_instructions(&request.model)
@@ -487,8 +466,7 @@ fn build_responses_item_history(
         .map(|instructions| augment_openai_instructions(&request.model, instructions));
 
     if !(ctx.include_assistant_phase
-        || ctx.preserve_assistant_phase_on_replay
-            && supports_assistant_phase_replay(&request.model))
+        || ctx.preserve_assistant_phase_on_replay && supports_assistant_phase_replay(&request.model))
     {
         strip_non_native_assistant_phase(&mut responses_payload.input);
     }
@@ -518,12 +496,8 @@ fn build_responses_request_from_history(
     let input = responses_payload.input;
     let instructions = responses_payload.instructions;
     if input.is_empty() {
-        let formatted_error =
-            error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
-        return Err(provider::LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
+        let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
+        return Err(provider::LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
     let mut openai_request = json!({
@@ -559,8 +533,7 @@ fn build_responses_request_from_history(
     let mut typed_parameters = RigResponsesAdditionalParameters::default();
 
     if ModelProvider::OpenAI.supports_service_tier(&request.model)
-        && let Some(service_tier) =
-            trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
+        && let Some(service_tier) = trimmed_non_empty(request.service_tier.as_deref().or(ctx.default_service_tier))
     {
         openai_request["service_tier"] = json!(service_tier);
     }
@@ -585,9 +558,7 @@ fn build_responses_request_from_history(
     merge_typed_responses_parameters(&mut openai_request, typed_parameters);
 
     let mut include_values = Vec::new();
-    if let Some(include_fields) =
-        request.responses_include.as_deref().or(ctx.default_responses_include)
-    {
+    if let Some(include_fields) = request.responses_include.as_deref().or(ctx.default_responses_include) {
         for field in include_fields {
             push_unique_include(&mut include_values, field);
         }
@@ -596,9 +567,8 @@ fn build_responses_request_from_history(
         push_unique_include(&mut include_values, "reasoning.encrypted_content");
     }
     if !include_values.is_empty() {
-        openai_request["include"] = Value::Array(
-            include_values.iter().map(|field| responses_include_value(field)).collect(),
-        );
+        openai_request["include"] =
+            Value::Array(include_values.iter().map(|field| responses_include_value(field)).collect());
     }
 
     if let Some(context_management) = &request.context_management {
@@ -639,8 +609,7 @@ fn build_responses_request_from_history(
 
     if ctx.supports_tools
         && let Some(tools) = &request.tools
-        && let Some(serialized) =
-            tool_serialization::serialize_tools_for_responses(tools, ctx.hosted_shell)
+        && let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools, ctx.hosted_shell)
     {
         openai_request["tools"] = serialized;
 
@@ -684,8 +653,7 @@ fn build_responses_request_from_history(
     if ctx.supports_reasoning_effort {
         if let Some(effort) = request.reasoning_effort {
             if let Some(payload) =
-                RigProviderCapabilities::new(ModelProvider::OpenAI, &request.model)
-                    .reasoning_parameters(effort)
+                RigProviderCapabilities::new(ModelProvider::OpenAI, &request.model).reasoning_parameters(effort)
             {
                 openai_request["reasoning"] = payload;
             } else {
@@ -743,9 +711,7 @@ fn build_responses_request_from_history(
         }
     }
 
-    if !has_format_options
-        && let Some(default_verbosity) = default_text_verbosity_for_model(&request.model)
-    {
+    if !has_format_options && let Some(default_verbosity) = default_text_verbosity_for_model(&request.model) {
         text_format["verbosity"] = json!(default_verbosity.as_str());
         has_format_options = true;
     }
@@ -771,9 +737,7 @@ mod tests {
     use serde_json::{Value, json};
     use vtcode_config::constants::models;
 
-    fn base_context<'a>(
-        default_responses_include: Option<&'a [String]>,
-    ) -> ResponsesRequestContext<'a> {
+    fn base_context<'a>(default_responses_include: Option<&'a [String]>) -> ResponsesRequestContext<'a> {
         ResponsesRequestContext {
             supports_tools: false,
             supports_allowed_tools: false,
@@ -820,8 +784,7 @@ mod tests {
         let mut ctx = base_context(None);
         ctx.force_response_store_false = true;
 
-        let payload =
-            build_responses_request(&request, &ctx).expect("responses request should build");
+        let payload = build_responses_request(&request, &ctx).expect("responses request should build");
 
         assert!(payload.get("previous_response_id").is_none());
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
@@ -833,15 +796,11 @@ mod tests {
         let mut ctx = base_context(Some(default_include.as_slice()));
         ctx.include_encrypted_reasoning = true;
 
-        let payload =
-            build_responses_request(&request(), &ctx).expect("responses request should build");
+        let payload = build_responses_request(&request(), &ctx).expect("responses request should build");
 
         assert_eq!(
             payload.get("include").and_then(Value::as_array),
-            Some(&vec![
-                json!("output_text.annotations"),
-                json!("reasoning.encrypted_content"),
-            ])
+            Some(&vec![json!("output_text.annotations"), json!("reasoning.encrypted_content"),])
         );
     }
 
@@ -852,13 +811,9 @@ mod tests {
         ctx.include_prompt_cache_retention = true;
         ctx.prompt_cache_retention = Some("24h");
 
-        let payload =
-            build_responses_request(&request(), &ctx).expect("responses request should build");
+        let payload = build_responses_request(&request(), &ctx).expect("responses request should build");
 
-        assert_eq!(
-            payload.get("prompt_cache_key").and_then(Value::as_str),
-            Some("vtcode:openai:session-123")
-        );
+        assert_eq!(payload.get("prompt_cache_key").and_then(Value::as_str), Some("vtcode:openai:session-123"));
         assert_eq!(payload.get("prompt_cache_retention").and_then(Value::as_str), Some("24h"));
     }
 
@@ -880,8 +835,7 @@ mod tests {
         ctx.force_response_store_false = true;
         ctx.include_encrypted_reasoning = true;
 
-        let payload = build_responses_request(&request, &ctx)
-            .expect("chatgpt responses request should build");
+        let payload = build_responses_request(&request, &ctx).expect("chatgpt responses request should build");
 
         assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(false));
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
@@ -892,10 +846,7 @@ mod tests {
         assert!(payload.get("previous_response_id").is_none());
         assert_eq!(
             payload.get("include").and_then(Value::as_array),
-            Some(&vec![
-                json!("output_text.annotations"),
-                json!("reasoning.encrypted_content"),
-            ])
+            Some(&vec![json!("output_text.annotations"), json!("reasoning.encrypted_content"),])
         );
     }
 
@@ -905,8 +856,8 @@ mod tests {
             let mut request = request();
             request.stream = requested_stream;
 
-            let payload = build_responses_request(&request, &base_context(None))
-                .expect("chatgpt responses request should build");
+            let payload =
+                build_responses_request(&request, &base_context(None)).expect("chatgpt responses request should build");
 
             assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(requested_stream));
         }

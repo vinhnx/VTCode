@@ -6,14 +6,11 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionS
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
-    ArchivedSessionIntent, ThreadBootstrap, loaded_skills_from_session_listing,
-    messages_from_session_listing,
+    ArchivedSessionIntent, ThreadBootstrap, loaded_skills_from_session_listing, messages_from_session_listing,
 };
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::SessionArchiveMetadata;
-use vtcode_core::utils::session_archive::{
-    SessionContinuationMetadata, SessionListing, SessionSnapshot,
-};
+use vtcode_core::utils::session_archive::{SessionContinuationMetadata, SessionListing, SessionSnapshot};
 use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 
 #[derive(Clone, Debug)]
@@ -119,9 +116,7 @@ pub(crate) async fn load_resume_session(
     identifier: &str,
     intent: ArchivedSessionIntent,
 ) -> Result<Option<SessionContinuation>> {
-    let Some(listing) =
-        vtcode_core::utils::session_archive::find_session_by_identifier(identifier).await?
-    else {
+    let Some(listing) = vtcode_core::utils::session_archive::find_session_by_identifier(identifier).await? else {
         return Ok(None);
     };
     Ok(Some(SessionContinuation::from_listing(&listing, intent)))
@@ -204,10 +199,7 @@ fn apply_resume_runtime_overrides(runtime_cfg: &mut CoreAgentConfig, resume: &Se
     apply_persisted_resume_metadata(runtime_cfg, Some(&resume.snapshot().metadata));
 }
 
-pub(crate) fn apply_runtime_overrides(
-    vt_cfg: Option<&mut VTCodeConfig>,
-    runtime_cfg: &CoreAgentConfig,
-) {
+pub(crate) fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {
     if let Some(cfg) = vt_cfg {
         cfg.agent.provider = runtime_cfg.provider.clone();
         cfg.agent.reasoning_effort = runtime_cfg.reasoning_effort;

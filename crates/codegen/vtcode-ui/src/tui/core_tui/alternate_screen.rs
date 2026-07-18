@@ -6,10 +6,7 @@ use ratatui::crossterm::{
     cursor::MoveToColumn,
     event::{DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange},
     execute,
-    terminal::{
-        self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-        enable_raw_mode,
-    },
+    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use vtcode_commons::MultiErrors;
 
@@ -79,8 +76,7 @@ impl AlternateScreenSession {
         };
 
         // Enter alternate screen first
-        execute!(stdout, EnterAlternateScreen)
-            .context("failed to enter alternate screen for terminal app")?;
+        execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen for terminal app")?;
 
         let mut session = Self { original_state, entered: true };
 

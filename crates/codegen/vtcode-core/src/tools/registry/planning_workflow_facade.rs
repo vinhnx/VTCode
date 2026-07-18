@@ -69,10 +69,7 @@ mod tests {
         registry.enable_planning();
         let after_second = registry.tool_catalog_state().current_epoch();
 
-        assert_eq!(
-            after_first, after_second,
-            "enabling an already-active planning workflow must not bump the epoch"
-        );
+        assert_eq!(after_first, after_second, "enabling an already-active planning workflow must not bump the epoch");
         assert!(registry.is_planning_active());
     }
 

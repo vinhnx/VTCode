@@ -131,14 +131,10 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
 
     let mut masked = tool.clone();
     if let Some(func) = masked.function.as_mut()
-        && let Some(action_prop) =
-            func.parameters.get_mut("properties").and_then(|p| p.get_mut("action"))
+        && let Some(action_prop) = func.parameters.get_mut("properties").and_then(|p| p.get_mut("action"))
         && let Some(obj) = action_prop.as_object_mut()
     {
-        obj.insert(
-            "enum".to_string(),
-            Value::Array(allowed.iter().map(|a| Value::String((*a).to_string())).collect()),
-        );
+        obj.insert("enum".to_string(), Value::Array(allowed.iter().map(|a| Value::String((*a).to_string())).collect()));
     }
     masked
 }
@@ -146,22 +142,17 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
 pub use crate::core::agent::hash_utils::{
     hash_tool_definitions, hash_value, low_signal_attempt_key, stable_system_prefix_hash,
 };
-pub use crate::core::agent::request_plan::{
-    HarnessRequestPlan, HarnessRequestPlanInput, build_harness_request_plan,
-};
+pub use crate::core::agent::request_plan::{HarnessRequestPlan, HarnessRequestPlanInput, build_harness_request_plan};
 pub use crate::core::agent::result_reducers::reduce_tool_result;
 pub use crate::core::agent::tool_batching::{
-    FallbackRecommendation, FallbackStep, PreparedToolBatch, PreparedToolBatchKind,
-    PreparedToolCall, is_parallel_safe_tool_batch,
+    FallbackRecommendation, FallbackStep, PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
+    is_parallel_safe_tool_batch,
 };
 pub use crate::core::agent::tool_catalog::SessionToolCatalogSnapshot;
 
 pub fn looks_like_grep_style_command(command: &str) -> bool {
     let lower = command.trim().to_ascii_lowercase();
-    lower.starts_with("grep ")
-        || lower.starts_with("rg ")
-        || lower.contains("/grep ")
-        || lower.contains("/rg ")
+    lower.starts_with("grep ") || lower.starts_with("rg ") || lower.contains("/grep ") || lower.contains("/rg ")
 }
 
 pub fn command_is_safe(command: &str) -> bool {
@@ -203,10 +194,7 @@ mod tests {
 
         assert!(plan.has_tools);
         assert!(plan.tool_catalog_hash.is_some());
-        assert_eq!(
-            plan.stable_prefix_hash,
-            stable_system_prefix_hash("base\n[Runtime Context]\n- turns: 1")
-        );
+        assert_eq!(plan.stable_prefix_hash, stable_system_prefix_hash("base\n[Runtime Context]\n- turns: 1"));
     }
 
     #[test]
@@ -307,8 +295,7 @@ mod tests {
             function_tool(tools::REQUEST_USER_INPUT),
         ]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         let names: Vec<&str> = filtered.iter().map(|tool| tool.function_name()).collect();
 
         assert!(names.contains(&tools::CODE_SEARCH));
@@ -324,8 +311,7 @@ mod tests {
             function_tool(tools::WRITE_FILE),
         ]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         let names: Vec<&str> = filtered.iter().map(|tool| tool.function_name()).collect();
 
         assert!(names.contains(&tools::CODE_SEARCH));
@@ -341,10 +327,7 @@ mod tests {
             "{base}\n\n## Active Tools\n- Capabilities: read-only.\n[Runtime Tool Catalog]\n- version: 1\n- epoch: 2\n- available_tools: 3\n- request_user_input_enabled: false"
         );
 
-        assert_eq!(
-            stable_system_prefix_hash(base),
-            stable_system_prefix_hash(&with_runtime_sections)
-        );
+        assert_eq!(stable_system_prefix_hash(base), stable_system_prefix_hash(&with_runtime_sections));
     }
 
     #[test]
@@ -407,8 +390,7 @@ mod tests {
             &["read", "write", "edit", "patch", "delete", "move", "copy"],
         )]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 1);
 
         let action_enum = filtered[0]
@@ -430,13 +412,10 @@ mod tests {
     fn filter_tool_definitions_masks_unified_exec_actions_in_planning() {
         let tools = Arc::new(vec![tool_with_action_enum(
             tools::UNIFIED_EXEC,
-            &[
-                "run", "write", "poll", "continue", "inspect", "list", "close", "code",
-            ],
+            &["run", "write", "poll", "continue", "inspect", "list", "close", "code"],
         )]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 1);
 
         let action_enum = filtered[0]
@@ -461,8 +440,7 @@ mod tests {
             &["read", "write", "edit", "patch", "delete", "move", "copy"],
         )]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), false, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), false, false).expect("filtered tools");
         assert_eq!(filtered.len(), 1);
 
         let action_enum = filtered[0]
@@ -477,18 +455,14 @@ mod tests {
             .expect("action enum should exist");
 
         let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
-        assert_eq!(
-            action_strings,
-            vec!["read", "write", "edit", "patch", "delete", "move", "copy"]
-        );
+        assert_eq!(action_strings, vec!["read", "write", "edit", "patch", "delete", "move", "copy"]);
     }
 
     #[test]
     fn filter_tool_definitions_skips_masking_for_non_multi_action_tools() {
         let tools = Arc::new(vec![function_tool(tools::CODE_SEARCH)]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 1);
         // No action property to mask — just verify the tool is still present.
         assert_eq!(filtered[0].function_name(), tools::CODE_SEARCH);
@@ -503,8 +477,7 @@ mod tests {
             tool_with_action_enum(tools::UNIFIED_FILE, &["read", "write", "edit"]),
         ]);
 
-        let filtered =
-            filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
+        let filtered = filter_tool_definitions_for_mode(Some(tools), true, false).expect("filtered tools");
         assert_eq!(filtered.len(), 2);
 
         let unified_file = filtered

@@ -104,10 +104,7 @@ pub fn build_turn_metadata_value(cwd: &Path) -> Result<Value> {
 /// Build turn metadata with a timeout to avoid blocking turn execution.
 ///
 /// Returns `Ok(None)` when metadata is unavailable or times out.
-pub async fn build_turn_metadata_value_with_timeout(
-    cwd: &Path,
-    timeout: Duration,
-) -> Result<Option<Value>> {
+pub async fn build_turn_metadata_value_with_timeout(cwd: &Path, timeout: Duration) -> Result<Option<Value>> {
     if !git_info::is_git_repo(cwd) {
         return Ok(None);
     }
@@ -117,11 +114,7 @@ pub async fn build_turn_metadata_value_with_timeout(
     match tokio::time::timeout(timeout, handle).await {
         Ok(join_result) => {
             let value = join_result.context("Turn metadata task failed")??;
-            if value.is_null() {
-                Ok(None)
-            } else {
-                Ok(Some(value))
-            }
+            if value.is_null() { Ok(None) } else { Ok(Some(value)) }
         }
         Err(_) => {
             tracing::debug!("Turn metadata collection timed out");

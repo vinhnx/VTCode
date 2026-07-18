@@ -17,8 +17,7 @@ pub(super) async fn handle_anthropic_api_command(
     )
     .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {e}"))?;
 
-    let state =
-        AnthropicApiServerState::new(std::sync::Arc::from(provider), core_cfg.model.clone());
+    let state = AnthropicApiServerState::new(std::sync::Arc::from(provider), core_cfg.model.clone());
     let app = create_router(state);
 
     let addr = format!("{host}:{port}")
@@ -47,7 +46,5 @@ pub(super) async fn handle_anthropic_api_command(
     _port: u16,
     _host: String,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Anthropic API server is not enabled. Recompile with --features anthropic-api"
-    ))
+    Err(anyhow::anyhow!("Anthropic API server is not enabled. Recompile with --features anthropic-api"))
 }

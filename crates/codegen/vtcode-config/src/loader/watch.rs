@@ -223,13 +223,13 @@ fn is_relevant_config_event(event: &notify::Event) -> bool {
     let relevant_files = ["vtcode.toml", "theme.toml"];
 
     match &event.kind {
-        notify::EventKind::Create(_)
-        | notify::EventKind::Modify(_)
-        | notify::EventKind::Remove(_) => event.paths.iter().any(|path| {
-            path.file_name()
-                .and_then(|file_name| file_name.to_str())
-                .is_some_and(|file_name| relevant_files.contains(&file_name))
-        }),
+        notify::EventKind::Create(_) | notify::EventKind::Modify(_) | notify::EventKind::Remove(_) => {
+            event.paths.iter().any(|path| {
+                path.file_name()
+                    .and_then(|file_name| file_name.to_str())
+                    .is_some_and(|file_name| relevant_files.contains(&file_name))
+            })
+        }
         _ => false,
     }
 }

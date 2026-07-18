@@ -84,13 +84,7 @@ pub fn truncate_middle(text: &str, max_len: usize) -> String {
     }
     let sanitized: String = text
         .chars()
-        .map(|c| {
-            if matches!(c, '\n' | '\r' | '\t') {
-                ' '
-            } else {
-                c
-            }
-        })
+        .map(|c| if matches!(c, '\n' | '\r' | '\t') { ' ' } else { c })
         .collect();
     let char_count = sanitized.chars().count();
     if char_count <= max_len {
@@ -145,8 +139,7 @@ pub fn truncate_path_middle(path: &str, max_len: usize) -> String {
     // Find the first '/' in the tail portion (from the end)
     let tail_chars: Vec<char> = path.chars().rev().take(tail_budget).collect();
     let tail_str: String = tail_chars.iter().rev().collect();
-    let tail_break_from_end =
-        tail_str.find('/').map(|pos| tail_str.len() - pos).unwrap_or(tail_budget);
+    let tail_break_from_end = tail_str.find('/').map(|pos| tail_str.len() - pos).unwrap_or(tail_budget);
 
     let head: String = path.chars().take(head_break).collect();
     let tail: String = path
@@ -444,10 +437,7 @@ mod tests {
     fn wrap_text_words_basic_and_continuation_width() {
         assert_eq!(wrap_text_words("the quick brown fox", 9, 9), vec!["the quick", "brown fox"]);
         // First line wider than continuation lines.
-        assert_eq!(
-            wrap_text_words("alpha beta gamma delta", 11, 5),
-            vec!["alpha beta", "gamma", "delta"]
-        );
+        assert_eq!(wrap_text_words("alpha beta gamma delta", 11, 5), vec!["alpha beta", "gamma", "delta"]);
     }
 
     #[test]

@@ -59,18 +59,12 @@ pub fn find_command(name: &str) -> Option<&'static SlashCommandInfo> {
 }
 
 /// Return fuzzy-matched slash command suggestions for the given terminal.
-pub fn suggestions_for_terminal(
-    prefix: &str,
-    terminal: TerminalType,
-) -> Vec<&'static SlashCommandInfo> {
+pub fn suggestions_for_terminal(prefix: &str, terminal: TerminalType) -> Vec<&'static SlashCommandInfo> {
     let visible = visible_commands_for_terminal(terminal);
     suggestions_for_commands(prefix, &visible)
 }
 
-fn suggestions_for_commands(
-    prefix: &str,
-    commands: &[&'static SlashCommandInfo],
-) -> Vec<&'static SlashCommandInfo> {
+fn suggestions_for_commands(prefix: &str, commands: &[&'static SlashCommandInfo]) -> Vec<&'static SlashCommandInfo> {
     let trimmed = prefix.trim();
     if trimmed.is_empty() {
         return commands.to_vec();
@@ -93,9 +87,8 @@ fn suggestions_for_commands(
         .collect();
 
     if !substring_matches.is_empty() {
-        substring_matches.sort_by(|(a, pos_a), (b, pos_b)| {
-            (*pos_a, a.name.len(), a.name).cmp(&(*pos_b, b.name.len(), b.name))
-        });
+        substring_matches
+            .sort_by(|(a, pos_a), (b, pos_b)| (*pos_a, a.name.len(), a.name).cmp(&(*pos_b, b.name.len(), b.name)));
         return substring_matches.into_iter().map(|(info, _)| info).collect();
     }
 
@@ -154,12 +147,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(
-            names,
-            vec![
-                "checkup", "clear", "command", "compact", "config", "continue", "copy"
-            ]
-        );
+        assert_eq!(names, vec!["checkup", "clear", "command", "compact", "config", "continue", "copy"]);
     }
 
     #[test]

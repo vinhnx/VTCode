@@ -89,9 +89,7 @@ impl From<A2aErrorCode> for i32 {
             A2aErrorCode::UnsupportedOperation => UNSUPPORTED_OPERATION_ERROR,
             A2aErrorCode::ContentTypeNotSupported => CONTENT_TYPE_NOT_SUPPORTED_ERROR,
             A2aErrorCode::InvalidAgentResponse => INVALID_AGENT_RESPONSE_ERROR,
-            A2aErrorCode::AuthenticatedExtendedCardNotConfigured => {
-                AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR
-            }
+            A2aErrorCode::AuthenticatedExtendedCardNotConfigured => AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR,
             A2aErrorCode::Custom(code) => code,
         }
     }
@@ -111,9 +109,7 @@ impl From<i32> for A2aErrorCode {
             UNSUPPORTED_OPERATION_ERROR => A2aErrorCode::UnsupportedOperation,
             CONTENT_TYPE_NOT_SUPPORTED_ERROR => A2aErrorCode::ContentTypeNotSupported,
             INVALID_AGENT_RESPONSE_ERROR => A2aErrorCode::InvalidAgentResponse,
-            AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR => {
-                A2aErrorCode::AuthenticatedExtendedCardNotConfigured
-            }
+            AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR => A2aErrorCode::AuthenticatedExtendedCardNotConfigured,
             other => A2aErrorCode::Custom(other),
         }
     }

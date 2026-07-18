@@ -113,9 +113,8 @@ impl UpdateConfig {
 
         // Ensure directory exists
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create config directory: {}", parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
         }
 
         let content = toml::to_string_pretty(self).context("Failed to serialize update config")?;

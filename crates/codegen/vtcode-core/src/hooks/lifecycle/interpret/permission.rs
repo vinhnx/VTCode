@@ -2,14 +2,13 @@ use serde_json::Value;
 
 use crate::config::HookCommandConfig;
 use crate::hooks::lifecycle::types::{
-    HookMessage, PermissionDecisionBehavior, PermissionDecisionScope,
-    PermissionRequestHookDecision, PermissionRequestHookOutcome, PermissionUpdateDestination,
-    PermissionUpdateKind, PermissionUpdateRequest,
+    HookMessage, PermissionDecisionBehavior, PermissionDecisionScope, PermissionRequestHookDecision,
+    PermissionRequestHookOutcome, PermissionUpdateDestination, PermissionUpdateKind, PermissionUpdateRequest,
 };
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
-    handle_timeout, looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
+    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_permission_request(
@@ -30,10 +29,9 @@ pub(crate) fn interpret_permission_request(
     }
 
     if let Some(stderr) = trimmed_non_empty(&result.stderr) {
-        outcome.messages.push(HookMessage::warning(format!(
-            "PermissionRequest hook `{}` stderr: {}",
-            command.command, stderr
-        )));
+        outcome
+            .messages
+            .push(HookMessage::warning(format!("PermissionRequest hook `{}` stderr: {}", command.command, stderr)));
     }
 
     let Some(json) = parse_json_output(&result.stdout) else {
@@ -64,9 +62,7 @@ pub(crate) fn interpret_permission_request(
         .and_then(|decision| decision.get("behavior"))
         .and_then(Value::as_str)
     {
-        Some(value) if value.eq_ignore_ascii_case("allow") => {
-            Some(PermissionDecisionBehavior::Allow)
-        }
+        Some(value) if value.eq_ignore_ascii_case("allow") => Some(PermissionDecisionBehavior::Allow),
         Some(value) if value.eq_ignore_ascii_case("deny") => Some(PermissionDecisionBehavior::Deny),
         _ => None,
     };

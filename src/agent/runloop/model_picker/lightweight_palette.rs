@@ -4,16 +4,14 @@ use vtcode_config::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::{
-    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
-    main_model_route, resolve_lightweight_route,
+    LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices, main_model_route,
+    resolve_lightweight_route,
 };
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use super::DynamicModelRegistry;
 use super::options::{MODEL_OPTIONS, option_indexes_for_provider};
-use super::rendering::{
-    dynamic_model_subtitle, model_search_value, static_model_search_terms, static_model_subtitle,
-};
+use super::rendering::{dynamic_model_subtitle, model_search_value, static_model_search_terms, static_model_subtitle};
 
 #[derive(Clone)]
 pub(crate) struct LightweightModelPaletteView {
@@ -35,12 +33,8 @@ pub(crate) async fn prepare_lightweight_model_palette_view(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> LightweightModelPaletteView {
-    let dynamic_models = DynamicModelRegistry::load(
-        MODEL_OPTIONS.as_slice(),
-        Some(config.workspace.as_path()),
-        vt_cfg,
-    )
-    .await;
+    let dynamic_models =
+        DynamicModelRegistry::load(MODEL_OPTIONS.as_slice(), Some(config.workspace.as_path()), vt_cfg).await;
     build_lightweight_model_palette_view(action_prefix, config, vt_cfg, &dynamic_models)
 }
 
@@ -52,8 +46,7 @@ pub(crate) fn build_lightweight_model_palette_view(
 ) -> LightweightModelPaletteView {
     let current_setting = configured_lightweight_setting(config, vt_cfg);
     let configured_label = current_setting.label();
-    let resolution =
-        resolve_lightweight_route(config, vt_cfg, LightweightFeature::PromptSuggestions, None);
+    let resolution = resolve_lightweight_route(config, vt_cfg, LightweightFeature::PromptSuggestions, None);
     let effective_route = match resolution.source {
         LightweightRouteSource::MainModel => config.model.clone(),
         _ => match resolution.fallback_to_main_model() {
@@ -80,13 +73,7 @@ pub(crate) fn build_lightweight_model_palette_view(
             &auto_model,
             dynamic_models,
         ),
-        None => custom_provider_items(
-            action_prefix,
-            &current_setting,
-            &provider_name,
-            &main_model,
-            &auto_model,
-        ),
+        None => custom_provider_items(action_prefix, &current_setting, &provider_name, &main_model, &auto_model),
     };
 
     let selected = Some(InlineListSelection::ConfigAction(match &current_setting {
@@ -130,15 +117,13 @@ fn provider_scoped_items(
     auto_model: &str,
     dynamic_models: &DynamicModelRegistry,
 ) -> Vec<InlineListItem> {
-    let mut items =
-        base_items(action_prefix, current_setting, current_provider, main_model, auto_model);
+    let mut items = base_items(action_prefix, current_setting, current_provider, main_model, auto_model);
 
     for option_index in option_indexes_for_provider(provider) {
         let Some(option) = MODEL_OPTIONS.get(*option_index) else {
             continue;
         };
-        if option.id.eq_ignore_ascii_case(main_model) || option.id.eq_ignore_ascii_case(auto_model)
-        {
+        if option.id.eq_ignore_ascii_case(main_model) || option.id.eq_ignore_ascii_case(auto_model) {
             continue;
         }
         items.push(InlineListItem {
@@ -146,10 +131,7 @@ fn provider_scoped_items(
             subtitle: Some(static_model_subtitle(option, current_provider, main_model)),
             badge: Some(model_badge(current_setting, &option.id, provider.label())),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{action_prefix}{}",
-                &option.id
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}{}", &option.id))),
             search_value: Some(model_search_value(
                 provider,
                 &option.display,
@@ -164,9 +146,7 @@ fn provider_scoped_items(
         let Some(detail) = dynamic_models.detail(*entry_index) else {
             continue;
         };
-        if detail.model_id.eq_ignore_ascii_case(main_model)
-            || detail.model_id.eq_ignore_ascii_case(auto_model)
-        {
+        if detail.model_id.eq_ignore_ascii_case(main_model) || detail.model_id.eq_ignore_ascii_case(auto_model) {
             continue;
         }
         let mut extra_terms = Vec::new();
@@ -187,10 +167,7 @@ fn provider_scoped_items(
             )),
             badge: Some(model_badge(current_setting, &detail.model_id, provider.label())),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{action_prefix}{}",
-                detail.model_id
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}{}", detail.model_id))),
             search_value: Some(model_search_value(
                 provider,
                 &detail.model_display,
@@ -211,8 +188,7 @@ fn custom_provider_items(
     main_model: &str,
     auto_model: &str,
 ) -> Vec<InlineListItem> {
-    let mut items =
-        base_items(action_prefix, current_setting, current_provider, main_model, auto_model);
+    let mut items = base_items(action_prefix, current_setting, current_provider, main_model, auto_model);
 
     for model in lightweight_model_choices(current_provider, main_model) {
         if model.eq_ignore_ascii_case(main_model) || model.eq_ignore_ascii_case(auto_model) {
@@ -241,9 +217,7 @@ fn base_items(
     vec![
         InlineListItem {
             title: "Automatic (recommended)".to_string(),
-            subtitle: Some(format!(
-                "Use {auto_model} for lower-cost side tasks and fall back to {main_model}."
-            )),
+            subtitle: Some(format!("Use {auto_model} for lower-cost side tasks and fall back to {main_model}.")),
             badge: Some(if matches!(current_setting, ConfiguredLightweightSetting::Automatic) {
                 "Current".to_string()
             } else {
@@ -251,15 +225,11 @@ fn base_items(
             }),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}auto"))),
-            search_value: Some(format!(
-                "{current_provider} {auto_model} automatic lightweight model recommended"
-            )),
+            search_value: Some(format!("{current_provider} {auto_model} automatic lightweight model recommended")),
         },
         InlineListItem {
             title: "Use main model".to_string(),
-            subtitle: Some(format!(
-                "Keep lightweight work on {main_model} for accuracy-first behavior."
-            )),
+            subtitle: Some(format!("Keep lightweight work on {main_model} for accuracy-first behavior.")),
             badge: Some(if matches!(current_setting, ConfiguredLightweightSetting::Main) {
                 "Current".to_string()
             } else {
@@ -267,22 +237,14 @@ fn base_items(
             }),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}main"))),
-            search_value: Some(format!(
-                "{current_provider} {main_model} main accuracy lightweight model"
-            )),
+            search_value: Some(format!("{current_provider} {main_model} main accuracy lightweight model")),
         },
     ]
 }
 
-fn model_badge(
-    current_setting: &ConfiguredLightweightSetting,
-    model_id: &str,
-    default_badge: &str,
-) -> String {
+fn model_badge(current_setting: &ConfiguredLightweightSetting, model_id: &str, default_badge: &str) -> String {
     match current_setting {
-        ConfiguredLightweightSetting::Explicit(current)
-            if current.eq_ignore_ascii_case(model_id) =>
-        {
+        ConfiguredLightweightSetting::Explicit(current) if current.eq_ignore_ascii_case(model_id) => {
             "Current".to_string()
         }
         _ => default_badge.to_string(),
@@ -328,9 +290,7 @@ mod tests {
     use crate::agent::runloop::model_picker::selection;
     use vtcode_core::config::constants::models;
     use vtcode_core::config::core::PromptCachingConfig;
-    use vtcode_core::config::types::{
-        ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
-    };
+    use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
@@ -375,8 +335,7 @@ mod tests {
         assert!(view.items.iter().any(|item| item.title == "Automatic (recommended)"));
         assert!(view.items.iter().any(|item| item.title == "Use main model"));
         assert!(view.items.iter().any(|item| {
-            item.selection
-                == Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string()))
+            item.selection == Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string()))
         }));
     }
 
@@ -392,10 +351,7 @@ mod tests {
             &DynamicModelRegistry::default(),
         );
 
-        assert_eq!(
-            view.items.first().map(|item| item.title.as_str()),
-            Some("Automatic (recommended)")
-        );
+        assert_eq!(view.items.first().map(|item| item.title.as_str()), Some("Automatic (recommended)"));
         assert_eq!(view.items.get(1).map(|item| item.title.as_str()), Some("Use main model"));
     }
 
@@ -415,10 +371,7 @@ mod tests {
             .items
             .iter()
             .find(|item| {
-                item.selection
-                    == Some(InlineListSelection::ConfigAction(
-                        "lightweight_model:gpt-5.5".to_string(),
-                    ))
+                item.selection == Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string()))
             })
             .expect("gpt-5.5 entry");
 
@@ -441,10 +394,7 @@ mod tests {
             &DynamicModelRegistry::default(),
         );
 
-        assert_eq!(
-            view.selected,
-            Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string(),))
-        );
+        assert_eq!(view.selected, Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string(),)));
     }
 
     #[test]
@@ -460,40 +410,21 @@ mod tests {
                     None,
                     None,
                 ),
-                selection::selection_from_dynamic(
-                    Provider::Ollama,
-                    "llama-local",
-                    "Llama Local",
-                    None,
-                    None,
-                ),
+                selection::selection_from_dynamic(Provider::Ollama, "llama-local", "Llama Local", None, None),
             ],
-            provider_models: hashbrown::HashMap::from([
-                (Provider::OpenAI, vec![0]),
-                (Provider::Ollama, vec![1]),
-            ]),
+            provider_models: hashbrown::HashMap::from([(Provider::OpenAI, vec![0]), (Provider::Ollama, vec![1])]),
             provider_errors: hashbrown::HashMap::new(),
             provider_warnings: hashbrown::HashMap::new(),
         };
 
-        let view = build_lightweight_model_palette_view(
-            "lightweight_model:",
-            &config,
-            Some(&vt_cfg),
-            &registry,
-        );
+        let view = build_lightweight_model_palette_view("lightweight_model:", &config, Some(&vt_cfg), &registry);
 
         assert!(view.items.iter().any(|item| {
             item.selection
-                == Some(InlineListSelection::ConfigAction(
-                    "lightweight_model:gpt-5.4-experimental".to_string(),
-                ))
+                == Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.4-experimental".to_string()))
         }));
         assert!(!view.items.iter().any(|item| {
-            item.selection
-                == Some(InlineListSelection::ConfigAction(
-                    "lightweight_model:llama-local".to_string(),
-                ))
+            item.selection == Some(InlineListSelection::ConfigAction("lightweight_model:llama-local".to_string()))
         }));
     }
 
@@ -502,19 +433,11 @@ mod tests {
         let config = runtime_config("openai", models::openai::GPT_5_4);
         let vt_cfg = VTCodeConfig::default();
         let registry = DynamicModelRegistry {
-            provider_errors: hashbrown::HashMap::from([(
-                Provider::OpenAI,
-                "Failed to query OpenAI".to_string(),
-            )]),
+            provider_errors: hashbrown::HashMap::from([(Provider::OpenAI, "Failed to query OpenAI".to_string())]),
             ..DynamicModelRegistry::default()
         };
 
-        let view = build_lightweight_model_palette_view(
-            "lightweight_model:",
-            &config,
-            Some(&vt_cfg),
-            &registry,
-        );
+        let view = build_lightweight_model_palette_view("lightweight_model:", &config, Some(&vt_cfg), &registry);
 
         assert!(
             view.lines

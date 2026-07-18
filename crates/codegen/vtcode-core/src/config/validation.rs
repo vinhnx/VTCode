@@ -8,9 +8,7 @@ use vtcode_commons::MultiErrors;
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
-use crate::config::models::{
-    catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
-};
+use crate::config::models::{catalog_provider_keys, model_catalog_entry, supported_models_for_provider};
 
 /// Result of a configuration validation check
 #[derive(Debug, Clone)]
@@ -69,12 +67,7 @@ pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
 
     if let Some(models) = supported_models_for_provider(provider) {
         if !models.contains(&model) {
-            bail!(
-                "Model '{}' not found for provider '{}'. Available models: {}",
-                model,
-                provider,
-                models.join(", ")
-            );
+            bail!("Model '{}' not found for provider '{}'. Available models: {}", model, provider, models.join(", "));
         }
         Ok(())
     } else {
@@ -96,9 +89,7 @@ fn catalog_model_context_window(provider: &str, model: &str) -> Result<Option<us
 /// Resolve the effective context window size for a model.
 pub fn effective_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
     if provider.eq_ignore_ascii_case("anthropic") {
-        return Ok(Some(crate::llm::providers::anthropic::capabilities::effective_context_size(
-            model,
-        )));
+        return Ok(Some(crate::llm::providers::anthropic::capabilities::effective_context_size(model)));
     }
 
     catalog_model_context_window(provider, model)
@@ -191,11 +182,7 @@ fn validate_checkpointing_dir(storage_dir: &str, workspace: &Path, result: &mut 
     }
 }
 
-fn validate_full_auto_config(
-    full_auto_cfg: &FullAutoConfig,
-    workspace: &Path,
-    result: &mut ValidationResult,
-) {
+fn validate_full_auto_config(full_auto_cfg: &FullAutoConfig, workspace: &Path, result: &mut ValidationResult) {
     if full_auto_cfg.require_profile_ack {
         if let Some(profile_path) = &full_auto_cfg.profile_path {
             let resolved = if Path::new(profile_path).is_absolute() {
@@ -212,9 +199,7 @@ fn validate_full_auto_config(
                 ));
             }
         } else {
-            result.add_error(
-                "Full-auto profile_path is required when require_profile_ack = true".to_owned(),
-            );
+            result.add_error("Full-auto profile_path is required when require_profile_ack = true".to_owned());
         }
     }
 }
@@ -257,8 +242,7 @@ mod tests {
         config.agent.provider = "codex".to_string();
         config.agent.default_model = "upstream-managed-model".to_string();
 
-        let result =
-            validate_config(&config, Path::new(".")).expect("config validation should run");
+        let result = validate_config(&config, Path::new(".")).expect("config validation should run");
 
         assert!(result.errors.is_empty());
     }

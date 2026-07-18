@@ -1,8 +1,6 @@
 use serde_json::Value;
 
-use crate::agent::runloop::text_tools::parse_args::{
-    find_matching_delimiter, parse_textual_arguments,
-};
+use crate::agent::runloop::text_tools::parse_args::{find_matching_delimiter, parse_textual_arguments};
 use crate::agent::runloop::text_tools::parse_channel::parse_tool_name_from_reference;
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
@@ -35,9 +33,7 @@ pub(super) fn collect_bracketed_regions(text: &str, regions: &mut Vec<(usize, us
             }
         };
         // Use shared delimiter matcher
-        let Some(args_end) =
-            find_matching_delimiter(text, args_start, open, close, MAX_BRACKETED_NESTING_DEPTH)
-        else {
+        let Some(args_end) = find_matching_delimiter(text, args_start, open, close, MAX_BRACKETED_NESTING_DEPTH) else {
             search_start = after_header;
             continue;
         };
@@ -72,9 +68,7 @@ pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
 
     if after_name.starts_with('{') {
         // Try to parse as JSON
-        if let Some(idx) =
-            find_matching_delimiter(after_name, 0, '{', '}', MAX_BRACKETED_NESTING_DEPTH)
-        {
+        if let Some(idx) = find_matching_delimiter(after_name, 0, '{', '}', MAX_BRACKETED_NESTING_DEPTH) {
             let json_str = &after_name[..idx + 1];
             if let Ok(args) = serde_json::from_str::<Value>(json_str) {
                 return Some((tool_name, args));
@@ -82,9 +76,7 @@ pub(super) fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
         }
     } else if after_name.starts_with('(') {
         // Try to parse as function arguments
-        if let Some(idx) =
-            find_matching_delimiter(after_name, 0, '(', ')', MAX_BRACKETED_NESTING_DEPTH)
-        {
+        if let Some(idx) = find_matching_delimiter(after_name, 0, '(', ')', MAX_BRACKETED_NESTING_DEPTH) {
             let args_str = &after_name[1..idx];
             if let Some(args) = parse_textual_arguments(args_str) {
                 return Some((tool_name, args));
@@ -161,8 +153,7 @@ mod tests {
 
     #[test]
     fn parses_bracketed_json_with_closing_delimiters_inside_strings() {
-        let message =
-            r#"[tool: read_file] {"path":"docs/notes})].md","note":"escaped quote: \"}\""}"#;
+        let message = r#"[tool: read_file] {"path":"docs/notes})].md","note":"escaped quote: \"}\""}"#;
         let parsed = parse_bracketed_tool_call(message).expect("should parse");
         assert_eq!(parsed.0, "read_file");
         assert_eq!(parsed.1["path"], Value::String("docs/notes})].md".to_string()));

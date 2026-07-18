@@ -1,6 +1,4 @@
-use crate::executor::{
-    CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, ShellKind,
-};
+use crate::executor::{CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, ShellKind};
 use crate::policy::CommandPolicy;
 use anyhow::{Context, Result, anyhow, bail};
 use lru::LruCache;
@@ -138,13 +136,9 @@ where
                 .build(),
         };
 
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::ListDirectory,
-            self.working_dir.clone(),
-        )
-        .with_paths(vec![target]);
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::ListDirectory, self.working_dir.clone())
+                .with_paths(vec![target]);
 
         let output = self.expect_success(invocation)?;
         Ok(output.stdout)
@@ -153,16 +147,10 @@ where
     pub fn pwd(&self) -> Result<String> {
         let command = match self.shell_kind {
             ShellKind::Unix => ShellCommand::new(ShellKind::Unix).verb("pwd").build(),
-            ShellKind::Windows => {
-                ShellCommand::new(ShellKind::Windows).verb("Get-Location").build()
-            }
+            ShellKind::Windows => ShellCommand::new(ShellKind::Windows).verb("Get-Location").build(),
         };
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::PrintDirectory,
-            self.working_dir.clone(),
-        );
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::PrintDirectory, self.working_dir.clone());
         self.policy.check(&invocation)?;
         Ok(self.working_dir.to_string_lossy().into_owned())
     }
@@ -216,13 +204,9 @@ where
                 .build(),
         };
 
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::Remove,
-            self.working_dir.clone(),
-        )
-        .with_paths(vec![target]);
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::Remove, self.working_dir.clone())
+                .with_paths(vec![target]);
 
         self.expect_success(invocation).map(|_| ())
     }
@@ -247,13 +231,9 @@ where
                 .build(),
         };
 
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::Copy,
-            self.working_dir.clone(),
-        )
-        .with_paths(vec![source_path, dest_path]);
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::Copy, self.working_dir.clone())
+                .with_paths(vec![source_path, dest_path]);
 
         self.expect_success(invocation).map(|_| ())
     }
@@ -276,13 +256,9 @@ where
                 .build(),
         };
 
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::Move,
-            self.working_dir.clone(),
-        )
-        .with_paths(vec![source_path, dest_path]);
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::Move, self.working_dir.clone())
+                .with_paths(vec![source_path, dest_path]);
 
         self.expect_success(invocation).map(|_| ())
     }
@@ -310,13 +286,9 @@ where
                 .build(),
         };
 
-        let invocation = CommandInvocation::new(
-            self.shell_kind,
-            command,
-            CommandCategory::Search,
-            self.working_dir.clone(),
-        )
-        .with_paths(vec![target]);
+        let invocation =
+            CommandInvocation::new(self.shell_kind, command, CommandCategory::Search, self.working_dir.clone())
+                .with_paths(vec![target]);
 
         let output = self.execute_invocation(invocation)?;
         if output.status.success() {
@@ -413,14 +385,13 @@ where
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
         // `workspace_root` is canonicalized in the constructor and candidates
         // arrive canonicalized, so the lexical check is sufficient here.
-        vtcode_commons::paths::ensure_path_within_workspace(candidate, &self.workspace_root)
-            .map_err(|error| {
-                error.context(format!(
-                    "path `{}` escapes workspace root `{}`",
-                    candidate.display(),
-                    self.workspace_root.display()
-                ))
-            })?;
+        vtcode_commons::paths::ensure_path_within_workspace(candidate, &self.workspace_root).map_err(|error| {
+            error.context(format!(
+                "path `{}` escapes workspace root `{}`",
+                candidate.display(),
+                self.workspace_root.display()
+            ))
+        })?;
         Ok(())
     }
 }
@@ -542,8 +513,7 @@ mod tests {
         let dir = TempDir::new()?;
         let nested = dir.path().join("nested");
         fs::create_dir(&nested)?;
-        let runner =
-            BashRunner::new(dir.path().to_path_buf(), RecordingExecutor::default(), AllowAllPolicy);
+        let runner = BashRunner::new(dir.path().to_path_buf(), RecordingExecutor::default(), AllowAllPolicy);
         let mut runner = runner?;
         runner.cd("nested")?;
         // Canonicalize expected path to match runner's canonical working_dir

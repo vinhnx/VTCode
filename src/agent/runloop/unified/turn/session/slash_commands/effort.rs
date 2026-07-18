@@ -21,10 +21,7 @@ pub(crate) async fn handle_set_effort(
     if supported.is_empty() {
         ctx.renderer.line(
             MessageStyle::Info,
-            &format!(
-                "The current model '{}' does not support configurable effort.",
-                ctx.config.model
-            ),
+            &format!("The current model '{}' does not support configurable effort.", ctx.config.model),
         )?;
         return Ok(SlashCommandControl::Continue);
     }
@@ -33,11 +30,7 @@ pub(crate) async fn handle_set_effort(
         if !supported.contains(&level) {
             ctx.renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Effort level '{}' is not supported by '{}'.",
-                    level.as_str(),
-                    ctx.config.model
-                ),
+                &format!("Effort level '{}' is not supported by '{}'.", level.as_str(), ctx.config.model),
             )?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -60,10 +53,8 @@ pub(crate) async fn handle_set_effort(
                     supported.iter().map(|value| value.as_str()).collect::<Vec<_>>().join(", ")
                 ),
             )?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]")?;
             return Ok(SlashCommandControl::Continue);
         }
 
@@ -82,10 +73,7 @@ pub(crate) async fn handle_set_effort(
                 },
             ],
             effort_items(&supported, ctx.config.reasoning_effort, ctx.config.model.as_str()),
-            Some(InlineListSelection::ConfigAction(format!(
-                "effort:{}",
-                ctx.config.reasoning_effort.as_str()
-            ))),
+            Some(InlineListSelection::ConfigAction(format!("effort:{}", ctx.config.reasoning_effort.as_str()))),
             None,
         );
 
@@ -95,18 +83,14 @@ pub(crate) async fn handle_set_effort(
         };
 
         let InlineListSelection::ConfigAction(action) = selection else {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Unsupported effort selection received from inline UI.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Unsupported effort selection received from inline UI.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
         let Some(value) = action.strip_prefix("effort:") else {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Unsupported effort selection received from inline UI.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Unsupported effort selection received from inline UI.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
@@ -158,11 +142,7 @@ async fn apply_effort_change(
     Ok(())
 }
 
-fn effort_items(
-    supported: &[ReasoningEffortLevel],
-    current: ReasoningEffortLevel,
-    model: &str,
-) -> Vec<InlineListItem> {
+fn effort_items(supported: &[ReasoningEffortLevel], current: ReasoningEffortLevel, model: &str) -> Vec<InlineListItem> {
     supported
         .iter()
         .map(|level| InlineListItem {
@@ -170,10 +150,7 @@ fn effort_items(
             subtitle: Some(effort_description(*level, model).to_string()),
             badge: (*level == current).then_some("Current".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "effort:{}",
-                level.as_str()
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("effort:{}", level.as_str()))),
             search_value: Some(format!("{} {}", level.as_str(), effort_description(*level, model))),
         })
         .collect()
@@ -245,9 +222,7 @@ async fn refresh_header_reasoning(ctx: &mut SlashCommandContext<'_>) -> Result<(
 }
 
 fn provider_label_for_header(ctx: &SlashCommandContext<'_>) -> String {
-    if ctx.config.provider.eq_ignore_ascii_case("openai")
-        && ctx.config.openai_chatgpt_auth.is_some()
-    {
+    if ctx.config.provider.eq_ignore_ascii_case("openai") && ctx.config.openai_chatgpt_auth.is_some() {
         return "OpenAI (ChatGPT)".to_string();
     }
 
@@ -270,12 +245,8 @@ fn effort_description(level: ReasoningEffortLevel, model: &str) -> &'static str 
         }
         ReasoningEffortLevel::Minimal => "Very light reasoning with minimal extra latency",
         ReasoningEffortLevel::Low => "Quick, straightforward implementation with minimal overhead",
-        ReasoningEffortLevel::Medium => {
-            "Balanced approach with standard implementation and testing"
-        }
-        ReasoningEffortLevel::High => {
-            "Comprehensive implementation with extensive testing and documentation"
-        }
+        ReasoningEffortLevel::Medium => "Balanced approach with standard implementation and testing",
+        ReasoningEffortLevel::High => "Comprehensive implementation with extensive testing and documentation",
         ReasoningEffortLevel::XHigh if model == "claude-opus-4-8" => {
             "Deeper reasoning than high, just below maximum (Opus 4.8 only)"
         }

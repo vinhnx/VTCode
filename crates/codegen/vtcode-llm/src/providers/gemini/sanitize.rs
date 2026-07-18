@@ -45,8 +45,7 @@ fn sanitize_function_parameters_impl(parameters: Value, inside_properties_map: b
                 "contentEncoding",
             ];
 
-            let alias_description_property =
-                inside_properties_map && should_alias_description_property(&map);
+            let alias_description_property = inside_properties_map && should_alias_description_property(&map);
             let alias_required_description = map
                 .get("properties")
                 .and_then(Value::as_object)
@@ -57,9 +56,7 @@ fn sanitize_function_parameters_impl(parameters: Value, inside_properties_map: b
             for (key, value) in map {
                 let is_properties_map = key == "properties";
                 // Skip unsupported fields at this level
-                if !inside_properties_map
-                    && (UNSUPPORTED_FIELDS.contains(&key.as_str()) || key.starts_with("x-"))
-                {
+                if !inside_properties_map && (UNSUPPORTED_FIELDS.contains(&key.as_str()) || key.starts_with("x-")) {
                     continue;
                 }
                 // Recursively sanitize nested values
@@ -68,10 +65,7 @@ fn sanitize_function_parameters_impl(parameters: Value, inside_properties_map: b
                 } else {
                     key
                 };
-                sanitized.insert(
-                    sanitized_key,
-                    sanitize_function_parameters_impl(value, is_properties_map),
-                );
+                sanitized.insert(sanitized_key, sanitize_function_parameters_impl(value, is_properties_map));
             }
 
             let property_names = sanitized
@@ -88,8 +82,7 @@ fn sanitize_function_parameters_impl(parameters: Value, inside_properties_map: b
 
                     for item in required.iter_mut() {
                         if let Some(name) = item.as_str() {
-                            let sanitized_name =
-                                sanitize_property_name(name, alias_required_description);
+                            let sanitized_name = sanitize_property_name(name, alias_required_description);
                             if sanitized_name != name {
                                 *item = Value::String(sanitized_name.to_string());
                             }

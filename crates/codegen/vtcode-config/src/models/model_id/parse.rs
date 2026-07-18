@@ -27,9 +27,7 @@ impl FromStr for ModelId {
             return match opencode_model {
                 m if m == models::opencode_zen::GPT_5_4 => Ok(ModelId::OpenCodeZenGPT54),
                 m if m == models::opencode_zen::GPT_5_4_MINI => Ok(ModelId::OpenCodeZenGPT54Mini),
-                m if m == models::opencode_zen::CLAUDE_SONNET_4_6 => {
-                    Ok(ModelId::OpenCodeZenClaudeSonnet46)
-                }
+                m if m == models::opencode_zen::CLAUDE_SONNET_4_6 => Ok(ModelId::OpenCodeZenClaudeSonnet46),
                 m if m == models::opencode_zen::GLM_5_1 => Ok(ModelId::OpenCodeZenGlm51),
                 _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
             };
@@ -48,12 +46,8 @@ impl FromStr for ModelId {
                 m if m == models::opencode_go::QWEN_3_7_MAX => Ok(ModelId::OpenCodeGoQwen37Max),
                 m if m == models::opencode_go::QWEN_3_7_PLUS => Ok(ModelId::OpenCodeGoQwen37Plus),
                 m if m == models::opencode_go::QWEN_3_6_PLUS => Ok(ModelId::OpenCodeGoQwen36Plus),
-                m if m == models::opencode_go::DEEPSEEK_V4_PRO => {
-                    Ok(ModelId::OpenCodeGoDeepseekV4Pro)
-                }
-                m if m == models::opencode_go::DEEPSEEK_V4_FLASH => {
-                    Ok(ModelId::OpenCodeGoDeepseekV4Flash)
-                }
+                m if m == models::opencode_go::DEEPSEEK_V4_PRO => Ok(ModelId::OpenCodeGoDeepseekV4Pro),
+                m if m == models::opencode_go::DEEPSEEK_V4_FLASH => Ok(ModelId::OpenCodeGoDeepseekV4Flash),
                 _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
             };
         }

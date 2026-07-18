@@ -18,10 +18,7 @@ use config_loading::load_startup_config;
 pub(crate) use dependency_advisories::{SearchToolsBundleNotice, take_search_tools_bundle_notice};
 use resume::{resolve_session_resume, validate_resume_all_usage};
 use theme::determine_theme;
-use validation::{
-    apply_cli_permission_overrides, validate_full_auto_configuration,
-    validate_startup_configuration,
-};
+use validation::{apply_cli_permission_overrides, validate_full_auto_configuration, validate_startup_configuration};
 use vtcode_config::PromptCacheRetention;
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, resolve_openai_auth};
 use vtcode_core::cli::args::{Cli, Commands};
@@ -29,19 +26,15 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{Provider, ProviderModelSupport, model_catalog_entry};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::config::validator::{
-    check_openai_hosted_shell_compat, check_prompt_cache_retention_compat,
-};
+use vtcode_core::config::validator::{check_openai_hosted_shell_compat, check_prompt_cache_retention_compat};
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
 use vtcode_core::core::agent::config::{
-    RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label,
-    resolve_runtime_model_selection,
+    RuntimeModelSelection, api_key_env_var, build_runtime_agent_config, provider_label, resolve_runtime_model_selection,
 };
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::{initialize_dot_folder, update_model_preference, update_theme_preference};
 pub(crate) use workspace_trust::{
-    auto_grant_tui_full_auto_workspace_trust, ensure_full_auto_workspace_trust,
-    require_full_auto_workspace_trust,
+    auto_grant_tui_full_auto_workspace_trust, ensure_full_auto_workspace_trust, require_full_auto_workspace_trust,
 };
 
 /// Aggregated data required for CLI command execution after startup.
@@ -148,28 +141,15 @@ impl StartupContext {
             vtcode_core::utils::ansi::apply_file_opener_config(config.file_opener);
             vtcode_core::telemetry::perf::initialize_perf_telemetry(&config.telemetry);
             vtcode_core::tools::cache::configure_file_cache(&config.optimization.file_read_cache);
-            vtcode_core::tools::read_limits::configure_read_limits(
-                &config.optimization.file_read_cache,
-            );
-            vtcode_core::tools::command_cache::configure_command_cache(
-                &config.optimization.command_cache,
-            );
-            vtcode_core::utils::gatekeeper::initialize_gatekeeper(
-                &config.security.gatekeeper,
-                Some(&loaded.workspace),
-            );
+            vtcode_core::tools::read_limits::configure_read_limits(&config.optimization.file_read_cache);
+            vtcode_core::tools::command_cache::configure_command_cache(&config.optimization.command_cache);
+            vtcode_core::utils::gatekeeper::initialize_gatekeeper(&config.security.gatekeeper, Some(&loaded.workspace));
         };
         let auth_fut = async {
             if skip_auth {
                 return Ok::<_, anyhow::Error>((String::new(), None));
             }
-            match resolve_runtime_provider_auth(
-                &config,
-                &loaded.workspace,
-                &selection,
-                loaded.first_run_occurred,
-            )
-            .await
+            match resolve_runtime_provider_auth(&config, &loaded.workspace, &selection, loaded.first_run_occurred).await
             {
                 Ok(auth) => Ok(auth),
                 Err(err) if can_start_without_provider_auth(args.command.as_ref()) => {
@@ -200,37 +180,25 @@ impl StartupContext {
 
         let (api_key, openai_chatgpt_auth) = auth_res?;
 
-        let mut agent_config = build_runtime_agent_config(
-            args,
-            &config,
-            loaded.workspace.clone(),
-            selection,
-            api_key,
-            theme_selection,
-        );
+        let mut agent_config =
+            build_runtime_agent_config(args, &config, loaded.workspace.clone(), selection, api_key, theme_selection);
         agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
         let skip_confirmations = args.dangerously_skip_permissions || args.skip_confirmations;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
-            && let Some(retention) =
-                agent_config.prompt_cache.providers.openai.prompt_cache_retention
+            && let Some(retention) = agent_config.prompt_cache.providers.openai.prompt_cache_retention
             && retention != PromptCacheRetention::Unknown
         {
             // Use constants list to identify which models use Responses API
-            if let Some(msg) = check_prompt_cache_retention_compat(
-                &config,
-                &agent_config.model,
-                &agent_config.provider,
-            ) {
+            if let Some(msg) = check_prompt_cache_retention_compat(&config, &agent_config.model, &agent_config.provider)
+            {
                 tracing::warn!("{}", msg);
             }
         }
 
-        if let Some(msg) =
-            check_openai_hosted_shell_compat(&config, &agent_config.model, &agent_config.provider)
-        {
+        if let Some(msg) = check_openai_hosted_shell_compat(&config, &agent_config.model, &agent_config.provider) {
             tracing::warn!("{}", msg);
         }
 
@@ -278,13 +246,10 @@ async fn maybe_apply_codex_sidecar_fallback(
         Err(err) => err,
     };
 
-    let fallback =
-        match resolve_codex_fallback_selection(config, workspace, selection, first_run_occurred)
-            .await
-        {
-            Ok(fallback) => fallback,
-            Err(err) => return Err(anyhow!("{unavailable} {err}")),
-        };
+    let fallback = match resolve_codex_fallback_selection(config, workspace, selection, first_run_occurred).await {
+        Ok(fallback) => fallback,
+        Err(err) => return Err(anyhow!("{unavailable} {err}")),
+    };
     persist_runtime_selection(config, workspace, &fallback).await?;
 
     let notice = format!(
@@ -348,9 +313,7 @@ async fn persist_runtime_selection(
     config.agent.provider = selection.provider.clone();
     config.agent.default_model = selection.model.clone();
     config.agent.api_key_env = api_key_env_var(&selection.provider);
-    if !selection.provider.eq_ignore_ascii_case("openai")
-        || !Provider::OpenAI.supports_service_tier(&selection.model)
-    {
+    if !selection.provider.eq_ignore_ascii_case("openai") || !Provider::OpenAI.supports_service_tier(&selection.model) {
         config.provider.openai.service_tier = None;
     }
 
@@ -372,9 +335,8 @@ async fn resolve_runtime_provider_auth(
 
     if selection.provider.eq_ignore_ascii_case("openai") {
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
-        let resolved =
-            resolve_openai_auth(&config.auth.openai, config.agent.credential_storage_mode, api_key)
-                .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
+        let resolved = resolve_openai_auth(&config.auth.openai, config.agent.credential_storage_mode, api_key)
+            .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 
@@ -535,8 +497,7 @@ mod validation_tests {
     }
 
     fn save_workspace_config(workspace: &Path, config: &VTCodeConfig) {
-        ConfigManager::save_config_to_path(workspace.join("vtcode.toml"), config)
-            .expect("save workspace config");
+        ConfigManager::save_config_to_path(workspace.join("vtcode.toml"), config).expect("save workspace config");
     }
 
     #[test]
@@ -575,9 +536,7 @@ mod validation_tests {
 
     #[test]
     fn app_server_can_start_without_provider_auth() {
-        assert!(can_start_without_provider_auth(Some(&Commands::AppServer {
-            listen: "stdio://".to_string(),
-        })));
+        assert!(can_start_without_provider_auth(Some(&Commands::AppServer { listen: "stdio://".to_string() })));
     }
 
     #[test]
@@ -586,12 +545,8 @@ mod validation_tests {
         // inits (gatekeeper/caches) — its codex proxy executes tools through
         // check_quarantine_for_program, which is a silent no-op when the
         // gatekeeper is uninitialized.
-        assert!(command_skips_provider_auth(Some(&Commands::AppServer {
-            listen: "stdio://".to_string(),
-        })));
-        assert!(!command_skips_runtime_init(Some(&Commands::AppServer {
-            listen: "stdio://".to_string(),
-        })));
+        assert!(command_skips_provider_auth(Some(&Commands::AppServer { listen: "stdio://".to_string() })));
+        assert!(!command_skips_runtime_init(Some(&Commands::AppServer { listen: "stdio://".to_string() })));
     }
 
     #[test]
@@ -696,16 +651,9 @@ mod validation_tests {
 
     #[test]
     fn resolve_session_resume_treats_resume_with_session_suffix_as_fork() {
-        let args = Cli::parse_from([
-            "vtcode",
-            "--resume",
-            "session-123",
-            "--session-id",
-            "fork-copy",
-        ]);
+        let args = Cli::parse_from(["vtcode", "--resume", "session-123", "--session-id", "fork-copy"]);
 
-        let (custom_session_id, session_resume) =
-            resolve_session_resume(&args).expect("session resume should resolve");
+        let (custom_session_id, session_resume) = resolve_session_resume(&args).expect("session resume should resolve");
 
         assert_eq!(custom_session_id.as_deref(), Some("fork-copy"));
         assert!(matches!(
@@ -718,8 +666,7 @@ mod validation_tests {
     fn resolve_session_resume_treats_continue_with_session_suffix_as_latest_fork() {
         let args = Cli::parse_from(["vtcode", "--continue", "--session-id", "fork-copy"]);
 
-        let (custom_session_id, session_resume) =
-            resolve_session_resume(&args).expect("continue should resolve");
+        let (custom_session_id, session_resume) = resolve_session_resume(&args).expect("continue should resolve");
 
         assert_eq!(custom_session_id.as_deref(), Some("fork-copy"));
         assert!(matches!(
@@ -734,8 +681,7 @@ mod validation_tests {
             Cli::parse_from(["vtcode", "--resume", "session-123", "--all"]),
             Cli::parse_from(["vtcode", "--continue", "--all"]),
         ] {
-            let (_, session_resume) =
-                resolve_session_resume(&args).expect("session resume should resolve");
+            let (_, session_resume) = resolve_session_resume(&args).expect("session resume should resolve");
             validate_resume_all_usage(&args, session_resume.as_ref()).unwrap();
         }
     }
@@ -744,23 +690,17 @@ mod validation_tests {
     fn validate_resume_all_usage_rejects_unscoped_all_flag() {
         let args = Cli::parse_from(["vtcode", "--all"]);
         let (_, session_resume) = resolve_session_resume(&args).expect("session resume");
-        let err = validate_resume_all_usage(&args, session_resume.as_ref())
-            .expect_err("all flag should be rejected");
+        let err = validate_resume_all_usage(&args, session_resume.as_ref()).expect_err("all flag should be rejected");
 
-        assert!(err.to_string().contains(
-            "--all can only be used with resume, continue, fork-session, or exec resume"
-        ));
+        assert!(
+            err.to_string()
+                .contains("--all can only be used with resume, continue, fork-session, or exec resume")
+        );
     }
 
     #[test]
     fn validate_resume_all_usage_accepts_summarized_interactive_fork_via_session_suffix() {
-        let args = Cli::parse_from([
-            "vtcode",
-            "--resume",
-            "--session-id",
-            "fork-copy",
-            "--summarize",
-        ]);
+        let args = Cli::parse_from(["vtcode", "--resume", "--session-id", "fork-copy", "--summarize"]);
 
         let (_, session_resume) = resolve_session_resume(&args).expect("session resume");
 
@@ -785,10 +725,7 @@ mod validation_tests {
 
         let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
 
-        assert_eq!(
-            ctx.config.agent.default_model,
-            vtcode_core::config::constants::models::openai::GPT_5
-        );
+        assert_eq!(ctx.config.agent.default_model, vtcode_core::config::constants::models::openai::GPT_5);
         assert_eq!(ctx.agent_config.model, vtcode_core::config::constants::models::openai::GPT_5);
     }
 
@@ -810,11 +747,8 @@ mod validation_tests {
         ]);
 
         let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
-        let maybe_warning = check_prompt_cache_retention_compat(
-            &ctx.config,
-            &ctx.agent_config.model,
-            &ctx.agent_config.provider,
-        );
+        let maybe_warning =
+            check_prompt_cache_retention_compat(&ctx.config, &ctx.agent_config.model, &ctx.agent_config.provider);
 
         assert!(maybe_warning.is_some());
     }
@@ -837,8 +771,7 @@ mod validation_tests {
         ]);
 
         let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
-        let maybe_warning =
-            check_openai_hosted_shell_compat(&ctx.config, &ctx.agent_config.model, "openai");
+        let maybe_warning = check_openai_hosted_shell_compat(&ctx.config, &ctx.agent_config.model, "openai");
 
         assert!(maybe_warning.is_some());
     }
@@ -861,11 +794,8 @@ mod validation_tests {
         ]);
 
         let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
-        let maybe_warning = check_prompt_cache_retention_compat(
-            &ctx.config,
-            &ctx.agent_config.model,
-            &ctx.agent_config.provider,
-        );
+        let maybe_warning =
+            check_prompt_cache_retention_compat(&ctx.config, &ctx.agent_config.model, &ctx.agent_config.provider);
 
         assert!(maybe_warning.is_none());
     }
@@ -877,8 +807,7 @@ mod validation_tests {
         let workspace = temp.path().to_path_buf();
         let mut config = VTCodeConfig::default();
         config.agent.provider = "openai".to_string();
-        config.agent.default_model =
-            vtcode_core::config::constants::models::openai::GPT_5.to_string();
+        config.agent.default_model = vtcode_core::config::constants::models::openai::GPT_5.to_string();
         config.automation.full_auto.enabled = true;
         config.automation.full_auto.require_profile_ack = false;
         save_workspace_config(&workspace, &config);
@@ -917,8 +846,7 @@ mod validation_tests {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "codex".to_string();
         config.agent.default_model = "gpt-5.3-codex".to_string();
-        config.agent.codex_app_server.command =
-            workspace.join("missing-codex").display().to_string();
+        config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
         config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
         config.auth.openai.preferred_method = OpenAIPreferredMethod::ApiKey;
         config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
@@ -926,11 +854,7 @@ mod validation_tests {
 
         env_guard.set_var("OPENAI_API_KEY", "test-openai-key");
         env_guard.remove_var("GITHUB_TOKEN");
-        let args = Cli::parse_from([
-            "vtcode",
-            "--workspace",
-            workspace.to_str().expect("workspace path"),
-        ]);
+        let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
 
         let ctx = StartupContext::from_cli_args(&args)
             .await
@@ -960,8 +884,7 @@ mod validation_tests {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "codex".to_string();
         config.agent.default_model = "gpt-5.3-codex".to_string();
-        config.agent.codex_app_server.command =
-            workspace.join("missing-codex").display().to_string();
+        config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
         config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
         config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
         config.auth.copilot.command = Some(fake_copilot.display().to_string());
@@ -969,21 +892,14 @@ mod validation_tests {
 
         env_guard.remove_var("OPENAI_API_KEY");
         env_guard.set_var("GITHUB_TOKEN", "test-github-token");
-        let args = Cli::parse_from([
-            "vtcode",
-            "--workspace",
-            workspace.to_str().expect("workspace path"),
-        ]);
+        let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
 
         let ctx = StartupContext::from_cli_args(&args)
             .await
             .expect("startup should fall back to copilot");
 
         assert_eq!(ctx.agent_config.provider, "copilot");
-        assert_eq!(
-            ctx.agent_config.model,
-            vtcode_core::config::constants::models::copilot::DEFAULT_MODEL
-        );
+        assert_eq!(ctx.agent_config.model, vtcode_core::config::constants::models::copilot::DEFAULT_MODEL);
         assert_eq!(ctx.config.agent.provider, "copilot");
     }
 
@@ -995,8 +911,7 @@ mod validation_tests {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "codex".to_string();
         config.agent.default_model = "gpt-5.3-codex".to_string();
-        config.agent.codex_app_server.command =
-            workspace.join("missing-codex").display().to_string();
+        config.agent.codex_app_server.command = workspace.join("missing-codex").display().to_string();
         config.agent.credential_storage_mode = AuthCredentialsStoreMode::File;
         config.auth.openai.preferred_method = OpenAIPreferredMethod::Chatgpt;
         config.auth.copilot.command = Some(workspace.join("missing-copilot").display().to_string());
@@ -1004,11 +919,7 @@ mod validation_tests {
 
         env_guard.remove_var("OPENAI_API_KEY");
         env_guard.remove_var("GITHUB_TOKEN");
-        let args = Cli::parse_from([
-            "vtcode",
-            "--workspace",
-            workspace.to_str().expect("workspace path"),
-        ]);
+        let args = Cli::parse_from(["vtcode", "--workspace", workspace.to_str().expect("workspace path")]);
 
         let err = StartupContext::from_cli_args(&args)
             .await

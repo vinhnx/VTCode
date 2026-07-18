@@ -267,11 +267,7 @@ impl SkillDiscovery {
     }
 
     /// Scan directory for CLI tools
-    async fn scan_for_tools(
-        &self,
-        dir: &Path,
-        stats: &mut DiscoveryStats,
-    ) -> Result<Vec<CliToolConfig>> {
+    async fn scan_for_tools(&self, dir: &Path, stats: &mut DiscoveryStats) -> Result<Vec<CliToolConfig>> {
         let mut tools = vec![];
 
         for entry in std::fs::read_dir(dir)? {
@@ -287,8 +283,7 @@ impl SkillDiscovery {
                     let readme_path = self.find_tool_readme(&path);
                     let schema_path = self.find_tool_schema(&path);
 
-                    let tool_name =
-                        path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+                    let tool_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
 
                     let config = CliToolConfig {
                         name: tool_name.clone(),
@@ -313,10 +308,7 @@ impl SkillDiscovery {
     }
 
     /// Discover system-wide CLI tools
-    async fn discover_system_tools(
-        &self,
-        stats: &mut DiscoveryStats,
-    ) -> Result<Vec<CliToolConfig>> {
+    async fn discover_system_tools(&self, stats: &mut DiscoveryStats) -> Result<Vec<CliToolConfig>> {
         info!("Auto-discovering system CLI tools");
 
         match discover_cli_tools() {
@@ -382,11 +374,7 @@ impl SkillDiscovery {
         } else {
             // Try tool.json
             let tool_json = tool_path.parent()?.join("tool.json");
-            if tool_json.exists() {
-                Some(tool_json)
-            } else {
-                None
-            }
+            if tool_json.exists() { Some(tool_json) } else { None }
         }
     }
 
@@ -500,11 +488,7 @@ impl ProgressiveSkillLoader {
     }
 
     /// Get skill metadata (lightweight)
-    pub async fn get_skill_metadata(
-        &mut self,
-        workspace_root: &Path,
-        name: &str,
-    ) -> Result<SkillContext> {
+    pub async fn get_skill_metadata(&mut self, workspace_root: &Path, name: &str) -> Result<SkillContext> {
         let result = self.discovery.discover_all(workspace_root).await?;
 
         // Check traditional skills
@@ -525,11 +509,7 @@ impl ProgressiveSkillLoader {
     }
 
     /// Load full skill with instructions and resources
-    pub async fn load_full_skill(
-        &mut self,
-        workspace_root: &Path,
-        name: &str,
-    ) -> Result<crate::skills::types::Skill> {
+    pub async fn load_full_skill(&mut self, workspace_root: &Path, name: &str) -> Result<crate::skills::types::Skill> {
         // Check cache first
         if let Some(skill) = self.skill_cache.get(name) {
             return Ok(skill.clone());

@@ -300,7 +300,9 @@ mod tests {
             open_decisions: vec![],
             task_context: "Review".into(),
             context_files: vec![],
-            test_results: Some("15 passed, 2 failed\n  FAIL: test_login_rate_limit\n  FAIL: test_signup_validation".into()),
+            test_results: Some(
+                "15 passed, 2 failed\n  FAIL: test_login_rate_limit\n  FAIL: test_signup_validation".into(),
+            ),
             boundary_status: vec![],
             known_issues: vec!["Rate limiting missing".into()],
             next_actions: vec!["Fix failing tests".into()],

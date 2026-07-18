@@ -115,30 +115,24 @@ impl OrientationContext {
 pub fn gather_orientation(workspace_root: &Path, session_id: &str) -> OrientationContext {
     use crate::loop_memory::{LoopMemoryStore, MarkdownLoopMemory};
 
-    let progress_summary =
-        vtcode_session_store::progress::load_progress(workspace_root, session_id)
-            .ok()
-            .flatten()
-            .map(|ledger| {
-                format!(
-                    "Goal: {} | Completion: {:.0}% | Confidence: {:.2} | {}",
-                    ledger.goal,
-                    ledger.completion_ratio() * 100.0,
-                    ledger.confidence,
-                    if ledger.is_stalled() {
-                        "STALLED"
-                    } else {
-                        "on track"
-                    },
-                )
-            });
+    let progress_summary = vtcode_session_store::progress::load_progress(workspace_root, session_id)
+        .ok()
+        .flatten()
+        .map(|ledger| {
+            format!(
+                "Goal: {} | Completion: {:.0}% | Confidence: {:.2} | {}",
+                ledger.goal,
+                ledger.completion_ratio() * 100.0,
+                ledger.confidence,
+                if ledger.is_stalled() { "STALLED" } else { "on track" },
+            )
+        });
 
     let spec_summary = harness_artifacts::read_spec_summary(workspace_root);
     let contract_summary = harness_artifacts::read_contract_summary(workspace_root);
     let sprint_contract_summary = harness_artifacts::read_sprint_contract_summary(workspace_root);
     let evaluation_summary = harness_artifacts::read_evaluation_summary(workspace_root);
-    let outcome_verification_summary =
-        harness_artifacts::read_outcome_verification_summary(workspace_root);
+    let outcome_verification_summary = harness_artifacts::read_outcome_verification_summary(workspace_root);
     let feature_list_summary = harness_artifacts::read_feature_list_summary(workspace_root);
 
     let recent_git_log = gather_recent_git_log(workspace_root);
@@ -188,11 +182,7 @@ fn gather_recent_git_log(workspace_root: &Path) -> Option<String> {
     }
 
     let log = String::from_utf8_lossy(&output.stdout).to_string();
-    if log.trim().is_empty() {
-        None
-    } else {
-        Some(log)
-    }
+    if log.trim().is_empty() { None } else { Some(log) }
 }
 
 /// Read compaction summary from persistent artifacts.
@@ -202,11 +192,7 @@ fn gather_recent_git_log(workspace_root: &Path) -> Option<String> {
 fn read_compaction_summary(workspace_root: &Path) -> Option<String> {
     let path = workspace_root.join("memories").join("compaction_summary.md");
     let content = std::fs::read_to_string(&path).ok()?;
-    if content.trim().is_empty() {
-        None
-    } else {
-        Some(content)
-    }
+    if content.trim().is_empty() { None } else { Some(content) }
 }
 
 /// Read the context reset manifest if a reset was triggered by the previous
@@ -215,11 +201,7 @@ fn read_compaction_summary(workspace_root: &Path) -> Option<String> {
 fn read_context_reset_manifest(workspace_root: &Path) -> Option<String> {
     let path = harness_artifacts::current_context_reset_path(workspace_root);
     let content = std::fs::read_to_string(&path).ok()?;
-    if content.trim().is_empty() {
-        None
-    } else {
-        Some(content)
-    }
+    if content.trim().is_empty() { None } else { Some(content) }
 }
 
 #[cfg(test)]
@@ -309,9 +291,7 @@ mod tests {
             loop_decisions: None,
             compaction_summary: None,
             feature_list_summary: None,
-            context_reset_manifest: Some(
-                "# Context Reset Manifest\n\n**Trigger:** stall".to_string(),
-            ),
+            context_reset_manifest: Some("# Context Reset Manifest\n\n**Trigger:** stall".to_string()),
             handoff: None,
         };
         let section = ctx.to_prompt_section().expect("should have section");

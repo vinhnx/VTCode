@@ -52,12 +52,7 @@ impl ContextResetManifest {
     }
 }
 
-pub fn should_reset(
-    mode: &str,
-    compaction: bool,
-    stall: u32,
-    threshold: u32,
-) -> ContextResetDecision {
+pub fn should_reset(mode: &str, compaction: bool, stall: u32, threshold: u32) -> ContextResetDecision {
     match mode {
         "off" => ContextResetDecision::Continue,
         "on_compaction" => {
@@ -119,15 +114,8 @@ pub fn maybe_write_reset_after_compaction(workspace_root: &Path, mode: &str) -> 
     write_manifest(workspace_root, &m).unwrap_or(false)
 }
 
-pub fn maybe_write_reset_on_stall(
-    workspace_root: &Path,
-    stall_count: u32,
-    mode: &str,
-    threshold: u32,
-) {
-    if let ContextResetDecision::Reset { stall_count: sc, .. } =
-        should_reset(mode, false, stall_count, threshold)
-    {
+pub fn maybe_write_reset_on_stall(workspace_root: &Path, stall_count: u32, mode: &str, threshold: u32) {
+    if let ContextResetDecision::Reset { stall_count: sc, .. } = should_reset(mode, false, stall_count, threshold) {
         let m = ContextResetManifest {
             triggered_at: chrono::Utc::now().to_rfc3339(),
             trigger: "stall".into(),
@@ -146,17 +134,11 @@ mod tests {
     }
     #[test]
     fn compaction_triggers() {
-        assert!(matches!(
-            should_reset("on_compaction", true, 0, 0),
-            ContextResetDecision::Reset { .. }
-        ));
+        assert!(matches!(should_reset("on_compaction", true, 0, 0), ContextResetDecision::Reset { .. }));
     }
     #[test]
     fn stall_triggers_at_threshold() {
-        assert!(matches!(
-            should_reset("on_stall", false, 2, 2),
-            ContextResetDecision::Reset { stall_count: 2, .. }
-        ));
+        assert!(matches!(should_reset("on_stall", false, 2, 2), ContextResetDecision::Reset { stall_count: 2, .. }));
     }
     #[test]
     fn manifest_round_trips_through_markdown() {

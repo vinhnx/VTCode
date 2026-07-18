@@ -59,17 +59,9 @@ pub fn run_interactive_selection(
         let mut list_state = ListState::default();
 
         loop {
-            render::draw_selection_ui(
-                &mut terminal,
-                title,
-                instructions,
-                entries,
-                selected_index,
-                &mut list_state,
-            )?;
+            render::draw_selection_ui(&mut terminal, title, instructions, entries, selected_index, &mut list_state)?;
 
-            let event = event::read()
-                .with_context(|| format!("Failed to read terminal input for {title} selector"))?;
+            let event = event::read().with_context(|| format!("Failed to read terminal input for {title} selector"))?;
             match input::handle_event(event, total, &mut selected_index, &mut number_buffer)? {
                 input::SelectionAction::Continue => {}
                 input::SelectionAction::Select => return Ok(Some(selected_index)),

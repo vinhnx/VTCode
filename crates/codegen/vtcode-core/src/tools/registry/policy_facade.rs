@@ -7,9 +7,7 @@ use indexmap::IndexMap;
 use super::{ToolPermissionDecision, ToolRegistry};
 use crate::config::ToolsConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
-use crate::tools::mcp::{
-    is_legacy_mcp_tool_name, legacy_mcp_tool_name, parse_canonical_mcp_tool_name,
-};
+use crate::tools::mcp::{is_legacy_mcp_tool_name, legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
 use crate::tools::names::canonical_tool_name;
 
 fn more_restrictive_policy(left: ToolPolicy, right: ToolPolicy) -> ToolPolicy {
@@ -256,13 +254,10 @@ impl ToolRegistry {
         let detect_window = super::DEFAULT_LOOP_DETECT_WINDOW
             .max(normalized_tools_config.max_repeated_tool_calls.saturating_mul(2))
             .max(1);
-        self.execution_history.set_loop_detection_limits(
-            detect_window,
-            normalized_tools_config.max_repeated_tool_calls,
-        );
-        self.execution_history.set_rate_limit_per_minute(
-            crate::tools::rate_limit_config::tool_calls_per_minute_from_env(),
-        );
+        self.execution_history
+            .set_loop_detection_limits(detect_window, normalized_tools_config.max_repeated_tool_calls);
+        self.execution_history
+            .set_rate_limit_per_minute(crate::tools::rate_limit_config::tool_calls_per_minute_from_env());
 
         Ok(())
     }
@@ -289,8 +284,7 @@ impl ToolRegistry {
         let resolved_public_tool = self.resolve_public_tool(name).ok();
 
         if let Some(resolution) = &resolved_public_tool
-            && let Some((_, tool_name)) =
-                parse_canonical_mcp_tool_name(resolution.registration_name())
+            && let Some((_, tool_name)) = parse_canonical_mcp_tool_name(resolution.registration_name())
         {
             return self.evaluate_mcp_tool_policy(resolution.registration_name(), tool_name).await;
         }
@@ -333,11 +327,7 @@ impl ToolRegistry {
             .await
     }
 
-    async fn evaluate_mcp_tool_policy(
-        &self,
-        full_name: &str,
-        tool_name: &str,
-    ) -> Result<ToolPermissionDecision> {
+    async fn evaluate_mcp_tool_policy(&self, full_name: &str, tool_name: &str) -> Result<ToolPermissionDecision> {
         let provider = match self.find_mcp_provider(tool_name).await {
             Some(provider) => provider,
             None => {
@@ -390,9 +380,7 @@ impl ToolRegistry {
         } else if let Some((provider, tool_name)) = parse_canonical_mcp_tool_name(name) {
             (provider.to_string(), tool_name.to_string())
         } else if let Ok(resolution) = self.resolve_public_tool(name) {
-            let Some((provider, tool_name)) =
-                parse_canonical_mcp_tool_name(resolution.registration_name())
-            else {
+            let Some((provider, tool_name)) = parse_canonical_mcp_tool_name(resolution.registration_name()) else {
                 return Ok(());
             };
             (provider.to_string(), tool_name.to_string())

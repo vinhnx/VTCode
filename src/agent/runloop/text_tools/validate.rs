@@ -44,11 +44,7 @@ pub(crate) fn textual_tool_schema(name: &str) -> Option<TextualToolSchema> {
 ///   accepted as a tool call.
 ///
 /// Returns `true` if the arguments pass validation, `false` otherwise.
-pub(crate) fn normalize_and_validate_tool_args(
-    name: &str,
-    args: &mut Value,
-    positional: Vec<Value>,
-) -> bool {
+pub(crate) fn normalize_and_validate_tool_args(name: &str, args: &mut Value, positional: Vec<Value>) -> bool {
     let Some(schema) = textual_tool_schema(name) else {
         // Tools without an explicit schema cannot accept positional arguments;
         // otherwise any function call like `printf!("hi")` would look like a

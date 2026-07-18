@@ -22,9 +22,7 @@ fn image_paste_key(modifiers: KeyModifiers) -> KeyEvent {
 
 fn paste_image(session: &mut AppSession, attachment: &ContentPart) {
     let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(attachment.clone())
-        });
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(attachment.clone()));
     assert!(event.is_none());
 }
 
@@ -55,9 +53,7 @@ fn ctrl_v_attaches_clipboard_image_when_enabled() {
     set_image_input_enabled(&mut session, true);
 
     let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(attachment.clone())
-        });
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(attachment.clone()));
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "describe this[Image #1]");
@@ -70,10 +66,8 @@ fn pasted_image_renders_immediately_as_inline_text_placeholder() {
     let mut session = app_session_with_input("", 0);
     set_image_input_enabled(&mut session, true);
 
-    let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(image_part())
-        });
+    let event =
+        session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(image_part()));
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "[Image #1]");
@@ -88,18 +82,14 @@ fn pasted_images_insert_placeholders_at_cursor_and_keep_typed_order() {
     let mut session = app_session_with_input("", 0);
     set_image_input_enabled(&mut session, true);
 
-    let first_paste = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(image_part())
-        });
+    let first_paste =
+        session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(image_part()));
     assert!(first_paste.is_none());
     let event = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE));
     assert!(event.is_none());
     session.core.set_cursor(0);
-    let second_paste = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(image_part())
-        });
+    let second_paste =
+        session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(image_part()));
 
     assert!(second_paste.is_none());
     assert_eq!(session.core.input_manager.content(), "[Image #2][Image #1]o");
@@ -124,10 +114,7 @@ fn pasted_image_keeps_large_text_paste_collapsed() {
     }
     paste_image(&mut session, &image_part());
 
-    assert_eq!(
-        session.core.input_manager.content(),
-        format!("before{pasted_text} after[Image #1]")
-    );
+    assert_eq!(session.core.input_manager.content(), format!("before{pasted_text} after[Image #1]"));
     let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
     let rendered = text_content(&data.text);
     assert!(rendered.contains("before"));
@@ -142,10 +129,8 @@ fn consecutive_pasted_images_insert_consecutive_placeholders() {
     set_image_input_enabled(&mut session, true);
 
     for _ in 0..2 {
-        let event = session.process_key_with_clipboard_image_reader(
-            image_paste_key(KeyModifiers::CONTROL),
-            || Ok(image_part()),
-        );
+        let event = session
+            .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(image_part()));
         assert!(event.is_none());
     }
 
@@ -159,9 +144,7 @@ fn pasted_image_is_included_in_submit_payload() {
     set_image_input_enabled(&mut session, true);
 
     let paste_event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Ok(attachment.clone())
-        });
+        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || Ok(attachment.clone()));
 
     assert!(paste_event.is_none());
     session.core.input_manager.insert_text(" and here?");
@@ -236,9 +219,10 @@ fn orphaned_restored_single_attachment_uses_visible_compacted_placeholder_proven
     let mut session = app_session_with_input("", 0);
     let attachment = image_part_with_data("second-image");
 
-    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
-        app_types::SubmittedInput::new("[Image #2] describe remaining", vec![attachment]),
-    ));
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(app_types::SubmittedInput::new(
+        "[Image #2] describe remaining",
+        vec![attachment],
+    )));
     session.core.input_manager.set_content("describe remaining".to_owned());
 
     let submitted = submit(&mut session);
@@ -251,10 +235,8 @@ fn orphaned_restored_single_attachment_uses_visible_compacted_placeholder_proven
 fn orphaned_history_restored_single_attachment_uses_visible_compacted_placeholder_provenance() {
     let mut session = app_session_with_input("", 0);
     let attachment = image_part_with_data("second-image");
-    let entry = InputHistoryEntry::from_content_and_attachments(
-        "[Image #2] describe remaining".to_owned(),
-        vec![attachment],
-    );
+    let entry =
+        InputHistoryEntry::from_content_and_attachments("[Image #2] describe remaining".to_owned(), vec![attachment]);
 
     session.core.input_manager.apply_history_entry(entry);
     session.core.input_manager.set_content("describe remaining".to_owned());
@@ -271,12 +253,10 @@ fn orphaned_restored_non_contiguous_placeholders_keep_visible_attachment() {
     let second_attachment = image_part_with_data("second-image");
     let third_attachment = image_part_with_data("third-image");
 
-    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
-        app_types::SubmittedInput::new(
-            "[Image #2][Image #3] describe remaining",
-            vec![second_attachment.clone(), third_attachment],
-        ),
-    ));
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(app_types::SubmittedInput::new(
+        "[Image #2][Image #3] describe remaining",
+        vec![second_attachment.clone(), third_attachment],
+    )));
     session
         .core
         .input_manager
@@ -295,9 +275,10 @@ fn orphaned_later_paste_after_restored_placeholder_keeps_restored_attachment() {
     let pasted_attachment = image_part_with_data("pasted-image");
     set_image_input_enabled(&mut session, true);
 
-    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
-        app_types::SubmittedInput::new("[Image #2] restored", vec![restored_attachment.clone()]),
-    ));
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(app_types::SubmittedInput::new(
+        "[Image #2] restored",
+        vec![restored_attachment.clone()],
+    )));
     paste_image(&mut session, &pasted_attachment);
 
     assert_eq!(session.core.input_manager.content(), "[Image #2] restored[Image #3]");
@@ -316,10 +297,8 @@ fn alt_v_attaches_clipboard_image_when_enabled() {
     let attachment = image_part();
     set_image_input_enabled(&mut session, true);
 
-    let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::ALT), || {
-            Ok(attachment.clone())
-        });
+    let event =
+        session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::ALT), || Ok(attachment.clone()));
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "describe this[Image #1]");
@@ -332,13 +311,10 @@ fn unsupported_model_warning_does_not_read_or_attach() {
     let mut reader_called = false;
     set_image_input_enabled(&mut session, false);
 
-    let event = session.process_key_with_clipboard_image_reader(
-        image_paste_key(KeyModifiers::CONTROL),
-        || {
-            reader_called = true;
-            Ok(image_part())
-        },
-    );
+    let event = session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+        reader_called = true;
+        Ok(image_part())
+    });
 
     assert!(event.is_none());
     assert!(!reader_called);
@@ -354,10 +330,9 @@ fn no_image_warning_leaves_text_and_attachments_unchanged() {
     session.core.input_manager.set_attachments(vec![existing_attachment.clone()]);
     set_image_input_enabled(&mut session, true);
 
-    let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Err(ClipboardImageError::NoImage)
-        });
+    let event = session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+        Err(ClipboardImageError::NoImage)
+    });
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "keep text");
@@ -370,17 +345,13 @@ fn clipboard_unavailable_warning_leaves_text_unchanged() {
     let mut session = app_session_with_input("keep text", "keep text".len());
     set_image_input_enabled(&mut session, true);
 
-    let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::ALT), || {
-            Err(ClipboardImageError::ClipboardUnavailable)
-        });
+    let event = session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::ALT), || {
+        Err(ClipboardImageError::ClipboardUnavailable)
+    });
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "keep text");
-    assert_eq!(
-        warning_text(&session),
-        "Clipboard image paste is unavailable in this terminal or desktop session."
-    );
+    assert_eq!(warning_text(&session), "Clipboard image paste is unavailable in this terminal or desktop session.");
 }
 
 #[test]
@@ -388,17 +359,13 @@ fn wsl_fallback_failure_warning_leaves_text_unchanged() {
     let mut session = app_session_with_input("keep text", "keep text".len());
     set_image_input_enabled(&mut session, true);
 
-    let event = session
-        .process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
-            Err(ClipboardImageError::WslFallbackFailure)
-        });
+    let event = session.process_key_with_clipboard_image_reader(image_paste_key(KeyModifiers::CONTROL), || {
+        Err(ClipboardImageError::WslFallbackFailure)
+    });
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "keep text");
-    assert_eq!(
-        warning_text(&session),
-        "Could not read a clipboard image from Windows via PowerShell."
-    );
+    assert_eq!(warning_text(&session), "Could not read a clipboard image from Windows via PowerShell.");
 }
 
 #[test]

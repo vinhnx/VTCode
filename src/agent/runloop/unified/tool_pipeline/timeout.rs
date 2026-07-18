@@ -6,9 +6,7 @@ use tracing::warn;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolTimeoutCategory};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
-use crate::agent::runloop::unified::wait_feedback::{
-    resolve_fractional_warning_delay, wait_timeout_warning_message,
-};
+use crate::agent::runloop::unified::wait_feedback::{resolve_fractional_warning_delay, wait_timeout_warning_message};
 
 use super::{MIN_TIMEOUT_WARNING_HEADROOM, ToolExecutionStatus};
 
@@ -54,12 +52,9 @@ pub(crate) fn create_timeout_error(
     timeout: Option<Duration>,
 ) -> ToolExecutionStatus {
     let message = match timeout {
-        Some(limit) => format!(
-            "Operation '{}' exceeded the {} timeout ceiling ({}s)",
-            name,
-            category.label(),
-            limit.as_secs()
-        ),
+        Some(limit) => {
+            format!("Operation '{}' exceeded the {} timeout ceiling ({}s)", name, category.label(), limit.as_secs())
+        }
         None => format!("Operation '{}' exceeded the {} timeout ceiling", name, category.label()),
     };
 
@@ -169,15 +164,10 @@ mod tests {
 
     #[test]
     fn tool_timeout_warning_delay_targets_fractional_budget() {
-        assert_eq!(
-            tool_timeout_warning_delay(Duration::from_secs(60), 0.75),
-            Some(Duration::from_secs(45))
-        );
+        assert_eq!(tool_timeout_warning_delay(Duration::from_secs(60), 0.75), Some(Duration::from_secs(45)));
     }
 
-    async fn wait_for_message(
-        reporter: &ProgressReporter,
-    ) -> crate::agent::runloop::unified::progress::ProgressInfo {
+    async fn wait_for_message(reporter: &ProgressReporter) -> crate::agent::runloop::unified::progress::ProgressInfo {
         for _ in 0..10 {
             let info = reporter.progress_info().await;
             if !info.message.is_empty() {

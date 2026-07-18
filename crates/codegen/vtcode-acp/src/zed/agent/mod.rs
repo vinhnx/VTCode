@@ -65,10 +65,7 @@ impl ZedAgent {
         let tool_call_delay = tools_config.tool_call_delay();
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
-            Some(FileOpsTool::new(
-                workspace_root.clone(),
-                Arc::new(GrepSearchManager::new(search_root)),
-            ))
+            Some(FileOpsTool::new(workspace_root.clone(), Arc::new(GrepSearchManager::new(search_root))))
         } else {
             None
         };

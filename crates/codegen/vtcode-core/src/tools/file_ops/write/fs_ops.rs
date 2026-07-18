@@ -22,14 +22,10 @@ impl FileOpsTool {
         let to_path = self.normalize_and_validate_user_path(destination).await?;
 
         if self.should_exclude(&from_path).await {
-            return Err(anyhow!(
-                "Error: Path '{path}' is excluded by .vtcodegitignore and cannot be {operation}."
-            ));
+            return Err(anyhow!("Error: Path '{path}' is excluded by .vtcodegitignore and cannot be {operation}."));
         }
         if self.should_exclude(&to_path).await {
-            return Err(anyhow!(
-                "Error: Destination '{destination}' is excluded by .vtcodegitignore."
-            ));
+            return Err(anyhow!("Error: Destination '{destination}' is excluded by .vtcodegitignore."));
         }
 
         if !tokio::fs::try_exists(&from_path).await? {
@@ -92,8 +88,7 @@ impl FileOpsTool {
 
         let target_path = self.workspace_root.join(&path);
 
-        let exists =
-            with_path_context(tokio::fs::try_exists(&target_path).await, "check if exists", &path)?;
+        let exists = with_path_context(tokio::fs::try_exists(&target_path).await, "check if exists", &path)?;
 
         if !exists {
             if force {
@@ -106,44 +101,28 @@ impl FileOpsTool {
                 }));
             }
 
-            return Err(anyhow!(
-                "Error: Path '{path}' does not exist. Provide force=true to ignore missing files."
-            ));
+            return Err(anyhow!("Error: Path '{path}' does not exist. Provide force=true to ignore missing files."));
         }
 
-        let canonical = with_path_context(
-            tokio::fs::canonicalize(&target_path).await,
-            "resolve canonical path for",
-            &path,
-        )?;
+        let canonical =
+            with_path_context(tokio::fs::canonicalize(&target_path).await, "resolve canonical path for", &path)?;
 
         if !canonical.starts_with(self.canonical_workspace_root()) {
-            return Err(anyhow!(
-                "Error: Path '{path}' resolves outside the workspace and cannot be deleted."
-            ));
+            return Err(anyhow!("Error: Path '{path}' resolves outside the workspace and cannot be deleted."));
         }
 
         if self.should_exclude(&canonical).await {
-            return Err(anyhow!(
-                "Error: Path '{path}' is excluded by .vtcodegitignore and cannot be deleted."
-            ));
+            return Err(anyhow!("Error: Path '{path}' is excluded by .vtcodegitignore and cannot be deleted."));
         }
 
-        let metadata =
-            with_path_context(tokio::fs::metadata(&canonical).await, "read metadata for", &path)?;
+        let metadata = with_path_context(tokio::fs::metadata(&canonical).await, "read metadata for", &path)?;
 
         let deleted_kind = if metadata.is_dir() {
             if !recursive {
-                return Err(anyhow!(
-                    "Error: '{path}' is a directory. Pass recursive=true to remove directories."
-                ));
+                return Err(anyhow!("Error: '{path}' is a directory. Pass recursive=true to remove directories."));
             }
 
-            with_path_context(
-                tokio::fs::remove_dir_all(&canonical).await,
-                "remove directory",
-                &path,
-            )?;
+            with_path_context(tokio::fs::remove_dir_all(&canonical).await, "remove directory", &path)?;
             "directory"
         } else {
             with_path_context(tokio::fs::remove_file(&canonical).await, "remove file", &path)?;
@@ -164,13 +143,10 @@ impl FileOpsTool {
 
         let MoveInput { path, destination, force } = input;
 
-        let (from_path, to_path) =
-            self.validate_move_copy_args(&path, &destination, "moved").await?;
+        let (from_path, to_path) = self.validate_move_copy_args(&path, &destination, "moved").await?;
 
         if tokio::fs::try_exists(&to_path).await? && !force {
-            return Err(anyhow!(
-                "Destination path '{destination}' already exists. Use force=true to overwrite."
-            ));
+            return Err(anyhow!("Destination path '{destination}' already exists. Use force=true to overwrite."));
         }
 
         tokio::fs::rename(&from_path, &to_path)
@@ -192,15 +168,12 @@ impl FileOpsTool {
 
         let CopyInput { path, destination, recursive } = input;
 
-        let (from_path, to_path) =
-            self.validate_move_copy_args(&path, &destination, "copied").await?;
+        let (from_path, to_path) = self.validate_move_copy_args(&path, &destination, "copied").await?;
 
         let metadata = tokio::fs::metadata(&from_path).await?;
         if metadata.is_dir() {
             if !recursive {
-                return Err(anyhow!(
-                    "Path '{path}' is a directory. Use recursive=true to copy directories."
-                ));
+                return Err(anyhow!("Path '{path}' is a directory. Use recursive=true to copy directories."));
             }
             // Simple recursive copy
             use vtcode_commons::walk::build_walker_single_threaded;
@@ -212,11 +185,7 @@ impl FileOpsTool {
                 if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                     ensure_dir_exists(&target).await?;
                 } else {
-                    with_file_context(
-                        tokio::fs::copy(entry_path, &target).await,
-                        "copy",
-                        entry_path,
-                    )?;
+                    with_file_context(tokio::fs::copy(entry_path, &target).await, "copy", entry_path)?;
                 }
             }
         } else {

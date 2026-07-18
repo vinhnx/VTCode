@@ -27,9 +27,7 @@ pub(super) fn is_openai_prompt_cache_enabled(
     global_prompt_cache_enabled: bool,
     openai_prompt_cache_enabled: bool,
 ) -> bool {
-    provider_name.eq_ignore_ascii_case("openai")
-        && global_prompt_cache_enabled
-        && openai_prompt_cache_enabled
+    provider_name.eq_ignore_ascii_case("openai") && global_prompt_cache_enabled && openai_prompt_cache_enabled
 }
 
 pub(super) fn resolve_prompt_cache_shaping_mode(
@@ -38,9 +36,7 @@ pub(super) fn resolve_prompt_cache_shaping_mode(
 ) -> PromptCacheShapingMode {
     debug_assert_eq!(provider_name, provider_name.to_ascii_lowercase());
 
-    if !prompt_cache.cache_friendly_prompt_shaping
-        || !prompt_cache.is_provider_enabled(provider_name)
-    {
+    if !prompt_cache.cache_friendly_prompt_shaping || !prompt_cache.is_provider_enabled(provider_name) {
         return PromptCacheShapingMode::Disabled;
     }
 
@@ -97,8 +93,7 @@ pub(super) fn capture_turn_request_snapshot(
         prompt_cache_config.enabled,
         prompt_cache_config.providers.openai.enabled,
     );
-    let prompt_cache_shaping_mode =
-        resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
+    let prompt_cache_shaping_mode = resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
     let request_user_input_enabled = FeatureSet::from_config(ctx.vt_cfg)
         .request_user_input_enabled(planning_active, ctx.renderer.supports_inline_ui());
     let active_primary_agent = ctx.active_primary_agent.active().clone();
@@ -108,13 +103,11 @@ pub(super) fn capture_turn_request_snapshot(
         .vt_cfg
         .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
         .unwrap_or(DEFAULT_TURN_TIMEOUT_SECS);
-    let openai_prompt_cache_key_mode =
-        prompt_cache_config.providers.openai.prompt_cache_key_mode.clone();
+    let openai_prompt_cache_key_mode = prompt_cache_config.providers.openai.prompt_cache_key_mode.clone();
     let full_auto = ctx.full_auto;
     let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, &active_model);
     let client_local_tool_deferral =
-        active_deferred_tool_policy(&*ctx.config, ctx.vt_cfg, &**ctx.provider_client)
-            .is_client_local();
+        active_deferred_tool_policy(&*ctx.config, ctx.vt_cfg, &**ctx.provider_client).is_client_local();
 
     TurnRequestSnapshot {
         provider_name,
@@ -137,10 +130,7 @@ pub(super) fn capture_turn_request_snapshot(
     }
 }
 
-fn resolve_effective_request_model(
-    base_model: &str,
-    active_primary_agent: &ActivePrimaryAgent,
-) -> String {
+fn resolve_effective_request_model(base_model: &str, active_primary_agent: &ActivePrimaryAgent) -> String {
     active_primary_agent
         .model
         .as_deref()

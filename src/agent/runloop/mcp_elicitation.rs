@@ -4,12 +4,9 @@ use serde_json::Value;
 use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::Mutex;
 
-use vtcode_core::mcp::{
-    ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
-};
+use vtcode_core::mcp::{ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse};
 use vtcode_core::{
-    NotificationEvent, exec_policy::AskForApproval, send_global_notification,
-    utils::ansi_codes::notify_attention,
+    NotificationEvent, exec_policy::AskForApproval, send_global_notification, utils::ansi_codes::notify_attention,
 };
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
@@ -21,10 +18,7 @@ pub(crate) struct InteractiveMcpElicitationHandler {
 }
 
 impl InteractiveMcpElicitationHandler {
-    pub(crate) fn new(
-        hitl_notification_bell: bool,
-        approval_policy: Arc<StdRwLock<AskForApproval>>,
-    ) -> Self {
+    pub(crate) fn new(hitl_notification_bell: bool, approval_policy: Arc<StdRwLock<AskForApproval>>) -> Self {
         Self {
             prompt_lock: Mutex::new(()),
             hitl_notification_bell,
@@ -49,18 +43,13 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         let approval_policy = match self.approval_policy.read() {
             Ok(policy) => *policy,
             Err(poisoned) => {
-                tracing::warn!(
-                    "MCP elicitation approval policy lock poisoned; continuing with recovered value"
-                );
+                tracing::warn!("MCP elicitation approval policy lock poisoned; continuing with recovered value");
                 *poisoned.into_inner()
             }
         };
 
         if elicitation_is_rejected_by_policy(approval_policy) {
-            tracing::info!(
-                "Auto-declining MCP elicitation from '{}' due to approval policy",
-                provider
-            );
+            tracing::info!("Auto-declining MCP elicitation from '{}' due to approval policy", provider);
             return Ok(McpElicitationResponse {
                 action: ElicitationAction::Decline,
                 content: None,
@@ -103,9 +92,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             });
         }
 
-        tracing::info!(
-            "Enter JSON to accept, press Enter to decline, or type 'cancel' to cancel the operation."
-        );
+        tracing::info!("Enter JSON to accept, press Enter to decline, or type 'cancel' to cancel the operation.");
         print!("Response> ");
         io::stdout().flush().ok();
 
@@ -136,8 +123,7 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             });
         }
 
-        let content: Value =
-            serde_json::from_str(trimmed).context("Elicitation response must be valid JSON")?;
+        let content: Value = serde_json::from_str(trimmed).context("Elicitation response must be valid JSON")?;
 
         tracing::info!("Submitting elicitation response to '{}'.", provider);
 

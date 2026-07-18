@@ -1,7 +1,6 @@
 use super::skill_setup::{discover_skills, register_skill_tools};
 use super::types::{
-    SessionMetadataContext, SessionState, ToolExecutionContext,
-    build_conversation_history_from_resume,
+    SessionMetadataContext, SessionState, ToolExecutionContext, build_conversation_history_from_resume,
 };
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::mcp_events;
@@ -40,8 +39,8 @@ use vtcode_core::tools::handlers::{
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
 use vtcode_core::utils::dot_config::load_workspace_trust_level;
 use vtcode_core::{
-    ActivePrimaryAgent, apply_global_notification_config_from_vtcode,
-    build_primary_agent_runtime_config, init_global_notification_manager,
+    ActivePrimaryAgent, apply_global_notification_config_from_vtcode, build_primary_agent_runtime_config,
+    init_global_notification_manager,
 };
 
 use crate::startup::take_search_tools_bundle_notice;
@@ -85,10 +84,7 @@ fn vtcode_config_circuit_breaker_to_core(
 ///
 /// Returns an empty string when the provider key is blank (caller should fall
 /// back to the runtime provider name).
-pub(crate) fn resolve_provider_label(
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-) -> String {
+pub(crate) fn resolve_provider_label(config: &CoreAgentConfig, vt_cfg: Option<&VTCodeConfig>) -> String {
     if config.provider.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
         return "OpenAI (ChatGPT)".to_string();
     }
@@ -135,8 +131,7 @@ pub(crate) async fn initialize_session(
         tracing::debug!("Notification manager already initialized or unavailable: {}", err);
     }
 
-    let tool_documentation_mode =
-        vt_cfg.map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
+    let tool_documentation_mode = vt_cfg.map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
     let async_mcp_manager = create_async_mcp_manager(vt_cfg, None);
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
@@ -174,13 +169,7 @@ pub(crate) async fn initialize_session(
     tool_registry.set_harness_session(parent_session_id.to_string());
     if let Some(cfg) = vt_cfg {
         if let Err(err) = tool_registry
-            .apply_session_runtime_config(
-                &cfg.commands,
-                &cfg.permissions,
-                &cfg.sandbox,
-                &cfg.timeouts,
-                &cfg.tools,
-            )
+            .apply_session_runtime_config(&cfg.commands, &cfg.permissions, &cfg.sandbox, &cfg.timeouts, &cfg.tools)
             .await
         {
             warn!("Failed to apply tool policies from config: {}", err);
@@ -195,12 +184,7 @@ pub(crate) async fn initialize_session(
             .context("Failed to determine workspace trust level for tool policy")?,
     };
     let auto_permission_review_active = full_auto;
-    apply_workspace_trust_prompt_policy(
-        &mut tool_registry,
-        auto_permission_review_active,
-        workspace_trust_level,
-    )
-    .await;
+    apply_workspace_trust_prompt_policy(&mut tool_registry, auto_permission_review_active, workspace_trust_level).await;
 
     let subagent_controller = if resume.is_none_or(ResumeSession::is_root_thread)
         && let Some(cfg) = vt_cfg
@@ -251,8 +235,7 @@ pub(crate) async fn initialize_session(
     tool_registry.enable_cgp_pipeline(cgp_mode).await;
 
     let tool_catalog = tool_registry.tool_catalog_state();
-    let anthropic_native_memory_enabled =
-        active_anthropic_native_memory(config, vt_cfg, provider_client.as_ref());
+    let anthropic_native_memory_enabled = active_anthropic_native_memory(config, vt_cfg, provider_client.as_ref());
 
     let tools = Arc::new(RwLock::new(
         tool_registry
@@ -299,13 +282,9 @@ pub(crate) async fn initialize_session(
             tool_registry.is_planning_active(),
         );
         tool_registry
-            .enable_full_auto_permission_for_session(
-                &cfg.automation.full_auto.allowed_tools,
-                session_tools_config,
-            )
+            .enable_full_auto_permission_for_session(&cfg.automation.full_auto.allowed_tools, session_tools_config)
             .await;
-        full_auto_allowlist =
-            Some(tool_registry.current_full_auto_allowlist().await.unwrap_or_default());
+        full_auto_allowlist = Some(tool_registry.current_full_auto_allowlist().await.unwrap_or_default());
     }
 
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
@@ -323,12 +302,8 @@ pub(crate) async fn initialize_session(
     } else {
         Vec::new()
     };
-    let (base_system_prompt, system_prompt_report) = read_system_prompt(
-        &config.workspace,
-        session_bootstrap.prompt_addendum.as_deref(),
-        &available_subagents,
-    )
-    .await;
+    let (base_system_prompt, system_prompt_report) =
+        read_system_prompt(&config.workspace, session_bootstrap.prompt_addendum.as_deref(), &available_subagents).await;
     session_bootstrap.system_prompt_report = system_prompt_report;
     let resumed_primary_agent = resume.and_then(|r| r.snapshot().metadata.primary_agent.clone());
     let active_primary_agent = if let Some(controller) = subagent_controller.as_ref() {
@@ -340,12 +315,9 @@ pub(crate) async fn initialize_session(
             resumed_primary_agent.clone(),
         )?
     } else {
-        let discovered = vtcode_config::discover_subagents(
-            &vtcode_config::SubagentDiscoveryInput::new(config.workspace.clone()),
-        )
-        .with_context(|| {
-            format!("Failed to discover primary agents in {}", config.workspace.display())
-        })?;
+        let discovered =
+            vtcode_config::discover_subagents(&vtcode_config::SubagentDiscoveryInput::new(config.workspace.clone()))
+                .with_context(|| format!("Failed to discover primary agents in {}", config.workspace.display()))?;
         active_primary_agent_from_specs_for_mode(
             &discovered.effective,
             vt_cfg,
@@ -367,24 +339,19 @@ pub(crate) async fn initialize_session(
         .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
         .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
     let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
-    let permissions_state =
-        Arc::new(RwLock::new(vt_cfg.map(|cfg| cfg.permissions.clone()).unwrap_or_default()));
+    let permissions_state = Arc::new(RwLock::new(vt_cfg.map(|cfg| cfg.permissions.clone()).unwrap_or_default()));
     if let Some(cfg) = vt_cfg
         && cfg.context.dynamic.enabled
-        && let Err(err) = vtcode_core::context::initialize_dynamic_context(
-            &config.workspace,
-            &cfg.context.dynamic,
-        )
-        .await
+        && let Err(err) =
+            vtcode_core::context::initialize_dynamic_context(&config.workspace, &cfg.context.dynamic).await
     {
         warn!("Failed to initialize dynamic context directories: {}", err);
     }
 
-    let circuit_breaker =
-        Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
-            vtcode_config_circuit_breaker_to_core(vt_cfg, config),
-            tool_registry.metrics_collector(),
-        ));
+    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
+        vtcode_config_circuit_breaker_to_core(vt_cfg, config),
+        tool_registry.metrics_collector(),
+    ));
     tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
     let shared_safety_gateway = tool_registry.safety_gateway();
 
@@ -401,17 +368,11 @@ pub(crate) async fn initialize_session(
             tool_permission_cache,
             permissions_state,
             approval_recorder,
-            safety_validator: Arc::new(ToolCallSafetyValidator::with_gateway(
-                shared_safety_gateway,
-            )),
+            safety_validator: Arc::new(ToolCallSafetyValidator::with_gateway(shared_safety_gateway)),
             circuit_breaker: circuit_breaker.clone(),
             tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
-            rate_limiter: Arc::new(
-                vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
-            ),
-            validation_cache: Arc::new(
-                vtcode_core::tools::validation_cache::ValidationCache::default(),
-            ),
+            rate_limiter: Arc::new(vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default()),
+            validation_cache: Arc::new(vtcode_core::tools::validation_cache::ValidationCache::default()),
             autonomous_executor: {
                 let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
                 if let Some(cfg) = vt_cfg {
@@ -426,9 +387,7 @@ pub(crate) async fn initialize_session(
             decision_ledger,
             trajectory,
             telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
-            error_recovery: Arc::new(RwLock::new(
-                vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
-            )),
+            error_recovery: Arc::new(RwLock::new(vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new())),
         },
         base_system_prompt,
         full_auto_allowlist,
@@ -445,10 +404,7 @@ fn load_startup_update_check() -> crate::updater::StartupUpdateCheck {
     // pinned-version, and release_channel config.  Use its result when
     // available — it is always fresher than the on-disk cache.
     if let Some(notice) = crate::updater::get_preflight_notice() {
-        return crate::updater::StartupUpdateCheck {
-            cached_notice: Some(notice),
-            should_refresh: false,
-        };
+        return crate::updater::StartupUpdateCheck { cached_notice: Some(notice), should_refresh: false };
     }
 
     let updater = match Updater::new(env!("CARGO_PKG_VERSION")) {
@@ -691,11 +647,8 @@ async fn apply_workspace_trust_prompt_policy(
     auto_permission_review_active: bool,
     workspace_trust_level: Option<WorkspaceTrustLevel>,
 ) {
-    let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
-        false,
-        auto_permission_review_active,
-        workspace_trust_level,
-    );
+    let enforce_safe_mode_prompts =
+        should_enforce_safe_mode_prompts(false, auto_permission_review_active, workspace_trust_level);
     tool_registry.set_enforce_safe_mode_prompts(enforce_safe_mode_prompts).await;
 }
 
@@ -862,8 +815,7 @@ mod tests {
         ]))];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        let manager =
-            create_async_mcp_manager(Some(&cfg), Some(&active)).expect("manager should exist");
+        let manager = create_async_mcp_manager(Some(&cfg), Some(&active)).expect("manager should exist");
         let manager_config = manager.config();
         let provider_names = manager_config
             .providers
@@ -889,16 +841,14 @@ mod tests {
             default_primary_agent: "builder".to_string(),
             ..VTCodeConfig::default()
         };
-        let active =
-            active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
-                .expect("configured primary agent");
+        let active = active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
+            .expect("configured primary agent");
 
         assert_eq!(active.active().identity.name, "builder");
 
         cfg.default_primary_agent = "missing".to_string();
-        let fallback =
-            active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
-                .expect("fallback primary agent");
+        let fallback = active_primary_agent_from_specs(&[test_primary_agent_spec("builder")], Some(&cfg))
+            .expect("fallback primary agent");
 
         assert_eq!(fallback.active().identity.name, "build");
         assert_eq!(fallback.active().identity.source, SubagentSource::Builtin);
@@ -909,8 +859,7 @@ mod tests {
         let mut auto = test_primary_agent_spec("auto");
         auto.prompt = "Custom auto instructions".to_string();
 
-        let active = active_primary_agent_from_specs_for_mode(&[auto], None, true, false, None)
-            .expect("auto");
+        let active = active_primary_agent_from_specs_for_mode(&[auto], None, true, false, None).expect("auto");
 
         assert_eq!(active.active().identity.name, "auto");
         assert_eq!(active.active().instructions, "Custom auto instructions");
@@ -924,10 +873,7 @@ mod tests {
         };
         // A resumed "plan" session should restore "plan", not the config default "builder".
         let active = active_primary_agent_from_specs_for_mode(
-            &[
-                test_primary_agent_spec("plan"),
-                test_primary_agent_spec("builder"),
-            ],
+            &[test_primary_agent_spec("plan"), test_primary_agent_spec("builder")],
             Some(&cfg),
             false,
             false,
@@ -946,10 +892,7 @@ mod tests {
             ..VTCodeConfig::default()
         };
         let active = active_primary_agent_from_specs_for_mode(
-            &[
-                test_primary_agent_spec("plan"),
-                test_primary_agent_spec("builder"),
-            ],
+            &[test_primary_agent_spec("plan"), test_primary_agent_spec("builder")],
             Some(&cfg),
             false,
             true,
@@ -966,13 +909,10 @@ mod tests {
             default_primary_agent: "builder".to_string(),
             ..VTCodeConfig::default()
         };
-        let specs = [
-            test_primary_agent_spec("auto"),
-            test_primary_agent_spec("builder"),
-        ];
+        let specs = [test_primary_agent_spec("auto"), test_primary_agent_spec("builder")];
 
-        let active = active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true, None)
-            .expect("explicit builder");
+        let active =
+            active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true, None).expect("explicit builder");
 
         assert_eq!(active.active().identity.name, "builder");
     }
@@ -985,8 +925,8 @@ mod tests {
         };
         let specs = [test_primary_agent_spec("auto")];
 
-        let active = active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true, None)
-            .expect("explicit build");
+        let active =
+            active_primary_agent_from_specs_for_mode(&specs, Some(&cfg), true, true, None).expect("explicit build");
 
         assert_eq!(active.active().identity.name, "build");
         assert_eq!(active.active().identity.source, SubagentSource::Builtin);
@@ -994,14 +934,9 @@ mod tests {
 
     #[test]
     fn full_auto_missing_defaulted_auto_fails_fast() {
-        let err = active_primary_agent_from_specs_for_mode(
-            &[test_primary_agent_spec("builder")],
-            None,
-            true,
-            false,
-            None,
-        )
-        .expect_err("missing auto should fail");
+        let err =
+            active_primary_agent_from_specs_for_mode(&[test_primary_agent_spec("builder")], None, true, false, None)
+                .expect_err("missing auto should fail");
 
         assert!(
             err.to_string()

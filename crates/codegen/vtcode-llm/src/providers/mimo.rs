@@ -36,8 +36,7 @@ impl OpenAiCompatSpec for MimoSpec {
     const MAX_TOKENS_KEY: &'static str = "max_completion_tokens";
     const STREAM_OPTIONS_INCLUDE_USAGE: bool = true;
     const INCLUDE_USER_ID: bool = true;
-    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
-        Some(mimo_reasoning);
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> = Some(mimo_reasoning);
 
     fn resolve_base_url(api_key: &str, base_url: Option<String>) -> String {
         let auth = detect_mimo_auth_method(api_key, base_url.as_deref());
@@ -74,9 +73,7 @@ impl OpenAiCompatSpec for MimoSpec {
 
     fn apply_auth(core: &OpenAiCompatCore<Self>, builder: RequestBuilder) -> RequestBuilder {
         match auth_method(core) {
-            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => {
-                builder.header("api-key", &core.api_key)
-            }
+            MiMoAuthMethod::PayAsYouGo | MiMoAuthMethod::Unknown => builder.header("api-key", &core.api_key),
             MiMoAuthMethod::TokenPlan => builder.bearer_auth(&core.api_key),
         }
     }
@@ -93,12 +90,7 @@ impl OpenAiCompatSpec for MimoSpec {
     }
 
     fn validate(core: &OpenAiCompatCore<Self>, request: &LLMRequest) -> Result<(), LLMError> {
-        super::common::validate_supported_models(
-            request,
-            Self::NAME,
-            Self::KEY,
-            Self::listed_models(core),
-        )
+        super::common::validate_supported_models(request, Self::NAME, Self::KEY, Self::listed_models(core))
     }
 }
 
@@ -224,29 +216,13 @@ mod tests {
 
     #[test]
     fn auth_method_drives_supported_models() {
-        let payg = MiMoProvider::from_config(
-            Some("sk-test-key".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let payg = MiMoProvider::from_config(Some("sk-test-key".to_string()), None, None, None, None, None, None);
         assert_eq!(
             payg.supported_models(),
             models::mimo::PAYG_MODELS.iter().map(|m| m.to_string()).collect::<Vec<_>>()
         );
 
-        let token_plan = MiMoProvider::from_config(
-            Some("tp-test-key".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let token_plan = MiMoProvider::from_config(Some("tp-test-key".to_string()), None, None, None, None, None, None);
         assert_eq!(
             token_plan.supported_models(),
             models::mimo::TOKEN_PLAN_MODELS

@@ -12,11 +12,7 @@ const HARMONIOUS_UNSET: u8 = 2;
 
 static RUNTIME_HARMONIOUS_HINT: AtomicU8 = AtomicU8::new(HARMONIOUS_UNSET);
 
-fn resolve_harmony(
-    is_light_theme: bool,
-    env_override: Option<bool>,
-    runtime_hint: Option<bool>,
-) -> bool {
+fn resolve_harmony(is_light_theme: bool, env_override: Option<bool>, runtime_hint: Option<bool>) -> bool {
     env_override.or(runtime_hint).unwrap_or(!is_light_theme)
 }
 

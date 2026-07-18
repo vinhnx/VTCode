@@ -15,14 +15,10 @@ mod resume_render;
 
 use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::unified::reasoning::{
-    model_supports_reasoning, resolve_reasoning_visibility,
-};
+use crate::agent::runloop::unified::reasoning::{model_supports_reasoning, resolve_reasoning_visibility};
 use crate::agent::runloop::unified::session_setup::ide_context::IdeContextBridge;
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
-use crate::agent::runloop::unified::turn::utils::{
-    append_additional_context, render_hook_messages,
-};
+use crate::agent::runloop::unified::turn::utils::{append_additional_context, render_hook_messages};
 use crate::agent::runloop::unified::{context_manager, state};
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
@@ -35,9 +31,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
-use vtcode_core::notifications::{
-    set_global_notification_hook_engine, set_global_terminal_focused,
-};
+use vtcode_core::notifications::{set_global_notification_hook_engine, set_global_terminal_focused};
 use vtcode_core::primary_agent::build_primary_agent_hook_config;
 use vtcode_core::prompts::discover_prompt_templates;
 use vtcode_core::ui::slash::visible_commands;
@@ -51,14 +45,12 @@ use vtcode_core::utils::dot_config::load_user_config;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_ui::tui::app::{
-    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineListSelection,
-    PreviewCallback, SessionOptions, SlashCommandItem, spawn_session_with_options,
+    AgentPaletteItem, FocusChangeCallback, InlineEvent, InlineEventCallback, InlineListSelection, PreviewCallback,
+    SessionOptions, SlashCommandItem, spawn_session_with_options,
 };
 
 use self::header_context::{HeaderContextInit, initialize_header_context};
-pub(crate) use self::header_context::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
-};
+pub(crate) use self::header_context::{apply_ide_context_snapshot, ide_context_status_label_from_bridge};
 pub(crate) use self::local_agents::refresh_local_agents;
 use self::resume_render::render_resume_state_if_present;
 pub(crate) use self::resume_render::{build_structured_resume_lines, render_resume_lines};
@@ -111,14 +103,8 @@ pub(crate) async fn initialize_session_ui(
     } = options;
 
     let lifecycle_hooks = if let Some(vt) = vt_cfg {
-        let hooks =
-            build_primary_agent_hook_config(&vt.hooks, session_state.active_primary_agent.active());
-        LifecycleHookEngine::new_with_session(
-            config.workspace.clone(),
-            &hooks,
-            session_trigger,
-            session_id,
-        )?
+        let hooks = build_primary_agent_hook_config(&vt.hooks, session_state.active_primary_agent.active());
+        LifecycleHookEngine::new_with_session(config.workspace.clone(), &hooks, session_trigger, session_id)?
     } else {
         None
     };
@@ -234,13 +220,9 @@ pub(crate) async fn initialize_session_ui(
             surface_preference: vt_cfg
                 .and_then(|cfg| cfg.tui.alternate_screen)
                 .map(|mode| match mode {
-                    vtcode_core::config::TuiAlternateScreen::Always => {
-                        vtcode_ui::tui::app::SessionSurface::Alternate
-                    }
+                    vtcode_core::config::TuiAlternateScreen::Always => vtcode_ui::tui::app::SessionSurface::Alternate,
                     vtcode_core::config::TuiAlternateScreen::Never
-                    | vtcode_core::config::TuiAlternateScreen::Unknown => {
-                        vtcode_ui::tui::app::SessionSurface::Inline
-                    }
+                    | vtcode_core::config::TuiAlternateScreen::Unknown => vtcode_ui::tui::app::SessionSurface::Inline,
                 })
                 .unwrap_or_else(|| to_tui_surface(config.ui_surface)),
             inline_rows,
@@ -256,9 +238,7 @@ pub(crate) async fn initialize_session_ui(
             slash_commands: slash_command_items,
             appearance: vt_cfg.map(to_tui_appearance),
             app_name: "VT Code".to_string(),
-            non_interactive_hint: Some(
-                "Use `vtcode ask \"your prompt\"` for non-interactive input.".to_string(),
-            ),
+            non_interactive_hint: Some("Use `vtcode ask \"your prompt\"` for non-interactive input.".to_string()),
             key_bindings: user_key_bindings,
             preview_callback: Some(preview_callback),
         },
@@ -270,14 +250,12 @@ pub(crate) async fn initialize_session_ui(
     }
 
     let handle = session.clone_inline_handle();
-    let highlight_config =
-        vt_cfg.as_ref().map(|cfg| cfg.syntax_highlighting.clone()).unwrap_or_default();
+    let highlight_config = vt_cfg.as_ref().map(|cfg| cfg.syntax_highlighting.clone()).unwrap_or_default();
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut ide_context_bridge = Some(IdeContextBridge::new(config.workspace.clone()));
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
-    let supports_reasoning =
-        model_supports_reasoning(&*session_state.provider_client, &config.model);
+    let supports_reasoning = model_supports_reasoning(&*session_state.provider_client, &config.model);
     renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
     if let Ok((width, _)) = crossterm::terminal::size() {
         renderer.set_table_max_width(Some(width as usize));
@@ -302,8 +280,7 @@ pub(crate) async fn initialize_session_ui(
     let handle_for_search = handle.clone();
     let file_palette_task_guard = BackgroundTaskGuard::new(tokio::spawn(async move {
         match tokio::task::spawn_blocking(move || {
-            vtcode_core::SimpleIndexer::new(workspace_for_search.clone())
-                .discover_files(&workspace_for_search)
+            vtcode_core::SimpleIndexer::new(workspace_for_search.clone()).discover_files(&workspace_for_search)
         })
         .await
         {
@@ -347,22 +324,17 @@ pub(crate) async fn initialize_session_ui(
             .map(|cfg| cfg.subagents.background.refresh_interval_ms)
             .unwrap_or(2_000)
             .max(250);
-        background_subprocess_task_guard =
-            Some(BackgroundTaskGuard::new(tokio::spawn(async move {
-                let mut interval =
-                    tokio::time::interval(std::time::Duration::from_millis(refresh_interval_ms));
-                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        background_subprocess_task_guard = Some(BackgroundTaskGuard::new(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(refresh_interval_ms));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-                loop {
-                    interval.tick().await;
-                    if let Err(err) =
-                        refresh_local_agents(&handle_for_subprocesses, &controller_for_subprocesses)
-                            .await
-                    {
-                        tracing::warn!("Failed to refresh background subprocesses: {}", err);
-                    }
+            loop {
+                interval.tick().await;
+                if let Err(err) = refresh_local_agents(&handle_for_subprocesses, &controller_for_subprocesses).await {
+                    tracing::warn!("Failed to refresh background subprocesses: {}", err);
                 }
-            })));
+            }
+        })));
     }
 
     transcript::clear();
@@ -378,20 +350,18 @@ pub(crate) async fn initialize_session_ui(
     };
     let header_provider_label = provider_label.clone();
 
-    let mut checkpoint_config =
-        vtcode_core::core::agent::snapshots::SnapshotConfig::new(config.workspace.clone());
+    let mut checkpoint_config = vtcode_core::core::agent::snapshots::SnapshotConfig::new(config.workspace.clone());
     checkpoint_config.enabled = config.checkpointing_enabled;
     checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
     checkpoint_config.max_snapshots = config.checkpointing_max_snapshots;
     checkpoint_config.max_age_days = config.checkpointing_max_age_days;
-    let checkpoint_manager =
-        match vtcode_core::core::agent::snapshots::SnapshotManager::new(checkpoint_config) {
-            Ok(manager) => Some(manager),
-            Err(err) => {
-                warn!("Failed to initialize checkpoint manager: {}", err);
-                None
-            }
-        };
+    let checkpoint_manager = match vtcode_core::core::agent::snapshots::SnapshotManager::new(checkpoint_config) {
+        Ok(manager) => Some(manager),
+        Err(err) => {
+            warn!("Failed to initialize checkpoint manager: {}", err);
+            None
+        }
+    };
 
     if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
         hooks.update_transcript_path(Some(archive.path().to_path_buf())).await;
@@ -401,16 +371,10 @@ pub(crate) async fn initialize_session_ui(
         match hooks.run_session_start().await {
             Ok(outcome) => {
                 render_hook_messages(&mut renderer, &outcome.messages)?;
-                append_additional_context(
-                    &mut session_state.conversation_history,
-                    outcome.additional_context,
-                );
+                append_additional_context(&mut session_state.conversation_history, outcome.additional_context);
             }
             Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to run session start hooks: {err}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("Failed to run session start hooks: {err}"))?;
             }
         }
     }
@@ -424,10 +388,7 @@ pub(crate) async fn initialize_session_ui(
         } else {
             renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "Full-auto permission review enabled. Permitted tools: {}",
-                    allowlist.join(", ")
-                ),
+                &format!("Full-auto permission review enabled. Permitted tools: {}", allowlist.join(", ")),
             )?;
         }
     }

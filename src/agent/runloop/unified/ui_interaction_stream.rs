@@ -7,9 +7,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::sync::{Notify, mpsc};
 
-use crate::agent::runloop::unified::plan_blocks::{
-    ProposedPlanStreamParser, extract_proposed_plan,
-};
+use crate::agent::runloop::unified::plan_blocks::{ProposedPlanStreamParser, extract_proposed_plan};
 use crate::agent::runloop::unified::stream_sanitization::StreamSanitizer;
 use vtcode_commons::formatting::compact_reasoning_text;
 use vtcode_core::copilot::CopilotRuntimeRequest;
@@ -20,9 +18,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::CtrlCState;
 use super::ui_interaction::{PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions};
-use super::ui_interaction_stream_helpers::{
-    common_prefix_len, map_render_error, reasoning_matches_content,
-};
+use super::ui_interaction_stream_helpers::{common_prefix_len, map_render_error, reasoning_matches_content};
 
 #[derive(Clone, Copy)]
 pub(crate) struct FirstProgressTimeout {
@@ -234,13 +230,7 @@ fn flush_pending_reasoning(
     last_render_at: &mut Instant,
     reasoning_emitted: &mut bool,
 ) -> Result<(), uni::LLMError> {
-    let rendered = flush_pending_reasoning_delta(
-        provider_name,
-        renderer,
-        reasoning_state,
-        on_progress,
-        pending_delta,
-    )?;
+    let rendered = flush_pending_reasoning_delta(provider_name, renderer, reasoning_state, on_progress, pending_delta)?;
     if rendered {
         *reasoning_emitted = true;
     }
@@ -650,8 +640,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                         &mut reasoning_emitted,
                     )?;
                 }
-                if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
-                {
+                if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred() {
                     let rendered = reasoning_state
                         .flush_pending(renderer)
                         .map_err(|err| map_render_error(provider_name, err))?;
@@ -674,10 +663,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 if let Some(callback) = on_progress.as_deref_mut() {
                     callback(StreamProgressEvent::OutputDelta(visible_delta.clone()));
                 }
-                if !supports_streaming_markdown
-                    && !reasoning_accumulated.trim().is_empty()
-                    && !emitted_tokens
-                {
+                if !supports_streaming_markdown && !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                     pending_content.push_str(&visible_delta);
                     if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
                         aggregated.push_str(&pending_content);
@@ -715,17 +701,14 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     spinner.update_message("Processing reasoning...");
                     spinner_message_updated = true;
                 } else if last_progress_update.elapsed() >= Duration::from_millis(500) {
-                    spinner.update_message(format!(
-                        "Processing reasoning... ({reasoning_token_count} tokens)"
-                    ));
+                    spinner.update_message(format!("Processing reasoning... ({reasoning_token_count} tokens)"));
                     last_progress_update = Instant::now();
                 }
                 finish_spinner(&mut spinner_active, false);
                 reasoning_accumulated.push_str(&delta);
                 if stream_reasoning_deltas {
                     pending_reasoning_delta.push_str(&delta);
-                    pending_reasoning_render_bytes =
-                        pending_reasoning_render_bytes.saturating_add(delta.len());
+                    pending_reasoning_render_bytes = pending_reasoning_render_bytes.saturating_add(delta.len());
                     let should_render_now = !reasoning_emitted
                         || delta.contains('\n')
                         || pending_reasoning_render_bytes >= REASONING_RENDER_MAX_BYTES
@@ -800,14 +783,9 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         let trailing_plan_parse = parser.finish();
         if !trailing_plan_parse.stripped_text.is_empty() {
             if let Some(callback) = on_progress {
-                callback(StreamProgressEvent::OutputDelta(
-                    trailing_plan_parse.stripped_text.clone(),
-                ));
+                callback(StreamProgressEvent::OutputDelta(trailing_plan_parse.stripped_text.clone()));
             }
-            if !supports_streaming_markdown
-                && !reasoning_accumulated.trim().is_empty()
-                && !emitted_tokens
-            {
+            if !supports_streaming_markdown && !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                 pending_content.push_str(&trailing_plan_parse.stripped_text);
                 if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
                     aggregated.push_str(&pending_content);
@@ -816,12 +794,8 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
             } else {
                 aggregated.push_str(&trailing_plan_parse.stripped_text);
                 if supports_streaming_markdown {
-                    rendered_line_count = stream_markdown_with_provider_error(
-                        provider_name,
-                        renderer,
-                        &aggregated,
-                        rendered_line_count,
-                    )?;
+                    rendered_line_count =
+                        stream_markdown_with_provider_error(provider_name, renderer, &aggregated, rendered_line_count)?;
                     emitted_tokens = true;
                 }
             }
@@ -829,12 +803,8 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     }
 
     if supports_streaming_markdown && pending_render_bytes > 0 {
-        rendered_line_count = stream_markdown_with_provider_error(
-            provider_name,
-            renderer,
-            &aggregated,
-            rendered_line_count,
-        )?;
+        rendered_line_count =
+            stream_markdown_with_provider_error(provider_name, renderer, &aggregated, rendered_line_count)?;
         emitted_tokens = true;
     }
 
@@ -845,17 +815,14 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
             finish_spinner(&mut spinner_active, true);
-            let formatted_error = error_display::format_llm_error(
-                provider_name,
-                "Stream ended without a completion event",
-            );
+            let formatted_error =
+                error_display::format_llm_error(provider_name, "Stream ended without a completion event");
             return Err(uni::LLMError::Provider { message: formatted_error, metadata: None });
         }
     };
 
     if !pending_content.is_empty() && !content_suppressed {
-        let reasoning_for_compare =
-            response.reasoning.as_deref().unwrap_or(reasoning_accumulated.as_str());
+        let reasoning_for_compare = response.reasoning.as_deref().unwrap_or(reasoning_accumulated.as_str());
         if !reasoning_for_compare.trim().is_empty()
             && reasoning_matches_content(reasoning_for_compare, &pending_content)
         {
@@ -865,8 +832,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
 
     if !pending_content.is_empty() && !content_suppressed {
         let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
-        let reasoning_prefix =
-            !reasoning_accumulated.is_empty() && prefix_len == reasoning_accumulated.len();
+        let reasoning_prefix = !reasoning_accumulated.is_empty() && prefix_len == reasoning_accumulated.len();
         let pending = std::mem::take(&mut pending_content);
         let render_text = if reasoning_prefix {
             pending.get(prefix_len..).unwrap_or("").to_string()
@@ -874,10 +840,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
             pending
         };
 
-        if reasoning_prefix
-            && render_text.is_empty()
-            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-        {
+        if reasoning_prefix && render_text.is_empty() && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
             content_suppressed = true;
         } else {
             aggregated.push_str(&render_text);
@@ -887,12 +850,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 } else {
                     rendered_line_count
                 };
-                let _ = stream_markdown_with_provider_error(
-                    provider_name,
-                    renderer,
-                    &aggregated,
-                    prev_count,
-                )?;
+                let _ = stream_markdown_with_provider_error(provider_name, renderer, &aggregated, prev_count)?;
                 emitted_tokens = true;
             }
             if reasoning_prefix && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
@@ -950,12 +908,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                     } else {
                         rendered_line_count
                     };
-                    let _ = stream_markdown_with_provider_error(
-                        provider_name,
-                        renderer,
-                        content,
-                        prev_count,
-                    )?;
+                    let _ = stream_markdown_with_provider_error(provider_name, renderer, content, prev_count)?;
                 } else {
                     renderer
                         .line(MessageStyle::Response, content)
@@ -968,18 +921,10 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     }
 
     let rendered_reasoning_before = reasoning_state.rendered_reasoning();
-    if !has_renderable_content
-        || aggregated.trim().is_empty()
-        || suppress_reasoning_due_to_duplication
-    {
+    if !has_renderable_content || aggregated.trim().is_empty() || suppress_reasoning_due_to_duplication {
         let suppress_reasoning = suppress_reasoning_due_to_duplication;
         reasoning_state
-            .finalize(
-                renderer,
-                response.reasoning.as_deref(),
-                reasoning_emitted,
-                suppress_reasoning,
-            )
+            .finalize(renderer, response.reasoning.as_deref(), reasoning_emitted, suppress_reasoning)
             .map_err(|err| map_render_error(provider_name, err))?;
     }
 
@@ -993,12 +938,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         let reasoning_trimmed = clean_reasoning_text(reasoning.trim());
         if !reasoning_trimmed.is_empty() {
             if supports_streaming_markdown {
-                let _ = stream_markdown_with_provider_error(
-                    provider_name,
-                    renderer,
-                    &reasoning_trimmed,
-                    0,
-                )?;
+                let _ = stream_markdown_with_provider_error(provider_name, renderer, &reasoning_trimmed, 0)?;
             } else {
                 renderer
                     .line(MessageStyle::Response, &reasoning_trimmed)
@@ -1008,8 +948,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
         }
     }
 
-    let response_rendered =
-        emitted_tokens || reasoning_emitted || reasoning_state.rendered_reasoning();
+    let response_rendered = emitted_tokens || reasoning_emitted || reasoning_state.rendered_reasoning();
 
     Ok((response, response_rendered))
 }
@@ -1017,21 +956,16 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
 #[cfg(test)]
 mod tests {
     use super::{
-        CopilotRuntimeRequestHandler, FirstProgressTimeout,
-        render_stream_with_options_and_copilot_runtime_impl,
+        CopilotRuntimeRequestHandler, FirstProgressTimeout, render_stream_with_options_and_copilot_runtime_impl,
     };
     use crate::agent::runloop::unified::state::CtrlCState;
-    use crate::agent::runloop::unified::ui_interaction::{
-        PlaceholderSpinner, StreamSpinnerOptions,
-    };
+    use crate::agent::runloop::unified::ui_interaction::{PlaceholderSpinner, StreamSpinnerOptions};
     use async_trait::async_trait;
     use futures::stream;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::{Notify, mpsc};
-    use vtcode_core::copilot::{
-        CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotRuntimeRequest,
-    };
+    use vtcode_core::copilot::{CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotRuntimeRequest};
     use vtcode_core::llm::provider::{self as uni, FinishReason, LLMResponse, LLMStreamEvent};
     use vtcode_core::utils::ansi::AnsiRenderer;
     use vtcode_ui::tui::app::{InlineCommand, InlineHandle};

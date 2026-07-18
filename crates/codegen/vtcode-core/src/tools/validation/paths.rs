@@ -52,18 +52,14 @@ mod tests {
     #[test]
     fn blocks_empty_or_missing_paths() {
         for candidate in [None, Some(""), Some("/")] {
-            assert!(
-                validate_non_root_listing_path(candidate).is_err(),
-                "should block {candidate:?}"
-            );
+            assert!(validate_non_root_listing_path(candidate).is_err(), "should block {candidate:?}");
         }
     }
 
     #[test]
     fn allows_root_listing_path() {
         for candidate in [Some("."), Some("./")] {
-            validate_non_root_listing_path(candidate)
-                .unwrap_or_else(|_| panic!("should allow {candidate:?}"));
+            validate_non_root_listing_path(candidate).unwrap_or_else(|_| panic!("should allow {candidate:?}"));
         }
     }
 

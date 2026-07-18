@@ -10,8 +10,7 @@ use vtcode_core::utils::tty::TtyExt;
 
 use super::BenchmarkCommandOptions;
 
-const ERROR_SPEC_REQUIRED: &str =
-    "Provide a benchmark specification via --task-file, --task, or STDIN.";
+const ERROR_SPEC_REQUIRED: &str = "Provide a benchmark specification via --task-file, --task, or STDIN.";
 const ERROR_SPEC_EMPTY: &str = "Benchmark specification is empty.";
 const CONTEXT_PREFIX: &str = "ctx";
 const TASK_PREFIX: &str = "task";
@@ -80,10 +79,7 @@ struct RawContextDetail {
     path: Option<String>,
 }
 
-pub(super) fn load_prepared_tasks(
-    options: &BenchmarkCommandOptions,
-    workspace: &Path,
-) -> Result<Vec<PreparedTask>> {
+pub(super) fn load_prepared_tasks(options: &BenchmarkCommandOptions, workspace: &Path) -> Result<Vec<PreparedTask>> {
     let spec_source = load_spec_source(options)?;
     parse_spec(&spec_source, workspace)
 }
@@ -141,8 +137,7 @@ fn parse_spec(source: &str, workspace: &Path) -> Result<Vec<PreparedTask>> {
     }
 
     if trimmed.starts_with('{') || trimmed.starts_with('[') {
-        serde_json::from_str::<Value>(trimmed)
-            .context("Failed to parse benchmark specification JSON structure")?;
+        serde_json::from_str::<Value>(trimmed).context("Failed to parse benchmark specification JSON structure")?;
         bail!(
             "Unsupported benchmark JSON structure. Expected either an array of tasks or an object containing a \"tasks\" array."
         );
@@ -234,11 +229,7 @@ fn build_contexts(
         .collect()
 }
 
-fn convert_context_entry(
-    entry: RawContextEntry,
-    workspace: &Path,
-    index: usize,
-) -> Result<ContextItem> {
+fn convert_context_entry(entry: RawContextEntry, workspace: &Path, index: usize) -> Result<ContextItem> {
     match entry {
         RawContextEntry::Text(text) => {
             let trimmed = text.trim();
@@ -257,14 +248,13 @@ fn convert_context_entry(
             if content.is_empty()
                 && let Some(path) = detail.path
             {
-                let canonical =
-                    resolve_workspace_path(workspace, Path::new(&path)).with_context(|| {
-                        format!(
-                            "Failed to resolve benchmark context path '{}' relative to workspace {}",
-                            path,
-                            workspace.display()
-                        )
-                    })?;
+                let canonical = resolve_workspace_path(workspace, Path::new(&path)).with_context(|| {
+                    format!(
+                        "Failed to resolve benchmark context path '{}' relative to workspace {}",
+                        path,
+                        workspace.display()
+                    )
+                })?;
 
                 content = read_file_with_context_sync(&canonical, "benchmark context file")?;
             }
@@ -273,8 +263,7 @@ fn convert_context_entry(
                 bail!("Encountered an empty context entry at position {}", index + 1);
             }
 
-            let identifier =
-                detail.id.unwrap_or_else(|| format!("{}-{}", CONTEXT_PREFIX, index + 1));
+            let identifier = detail.id.unwrap_or_else(|| format!("{}-{}", CONTEXT_PREFIX, index + 1));
 
             Ok(ContextItem { id: identifier, content })
         }

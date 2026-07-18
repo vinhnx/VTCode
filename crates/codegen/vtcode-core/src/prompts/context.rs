@@ -105,8 +105,7 @@ impl PromptContext {
 
     /// Infer capability level from available tools
     pub fn infer_capability_level(&mut self) {
-        self.capability_level =
-            Some(crate::prompts::guidelines::infer_capability_level(&self.available_tools));
+        self.capability_level = Some(crate::prompts::guidelines::infer_capability_level(&self.available_tools));
     }
 
     /// Set current working directory
@@ -139,14 +138,9 @@ impl PromptContext {
         let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
             .map(|manager| manager.config().skills.bundled.enabled)
             .unwrap_or(true);
-        let manager = SkillsManager::new_with_bundled_skills_enabled(
-            home_dir.to_path_buf(),
-            bundled_skills_enabled,
-        );
+        let manager = SkillsManager::new_with_bundled_skills_enabled(home_dir.to_path_buf(), bundled_skills_enabled);
         let outcome = manager.skills_metadata_lightweight(workspace);
-        self.add_skill_metadata_entries(
-            outcome.skills.into_iter().filter(is_model_catalog_eligible).collect(),
-        );
+        self.add_skill_metadata_entries(outcome.skills.into_iter().filter(is_model_catalog_eligible).collect());
     }
 
     pub(crate) fn replace_available_skills_with_named_and_home_dir(
@@ -180,10 +174,7 @@ impl PromptContext {
         let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace)
             .map(|manager| manager.config().skills.bundled.enabled)
             .unwrap_or(true);
-        let manager = SkillsManager::new_with_bundled_skills_enabled(
-            home_dir.to_path_buf(),
-            bundled_skills_enabled,
-        );
+        let manager = SkillsManager::new_with_bundled_skills_enabled(home_dir.to_path_buf(), bundled_skills_enabled);
         let outcome = manager.skills_metadata_lightweight(workspace);
         self.add_skill_metadata_entries(
             outcome
@@ -283,15 +274,10 @@ mod tests {
     fn load_available_skills_discovers_repo_and_system_skills() {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir(workspace.path().join(".git")).expect("create git dir");
-        write_skill(
-            &workspace.path().join(".agents/skills/repo-skill"),
-            "repo-skill",
-            "Repo-local skill",
-        );
+        write_skill(&workspace.path().join(".agents/skills/repo-skill"), "repo-skill", "Repo-local skill");
 
         let home = TempDir::new().expect("home tempdir");
-        let mut context =
-            PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
+        let mut context = PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
         assert!(context.available_skill_metadata.is_empty());
 
@@ -317,13 +303,9 @@ mod tests {
         write_skill(&workspace.path().join(".agents/skills/beta"), "beta", "Beta skill");
 
         let home = TempDir::new().expect("home tempdir");
-        let mut context =
-            PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
+        let mut context = PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
-        context.replace_available_skills_with_named_and_home_dir(
-            &["alpha".to_string()],
-            Some(home.path()),
-        );
+        context.replace_available_skills_with_named_and_home_dir(&["alpha".to_string()], Some(home.path()));
         assert_eq!(
             context
                 .available_skill_metadata
@@ -333,10 +315,7 @@ mod tests {
             vec!["alpha"]
         );
 
-        context.replace_available_skills_with_named_and_home_dir(
-            &["beta".to_string()],
-            Some(home.path()),
-        );
+        context.replace_available_skills_with_named_and_home_dir(&["beta".to_string()], Some(home.path()));
         assert_eq!(
             context
                 .available_skill_metadata

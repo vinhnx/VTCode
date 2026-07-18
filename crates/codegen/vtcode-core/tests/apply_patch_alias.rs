@@ -3,8 +3,7 @@ use serde_json::json;
 use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
 
-const SAMPLE_PATCH: &str =
-    "*** Begin Patch\n*** Add File: hello.txt\n+Hello from patch alias!\n*** End Patch\n";
+const SAMPLE_PATCH: &str = "*** Begin Patch\n*** Add File: hello.txt\n+Hello from patch alias!\n*** End Patch\n";
 
 #[tokio::test]
 async fn apply_patch_supports_patch_alias() {

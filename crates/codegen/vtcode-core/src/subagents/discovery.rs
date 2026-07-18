@@ -7,9 +7,7 @@ use crate::plugins::manifest::PluginManifest;
 
 // ─── Subagent Discovery ────────────────────────────────────────────────────
 
-pub(crate) async fn discover_controller_subagents(
-    workspace_root: &Path,
-) -> Result<DiscoveredSubagents> {
+pub(crate) async fn discover_controller_subagents(workspace_root: &Path) -> Result<DiscoveredSubagents> {
     let plugin_agent_files = discover_plugin_agent_files(workspace_root).await?;
     let mut input = SubagentDiscoveryInput::new(workspace_root.to_path_buf());
     input.plugin_agent_files = plugin_agent_files;
@@ -23,9 +21,9 @@ async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(Strin
             continue;
         }
 
-        let mut plugin_entries = tokio::fs::read_dir(&plugin_root).await.with_context(|| {
-            format!("Failed to read plugin directory {}", plugin_root.display())
-        })?;
+        let mut plugin_entries = tokio::fs::read_dir(&plugin_root)
+            .await
+            .with_context(|| format!("Failed to read plugin directory {}", plugin_root.display()))?;
         while let Some(entry) = plugin_entries.next_entry().await? {
             let path = entry.path();
             if !path.is_dir() {
@@ -37,13 +35,11 @@ async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(Strin
             }
 
             let manifest: PluginManifest = serde_json::from_str(
-                &tokio::fs::read_to_string(&manifest_path).await.with_context(|| {
-                    format!("Failed to read plugin manifest {}", manifest_path.display())
-                })?,
+                &tokio::fs::read_to_string(&manifest_path)
+                    .await
+                    .with_context(|| format!("Failed to read plugin manifest {}", manifest_path.display()))?,
             )
-            .with_context(|| {
-                format!("Failed to parse plugin manifest {}", manifest_path.display())
-            })?;
+            .with_context(|| format!("Failed to parse plugin manifest {}", manifest_path.display()))?;
             for agent_path in AgentsHandler::process_agents(&path, manifest.agents.clone()).await? {
                 files.push((manifest.name.clone(), agent_path));
             }

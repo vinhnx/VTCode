@@ -476,11 +476,7 @@ impl StreamingSkillExecutor {
             }
         }
 
-        if events.is_empty() {
-            None
-        } else {
-            Some(events)
-        }
+        if events.is_empty() { None } else { Some(events) }
     }
 
     /// Configure command arguments from JSON
@@ -628,17 +624,11 @@ pub struct ProgressInfo {
 /// Extension trait for streaming execution
 pub trait StreamingExecution {
     /// Execute with streaming output
-    fn execute_streaming(
-        &self,
-        args: Value,
-    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>>;
+    fn execute_streaming(&self, args: Value) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>>;
 }
 
 impl StreamingExecution for CliToolBridge {
-    fn execute_streaming(
-        &self,
-        args: Value,
-    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>> {
+    fn execute_streaming(&self, args: Value) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>> {
         let executor = StreamingSkillExecutor::new();
         executor.execute_cli_tool_streaming(self, args)
     }

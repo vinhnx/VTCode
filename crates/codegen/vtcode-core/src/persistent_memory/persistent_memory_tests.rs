@@ -1,8 +1,7 @@
 use super::*;
 use crate::config::models::ModelId;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse,
-    NormalizedStreamEvent,
+    FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent,
 };
 use crate::llm::resolve_api_key_for_model_route;
 use async_trait::async_trait;
@@ -136,9 +135,8 @@ fn maybe_extract_user_fact_keeps_durable_self_facts() {
     assert_eq!(name.source, "user_assertion");
     assert_eq!(name.fact, "My name is Vinh Nguyen");
 
-    let preference =
-        maybe_extract_user_fact(&Message::user("I prefer cargo nextest for test runs".to_string()))
-            .expect("preference should be extracted");
+    let preference = maybe_extract_user_fact(&Message::user("I prefer cargo nextest for test runs".to_string()))
+        .expect("preference should be extracted");
     assert_eq!(preference.source, "user_assertion");
     assert_eq!(preference.fact, "I prefer cargo nextest for test runs");
 }
@@ -146,46 +144,27 @@ fn maybe_extract_user_fact_keeps_durable_self_facts() {
 #[test]
 fn maybe_extract_user_fact_ignores_transient_first_person_task_chatter() {
     assert!(
-        maybe_extract_user_fact(&Message::user(
-            "I am debugging a failing vtcode-core test".to_string(),
-        ))
-        .is_none()
+        maybe_extract_user_fact(&Message::user("I am debugging a failing vtcode-core test".to_string(),)).is_none()
     );
     assert!(
-        maybe_extract_user_fact(&Message::user(
-            "My tests are still failing after the refactor".to_string(),
-        ))
-        .is_none()
+        maybe_extract_user_fact(&Message::user("My tests are still failing after the refactor".to_string(),)).is_none()
     );
 }
 
 #[test]
 fn maybe_extract_user_fact_keeps_authored_notes_after_polite_prefixes() {
-    let note = maybe_extract_user_fact(&Message::user(
-        "Please note that I prefer pnpm in JavaScript workspaces".to_string(),
-    ))
-    .expect("authored note should be extracted");
+    let note =
+        maybe_extract_user_fact(&Message::user("Please note that I prefer pnpm in JavaScript workspaces".to_string()))
+            .expect("authored note should be extracted");
     assert_eq!(note.source, "user_assertion");
     assert_eq!(note.fact, "I prefer pnpm in JavaScript workspaces");
 }
 
 #[test]
 fn maybe_extract_user_fact_ignores_memory_prompts_and_questions() {
-    assert!(
-        maybe_extract_user_fact(
-            &Message::user("remember that I prefer cargo nextest".to_string(),)
-        )
-        .is_none()
-    );
-    assert!(
-        maybe_extract_user_fact(&Message::user("do you remember my name?".to_string())).is_none()
-    );
-    assert!(
-        maybe_extract_user_fact(&Message::user(
-            "what do you remember about this repo?".to_string(),
-        ))
-        .is_none()
-    );
+    assert!(maybe_extract_user_fact(&Message::user("remember that I prefer cargo nextest".to_string(),)).is_none());
+    assert!(maybe_extract_user_fact(&Message::user("do you remember my name?".to_string())).is_none());
+    assert!(maybe_extract_user_fact(&Message::user("what do you remember about this repo?".to_string(),)).is_none());
 }
 
 #[tokio::test]
@@ -201,9 +180,7 @@ async fn finalize_persistent_memory_ignores_explicit_memory_prompts() {
     let report = finalize_persistent_memory(
         &runtime,
         Some(&vt_cfg),
-        &[Message::user(
-            "remember that I prefer cargo nextest".to_string(),
-        )],
+        &[Message::user("remember that I prefer cargo nextest".to_string())],
     )
     .await
     .expect("finalize should skip ignored prompts");
@@ -221,10 +198,9 @@ async fn finalize_persistent_memory_skips_existing_authored_note_duplicates() {
 
     let vt_cfg = enabled_vt_memory_config_for(workspace.path());
 
-    let memory_dir =
-        resolve_persistent_memory_dir(&vt_cfg.agent.persistent_memory, workspace.path())
-            .expect("memory dir")
-            .expect("resolved dir");
+    let memory_dir = resolve_persistent_memory_dir(&vt_cfg.agent.persistent_memory, workspace.path())
+        .expect("memory dir")
+        .expect("resolved dir");
     let files = PersistentMemoryFiles::new(memory_dir);
     std::fs::create_dir_all(&files.directory).expect("dir");
     std::fs::write(
@@ -262,14 +238,10 @@ async fn llm_classification_rewrites_and_routes_candidates() {
         model: "stub-model".to_string(),
         temperature: 0.0,
     };
-    let classified = classify_facts_with_provider(
-        &provider,
-        &route,
-        workspace.path(),
-        &dedup_latest_facts(&message_history(), 8),
-    )
-    .await
-    .expect("classify");
+    let classified =
+        classify_facts_with_provider(&provider, &route, workspace.path(), &dedup_latest_facts(&message_history(), 8))
+            .await
+            .expect("classify");
 
     assert_eq!(classified.preferences.len(), 1);
     assert_eq!(classified.repository_facts.len(), 1);
@@ -367,14 +339,10 @@ async fn classification_falls_back_to_prompt_only_json_when_native_schema_is_uns
         temperature: 0.0,
     };
 
-    let classified = classify_facts_with_provider(
-        &provider,
-        &route,
-        workspace.path(),
-        &dedup_latest_facts(&message_history(), 8),
-    )
-    .await
-    .expect("classify");
+    let classified =
+        classify_facts_with_provider(&provider, &route, workspace.path(), &dedup_latest_facts(&message_history(), 8))
+            .await
+            .expect("classify");
 
     assert_eq!(classified.preferences.len(), 1);
     let request = provider.last_request();
@@ -435,10 +403,7 @@ impl LLMProvider for StreamingOnlyMemoryProvider {
         panic!("generate should not be called for streaming-only provider")
     }
 
-    async fn stream_normalized(
-        &self,
-        _request: LLMRequest,
-    ) -> std::result::Result<LLMNormalizedStream, LLMError> {
+    async fn stream_normalized(&self, _request: LLMRequest) -> std::result::Result<LLMNormalizedStream, LLMError> {
         Ok(Box::pin(stream::iter(vec![Ok(NormalizedStreamEvent::Done {
             response: Box::new(LLMResponse {
                 content: Some(self.response.to_string()),
@@ -648,11 +613,10 @@ async fn remember_plan_persists_normalized_manual_memory_update() {
         message: None,
     };
 
-    let report =
-        persist_remembered_memory_plan(&runtime_config(workspace.path()), Some(&vt_cfg), &plan)
-            .await
-            .expect("remember plan")
-            .expect("report");
+    let report = persist_remembered_memory_plan(&runtime_config(workspace.path()), Some(&vt_cfg), &plan)
+        .await
+        .expect("remember plan")
+        .expect("report");
 
     assert_eq!(report.added_facts, 1);
     let excerpt = read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
@@ -685,26 +649,20 @@ async fn forget_planned_matches_remove_notes_from_memory_files() {
         .expect("remember plan")
         .expect("report");
 
-    let matches =
-        find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
-            .await
-            .expect("find matches")
-            .expect("enabled");
+    let matches = find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
+        .await
+        .expect("find matches")
+        .expect("enabled");
     assert!(!matches.is_empty());
 
-    let candidates =
-        list_persistent_memory_candidates(&vt_cfg.agent.persistent_memory, workspace.path())
-            .await
-            .expect("list")
-            .expect("enabled")
-            .into_iter()
-            .enumerate()
-            .map(|(index, entry)| MemoryOpCandidate {
-                id: index,
-                source: entry.source,
-                fact: entry.fact,
-            })
-            .collect::<Vec<_>>();
+    let candidates = list_persistent_memory_candidates(&vt_cfg.agent.persistent_memory, workspace.path())
+        .await
+        .expect("list")
+        .expect("enabled")
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| MemoryOpCandidate { id: index, source: entry.source, fact: entry.fact })
+        .collect::<Vec<_>>();
     let plan = MemoryOpPlan {
         kind: MemoryOpKind::Forget,
         facts: Vec::new(),
@@ -713,18 +671,16 @@ async fn forget_planned_matches_remove_notes_from_memory_files() {
         message: None,
     };
 
-    let report =
-        forget_planned_persistent_memory_matches(&runtime, Some(&vt_cfg), &candidates, &plan)
-            .await
-            .expect("forget plan")
-            .expect("report");
+    let report = forget_planned_persistent_memory_matches(&runtime, Some(&vt_cfg), &candidates, &plan)
+        .await
+        .expect("forget plan")
+        .expect("report");
     assert!(report.removed_facts >= 1);
 
-    let matches =
-        find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
-            .await
-            .expect("find matches")
-            .expect("enabled");
+    let matches = find_persistent_memory_matches(&vt_cfg.agent.persistent_memory, workspace.path(), "pnpm")
+        .await
+        .expect("find matches")
+        .expect("enabled");
     assert!(matches.is_empty());
 
     let excerpt = read_persistent_memory_excerpt(&vt_cfg.agent.persistent_memory, workspace.path())
@@ -749,8 +705,7 @@ fn cleanup_status_flags_legacy_prompt_lines() {
         "# Preferences\n\n- [user_assertion] save to memory and remember my name\n",
     )
     .expect("prefs");
-    std::fs::write(&files.summary_file, "# VT Code Memory Summary\n\n- {\"query\":\"pnpm\"}\n")
-        .expect("summary");
+    std::fs::write(&files.summary_file, "# VT Code Memory Summary\n\n- {\"query\":\"pnpm\"}\n").expect("summary");
 
     let status = detect_memory_cleanup_status(&files).expect("status");
     assert!(status.needed);
@@ -767,11 +722,8 @@ fn cleanup_status_ignores_normalized_user_assertion_fact() {
         .expect("resolved dir");
     let files = PersistentMemoryFiles::new(memory_dir);
     std::fs::create_dir_all(&files.directory).expect("dir");
-    std::fs::write(
-        &files.preferences_file,
-        "# Preferences\n\n- [user_assertion] My name is Vinh Nguyen\n",
-    )
-    .expect("prefs");
+    std::fs::write(&files.preferences_file, "# Preferences\n\n- [user_assertion] My name is Vinh Nguyen\n")
+        .expect("prefs");
 
     let status = detect_memory_cleanup_status(&files).expect("status");
     assert!(!status.needed);
@@ -838,8 +790,7 @@ fn resolve_memory_route_api_key_uses_runtime_key_for_active_provider() {
 #[test]
 fn resolves_project_scoped_memory_directory() {
     let workspace = tempdir().expect("workspace");
-    std::fs::write(workspace.path().join(".vtcode-project"), "renamed-project")
-        .expect("project name");
+    std::fs::write(workspace.path().join(".vtcode-project"), "renamed-project").expect("project name");
     let config = enabled_memory_config();
     let directory = resolve_persistent_memory_dir(&config, workspace.path())
         .expect("memory dir")
@@ -868,8 +819,7 @@ fn migrates_legacy_memory_into_empty_target_directory() {
     migrate_legacy_memory_dir(&legacy_dir, &target_dir).expect("migrate");
 
     assert!(!legacy_dir.exists());
-    let migrated =
-        std::fs::read_to_string(target_dir.join(PREFERENCES_FILENAME)).expect("target prefs");
+    let migrated = std::fs::read_to_string(target_dir.join(PREFERENCES_FILENAME)).expect("target prefs");
     assert!(migrated.contains("Prefer cargo nextest"));
 }
 
@@ -892,26 +842,18 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
     .expect("legacy facts");
 
     std::fs::create_dir_all(target_dir.join(ROLLOUT_SUMMARIES_DIRNAME)).expect("target dir");
-    std::fs::write(
-        target_dir.join(PREFERENCES_FILENAME),
-        render_topic_file(MemoryTopic::Preferences, &[]),
-    )
-    .expect("target prefs");
-    std::fs::write(
-        target_dir.join(REPOSITORY_FACTS_FILENAME),
-        render_topic_file(MemoryTopic::RepositoryFacts, &[]),
-    )
-    .expect("target facts");
-    std::fs::write(target_dir.join(MEMORY_FILENAME), render_memory_index(&[], &[], &[], 0))
-        .expect("target memory");
+    std::fs::write(target_dir.join(PREFERENCES_FILENAME), render_topic_file(MemoryTopic::Preferences, &[]))
+        .expect("target prefs");
+    std::fs::write(target_dir.join(REPOSITORY_FACTS_FILENAME), render_topic_file(MemoryTopic::RepositoryFacts, &[]))
+        .expect("target facts");
+    std::fs::write(target_dir.join(MEMORY_FILENAME), render_memory_index(&[], &[], &[], 0)).expect("target memory");
     std::fs::write(target_dir.join(MEMORY_SUMMARY_FILENAME), render_memory_summary(&[], &[], &[]))
         .expect("target summary");
 
     migrate_legacy_memory_dir(&legacy_dir, &target_dir).expect("migrate");
 
     assert!(!legacy_dir.exists());
-    let migrated =
-        std::fs::read_to_string(target_dir.join(REPOSITORY_FACTS_FILENAME)).expect("target facts");
+    let migrated = std::fs::read_to_string(target_dir.join(REPOSITORY_FACTS_FILENAME)).expect("target facts");
     assert!(migrated.contains("Tests live under vtcode-core/tests"));
 }
 

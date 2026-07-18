@@ -24,8 +24,7 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
     if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
         && !messages.is_empty()
     {
-        renderer
-            .line(MessageStyle::ToolDetail, &format!("{} snippets retrieved", messages.len()))?;
+        renderer.line(MessageStyle::ToolDetail, &format!("{} snippets retrieved", messages.len()))?;
     }
 
     if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
@@ -37,8 +36,7 @@ pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -
             }
         }
         if errors.len() > 1 {
-            renderer
-                .line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
+            renderer.line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
         }
     }
 
@@ -68,8 +66,7 @@ pub(crate) fn render_sequential_output(renderer: &mut AnsiRenderer, val: &Value)
             }
         }
         if errors.len() > 1 {
-            renderer
-                .line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
+            renderer.line(MessageStyle::ToolError, &format!("… {} more errors", errors.len() - 1))?;
         }
     }
 
@@ -87,10 +84,8 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 }
                 if let Ok(json_val) = serde_json::from_str::<Value>(text) {
                     if content.len() > 1 {
-                        block_lines.push(PanelContentLine::new(
-                            format!("[content {}]", idx + 1),
-                            MessageStyle::ToolDetail,
-                        ));
+                        block_lines
+                            .push(PanelContentLine::new(format!("[content {}]", idx + 1), MessageStyle::ToolDetail));
                     }
                     collect_formatted_json_lines(&mut block_lines, &json_val)?;
                 } else if text.contains("```") {
@@ -114,21 +109,14 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
             }) {
                 render_text_content(text)?;
             } else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
-                block_lines
-                    .push(PanelContentLine::new("[image content]", MessageStyle::ToolDetail));
+                block_lines.push(PanelContentLine::new("[image content]", MessageStyle::ToolDetail));
                 if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
-                    block_lines.push(PanelContentLine::new(
-                        format!("type: {mime}"),
-                        MessageStyle::ToolDetail,
-                    ));
+                    block_lines.push(PanelContentLine::new(format!("type: {mime}"), MessageStyle::ToolDetail));
                 }
             } else if item.get("type").and_then(|t| t.as_str()) == Some("resource")
                 && let Some(uri) = item.get("uri").and_then(|v| v.as_str())
             {
-                block_lines.push(PanelContentLine::new(
-                    format!("[resource: {uri}]"),
-                    MessageStyle::ToolDetail,
-                ));
+                block_lines.push(PanelContentLine::new(format!("[resource: {uri}]"), MessageStyle::ToolDetail));
             }
         }
     }
@@ -141,13 +129,10 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
         }
         for (key, value) in meta {
             if let Some(text) = value.as_str() {
-                block_lines.push(PanelContentLine::new(
-                    format!("{}: {}", key, shorten(text, 100)),
-                    MessageStyle::ToolDetail,
-                ));
-            } else if let Some(num) = value.as_u64() {
                 block_lines
-                    .push(PanelContentLine::new(format!("{key}: {num}"), MessageStyle::ToolDetail));
+                    .push(PanelContentLine::new(format!("{}: {}", key, shorten(text, 100)), MessageStyle::ToolDetail));
+            } else if let Some(num) = value.as_u64() {
+                block_lines.push(PanelContentLine::new(format!("{key}: {num}"), MessageStyle::ToolDetail));
             }
         }
     }
@@ -170,8 +155,7 @@ fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) 
                 in_code_block = true;
                 let lang = line.trim_start().trim_start_matches("```").trim();
                 if !lang.is_empty() {
-                    lines
-                        .push(PanelContentLine::new(format!("[{lang}]"), MessageStyle::ToolDetail));
+                    lines.push(PanelContentLine::new(format!("[{lang}]"), MessageStyle::ToolDetail));
                 }
             }
         } else {

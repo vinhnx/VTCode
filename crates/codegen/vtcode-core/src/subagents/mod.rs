@@ -12,25 +12,22 @@ mod types;
 // ─── Re-exports ─────────────────────────────────────────────────────────────
 
 pub use background::{
-    background_record_id, build_background_subagent_command, extract_tail_lines,
-    load_archive_preview, subagent_display_label,
+    background_record_id, build_background_subagent_command, extract_tail_lines, load_archive_preview,
+    subagent_display_label,
 };
 pub use config::{
-    ResolvedAgentRuntimeView, build_child_config, compose_subagent_instructions,
-    filter_child_tools, normalize_background_child_max_turns, normalize_child_max_turns,
-    prepare_child_runtime_config,
+    ResolvedAgentRuntimeView, build_child_config, compose_subagent_instructions, filter_child_tools,
+    normalize_background_child_max_turns, normalize_child_max_turns, prepare_child_runtime_config,
 };
 pub use model::{agent_type_for_spec, load_memory_appendix, load_primary_memory_appendix};
 pub use prompt::{
-    contains_explicit_delegation_request, contains_explicit_model_request,
-    delegated_task_requires_clarification, extract_explicit_agent_mentions,
-    normalize_requested_model_override, request_prompt, sanitize_subagent_input_items,
+    contains_explicit_delegation_request, contains_explicit_model_request, delegated_task_requires_clarification,
+    extract_explicit_agent_mentions, normalize_requested_model_override, request_prompt, sanitize_subagent_input_items,
 };
 pub use types::{
-    BackgroundRecord, BackgroundSubprocessEntry, BackgroundSubprocessSnapshot,
-    BackgroundSubprocessStatus, ChildRecord, ChildRunResult, ControllerState,
-    PersistedBackgroundRecord, PersistedBackgroundState, SendInputRequest, SpawnAgentRequest,
-    SpawnBackgroundSubprocessRequest, StatusEntryBuilder, SubagentInputItem, SubagentStatus,
+    BackgroundRecord, BackgroundSubprocessEntry, BackgroundSubprocessSnapshot, BackgroundSubprocessStatus, ChildRecord,
+    ChildRunResult, ControllerState, PersistedBackgroundRecord, PersistedBackgroundState, SendInputRequest,
+    SpawnAgentRequest, SpawnBackgroundSubprocessRequest, StatusEntryBuilder, SubagentInputItem, SubagentStatus,
     SubagentStatusEntry, SubagentThreadSnapshot, TurnDelegationHints,
 };
 
@@ -192,10 +189,8 @@ impl SubagentController {
     /// Parses the current user input to extract explicit agent mentions and delegation signals.
     pub async fn set_turn_delegation_hints_from_input(&self, input: &str) -> Vec<String> {
         let mut state = self.state.write().await;
-        let explicit_mentions =
-            extract_explicit_agent_mentions(input, state.discovered.effective.as_slice());
-        let explicit_request =
-            contains_explicit_delegation_request(input, explicit_mentions.as_slice());
+        let explicit_mentions = extract_explicit_agent_mentions(input, state.discovered.effective.as_slice());
+        let explicit_request = contains_explicit_delegation_request(input, explicit_mentions.as_slice());
         state.turn_hints = TurnDelegationHints {
             explicit_mentions: explicit_mentions.clone(),
             explicit_request,

@@ -58,14 +58,12 @@ mod tool;
 
 pub use call::{FunctionCall, ToolCall};
 pub use message::{AssistantPhase, ContentPart, Message, MessageContent, MessageRole};
-pub use provider_trait::{
-    LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
-};
+pub use provider_trait::{LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities};
 pub use request::{
-    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
-    AnthropicThinkingConfig, AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride,
-    CodingAgentSettings, FallbackModel, LLMRequest, ParallelToolConfig, PromptCacheProfile,
-    ResponsesCompactionOptions, SpecificFunctionChoice, SpecificToolChoice, ToolChoice,
+    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides, AnthropicThinkingConfig,
+    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, CodingAgentSettings, FallbackModel, LLMRequest,
+    ParallelToolConfig, PromptCacheProfile, ResponsesCompactionOptions, SpecificFunctionChoice, SpecificToolChoice,
+    ToolChoice,
 };
 pub use response::{
     BorrowedLLMStream, FinishReason, LLMNormalizedStream, LLMResponse, LLMStream, LLMStreamEvent,
@@ -73,10 +71,9 @@ pub use response::{
 };
 pub use responses_continuation::{
     PreparedResponsesRequest, ResponsesContinuationState, prepare_openai_responses_request,
-    prepare_responses_continuation_request, records_responses_continuation_state,
-    responses_continuation_key, supports_responses_chaining, uses_incremental_responses_history,
+    prepare_responses_continuation_request, records_responses_continuation_state, responses_continuation_key,
+    supports_responses_chaining, uses_incremental_responses_history,
 };
 pub use tool::{
-    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolNamespace,
-    ToolSearchAlgorithm,
+    FunctionDefinition, GrammarDefinition, ShellToolDefinition, ToolDefinition, ToolNamespace, ToolSearchAlgorithm,
 };

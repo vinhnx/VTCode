@@ -442,10 +442,7 @@ impl HarnessTurnState {
         self.tool_calls = self.tool_calls.saturating_add(1);
     }
 
-    pub(crate) fn record_tool_call_with_warning(
-        &mut self,
-        threshold: f64,
-    ) -> Option<ToolBudgetWarning> {
+    pub(crate) fn record_tool_call_with_warning(&mut self, threshold: f64) -> Option<ToolBudgetWarning> {
         self.record_tool_call();
         if !self.should_emit_tool_budget_warning(threshold) {
             return None;
@@ -470,14 +467,11 @@ impl HarnessTurnState {
     /// for symmetry with the other `record_*` helpers and is incremented
     /// alongside the in-message tracking.
     pub(crate) fn record_assistant_text_response(&mut self) -> u32 {
-        self.assistant_text_responses_in_turn =
-            self.assistant_text_responses_in_turn.saturating_add(1);
+        self.assistant_text_responses_in_turn = self.assistant_text_responses_in_turn.saturating_add(1);
         self.assistant_text_responses_in_turn
     }
 
-    pub(crate) fn record_tool_budget_exhaustion_notice(
-        &mut self,
-    ) -> Option<ToolBudgetExhaustionNotice> {
+    pub(crate) fn record_tool_budget_exhaustion_notice(&mut self) -> Option<ToolBudgetExhaustionNotice> {
         let exhaustion = self.tool_budget_exhaustion()?;
         let first_notice = !self.tool_budget_exhausted_emitted;
         if first_notice {
@@ -500,9 +494,7 @@ impl HarnessTurnState {
     /// call it flags `first_notice` (so the full policy message is emitted once)
     /// and arms `wall_clock_directive_pending` so the handler pushes a single
     /// "synthesize now" system directive *after* the tool batch completes.
-    pub(crate) fn record_wall_clock_exhaustion_notice(
-        &mut self,
-    ) -> Option<ToolWallClockExhaustionNotice> {
+    pub(crate) fn record_wall_clock_exhaustion_notice(&mut self) -> Option<ToolWallClockExhaustionNotice> {
         let exhaustion = self.wall_clock_budget_exhaustion()?;
         let first_notice = !self.wall_clock_exhausted_emitted;
         if first_notice {
@@ -541,9 +533,7 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
-        self.has_tool_call_budget()
-            && !self.tool_budget_warning_emitted
-            && self.tool_budget_usage_ratio() >= threshold
+        self.has_tool_call_budget() && !self.tool_budget_warning_emitted && self.tool_budget_usage_ratio() >= threshold
     }
 
     pub(crate) fn mark_tool_budget_warning_emitted(&mut self) {
@@ -558,11 +548,7 @@ impl HarnessTurnState {
         self.activate_recovery_with_mode(reason, RecoveryMode::ToolFreeSynthesis);
     }
 
-    pub(crate) fn activate_recovery_with_mode(
-        &mut self,
-        reason: impl Into<String>,
-        mode: RecoveryMode,
-    ) {
+    pub(crate) fn activate_recovery_with_mode(&mut self, reason: impl Into<String>, mode: RecoveryMode) {
         if matches!(self.recovery_phase, RecoveryPhase::Inactive) {
             self.recovery_reason = Some(reason.into());
             self.recovery_phase = RecoveryPhase::Pending;
@@ -694,8 +680,7 @@ impl HarnessTurnState {
 
     pub(crate) fn record_shell_command_run(&mut self, signature: String) -> usize {
         if self.last_shell_command_signature.as_deref() == Some(signature.as_str()) {
-            self.consecutive_same_shell_command_runs =
-                self.consecutive_same_shell_command_runs.saturating_add(1);
+            self.consecutive_same_shell_command_runs = self.consecutive_same_shell_command_runs.saturating_add(1);
         } else {
             self.last_shell_command_signature = Some(signature);
             self.consecutive_same_shell_command_runs = 1;
@@ -925,23 +910,16 @@ impl<'a> RunLoopContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CrossTurnTracker, HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD,
-        ToolBudgetExhaustion, ToolBudgetExhaustionNotice, ToolBudgetWarning,
-        ToolWallClockExhaustion, ToolWallClockExhaustionNotice, TurnExecutionPhase, TurnId,
-        TurnPhase, TurnRunId,
+        CrossTurnTracker, HarnessTurnState, RecoveryMode, TOOL_BUDGET_WARNING_THRESHOLD, ToolBudgetExhaustion,
+        ToolBudgetExhaustionNotice, ToolBudgetWarning, ToolWallClockExhaustion, ToolWallClockExhaustionNotice,
+        TurnExecutionPhase, TurnId, TurnPhase, TurnRunId,
     };
     use hashbrown::HashSet;
     use std::time::{Duration, Instant};
 
     #[test]
     fn harness_state_tracks_phase_transitions() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            2,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
 
         // Verify that run_id and turn_id are accessible
         assert_eq!(state.run_id.0, "run-1");
@@ -958,13 +936,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_spool_chunk_read_streak() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            2,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 2, 10, 1);
 
         assert_eq!(state.record_spool_chunk_read(), 1);
         assert_eq!(state.record_spool_chunk_read(), 2);
@@ -974,13 +946,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_budget_warning_threshold_once() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert!(!state.should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD));
         state.record_tool_call(); // 1/4
@@ -996,13 +962,7 @@ mod tests {
 
     #[test]
     fn harness_state_records_budget_warning_once_via_helper() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert_eq!(state.record_tool_call_with_default_warning(), None);
         assert_eq!(state.record_tool_call_with_default_warning(), None);
@@ -1023,13 +983,7 @@ mod tests {
 
     #[test]
     fn harness_state_records_budget_exhaustion_notice_once_via_helper() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            1,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 1, 10, 1);
 
         assert!(!state.tool_budget_exhausted());
         assert!(!state.tool_budget_exhausted_emitted);
@@ -1062,13 +1016,7 @@ mod tests {
 
     #[test]
     fn tool_budget_exhaustion_notice_arms_synthesis_directive_once() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            1,
-            600,
-            3,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 1, 600, 3);
         state.record_tool_call();
         assert!(state.record_tool_budget_exhaustion_notice().is_some());
         assert!(state.take_tool_budget_directive_pending());
@@ -1087,13 +1035,7 @@ mod tests {
 
     #[test]
     fn harness_state_treats_zero_tool_budget_as_unlimited() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            0,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 0, 10, 1);
 
         for _ in 0..8 {
             state.record_tool_call();
@@ -1107,31 +1049,16 @@ mod tests {
 
     #[test]
     fn harness_state_reports_wall_clock_budget_exhaustion() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert_eq!(state.wall_clock_budget_exhaustion(), None);
         state.turn_started_at = Instant::now().checked_sub(Duration::from_secs(11)).unwrap();
-        assert_eq!(
-            state.wall_clock_budget_exhaustion(),
-            Some(ToolWallClockExhaustion { max_secs: 10 })
-        );
+        assert_eq!(state.wall_clock_budget_exhaustion(), Some(ToolWallClockExhaustion { max_secs: 10 }));
     }
 
     #[test]
     fn harness_state_records_wall_clock_exhaustion_notice_once() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         // Not exhausted yet: no notice, no pending directive.
         assert_eq!(state.record_wall_clock_exhaustion_notice(), None);
@@ -1167,10 +1094,7 @@ mod tests {
     #[test]
     fn tool_wall_clock_exhaustion_directive_messages_match_contract() {
         let exhaustion = ToolWallClockExhaustion { max_secs: 600 };
-        assert_eq!(
-            exhaustion.skipped_call_message(),
-            "Tool wall-clock budget exhausted for this turn; call skipped."
-        );
+        assert_eq!(exhaustion.skipped_call_message(), "Tool wall-clock budget exhausted for this turn; call skipped.");
         assert_eq!(
             exhaustion.synthesis_directive_message(),
             "Tool wall-clock budget exhausted for this turn (600s). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation."
@@ -1179,13 +1103,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_blocked_call_streak() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert_eq!(state.blocked_tool_calls, 0);
         assert_eq!(state.record_blocked_tool_call(), 1);
@@ -1197,13 +1115,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_recovery_state() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert!(!state.is_recovery_active());
         assert!(!state.recovery_pass_used());
@@ -1222,13 +1134,7 @@ mod tests {
 
     #[test]
     fn harness_state_consumes_recovery_pass_once() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert!(!state.consume_recovery_pass());
 
@@ -1242,13 +1148,7 @@ mod tests {
 
     #[test]
     fn harness_state_supports_tool_enabled_recovery_retries() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
 
@@ -1269,53 +1169,32 @@ mod tests {
         // switch left it there, `consume_recovery_pass()` would return false,
         // `tool_free_recovery` would evaluate to false, and tools would never
         // be disabled at the API level.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         // Fresh state: recovery is inactive.
         assert!(!state.is_recovery_active());
         assert!(!state.recovery_is_tool_free());
 
         // Switching from Inactive must engage a tool-free recovery pass.
-        assert!(
-            state.switch_to_tool_free_recovery(),
-            "switch from Inactive must report a phase change"
-        );
+        assert!(state.switch_to_tool_free_recovery(), "switch from Inactive must report a phase change");
         assert!(state.is_recovery_active(), "phase must be Pending");
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
         assert!(state.recovery_is_tool_free());
 
         // The pass must be consumable. This is what the turn loop checks to
         // decide `tool_free_recovery = true` and disable tools at the API level.
-        assert!(
-            state.consume_recovery_pass(),
-            "consume_recovery_pass must succeed after switch from Inactive"
-        );
+        assert!(state.consume_recovery_pass(), "consume_recovery_pass must succeed after switch from Inactive");
 
         // A default recovery reason must be seeded so the [Recovery Mode]
         // request block reports why recovery was engaged.
-        assert!(
-            state.recovery_reason().is_some(),
-            "recovery_reason must be seeded when switching from Inactive"
-        );
+        assert!(state.recovery_reason().is_some(), "recovery_reason must be seeded when switching from Inactive");
     }
 
     #[test]
     fn harness_state_switch_to_tool_free_recovery_from_in_pass_keeps_consumable() {
         // Switching from InPass (a pass already in flight) must still reset to
         // Pending so the next loop iteration can consume it.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
         assert!(state.consume_recovery_pass()); // -> InPass
@@ -1323,22 +1202,13 @@ mod tests {
 
         assert!(state.switch_to_tool_free_recovery());
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
-        assert!(
-            state.consume_recovery_pass(),
-            "pass must be consumable again after switching from InPass"
-        );
+        assert!(state.consume_recovery_pass(), "pass must be consumable again after switching from InPass");
     }
 
     #[test]
     fn harness_state_switch_to_tool_free_recovery_from_completed_keeps_consumable() {
         // No-regression guard: switching from Completed must reset to Pending.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         state.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
         assert!(state.consume_recovery_pass()); // -> InPass
@@ -1354,21 +1224,12 @@ mod tests {
     fn harness_state_switch_to_tool_free_recovery_idempotent_when_pending() {
         // When already Pending, switching reports no phase change but still
         // forces the mode to ToolFreeSynthesis.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         state.activate_recovery("loop detector");
         assert!(state.is_recovery_active()); // Pending
 
-        assert!(
-            !state.switch_to_tool_free_recovery(),
-            "switch from Pending must report no phase change"
-        );
+        assert!(!state.switch_to_tool_free_recovery(), "switch from Pending must report no phase change");
         assert_eq!(state.recovery_mode(), Some(RecoveryMode::ToolFreeSynthesis));
         assert!(state.consume_recovery_pass());
     }
@@ -1378,13 +1239,7 @@ mod tests {
         // Switching from Inactive resets the retry counter (mirrors
         // activate_recovery_with_mode) so any stale count does not
         // prematurely exhaust the in-pass retry budget on the new pass.
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         // Fresh state: retry_count is 0, phase is Inactive.
         assert_eq!(state.recovery_retry_count(), 0);
@@ -1403,11 +1258,7 @@ mod tests {
         assert!(state.consume_recovery_pass());
         assert!(state.finish_recovery_pass());
         state.switch_to_tool_free_recovery();
-        assert_eq!(
-            state.recovery_retry_count(),
-            1,
-            "retry count must NOT be reset when switching from Completed"
-        );
+        assert_eq!(state.recovery_retry_count(), 1, "retry count must NOT be reset when switching from Completed");
 
         // Consume and retry: the budget should tick up to 2, not start over.
         assert!(state.consume_recovery_pass());
@@ -1417,13 +1268,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_post_tool_recovery_cycles() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert_eq!(state.post_tool_recovery_cycles(), 0);
         assert_eq!(state.increment_post_tool_recovery_cycle(), 1);
@@ -1436,13 +1281,7 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_task_tracker_create_signatures() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert!(state.record_task_tracker_create_signature(
             "task_tracker::create::{\"title\":\"A\",\"items\":[\"x\"]}".to_string()
@@ -1457,37 +1296,17 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_successful_readonly_signatures() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert!(!state.has_successful_readonly_signature("file_operation:ro:len10-fnv1234"));
-        assert!(
-            state.record_successful_readonly_signature(
-                "file_operation:ro:len10-fnv1234".to_string()
-            )
-        );
+        assert!(state.record_successful_readonly_signature("file_operation:ro:len10-fnv1234".to_string()));
         assert!(state.has_successful_readonly_signature("file_operation:ro:len10-fnv1234"));
-        assert!(
-            !state.record_successful_readonly_signature(
-                "file_operation:ro:len10-fnv1234".to_string()
-            )
-        );
+        assert!(!state.record_successful_readonly_signature("file_operation:ro:len10-fnv1234".to_string()));
     }
 
     #[test]
     fn harness_state_tracks_identical_shell_command_streak() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 1);
         assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 2);
@@ -1497,13 +1316,7 @@ mod tests {
 
     #[test]
     fn harness_state_resets_shell_command_streak() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
         state.record_shell_command_run("exec_command::cargo check".to_string());
         state.reset_shell_command_run_streak();
@@ -1513,26 +1326,11 @@ mod tests {
 
     #[test]
     fn harness_state_tracks_file_read_family_streak() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-1".to_string()),
-            TurnId("turn-1".to_string()),
-            4,
-            10,
-            1,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
 
-        assert_eq!(
-            state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()),
-            1
-        );
-        assert_eq!(
-            state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()),
-            2
-        );
-        assert_eq!(
-            state.record_file_read_family_call("apply_patch::read::src/main.rs".to_string()),
-            1
-        );
+        assert_eq!(state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()), 1);
+        assert_eq!(state.record_file_read_family_call("apply_patch::read::src/lib.rs".to_string()), 2);
+        assert_eq!(state.record_file_read_family_call("apply_patch::read::src/main.rs".to_string()), 1);
 
         state.reset_file_read_family_streak();
         assert_eq!(state.consecutive_same_file_read_family_calls, 0);
@@ -1540,13 +1338,8 @@ mod tests {
 
     #[test]
     fn file_read_path_counts_track_per_path_regardless_of_slice() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-path".to_string()),
-            TurnId("turn-path".to_string()),
-            20,
-            600,
-            3,
-        );
+        let mut state =
+            HarnessTurnState::new(TurnRunId("run-path".to_string()), TurnId("turn-path".to_string()), 20, 600, 3);
 
         // Same path, different offsets — each increments the path counter.
         assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
@@ -1563,13 +1356,7 @@ mod tests {
 
     #[test]
     fn harness_state_builds_execution_snapshot() {
-        let mut state = HarnessTurnState::new(
-            TurnRunId("run-9".to_string()),
-            TurnId("turn-3".to_string()),
-            6,
-            120,
-            2,
-        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-9".to_string()), TurnId("turn-3".to_string()), 6, 120, 2);
         state.set_phase(TurnPhase::ExecutingTools);
 
         let snapshot = state.execution_snapshot();

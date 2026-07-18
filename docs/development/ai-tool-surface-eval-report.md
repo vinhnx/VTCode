@@ -21,7 +21,7 @@ telemetry, so the case schema makes no telemetry claim.
 ## Baseline Data
 
 No checked-in archived baseline report for the old tool surface was found in
-`evals/`, `docs/`, or benchmark report paths during this slice. No live provider
+`scripts/evals/`, `docs/`, or benchmark report paths during this slice. No live provider
 run was performed for this report. The baseline column is therefore marked
 unavailable. This context is report prose, not an executable eval case.
 

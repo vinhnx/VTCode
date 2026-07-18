@@ -97,18 +97,9 @@ mod tests {
         queue.push("second".into(), Some("build".to_string()));
         queue.push("third".into(), Some("review".to_string()));
 
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("third")
-        );
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("first")
-        );
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("second")
-        );
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
     }
 
     #[test]
@@ -125,18 +116,9 @@ mod tests {
 
         queue.prefer_latest_next();
 
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("third")
-        );
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("first")
-        );
-        assert_eq!(
-            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
-            Some("second")
-        );
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("third"));
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("first"));
+        assert_eq!(queue.take_next_submission().map(|queued| queued.input.text).as_deref(), Some("second"));
     }
 
     #[test]

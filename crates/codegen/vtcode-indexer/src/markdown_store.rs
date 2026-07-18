@@ -79,9 +79,8 @@ impl MarkdownStorage {
                 Ok(_) => {}
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
                 Err(err) => {
-                    return Err(err).with_context(|| {
-                        format!("Failed to delete markdown file at {}", file_path.display())
-                    });
+                    return Err(err)
+                        .with_context(|| format!("Failed to delete markdown file at {}", file_path.display()));
                 }
             }
         }
@@ -125,8 +124,7 @@ impl MarkdownStorage {
         }
 
         if let Some(yaml_block) = self.extract_code_block(content, "yaml") {
-            return serde_saphyr::from_str(yaml_block)
-                .context("Failed to parse YAML from markdown");
+            return serde_saphyr::from_str(yaml_block).context("Failed to parse YAML from markdown");
         }
 
         Err(anyhow::anyhow!("No valid JSON or YAML found in markdown"))
@@ -174,9 +172,8 @@ impl MarkdownStorage {
 
 fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| {
-            format!("Failed to ensure parent directory exists for {}", path.display())
-        })?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to ensure parent directory exists for {}", path.display()))?;
     }
 
     let mut file = OpenOptions::new()
@@ -189,20 +186,16 @@ fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
     FileExt::lock_exclusive(&file)
         .with_context(|| format!("Failed to acquire exclusive lock for {}", path.display()))?;
 
-    file.set_len(0).with_context(|| {
-        format!("Failed to truncate file at {} while holding exclusive lock", path.display())
-    })?;
+    file.set_len(0)
+        .with_context(|| format!("Failed to truncate file at {} while holding exclusive lock", path.display()))?;
 
-    file.write_all(data).with_context(|| {
-        format!("Failed to write file content to {} while holding exclusive lock", path.display())
-    })?;
+    file.write_all(data)
+        .with_context(|| format!("Failed to write file content to {} while holding exclusive lock", path.display()))?;
 
-    file.sync_all().with_context(|| {
-        format!("Failed to sync file at {} after writing with exclusive lock", path.display())
-    })?;
+    file.sync_all()
+        .with_context(|| format!("Failed to sync file at {} after writing with exclusive lock", path.display()))?;
 
-    FileExt::unlock(&file)
-        .with_context(|| format!("Failed to release exclusive lock for {}", path.display()))
+    FileExt::unlock(&file).with_context(|| format!("Failed to release exclusive lock for {}", path.display()))
 }
 
 fn read_with_shared_lock(path: &Path) -> Result<String> {
@@ -211,16 +204,13 @@ fn read_with_shared_lock(path: &Path) -> Result<String> {
         .open(path)
         .with_context(|| format!("Failed to open file at {}", path.display()))?;
 
-    FileExt::lock_shared(&file)
-        .with_context(|| format!("Failed to acquire shared lock for {}", path.display()))?;
+    FileExt::lock_shared(&file).with_context(|| format!("Failed to acquire shared lock for {}", path.display()))?;
 
     let mut content = String::new();
-    file.read_to_string(&mut content).with_context(|| {
-        format!("Failed to read file content from {} while holding shared lock", path.display())
-    })?;
+    file.read_to_string(&mut content)
+        .with_context(|| format!("Failed to read file content from {} while holding shared lock", path.display()))?;
 
-    FileExt::unlock(&file)
-        .with_context(|| format!("Failed to release shared lock for {}", path.display()))?;
+    FileExt::unlock(&file).with_context(|| format!("Failed to release shared lock for {}", path.display()))?;
 
     Ok(content)
 }

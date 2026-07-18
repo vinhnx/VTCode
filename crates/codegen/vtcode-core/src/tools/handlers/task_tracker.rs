@@ -13,22 +13,17 @@
 //! - `add`: Add a new item to an existing checklist
 
 use super::planning_task_tracker::{PlanningTaskTrackerArgs, PlanningTaskTrackerTool};
-use super::planning_workflow::{
-    PlanningWorkflowState, plan_file_for_tracker_file, sync_tracker_into_plan_file,
-};
+use super::planning_workflow::{PlanningWorkflowState, plan_file_for_tracker_file, sync_tracker_into_plan_file};
 use std::str::FromStr;
 
 use crate::config::constants::tools;
 use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
-    append_notes_section, append_task_step_metadata, is_bulk_sync_update, metadata_from_input,
-    normalize_optional_text, normalize_string_items, parse_marked_status_prefix,
-    parse_status_prefix,
+    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes, append_notes_section,
+    append_task_step_metadata, is_bulk_sync_update, metadata_from_input, normalize_optional_text,
+    normalize_string_items, parse_marked_status_prefix, parse_status_prefix,
 };
-use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_with_context,
-};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -115,11 +110,7 @@ impl TaskChecklist {
     fn view(&self) -> Value {
         let mut lines = Vec::new();
         for (idx, item) in self.items.iter().enumerate() {
-            let branch = if idx + 1 == self.items.len() {
-                "└"
-            } else {
-                "├"
-            };
+            let branch = if idx + 1 == self.items.len() { "└" } else { "├" };
             lines.push(json!({
                 "display": format!("{} {} {}", branch, item.status.view_symbol(), item.description),
                 "status": item.status.to_string(),
@@ -482,25 +473,15 @@ impl TaskTrackerTool {
         Ok(())
     }
 
-    async fn save_plan_mirror_to_file(
-        &self,
-        tracker_file: &Path,
-        checklist: &TaskChecklist,
-    ) -> Result<()> {
+    async fn save_plan_mirror_to_file(&self, tracker_file: &Path, checklist: &TaskChecklist) -> Result<()> {
         if let Some(parent) = tracker_file.parent() {
-            ensure_dir_exists(parent).await.with_context(|| {
-                format!("Failed to create plan tracker directory: {}", parent.display())
-            })?;
+            ensure_dir_exists(parent)
+                .await
+                .with_context(|| format!("Failed to create plan tracker directory: {}", parent.display()))?;
         }
-        write_file_with_context(
-            tracker_file,
-            &checklist.to_plan_markdown(),
-            "plan task tracker file",
-        )
-        .await
-        .with_context(|| {
-            format!("Failed to write plan task tracker file: {}", tracker_file.display())
-        })?;
+        write_file_with_context(tracker_file, &checklist.to_plan_markdown(), "plan task tracker file")
+            .await
+            .with_context(|| format!("Failed to write plan task tracker file: {}", tracker_file.display()))?;
         if let Some(plan_file) = plan_file_for_tracker_file(tracker_file)
             && plan_file.exists()
         {
@@ -599,12 +580,9 @@ impl TaskTrackerTool {
         }
 
         let selected = if global_exists && plan_exists {
-            let global_modified =
-                tokio::fs::metadata(&task_file).await.ok().and_then(|meta| meta.modified().ok());
+            let global_modified = tokio::fs::metadata(&task_file).await.ok().and_then(|meta| meta.modified().ok());
             let plan_modified = match &plan_file {
-                Some(path) => {
-                    tokio::fs::metadata(path).await.ok().and_then(|meta| meta.modified().ok())
-                }
+                Some(path) => tokio::fs::metadata(path).await.ok().and_then(|meta| meta.modified().ok()),
                 None => None,
             };
             newer_source(global_modified, plan_modified, self.planning_workflow_state.is_active())
@@ -665,10 +643,7 @@ impl TaskTrackerTool {
             title: args.title.clone(),
             items: args.items.clone(),
             index: args.index,
-            index_path: args
-                .index_path
-                .clone()
-                .or_else(|| args.index.map(|value| value.to_string())),
+            index_path: args.index_path.clone().or_else(|| args.index.map(|value| value.to_string())),
             status: args.status.clone(),
             description: args.description.clone(),
             files: args.files.clone(),
@@ -705,25 +680,21 @@ impl TaskTrackerTool {
                 .iter()
                 .zip(items.iter())
                 .all(|(left, right)| left.description == right.description);
-        let requested_has_explicit_status =
-            items.iter().any(|item| item.status != TaskStatus::Pending);
+        let requested_has_explicit_status = items.iter().any(|item| item.status != TaskStatus::Pending);
         let requested_has_step_metadata = items.iter().any(|item| {
-            !item.metadata.files.is_empty()
-                || item.metadata.outcome.is_some()
-                || !item.metadata.verify.is_empty()
+            !item.metadata.files.is_empty() || item.metadata.outcome.is_some() || !item.metadata.verify.is_empty()
         });
 
-        let unchanged =
-            if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
-                Some("Checklist already active; preserved current progress.")
-            } else if existing.title == title
-                && existing.items.len() == items.len()
-                && existing.items.iter().zip(items.iter()).all(|(l, r)| l == r)
-            {
-                Some("Requested checklist already matches current tracker state.")
-            } else {
-                None
-            };
+        let unchanged = if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
+            Some("Checklist already active; preserved current progress.")
+        } else if existing.title == title
+            && existing.items.len() == items.len()
+            && existing.items.iter().zip(items.iter()).all(|(l, r)| l == r)
+        {
+            Some("Requested checklist already matches current tracker state.")
+        } else {
+            None
+        };
 
         unchanged.map(|message| {
             json!({
@@ -740,9 +711,7 @@ impl TaskTrackerTool {
         let title = args.title.as_deref().unwrap_or("Task Checklist").to_string();
         let item_descs = args.items.as_deref().unwrap_or(&[]);
         if item_descs.is_empty() {
-            anyhow::bail!(
-                "At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]"
-            );
+            anyhow::bail!("At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]");
         }
 
         let items = parse_input_items(item_descs)?;
@@ -756,12 +725,9 @@ impl TaskTrackerTool {
         let mut existing_item_count = 0usize;
         if let Some(existing) = guard.as_ref() {
             existing_item_count = existing.items.len();
-            if let Some(unchanged) = Self::check_create_idempotency(
-                existing,
-                &title,
-                &items,
-                &self.task_file().display().to_string(),
-            ) {
+            if let Some(unchanged) =
+                Self::check_create_idempotency(existing, &title, &items, &self.task_file().display().to_string())
+            {
                 return Ok(unchanged);
             }
         }
@@ -776,9 +742,7 @@ impl TaskTrackerTool {
         let (status, message) = if existing_item_count > 0 {
             (
                 "replaced",
-                format!(
-                    "Previous checklist replaced with new structure (was {existing_item_count} items).",
-                ),
+                format!("Previous checklist replaced with new structure (was {existing_item_count} items).",),
             )
         } else {
             ("created", "Task checklist created successfully.".to_string())
@@ -796,12 +760,7 @@ impl TaskTrackerTool {
     async fn handle_update(&self, args: &TaskTrackerArgs) -> Result<Value> {
         self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        if is_bulk_sync_update(
-            args.items.as_deref(),
-            args.index,
-            args.index_path.as_deref(),
-            args.status.as_deref(),
-        ) {
+        if is_bulk_sync_update(args.items.as_deref(), args.index, args.index_path.as_deref(), args.status.as_deref()) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
             let items = parse_input_items(input_items)?;
             if items.is_empty() {
@@ -834,8 +793,7 @@ impl TaskTrackerTool {
             }));
         }
 
-        let checklist =
-            guard.as_mut().context("No active checklist. Use action='create' first.")?;
+        let checklist = guard.as_mut().context("No active checklist. Use action='create' first.")?;
 
         let index = match (args.index, args.index_path.as_deref()) {
             (Some(idx), _) => idx,
@@ -856,15 +814,12 @@ impl TaskTrackerTool {
 
         if index == 0 {
             if new_status != TaskStatus::Completed {
-                bail!(
-                    "index 0 is reserved for checklist-level completion; individual item indices are 1-indexed"
-                );
+                bail!("index 0 is reserved for checklist-level completion; individual item indices are 1-indexed");
             }
 
             if let Some(outcome) = normalize_optional_text(args.outcome.as_deref()) {
                 let checklist_outcome = format!("Checklist outcome: {outcome}");
-                checklist.notes =
-                    append_notes(checklist.notes.take(), Some(checklist_outcome.as_str()));
+                checklist.notes = append_notes(checklist.notes.take(), Some(checklist_outcome.as_str()));
             }
             checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
 
@@ -881,10 +836,11 @@ impl TaskTrackerTool {
         }
 
         let item_count = checklist.items.len();
-        let pos =
-            checklist.items.iter().position(|i| i.index == index).with_context(|| {
-                format!("No item at index {index}. Valid range: 1-{item_count}")
-            })?;
+        let pos = checklist
+            .items
+            .iter()
+            .position(|i| i.index == index)
+            .with_context(|| format!("No item at index {index}. Valid range: 1-{item_count}"))?;
 
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
@@ -893,8 +849,7 @@ impl TaskTrackerTool {
             checklist.items[pos].metadata.files = normalize_string_items(Some(files));
         }
         if args.outcome.is_some() {
-            checklist.items[pos].metadata.outcome =
-                normalize_optional_text(args.outcome.as_deref());
+            checklist.items[pos].metadata.outcome = normalize_optional_text(args.outcome.as_deref());
         }
         if let Some(verify) = args.verify.as_deref() {
             checklist.items[pos].metadata.verify = normalize_string_items(Some(verify));
@@ -941,8 +896,7 @@ impl TaskTrackerTool {
 
         self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        let checklist =
-            guard.as_mut().context("No active checklist. Use action='create' first.")?;
+        let checklist = guard.as_mut().context("No active checklist. Use action='create' first.")?;
 
         let desc = args.description.as_deref().context("'description' is required for 'add'")?;
         let (status, parsed_description) = parse_status_prefix(desc);
@@ -956,11 +910,7 @@ impl TaskTrackerTool {
             index: new_index,
             description: description.clone(),
             status,
-            metadata: metadata_from_input(
-                args.files.as_deref(),
-                args.outcome.as_deref(),
-                args.verify.as_deref(),
-            ),
+            metadata: metadata_from_input(args.files.as_deref(), args.outcome.as_deref(), args.verify.as_deref()),
         });
 
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
@@ -1205,14 +1155,10 @@ mod tests {
         assert_eq!(result["checklist"]["items"][0]["verify"], json!(["cargo check"]));
         assert_eq!(
             result["checklist"]["items"][1]["verify"],
-            json!([
-                "cargo test -p vtcode-core continuation",
-                "cargo check -p vtcode"
-            ])
+            json!(["cargo test -p vtcode-core continuation", "cargo check -p vtcode"])
         );
 
-        let persisted =
-            std::fs::read_to_string(temp.path().join(".vtcode/tasks/current_task.md")).unwrap();
+        let persisted = std::fs::read_to_string(temp.path().join(".vtcode/tasks/current_task.md")).unwrap();
         assert!(persisted.contains("files: docs/ARCHITECTURE.md"));
         assert!(persisted.contains("outcome: Document the harness map"));
         assert!(persisted.contains("verify: cargo check"));
@@ -1502,8 +1448,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(15));
 
         let sidecar = plans_dir.join("plan-primary.tasks.md");
-        std::fs::write(&sidecar, "# Plan Primary\n\n## Plan of Work\n\n- [ ] plan source\n")
-            .unwrap();
+        std::fs::write(&sidecar, "# Plan Primary\n\n## Plan of Work\n\n- [ ] plan source\n").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(15));
         std::fs::write(&global_file, "# Plan Primary\n\n- [x] global newest\n").unwrap();
 

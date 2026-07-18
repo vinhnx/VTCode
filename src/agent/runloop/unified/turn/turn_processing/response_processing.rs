@@ -4,9 +4,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
-use crate::agent::runloop::unified::turn::context::{
-    PreparedAssistantToolCall, TurnProcessingResult,
-};
+use crate::agent::runloop::unified::turn::context::{PreparedAssistantToolCall, TurnProcessingResult};
 use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
@@ -19,14 +17,10 @@ pub(crate) fn process_llm_response(
     allow_plan_interview: bool,
     request_user_input_enabled: bool,
     allow_tool_calls: bool,
-    validation_cache: Option<
-        &std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>,
-    >,
+    validation_cache: Option<&std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>>,
     tool_registry: Option<&vtcode_core::tools::ToolRegistry>,
 ) -> Result<TurnProcessingResult> {
-    use crate::agent::runloop::unified::turn::harmony::{
-        contains_harmony_marker, strip_harmony_syntax,
-    };
+    use crate::agent::runloop::unified::turn::harmony::{contains_harmony_marker, strip_harmony_syntax};
     use crate::agent::runloop::unified::turn::provider_noise::strip_provider_noise;
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider as uni;
@@ -96,14 +90,10 @@ pub(crate) fn process_llm_response(
         && tool_calls.is_empty()
         && let Some(text) = final_text.as_deref()
         && !text.trim().is_empty()
-        && let Some((name, args)) =
-            crate::agent::runloop::text_tools::detect_textual_tool_call(text)
+        && let Some((name, args)) = crate::agent::runloop::text_tools::detect_textual_tool_call(text)
     {
-        if let Some(validation_failures) =
-            validate_tool_args_security(&name, &args, validation_cache, tool_registry)
-        {
-            let tool_display =
-                crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
+        if let Some(validation_failures) = validate_tool_args_security(&name, &args, validation_cache, tool_registry) {
+            let tool_display = crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name);
             let failures_list = validation_failures.join("; ");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 renderer,
@@ -113,30 +103,18 @@ pub(crate) fn process_llm_response(
             let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
             let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(text);
             if !code_blocks.is_empty() {
-                crate::agent::runloop::tool_output::render_code_fence_blocks(
-                    renderer,
-                    &code_blocks,
-                )?;
+                crate::agent::runloop::tool_output::render_code_fence_blocks(renderer, &code_blocks)?;
                 renderer.line(MessageStyle::Output, "")?;
             }
-            let (headline, _) = crate::agent::runloop::unified::tool_summary::describe_tool_action(
-                &name, &args, None,
-            );
+            let (headline, _) = crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args, None);
             let notice = if headline.is_empty() {
-                format!(
-                    "Detected {} request",
-                    crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
-                )
+                format!("Detected {} request", crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name))
             } else {
                 format!("Detected {headline}")
             };
             crate::agent::runloop::unified::turn::turn_helpers::display_status(renderer, &notice)?;
             let call_id = format!("call_textual_{conversation_len}");
-            tool_calls.push(uni::ToolCall::function(
-                call_id.clone(),
-                name.clone(),
-                args_json.clone(),
-            ));
+            tool_calls.push(uni::ToolCall::function(call_id.clone(), name.clone(), args_json.clone()));
             interpreted_textual_call = true;
             final_text = None;
         }
@@ -152,11 +130,7 @@ pub(crate) fn process_llm_response(
     {
         let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
         let call_id = format!("call_interview_{conversation_len}");
-        tool_calls.push(uni::ToolCall::function(
-            call_id.clone(),
-            tools::REQUEST_USER_INPUT.to_string(),
-            args_json,
-        ));
+        tool_calls.push(uni::ToolCall::function(call_id.clone(), tools::REQUEST_USER_INPUT.to_string(), args_json));
         interpreted_textual_call = true;
         final_text = None;
     }
@@ -209,12 +183,7 @@ pub(crate) fn process_llm_response(
             proposed_plan = proposed_plan.is_some(),
             "turn metric"
         );
-        return Ok(TurnProcessingResult::TextResponse {
-            text,
-            reasoning,
-            reasoning_details,
-            proposed_plan,
-        });
+        return Ok(TurnProcessingResult::TextResponse { text, reasoning, reasoning_details, proposed_plan });
     }
 
     tracing::info!(
@@ -403,15 +372,11 @@ fn synthesize_alignment_question(text: &str) -> Option<String> {
     }
 
     if contains_any(&lower, &["system prompt", "prompt architecture", "prompt variants"]) {
-        return Some(
-            "Which system prompt improvement area should we prioritize first?".to_string(),
-        );
+        return Some("Which system prompt improvement area should we prioritize first?".to_string());
     }
 
     if lower.contains("planning workflow") {
-        return Some(
-            "Which planning workflow improvement area should we prioritize first?".to_string(),
-        );
+        return Some("Which planning workflow improvement area should we prioritize first?".to_string());
     }
 
     Some("Which improvement area should we prioritize first?".to_string())
@@ -557,10 +522,7 @@ mod tests {
 
         assert_eq!(prepared[1].call_id(), "call_exec");
         assert_eq!(prepared[1].tool_name(), tools::UNIFIED_EXEC);
-        assert_eq!(
-            prepared[1].args(),
-            Some(&serde_json::json!({"action":"run","command":["cargo","check"]}))
-        );
+        assert_eq!(prepared[1].args(), Some(&serde_json::json!({"action":"run","command":["cargo","check"]})));
         assert!(!prepared[1].is_parallel_safe());
         assert!(prepared[1].is_command_execution());
     }
@@ -597,10 +559,7 @@ mod tests {
         assert_eq!(prepared.len(), 1);
         assert_eq!(prepared[0].call_id(), "call_patch");
         assert_eq!(prepared[0].tool_name(), tools::APPLY_PATCH);
-        assert_eq!(
-            prepared[0].args(),
-            Some(&serde_json::json!("*** Begin Patch\n*** End Patch\n"))
-        );
+        assert_eq!(prepared[0].args(), Some(&serde_json::json!("*** Begin Patch\n*** End Patch\n")));
         assert!(prepared[0].args_error().is_none());
         assert!(!prepared[0].is_parallel_safe());
         assert!(!prepared[0].is_command_execution());
@@ -641,9 +600,8 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, true, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, false, true, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
@@ -672,18 +630,9 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(
-            &response,
-            &mut renderer,
-            7,
-            false,
-            false,
-            true,
-            true,
-            None,
-            Some(&tool_registry),
-        )
-        .expect("processing should succeed");
+        let result =
+            process_llm_response(&response, &mut renderer, 7, false, false, true, true, None, Some(&tool_registry))
+                .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
@@ -710,9 +659,8 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, false, false, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
@@ -739,9 +687,8 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, proposed_plan, .. } => {
@@ -770,9 +717,8 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, proposed_plan, .. } => {
@@ -826,9 +772,8 @@ Outro"#
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, proposed_plan, .. } => {
@@ -880,8 +825,7 @@ Key findings:
 Open questions for alignment:
 "#;
 
-        let args =
-            build_interview_args_from_text(text).expect("expected synthesized interview args");
+        let args = build_interview_args_from_text(text).expect("expected synthesized interview args");
         let questions = args["questions"].as_array().expect("questions should be an array");
         assert_eq!(questions.len(), 1);
 
@@ -897,9 +841,7 @@ Open questions for alignment:
     #[test]
     fn process_llm_response_turns_alignment_request_into_tool_call() {
         let response = LLMResponse {
-            content: Some(
-                "Need clarification before finalizing.\nOpen questions for alignment:".to_string(),
-            ),
+            content: Some("Need clarification before finalizing.\nOpen questions for alignment:".to_string()),
             tool_calls: None,
             model: "test".to_string(),
             usage: None,
@@ -913,16 +855,12 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 1, true, true, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 1, true, true, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
-                let name = tool_calls
-                    .first()
-                    .map(|call| call.tool_name())
-                    .expect("function name expected");
+                let name = tool_calls.first().map(|call| call.tool_name()).expect("function name expected");
                 assert_eq!(name, tools::REQUEST_USER_INPUT);
             }
             _ => panic!("Expected tool calls"),
@@ -942,9 +880,7 @@ Open questions for alignment:
             usage: None,
             finish_reason: FinishReason::ToolCalls,
             reasoning: None,
-            reasoning_details: Some(vec![
-                r#"{"type":"reasoning_content","text":"trace"}"#.to_string(),
-            ]),
+            reasoning_details: Some(vec![r#"{"type":"reasoning_content","text":"trace"}"#.to_string()]),
             tool_references: Vec::new(),
             compaction: None,
             request_id: None,
@@ -952,16 +888,12 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result =
-            process_llm_response(&response, &mut renderer, 0, false, false, true, true, None, None)
-                .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, false, false, true, true, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, reasoning_details, .. } => {
-                assert_eq!(
-                    reasoning_details,
-                    Some(vec![r#"{"type":"reasoning_content","text":"trace"}"#.to_string()])
-                );
+                assert_eq!(reasoning_details, Some(vec![r#"{"type":"reasoning_content","text":"trace"}"#.to_string()]));
                 assert_eq!(tool_calls.len(), 1);
                 assert_eq!(tool_calls[0].call_id(), "call_1");
                 assert!(tool_calls[0].is_parallel_safe());
@@ -988,18 +920,8 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(
-            &response,
-            &mut renderer,
-            0,
-            false,
-            false,
-            true,
-            false,
-            None,
-            None,
-        )
-        .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, false, false, true, false, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
@@ -1030,18 +952,8 @@ Open questions for alignment:
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(
-            &response,
-            &mut renderer,
-            0,
-            false,
-            false,
-            true,
-            false,
-            None,
-            None,
-        )
-        .expect("processing should succeed");
+        let result = process_llm_response(&response, &mut renderer, 0, false, false, true, false, None, None)
+            .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {

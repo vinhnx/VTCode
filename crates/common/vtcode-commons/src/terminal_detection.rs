@@ -149,9 +149,7 @@ impl TerminalType {
             | TerminalType::WezTerm
             | TerminalType::ITerm2
             | TerminalType::Warp => TerminalSetupAvailability::NativeSupport,
-            TerminalType::Alacritty | TerminalType::Zed | TerminalType::VSCode => {
-                TerminalSetupAvailability::Offered
-            }
+            TerminalType::Alacritty | TerminalType::Zed | TerminalType::VSCode => TerminalSetupAvailability::Offered,
             TerminalType::TerminalApp
             | TerminalType::Xterm
             | TerminalType::WindowsTerminal
@@ -173,8 +171,7 @@ impl TerminalType {
         let path = match self {
             TerminalType::Ghostty => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("ghostty").join("config")
                 } else {
                     home_dir.join(".config").join("ghostty").join("config")
@@ -182,8 +179,7 @@ impl TerminalType {
             }
             TerminalType::Kitty => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("kitty").join("kitty.conf")
                 } else {
                     home_dir.join(".config").join("kitty").join("kitty.conf")
@@ -191,8 +187,7 @@ impl TerminalType {
             }
             TerminalType::Alacritty => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("alacritty").join("alacritty.toml")
                 } else {
                     home_dir.join(".config").join("alacritty").join("alacritty.toml")
@@ -209,8 +204,7 @@ impl TerminalType {
             TerminalType::Xterm => home_dir.join(".Xresources"),
             TerminalType::Zed => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("Zed").join("settings.json")
                 } else if cfg!(target_os = "macos") {
                     home_dir
@@ -238,8 +232,7 @@ impl TerminalType {
             }
             TerminalType::VSCode => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("Code").join("User").join("settings.json")
                 } else if cfg!(target_os = "macos") {
                     home_dir
@@ -254,8 +247,8 @@ impl TerminalType {
             }
             TerminalType::WindowsTerminal => {
                 if cfg!(target_os = "windows") {
-                    let local_appdata = env::var("LOCALAPPDATA")
-                        .context("LOCALAPPDATA environment variable not set")?;
+                    let local_appdata =
+                        env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not set")?;
                     PathBuf::from(local_appdata)
                         .join("Packages")
                         .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
@@ -268,8 +261,7 @@ impl TerminalType {
             TerminalType::Hyper => home_dir.join(".hyper.js"),
             TerminalType::Tabby => {
                 if cfg!(target_os = "windows") {
-                    let appdata =
-                        env::var("APPDATA").context("APPDATA environment variable not set")?;
+                    let appdata = env::var("APPDATA").context("APPDATA environment variable not set")?;
                     PathBuf::from(appdata).join("tabby").join("config.yaml")
                 } else if cfg!(target_os = "macos") {
                     home_dir

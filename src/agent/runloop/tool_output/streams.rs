@@ -43,12 +43,9 @@ use std::borrow::Cow;
 use anstyle::{AnsiColor, Effects, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use smallvec::SmallVec;
-use vtcode_commons::diff_paths::{
-    language_hint_from_path, parse_diff_git_path, parse_diff_marker_path,
-};
+use vtcode_commons::diff_paths::{language_hint_from_path, parse_diff_git_path, parse_diff_marker_path};
 use vtcode_commons::diff_preview::{
-    DiffDisplayKind, DiffDisplayLine, diff_display_line_number_width,
-    display_lines_from_unified_diff,
+    DiffDisplayKind, DiffDisplayLine, diff_display_line_number_width, display_lines_from_unified_diff,
 };
 use vtcode_commons::preview::{
     display_width, excerpt_text_lines, format_hidden_lines_summary as shared_hidden_lines_summary,
@@ -65,12 +62,10 @@ use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
 mod streams_helpers;
 pub(crate) use streams_helpers::{
-    build_markdown_code_block, render_code_fence_blocks, resolve_stdout_tail_limit,
-    strip_ansi_codes,
+    build_markdown_code_block, render_code_fence_blocks, resolve_stdout_tail_limit, strip_ansi_codes,
 };
 use streams_helpers::{
-    looks_like_diff_content, select_stream_lines_streaming, should_render_as_code_block,
-    spool_output_if_needed,
+    looks_like_diff_content, select_stream_lines_streaming, should_render_as_code_block, spool_output_if_needed,
 };
 
 /// Maximum number of lines to display in inline mode before truncating
@@ -105,9 +100,7 @@ fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
         HiddenLinesNoticeKind::Generic => {
             format!("[... {} line{} truncated ...]", hidden, if hidden == 1 { "" } else { "s" })
         }
-        HiddenLinesNoticeKind::TokenBudget => {
-            "[... content truncated by token budget ...]".to_string()
-        }
+        HiddenLinesNoticeKind::TokenBudget => "[... content truncated by token budget ...]".to_string(),
     }
 }
 
@@ -157,18 +150,10 @@ fn render_preview_line(
         truncated
     };
 
-    renderer.line_with_override_style(
-        fallback_style,
-        override_style.unwrap_or(fallback_style.style()),
-        &text,
-    )
+    renderer.line_with_override_style(fallback_style, override_style.unwrap_or(fallback_style.style()), &text)
 }
 
-fn highlight_diff_content(
-    content: &str,
-    language_hint: Option<&str>,
-    bg: Option<anstyle::Color>,
-) -> Option<String> {
+fn highlight_diff_content(content: &str, language_hint: Option<&str>, bg: Option<anstyle::Color>) -> Option<String> {
     let leading_ws_len = content
         .char_indices()
         .find(|(_, ch)| !ch.is_whitespace())
@@ -270,10 +255,8 @@ fn format_diff_line_with_gutter_and_syntax(
 }
 
 fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
-    let preview =
-        excerpt_text_lines(content, RUN_COMMAND_HEAD_PREVIEW_LINES, RUN_COMMAND_TAIL_PREVIEW_LINES);
-    let mut collected: SmallVec<[&str; 32]> =
-        SmallVec::with_capacity(preview.head.len() + preview.tail.len());
+    let preview = excerpt_text_lines(content, RUN_COMMAND_HEAD_PREVIEW_LINES, RUN_COMMAND_TAIL_PREVIEW_LINES);
+    let mut collected: SmallVec<[&str; 32]> = SmallVec::with_capacity(preview.head.len() + preview.tail.len());
     collected.extend(preview.head.iter().copied());
     collected.extend(preview.tail.iter().copied());
     (collected, preview.total, preview.hidden_count)
@@ -288,9 +271,7 @@ async fn render_run_command_preview(
     config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let run_tool_name = tool_name.unwrap_or(vtcode_core::config::constants::tools::RUN_PTY_CMD);
-    if !disable_spool
-        && let Ok(Some(log_path)) = spool_output_if_needed(content, run_tool_name, config).await
-    {
+    if !disable_spool && let Ok(Some(log_path)) = spool_output_if_needed(content, run_tool_name, config).await {
         let total = content.lines().count();
         renderer.line(
             MessageStyle::ToolDetail,
@@ -310,10 +291,7 @@ async fn render_run_command_preview(
 
     // Show hidden lines notice if needed
     if hidden > 0 {
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &hidden_lines_notice(hidden, HiddenLinesNoticeKind::CommandPreview),
-        )?;
+        renderer.line(MessageStyle::ToolDetail, &hidden_lines_notice(hidden, HiddenLinesNoticeKind::CommandPreview))?;
     }
 
     // Render command output with bash syntax highlighting.
@@ -339,12 +317,11 @@ pub(crate) fn render_diff_content_block(
 ) -> Result<()> {
     let diff_lines = display_lines_from_unified_diff(diff_content);
     let total = diff_lines.len();
-    let effective_limit =
-        if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
-            tail_limit.max(1000)
-        } else {
-            tail_limit
-        };
+    let effective_limit = if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
+        tail_limit.max(1000)
+    } else {
+        tail_limit
+    };
     let (lines_slice, truncated) = if total > effective_limit {
         let start = total.saturating_sub(effective_limit);
         (&diff_lines[start..], total > effective_limit)
@@ -355,10 +332,7 @@ pub(crate) fn render_diff_content_block(
     if truncated {
         let hidden = total.saturating_sub(lines_slice.len());
         if hidden > 0 {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &hidden_lines_notice(hidden, HiddenLinesNoticeKind::Generic),
-            )?;
+            renderer.line(MessageStyle::ToolDetail, &hidden_lines_notice(hidden, HiddenLinesNoticeKind::Generic))?;
         }
     }
 
@@ -371,9 +345,7 @@ pub(crate) fn render_diff_content_block(
         if raw_line.is_empty() {
             continue;
         }
-        if let Some(path) =
-            parse_diff_git_path(&line.text).or_else(|| parse_diff_marker_path(&line.text))
-        {
+        if let Some(path) = parse_diff_git_path(&line.text).or_else(|| parse_diff_marker_path(&line.text)) {
             current_language_hint = language_hint_from_path(&path);
         }
         display_buffer.clear();
@@ -429,10 +401,7 @@ pub(crate) fn render_diff_content_block(
 #[allow(clippy::too_many_arguments)]
 #[cfg_attr(
     feature = "profiling",
-    tracing::instrument(
-        skip(renderer, content, git_styles, ls_styles, config),
-        level = "debug"
-    )
+    tracing::instrument(skip(renderer, content, git_styles, ls_styles, config), level = "debug")
 )]
 pub(crate) async fn render_stream_section(
     renderer: &mut AnsiRenderer,
@@ -489,8 +458,7 @@ pub(crate) async fn render_stream_section(
 
     if !disable_spool
         && let Some(tool) = tool_name
-        && let Ok(Some(log_path)) =
-            spool_output_if_needed(normalized_content.as_ref(), tool, config).await
+        && let Ok(Some(log_path)) = spool_output_if_needed(normalized_content.as_ref(), tool, config).await
     {
         // Skip preview entirely for extremely large output
         if normalized_content.len() > EXTREME_OUTPUT_THRESHOLD_MB {
@@ -615,9 +583,7 @@ pub(crate) async fn render_stream_section(
         renderer.render_markdown_output(fallback_style, &markdown)?;
     } else {
         for line in &lines_vec {
-            if apply_line_styles
-                && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
-            {
+            if apply_line_styles && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
                 render_preview_line(renderer, line, None, None, true, fallback_style, Some(style))?;
             } else {
                 render_preview_line(renderer, line, None, None, true, fallback_style, None)?;
@@ -639,9 +605,8 @@ mod tests {
     use crate::agent::runloop::tool_output::collect_inline_output;
 
     use super::{
-        HiddenLinesNoticeKind, MAX_LINE_LENGTH, collect_run_command_preview,
-        format_diff_line_with_gutter_and_syntax, hidden_lines_notice, language_hint_from_path,
-        render_preview_line, strip_ansi_codes,
+        HiddenLinesNoticeKind, MAX_LINE_LENGTH, collect_run_command_preview, format_diff_line_with_gutter_and_syntax,
+        hidden_lines_notice, language_hint_from_path, render_preview_line, strip_ansi_codes,
     };
 
     #[test]
@@ -668,10 +633,7 @@ mod tests {
             hidden_lines_notice(2, HiddenLinesNoticeKind::CommandPreview),
             "    … +2 lines (/share html for full transcript)"
         );
-        assert_eq!(
-            hidden_lines_notice(1, HiddenLinesNoticeKind::Generic),
-            "[... 1 line truncated ...]"
-        );
+        assert_eq!(hidden_lines_notice(1, HiddenLinesNoticeKind::Generic), "[... 1 line truncated ...]");
         assert_eq!(
             hidden_lines_notice(3, HiddenLinesNoticeKind::TokenBudget),
             "[... content truncated by token budget ...]"
@@ -681,20 +643,11 @@ mod tests {
     #[test]
     fn render_preview_line_truncates_and_prefixes() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let line = "x".repeat(MAX_LINE_LENGTH + 10);
 
-        render_preview_line(
-            &mut renderer,
-            &line,
-            None,
-            Some("  "),
-            true,
-            MessageStyle::ToolOutput,
-            None,
-        )
-        .expect("preview line should render");
+        render_preview_line(&mut renderer, &line, None, Some("  "), true, MessageStyle::ToolOutput, None)
+            .expect("preview line should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.starts_with("  "));

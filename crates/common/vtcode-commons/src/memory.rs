@@ -14,8 +14,7 @@ pub fn resident_set_size_mb() -> Option<f64> {
     // SAFETY: `mach_task_basic_info` is a plain old data struct; zeroing it
     // produces a valid (all-zero) starting value before `task_info` fills it.
     let mut info: libc::mach_task_basic_info = unsafe { std::mem::zeroed() };
-    let mut count = (std::mem::size_of::<libc::mach_task_basic_info>()
-        / std::mem::size_of::<libc::integer_t>())
+    let mut count = (std::mem::size_of::<libc::mach_task_basic_info>() / std::mem::size_of::<libc::integer_t>())
         as libc::mach_msg_type_number_t;
     // SAFETY: `mach_task_self()` returns a send-right to the current task with
     // no preconditions; it cannot fail to produce a valid port name.
@@ -24,12 +23,7 @@ pub fn resident_set_size_mb() -> Option<f64> {
     // out-pointers of the expected size, and `task_info` only writes them on
     // success.
     let ret = unsafe {
-        libc::task_info(
-            task,
-            libc::MACH_TASK_BASIC_INFO,
-            &mut info as *mut _ as *mut libc::integer_t,
-            &mut count,
-        )
+        libc::task_info(task, libc::MACH_TASK_BASIC_INFO, &mut info as *mut _ as *mut libc::integer_t, &mut count)
     };
     if ret != libc::KERN_SUCCESS {
         return None;

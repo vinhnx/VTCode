@@ -85,9 +85,7 @@ impl GeminiProvider {
             prompt_cache,
             |providers| &providers.gemini,
             |cfg, provider_settings| {
-                cfg.enabled
-                    && provider_settings.enabled
-                    && provider_settings.mode != GeminiPromptCacheMode::Off
+                cfg.enabled && provider_settings.enabled && provider_settings.mode != GeminiPromptCacheMode::Off
             },
         );
 
@@ -95,8 +93,7 @@ impl GeminiProvider {
             api_key: Arc::from(api_key.as_str()),
             http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: Arc::from(
-                override_base_url(urls::GEMINI_API_BASE, base_url, Some(env_vars::GEMINI_BASE_URL))
-                    .as_str(),
+                override_base_url(urls::GEMINI_API_BASE, base_url, Some(env_vars::GEMINI_BASE_URL)).as_str(),
             ),
             model: Arc::from(model.as_str()),
             prompt_cache_enabled,
@@ -130,16 +127,12 @@ impl GeminiProvider {
 
         // Handle invalid request errors
         if status_code == 400 {
-            let formatted_error = error_display::format_llm_error(
-                "Gemini",
-                &format!("Invalid request: {error_text}"),
-            );
+            let formatted_error = error_display::format_llm_error("Gemini", &format!("Invalid request: {error_text}"));
             return LLMError::InvalidRequest { message: formatted_error, metadata: None };
         }
 
         // Generic error for other cases
-        let formatted_error =
-            error_display::format_llm_error("Gemini", &format!("HTTP {status}: {error_text}"));
+        let formatted_error = error_display::format_llm_error("Gemini", &format!("HTTP {status}: {error_text}"));
         LLMError::Provider { message: formatted_error, metadata: None }
     }
 }

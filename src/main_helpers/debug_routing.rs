@@ -2,17 +2,12 @@ use crate::startup::{SessionResumeMode, StartupContext};
 use vtcode_core::cli::args::{Cli, Commands, ExecSubcommand};
 use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scope};
 use vtcode_core::utils::session_archive::{
-    generate_session_archive_identifier, history_persistence_enabled,
-    reserve_session_archive_identifier,
+    generate_session_archive_identifier, history_persistence_enabled, reserve_session_archive_identifier,
 };
 
 use super::{build_command_debug_session_id, configure_runtime_debug_context};
 
-fn resolve_mode_hint(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: &Option<String>,
-) -> &'static str {
+fn resolve_mode_hint(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) -> &'static str {
     if startup.session_resume.is_some() {
         "resume"
     } else if print_mode.is_some() {
@@ -38,11 +33,7 @@ fn resolve_mode_hint(
     }
 }
 
-fn interactive_archive_backed_session(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: &Option<String>,
-) -> bool {
+fn interactive_archive_backed_session(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) -> bool {
     startup.session_resume.is_some()
         || matches!(args.command, Some(Commands::Chat) | Some(Commands::ChatVerbose))
         || (args.command.is_none() && print_mode.is_none() && startup.automation_prompt.is_none())
@@ -113,20 +104,13 @@ async fn resolve_archive_session_id(
                 resume.session_or_prompt.clone()
             }
         }
-        Some(Commands::Exec { .. }) | Some(Commands::Review(_)) => {
-            reserve_fresh_archive_session_id(startup).await
-        }
+        Some(Commands::Exec { .. }) | Some(Commands::Review(_)) => reserve_fresh_archive_session_id(startup).await,
         _ => None,
     }
 }
 
-pub(crate) async fn configure_debug_session_routing(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: &Option<String>,
-) {
-    let command_debug_session_id =
-        build_command_debug_session_id(resolve_mode_hint(args, startup, print_mode));
+pub(crate) async fn configure_debug_session_routing(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) {
+    let command_debug_session_id = build_command_debug_session_id(resolve_mode_hint(args, startup, print_mode));
 
     if let Some(session_id) = resolve_archive_session_id(args, startup, print_mode).await {
         configure_runtime_debug_context(session_id.clone(), Some(session_id));
@@ -145,8 +129,7 @@ mod tests {
 
     use vtcode_config::core::PromptCachingConfig;
     use vtcode_config::types::{
-        AgentConfig as StartupAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
-        UiSurfacePreference,
+        AgentConfig as StartupAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
     use vtcode_core::config::loader::VTCodeConfig;
 
@@ -196,8 +179,7 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            planning_entry_source:
-                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
+            planning_entry_source: vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
@@ -224,8 +206,7 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            planning_entry_source:
-                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
+            planning_entry_source: vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         };
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));

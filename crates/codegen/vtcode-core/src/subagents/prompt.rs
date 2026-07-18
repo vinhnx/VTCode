@@ -55,9 +55,8 @@ fn extract_direct_agent_mentions(input: &str) -> Vec<String> {
     input
         .split_whitespace()
         .filter_map(|token| {
-            let trimmed = token.trim_matches(|ch: char| {
-                matches!(ch, '"' | '\'' | ',' | '.' | ':' | ';' | '!' | '?' | ')' | '(')
-            });
+            let trimmed =
+                token.trim_matches(|ch: char| matches!(ch, '"' | '\'' | ',' | '.' | ':' | ';' | '!' | '?' | ')' | '('));
             trimmed
                 .strip_prefix("@agent-")
                 .map(str::trim)
@@ -108,12 +107,9 @@ fn contains_explicit_named_agent_selection(input: &str, candidate: &str) -> bool
         return true;
     }
 
-    [
-        format!("use {candidate} and"),
-        format!("use the {candidate} and"),
-    ]
-    .iter()
-    .any(|pattern| input.contains(pattern.as_str()))
+    [format!("use {candidate} and"), format!("use the {candidate} and")]
+        .iter()
+        .any(|pattern| input.contains(pattern.as_str()))
         && (input.contains(" agent") || input.contains(" subagent"))
 }
 
@@ -127,8 +123,7 @@ pub fn contains_explicit_delegation_request(input: &str, explicit_mentions: &[St
         || lower.starts_with("delegate ")
         || lower.contains(" background subagent")
         || lower.contains(" background agent")
-        || (lower.contains(" use the ")
-            && (lower.contains(" agent") || lower.contains(" subagent")))
+        || (lower.contains(" use the ") && (lower.contains(" agent") || lower.contains(" subagent")))
         || (lower.starts_with("use ") && (lower.contains(" agent") || lower.contains(" subagent")))
 }
 
@@ -161,16 +156,12 @@ pub fn contains_explicit_model_request(input: &str, requested_model: &str) -> bo
     }
 }
 
-pub fn normalize_requested_model_override(
-    raw: Option<String>,
-    current_input: &str,
-) -> Option<String> {
+pub fn normalize_requested_model_override(raw: Option<String>, current_input: &str) -> Option<String> {
     let requested = raw?.trim().to_string();
     if requested.is_empty() || requested.eq_ignore_ascii_case("default") {
         return None;
     }
-    if requested.eq_ignore_ascii_case("inherit")
-        && !contains_explicit_model_request(current_input, requested.as_str())
+    if requested.eq_ignore_ascii_case("inherit") && !contains_explicit_model_request(current_input, requested.as_str())
     {
         return None;
     }
@@ -184,10 +175,9 @@ fn contains_bounded_term(input: &str, needle: &str) -> bool {
 
     input.match_indices(needle).any(|(start, matched)| {
         let end = start + matched.len();
-        let leading_ok = start == 0
-            || !input[..start].chars().next_back().is_some_and(|ch| ch.is_ascii_alphanumeric());
-        let trailing_ok = end == input.len()
-            || !input[end..].chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric());
+        let leading_ok = start == 0 || !input[..start].chars().next_back().is_some_and(|ch| ch.is_ascii_alphanumeric());
+        let trailing_ok =
+            end == input.len() || !input[end..].chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric());
         leading_ok && trailing_ok
     })
 }
@@ -202,11 +192,7 @@ pub fn sanitize_subagent_input_items(items: &mut Vec<SubagentInputItem>) {
         item.path = trim_optional_field(item.path.take());
         item.name = trim_optional_field(item.name.take());
         item.image_url = trim_optional_field(item.image_url.take());
-        if item.text.is_none()
-            && item.path.is_none()
-            && item.name.is_none()
-            && item.image_url.is_none()
-        {
+        if item.text.is_none() && item.path.is_none() && item.name.is_none() && item.image_url.is_none() {
             continue;
         }
         sanitized.push(item);
@@ -301,10 +287,7 @@ mod tests {
         let primary_plan = test_spec("plan", AgentMode::Primary);
         let child_plan = test_spec("plan", AgentMode::Subagent);
 
-        let mentions = extract_explicit_agent_mentions(
-            "@agent-plan inspect this",
-            &[primary_plan, child_plan],
-        );
+        let mentions = extract_explicit_agent_mentions("@agent-plan inspect this", &[primary_plan, child_plan]);
 
         assert_eq!(mentions, vec!["plan".to_string()]);
     }

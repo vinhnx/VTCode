@@ -10,8 +10,7 @@ use serde_json::{Value, json};
 use vtcode_config::constants::tools;
 use vtcode_config::core::{
     OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
-    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
-    OpenAIHostedSkillVersion,
+    OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill, OpenAIHostedSkillVersion,
 };
 use vtcode_utility_tool_specs::parse_tool_input_schema;
 
@@ -37,10 +36,7 @@ fn serialize_responses_hosted_tool(tool_type: &str, config: Option<&Value>) -> O
     Some(Value::Object(payload))
 }
 
-fn serialize_responses_function_tool(
-    func: &provider::FunctionDefinition,
-    defer_loading: bool,
-) -> Value {
+fn serialize_responses_function_tool(func: &provider::FunctionDefinition, defer_loading: bool) -> Value {
     let mut value = json!({
         "type": "function",
         "name": &func.name,
@@ -136,8 +132,7 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
 
             if let Some(properties) = map.get_mut("properties").and_then(Value::as_object_mut) {
                 for schema in properties.values_mut() {
-                    *schema =
-                        sanitize_openai_schema_node(parse_tool_input_schema(schema), strip_any_of);
+                    *schema = sanitize_openai_schema_node(parse_tool_input_schema(schema), strip_any_of);
                 }
             }
 
@@ -153,9 +148,7 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
                             .map(|value| sanitize_openai_schema_node(value, strip_any_of))
                             .collect(),
                     ),
-                    other => {
-                        sanitize_openai_schema_node(parse_tool_input_schema(&other), strip_any_of)
-                    }
+                    other => sanitize_openai_schema_node(parse_tool_input_schema(&other), strip_any_of),
                 };
             }
 
@@ -163,10 +156,8 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
                 if matches!(additional_properties, Value::Bool(true)) {
                     *additional_properties = json!({ "type": "string" });
                 } else if !matches!(additional_properties, Value::Bool(_)) {
-                    *additional_properties = sanitize_openai_schema_node(
-                        parse_tool_input_schema(additional_properties),
-                        strip_any_of,
-                    );
+                    *additional_properties =
+                        sanitize_openai_schema_node(parse_tool_input_schema(additional_properties), strip_any_of);
                 }
             }
 
@@ -288,9 +279,7 @@ fn serialize_hosted_shell_domain_secret(secret: &OpenAIHostedShellDomainSecret) 
     }))
 }
 
-fn serialize_openai_hosted_shell_network_policy(
-    policy: &OpenAIHostedShellNetworkPolicy,
-) -> Option<Value> {
+fn serialize_openai_hosted_shell_network_policy(policy: &OpenAIHostedShellNetworkPolicy) -> Option<Value> {
     match policy.policy_type {
         OpenAIHostedShellNetworkPolicyType::Disabled => Some(json!({ "type": "disabled" })),
         OpenAIHostedShellNetworkPolicyType::Allowlist => {
@@ -332,9 +321,7 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
 
     match config.environment {
         OpenAIHostedShellEnvironment::ContainerAuto => {
-            if let Some(network_policy) =
-                serialize_openai_hosted_shell_network_policy(&config.network_policy)
-            {
+            if let Some(network_policy) = serialize_openai_hosted_shell_network_policy(&config.network_policy) {
                 environment.insert("network_policy".to_string(), network_policy);
             }
 
@@ -344,8 +331,7 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
                 environment.insert("file_ids".to_string(), json!(file_ids));
             }
 
-            let skills: Vec<Value> =
-                config.skills.iter().filter_map(serialize_hosted_skill).collect();
+            let skills: Vec<Value> = config.skills.iter().filter_map(serialize_hosted_skill).collect();
             if !skills.is_empty() {
                 environment.insert("skills".to_string(), Value::Array(skills));
             }

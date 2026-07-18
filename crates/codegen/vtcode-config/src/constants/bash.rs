@@ -43,9 +43,7 @@ pub const ALWAYS_BLOCKED_COMMANDS: &[&str] = &[
 ];
 
 /// Network commands that require sandbox to be enabled
-pub const NETWORK_COMMANDS: &[&str] = &[
-    "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
-];
+pub const NETWORK_COMMANDS: &[&str] = &["wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat"];
 
 /// Commands that are always allowed (safe development tools)
 pub const ALLOWED_COMMANDS: &[&str] = &[

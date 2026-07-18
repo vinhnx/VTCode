@@ -11,8 +11,7 @@ use crate::tools::file_search_bridge::BoundedPathSearch;
 use crate::tools::grep_file::{LiteralSearchCandidate, search_literal_bounded};
 use crate::tools::outline_search::{DeclarationFileRecord, search_declarations_bounded};
 use crate::tools::tree_sitter_runtime::{
-    SourceByteRange, exact_declaration_name_range, is_exact_usage_identifier, parse_source,
-    usage_node_kind_allowlist,
+    SourceByteRange, exact_declaration_name_range, is_exact_usage_identifier, parse_source, usage_node_kind_allowlist,
 };
 use crate::types::CompactStr;
 use vtcode_commons::exclusions::is_sensitive_file;
@@ -132,10 +131,7 @@ impl CodeSearchRequest {
     }
 }
 
-fn normalised_identity_value(
-    args: &serde_json::Value,
-    include_max_results: bool,
-) -> Option<serde_json::Value> {
+fn normalised_identity_value(args: &serde_json::Value, include_max_results: bool) -> Option<serde_json::Value> {
     let request = serde_json::from_value::<CodeSearchRequest>(args.clone()).ok()?;
     let mut normalised = request.normalise().ok()?;
     normalised.filters.file_types.sort_unstable();
@@ -174,11 +170,7 @@ pub fn normalised_loop_identity(args: &serde_json::Value) -> Option<String> {
 /// absolute tool arguments share one component-aware comparison. Existing
 /// prefixes are canonicalised while missing suffixes remain lexical, which
 /// keeps deleted and newly-created targets comparable.
-pub fn scope_contains_mutated_path(
-    args: &serde_json::Value,
-    mutated_path: &Path,
-    workspace_root: &Path,
-) -> bool {
+pub fn scope_contains_mutated_path(args: &serde_json::Value, mutated_path: &Path, workspace_root: &Path) -> bool {
     let Ok(request) = serde_json::from_value::<CodeSearchRequest>(args.clone()) else {
         return false;
     };
@@ -251,9 +243,7 @@ fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<Compa
     Ok(normalised)
 }
 
-fn normalise_result_types(
-    result_types: Option<Vec<CodeSearchResultType>>,
-) -> Result<Vec<CodeSearchResultType>> {
+fn normalise_result_types(result_types: Option<Vec<CodeSearchResultType>>) -> Result<Vec<CodeSearchResultType>> {
     let Some(result_types) = result_types else {
         return Ok(CodeSearchResultType::ALL.to_vec());
     };
@@ -302,10 +292,7 @@ fn requested_languages(filters: &CodeSearchFilters) -> Vec<AstGrepLanguage> {
         .collect()
 }
 
-fn usage_scope_support(
-    scope: &ResolvedSearchScope,
-    languages: &[AstGrepLanguage],
-) -> UsageScopeSupport {
+fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[AstGrepLanguage]) -> UsageScopeSupport {
     let mut support = UsageScopeSupport {
         requested_unsupported_file_types: languages
             .iter()
@@ -338,9 +325,7 @@ fn has_complete_supported_inventory(
         let Some(language) = AstGrepLanguage::from_path(path) else {
             return false;
         };
-        if (!languages.is_empty() && !languages.contains(&language))
-            || usage_node_kind_allowlist(language).is_none()
-        {
+        if (!languages.is_empty() && !languages.contains(&language)) || usage_node_kind_allowlist(language).is_none() {
             return false;
         }
         inventories.get(path).map_or(stream_complete, |inventory| inventory.complete)
@@ -352,9 +337,8 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
     if requested_path.components().any(|component| component == Component::ParentDir) {
         bail!("code_search path must not contain '..' traversal");
     }
-    let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
-        format!("failed to canonicalise workspace root {}", workspace_root.display())
-    })?;
+    let workspace_root = std::fs::canonicalize(workspace_root)
+        .with_context(|| format!("failed to canonicalise workspace root {}", workspace_root.display()))?;
     let candidate = if requested_path.is_absolute() {
         requested_path.to_path_buf()
     } else {
@@ -384,9 +368,7 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
     let filter_requested_path = requested_path.clone();
     builder.filter_entry(move |entry| {
         !is_excluded_dir(entry)
-            && (!requested_is_file
-                || entry.path() == filter_walk_root
-                || entry.path() == filter_requested_path)
+            && (!requested_is_file || entry.path() == filter_walk_root || entry.path() == filter_requested_path)
     });
     let mut requested_available = requested_path == workspace_root;
     let mut allowed_files = HashSet::new();
@@ -457,8 +439,7 @@ fn accepted_candidate_path(
         return None;
     }
     let language_matches = languages.is_empty()
-        || AstGrepLanguage::from_path(&canonical)
-            .is_some_and(|language| languages.contains(&language));
+        || AstGrepLanguage::from_path(&canonical).is_some_and(|language| languages.contains(&language));
     if !language_matches {
         return None;
     }
@@ -497,9 +478,8 @@ fn deduplicate_and_order(mut candidates: Vec<RankedCandidate>) -> Vec<CodeSearch
         };
         let key = (candidate.result.path.clone(), line, column);
         match source_locations.get(&key) {
-            Some(existing)
-                if existing.result.result_type.precedence()
-                    <= candidate.result.result_type.precedence() => {}
+            Some(existing) if existing.result.result_type.precedence() <= candidate.result.result_type.precedence() => {
+            }
             _ => {
                 source_locations.insert(key, candidate);
             }
@@ -545,8 +525,7 @@ fn append_path_candidates(
 ) {
     let mut seen_canonical_paths = HashSet::new();
     for path in paths {
-        let Some((canonical, relative)) = accepted_candidate_path(scope, base, &path, languages)
-        else {
+        let Some((canonical, relative)) = accepted_candidate_path(scope, base, &path, languages) else {
             continue;
         };
         if !seen_canonical_paths.insert(canonical) {
@@ -566,17 +545,13 @@ fn append_path_candidates(
     }
 }
 
-pub(crate) async fn execute(
-    workspace_root: &Path,
-    request: CodeSearchRequest,
-) -> Result<CodeSearchResponse> {
+pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -> Result<CodeSearchResponse> {
     let mut request = request.normalise()?;
     let scope = resolve_scope(workspace_root, &request.filters.path)?;
     request.filters.path = response_path(&scope);
     let languages = requested_languages(&request.filters);
     let candidate_cap = backend_candidate_cap(request.filters.max_results);
-    let definition_enabled =
-        request.filters.result_types.contains(&CodeSearchResultType::Definition);
+    let definition_enabled = request.filters.result_types.contains(&CodeSearchResultType::Definition);
     let usage_enabled = request.filters.result_types.contains(&CodeSearchResultType::Usage);
     let text_enabled = request.filters.result_types.contains(&CodeSearchResultType::Text);
     let path_enabled = request.filters.result_types.contains(&CodeSearchResultType::Path);
@@ -606,8 +581,7 @@ pub(crate) async fn execute(
     let path_outcome = if path_enabled {
         let query = request.query.to_string();
         if scope.requested_is_file {
-            let relative = workspace_relative(&scope, &scope.requested_path)
-                .unwrap_or_else(|| CompactStr::from("."));
+            let relative = workspace_relative(&scope, &scope.requested_path).unwrap_or_else(|| CompactStr::from("."));
             let matches = relative.to_lowercase().contains(&query.to_lowercase());
             Ok(Some(BoundedPathSearch {
                 paths: matches.then(|| scope.requested_path.clone()).into_iter().collect(),
@@ -616,11 +590,7 @@ pub(crate) async fn execute(
         } else {
             let search_root = scope.requested_path.clone();
             tokio::task::spawn_blocking(move || {
-                crate::tools::file_search_bridge::search_paths_bounded_no_follow(
-                    &query,
-                    search_root,
-                    candidate_cap,
-                )
+                crate::tools::file_search_bridge::search_paths_bounded_no_follow(&query, search_root, candidate_cap)
             })
             .await
             .context("path search task failed")?
@@ -675,12 +645,7 @@ pub(crate) async fn execute(
 
     if usage_backend_needed
         && !unavailable.contains(&CodeSearchResultType::Usage)
-        && !has_complete_supported_inventory(
-            &scope,
-            &languages,
-            outline_stream_complete,
-            &inventories,
-        )
+        && !has_complete_supported_inventory(&scope, &languages, outline_stream_complete, &inventories)
     {
         unavailable.push(CodeSearchResultType::Usage);
     }
@@ -739,15 +704,12 @@ pub(crate) async fn execute(
     }
     let mut hints = Vec::new();
     if truncated {
-        hints.push(CompactStr::from(
-            "Narrow path, file_types, or result_types to refine truncated results.",
-        ));
+        hints.push(CompactStr::from("Narrow path, file_types, or result_types to refine truncated results."));
     }
-    let usage_limited = usage_enabled
-        && (usage_support.has_unsupported_files || usage_support.requested_unsupported_file_types);
+    let usage_limited =
+        usage_enabled && (usage_support.has_unsupported_files || usage_support.requested_unsupported_file_types);
     if usage_limited {
-        hints
-            .push(CompactStr::from("Usage results are unavailable for some requested file types."));
+        hints.push(CompactStr::from("Usage results are unavailable for some requested file types."));
     }
     if results.iter().any(|result| result.result_type == CodeSearchResultType::Usage) {
         hints.push(CompactStr::from(
@@ -780,8 +742,7 @@ fn process_declaration_file(
     inventories: &mut HashMap<PathBuf, DeclarationInventory>,
     candidates: &mut Vec<RankedCandidate>,
 ) {
-    let Some((canonical, relative)) =
-        accepted_candidate_path(scope, &scope.workspace_root, &file.path, languages)
+    let Some((canonical, relative)) = accepted_candidate_path(scope, &scope.workspace_root, &file.path, languages)
     else {
         return;
     };
@@ -802,14 +763,7 @@ fn process_declaration_file(
             end: declaration.range.byte_end,
         };
         let exact_range = tree.as_ref().and_then(|tree| {
-            exact_declaration_name_range(
-                tree,
-                &source,
-                language,
-                full_range,
-                &declaration.name,
-                query,
-            )
+            exact_declaration_name_range(tree, &source, language, full_range, &declaration.name, query)
         });
         if let Some(range) = exact_range {
             inventory.exact_name_ranges.push(range);
@@ -855,8 +809,7 @@ fn classify_literal_candidates(
         let language = AstGrepLanguage::from_path(&canonical);
         let range = SourceByteRange { start: literal.byte_start, end: literal.byte_end };
         let inventory = inventories.get(&canonical);
-        let is_definition =
-            inventory.is_some_and(|inventory| inventory.exact_name_ranges.contains(&range));
+        let is_definition = inventory.is_some_and(|inventory| inventory.exact_name_ranges.contains(&range));
         if is_definition {
             continue;
         }
@@ -868,9 +821,7 @@ fn classify_literal_candidates(
                 .entry(canonical.clone())
                 .or_insert_with(|| std::fs::read_to_string(&canonical).unwrap_or_default());
             language
-                .and_then(|language| {
-                    parse_source(language, source).ok().map(|tree| (language, tree))
-                })
+                .and_then(|language| parse_source(language, source).ok().map(|tree| (language, tree)))
                 .is_some_and(|(language, tree)| is_exact_usage_identifier(&tree, language, range))
         } else {
             false
@@ -981,27 +932,16 @@ mod tests {
             "const LABEL: &str = \"Widget\";\n",
         );
         fs::write(workspace.path().join("src/widget.rs"), rust_source).expect("Rust fixture");
-        fs::write(
-            workspace.path().join("src/WidgetConfig.rs"),
-            "pub const VALUE: &str = \"other\";\n",
-        )
-        .expect("matching path fixture");
-        fs::write(
-            workspace.path().join("src/long.rs"),
-            format!("// Widget {}\n", "こ".repeat(200)),
-        )
-        .expect("long UTF-8 fixture");
-        fs::write(
-            workspace.path().join("src/widget.py"),
-            "class Widget:\n    pass\nprint(Widget)\n",
-        )
-        .expect("Python fixture");
+        fs::write(workspace.path().join("src/WidgetConfig.rs"), "pub const VALUE: &str = \"other\";\n")
+            .expect("matching path fixture");
+        fs::write(workspace.path().join("src/long.rs"), format!("// Widget {}\n", "こ".repeat(200)))
+            .expect("long UTF-8 fixture");
+        fs::write(workspace.path().join("src/widget.py"), "class Widget:\n    pass\nprint(Widget)\n")
+            .expect("Python fixture");
         let bash_source = "function Widget() { echo Widget; }\n";
         fs::write(workspace.path().join("src/widget.sh"), bash_source).expect("Bash fixture");
-        fs::write(workspace.path().join("src/readme.mdx"), "Widget prose\n")
-            .expect("unsupported parser fixture");
-        fs::write(workspace.path().join("ignored.rs"), "fn Widget() {}\n")
-            .expect("ignored fixture");
+        fs::write(workspace.path().join("src/readme.mdx"), "Widget prose\n").expect("unsupported parser fixture");
+        fs::write(workspace.path().join("ignored.rs"), "fn Widget() {}\n").expect("ignored fixture");
         fs::write(workspace.path().join(".env"), "Widget=secret\n").expect("sensitive fixture");
         fs::write(workspace.path().join(".gitignore"), "ignored.rs\n").expect("ignore file");
 
@@ -1051,8 +991,7 @@ mod tests {
                 .expect("fake executable metadata")
                 .permissions();
             permissions.set_mode(0o755);
-            fs::set_permissions(&fake_outline_path, permissions)
-                .expect("fake executable permissions");
+            fs::set_permissions(&fake_outline_path, permissions).expect("fake executable permissions");
         }
 
         CodeSearchFixture { workspace, fake_outline, fake_outline_path }
@@ -1088,10 +1027,7 @@ mod tests {
 
         assert_eq!(request.filters.path, "src");
         assert_eq!(request.filters.file_types, ["rust", "c"]);
-        assert_eq!(
-            request.filters.result_types,
-            [CodeSearchResultType::Definition, CodeSearchResultType::Path]
-        );
+        assert_eq!(request.filters.result_types, [CodeSearchResultType::Definition, CodeSearchResultType::Path]);
         assert_eq!(request.filters.max_results, 7);
     }
 
@@ -1117,16 +1053,8 @@ mod tests {
                 mutation.display()
             );
         }
-        assert!(!scope_contains_mutated_path(
-            &args,
-            Path::new("src/module_two/widget.rs"),
-            workspace.path(),
-        ));
-        assert!(!scope_contains_mutated_path(
-            &args,
-            Path::new("tests/widget.rs"),
-            workspace.path(),
-        ));
+        assert!(!scope_contains_mutated_path(&args, Path::new("src/module_two/widget.rs"), workspace.path(),));
+        assert!(!scope_contains_mutated_path(&args, Path::new("tests/widget.rs"), workspace.path(),));
     }
 
     #[cfg(unix)]
@@ -1141,16 +1069,8 @@ mod tests {
         symlink(real_workspace.path(), &linked_workspace).expect("workspace symlink");
         let args = json!({"query": "Widget", "path": "src"});
 
-        assert!(scope_contains_mutated_path(
-            &args,
-            &linked_workspace.join("src/widget.rs"),
-            &linked_workspace,
-        ));
-        assert!(scope_contains_mutated_path(
-            &args,
-            &real_workspace.path().join("src/widget.rs"),
-            &linked_workspace,
-        ));
+        assert!(scope_contains_mutated_path(&args, &linked_workspace.join("src/widget.rs"), &linked_workspace,));
+        assert!(scope_contains_mutated_path(&args, &real_workspace.path().join("src/widget.rs"), &linked_workspace,));
     }
 
     #[test]
@@ -1171,12 +1091,7 @@ mod tests {
             DeclarationInventory { complete: false, exact_name_ranges: Vec::new() },
         )]);
 
-        assert!(!has_complete_supported_inventory(
-            &scope,
-            &[AstGrepLanguage::Rust],
-            true,
-            &inventories,
-        ));
+        assert!(!has_complete_supported_inventory(&scope, &[AstGrepLanguage::Rust], true, &inventories,));
     }
 
     #[test]
@@ -1284,8 +1199,7 @@ mod tests {
     async fn code_search_fixture_composes_exact_classifications_deterministically() {
         let fixture = code_search_fixture();
         let _keep_fake_outline_alive = &fixture.fake_outline;
-        let _override =
-            set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
+        let _override = set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
         let payload = json!({
             "query": "Widget",
             "path": "src",
@@ -1307,26 +1221,30 @@ mod tests {
             first
                 .results
                 .iter()
-                .any(|result| result.result_type == CodeSearchResultType::Usage
-                    && result.line == Some(2))
+                .any(|result| result.result_type == CodeSearchResultType::Usage && result.line == Some(2))
         );
         assert!(
             first
                 .results
                 .iter()
-                .any(|result| result.result_type == CodeSearchResultType::Usage
-                    && result.line == Some(6))
+                .any(|result| result.result_type == CodeSearchResultType::Usage && result.line == Some(6))
         );
         assert!(first.results.iter().any(|result| {
             result.result_type == CodeSearchResultType::Text
                 && result.snippet.as_deref().is_some_and(|line| line.contains("WidgetExtra"))
         }));
-        assert!(first.results.iter().any(|result| {
-            result.result_type == CodeSearchResultType::Text && result.line == Some(9)
-        }));
-        assert!(first.results.iter().any(|result| {
-            result.result_type == CodeSearchResultType::Text && result.line == Some(11)
-        }));
+        assert!(
+            first
+                .results
+                .iter()
+                .any(|result| { result.result_type == CodeSearchResultType::Text && result.line == Some(9) })
+        );
+        assert!(
+            first
+                .results
+                .iter()
+                .any(|result| { result.result_type == CodeSearchResultType::Text && result.line == Some(11) })
+        );
         assert!(first.results.iter().any(|result| {
             result.result_type == CodeSearchResultType::Path && result.path == "src/WidgetConfig.rs"
         }));
@@ -1367,8 +1285,7 @@ mod tests {
             .await
             .expect("result subset");
             assert!(response.results.iter().all(|result| {
-                serde_json::to_value(result.result_type).expect("result type").as_str()
-                    == Some(result_type)
+                serde_json::to_value(result.result_type).expect("result type").as_str() == Some(result_type)
             }));
         }
 
@@ -1383,9 +1300,12 @@ mod tests {
         )
         .await
         .expect("mixed-language usage search");
-        assert!(unfiltered.results.iter().any(|result| {
-            result.result_type == CodeSearchResultType::Text && result.path == "src/widget.sh"
-        }));
+        assert!(
+            unfiltered
+                .results
+                .iter()
+                .any(|result| { result.result_type == CodeSearchResultType::Text && result.path == "src/widget.sh" })
+        );
         assert!(unfiltered.hints.iter().any(|hint| hint.contains("file types")));
     }
 
@@ -1442,9 +1362,12 @@ mod tests {
         assert_eq!(truncated.returned, 1);
         assert!(truncated.truncated);
         assert!(truncated.hints[0].contains("Narrow path"));
-        assert!(truncated.results.iter().all(|result| {
-            result.snippet.as_ref().is_none_or(|snippet| snippet.len() <= SNIPPET_BYTE_CAP)
-        }));
+        assert!(
+            truncated
+                .results
+                .iter()
+                .all(|result| { result.snippet.as_ref().is_none_or(|snippet| snippet.len() <= SNIPPET_BYTE_CAP) })
+        );
 
         let long_snippet = execute(
             fixture.workspace.path(),
@@ -1522,8 +1445,7 @@ mod tests {
     async fn code_search_bash_definition_remains_available() {
         let fixture = code_search_fixture();
         let _fake_outline_dir = &fixture.fake_outline;
-        let _override =
-            set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
+        let _override = set_ast_grep_binary_override_for_tests(Some(fixture.fake_outline_path.clone()));
         let response = execute(
             fixture.workspace.path(),
             request(json!({
@@ -1602,8 +1524,7 @@ mod tests {
         let fixture = code_search_fixture();
         let outside = TempDir::new().expect("outside directory");
         fs::write(outside.path().join("Widget.rs"), "fn Widget() {}\n").expect("outside source");
-        symlink(outside.path().join("Widget.rs"), fixture.workspace.path().join("escape.rs"))
-            .expect("escape symlink");
+        symlink(outside.path().join("Widget.rs"), fixture.workspace.path().join("escape.rs")).expect("escape symlink");
         assert!(
             execute(
                 fixture.workspace.path(),
@@ -1668,13 +1589,10 @@ mod tests {
     fn code_search_incomplete_declaration_inventory_preserves_text() {
         let fixture = code_search_fixture();
         let scope = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
-        let canonical = fs::canonicalize(fixture.workspace.path().join("src/widget.rs"))
-            .expect("canonical fixture path");
+        let canonical =
+            fs::canonicalize(fixture.workspace.path().join("src/widget.rs")).expect("canonical fixture path");
         let mut inventories = HashMap::new();
-        inventories.insert(
-            canonical,
-            DeclarationInventory { complete: false, exact_name_ranges: Vec::new() },
-        );
+        inventories.insert(canonical, DeclarationInventory { complete: false, exact_name_ranges: Vec::new() });
         let mut candidates = Vec::new();
         classify_literal_candidates(
             &scope,
@@ -1704,8 +1622,8 @@ mod tests {
     fn code_search_definitions_require_exact_name_ranges() {
         let fixture = code_search_fixture();
         let scope = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
-        let canonical = fs::canonicalize(fixture.workspace.path().join("src/widget.rs"))
-            .expect("canonical fixture path");
+        let canonical =
+            fs::canonicalize(fixture.workspace.path().join("src/widget.rs")).expect("canonical fixture path");
         let source = fs::read_to_string(&canonical).expect("fixture source");
         let exact_end = source.find("}\n").expect("exact declaration end") + 1;
         let missing_name_start = source.find("Widget();").expect("body call");
@@ -1716,17 +1634,11 @@ mod tests {
             declarations: vec![
                 crate::tools::outline_search::DeclarationRecord {
                     name: "Widget".to_string(),
-                    range: crate::tools::outline_search::DeclarationRange {
-                        byte_start: 0,
-                        byte_end: exact_end,
-                    },
+                    range: crate::tools::outline_search::DeclarationRange { byte_start: 0, byte_end: exact_end },
                 },
                 crate::tools::outline_search::DeclarationRecord {
                     name: "Different".to_string(),
-                    range: crate::tools::outline_search::DeclarationRange {
-                        byte_start: 0,
-                        byte_end: exact_end,
-                    },
+                    range: crate::tools::outline_search::DeclarationRange { byte_start: 0, byte_end: exact_end },
                 },
                 crate::tools::outline_search::DeclarationRecord {
                     name: "Widget".to_string(),
@@ -1796,9 +1708,11 @@ mod tests {
                 .count(),
             1
         );
-        assert!(results.iter().any(|result| {
-            result.result_type == CodeSearchResultType::Text && result.line == Some(2)
-        }));
+        assert!(
+            results
+                .iter()
+                .any(|result| { result.result_type == CodeSearchResultType::Text && result.line == Some(2) })
+        );
     }
 
     #[test]
@@ -1815,12 +1729,9 @@ mod tests {
                 .iter()
                 .all(|path| path.starts_with(&subtree.requested_path))
         );
-        assert!(
-            !subtree.allowed_files.contains(
-                &fs::canonicalize(fixture.workspace.path().join("ignored.rs"))
-                    .expect("ignored fixture canonical path")
-            )
-        );
+        assert!(!subtree.allowed_files.contains(
+            &fs::canonicalize(fixture.workspace.path().join("ignored.rs")).expect("ignored fixture canonical path")
+        ));
     }
 
     #[test]
@@ -1855,10 +1766,7 @@ mod tests {
         append_path_candidates(
             &scope,
             &scope.requested_path,
-            [
-                PathBuf::from("WidgetConfig.rs"),
-                PathBuf::from("./WidgetConfig.rs"),
-            ],
+            [PathBuf::from("WidgetConfig.rs"), PathBuf::from("./WidgetConfig.rs")],
             &[AstGrepLanguage::Rust],
             &mut candidates,
         );

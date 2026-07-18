@@ -4,8 +4,7 @@ use crate::error_display;
 use crate::provider::{ContentPart, LLMError, LLMRequest, Message, MessageContent, MessageRole};
 use crate::providers::anthropic::capabilities::supports_mid_conversation_system_messages;
 use crate::providers::anthropic_types::{
-    AnthropicContentBlock, AnthropicMessage, AnthropicToolResultBlock, AnthropicToolUseBlock,
-    CacheControl, ImageSource,
+    AnthropicContentBlock, AnthropicMessage, AnthropicToolResultBlock, AnthropicToolUseBlock, CacheControl, ImageSource,
 };
 use crate::providers::common::normalize_reasoning_detail_object;
 use serde_json::{Value, json};
@@ -42,8 +41,7 @@ pub(crate) fn build_messages(
 ) -> Result<Vec<AnthropicMessage>, LLMError> {
     let mut messages = Vec::with_capacity(messages_to_process.len());
     let mut tool_use_ids = HashSet::new();
-    let allow_mid_conversation_system =
-        supports_mid_conversation_system_messages(&request.model, &request.model);
+    let allow_mid_conversation_system = supports_mid_conversation_system_messages(&request.model, &request.model);
     let allow_container_uploads = request
         .tools
         .as_ref()
@@ -70,11 +68,7 @@ pub(crate) fn build_messages(
                 }
                 blocks.extend(build_reasoning_blocks(msg));
 
-                blocks.extend(content_blocks_from_message_content(
-                    &msg.content,
-                    None,
-                    allow_container_uploads,
-                ));
+                blocks.extend(content_blocks_from_message_content(&msg.content, None, allow_container_uploads));
 
                 blocks.extend(build_advisor_blocks(msg));
 
@@ -94,9 +88,7 @@ pub(crate) fn build_messages(
                     && tool_use_ids.contains(tool_call_id)
                 {
                     let tool_content_blocks = tool_result_blocks(msg.content.as_text().as_ref());
-                    let content_val = if tool_content_blocks.len() == 1
-                        && tool_content_blocks[0]["type"] == "text"
-                    {
+                    let content_val = if tool_content_blocks.len() == 1 && tool_content_blocks[0]["type"] == "text" {
                         json!(tool_content_blocks[0]["text"])
                     } else {
                         json!(tool_content_blocks)
@@ -104,14 +96,12 @@ pub(crate) fn build_messages(
 
                     messages.push(AnthropicMessage {
                         role: "user".to_string(),
-                        content: vec![AnthropicContentBlock::ToolResult(Box::new(
-                            AnthropicToolResultBlock {
-                                tool_use_id: tool_call_id.clone(),
-                                content: content_val,
-                                is_error: None,
-                                cache_control: None,
-                            },
-                        ))],
+                        content: vec![AnthropicContentBlock::ToolResult(Box::new(AnthropicToolResultBlock {
+                            tool_use_id: tool_call_id.clone(),
+                            content: content_val,
+                            is_error: None,
+                            cache_control: None,
+                        }))],
                     });
                 } else if !msg.content.is_empty() {
                     messages.push(AnthropicMessage {
@@ -125,11 +115,7 @@ pub(crate) fn build_messages(
                 }
             }
             _ => {
-                let blocks = content_blocks_from_message_content(
-                    &msg.content,
-                    None,
-                    allow_container_uploads,
-                );
+                let blocks = content_blocks_from_message_content(&msg.content, None, allow_container_uploads);
                 if blocks.is_empty() {
                     continue;
                 }
@@ -183,10 +169,8 @@ pub(crate) fn build_messages(
     add_prefill_message(request, &mut messages);
 
     if messages.is_empty() {
-        let formatted_error = error_display::format_llm_error(
-            "Anthropic",
-            "No convertible messages for Anthropic request",
-        );
+        let formatted_error =
+            error_display::format_llm_error("Anthropic", "No convertible messages for Anthropic request");
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
@@ -217,10 +201,8 @@ fn build_advisor_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
         for block in stored {
             match block.get("type").and_then(|t| t.as_str()) {
                 Some("server_tool_use") => {
-                    let id =
-                        block.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-                    let name =
-                        block.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let id = block.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let name = block.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
                     blocks.push(AnthropicContentBlock::ServerToolUse { id, name, input });
                 }
@@ -250,8 +232,7 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
             };
 
             if normalized.get("type").and_then(|t| t.as_str()) == Some("thinking") {
-                let thinking =
-                    normalized.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                let thinking = normalized.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
                 let signature = normalized
                     .get("signature")
                     .and_then(|t| t.as_str())
@@ -259,15 +240,10 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                     .filter(|value| !value.is_empty())
                     .map(str::to_owned);
                 if !thinking.is_empty() || signature.is_some() {
-                    blocks.push(AnthropicContentBlock::Thinking {
-                        thinking,
-                        signature,
-                        cache_control: None,
-                    });
+                    blocks.push(AnthropicContentBlock::Thinking { thinking, signature, cache_control: None });
                 }
             } else if normalized.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
-                let data =
-                    normalized.get("data").and_then(|d| d.as_str()).unwrap_or("").to_string();
+                let data = normalized.get("data").and_then(|d| d.as_str()).unwrap_or("").to_string();
                 blocks.push(AnthropicContentBlock::RedactedThinking { data, cache_control: None });
             }
         }
@@ -291,11 +267,7 @@ fn content_blocks_from_message_content(
     match content {
         MessageContent::Text(text) => {
             if !text.is_empty() {
-                blocks.push(AnthropicContentBlock::Text {
-                    text: text.clone(),
-                    citations: None,
-                    cache_control,
-                });
+                blocks.push(AnthropicContentBlock::Text { text: text.clone(), citations: None, cache_control });
             }
         }
         MessageContent::Parts(parts) => {
@@ -305,11 +277,7 @@ fn content_blocks_from_message_content(
                         if text.is_empty() {
                             continue;
                         }
-                        let control = if !cache_used {
-                            cache_control.clone()
-                        } else {
-                            None
-                        };
+                        let control = if !cache_used { cache_control.clone() } else { None };
                         cache_used = true;
                         blocks.push(AnthropicContentBlock::Text {
                             text: text.clone(),
@@ -329,9 +297,7 @@ fn content_blocks_from_message_content(
                     }
                     ContentPart::File { filename, file_id, file_url, .. } => {
                         if allow_container_uploads && let Some(file_id) = file_id {
-                            blocks.push(AnthropicContentBlock::ContainerUpload {
-                                file_id: file_id.clone(),
-                            });
+                            blocks.push(AnthropicContentBlock::ContainerUpload { file_id: file_id.clone() });
                             continue;
                         }
 
@@ -403,11 +369,7 @@ fn add_prefill_message(request: &LLMRequest, messages: &mut Vec<AnthropicMessage
         if !text.is_empty() {
             messages.push(AnthropicMessage {
                 role: "assistant".to_string(),
-                content: vec![AnthropicContentBlock::Text {
-                    text,
-                    citations: None,
-                    cache_control: None,
-                }],
+                content: vec![AnthropicContentBlock::Text { text, citations: None, cache_control: None }],
             });
         }
     } else if request.character_reinforcement
@@ -442,10 +404,7 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_advisor_blocks, build_messages, build_reasoning_blocks,
-        content_blocks_from_message_content,
-    };
+    use super::{build_advisor_blocks, build_messages, build_reasoning_blocks, content_blocks_from_message_content};
     use crate::provider::{ContentPart, LLMRequest, Message, MessageContent};
     use crate::providers::anthropic_types::{AnthropicContentBlock, CacheControl};
     use serde_json::json;
@@ -455,9 +414,9 @@ mod tests {
         messages
             .iter()
             .map(|msg| {
-                msg.content.iter().any(|block| {
-                    matches!(block, AnthropicContentBlock::Text { cache_control: Some(_), .. })
-                })
+                msg.content
+                    .iter()
+                    .any(|block| matches!(block, AnthropicContentBlock::Text { cache_control: Some(_), .. }))
             })
             .collect()
     }
@@ -485,14 +444,9 @@ mod tests {
         };
         let mut breakpoints_remaining = 4usize;
 
-        let messages = build_messages(
-            &request,
-            &source_messages,
-            &cache_control,
-            &settings,
-            &mut breakpoints_remaining,
-        )
-        .expect("build_messages");
+        let messages =
+            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining)
+                .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, true, true]);
         assert_eq!(breakpoints_remaining, 2);
@@ -507,14 +461,9 @@ mod tests {
         };
         let mut breakpoints_remaining = 0usize;
 
-        let messages = build_messages(
-            &request,
-            &source_messages,
-            &cache_control,
-            &settings,
-            &mut breakpoints_remaining,
-        )
-        .expect("build_messages");
+        let messages =
+            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining)
+                .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, false, false]);
         assert_eq!(breakpoints_remaining, 0);
@@ -529,14 +478,9 @@ mod tests {
         };
         let mut breakpoints_remaining = 1usize;
 
-        let messages = build_messages(
-            &request,
-            &source_messages,
-            &cache_control,
-            &settings,
-            &mut breakpoints_remaining,
-        )
-        .expect("build_messages");
+        let messages =
+            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining)
+                .expect("build_messages");
 
         assert_eq!(message_anchor_flags(&messages), vec![false, false, true]);
         assert_eq!(breakpoints_remaining, 0);
@@ -557,14 +501,9 @@ mod tests {
         let settings = AnthropicPromptCacheSettings::default();
         let mut breakpoints_remaining = 4usize;
 
-        let messages = build_messages(
-            &request,
-            &source_messages,
-            &cache_control,
-            &settings,
-            &mut breakpoints_remaining,
-        )
-        .expect("build_messages");
+        let messages =
+            build_messages(&request, &source_messages, &cache_control, &settings, &mut breakpoints_remaining)
+                .expect("build_messages");
 
         // Both long messages qualify (default threshold is 256 chars); the short
         // middle message never receives an anchor.
@@ -658,8 +597,7 @@ mod tests {
         })
         .to_string();
 
-        let message =
-            Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(detail)]));
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(detail)]));
 
         let blocks = build_advisor_blocks(&message);
         assert_eq!(blocks.len(), 2);

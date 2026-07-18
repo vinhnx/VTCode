@@ -11,16 +11,14 @@ impl<'a> TurnProcessingContext<'a> {
         phase: Option<uni::AssistantPhase>,
     ) -> anyhow::Result<()> {
         let mut text = text;
-        let detail_reasoning = reasoning_details.as_deref().and_then(
-            vtcode_core::llm::providers::common::extract_reasoning_text_from_serialized_details,
-        );
+        let detail_reasoning = reasoning_details
+            .as_deref()
+            .and_then(vtcode_core::llm::providers::common::extract_reasoning_text_from_serialized_details);
         if should_suppress_redundant_diff_recap(self.working_history, &text) {
             text.clear();
         }
         let has_visible_text = !text.trim().is_empty();
-        if !reasoning.is_empty()
-            || reasoning_details.as_ref().is_some_and(|details| !details.is_empty())
-        {
+        if !reasoning.is_empty() || reasoning_details.as_ref().is_some_and(|details| !details.is_empty()) {
             tracing::info!(
                 target: "vtcode.turn.metrics",
                 metric = "reasoning_observed",
@@ -46,8 +44,7 @@ impl<'a> TurnProcessingContext<'a> {
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;
             }
-            let mut rendered_reasoning =
-                detail_reasoning.is_some().then(|| Vec::with_capacity(reasoning.len()));
+            let mut rendered_reasoning = detail_reasoning.is_some().then(|| Vec::with_capacity(reasoning.len()));
 
             for segment in &reasoning {
                 if let Some(stage) = &segment.stage {
@@ -56,16 +53,13 @@ impl<'a> TurnProcessingContext<'a> {
 
                 let reasoning_text = &segment.text;
                 if !reasoning_text.trim().is_empty() {
-                    let duplicates_content =
-                        has_visible_text && reasoning_duplicates_content(reasoning_text, &text);
+                    let duplicates_content = has_visible_text && reasoning_duplicates_content(reasoning_text, &text);
                     if !duplicates_content {
-                        let compact =
-                            vtcode_commons::formatting::compact_reasoning_text(reasoning_text);
+                        let compact = vtcode_commons::formatting::compact_reasoning_text(reasoning_text);
                         if compact.trim().is_empty() {
                             continue;
                         }
-                        let rendered =
-                            render_compact_reasoning_block(self.renderer, reasoning_text)?;
+                        let rendered = render_compact_reasoning_block(self.renderer, reasoning_text)?;
                         if rendered && let Some(rendered_reasoning) = rendered_reasoning.as_mut() {
                             rendered_reasoning.push(compact);
                         }
@@ -74,17 +68,14 @@ impl<'a> TurnProcessingContext<'a> {
             }
 
             if let Some(detail_text) = detail_reasoning.as_deref() {
-                let cleaned_detail =
-                    vtcode_commons::formatting::compact_reasoning_text(detail_text);
-                let duplicates_content =
-                    has_visible_text && reasoning_duplicates_content(&cleaned_detail, &text);
-                let duplicates_rendered =
-                    rendered_reasoning.as_ref().is_some_and(|rendered_reasoning| {
-                        rendered_reasoning.iter().any(|existing: &String| {
-                            reasoning_duplicates_content(existing, &cleaned_detail)
-                                || reasoning_duplicates_content(&cleaned_detail, existing)
-                        })
-                    });
+                let cleaned_detail = vtcode_commons::formatting::compact_reasoning_text(detail_text);
+                let duplicates_content = has_visible_text && reasoning_duplicates_content(&cleaned_detail, &text);
+                let duplicates_rendered = rendered_reasoning.as_ref().is_some_and(|rendered_reasoning| {
+                    rendered_reasoning.iter().any(|existing: &String| {
+                        reasoning_duplicates_content(existing, &cleaned_detail)
+                            || reasoning_duplicates_content(&cleaned_detail, existing)
+                    })
+                });
                 if !cleaned_detail.is_empty() && !duplicates_content && !duplicates_rendered {
                     render_compact_reasoning_block(self.renderer, detail_text)?;
                 }
@@ -93,9 +84,9 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         let combined_reasoning = build_combined_reasoning(&reasoning, detail_reasoning.as_deref());
-        let include_reasoning = combined_reasoning.as_deref().is_some_and(|combined_reasoning| {
-            !reasoning_duplicates_content(combined_reasoning, &text)
-        });
+        let include_reasoning = combined_reasoning
+            .as_deref()
+            .is_some_and(|combined_reasoning| !reasoning_duplicates_content(combined_reasoning, &text));
         let msg = uni::Message::assistant(text).with_phase(phase);
         let mut msg_with_reasoning = if include_reasoning {
             msg.with_reasoning(combined_reasoning)
@@ -208,13 +199,7 @@ impl<'a> TurnProcessingContext<'a> {
         } else {
             Some(uni::AssistantPhase::FinalAnswer)
         };
-        self.handle_assistant_response(
-            text,
-            reasoning,
-            reasoning_details,
-            response_streamed,
-            assistant_phase,
-        )?;
+        self.handle_assistant_response(text, reasoning, reasoning_details, response_streamed, assistant_phase)?;
 
         // Count this text response so the recovery loop can short-circuit
         // when the model has already produced a final answer but the loop
@@ -252,10 +237,7 @@ impl<'a> TurnProcessingContext<'a> {
 
         if let Some(hooks) = self.lifecycle_hooks {
             let outcome = hooks.run_stop(&final_text, self.harness_state.stop_hook_active).await?;
-            crate::agent::runloop::unified::turn::utils::render_hook_messages(
-                self.renderer,
-                &outcome.messages,
-            )?;
+            crate::agent::runloop::unified::turn::utils::render_hook_messages(self.renderer, &outcome.messages)?;
             if let Some(reason) = outcome.block_reason {
                 push_system_directive_once(self.working_history, &reason);
                 self.harness_state.stop_hook_active = true;
@@ -268,9 +250,7 @@ impl<'a> TurnProcessingContext<'a> {
             && let Some(plan_text) = proposed_plan
         {
             self.emit_plan_events(&plan_text).await;
-            let _persisted =
-                persist_plan_draft(&self.tool_registry.planning_workflow_state(), &plan_text)
-                    .await?;
+            let _persisted = persist_plan_draft(&self.tool_registry.planning_workflow_state(), &plan_text).await?;
         }
 
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
@@ -302,8 +282,7 @@ impl<'a> TurnProcessingContext<'a> {
             id: item_id,
             details: ThreadItemDetails::Plan(PlanItem { text: plan_text.to_string() }),
         };
-        let _ =
-            emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }));
+        let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }));
     }
 }
 

@@ -10,10 +10,7 @@ fn suppresses_redundant_diff_recap_after_git_diff_view_request() {
         ),
     ];
 
-    assert!(should_suppress_redundant_diff_recap(
-        &history,
-        "Diff for src/main.rs:\n```diff\n@@ -1 +1 @@\n```"
-    ));
+    assert!(should_suppress_redundant_diff_recap(&history, "Diff for src/main.rs:\n```diff\n@@ -1 +1 @@\n```"));
 }
 
 #[test]
@@ -47,8 +44,7 @@ fn suppresses_heading_style_diff_recap_after_view_request() {
 
 #[test]
 fn parse_reasoning_detail_value_decodes_stringified_json_object() {
-    let parsed =
-        parse_reasoning_detail_value(r#"{"type":"reasoning.text","id":"r1","text":"hello"}"#);
+    let parsed = parse_reasoning_detail_value(r#"{"type":"reasoning.text","id":"r1","text":"hello"}"#);
     assert!(parsed.is_object());
     assert_eq!(parsed["type"], "reasoning.text");
 }
@@ -68,9 +64,8 @@ fn build_combined_reasoning_preserves_whitespace_only_segments_without_detail() 
 #[test]
 fn push_assistant_message_preserves_reasoning_details_when_merging() {
     let mut history = vec![uni::Message::assistant("old".to_string())];
-    let new_msg = uni::Message::assistant("new".to_string()).with_reasoning_details(Some(vec![
-        serde_json::json!({"type":"reasoning.text","text":"trace"}),
-    ]));
+    let new_msg = uni::Message::assistant("new".to_string())
+        .with_reasoning_details(Some(vec![serde_json::json!({"type":"reasoning.text","text":"trace"})]));
 
     push_assistant_message(&mut history, new_msg);
 
@@ -84,12 +79,9 @@ fn push_assistant_message_preserves_reasoning_details_when_merging() {
 
 #[test]
 fn push_assistant_message_keeps_different_phases_separate() {
-    let mut history = vec![
-        uni::Message::assistant("working".to_string())
-            .with_phase(Some(uni::AssistantPhase::Commentary)),
-    ];
-    let new_msg = uni::Message::assistant("done".to_string())
-        .with_phase(Some(uni::AssistantPhase::FinalAnswer));
+    let mut history =
+        vec![uni::Message::assistant("working".to_string()).with_phase(Some(uni::AssistantPhase::Commentary))];
+    let new_msg = uni::Message::assistant("done".to_string()).with_phase(Some(uni::AssistantPhase::FinalAnswer));
 
     push_assistant_message(&mut history, new_msg);
 

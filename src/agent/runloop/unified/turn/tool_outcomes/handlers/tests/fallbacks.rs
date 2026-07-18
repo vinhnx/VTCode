@@ -52,9 +52,7 @@ fn preflight_fallback_remaps_file_operation_list_to_exec_command() {
 
 #[test]
 fn preflight_fallback_normalizes_request_user_input_single_question_shape() {
-    let error = anyhow!(
-        "Invalid arguments for tool 'request_user_input': \"questions\" is a required property"
-    );
+    let error = anyhow!("Invalid arguments for tool 'request_user_input': \"questions\" is a required property");
     let args = json!({
         "question": "Which direction should we take?",
         "header": "Scope",
@@ -74,9 +72,7 @@ fn preflight_fallback_normalizes_request_user_input_single_question_shape() {
 
 #[test]
 fn preflight_fallback_normalizes_request_user_input_tabs_shape() {
-    let error = anyhow!(
-        "Invalid arguments for tool 'request_user_input': additional properties are not allowed"
-    );
+    let error = anyhow!("Invalid arguments for tool 'request_user_input': additional properties are not allowed");
     let args = json!({
         "question": "Which area should we prioritize first?",
         "tabs": [
@@ -107,15 +103,11 @@ fn validation_error_payload_includes_fallback_metadata() {
         Some(tool_names::EXEC_COMMAND.to_string()),
         Some(json!({"cmd":"rg --line-number --column --color=never 'foo' '.'"})),
     );
-    let parsed: serde_json::Value =
-        serde_json::from_str(&payload).expect("validation payload should be json");
+    let parsed: serde_json::Value = serde_json::from_str(&payload).expect("validation payload should be json");
     assert_eq!(parsed["error_class"], "invalid_arguments");
     assert_eq!(parsed["is_recoverable"], true);
     assert_eq!(parsed["fallback_tool"], tool_names::EXEC_COMMAND);
-    assert_eq!(
-        parsed["fallback_tool_args"]["cmd"],
-        "rg --line-number --column --color=never 'foo' '.'"
-    );
+    assert_eq!(parsed["fallback_tool_args"]["cmd"], "rg --line-number --column --color=never 'foo' '.'");
     assert_eq!(parsed.get("next_action"), Some(&json!("Retry with fallback_tool_args.")));
     assert!(parsed.get("loop_detected").is_none());
 }
@@ -128,8 +120,7 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
         Some(tool_names::EXEC_COMMAND.to_string()),
         Some(json!({"cmd":"find '.' -maxdepth 1 -mindepth 1 -print"})),
     );
-    let parsed: serde_json::Value =
-        serde_json::from_str(&payload).expect("validation payload should be json");
+    let parsed: serde_json::Value = serde_json::from_str(&payload).expect("validation payload should be json");
     // `loop_detected` is internal control logic and is stripped from model output.
     assert!(parsed.get("loop_detected").is_none());
     assert_eq!(parsed["fallback_tool"], tool_names::EXEC_COMMAND);
@@ -156,9 +147,7 @@ fn reused_read_only_result_uses_canonical_guidance() {
     assert_eq!(payload.get("loop_detected"), Some(&json!(true)));
     assert_eq!(
         payload.get("loop_detected_note"),
-        Some(&json!(
-            "Loop detected: same result returned. The content is in the result above — use it directly."
-        ))
+        Some(&json!("Loop detected: same result returned. The content is in the result above — use it directly."))
     );
     assert_eq!(
         payload.get("next_action"),

@@ -266,17 +266,11 @@ mod tests {
                 assert_eq!(result.unwrap(), "gemini-primary");
             },
         );
-        with_overrides(
-            &[
-                ("GEMINI_API_KEY", None),
-                ("GOOGLE_API_KEY", Some("google-fallback")),
-            ],
-            || {
-                // Without GEMINI_API_KEY, it should fall back to GOOGLE_API_KEY
-                let result = get_api_key("gemini", &default_sources());
-                assert_eq!(result.unwrap(), "google-fallback");
-            },
-        );
+        with_overrides(&[("GEMINI_API_KEY", None), ("GOOGLE_API_KEY", Some("google-fallback"))], || {
+            // Without GEMINI_API_KEY, it should fall back to GOOGLE_API_KEY
+            let result = get_api_key("gemini", &default_sources());
+            assert_eq!(result.unwrap(), "google-fallback");
+        });
     }
 
     #[test]
@@ -305,16 +299,10 @@ mod tests {
 
     #[test]
     fn qwen_falls_back_to_dashscope() {
-        with_overrides(
-            &[
-                ("QWEN_API_KEY", None),
-                ("DASHSCOPE_API_KEY", Some("dashscope-key")),
-            ],
-            || {
-                let result = get_api_key("qwen", &default_sources());
-                assert_eq!(result.unwrap(), "dashscope-key");
-            },
-        );
+        with_overrides(&[("QWEN_API_KEY", None), ("DASHSCOPE_API_KEY", Some("dashscope-key"))], || {
+            let result = get_api_key("qwen", &default_sources());
+            assert_eq!(result.unwrap(), "dashscope-key");
+        });
     }
 
     #[test]
@@ -392,10 +380,7 @@ mod tests {
 
     #[test]
     fn resolve_api_key_env_uses_provider_default_for_placeholder() {
-        assert_eq!(
-            resolve_api_key_env("minimax", defaults::DEFAULT_API_KEY_ENV),
-            "MINIMAX_API_KEY"
-        );
+        assert_eq!(resolve_api_key_env("minimax", defaults::DEFAULT_API_KEY_ENV), "MINIMAX_API_KEY");
     }
 
     #[test]

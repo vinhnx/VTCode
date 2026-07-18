@@ -169,9 +169,7 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
                 "Invalid code_challenge_method. Ensure you're using the same method (S256) in both steps."
             ));
         } else if status.as_u16() == 403 {
-            return Err(anyhow!(
-                "Invalid code or code_verifier. The authorization code may have expired."
-            ));
+            return Err(anyhow!("Invalid code or code_verifier. The authorization code may have expired."));
         } else if status.as_u16() == 405 {
             return Err(anyhow!("Method not allowed. Ensure you're using POST over HTTPS."));
         }
@@ -179,8 +177,7 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
     }
 
     // Parse the response to extract the key
-    let response_json: serde_json::Value =
-        serde_json::from_str(&body).context("Failed to parse token response")?;
+    let response_json: serde_json::Value = serde_json::from_str(&body).context("Failed to parse token response")?;
 
     let api_key = response_json
         .get("key")
@@ -227,8 +224,7 @@ fn derive_encryption_key() -> Result<LessSafeKey> {
     let hash = digest(&SHA256, &key_material);
     let key_bytes: &[u8; 32] = hash.as_ref()[..32].try_into().context("Hash too short")?;
 
-    let unbound_key = UnboundKey::new(&aead::AES_256_GCM, key_bytes)
-        .map_err(|_| anyhow!("Invalid key length"))?;
+    let unbound_key = UnboundKey::new(&aead::AES_256_GCM, key_bytes).map_err(|_| anyhow!("Invalid key length"))?;
 
     Ok(LessSafeKey::new(unbound_key))
 }
@@ -276,13 +272,12 @@ fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
         .try_into()
         .map_err(|_| anyhow!("Invalid nonce length"))?;
 
-    let mut ciphertext =
-        STANDARD.decode(&encrypted.ciphertext).context("Invalid ciphertext encoding")?;
+    let mut ciphertext = STANDARD.decode(&encrypted.ciphertext).context("Invalid ciphertext encoding")?;
 
     let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-    let plaintext = key.open_in_place(nonce, Aad::empty(), &mut ciphertext).map_err(|_| {
-        anyhow!("Decryption failed - token may be corrupted or from different machine")
-    })?;
+    let plaintext = key
+        .open_in_place(nonce, Aad::empty(), &mut ciphertext)
+        .map_err(|_| anyhow!("Decryption failed - token may be corrupted or from different machine"))?;
 
     serde_json::from_slice(plaintext).context("Failed to deserialize token")
 }
@@ -292,10 +287,7 @@ fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
 /// # Arguments
 /// * `token` - The OAuth token to save
 /// * `mode` - The storage mode to use (defaults to Keyring on macOS)
-pub fn save_oauth_token_with_mode(
-    token: &OpenRouterToken,
-    mode: AuthCredentialsStoreMode,
-) -> Result<()> {
+pub fn save_oauth_token_with_mode(token: &OpenRouterToken, mode: AuthCredentialsStoreMode) -> Result<()> {
     let effective_mode = mode.effective_mode();
 
     match effective_mode {
@@ -307,12 +299,10 @@ pub fn save_oauth_token_with_mode(
 
 /// Save token to OS keyring.
 fn save_oauth_token_keyring(token: &OpenRouterToken) -> Result<()> {
-    let entry =
-        keyring_entry("vtcode", "openrouter_oauth").context("Failed to access OS keyring")?;
+    let entry = keyring_entry("vtcode", "openrouter_oauth").context("Failed to access OS keyring")?;
 
     // Serialize the entire token to JSON for storage
-    let token_json =
-        serde_json::to_string(token).context("Failed to serialize token for keyring")?;
+    let token_json = serde_json::to_string(token).context("Failed to serialize token for keyring")?;
 
     entry.set_password(&token_json).context("Failed to store token in OS keyring")?;
 
@@ -324,8 +314,7 @@ fn save_oauth_token_keyring(token: &OpenRouterToken) -> Result<()> {
 fn save_oauth_token_file(token: &OpenRouterToken) -> Result<()> {
     let path = get_token_path()?;
     let encrypted = encrypt_token(token)?;
-    let json =
-        serde_json::to_string_pretty(&encrypted).context("Failed to serialize encrypted token")?;
+    let json = serde_json::to_string_pretty(&encrypted).context("Failed to serialize encrypted token")?;
     write_private_file(&path, json.as_bytes()).context("Failed to write token file")?;
 
     tracing::info!("OAuth token saved to {}", path.display());
@@ -343,9 +332,7 @@ pub fn save_oauth_token(token: &OpenRouterToken) -> Result<()> {
 /// Load an OAuth token from storage with specified mode.
 ///
 /// Returns `None` if no token exists or the token has expired.
-pub fn load_oauth_token_with_mode(
-    mode: AuthCredentialsStoreMode,
-) -> Result<Option<OpenRouterToken>> {
+pub fn load_oauth_token_with_mode(mode: AuthCredentialsStoreMode) -> Result<Option<OpenRouterToken>> {
     let effective_mode = mode.effective_mode();
 
     match effective_mode {
@@ -368,8 +355,7 @@ fn load_oauth_token_keyring() -> Result<Option<OpenRouterToken>> {
         Err(e) => return Err(anyhow!("Failed to read from keyring: {e}")),
     };
 
-    let token: OpenRouterToken =
-        serde_json::from_str(&token_json).context("Failed to parse token from keyring")?;
+    let token: OpenRouterToken = serde_json::from_str(&token_json).context("Failed to parse token from keyring")?;
 
     // Check expiry
     if token.is_expired() {
@@ -390,8 +376,7 @@ fn load_oauth_token_file() -> Result<Option<OpenRouterToken>> {
     }
 
     let json = fs::read_to_string(&path).context("Failed to read token file")?;
-    let encrypted: EncryptedToken =
-        serde_json::from_str(&json).context("Failed to parse token file")?;
+    let encrypted: EncryptedToken = serde_json::from_str(&json).context("Failed to parse token file")?;
 
     let token = decrypt_token(&encrypted)?;
 
@@ -596,12 +581,9 @@ mod tests {
     impl TestAuthDirGuard {
         fn new() -> Self {
             let temp_dir = TempDir::new().expect("create temp auth dir");
-            let previous = crate::storage_paths::auth_storage_dir_override_for_tests()
-                .expect("read auth dir override");
-            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(
-                temp_dir.path().to_path_buf(),
-            ))
-            .expect("set temp auth dir override");
+            let previous = crate::storage_paths::auth_storage_dir_override_for_tests().expect("read auth dir override");
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(temp_dir.path().to_path_buf()))
+                .expect("set temp auth dir override");
             Self { temp_dir: Some(temp_dir), previous }
         }
     }
@@ -714,12 +696,10 @@ mod tests {
         };
 
         save_oauth_token_with_mode(&token, AuthCredentialsStoreMode::File).expect("save token");
-        let loaded =
-            load_oauth_token_with_mode(AuthCredentialsStoreMode::File).expect("load token");
+        let loaded = load_oauth_token_with_mode(AuthCredentialsStoreMode::File).expect("load token");
         assert_eq!(loaded.as_ref().map(|value| &value.api_key), Some(&token.api_key));
 
-        let stored =
-            fs::read_to_string(get_token_path().expect("token path")).expect("read token file");
+        let stored = fs::read_to_string(get_token_path().expect("token path")).expect("read token file");
         assert!(!stored.contains(&token.api_key));
     }
 
@@ -743,8 +723,7 @@ mod tests {
 
         save_oauth_token_with_mode(&token, AuthCredentialsStoreMode::File).expect("save token");
 
-        let metadata =
-            fs::metadata(get_token_path().expect("token path")).expect("read token metadata");
+        let metadata = fs::metadata(get_token_path().expect("token path")).expect("read token metadata");
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 }

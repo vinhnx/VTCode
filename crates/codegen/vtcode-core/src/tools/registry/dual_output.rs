@@ -56,89 +56,77 @@ impl ToolRegistry {
         // Check if we have a summarizer for this tool
         match tool_name.as_str() {
             tools::CODE_SEARCH => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
-            tools::UNIFIED_FILE => {
-                match tool_intent::file_operation_action(&args).unwrap_or("read") {
-                    "read" => {
-                        let mut metadata = args.clone();
-                        if let Value::Object(map) = &mut metadata
-                            && !map.contains_key("file_path")
-                        {
-                            let inferred_path = args
-                                .get("path")
-                                .or_else(|| args.get("file_path"))
-                                .or_else(|| args.get("filepath"))
-                                .or_else(|| args.get("target_path"))
-                                .and_then(Value::as_str)
-                                .map(str::to_string);
-                            if let Some(path) = inferred_path {
-                                map.insert("file_path".to_string(), Value::String(path));
-                            }
+            tools::UNIFIED_FILE => match tool_intent::file_operation_action(&args).unwrap_or("read") {
+                "read" => {
+                    let mut metadata = args.clone();
+                    if let Value::Object(map) = &mut metadata
+                        && !map.contains_key("file_path")
+                    {
+                        let inferred_path = args
+                            .get("path")
+                            .or_else(|| args.get("file_path"))
+                            .or_else(|| args.get("filepath"))
+                            .or_else(|| args.get("target_path"))
+                            .and_then(Value::as_str)
+                            .map(str::to_string);
+                        if let Some(path) = inferred_path {
+                            map.insert("file_path".to_string(), Value::String(path));
                         }
+                    }
 
-                        let summarizer = ReadSummarizer::default();
-                        match summarizer.summarize(&ui_content, Some(&metadata)) {
-                            Ok(llm_content) => {
-                                let savings =
-                                    summarizer.estimate_savings(&ui_content, &llm_content);
-                                debug!(
-                                    tool = tools::UNIFIED_FILE,
-                                    action = "read",
-                                    ui_tokens = %savings.ui_tokens,
-                                    llm_tokens = %savings.llm_tokens,
-                                    savings_pct = %savings.savings_percent,
-                                    "Applied file_operation read summarization"
-                                );
-                                Ok(SplitToolResult::new(
-                                    tool_name.as_str(),
-                                    llm_content,
-                                    ui_content,
-                                ))
-                            }
-                            Err(e) => {
-                                warn!(
-                                    tool = tools::UNIFIED_FILE,
-                                    action = "read",
-                                    error = %e,
-                                    "Failed to summarize file_operation read output, using simple result"
-                                );
-                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
-                            }
+                    let summarizer = ReadSummarizer::default();
+                    match summarizer.summarize(&ui_content, Some(&metadata)) {
+                        Ok(llm_content) => {
+                            let savings = summarizer.estimate_savings(&ui_content, &llm_content);
+                            debug!(
+                                tool = tools::UNIFIED_FILE,
+                                action = "read",
+                                ui_tokens = %savings.ui_tokens,
+                                llm_tokens = %savings.llm_tokens,
+                                savings_pct = %savings.savings_percent,
+                                "Applied file_operation read summarization"
+                            );
+                            Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
+                        }
+                        Err(e) => {
+                            warn!(
+                                tool = tools::UNIFIED_FILE,
+                                action = "read",
+                                error = %e,
+                                "Failed to summarize file_operation read output, using simple result"
+                            );
+                            Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
                         }
                     }
-                    "write" | "edit" | "patch" | "move" | "copy" | "delete" => {
-                        let summarizer = EditSummarizer::default();
-                        match summarizer.summarize(&ui_content, None) {
-                            Ok(llm_content) => {
-                                let savings =
-                                    summarizer.estimate_savings(&ui_content, &llm_content);
-                                debug!(
-                                    tool = tools::UNIFIED_FILE,
-                                    action = "mutate",
-                                    ui_tokens = %savings.ui_tokens,
-                                    llm_tokens = %savings.llm_tokens,
-                                    savings_pct = %savings.savings_percent,
-                                    "Applied file_operation mutation summarization"
-                                );
-                                Ok(SplitToolResult::new(
-                                    tool_name.as_str(),
-                                    llm_content,
-                                    ui_content,
-                                ))
-                            }
-                            Err(e) => {
-                                warn!(
-                                    tool = tools::UNIFIED_FILE,
-                                    action = "mutate",
-                                    error = %e,
-                                    "Failed to summarize file_operation mutation output, using simple result"
-                                );
-                                Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
-                            }
-                        }
-                    }
-                    _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
                 }
-            }
+                "write" | "edit" | "patch" | "move" | "copy" | "delete" => {
+                    let summarizer = EditSummarizer::default();
+                    match summarizer.summarize(&ui_content, None) {
+                        Ok(llm_content) => {
+                            let savings = summarizer.estimate_savings(&ui_content, &llm_content);
+                            debug!(
+                                tool = tools::UNIFIED_FILE,
+                                action = "mutate",
+                                ui_tokens = %savings.ui_tokens,
+                                llm_tokens = %savings.llm_tokens,
+                                savings_pct = %savings.savings_percent,
+                                "Applied file_operation mutation summarization"
+                            );
+                            Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
+                        }
+                        Err(e) => {
+                            warn!(
+                                tool = tools::UNIFIED_FILE,
+                                action = "mutate",
+                                error = %e,
+                                "Failed to summarize file_operation mutation output, using simple result"
+                            );
+                            Ok(SplitToolResult::simple(tool_name.as_str(), ui_content))
+                        }
+                    }
+                }
+                _ => Ok(SplitToolResult::simple(tool_name.as_str(), ui_content)),
+            },
             tools::UNIFIED_EXEC | tools::EXEC_COMMAND => {
                 match tool_intent::command_session_action(&args).unwrap_or("run") {
                     "run" | "code" => {
@@ -146,8 +134,7 @@ impl ToolRegistry {
                         let metadata = args.as_object().map(|_| args.clone());
                         match summarizer.summarize(&ui_content, metadata.as_ref()) {
                             Ok(llm_content) => {
-                                let savings =
-                                    summarizer.estimate_savings(&ui_content, &llm_content);
+                                let savings = summarizer.estimate_savings(&ui_content, &llm_content);
                                 debug!(
                                     tool = tools::UNIFIED_EXEC,
                                     action = "run",
@@ -156,11 +143,7 @@ impl ToolRegistry {
                                     savings_pct = %savings.savings_percent,
                                     "Applied command_session summarization"
                                 );
-                                Ok(SplitToolResult::new(
-                                    tool_name.as_str(),
-                                    llm_content,
-                                    ui_content,
-                                ))
+                                Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
                             }
                             Err(e) => {
                                 warn!(

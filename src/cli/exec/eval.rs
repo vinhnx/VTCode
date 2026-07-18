@@ -43,21 +43,14 @@ pub(crate) async fn handle_eval_command(
         bail!("eval suite requires attempts >= 1");
     }
 
-    eprintln!(
-        "Running eval suite: {} ({} tasks, {} attempts each)",
-        suite.name,
-        suite.tasks.len(),
-        suite.attempts
-    );
+    eprintln!("Running eval suite: {} ({} tasks, {} attempts each)", suite.name, suite.tasks.len(), suite.attempts);
 
     // H1: require full-auto workspace trust
     require_full_auto_workspace_trust(config.workspace.as_path(), "eval runs", "eval").await?;
 
     // H2: require full-auto enabled
     if !vt_cfg.automation.full_auto.enabled {
-        bail!(
-            "Automation is disabled in configuration. Enable [automation.full_auto] to run eval."
-        );
+        bail!("Automation is disabled in configuration. Enable [automation.full_auto] to run eval.");
     }
 
     let allowed_tools = vt_cfg.automation.full_auto.allowed_tools.clone();
@@ -67,8 +60,7 @@ pub(crate) async fn handle_eval_command(
 
     let markdown = report.to_markdown();
     if let Some(path) = output_path {
-        std::fs::write(path, &markdown)
-            .with_context(|| format!("write report to {}", path.display()))?;
+        std::fs::write(path, &markdown).with_context(|| format!("write report to {}", path.display()))?;
         eprintln!("\nReport written to {}", path.display());
     } else {
         println!("{markdown}");
@@ -166,11 +158,7 @@ async fn run_eval_task(
     // provides the practical wall-clock guard. Documented in suite schema.
 
     let exec_outcome = match &exec_result {
-        Ok(result)
-            if matches!(result.outcome, TaskOutcome::Success | TaskOutcome::StoppedNoAction) =>
-        {
-            RunOutcome::Pass
-        }
+        Ok(result) if matches!(result.outcome, TaskOutcome::Success | TaskOutcome::StoppedNoAction) => RunOutcome::Pass,
         Ok(_) => RunOutcome::Fail,
         Err(_) => RunOutcome::Error,
     };

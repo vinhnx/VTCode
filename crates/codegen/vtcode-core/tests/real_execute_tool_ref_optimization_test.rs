@@ -186,10 +186,7 @@ async fn test_execute_tool_ref_performance_comparison() {
     println!("v execute_tool_ref performance comparison test completed");
     println!("   Unoptimized: {unoptimized_duration:?}");
     println!("   Optimized: {optimized_duration:?}");
-    println!(
-        "   Optimized registry has {} optimizations enabled",
-        registry_optimized.has_optimizations_enabled()
-    );
+    println!("   Optimized registry has {} optimizations enabled", registry_optimized.has_optimizations_enabled());
 
     // Both should complete successfully (performance may vary). Use nanos
     // rather than millis: on fast machines the 5-iteration loop can complete

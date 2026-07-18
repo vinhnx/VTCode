@@ -46,11 +46,7 @@ impl SharedListWidgetModel for StaticRowsListPanelModel {
     }
 }
 
-pub(crate) fn split_bottom_list_panel(
-    area: Rect,
-    fixed_rows: u16,
-    desired_list_rows: u16,
-) -> (Rect, Option<Rect>) {
+pub(crate) fn split_bottom_list_panel(area: Rect, fixed_rows: u16, desired_list_rows: u16) -> (Rect, Option<Rect>) {
     if area.width == 0 || area.height == 0 {
         return (area, None);
     }
@@ -219,8 +215,8 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if sections.search.is_some() {
         constraints.push(Constraint::Length(2));
     }
-    let show_divider = styles.divider_style.is_some()
-        && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
+    let show_divider =
+        styles.divider_style.is_some() && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
     if show_divider {
         constraints.push(Constraint::Length(1));
     }
@@ -258,8 +254,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if show_divider && idx < chunks.len() {
         let divider_style = styles.divider_style.expect("divider style");
         frame.render_widget(
-            Fill::new(crate::tui::config::constants::ui::INLINE_BLOCK_HORIZONTAL)
-                .style(divider_style),
+            Fill::new(crate::tui::config::constants::ui::INLINE_BLOCK_HORIZONTAL).style(divider_style),
             chunks[idx],
         );
         idx += 1;

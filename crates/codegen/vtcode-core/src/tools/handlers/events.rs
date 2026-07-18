@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use super::sandboxing::{ExecToolCallOutput, ToolError};
 use super::tool_handler::{
-    DiffTracker, FileChange, PatchApplyBeginEvent, PatchApplyEndEvent, ToolCallError, ToolEvent,
-    ToolEventBegin, ToolEventFailure, ToolEventSuccess, ToolSession, TurnContext,
+    DiffTracker, FileChange, PatchApplyBeginEvent, PatchApplyEndEvent, ToolCallError, ToolEvent, ToolEventBegin,
+    ToolEventFailure, ToolEventSuccess, ToolSession, TurnContext,
 };
 
 /// Context for emitting tool events
@@ -108,12 +108,7 @@ pub enum ToolEmitter {
 
 impl ToolEmitter {
     /// Create emitter for shell commands
-    pub fn shell(
-        command: Vec<String>,
-        cwd: PathBuf,
-        source: ExecCommandSource,
-        freeform: bool,
-    ) -> Self {
+    pub fn shell(command: Vec<String>, cwd: PathBuf, source: ExecCommandSource, freeform: bool) -> Self {
         let parsed_cmd = parse_command(&command);
         Self::Shell { command, cwd, source, parsed_cmd, freeform }
     }
@@ -173,18 +168,12 @@ impl ToolEmitter {
             }
 
             // Apply patch failure
-            (
-                Self::ApplyPatch { .. },
-                ToolEventStage::Failure(ToolEventFailureKind::Output(output)),
-            ) => {
+            (Self::ApplyPatch { .. }, ToolEventStage::Failure(ToolEventFailureKind::Output(output))) => {
                 self.emit_patch_end(ctx, output.stdout.clone(), output.stderr.clone(), false)
                     .await;
             }
 
-            (
-                Self::ApplyPatch { .. },
-                ToolEventStage::Failure(ToolEventFailureKind::Message(msg)),
-            ) => {
+            (Self::ApplyPatch { .. }, ToolEventStage::Failure(ToolEventFailureKind::Message(msg))) => {
                 self.emit_patch_end(ctx, String::new(), msg.clone(), false).await;
             }
 
@@ -214,10 +203,7 @@ impl ToolEmitter {
                     ToolEventFailureKind::Message(msg) => msg.clone(),
                     ToolEventFailureKind::Error(err) => err.clone(),
                 };
-                let event = ToolEvent::Failure(ToolEventFailure {
-                    call_id: ctx.call_id.to_string(),
-                    error,
-                });
+                let event = ToolEvent::Failure(ToolEventFailure { call_id: ctx.call_id.to_string(), error });
                 ctx.session.send_event(event).await;
             }
 
@@ -245,10 +231,7 @@ impl ToolEmitter {
                     ToolEventFailureKind::Message(msg) => msg.clone(),
                     ToolEventFailureKind::Error(err) => err.clone(),
                 };
-                let event = ToolEvent::Failure(ToolEventFailure {
-                    call_id: ctx.call_id.to_string(),
-                    error,
-                });
+                let event = ToolEvent::Failure(ToolEventFailure { call_id: ctx.call_id.to_string(), error });
                 ctx.session.send_event(event).await;
             }
 
@@ -332,13 +315,7 @@ impl ToolEmitter {
     }
 
     /// Emit patch end event
-    async fn emit_patch_end(
-        &self,
-        ctx: ToolEventCtx<'_>,
-        stdout: String,
-        stderr: String,
-        success: bool,
-    ) {
+    async fn emit_patch_end(&self, ctx: ToolEventCtx<'_>, stdout: String, stderr: String, success: bool) {
         // Update diff tracker
         {
             if let Some(tracker) = ctx.turn_diff_tracker {
@@ -412,23 +389,13 @@ mod tests {
 
     #[test]
     fn test_emitter_tool_names() {
-        let shell = ToolEmitter::shell(
-            vec!["ls".to_string()],
-            PathBuf::new(),
-            ExecCommandSource::Agent,
-            false,
-        );
+        let shell = ToolEmitter::shell(vec!["ls".to_string()], PathBuf::new(), ExecCommandSource::Agent, false);
         assert_eq!(shell.tool_name(), "shell");
 
         let patch = ToolEmitter::apply_patch(HashMap::new(), true);
         assert_eq!(patch.tool_name(), "apply_patch");
 
-        let exec = ToolEmitter::command_session(
-            &["echo".to_string()],
-            PathBuf::new(),
-            ExecCommandSource::Agent,
-            None,
-        );
+        let exec = ToolEmitter::command_session(&["echo".to_string()], PathBuf::new(), ExecCommandSource::Agent, None);
         assert_eq!(exec.tool_name(), "exec_command");
 
         let generic = ToolEmitter::generic("custom_tool");

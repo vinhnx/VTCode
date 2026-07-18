@@ -5,9 +5,9 @@
 
 use crate::provider::{LLMProvider, LLMStreamEvent};
 use crate::providers::anthropic::compat::{
-    AnthropicContentBlock, AnthropicContentDelta, AnthropicDelta, AnthropicError,
-    AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicStreamEvent, AnthropicUsage,
-    anthropic_stop_reason, convert_anthropic_to_llm_request, convert_llm_to_anthropic_response,
+    AnthropicContentBlock, AnthropicContentDelta, AnthropicDelta, AnthropicError, AnthropicMessagesRequest,
+    AnthropicMessagesResponse, AnthropicStreamEvent, AnthropicUsage, anthropic_stop_reason,
+    convert_anthropic_to_llm_request, convert_llm_to_anthropic_response,
 };
 use axum::{
     Json, Router,
@@ -75,19 +75,11 @@ async fn send_stream_event(tx: &AnthropicSseSender, event: AnthropicStreamEvent)
     tx.send(Event::default().json_data(event)).await.is_ok()
 }
 
-async fn send_content_block_start(
-    tx: &AnthropicSseSender,
-    index: u32,
-    content_block: AnthropicContentBlock,
-) -> bool {
+async fn send_content_block_start(tx: &AnthropicSseSender, index: u32, content_block: AnthropicContentBlock) -> bool {
     send_stream_event(tx, AnthropicStreamEvent::ContentBlockStart { index, content_block }).await
 }
 
-async fn send_content_block_delta(
-    tx: &AnthropicSseSender,
-    index: u32,
-    delta: AnthropicContentDelta,
-) -> bool {
+async fn send_content_block_delta(tx: &AnthropicSseSender, index: u32, delta: AnthropicContentDelta) -> bool {
     send_stream_event(tx, AnthropicStreamEvent::ContentBlockDelta { index, delta }).await
 }
 
@@ -138,12 +130,7 @@ pub async fn messages_handler(
                 usage: AnthropicUsage { input_tokens: 0, output_tokens: 0 },
             };
 
-            if !send_stream_event(
-                &tx,
-                AnthropicStreamEvent::MessageStart { message: initial_response },
-            )
-            .await
-            {
+            if !send_stream_event(&tx, AnthropicStreamEvent::MessageStart { message: initial_response }).await {
                 return;
             }
 
@@ -205,10 +192,7 @@ pub async fn messages_handler(
                                     if !send_content_block_start(
                                         &tx,
                                         index,
-                                        AnthropicContentBlock::Thinking {
-                                            thinking: String::new(),
-                                            signature: None,
-                                        },
+                                        AnthropicContentBlock::Thinking { thinking: String::new(), signature: None },
                                     )
                                     .await
                                     {
@@ -255,9 +239,7 @@ pub async fn messages_handler(
 
                                 let usage = response.usage.unwrap_or_default();
                                 let delta = AnthropicDelta {
-                                    stop_reason: Some(anthropic_stop_reason(
-                                        response.finish_reason,
-                                    )),
+                                    stop_reason: Some(anthropic_stop_reason(response.finish_reason)),
                                     stop_sequence: None,
                                 };
 
@@ -276,8 +258,7 @@ pub async fn messages_handler(
                                     break;
                                 }
 
-                                if !send_stream_event(&tx, AnthropicStreamEvent::MessageStop).await
-                                {
+                                if !send_stream_event(&tx, AnthropicStreamEvent::MessageStop).await {
                                     break;
                                 }
 
@@ -321,14 +302,12 @@ pub async fn messages_handler(
 mod tests {
     use super::*;
     use crate::provider::{
-        AnthropicOptionalStringOverride, AnthropicOptionalU32Override,
-        AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart,
-        MessageContent, ToolChoice,
+        AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicThinkingDisplayOverride,
+        AnthropicThinkingModeOverride, ContentPart, MessageContent, ToolChoice,
     };
     use crate::providers::anthropic::compat::{AnthropicContent, AnthropicMessage, AnthropicTool};
     use crate::providers::anthropic_types::{
-        AnthropicOutputConfig, AnthropicOutputFormat, AnthropicTaskBudget, ThinkingConfig,
-        ThinkingDisplay,
+        AnthropicOutputConfig, AnthropicOutputFormat, AnthropicTaskBudget, ThinkingConfig, ThinkingDisplay,
     };
     use serde_json::json;
 
@@ -414,10 +393,7 @@ mod tests {
 
         let llm_request = convert_anthropic_to_llm_request(request);
         let tools = llm_request.tools.expect("tools");
-        assert_eq!(
-            tools[0].allowed_callers.as_ref(),
-            Some(&vec!["code_execution_20250825".to_string()])
-        );
+        assert_eq!(tools[0].allowed_callers.as_ref(), Some(&vec!["code_execution_20250825".to_string()]));
     }
 
     #[test]
@@ -661,10 +637,7 @@ mod tests {
             context_management: None,
             output_config: Some(AnthropicOutputConfig {
                 effort: Some("medium".to_string()),
-                task_budget: Some(AnthropicTaskBudget {
-                    budget_type: "tokens".to_string(),
-                    total: 64_000,
-                }),
+                task_budget: Some(AnthropicTaskBudget { budget_type: "tokens".to_string(), total: 64_000 }),
                 format: None,
             }),
         };
@@ -673,10 +646,7 @@ mod tests {
         let overrides = llm_request.anthropic_request_overrides.expect("anthropic overrides");
         assert_eq!(overrides.thinking_mode, AnthropicThinkingModeOverride::Adaptive);
         assert_eq!(overrides.thinking_display, AnthropicThinkingDisplayOverride::Summarized);
-        assert_eq!(
-            overrides.effort,
-            AnthropicOptionalStringOverride::Explicit("medium".to_string())
-        );
+        assert_eq!(overrides.effort, AnthropicOptionalStringOverride::Explicit("medium".to_string()));
         assert_eq!(overrides.task_budget_tokens, AnthropicOptionalU32Override::Explicit(64_000));
     }
 
@@ -804,8 +774,7 @@ mod tests {
 
     #[test]
     fn anthropic_content_block_thinking_uses_anthropic_wire_field() {
-        let block =
-            AnthropicContentBlock::Thinking { thinking: "plan".to_string(), signature: None };
+        let block = AnthropicContentBlock::Thinking { thinking: "plan".to_string(), signature: None };
 
         let serialized = serde_json::to_value(block).expect("serialize thinking block");
         assert_eq!(serialized["type"], "thinking");

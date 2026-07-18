@@ -34,9 +34,7 @@ fn push_unique_permission_entry(target: &mut Vec<String>, entry: &str) {
     }
 }
 
-pub(super) fn parse_cli_config_entries(
-    entries: &[String],
-) -> (Option<PathBuf>, Vec<(String, String)>) {
+pub(super) fn parse_cli_config_entries(entries: &[String]) -> (Option<PathBuf>, Vec<(String, String)>) {
     let mut config_path: Option<PathBuf> = None;
     let mut overrides = Vec::new();
 
@@ -79,15 +77,10 @@ pub(super) fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf
     }
 }
 
-pub(super) fn validate_full_auto_configuration(
-    config: &VTCodeConfig,
-    workspace: &Path,
-) -> Result<()> {
+pub(super) fn validate_full_auto_configuration(config: &VTCodeConfig, workspace: &Path) -> Result<()> {
     let automation_cfg = &config.automation.full_auto;
     if !automation_cfg.enabled {
-        bail!(
-            "Full-auto permission review is disabled in configuration. Enable it under [automation.full_auto]."
-        );
+        bail!("Full-auto permission review is disabled in configuration. Enable it under [automation.full_auto].");
     }
 
     if automation_cfg.require_profile_ack {
@@ -125,11 +118,7 @@ pub(super) fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<P
     Ok(canonicalize_workspace(&resolved))
 }
 
-pub(super) async fn validate_startup_configuration(
-    config: &VTCodeConfig,
-    workspace: &Path,
-    quiet: bool,
-) -> Result<()> {
+pub(super) async fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path, quiet: bool) -> Result<()> {
     // Ripgrep availability is checked lazily when search tools are actually
     // needed (session setup, first-run, `vtcode dependencies`).  Checking it
     // here would fork a subprocess (`rg --version`) on every startup for
@@ -247,10 +236,7 @@ mod tests {
     use vtcode_core::config::loader::ConfigBuilder;
 
     #[test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "test function, assertions are OK"
-    )]
+    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are OK")]
     fn resolves_current_dir_when_none() -> Result<()> {
         let _env = env_lock::lock();
         let original_cwd = env::current_dir()?;
@@ -300,10 +286,7 @@ mod tests {
 
         apply_cli_permission_overrides(
             &mut config,
-            &[
-                "exec_command,code_search".to_string(),
-                "write_stdin".to_string(),
-            ],
+            &["exec_command,code_search".to_string(), "write_stdin".to_string()],
             &["apply_patch".to_string(), "exec_command".to_string()],
         );
 
@@ -315,10 +298,7 @@ mod tests {
                 "write_stdin".to_string()
             ]
         );
-        assert_eq!(
-            config.permissions.deny,
-            vec!["apply_patch".to_string(), "exec_command".to_string()]
-        );
+        assert_eq!(config.permissions.deny, vec!["apply_patch".to_string(), "exec_command".to_string()]);
     }
 
     #[test]
@@ -327,20 +307,11 @@ mod tests {
 
         apply_cli_permission_overrides(
             &mut config,
-            &[
-                "Read(/docs/**)".to_string(),
-                "Bash(cargo check)".to_string(),
-            ],
+            &["Read(/docs/**)".to_string(), "Bash(cargo check)".to_string()],
             &["Edit(/.git/**)".to_string()],
         );
 
-        assert_eq!(
-            config.permissions.allow,
-            vec![
-                "Read(/docs/**)".to_string(),
-                "Bash(cargo check)".to_string()
-            ]
-        );
+        assert_eq!(config.permissions.allow, vec!["Read(/docs/**)".to_string(), "Bash(cargo check)".to_string()]);
         assert_eq!(config.permissions.deny, vec!["Edit(/.git/**)".to_string()]);
     }
 

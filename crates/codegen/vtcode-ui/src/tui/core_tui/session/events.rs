@@ -27,18 +27,12 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) {
     }
 }
 
-fn copy_selected_input_if_requested(
-    session: &mut Session,
-    key: &KeyEvent,
-    has_command: bool,
-) -> bool {
+fn copy_selected_input_if_requested(session: &mut Session, key: &KeyEvent, has_command: bool) -> bool {
     let is_copy_shortcut = if has_command {
         matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
     } else {
         match key.code {
-            KeyCode::Char('c') | KeyCode::Char('C') => {
-                key.modifiers.contains(KeyModifiers::CONTROL)
-            }
+            KeyCode::Char('c') | KeyCode::Char('C') => key.modifiers.contains(KeyModifiers::CONTROL),
             KeyCode::Char('\u{3}') => true,
             _ => false,
         }
@@ -150,9 +144,7 @@ fn dispatch_action(session: &mut Session, action: Action) -> Option<InlineEvent>
             }
             session.clear_inline_prompt_suggestion();
             session.mark_dirty();
-            Some(InlineEvent::RequestInlinePromptSuggestion(
-                session.input_manager.content().to_string(),
-            ))
+            Some(InlineEvent::RequestInlinePromptSuggestion(session.input_manager.content().to_string()))
         }
     }
 }
@@ -187,9 +179,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         if let Some(action) = modal.hotkey_action(&key, modal_modifiers) {
             session.close_overlay();
             session.mark_dirty();
-            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Hotkey(
-                action,
-            ))));
+            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Hotkey(action))));
         }
 
         // Text-only modals (no list): close on Esc or any keypress.
@@ -338,9 +328,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             None
         }
-        KeyCode::Char('g') | KeyCode::Char('G')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('g') | KeyCode::Char('G') if has_control && !has_command && !has_alt && session.input_enabled => {
             let draft = session.input_manager.content().to_string();
             session.mark_dirty();
             Some(InlineEvent::LaunchEditor { draft })
@@ -372,32 +360,24 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             None
         }
-        KeyCode::Char('z') | KeyCode::Char('Z')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('z') | KeyCode::Char('Z') if has_control && !has_command && !has_alt && session.input_enabled => {
             session.input_manager.undo();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('y') | KeyCode::Char('Y')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('y') | KeyCode::Char('Y') if has_control && !has_command && !has_alt && session.input_enabled => {
             session.input_manager.redo();
             session.mark_dirty();
             None
         }
 
         // --- Readline-style editing shortcuts ---
-        KeyCode::Char('f') | KeyCode::Char('F')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('f') | KeyCode::Char('F') if has_control && !has_command && !has_alt && session.input_enabled => {
             session.move_right();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('b') | KeyCode::Char('B')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('b') | KeyCode::Char('B') if has_control && !has_command && !has_alt && session.input_enabled => {
             session.move_left();
             session.mark_dirty();
             None
@@ -414,44 +394,32 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
             None
         }
-        KeyCode::Char('t') | KeyCode::Char('T')
-            if has_control && !has_command && !has_alt && session.input_enabled =>
-        {
+        KeyCode::Char('t') | KeyCode::Char('T') if has_control && !has_command && !has_alt && session.input_enabled => {
             session.transpose_chars();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('d') | KeyCode::Char('D')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('d') | KeyCode::Char('D') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.delete_word_forward();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('t') | KeyCode::Char('T')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('t') | KeyCode::Char('T') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.transpose_words();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('u') | KeyCode::Char('U')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('u') | KeyCode::Char('U') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.uppercase_word();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('l') | KeyCode::Char('L')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('l') | KeyCode::Char('L') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.lowercase_word();
             session.mark_dirty();
             None
         }
-        KeyCode::Char('c') | KeyCode::Char('C')
-            if has_alt && !has_control && !has_command && session.input_enabled =>
-        {
+        KeyCode::Char('c') | KeyCode::Char('C') if has_alt && !has_control && !has_command && session.input_enabled => {
             session.capitalize_word();
             session.mark_dirty();
             None
@@ -699,12 +667,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            if ch == '?'
-                && !has_control
-                && !has_alt
-                && !has_command
-                && session.input_manager.content().is_empty()
-            {
+            if ch == '?' && !has_control && !has_alt && !has_command && session.input_manager.content().is_empty() {
                 session.show_help_modal();
                 return None;
             }

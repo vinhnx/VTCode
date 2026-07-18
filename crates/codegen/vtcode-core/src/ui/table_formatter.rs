@@ -169,11 +169,7 @@ impl TableFormatter {
         }
 
         // Bottom border
-        let (left, right) = if self.use_unicode {
-            ('└', '┘')
-        } else {
-            ('+', '+')
-        };
+        let (left, right) = if self.use_unicode { ('└', '┘') } else { ('+', '+') };
         let mut bottom_border = String::from(left);
         for (idx, column) in self.columns.iter().enumerate() {
             bottom_border.push_str(&line.to_string().repeat(column.width + 2));

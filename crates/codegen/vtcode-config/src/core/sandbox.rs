@@ -532,8 +532,8 @@ enabled = true
 {removed_field} = "workspace_write"
 "#,
         );
-        let config: SandboxConfig = toml::from_str(&input)
-            .expect("sandbox config should accept unknown fields for forward compatibility");
+        let config: SandboxConfig =
+            toml::from_str(&input).expect("sandbox config should accept unknown fields for forward compatibility");
         assert!(config.enabled);
     }
 
@@ -546,22 +546,19 @@ enabled = true
 
     #[test]
     fn test_network_config_policy_field() {
-        let config: NetworkConfig =
-            toml::from_str(r#"policy = "allow_all""#).expect("policy field should parse");
+        let config: NetworkConfig = toml::from_str(r#"policy = "allow_all""#).expect("policy field should parse");
         assert_eq!(config.policy, NetworkPolicy::AllowAll);
     }
 
     #[test]
     fn test_network_config_legacy_allow_all() {
-        let config: NetworkConfig =
-            toml::from_str(r#"allow_all = true"#).expect("legacy allow_all should parse");
+        let config: NetworkConfig = toml::from_str(r#"allow_all = true"#).expect("legacy allow_all should parse");
         assert_eq!(config.policy, NetworkPolicy::AllowAll);
     }
 
     #[test]
     fn test_network_config_legacy_block_all() {
-        let config: NetworkConfig =
-            toml::from_str(r#"block_all = true"#).expect("legacy block_all should parse");
+        let config: NetworkConfig = toml::from_str(r#"block_all = true"#).expect("legacy block_all should parse");
         assert_eq!(config.policy, NetworkPolicy::BlockAll);
     }
 

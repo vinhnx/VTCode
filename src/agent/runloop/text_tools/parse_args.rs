@@ -205,11 +205,7 @@ pub(super) fn normalize_command_string(command: &str) -> Option<Vec<Value>> {
         .filter(|segment| !segment.is_empty())
         .map(|segment| Value::String(segment.to_string()))
         .collect();
-    if fallback.is_empty() {
-        None
-    } else {
-        Some(fallback)
-    }
+    if fallback.is_empty() { None } else { Some(fallback) }
 }
 
 pub(super) fn parse_scalar_value(input: &str) -> Value {

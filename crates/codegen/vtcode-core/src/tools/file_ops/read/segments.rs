@@ -9,15 +9,11 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 impl FileOpsTool {
-    pub(super) async fn read_file_paged(
-        &self,
-        file_path: &Path,
-        input: &Input,
-    ) -> Result<(String, Value, bool)> {
+    pub(super) async fn read_file_paged(&self, file_path: &Path, input: &Input) -> Result<(String, Value, bool)> {
         // Get file metadata to verify file exists and get size
-        let file_metadata = tokio::fs::metadata(file_path).await.with_context(|| {
-            format!("Failed to read metadata for file: {}", file_path.display())
-        })?;
+        let file_metadata = tokio::fs::metadata(file_path)
+            .await
+            .with_context(|| format!("Failed to read metadata for file: {}", file_path.display()))?;
 
         if !file_metadata.is_file() {
             return Err(anyhow!("Path is not a file: {}", file_path.display()));
@@ -26,22 +22,18 @@ impl FileOpsTool {
         let file_size = file_metadata.len();
 
         // Calculate the final content based on whether we're using byte or line-based paging
-        let (final_content, is_truncated) =
-            if input.offset_lines.is_some() || input.page_size_lines.is_some() {
-                // Line-based paging
-                self.read_file_by_lines(file_path, input, file_size as usize).await?
-            } else {
-                // Byte-based paging (default)
-                self.read_file_by_bytes(file_path, input, file_size).await?
-            };
+        let (final_content, is_truncated) = if input.offset_lines.is_some() || input.page_size_lines.is_some() {
+            // Line-based paging
+            self.read_file_by_lines(file_path, input, file_size as usize).await?
+        } else {
+            // Byte-based paging (default)
+            self.read_file_by_bytes(file_path, input, file_size).await?
+        };
 
         // Create builder and metadata object
         let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
             .success()
-            .message(format!(
-                "Successfully read file {} (paged)",
-                self.workspace_relative_display(file_path)
-            ))
+            .message(format!("Successfully read file {} (paged)", self.workspace_relative_display(file_path)))
             .content(final_content.clone())
             .data("size_bytes", json!(file_size))
             .data("size_lines", json!(final_content.lines().count()))
@@ -67,12 +59,7 @@ impl FileOpsTool {
     }
 
     /// Read file content by lines with offset and page size
-    async fn read_file_by_lines(
-        &self,
-        file_path: &Path,
-        input: &Input,
-        _file_size: usize,
-    ) -> Result<(String, bool)> {
+    async fn read_file_by_lines(&self, file_path: &Path, input: &Input, _file_size: usize) -> Result<(String, bool)> {
         // Validate and extract parameters
         let offset_lines = input.offset_lines.unwrap_or(0);
         let page_size_lines = input.page_size_lines.unwrap_or(1000); // Reasonable default: 1000 lines
@@ -87,9 +74,7 @@ impl FileOpsTool {
 
         // Check for overflow before adding
         if offset_lines > usize::MAX - page_size_lines {
-            return Err(anyhow!(
-                "Offset_lines + page_size_lines would overflow: {offset_lines} + {page_size_lines}"
-            ));
+            return Err(anyhow!("Offset_lines + page_size_lines would overflow: {offset_lines} + {page_size_lines}"));
         }
 
         let content = read_file_with_context(file_path, "file content")
@@ -115,12 +100,7 @@ impl FileOpsTool {
     }
 
     /// Read file content by bytes with offset and page size
-    async fn read_file_by_bytes(
-        &self,
-        file_path: &Path,
-        input: &Input,
-        _file_size: u64,
-    ) -> Result<(String, bool)> {
+    async fn read_file_by_bytes(&self, file_path: &Path, input: &Input, _file_size: u64) -> Result<(String, bool)> {
         let offset_bytes = input.offset_bytes.unwrap_or(0);
         let page_size_bytes = input.page_size_bytes.unwrap_or(8192);
 

@@ -85,11 +85,7 @@ pub fn get_head_commit_hash(cwd: &Path) -> Result<Option<String>> {
 
     let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-    if hash.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(hash))
-    }
+    if hash.is_empty() { Ok(None) } else { Ok(Some(hash)) }
 }
 
 /// Get the repository root path for the given working directory.
@@ -104,9 +100,7 @@ pub fn get_git_repo_root(cwd: &Path) -> Result<Option<String>> {
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(cwd)
         .output()
-        .with_context(|| {
-            format!("Failed to run git rev-parse --show-toplevel in {}", cwd.display())
-        })?;
+        .with_context(|| format!("Failed to run git rev-parse --show-toplevel in {}", cwd.display()))?;
 
     if !output.status.success() {
         return Ok(None);
@@ -114,11 +108,7 @@ pub fn get_git_repo_root(cwd: &Path) -> Result<Option<String>> {
 
     let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-    if root.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(root))
-    }
+    if root.is_empty() { Ok(None) } else { Ok(Some(root)) }
 }
 
 /// Collect all git information for a workspace.
@@ -158,9 +148,7 @@ pub fn is_git_repo(cwd: &Path) -> bool {
 
 /// Async variant of [`get_git_remote_urls`]. Runs the git subprocess on the
 /// blocking thread pool.
-pub async fn get_git_remote_urls_async(
-    cwd: std::path::PathBuf,
-) -> Result<BTreeMap<String, String>> {
+pub async fn get_git_remote_urls_async(cwd: std::path::PathBuf) -> Result<BTreeMap<String, String>> {
     tokio::task::spawn_blocking(move || get_git_remote_urls(&cwd))
         .await
         .context("Git remote URLs task panicked")?

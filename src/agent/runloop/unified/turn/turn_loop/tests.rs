@@ -2,13 +2,11 @@ use super::post_tool_recovery::complete_turn_after_failed_tool_free_recovery;
 use super::post_tool_recovery::prepare_post_tool_tool_free_recovery;
 use super::post_tool_recovery::{ensure_post_tool_resume_directive, has_tool_response_since};
 use super::{
-    HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON,
-    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery,
-    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
-    accumulate_turn_usage, count_assistant_text_responses_for_guard,
-    count_assistant_text_responses_in_turn, has_turn_usage,
-    maybe_recover_after_post_tool_llm_failure, normalize_tool_free_recovery_break_outcome,
-    run_turn_loop,
+    HarnessUsage, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, POST_TOOL_RECOVERY_REASON, POST_TOOL_RECOVERY_REASON_PLAN_MODE,
+    POST_TOOL_RESUME_DIRECTIVE, PostToolFailureRecovery, RECOVERY_CONTRACT_VIOLATION_REASON,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER, accumulate_turn_usage, count_assistant_text_responses_for_guard,
+    count_assistant_text_responses_in_turn, has_turn_usage, maybe_recover_after_post_tool_llm_failure,
+    normalize_tool_free_recovery_break_outcome, run_turn_loop,
 };
 use crate::agent::runloop::unified::planning_workflow::recovery::{
     PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE, plan_synthesis_was_truncated,
@@ -51,10 +49,7 @@ fn has_tool_response_since_ignores_non_tool_messages() {
 
 #[test]
 fn has_tool_response_since_handles_baseline_past_end() {
-    let messages = vec![uni::Message::tool_response(
-        "call_1".to_string(),
-        "ok".to_string(),
-    )];
+    let messages = vec![uni::Message::tool_response("call_1".to_string(), "ok".to_string())];
 
     assert!(!has_tool_response_since(&messages, 10));
 }
@@ -72,8 +67,7 @@ fn ensure_post_tool_resume_directive_is_idempotent_near_history_tail() {
     let directive_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
         })
         .count();
     assert_eq!(directive_count, 1);
@@ -95,8 +89,7 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
     let resume_directive_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
         })
         .count();
     assert_eq!(resume_directive_count, 0);
@@ -104,8 +97,7 @@ fn prepare_post_tool_tool_free_recovery_is_idempotent_near_history_tail() {
     let recovery_reason_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RECOVERY_REASON
         })
         .count();
     assert_eq!(recovery_reason_count, 1);
@@ -119,10 +111,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
     let mut history = vec![
         uni::Message::user("run cargo nextest".to_string()),
         uni::Message::assistant("".to_string()),
-        uni::Message::tool_response(
-            "call_1".to_string(),
-            "{\"critical_note\":\"reuse output\"}".to_string(),
-        ),
+        uni::Message::tool_response("call_1".to_string(), "{\"critical_note\":\"reuse output\"}".to_string()),
     ];
 
     let action = maybe_recover_after_post_tool_llm_failure(
@@ -156,8 +145,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
     let directive_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
         })
         .count();
     assert_eq!(directive_count, 0);
@@ -165,8 +153,7 @@ fn retryable_post_tool_follow_up_failure_schedules_tool_free_recovery_once() {
     let recovery_reason_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RECOVERY_REASON
         })
         .count();
     assert_eq!(recovery_reason_count, 1);
@@ -204,8 +191,7 @@ fn plan_mode_recovery_uses_plan_aware_directive() {
     let plan_directive_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RECOVERY_REASON_PLAN_MODE
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RECOVERY_REASON_PLAN_MODE
         })
         .count();
     assert_eq!(plan_directive_count, 1);
@@ -214,8 +200,7 @@ fn plan_mode_recovery_uses_plan_aware_directive() {
     let generic_directive_count = history
         .iter()
         .filter(|message| {
-            message.role == uni::MessageRole::System
-                && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+            message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RECOVERY_REASON
         })
         .count();
     assert_eq!(generic_directive_count, 0);
@@ -246,13 +231,11 @@ fn retryable_post_tool_follow_up_failure_stops_after_recovery_pass_is_spent() {
 
     assert_eq!(action, PostToolFailureRecovery::StopAfterDirective);
     assert!(!history.iter().any(|message| {
-        message.role == uni::MessageRole::System
-            && message.content.as_text() == POST_TOOL_RECOVERY_REASON
+        message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RECOVERY_REASON
     }));
     // Turn-ending path keeps the resume directive for the next turn.
     assert!(history.iter().any(|message| {
-        message.role == uni::MessageRole::System
-            && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
+        message.role == uni::MessageRole::System && message.content.as_text() == POST_TOOL_RESUME_DIRECTIVE
     }));
 }
 
@@ -274,19 +257,10 @@ fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
     let mut history = vec![
         uni::Message::user("run cargo nextest".to_string()),
         uni::Message::assistant("".to_string()),
-        uni::Message::tool_response(
-            "call_1".to_string(),
-            "{\"critical_note\":\"reuse output\"}".to_string(),
-        ),
+        uni::Message::tool_response("call_1".to_string(), "{\"critical_note\":\"reuse output\"}".to_string()),
     ];
 
-    let mut state = HarnessTurnState::new(
-        TurnRunId("run-1".to_string()),
-        TurnId("turn-1".to_string()),
-        4,
-        10,
-        1,
-    );
+    let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 4, 10, 1);
     // Fresh turn: recovery is inactive.
     assert!(!state.is_recovery_active());
 
@@ -312,10 +286,7 @@ fn post_tool_follow_up_failure_chain_consumes_tool_free_recovery_pass() {
 
     // The next loop iteration consumes the pass — this is the gate that
     // decides `tool_free_recovery = true` and disables tools at the API level.
-    assert!(
-        state.consume_recovery_pass(),
-        "consume_recovery_pass must succeed after switch from Inactive"
-    );
+    assert!(state.consume_recovery_pass(), "consume_recovery_pass must succeed after switch from Inactive");
     assert!(state.recovery_is_tool_free());
 }
 
@@ -342,15 +313,8 @@ async fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
         .count();
     assert_eq!(fallback_count, 1);
 
-    let outcome_again = complete_turn_after_failed_tool_free_recovery(
-        &mut history,
-        "test.stage",
-        None,
-        None,
-        None,
-        None,
-    )
-    .await;
+    let outcome_again =
+        complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None, None, None).await;
     assert!(matches!(outcome_again, TurnLoopResult::Completed));
     let fallback_count_again = history
         .iter()
@@ -457,9 +421,7 @@ async fn plan_mode_recovery_fallback_marks_interview_pending_and_preserves_resea
     plan_session.enter(PlanningEntrySource::UserRequest);
     assert!(!plan_session.interview_pending());
 
-    let mut history = vec![uni::Message::user(
-        "plan launch-time optimization".to_string(),
-    )];
+    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
     let outcome = complete_turn_after_failed_tool_free_recovery(
         &mut history,
         "test.stage",
@@ -500,9 +462,7 @@ async fn plan_mode_recovery_exhausted_finalizes_instead_of_reforcing_interview()
     plan_session.mark_recovery_exhausted();
     assert!(!plan_session.interview_pending());
 
-    let mut history = vec![uni::Message::user(
-        "plan launch-time optimization".to_string(),
-    )];
+    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
     let outcome = complete_turn_after_failed_tool_free_recovery(
         &mut history,
         "test.stage",
@@ -538,9 +498,7 @@ async fn plan_mode_recovery_rejects_non_plan_salvage() {
     let mut plan_session = PlanningWorkflowSessionState::default();
     plan_session.enter(PlanningEntrySource::UserRequest);
 
-    let mut history = vec![uni::Message::user(
-        "plan launch-time optimization".to_string(),
-    )];
+    let mut history = vec![uni::Message::user("plan launch-time optimization".to_string())];
     let outcome = complete_turn_after_failed_tool_free_recovery(
         &mut history,
         "test.stage",
@@ -816,8 +774,7 @@ fn count_assistant_text_responses_for_guard_counts_post_compaction_growth_above_
     let recorded_text_responses_in_turn = 1;
 
     compacted_history.push(uni::Message::assistant("current answer after compaction".to_string()));
-    compacted_history
-        .push(uni::Message::assistant("second current answer after compaction".to_string()));
+    compacted_history.push(uni::Message::assistant("second current answer after compaction".to_string()));
 
     assert_eq!(
         count_assistant_text_responses_for_guard(
@@ -855,8 +812,7 @@ fn count_assistant_text_responses_in_turn_matches_observed_pattern() {
     }
     assert_eq!(count_assistant_text_responses_in_turn(&history, 0), 4);
     assert!(
-        count_assistant_text_responses_in_turn(&history, 0)
-            >= super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
+        count_assistant_text_responses_in_turn(&history, 0) >= super::MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
         "anti-runaway guard would trip on this history"
     );
 }
@@ -886,10 +842,7 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
         fn supports_streaming(&self) -> bool {
             false
         }
-        async fn generate(
-            &self,
-            request: uni::LLMRequest,
-        ) -> Result<uni::LLMResponse, uni::LLMError> {
+        async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
             *self.requests.lock().expect("requests lock") += 1;
             Ok(uni::LLMResponse {
                 content: Some(self.content.clone()),
@@ -963,10 +916,7 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
 #[test]
 fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
     let truncated = uni::LLMResponse {
-        content: Some(
-            "<proposed_plan>\n# Improve launch time\n## Steps\n1. Fix warmup -> src/main.rs"
-                .to_string(),
-        ),
+        content: Some("<proposed_plan>\n# Improve launch time\n## Steps\n1. Fix warmup -> src/main.rs".to_string()),
         model: "noop".to_string(),
         tool_calls: None,
         usage: None,
@@ -997,10 +947,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         tool_references: Vec::new(),
         compaction: None,
     };
-    assert!(
-        !plan_synthesis_was_truncated(&complete),
-        "closed <proposed_plan> must not be flagged as truncated"
-    );
+    assert!(!plan_synthesis_was_truncated(&complete), "closed <proposed_plan> must not be flagged as truncated");
 
     // A normal (Stop) response that happens to mention the tag is not truncated.
     let normal = uni::LLMResponse {
@@ -1016,10 +963,7 @@ fn plan_synthesis_truncated_detects_unclosed_proposed_plan() {
         tool_references: Vec::new(),
         compaction: None,
     };
-    assert!(
-        !plan_synthesis_was_truncated(&normal),
-        "Stop-finished plan must not be flagged as truncated"
-    );
+    assert!(!plan_synthesis_was_truncated(&normal), "Stop-finished plan must not be flagged as truncated");
 }
 
 /// End-to-end regression test for the plan-mode "cut off mid-flight" fix (Fix B):
@@ -1048,10 +992,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
         fn supports_streaming(&self) -> bool {
             false
         }
-        async fn generate(
-            &self,
-            request: uni::LLMRequest,
-        ) -> Result<uni::LLMResponse, uni::LLMError> {
+        async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
             let n = self.calls.fetch_add(1, Ordering::SeqCst);
             let (content, finish_reason) = if n == 0 {
                 // First pass: plan cut off mid-<proposed_plan> (output token limit).
@@ -1062,8 +1003,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
             } else {
                 // Second pass: compact completion after the condense directive.
                 (
-                    "Plan condensed: warmup path in src/main.rs fixed; rebuild to verify."
-                        .to_string(),
+                    "Plan condensed: warmup path in src/main.rs fixed; rebuild to verify.".to_string(),
                     uni::FinishReason::Stop,
                 )
             };
@@ -1094,20 +1034,14 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
     backing.activate_planning_for_test();
     backing.set_provider(Box::new(TruncateThenCompactProvider { calls: calls.clone() }));
 
-    let mut history = vec![uni::Message::user(
-        "make a plan to improve launch time".to_string(),
-    )];
+    let mut history = vec![uni::Message::user("make a plan to improve launch time".to_string())];
     run_turn_loop(&mut history, backing.turn_loop_context())
         .await
         .expect("turn loop must complete after condensing the truncated plan");
 
     // Two generations: the truncated pass + exactly one compact retry (bounded
     // by MAX_PLAN_SYNTHESIS_CONDENSE_ATTEMPTS, so it must NOT loop).
-    assert_eq!(
-        calls.load(Ordering::SeqCst),
-        2,
-        "must re-run synthesis exactly once after truncation, not loop"
-    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "must re-run synthesis exactly once after truncation, not loop");
 
     // The condense directive must have been injected into the history.
     assert!(
@@ -1126,10 +1060,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
         .find(|message| message.role == uni::MessageRole::Assistant)
         .map(|message| message.content.as_text().to_string())
         .unwrap_or_default();
-    assert!(
-        final_text.contains("Plan condensed:"),
-        "final answer must be the compact retry, got: {final_text}"
-    );
+    assert!(final_text.contains("Plan condensed:"), "final answer must be the compact retry, got: {final_text}");
     assert!(
         !final_text.contains("Fix warmup -> src/main.rs -> verify: build"),
         "final answer must not be the truncated draft"

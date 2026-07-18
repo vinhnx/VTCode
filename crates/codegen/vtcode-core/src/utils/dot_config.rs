@@ -287,10 +287,7 @@ impl DotManager {
     }
 
     /// Load the trust level recorded for a workspace, if any.
-    pub async fn workspace_trust_level(
-        &self,
-        workspace: &Path,
-    ) -> Result<Option<WorkspaceTrustLevel>, DotError> {
+    pub async fn workspace_trust_level(&self, workspace: &Path) -> Result<Option<WorkspaceTrustLevel>, DotError> {
         let workspace_key = workspace_trust_key(workspace);
         let config = self.load_config().await?;
 
@@ -298,11 +295,7 @@ impl DotManager {
     }
 
     /// Persist a workspace trust level in the dot configuration.
-    pub async fn update_workspace_trust(
-        &self,
-        workspace: &Path,
-        level: WorkspaceTrustLevel,
-    ) -> Result<(), DotError> {
+    pub async fn update_workspace_trust(&self, workspace: &Path, level: WorkspaceTrustLevel) -> Result<(), DotError> {
         let workspace_key = workspace_trust_key(workspace);
         let trusted_at = unix_timestamp_secs()?;
 
@@ -344,19 +337,16 @@ impl DotManager {
 
         // Clean prompt cache
         if config.cache.prompt_cache_enabled {
-            stats.prompts_cleaned =
-                self.cleanup_directory(&self.cache_dir("prompts"), max_age, now).await?;
+            stats.prompts_cleaned = self.cleanup_directory(&self.cache_dir("prompts"), max_age, now).await?;
         }
 
         // Clean context cache
         if config.cache.context_cache_enabled {
-            stats.context_cleaned =
-                self.cleanup_directory(&self.cache_dir("context"), max_age, now).await?;
+            stats.context_cleaned = self.cleanup_directory(&self.cache_dir("context"), max_age, now).await?;
         }
 
         // Clean model cache
-        stats.models_cleaned =
-            self.cleanup_directory(&self.cache_dir("models"), max_age, now).await?;
+        stats.models_cleaned = self.cleanup_directory(&self.cache_dir("models"), max_age, now).await?;
 
         Ok(stats)
     }
@@ -406,11 +396,8 @@ impl DotManager {
         stats.sessions_size = self.calculate_dir_size(&self.sessions_dir()).await?;
         stats.backups_size = self.calculate_dir_size(&self.backups_dir()).await?;
 
-        stats.total_size = stats.config_size
-            + stats.cache_size
-            + stats.logs_size
-            + stats.sessions_size
-            + stats.backups_size;
+        stats.total_size =
+            stats.config_size + stats.cache_size + stats.logs_size + stats.sessions_size + stats.backups_size;
 
         Ok(stats)
     }
@@ -605,18 +592,13 @@ pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
 }
 
 /// Load the trust level recorded for a workspace, if any.
-pub async fn load_workspace_trust_level(
-    workspace: &Path,
-) -> Result<Option<WorkspaceTrustLevel>, DotError> {
+pub async fn load_workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>, DotError> {
     let manager = clone_manager()?;
     manager.workspace_trust_level(workspace).await
 }
 
 /// Persist the trust level recorded for a workspace.
-pub async fn update_workspace_trust(
-    workspace: &Path,
-    level: WorkspaceTrustLevel,
-) -> Result<(), DotError> {
+pub async fn update_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Result<(), DotError> {
     let manager = clone_manager()?;
     manager.update_workspace_trust(workspace, level).await
 }

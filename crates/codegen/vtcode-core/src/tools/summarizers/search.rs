@@ -32,17 +32,12 @@ impl Default for GrepSummarizer {
 }
 
 impl Summarizer for GrepSummarizer {
-    fn summarize(
-        &self,
-        full_output: &str,
-        _metadata: Option<&serde_json::Value>,
-    ) -> Result<String> {
+    fn summarize(&self, full_output: &str, _metadata: Option<&serde_json::Value>) -> Result<String> {
         // Parse grep output to extract key information
         let stats = parse_grep_output(full_output);
 
         // Build concise summary
-        let mut summary =
-            format!("Found {} matches in {} files", stats.total_matches, stats.unique_files);
+        let mut summary = format!("Found {} matches in {} files", stats.total_matches, stats.unique_files);
 
         // Add top files if available
         if !stats.top_files.is_empty() {
@@ -57,8 +52,7 @@ impl Summarizer for GrepSummarizer {
 
         // Add pattern context if available
         if !stats.symbols.is_empty() {
-            let symbol_list: Vec<&str> =
-                stats.symbols.iter().take(self.max_symbols).map(|s| s.as_str()).collect();
+            let symbol_list: Vec<&str> = stats.symbols.iter().take(self.max_symbols).map(|s| s.as_str()).collect();
             summary.push_str(&format!(". Pattern in: {}", symbol_list.join(", ")));
         }
 
@@ -81,22 +75,15 @@ impl Default for ListSummarizer {
 }
 
 impl Summarizer for ListSummarizer {
-    fn summarize(
-        &self,
-        full_output: &str,
-        _metadata: Option<&serde_json::Value>,
-    ) -> Result<String> {
+    fn summarize(&self, full_output: &str, _metadata: Option<&serde_json::Value>) -> Result<String> {
         let stats = parse_list_output(full_output);
 
-        let mut summary = format!(
-            "Listed {} items ({} files, {} directories)",
-            stats.total_items, stats.file_count, stats.dir_count
-        );
+        let mut summary =
+            format!("Listed {} items ({} files, {} directories)", stats.total_items, stats.file_count, stats.dir_count);
 
         // Add sample files if available
         if !stats.sample_files.is_empty() {
-            let files: Vec<&str> =
-                stats.sample_files.iter().take(self.max_files).map(|s| s.as_str()).collect();
+            let files: Vec<&str> = stats.sample_files.iter().take(self.max_files).map(|s| s.as_str()).collect();
             summary.push_str(&format!(". Files: {}", files.join(", ")));
         }
 

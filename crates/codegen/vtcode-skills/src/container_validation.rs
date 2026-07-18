@@ -97,7 +97,8 @@ impl ContainerSkillsValidator {
                 analysis: "Manifest sets disallow-container=true (VT Code-native only)".to_string(),
                 patterns_found: vec!["disallow-container".to_string()],
                 recommendations: vec![
-                    "Use VT Code-native execution paths via `exec_command` instead of Anthropic container skills.".to_string(),
+                    "Use VT Code-native execution paths via `exec_command` instead of Anthropic container skills."
+                        .to_string(),
                 ],
                 should_filter: false,
             };
@@ -158,10 +159,7 @@ impl ContainerSkillsValidator {
         } else if has_container_usage && has_fallback {
             (
                 ContainerSkillsRequirement::RequiredWithFallback,
-                format!(
-                    "Skill '{}' uses container skills but provides VT Code-compatible alternatives.",
-                    skill.name()
-                ),
+                format!("Skill '{}' uses container skills but provides VT Code-compatible alternatives.", skill.name()),
                 false,
             )
         } else if has_container_usage {
@@ -183,7 +181,10 @@ impl ContainerSkillsValidator {
 
         // Generate recommendations with enhanced user guidance
         if requirement == ContainerSkillsRequirement::Required {
-            recommendations.push("This skill requires Anthropic's container skills feature which is not available in VT Code.".to_string());
+            recommendations.push(
+                "This skill requires Anthropic's container skills feature which is not available in VT Code."
+                    .to_string(),
+            );
             recommendations.push("".to_string());
             recommendations.push("Consider these VT Code-compatible alternatives:".to_string());
 
@@ -201,48 +202,32 @@ impl ContainerSkillsValidator {
                         .to_string(),
                 );
                 recommendations.push("  2. Install: pip install openpyxl xlsxwriter".to_string());
-                recommendations
-                    .push("  3. Use Python code execution to create spreadsheets".to_string());
+                recommendations.push("  3. Use Python code execution to create spreadsheets".to_string());
             } else if skill.name().contains("doc") || skill.name().contains("word") {
                 recommendations.push(
-                    "  1. Run Python through exec_command.cmd with libraries: python-docx or docxtpl"
-                        .to_string(),
+                    "  1. Run Python through exec_command.cmd with libraries: python-docx or docxtpl".to_string(),
                 );
                 recommendations.push("  2. Install: pip install python-docx".to_string());
-                recommendations
-                    .push("  3. Use Python code execution to generate documents".to_string());
+                recommendations.push("  3. Use Python code execution to generate documents".to_string());
             } else if skill.name().contains("presentation") || skill.name().contains("ppt") {
-                recommendations.push(
-                    "  1. Run Python through exec_command.cmd with libraries: python-pptx"
-                        .to_string(),
-                );
-                recommendations.push("  2. Install: pip install python-pptx".to_string());
                 recommendations
-                    .push("  3. Use Python code execution to create presentations".to_string());
+                    .push("  1. Run Python through exec_command.cmd with libraries: python-pptx".to_string());
+                recommendations.push("  2. Install: pip install python-pptx".to_string());
+                recommendations.push("  3. Use Python code execution to create presentations".to_string());
             } else {
-                recommendations.push(
-                    "  1. Run Python through exec_command.cmd with appropriate Python libraries"
-                        .to_string(),
-                );
-                recommendations.push(
-                    "  2. Search for VT Code-compatible skills in the documentation".to_string(),
-                );
+                recommendations
+                    .push("  1. Run Python through exec_command.cmd with appropriate Python libraries".to_string());
+                recommendations.push("  2. Search for VT Code-compatible skills in the documentation".to_string());
             }
 
             recommendations.push("".to_string());
-            recommendations.push(
-                "Learn more about VT Code's code execution in the documentation.".to_string(),
-            );
+            recommendations.push("Learn more about VT Code's code execution in the documentation.".to_string());
             recommendations.push("Official Anthropic container skills documentation: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview".to_string());
         } else if requirement == ContainerSkillsRequirement::RequiredWithFallback {
-            recommendations.push(
-                "This skill uses container skills but provides VT Code-compatible alternatives."
-                    .to_string(),
-            );
             recommendations
-                .push("Use the fallback instructions in the skill documentation.".to_string());
-            recommendations
-                .push("Look for sections marked 'Option 2' or 'VT Code Alternative'.".to_string());
+                .push("This skill uses container skills but provides VT Code-compatible alternatives.".to_string());
+            recommendations.push("Use the fallback instructions in the skill documentation.".to_string());
+            recommendations.push("Look for sections marked 'Option 2' or 'VT Code Alternative'.".to_string());
             recommendations.push(
                 "The skill instructions contain working examples using legacy `execute_code`; map them to `exec_command` with a Python command in VT Code.".to_string(),
             );
@@ -263,10 +248,7 @@ impl ContainerSkillsValidator {
     }
 
     /// Filter skills that require container skills without fallback
-    pub fn filter_incompatible_skills(
-        &self,
-        skills: Vec<Skill>,
-    ) -> (Vec<Skill>, Vec<IncompatibleSkillInfo>) {
+    pub fn filter_incompatible_skills(&self, skills: Vec<Skill>) -> (Vec<Skill>, Vec<IncompatibleSkillInfo>) {
         let mut compatible_skills = Vec::new();
         let mut incompatible_skills = Vec::new();
 
@@ -378,10 +360,8 @@ impl ContainerValidationReport {
             description,
             reason,
             recommendations: vec![
-                "This skill requires Anthropic container skills which are not supported in VT Code."
-                    .to_string(),
-                "Consider using alternative approaches with VT Code's code execution tools."
-                    .to_string(),
+                "This skill requires Anthropic container skills which are not supported in VT Code.".to_string(),
+                "Consider using alternative approaches with VT Code's code execution tools.".to_string(),
             ],
         });
         self.summary.total_incompatible += 1;
@@ -389,10 +369,7 @@ impl ContainerValidationReport {
     }
 
     pub fn finalize(&mut self) {
-        self.summary.recommendation = match (
-            self.summary.total_incompatible,
-            self.summary.total_with_fallbacks,
-        ) {
+        self.summary.recommendation = match (self.summary.total_incompatible, self.summary.total_with_fallbacks) {
             (0, 0) => "All skills are fully compatible with VT Code.".to_string(),
             (0, _) => format!(
                 "{} skills have container skills dependencies but provide VT Code-compatible fallbacks.",

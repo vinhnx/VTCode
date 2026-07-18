@@ -48,30 +48,19 @@ pub(crate) async fn run_checkup_diagnostics(
     async_mcp_manager: Option<&AsyncMcpManager>,
     linked_directories: &[LinkedDirectory],
     loaded_skills: Option<
-        &std::sync::Arc<
-            tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>,
-        >,
+        &std::sync::Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     >,
     options: CheckupOptions,
 ) -> Result<()> {
     let mut summary = DoctorSummary::default();
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(
-        MessageStyle::Status,
-        "═══════════════════════════════════════════════════════════════",
-    )?;
-    renderer
-        .line(MessageStyle::Status, &format!("VT Code Doctor v{}", env!("CARGO_PKG_VERSION")))?;
-    renderer.line(
-        MessageStyle::Status,
-        "═══════════════════════════════════════════════════════════════",
-    )?;
+    renderer.line(MessageStyle::Status, "═══════════════════════════════════════════════════════════════")?;
+    renderer.line(MessageStyle::Status, &format!("VT Code Doctor v{}", env!("CARGO_PKG_VERSION")))?;
+    renderer.line(MessageStyle::Status, "═══════════════════════════════════════════════════════════════")?;
     if options.quick {
-        renderer.line(
-            MessageStyle::Info,
-            "Mode: quick (skips dependency, external service, and session context checks)",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "Mode: quick (skips dependency, external service, and session context checks)")?;
     }
     renderer.line(MessageStyle::Info, "")?;
 
@@ -85,12 +74,7 @@ pub(crate) async fn run_checkup_diagnostics(
     render_doctor_check(renderer, &mut summary, "Workspace", workspace_result)?;
 
     let cli_version = format!("VT Code {}", env!("CARGO_PKG_VERSION"));
-    render_doctor_check(
-        renderer,
-        &mut summary,
-        "CLI Version",
-        DoctorCheckOutcome::Pass(cli_version),
-    )?;
+    render_doctor_check(renderer, &mut summary, "CLI Version", DoctorCheckOutcome::Pass(cli_version))?;
 
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Status, "[Configuration]")?;
@@ -100,9 +84,7 @@ pub(crate) async fn run_checkup_diagnostics(
             if let Some(path) = manager.config_path() {
                 DoctorCheckOutcome::Pass(format!("Loaded from {}", path.display()))
             } else {
-                DoctorCheckOutcome::Warn(
-                    "Using runtime defaults (no vtcode.toml found)".to_string(),
-                )
+                DoctorCheckOutcome::Warn("Using runtime defaults (no vtcode.toml found)".to_string())
             }
         }
         Err(err) => DoctorCheckOutcome::Fail(err.to_string()),
@@ -110,12 +92,7 @@ pub(crate) async fn run_checkup_diagnostics(
     render_doctor_check(renderer, &mut summary, "Config File", config_result)?;
 
     if let Some(cfg) = vt_cfg {
-        render_doctor_check(
-            renderer,
-            &mut summary,
-            "Theme",
-            DoctorCheckOutcome::Pass(cfg.agent.theme.clone()),
-        )?;
+        render_doctor_check(renderer, &mut summary, "Theme", DoctorCheckOutcome::Pass(cfg.agent.theme.clone()))?;
 
         let model_info = if cfg.agent.small_model.enabled {
             let lightweight_model = if cfg.agent.small_model.model.is_empty() {
@@ -143,24 +120,14 @@ pub(crate) async fn run_checkup_diagnostics(
             DoctorCheckOutcome::Pass(format!("{}", cfg.context.max_context_tokens)),
         )?;
 
-        render_doctor_check(
-            renderer,
-            &mut summary,
-            "Token Budget",
-            DoctorCheckOutcome::Pass("Disabled".to_string()),
-        )?;
+        render_doctor_check(renderer, &mut summary, "Token Budget", DoctorCheckOutcome::Pass("Disabled".to_string()))?;
 
         let ledger_status = if cfg.context.ledger.enabled {
             format!("Enabled (max {} entries)", cfg.context.ledger.max_entries)
         } else {
             "Disabled".to_string()
         };
-        render_doctor_check(
-            renderer,
-            &mut summary,
-            "Decision Ledger",
-            DoctorCheckOutcome::Pass(ledger_status),
-        )?;
+        render_doctor_check(renderer, &mut summary, "Decision Ledger", DoctorCheckOutcome::Pass(ledger_status))?;
 
         render_doctor_check(
             renderer,
@@ -173,14 +140,7 @@ pub(crate) async fn run_checkup_diagnostics(
             renderer,
             &mut summary,
             "HITL Enabled",
-            DoctorCheckOutcome::Pass(
-                (if cfg.security.human_in_the_loop {
-                    "Yes"
-                } else {
-                    "No"
-                })
-                .to_string(),
-            ),
+            DoctorCheckOutcome::Pass((if cfg.security.human_in_the_loop { "Yes" } else { "No" }).to_string()),
         )?;
 
         let policy = match cfg.tools.default_policy {
@@ -188,12 +148,7 @@ pub(crate) async fn run_checkup_diagnostics(
             ToolPolicy::Deny => "Deny all (security)",
             ToolPolicy::Prompt => "Prompt on tool use",
         };
-        render_doctor_check(
-            renderer,
-            &mut summary,
-            "Tool Policy",
-            DoctorCheckOutcome::Pass(policy.to_string()),
-        )?;
+        render_doctor_check(renderer, &mut summary, "Tool Policy", DoctorCheckOutcome::Pass(policy.to_string()))?;
 
         render_doctor_check(
             renderer,
@@ -235,9 +190,7 @@ pub(crate) async fn run_checkup_diagnostics(
             renderer,
             &mut summary,
             "Provider",
-            DoctorCheckOutcome::Warn(format!(
-                "Configured '{configured_provider}', active '{runtime_provider}'"
-            )),
+            DoctorCheckOutcome::Warn(format!("Configured '{configured_provider}', active '{runtime_provider}'")),
         )?;
     }
 
@@ -247,36 +200,31 @@ pub(crate) async fn run_checkup_diagnostics(
         runtime_provider.as_str()
     };
 
-    let api_key_result = if provider_for_api_check.eq_ignore_ascii_case("openai")
-        && config.openai_chatgpt_auth.is_some()
-    {
-        DoctorCheckOutcome::Pass("ChatGPT subscription active for OpenAI".to_string())
-    } else if provider_requires_api_key(provider_for_api_check) {
-        match get_api_key(provider_for_api_check, &ApiKeySources::default()) {
-            Ok(_) => DoctorCheckOutcome::Pass(format!(
-                "API key configured for '{provider_for_api_check}'"
-            )),
-            Err(err) => {
-                let detail = err.to_string();
-                if detail.contains("Unsupported provider") {
-                    DoctorCheckOutcome::Warn(format!(
-                        "Skipped API-key validation for unsupported provider '{provider_for_api_check}'"
-                    ))
-                } else {
-                    DoctorCheckOutcome::Fail(format!(
-                        "Missing API key for '{}': {} (expected: {})",
-                        provider_for_api_check,
-                        detail,
-                        api_key_env_hint(provider_for_api_check)
-                    ))
+    let api_key_result =
+        if provider_for_api_check.eq_ignore_ascii_case("openai") && config.openai_chatgpt_auth.is_some() {
+            DoctorCheckOutcome::Pass("ChatGPT subscription active for OpenAI".to_string())
+        } else if provider_requires_api_key(provider_for_api_check) {
+            match get_api_key(provider_for_api_check, &ApiKeySources::default()) {
+                Ok(_) => DoctorCheckOutcome::Pass(format!("API key configured for '{provider_for_api_check}'")),
+                Err(err) => {
+                    let detail = err.to_string();
+                    if detail.contains("Unsupported provider") {
+                        DoctorCheckOutcome::Warn(format!(
+                            "Skipped API-key validation for unsupported provider '{provider_for_api_check}'"
+                        ))
+                    } else {
+                        DoctorCheckOutcome::Fail(format!(
+                            "Missing API key for '{}': {} (expected: {})",
+                            provider_for_api_check,
+                            detail,
+                            api_key_env_hint(provider_for_api_check)
+                        ))
+                    }
                 }
             }
-        }
-    } else {
-        DoctorCheckOutcome::Pass(format!(
-            "Not required for local provider '{provider_for_api_check}'"
-        ))
-    };
+        } else {
+            DoctorCheckOutcome::Pass(format!("Not required for local provider '{provider_for_api_check}'"))
+        };
     render_doctor_check(renderer, &mut summary, "API Key", api_key_result)?;
 
     if options.quick {
@@ -303,15 +251,10 @@ pub(crate) async fn run_checkup_diagnostics(
         render_doctor_check(renderer, &mut summary, "npm", npm_result)?;
 
         let ripgrep_result = match detect_command_version("rg", &["--version"]) {
-            Ok(version) => DoctorCheckOutcome::Pass(format!(
-                "Ripgrep {}",
-                version.lines().next().unwrap_or(&version)
-            )),
+            Ok(version) => DoctorCheckOutcome::Pass(format!("Ripgrep {}", version.lines().next().unwrap_or(&version))),
             Err(err) => {
                 if err.contains("not found") {
-                    DoctorCheckOutcome::Warn(
-                        "Not installed (searches will fall back to built-in grep)".to_string(),
-                    )
+                    DoctorCheckOutcome::Warn("Not installed (searches will fall back to built-in grep)".to_string())
                 } else {
                     DoctorCheckOutcome::Warn(err)
                 }
@@ -338,17 +281,11 @@ pub(crate) async fn run_checkup_diagnostics(
                         McpInitStatus::Initializing { progress } => {
                             DoctorCheckOutcome::Warn(format!("Initializing: {progress}"))
                         }
-                        McpInitStatus::Error { message } => {
-                            DoctorCheckOutcome::Fail(format!("Init error: {message}"))
-                        }
-                        McpInitStatus::Disabled => {
-                            DoctorCheckOutcome::Pass("Disabled in config".to_string())
-                        }
+                        McpInitStatus::Error { message } => DoctorCheckOutcome::Fail(format!("Init error: {message}")),
+                        McpInitStatus::Disabled => DoctorCheckOutcome::Pass("Disabled in config".to_string()),
                     }
                 } else {
-                    DoctorCheckOutcome::Fail(
-                        "Enabled in config but manager not initialized".to_string(),
-                    )
+                    DoctorCheckOutcome::Fail("Enabled in config but manager not initialized".to_string())
                 }
             } else {
                 DoctorCheckOutcome::Pass("Disabled".to_string())
@@ -367,12 +304,7 @@ pub(crate) async fn run_checkup_diagnostics(
             for (idx, entry) in linked_directories.iter().enumerate() {
                 renderer.line(
                     MessageStyle::Output,
-                    &format!(
-                        "  [{}] {} -> {}",
-                        idx + 1,
-                        entry.display_path,
-                        entry.original.display()
-                    ),
+                    &format!("  [{}] {} -> {}", idx + 1, entry.display_path, entry.original.display()),
                 )?;
             }
         }
@@ -385,16 +317,12 @@ pub(crate) async fn run_checkup_diagnostics(
             if skills.is_empty() {
                 renderer.line(MessageStyle::Output, "  No skills loaded in session")?;
             } else {
-                renderer
-                    .line(MessageStyle::Output, &format!("  {} loaded skill(s):", skills.len()))?;
+                renderer.line(MessageStyle::Output, &format!("  {} loaded skill(s):", skills.len()))?;
                 let mut sorted_skills: Vec<_> = skills.iter().collect();
                 sorted_skills.sort_by(|(name_a, _), (name_b, _)| name_a.cmp(name_b));
                 for (idx, (name, skill)) in sorted_skills.iter().enumerate() {
                     let scope = format!("{:?}", skill.scope).to_lowercase();
-                    renderer.line(
-                        MessageStyle::Output,
-                        &format!("    [{}] {} ({})", idx + 1, name, scope),
-                    )?;
+                    renderer.line(MessageStyle::Output, &format!("    [{}] {} ({})", idx + 1, name, scope))?;
                 }
             }
         } else {
@@ -403,10 +331,7 @@ pub(crate) async fn run_checkup_diagnostics(
     }
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(
-        MessageStyle::Status,
-        "═══════════════════════════════════════════════════════════════",
-    )?;
+    renderer.line(MessageStyle::Status, "═══════════════════════════════════════════════════════════════")?;
 
     render_checkup_optimizations(renderer, vt_cfg, config)?;
 
@@ -414,24 +339,15 @@ pub(crate) async fn run_checkup_diagnostics(
     renderer.line(MessageStyle::Status, "[Summary]")?;
     renderer.line(
         MessageStyle::Status,
-        &format!(
-            "  {} passed, {} warning(s), {} failure(s)",
-            summary.passed, summary.warnings, summary.failures
-        ),
+        &format!("  {} passed, {} warning(s), {} failure(s)", summary.passed, summary.warnings, summary.failures),
     )?;
     if summary.failures > 0 {
-        renderer.line(
-            MessageStyle::Error,
-            "[FAIL] Resolve failures first, then rerun `/checkup` (alias `/doctor`).",
-        )?;
-    } else if summary.warnings > 0 {
-        renderer.line(
-            MessageStyle::Warning,
-            "[WARN] Core checks passed, but there are warnings to review.",
-        )?;
-    } else {
         renderer
-            .line(MessageStyle::Status, "[OK] All checks passed. You are ready to use VT Code.")?;
+            .line(MessageStyle::Error, "[FAIL] Resolve failures first, then rerun `/checkup` (alias `/doctor`).")?;
+    } else if summary.warnings > 0 {
+        renderer.line(MessageStyle::Warning, "[WARN] Core checks passed, but there are warnings to review.")?;
+    } else {
+        renderer.line(MessageStyle::Status, "[OK] All checks passed. You are ready to use VT Code.")?;
     }
 
     renderer.line(MessageStyle::Info, "")?;
@@ -458,16 +374,10 @@ pub(crate) async fn run_checkup_diagnostics(
         MessageStyle::Info,
         "[TIP] For more details: `/skills list` (available skills), `/status` (session), `/compact` (conversation compaction)",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "[DOCS] See docs/ide/troubleshooting.md for troubleshooting guidance.",
-    )?;
+    renderer.line(MessageStyle::Info, "[DOCS] See docs/ide/troubleshooting.md for troubleshooting guidance.")?;
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(
-        MessageStyle::Status,
-        "═══════════════════════════════════════════════════════════════",
-    )?;
+    renderer.line(MessageStyle::Status, "═══════════════════════════════════════════════════════════════")?;
     renderer.line(MessageStyle::Info, "")?;
     Ok(())
 }
@@ -516,10 +426,7 @@ fn render_checkup_optimizations(
         Some(ToolPolicy::Allow) | None => {}
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "[TIP] Run `/update` to ensure VT Code is on the latest version.",
-    )?;
+    renderer.line(MessageStyle::Info, "[TIP] Run `/update` to ensure VT Code is on the latest version.")?;
     renderer.line(
         MessageStyle::Info,
         "[TIP] Remove unused skills/MCPs and deduplicate or split your CLAUDE.md into nested files to save context.",
@@ -555,9 +462,7 @@ fn render_doctor_check(
 ) -> Result<()> {
     summary.record(&outcome);
     match outcome {
-        DoctorCheckOutcome::Pass(detail) => {
-            renderer.line(MessageStyle::Status, &format!("✓  {label}: {detail}"))?
-        }
+        DoctorCheckOutcome::Pass(detail) => renderer.line(MessageStyle::Status, &format!("✓  {label}: {detail}"))?,
         DoctorCheckOutcome::Warn(detail) => {
             renderer.line(MessageStyle::Warning, &format!("!  {label}: {detail}"))?;
             if let Some(suggestion) = get_suggestion_for_issue(label, &detail) {
@@ -596,10 +501,7 @@ fn get_suggestion_for_issue(label: &str, detail: &str) -> Option<String> {
             "Run `{RIPGREP_INSTALL_COMMAND}` for guided installation, or install `ripgrep` manually with your package manager."
         ))
     } else if label_lower.contains("mcp") && detail_lower.contains("error") {
-        Some(
-            "Check MCP configuration in vtcode.toml, server availability, and timeouts."
-                .to_string(),
-        )
+        Some("Check MCP configuration in vtcode.toml, server availability, and timeouts.".to_string())
     } else {
         None
     }

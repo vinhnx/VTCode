@@ -66,9 +66,7 @@ impl ChangeAttribution {
     /// Get normalized model ID in provider/model format.
     pub fn normalized_model_id(&self) -> Option<String> {
         match (&self.model_id, &self.provider) {
-            (Some(model), Some(provider)) if !model.contains('/') => {
-                Some(format!("{provider}/{model}"))
-            }
+            (Some(model), Some(provider)) if !model.contains('/') => Some(format!("{provider}/{model}")),
             (Some(model), _) => Some(model.clone()),
             _ => None,
         }
@@ -98,10 +96,7 @@ pub enum FileChangeKind {
     /// File deleted
     Delete { original_content: String },
     /// File modified
-    Update {
-        old_content: String,
-        new_content: String,
-    },
+    Update { old_content: String, new_content: String },
     /// File renamed
     Rename {
         new_path: PathBuf,
@@ -142,11 +137,7 @@ impl FileChange {
     }
 
     /// Create a new Rename change.
-    pub fn rename(
-        new_path: PathBuf,
-        old_content: Option<String>,
-        new_content: Option<String>,
-    ) -> Self {
+    pub fn rename(new_path: PathBuf, old_content: Option<String>, new_content: Option<String>) -> Self {
         Self {
             kind: FileChangeKind::Rename { new_path, old_content, new_content },
             attribution: None,
@@ -214,30 +205,21 @@ impl FileChange {
     /// Convert from legacy FileChange enum (from tool_handler.rs).
     ///
     /// This provides backward compatibility with the older FileChange format.
-    pub fn from_legacy(
-        legacy: &super::tool_handler::FileChange,
-        attribution: Option<ChangeAttribution>,
-    ) -> Self {
+    pub fn from_legacy(legacy: &super::tool_handler::FileChange, attribution: Option<ChangeAttribution>) -> Self {
         let kind = match legacy {
-            super::tool_handler::FileChange::Add { content } => {
-                FileChangeKind::Add { content: content.clone() }
-            }
+            super::tool_handler::FileChange::Add { content } => FileChangeKind::Add { content: content.clone() },
             super::tool_handler::FileChange::Delete => FileChangeKind::Delete {
                 original_content: String::new(), // Legacy doesn't preserve content
             },
-            super::tool_handler::FileChange::Update { old_content, new_content } => {
-                FileChangeKind::Update {
-                    old_content: old_content.clone(),
-                    new_content: new_content.clone(),
-                }
-            }
-            super::tool_handler::FileChange::Rename { new_path, content } => {
-                FileChangeKind::Rename {
-                    new_path: new_path.clone(),
-                    old_content: None,
-                    new_content: content.clone(),
-                }
-            }
+            super::tool_handler::FileChange::Update { old_content, new_content } => FileChangeKind::Update {
+                old_content: old_content.clone(),
+                new_content: new_content.clone(),
+            },
+            super::tool_handler::FileChange::Rename { new_path, content } => FileChangeKind::Rename {
+                new_path: new_path.clone(),
+                old_content: None,
+                new_content: content.clone(),
+            },
         };
         Self { kind, attribution, line_range: None }
     }
@@ -245,22 +227,16 @@ impl FileChange {
     /// Convert to legacy FileChange enum (for backward compatibility).
     pub fn to_legacy(&self) -> super::tool_handler::FileChange {
         match &self.kind {
-            FileChangeKind::Add { content } => {
-                super::tool_handler::FileChange::Add { content: content.clone() }
-            }
+            FileChangeKind::Add { content } => super::tool_handler::FileChange::Add { content: content.clone() },
             FileChangeKind::Delete { .. } => super::tool_handler::FileChange::Delete,
-            FileChangeKind::Update { old_content, new_content } => {
-                super::tool_handler::FileChange::Update {
-                    old_content: old_content.clone(),
-                    new_content: new_content.clone(),
-                }
-            }
-            FileChangeKind::Rename { new_path, new_content, .. } => {
-                super::tool_handler::FileChange::Rename {
-                    new_path: new_path.clone(),
-                    content: new_content.clone(),
-                }
-            }
+            FileChangeKind::Update { old_content, new_content } => super::tool_handler::FileChange::Update {
+                old_content: old_content.clone(),
+                new_content: new_content.clone(),
+            },
+            FileChangeKind::Rename { new_path, new_content, .. } => super::tool_handler::FileChange::Rename {
+                new_path: new_path.clone(),
+                content: new_content.clone(),
+            },
         }
     }
 }
@@ -332,49 +308,42 @@ impl TurnDiffTracker {
             // Merge the changes, preserving the latest attribution
             let merged = match (&existing.kind, &change.kind) {
                 // Add then Update = Add with new content
-                (FileChangeKind::Add { .. }, FileChangeKind::Update { new_content, .. }) => {
-                    FileChange {
-                        kind: FileChangeKind::Add { content: new_content.clone() },
-                        attribution: change.attribution.clone().or(existing.attribution.clone()),
-                        line_range: change.line_range,
-                    }
-                }
+                (FileChangeKind::Add { .. }, FileChangeKind::Update { new_content, .. }) => FileChange {
+                    kind: FileChangeKind::Add { content: new_content.clone() },
+                    attribution: change.attribution.clone().or(existing.attribution.clone()),
+                    line_range: change.line_range,
+                },
                 // Add then Delete = No change (remove from tracker)
                 (FileChangeKind::Add { .. }, FileChangeKind::Delete { .. }) => {
                     self.changes.remove(&path);
                     return;
                 }
                 // Update then Update = Update with combined old/new
-                (
-                    FileChangeKind::Update { old_content, .. },
-                    FileChangeKind::Update { new_content, .. },
-                ) => FileChange {
-                    kind: FileChangeKind::Update {
-                        old_content: old_content.clone(),
-                        new_content: new_content.clone(),
-                    },
-                    attribution: change.attribution.clone().or(existing.attribution.clone()),
-                    line_range: change.line_range,
-                },
-                // Update then Delete = Delete with original old content
-                (FileChangeKind::Update { old_content, .. }, FileChangeKind::Delete { .. }) => {
-                    FileChange {
-                        kind: FileChangeKind::Delete { original_content: old_content.clone() },
-                        attribution: change.attribution.clone().or(existing.attribution.clone()),
-                        line_range: None,
-                    }
-                }
-                // Delete then Add = Update
-                (FileChangeKind::Delete { original_content }, FileChangeKind::Add { content }) => {
+                (FileChangeKind::Update { old_content, .. }, FileChangeKind::Update { new_content, .. }) => {
                     FileChange {
                         kind: FileChangeKind::Update {
-                            old_content: original_content.clone(),
-                            new_content: content.clone(),
+                            old_content: old_content.clone(),
+                            new_content: new_content.clone(),
                         },
                         attribution: change.attribution.clone().or(existing.attribution.clone()),
                         line_range: change.line_range,
                     }
                 }
+                // Update then Delete = Delete with original old content
+                (FileChangeKind::Update { old_content, .. }, FileChangeKind::Delete { .. }) => FileChange {
+                    kind: FileChangeKind::Delete { original_content: old_content.clone() },
+                    attribution: change.attribution.clone().or(existing.attribution.clone()),
+                    line_range: None,
+                },
+                // Delete then Add = Update
+                (FileChangeKind::Delete { original_content }, FileChangeKind::Add { content }) => FileChange {
+                    kind: FileChangeKind::Update {
+                        old_content: original_content.clone(),
+                        new_content: content.clone(),
+                    },
+                    attribution: change.attribution.clone().or(existing.attribution.clone()),
+                    line_range: change.line_range,
+                },
                 // Default: use the new change
                 _ => change,
             };
@@ -408,38 +377,21 @@ impl TurnDiffTracker {
             match &change.kind {
                 FileChangeKind::Add { content } => {
                     let new_label = path_str.to_string();
-                    diff.push_str(&compute_unified_diff_with_labels(
-                        "",
-                        content,
-                        "/dev/null",
-                        &new_label,
-                    ));
+                    diff.push_str(&compute_unified_diff_with_labels("", content, "/dev/null", &new_label));
                 }
                 FileChangeKind::Delete { original_content } => {
                     let old_label = path_str.to_string();
-                    diff.push_str(&compute_unified_diff_with_labels(
-                        original_content,
-                        "",
-                        &old_label,
-                        "/dev/null",
-                    ));
+                    diff.push_str(&compute_unified_diff_with_labels(original_content, "", &old_label, "/dev/null"));
                 }
                 FileChangeKind::Update { old_content, new_content } => {
                     let filename = path_str.to_string();
-                    diff.push_str(&compute_unified_diff_with_labels(
-                        old_content,
-                        new_content,
-                        &filename,
-                        &filename,
-                    ));
+                    diff.push_str(&compute_unified_diff_with_labels(old_content, new_content, &filename, &filename));
                 }
                 FileChangeKind::Rename { new_path, old_content, new_content } => {
                     if let (Some(old), Some(new)) = (old_content, new_content) {
                         let old_label = path_str.to_string();
                         let new_label = new_path.to_string_lossy();
-                        diff.push_str(&compute_unified_diff_with_labels(
-                            old, new, &old_label, &new_label,
-                        ));
+                        diff.push_str(&compute_unified_diff_with_labels(old, new, &old_label, &new_label));
                     }
                 }
             }
@@ -465,12 +417,7 @@ pub fn new_shared_tracker() -> SharedTurnDiffTracker {
 }
 
 /// Compute unified diff between old and new content
-fn compute_unified_diff_with_labels(
-    old: &str,
-    new: &str,
-    old_label: &str,
-    new_label: &str,
-) -> String {
+fn compute_unified_diff_with_labels(old: &str, new: &str, old_label: &str, new_label: &str) -> String {
     let old_label = format!("a/{old_label}");
     let new_label = format!("b/{new_label}");
     crate::utils::diff::format_unified_diff(

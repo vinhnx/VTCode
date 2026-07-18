@@ -20,8 +20,7 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
                         .skills
                         .iter()
                         .filter(|skill_ctx| {
-                            skill_ctx.manifest().variety
-                                == vtcode_core::skills::types::SkillVariety::BuiltIn
+                            skill_ctx.manifest().variety == vtcode_core::skills::types::SkillVariety::BuiltIn
                         })
                         .count();
                     let traditional_count = discovery_result.skills.len() - built_in_count;
@@ -40,8 +39,7 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
                         println!("\nTraditional skills:");
                         for skill_ctx in &discovery_result.skills {
                             let manifest = skill_ctx.manifest();
-                            if manifest.variety == vtcode_core::skills::types::SkillVariety::BuiltIn
-                            {
+                            if manifest.variety == vtcode_core::skills::types::SkillVariety::BuiltIn {
                                 continue;
                             }
                             println!("   - {} - {}", manifest.name, manifest.description);
@@ -52,8 +50,7 @@ pub async fn handle_skills_regenerate_index(options: &SkillsCommandOptions) -> R
                         println!("\nBuilt-in command skills:");
                         for skill_ctx in &discovery_result.skills {
                             let manifest = skill_ctx.manifest();
-                            if manifest.variety != vtcode_core::skills::types::SkillVariety::BuiltIn
-                            {
+                            if manifest.variety != vtcode_core::skills::types::SkillVariety::BuiltIn {
                                 continue;
                             }
                             println!("   - {} - {}", manifest.name, manifest.description);
@@ -125,9 +122,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
         let built_in_skills = discovery_result
             .skills
             .iter()
-            .filter(|skill_ctx| {
-                skill_ctx.manifest().variety == vtcode_core::skills::types::SkillVariety::BuiltIn
-            })
+            .filter(|skill_ctx| skill_ctx.manifest().variety == vtcode_core::skills::types::SkillVariety::BuiltIn)
             .collect::<Vec<_>>();
         if !built_in_skills.is_empty() {
             content.push_str("### Built-In Command Skills\n\n");
@@ -155,13 +150,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
 
             for tool in &discovery_result.tools {
                 let desc = tool.description.replace('|', "\\|");
-                let _ = writeln!(
-                    content,
-                    "| `{}` | {} | `{}` |",
-                    tool.name,
-                    desc,
-                    tool.executable_path.display()
-                );
+                let _ = writeln!(content, "| `{}` | {} | `{}` |", tool.name, desc, tool.executable_path.display());
             }
             content.push('\n');
         }
@@ -191,19 +180,14 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
                 );
             } else {
                 let skill_md = skill_ctx.path().join("SKILL.md");
-                let _ =
-                    writeln!(content, "- **Type**: Skill\n- **Path**: `{}`\n", skill_md.display());
+                let _ = writeln!(content, "- **Type**: Skill\n- **Path**: `{}`\n", skill_md.display());
             }
         }
 
         for tool in &discovery_result.tools {
             let _ = writeln!(content, "### {}\n", tool.name);
             let _ = writeln!(content, "{}\n", tool.description);
-            let _ = writeln!(
-                content,
-                "- **Type**: CLI Tool\n- **Executable**: `{}`\n",
-                tool.executable_path.display()
-            );
+            let _ = writeln!(content, "- **Type**: CLI Tool\n- **Executable**: `{}`\n", tool.executable_path.display());
         }
     }
 
@@ -211,15 +195,9 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
     content.push_str("*Generated automatically. Do not edit manually.*\n");
 
     let index_path = skill_manager.index_path();
-    vtcode_core::utils::file_utils::write_file_with_context(
-        &index_path,
-        &content,
-        "comprehensive skills index",
-    )
-    .await
-    .with_context(|| {
-        format!("Failed to write comprehensive skills index: {}", index_path.display())
-    })?;
+    vtcode_core::utils::file_utils::write_file_with_context(&index_path, &content, "comprehensive skills index")
+        .await
+        .with_context(|| format!("Failed to write comprehensive skills index: {}", index_path.display()))?;
 
     Ok(index_path)
 }

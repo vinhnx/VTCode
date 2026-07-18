@@ -15,15 +15,7 @@ pub struct MinimaxProvider {
 
 impl MinimaxProvider {
     pub fn new(api_key: String) -> Self {
-        Self::from_config(
-            Some(api_key),
-            Some(models::minimax::DEFAULT_MODEL.to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Self::from_config(Some(api_key), Some(models::minimax::DEFAULT_MODEL.to_string()), None, None, None, None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -122,9 +114,7 @@ fn resolve_minimax_base_url(base_url: Option<String>) -> String {
         without_v1 = without_v1.trim_end_matches("/v1").trim_end_matches('/').to_string();
     }
 
-    if is_official_minimax_host(&without_v1)
-        && !without_v1.to_ascii_lowercase().contains("/anthropic")
-    {
+    if is_official_minimax_host(&without_v1) && !without_v1.to_ascii_lowercase().contains("/anthropic") {
         without_v1 = format!("{}/anthropic", without_v1.trim_end_matches('/'));
     }
 
@@ -177,11 +167,7 @@ impl LLMProvider for MinimaxProvider {
         self.inner.effective_context_size(model)
     }
 
-    async fn compact_history(
-        &self,
-        model: &str,
-        history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, model: &str, history: &[Message]) -> Result<Vec<Message>, LLMError> {
         self.inner.compact_history(model, history).await
     }
 
@@ -237,9 +223,7 @@ mod tests {
             "https://api.minimax.io/anthropic/v1"
         );
         assert_eq!(
-            resolve_minimax_base_url(Some(
-                "https://api.minimax.io/anthropic/v1/messages".to_string()
-            )),
+            resolve_minimax_base_url(Some("https://api.minimax.io/anthropic/v1/messages".to_string())),
             "https://api.minimax.io/anthropic/v1"
         );
     }
@@ -254,15 +238,7 @@ mod tests {
 
     #[test]
     fn minimax_provider_preserves_provider_name_and_default_model() {
-        let provider = MinimaxProvider::from_config(
-            Some("test-key".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let provider = MinimaxProvider::from_config(Some("test-key".to_string()), None, None, None, None, None, None);
 
         assert_eq!(provider.name(), "minimax");
         assert_eq!(provider.model_id(), models::minimax::DEFAULT_MODEL);
@@ -293,15 +269,7 @@ mod tests {
 
     #[test]
     fn minimax_provider_supports_streaming() {
-        let provider = MinimaxProvider::from_config(
-            Some("test-key".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        let provider = MinimaxProvider::from_config(Some("test-key".to_string()), None, None, None, None, None, None);
 
         assert!(provider.supports_streaming());
     }

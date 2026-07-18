@@ -53,11 +53,7 @@ impl EnhancedSkillHarness {
         let message = if verification_messages.is_empty() {
             format!("✓ Skill '{skill_name}' executed successfully")
         } else {
-            format!(
-                "✓ Skill '{}' executed successfully\n\n{}",
-                skill_name,
-                verification_messages.join("\n")
-            )
+            format!("✓ Skill '{}' executed successfully\n\n{}", skill_name, verification_messages.join("\n"))
         };
 
         Ok(EnhancedSkillResult {

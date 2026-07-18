@@ -49,10 +49,7 @@ impl uni::LLMProvider for ScriptedProvider {
         self.supports_responses_compaction
     }
 
-    async fn generate(
-        &self,
-        request: uni::LLMRequest,
-    ) -> std::result::Result<uni::LLMResponse, uni::LLMError> {
+    async fn generate(&self, request: uni::LLMRequest) -> std::result::Result<uni::LLMResponse, uni::LLMError> {
         self.recorded_previous_response_ids
             .lock()
             .expect("previous_response_id recorder")
@@ -86,10 +83,7 @@ impl uni::LLMProvider for ScriptedProvider {
         vec!["noop-model".to_string()]
     }
 
-    fn validate_request(
-        &self,
-        _request: &uni::LLMRequest,
-    ) -> std::result::Result<(), uni::LLMError> {
+    fn validate_request(&self, _request: &uni::LLMRequest) -> std::result::Result<(), uni::LLMError> {
         Ok(())
     }
 }
@@ -116,8 +110,7 @@ async fn compatible_previous_response_not_found_without_sent_chain_is_not_recove
         true,
         Arc::clone(&recorded_previous_response_ids),
         vec![ScriptedProviderOutcome::Error(uni::LLMError::Provider {
-            message: "Provider error: previous_response_not_found: previous response missing"
-                .to_string(),
+            message: "Provider error: previous_response_not_found: previous response missing".to_string(),
             metadata: None,
         })],
     );
@@ -128,12 +121,8 @@ async fn compatible_previous_response_not_found_without_sent_chain_is_not_recove
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.extend(prior_messages.clone());
     ctx.working_history.push(uni::Message::user("continue".to_string()));
-    ctx.session_stats.set_previous_response_chain(
-        "mycorp",
-        "noop-model",
-        Some("resp_123"),
-        &prior_messages,
-    );
+    ctx.session_stats
+        .set_previous_response_chain("mycorp", "noop-model", Some("resp_123"), &prior_messages);
 
     let result = execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None).await;
 
@@ -174,8 +163,7 @@ async fn openai_stale_previous_response_retry_is_disabled() {
         Arc::clone(&recorded_previous_response_ids),
         vec![
             ScriptedProviderOutcome::Error(uni::LLMError::Provider {
-                message: "OpenAI error: previous_response_not_found: previous response missing"
-                    .to_string(),
+                message: "OpenAI error: previous_response_not_found: previous response missing".to_string(),
                 metadata: None,
             }),
             ScriptedProviderOutcome::Success {
@@ -191,12 +179,8 @@ async fn openai_stale_previous_response_retry_is_disabled() {
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.extend(prior_messages.clone());
     ctx.working_history.push(uni::Message::user("continue".to_string()));
-    ctx.session_stats.set_previous_response_chain(
-        "openai",
-        "noop-model",
-        Some("resp_123"),
-        &prior_messages,
-    );
+    ctx.session_stats
+        .set_previous_response_chain("openai", "noop-model", Some("resp_123"), &prior_messages);
 
     let result = execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None).await;
 
@@ -393,10 +377,7 @@ fn prompt_cache_shaping_mode_requires_global_opt_in_and_provider_cache() {
     };
     cfg.providers.openai.enabled = true;
 
-    assert_eq!(
-        resolve_prompt_cache_shaping_mode("openai", &cfg),
-        PromptCacheShapingMode::TrailingRuntimeContext
-    );
+    assert_eq!(resolve_prompt_cache_shaping_mode("openai", &cfg), PromptCacheShapingMode::TrailingRuntimeContext);
 
     cfg.cache_friendly_prompt_shaping = false;
     assert_eq!(resolve_prompt_cache_shaping_mode("openai", &cfg), PromptCacheShapingMode::Disabled);
@@ -437,10 +418,8 @@ fn prompt_cache_shaping_mode_respects_gemini_mode_off() {
 #[test]
 fn openai_prompt_cache_key_uses_stable_session_identifier() {
     let lineage_id = "lineage-abc-123";
-    let first =
-        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
-    let second =
-        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
+    let first = build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
+    let second = build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(lineage_id));
 
     assert_eq!(first, Some("vtcode:openai:lineage-abc-123".to_string()));
     assert_eq!(first, second);
@@ -448,27 +427,17 @@ fn openai_prompt_cache_key_uses_stable_session_identifier() {
 
 #[test]
 fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
-    assert_eq!(
-        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1"),),
-        None
-    );
-    assert_eq!(
-        build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("lineage-1"),),
-        None
-    );
-    assert_eq!(
-        build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,),
-        None
-    );
+    assert_eq!(build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("lineage-1"),), None);
+    assert_eq!(build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("lineage-1"),), None);
+    assert_eq!(build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, None,), None);
 }
 
 #[test]
 fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
     let tmp = TempDir::new().expect("temp dir");
     let path = tmp.path().join("harness.jsonl");
-    let emitter =
-        crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
-            .expect("harness emitter");
+    let emitter = crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+        .expect("harness emitter");
 
     // The second output delta must cross MIN_OUTPUT_UPDATE_BYTES (1024) for the
     // throttled incremental `item.updated` event to fire.
@@ -537,9 +506,8 @@ fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
 fn harness_streaming_bridge_throttles_reasoning_update_events() {
     let tmp = TempDir::new().expect("temp dir");
     let path = tmp.path().join("harness.jsonl");
-    let emitter =
-        crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
-            .expect("harness emitter");
+    let emitter = crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+        .expect("harness emitter");
 
     let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_789", 2, 1);
     bridge.on_progress(StreamProgressEvent::ReasoningStage("analysis".to_string()));
@@ -571,23 +539,16 @@ fn harness_streaming_bridge_throttles_reasoning_update_events() {
         })
         .count();
 
-    assert!(
-        reasoning_updates <= 2,
-        "expected throttled reasoning updates, got {reasoning_updates}"
-    );
-    assert!(
-        reasoning_updates >= 1,
-        "expected at least one meaningful reasoning update, got {reasoning_updates}"
-    );
+    assert!(reasoning_updates <= 2, "expected throttled reasoning updates, got {reasoning_updates}");
+    assert!(reasoning_updates >= 1, "expected at least one meaningful reasoning update, got {reasoning_updates}");
 }
 
 #[test]
 fn harness_streaming_bridge_abort_closes_open_items() {
     let tmp = TempDir::new().expect("temp dir");
     let path = tmp.path().join("harness.jsonl");
-    let emitter =
-        crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
-            .expect("harness emitter");
+    let emitter = crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+        .expect("harness emitter");
 
     let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_456", 3, 2);
     bridge.on_progress(StreamProgressEvent::OutputDelta("partial".to_string()));
@@ -612,9 +573,8 @@ fn harness_streaming_bridge_abort_closes_open_items() {
 fn harness_streaming_bridge_emits_tool_invocation_items() {
     let tmp = TempDir::new().expect("temp dir");
     let path = tmp.path().join("harness.jsonl");
-    let emitter =
-        crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
-            .expect("harness emitter");
+    let emitter = crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+        .expect("harness emitter");
 
     let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_tool", 4, 1);
     bridge.on_progress(StreamProgressEvent::ToolCallStarted {
@@ -653,22 +613,19 @@ fn harness_streaming_bridge_emits_tool_invocation_items() {
         let arguments = item.get("arguments");
 
         if event_type == "item.started" {
-            saw_started =
-                tool_name == "shell" && tool_call_id == "call_1" && status == "in_progress";
+            saw_started = tool_name == "shell" && tool_call_id == "call_1" && status == "in_progress";
         }
         if event_type == "item.updated" {
             saw_updated = tool_name == "shell"
                 && tool_call_id == "call_1"
                 && status == "in_progress"
-                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str())
-                    == Some("echo hi");
+                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str()) == Some("echo hi");
         }
         if event_type == "item.completed" {
             saw_completed = tool_name == "shell"
                 && tool_call_id == "call_1"
                 && status == "completed"
-                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str())
-                    == Some("echo hi");
+                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str()) == Some("echo hi");
         }
     }
 

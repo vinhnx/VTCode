@@ -16,10 +16,7 @@ pub(super) async fn create_session_archive(
     reserved_archive_id: Option<String>,
 ) -> Result<vtcode_core::utils::session_archive::SessionArchive> {
     if let Some(identifier) = reserved_archive_id {
-        return vtcode_core::utils::session_archive::SessionArchive::new_with_identifier(
-            metadata, identifier,
-        )
-        .await;
+        return vtcode_core::utils::session_archive::SessionArchive::new_with_identifier(metadata, identifier).await;
     }
 
     vtcode_core::utils::session_archive::SessionArchive::new(metadata, None).await
@@ -63,17 +60,11 @@ pub(super) async fn refresh_runtime_debug_context_for_next_session(
         NextRuntimeArchiveId::Reserve { workspace_label, custom_suffix }
             if vtcode_core::utils::session_archive::history_persistence_enabled() =>
         {
-            vtcode_core::utils::session_archive::reserve_session_archive_identifier(
-                &workspace_label,
-                custom_suffix,
-            )
-            .await?
+            vtcode_core::utils::session_archive::reserve_session_archive_identifier(&workspace_label, custom_suffix)
+                .await?
         }
         NextRuntimeArchiveId::Reserve { workspace_label, custom_suffix } => {
-            vtcode_core::utils::session_archive::generate_session_archive_identifier(
-                &workspace_label,
-                custom_suffix,
-            )
+            vtcode_core::utils::session_archive::generate_session_archive_identifier(&workspace_label, custom_suffix)
         }
     };
 

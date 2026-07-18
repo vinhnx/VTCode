@@ -13,14 +13,14 @@ use vtcode_config::update::UpdateConfig;
 
 pub(crate) use install_source::InstallSource;
 pub(crate) use interactive::{
-    InlineUpdateOutcome, append_notice_highlight, display_release_notes, display_update_notice,
-    execute_inline_update, run_inline_update_prompt,
+    InlineUpdateOutcome, append_notice_highlight, display_release_notes, display_update_notice, execute_inline_update,
+    run_inline_update_prompt,
 };
 pub(crate) use preflight::{get_preflight_notice, run_preflight_check};
 pub(crate) use release_notes::parse_highlights as parse_release_highlights;
 pub(crate) use types::{
-    InstallOutcome, StartupUpdateCheck, StartupUpdateNotice, UpdateExecutionStrategy,
-    UpdateGuidance, UpdateInfo, VersionInfo,
+    InstallOutcome, StartupUpdateCheck, StartupUpdateNotice, UpdateExecutionStrategy, UpdateGuidance, UpdateInfo,
+    VersionInfo,
 };
 
 /// Auto-updater for VT Code binary from GitHub Releases
@@ -61,23 +61,13 @@ impl Updater {
             if self.config.should_auto_unpin() {
                 // Auto-unpin: fetch the latest release and, if it is newer
                 // than the pinned version, clear the pin so the update proceeds.
-                debug!(
-                    "Version pinned to {} with auto-unpin enabled, checking for newer release",
-                    pinned_version
-                );
-                let latest = github::fetch_latest_release(
-                    self,
-                    self.config.download_timeout_secs,
-                    &self.config.channel,
-                )
-                .await?;
+                debug!("Version pinned to {} with auto-unpin enabled, checking for newer release", pinned_version);
+                let latest =
+                    github::fetch_latest_release(self, self.config.download_timeout_secs, &self.config.channel).await?;
                 if let Some(info) = latest.as_ref()
                     && info.version > *pinned_version
                 {
-                    info!(
-                        "Auto-unpinning: newer version {} available (pinned: {})",
-                        info.version, pinned_version
-                    );
+                    info!("Auto-unpinning: newer version {} available (pinned: {})", info.version, pinned_version);
                     self.config.clear_pin();
                     let _ = self.config.save();
                     return Ok(latest);
@@ -89,19 +79,12 @@ impl Updater {
             return Ok(None);
         }
 
-        let latest = github::fetch_latest_release(
-            self,
-            self.config.download_timeout_secs,
-            &self.config.channel,
-        )
-        .await?;
+        let latest =
+            github::fetch_latest_release(self, self.config.download_timeout_secs, &self.config.channel).await?;
 
         if latest.as_ref().is_some_and(|info| info.version > self.current_version) {
             if let Some(latest) = latest.as_ref() {
-                info!(
-                    "New version available: {} (current: {})",
-                    latest.version, self.current_version
-                );
+                info!("New version available: {} (current: {})", latest.version, self.current_version);
             }
         } else {
             debug!("Already on latest version");
@@ -141,14 +124,13 @@ impl Updater {
             return Ok(None);
         }
 
-        let latest =
-            match github::fetch_latest_release_info(self.config.download_timeout_secs).await {
-                Ok(info) => info,
-                Err(err) => {
-                    let _ = cache::record_failed_check();
-                    return Err(err);
-                }
-            };
+        let latest = match github::fetch_latest_release_info(self.config.download_timeout_secs).await {
+            Ok(info) => info,
+            Err(err) => {
+                let _ = cache::record_failed_check();
+                return Err(err);
+            }
+        };
 
         let latest_is_newer = latest.version > self.current_version;
         cache::record_successful_check(Some(&latest.version), latest_is_newer)?;
@@ -172,16 +154,11 @@ impl Updater {
     ) -> Result<InstallOutcome> {
         let guidance = self.update_guidance();
         if guidance.source.is_managed() {
-            bail!(
-                "VT Code was installed via {}. Update with: {}",
-                guidance.source.label(),
-                guidance.command()
-            );
+            bail!("VT Code was installed via {}. Update with: {}", guidance.source.label(), guidance.command());
         }
 
         let current_version = self.current_version.to_string();
-        let target =
-            install_source::get_target_triple().context("Unsupported platform for auto-update")?;
+        let target = install_source::get_target_triple().context("Unsupported platform for auto-update")?;
 
         let status = tokio::task::spawn_blocking(move || {
             // Use .tar.gz as identifier to specifically match tarball archives
@@ -238,12 +215,7 @@ impl Updater {
         github::list_versions(limit, self.config.download_timeout_secs).await
     }
 
-    pub(crate) fn pin_version(
-        &mut self,
-        version: Version,
-        reason: Option<String>,
-        auto_unpin: bool,
-    ) -> Result<()> {
+    pub(crate) fn pin_version(&mut self, version: Version, reason: Option<String>, auto_unpin: bool) -> Result<()> {
         self.config.set_pin(version, reason, auto_unpin);
         self.config
             .save()
@@ -366,21 +338,15 @@ mod tests {
     #[test]
     fn test_install_source_detection() {
         assert_eq!(
-            install_source::detect_install_source_from_path(Path::new(
-                "/opt/homebrew/Cellar/vtcode/0.1/bin/vtcode"
-            )),
+            install_source::detect_install_source_from_path(Path::new("/opt/homebrew/Cellar/vtcode/0.1/bin/vtcode")),
             InstallSource::Homebrew
         );
         assert_eq!(
-            install_source::detect_install_source_from_path(Path::new(
-                "/Users/dev/.cargo/bin/vtcode"
-            )),
+            install_source::detect_install_source_from_path(Path::new("/Users/dev/.cargo/bin/vtcode")),
             InstallSource::Cargo
         );
         assert_eq!(
-            install_source::detect_install_source_from_path(Path::new(
-                "/usr/local/lib/node_modules/vtcode/bin/vtcode"
-            )),
+            install_source::detect_install_source_from_path(Path::new("/usr/local/lib/node_modules/vtcode/bin/vtcode")),
             InstallSource::Npm
         );
         assert_eq!(

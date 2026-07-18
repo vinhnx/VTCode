@@ -176,10 +176,7 @@ impl WorkflowOptimizer {
     /// Check if tools likely have dependencies (simple heuristic).
     fn tools_have_dependencies(&self, tools: &[String]) -> bool {
         // Heuristic: grep likely depends on find, etc.
-        let dependencies = vec![
-            (tools::GREP_FILE, "find_files"),
-            ("edit_file", tools::LIST_FILES),
-        ];
+        let dependencies = vec![(tools::GREP_FILE, "find_files"), ("edit_file", tools::LIST_FILES)];
 
         for (i, tool1) in tools.iter().enumerate() {
             for (j, tool2) in tools.iter().enumerate() {
@@ -281,11 +278,7 @@ mod tests {
     fn test_optimizer_recommendations() {
         let patterns = vec![DetectedPattern {
             name: "p1".into(),
-            sequence: vec![
-                tools::LIST_FILES.into(),
-                "find_files".into(),
-                "grep_file".into(),
-            ],
+            sequence: vec![tools::LIST_FILES.into(), "find_files".into(), "grep_file".into()],
             frequency: 10,
             success_rate: 0.98,
             avg_duration_ms: 200,

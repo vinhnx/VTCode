@@ -162,9 +162,7 @@ impl ContinuationController {
                 self.note_progress_stall();
                 return Ok(CompletionAssessment::Continue {
                     reason: "Task tracker could not be loaded.".to_string(),
-                    prompt:
-                        "Continue working. The harness task tracker is missing, so do not stop yet."
-                            .to_string(),
+                    prompt: "Continue working. The harness task tracker is missing, so do not stop yet.".to_string(),
                 });
             }
         };
@@ -232,10 +230,7 @@ impl ContinuationController {
         Ok(CompletionAssessment::Verify { commands })
     }
 
-    pub(super) async fn after_verification(
-        &mut self,
-        results: &[VerificationResult],
-    ) -> Result<CompletionAssessment> {
+    pub(super) async fn after_verification(&mut self, results: &[VerificationResult]) -> Result<CompletionAssessment> {
         let first_failure = results.iter().find(|result| !result.success);
         if let Some(failure) = first_failure {
             let summary = build_verification_failure_summary(failure);
@@ -294,10 +289,7 @@ impl ContinuationController {
                 .items
                 .iter()
                 .map(|item| Milestone {
-                    id: item
-                        .index
-                        .map(|i| i.to_string())
-                        .unwrap_or_else(|| item.description.clone()),
+                    id: item.index.map(|i| i.to_string()).unwrap_or_else(|| item.description.clone()),
                     description: item.description.clone(),
                     status: milestone_status_from_str(&item.status),
                 })
@@ -345,8 +337,7 @@ impl ContinuationController {
             .execute(json!({ "action": "list" }))
             .await
             .context("load task tracker")?;
-        let response: TrackerListResponse =
-            serde_json::from_value(payload).context("decode task tracker response")?;
+        let response: TrackerListResponse = serde_json::from_value(payload).context("decode task tracker response")?;
         if response.status == "empty" {
             return Ok(None);
         }
@@ -475,9 +466,7 @@ fn continuation_skip_reason(
         }
         // Dead arm: `continuation_enabled()` returns true for these
         // policies, so this function is never called with them.
-        ContinuationPolicy::ExecOnly | ContinuationPolicy::All => {
-            "Continuation disabled.".to_string()
-        }
+        ContinuationPolicy::ExecOnly | ContinuationPolicy::All => "Continuation disabled.".to_string(),
     }
 }
 
@@ -666,8 +655,7 @@ mod tests {
     #[tokio::test]
     async fn exec_only_policy_skips_non_full_auto_sessions() {
         let temp = TempDir::new().expect("tempdir");
-        let mut controller =
-            make_controller_with_flags(&temp, ContinuationPolicy::ExecOnly, false, false, false);
+        let mut controller = make_controller_with_flags(&temp, ContinuationPolicy::ExecOnly, false, false, false);
         controller.prepare(&sample_task()).await.expect("prepare");
 
         let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);

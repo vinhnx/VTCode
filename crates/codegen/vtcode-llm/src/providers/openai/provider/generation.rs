@@ -1,6 +1,6 @@
 use super::super::errors::{
-    fallback_model_if_not_found, format_openai_error, is_flex_service_tier_unsupported,
-    is_model_not_found, is_responses_api_unsupported,
+    fallback_model_if_not_found, format_openai_error, is_flex_service_tier_unsupported, is_model_not_found,
+    is_responses_api_unsupported,
 };
 use super::super::headers;
 use super::super::types::ResponsesApiState;
@@ -43,8 +43,7 @@ fn append_manual_compaction_instructions(
     derived_instructions: Option<&str>,
     manual_instructions: Option<&str>,
 ) -> Option<String> {
-    let manual_instructions =
-        manual_instructions.map(str::trim).filter(|value| !value.is_empty())?;
+    let manual_instructions = manual_instructions.map(str::trim).filter(|value| !value.is_empty())?;
     let manual_section = format!("{MANUAL_COMPACTION_INSTRUCTIONS_LABEL}\n{manual_instructions}");
 
     match derived_instructions.map(str::trim).filter(|value| !value.is_empty()) {
@@ -53,9 +52,7 @@ fn append_manual_compaction_instructions(
     }
 }
 
-async fn collect_streamed_response(
-    stream: provider::LLMStream,
-) -> Result<provider::LLMResponse, provider::LLMError> {
+async fn collect_streamed_response(stream: provider::LLMStream) -> Result<provider::LLMResponse, provider::LLMError> {
     let mut stream = stream;
     let mut streamed_content = String::new();
     let mut streamed_reasoning = String::new();
@@ -75,10 +72,7 @@ async fn collect_streamed_response(
     }
 
     let mut response = completed.ok_or_else(|| provider::LLMError::Provider {
-        message: error_display::format_llm_error(
-            "OpenAI",
-            "Streaming response ended without a completion event",
-        ),
+        message: error_display::format_llm_error("OpenAI", "Streaming response ended without a completion event"),
         metadata: None,
     })?;
 
@@ -161,12 +155,8 @@ impl OpenAIProvider {
         model: &str,
         history: &[provider::Message],
     ) -> Result<Vec<provider::Message>, provider::LLMError> {
-        self.compact_history_request_with_options(
-            model,
-            history,
-            &provider::ResponsesCompactionOptions::default(),
-        )
-        .await
+        self.compact_history_request_with_options(model, history, &provider::ResponsesCompactionOptions::default())
+            .await
     }
 
     pub(crate) async fn compact_history_request_with_options(
@@ -236,9 +226,7 @@ impl OpenAIProvider {
         let response = self
             .send_authorized(|auth| {
                 headers::apply_client_request_id(
-                    headers::apply_responses_beta(
-                        self.authorize_with_api_key(self.http_client.post(&url), auth),
-                    ),
+                    headers::apply_responses_beta(self.authorize_with_api_key(self.http_client.post(&url), auth)),
                     &client_request_id,
                 )
                 .json(&compact_payload)
@@ -263,27 +251,20 @@ impl OpenAIProvider {
         }
 
         let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Failed to parse compaction response: {e}"),
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", &format!("Failed to parse compaction response: {e}"));
             provider::LLMError::Provider { message: formatted_error, metadata: None }
         })?;
-        let output =
-            response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    "Invalid compaction response format: missing output array",
-                );
-                provider::LLMError::Provider { message: formatted_error, metadata: None }
-            })?;
+        let output = response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", "Invalid compaction response format: missing output array");
+            provider::LLMError::Provider { message: formatted_error, metadata: None }
+        })?;
 
         let compacted = parse_compacted_output_messages(output);
         if compacted.is_empty() {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                "Compaction response contained no reusable messages",
-            );
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", "Compaction response contained no reusable messages");
             return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
 
@@ -326,8 +307,7 @@ impl OpenAIProvider {
 
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             // Skip flex tier if it was previously rejected for this model
-            let openai_request =
-                self.maybe_strip_flex_service_tier(&request.model, &openai_request);
+            let openai_request = self.maybe_strip_flex_service_tier(&request.model, &openai_request);
             let url = format!("{}/responses", self.base_url);
             let client_request_id = Self::new_client_request_id();
 
@@ -370,18 +350,12 @@ impl OpenAIProvider {
 
                     if retry_response.status().is_success() {
                         let openai_response: Value = retry_response.json().await.map_err(|e| {
-                            let formatted_error = error_display::format_llm_error(
-                                "OpenAI",
-                                &format!("Failed to parse response: {e}"),
-                            );
-                            provider::LLMError::Provider {
-                                message: formatted_error,
-                                metadata: None,
-                            }
+                            let formatted_error =
+                                error_display::format_llm_error("OpenAI", &format!("Failed to parse response: {e}"));
+                            provider::LLMError::Provider { message: formatted_error, metadata: None }
                         })?;
 
-                        let response =
-                            self.parse_openai_responses_response(openai_response, model.clone())?;
+                        let response = self.parse_openai_responses_response(openai_response, model.clone())?;
                         return Ok(response);
                     }
 
@@ -408,18 +382,14 @@ impl OpenAIProvider {
                         if fallback_model != request.model {
                             let mut retry_request = request.clone();
                             retry_request.model = fallback_model;
-                            let retry_openai =
-                                self.convert_to_openai_responses_format(&retry_request)?;
+                            let retry_openai = self.convert_to_openai_responses_format(&retry_request)?;
                             let retry_client_request_id = Self::new_client_request_id();
                             let retry_response = self
                                 .send_authorized(|auth| {
                                     headers::apply_turn_metadata(
                                         headers::apply_client_request_id(
                                             headers::apply_responses_beta(
-                                                self.authorize_with_api_key(
-                                                    self.http_client.post(&url),
-                                                    auth,
-                                                ),
+                                                self.authorize_with_api_key(self.http_client.post(&url), auth),
                                             ),
                                             &retry_client_request_id,
                                         ),
@@ -429,21 +399,14 @@ impl OpenAIProvider {
                                 })
                                 .await?;
                             if retry_response.status().is_success() {
-                                let openai_response: Value =
-                                    retry_response.json().await.map_err(|e| {
-                                        let formatted_error = error_display::format_llm_error(
-                                            "OpenAI",
-                                            &format!("Failed to parse response: {e}"),
-                                        );
-                                        provider::LLMError::Provider {
-                                            message: formatted_error,
-                                            metadata: None,
-                                        }
-                                    })?;
-                                let response = self.parse_openai_responses_response(
-                                    openai_response,
-                                    model.clone(),
-                                )?;
+                                let openai_response: Value = retry_response.json().await.map_err(|e| {
+                                    let formatted_error = error_display::format_llm_error(
+                                        "OpenAI",
+                                        &format!("Failed to parse response: {e}"),
+                                    );
+                                    provider::LLMError::Provider { message: formatted_error, metadata: None }
+                                })?;
+                                let response = self.parse_openai_responses_response(openai_response, model.clone())?;
                                 return Ok(response);
                             }
                         }
@@ -458,10 +421,7 @@ impl OpenAIProvider {
                             Some(&effective_client_request_id),
                         ),
                     );
-                    return Err(provider::LLMError::Provider {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
                 } else if matches!(responses_state, ResponsesApiState::Allowed)
                     && is_responses_api_unsupported(status, &error_text)
                 {
@@ -480,10 +440,7 @@ impl OpenAIProvider {
                             Some(&effective_client_request_id),
                         ),
                     );
-                    return Err(provider::LLMError::Provider {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
                 } else if is_rate_limit_error(status.as_u16(), &error_text) {
                     return Err(parse_api_error("OpenAI", status, &error_text));
                 } else {
@@ -497,22 +454,16 @@ impl OpenAIProvider {
                             Some(&effective_client_request_id),
                         ),
                     );
-                    return Err(provider::LLMError::Provider {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
                 }
             } else {
                 let openai_response: Value = response.json().await.map_err(|e| {
-                    let formatted_error = error_display::format_llm_error(
-                        "OpenAI",
-                        &format!("Failed to parse response: {e}"),
-                    );
+                    let formatted_error =
+                        error_display::format_llm_error("OpenAI", &format!("Failed to parse response: {e}"));
                     provider::LLMError::Provider { message: formatted_error, metadata: None }
                 })?;
 
-                let response =
-                    self.parse_openai_responses_response(openai_response, model.clone())?;
+                let response = self.parse_openai_responses_response(openai_response, model.clone())?;
                 return Ok(response);
             }
         }
@@ -548,8 +499,7 @@ impl OpenAIProvider {
             let mut error_text = response.text().await.unwrap_or_default();
             let mut effective_client_request_id = client_request_id.clone();
 
-            if payload_uses_flex_service_tier(&openai_request)
-                && is_flex_service_tier_unsupported(status, &error_text)
+            if payload_uses_flex_service_tier(&openai_request) && is_flex_service_tier_unsupported(status, &error_text)
             {
                 // Cache this so future requests skip flex tier entirely
                 self.mark_flex_unsupported_for_model(&request.model);
@@ -566,10 +516,8 @@ impl OpenAIProvider {
 
                 if retry_response.status().is_success() {
                     let openai_response: Value = retry_response.json().await.map_err(|e| {
-                        let formatted_error = error_display::format_llm_error(
-                            "OpenAI",
-                            &format!("Failed to parse response: {e}"),
-                        );
+                        let formatted_error =
+                            error_display::format_llm_error("OpenAI", &format!("Failed to parse response: {e}"));
                         provider::LLMError::Provider { message: formatted_error, metadata: None }
                     })?;
 
@@ -600,10 +548,7 @@ impl OpenAIProvider {
         }
 
         let openai_response: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Failed to parse response: {e}"),
-            );
+            let formatted_error = error_display::format_llm_error("OpenAI", &format!("Failed to parse response: {e}"));
             provider::LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 

@@ -9,9 +9,9 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::fmt::Write;
 use syntect::util::LinesWithEndings;
 use vtcode_commons::diff_paths::{
-    format_start_only_hunk_header, is_diff_addition_line, is_diff_deletion_line,
-    is_diff_header_line, is_diff_new_file_marker_line, language_hint_from_path,
-    looks_like_diff_content, parse_diff_git_path, parse_diff_marker_path,
+    format_start_only_hunk_header, is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
+    is_diff_new_file_marker_line, language_hint_from_path, looks_like_diff_content, parse_diff_git_path,
+    parse_diff_marker_path,
 };
 
 const DIFF_SUMMARY_PREFIX: &str = "• Diff ";
@@ -58,10 +58,7 @@ pub(crate) fn handle_code_block_event(
     }
 }
 
-pub(crate) fn finalize_unclosed_code_block(
-    code_block: &mut Option<CodeBlockState>,
-    env: &mut CodeBlockRenderEnv<'_>,
-) {
+pub(crate) fn finalize_unclosed_code_block(code_block: &mut Option<CodeBlockState>, env: &mut CodeBlockRenderEnv<'_>) {
     finalize_code_block(env, code_block, false, false);
 }
 
@@ -106,8 +103,7 @@ fn render_code_block_state(
         );
     }
 
-    let prefix =
-        build_prefix_segments(env.blockquote_depth, env.list_continuation_prefix, env.base_style);
+    let prefix = build_prefix_segments(env.blockquote_depth, env.list_continuation_prefix, env.base_style);
     highlight_code_block(
         &state.buffer,
         state.language.as_deref(),
@@ -128,13 +124,7 @@ fn render_markdown_code_block_table(
 ) -> Vec<MarkdownLine> {
     let mut nested_options = render_options;
     nested_options.disable_code_block_table_reparse = true;
-    super::render_markdown_to_lines_with_options(
-        source,
-        base_style,
-        theme_styles,
-        highlight_config,
-        nested_options,
-    )
+    super::render_markdown_to_lines_with_options(source, base_style, theme_styles, highlight_config, nested_options)
 }
 
 fn build_prefix_segments(
@@ -142,8 +132,7 @@ fn build_prefix_segments(
     list_continuation_prefix: &str,
     base_style: Style,
 ) -> Vec<MarkdownSegment> {
-    let mut segments =
-        Vec::with_capacity(blockquote_depth + usize::from(!list_continuation_prefix.is_empty()));
+    let mut segments = Vec::with_capacity(blockquote_depth + usize::from(!list_continuation_prefix.is_empty()));
     for _ in 0..blockquote_depth {
         segments.push(MarkdownSegment::new(base_style.dimmed().italic(), "│ "));
     }
@@ -166,13 +155,10 @@ fn highlight_code_block(
 
     let normalized_code = normalize_code_indentation(code, language, preserve_code_indentation);
     let code_to_display = &normalized_code;
-    if is_diff_language(language)
-        || (language.is_none() && looks_like_diff_content(code_to_display))
-    {
+    if is_diff_language(language) || (language.is_none() && looks_like_diff_content(code_to_display)) {
         return render_diff_code_block(code_to_display, theme_styles, base_style, prefix_segments);
     }
-    let use_line_numbers =
-        language.is_some_and(|lang| !lang.trim().is_empty()) && !is_diff_language(language);
+    let use_line_numbers = language.is_some_and(|lang| !lang.trim().is_empty()) && !is_diff_language(language);
 
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)
@@ -191,8 +177,7 @@ fn highlight_code_block(
             } else {
                 (None, 1)
             };
-            let mut line =
-                code_line_with_prefix(prefix_segments, gutter_text.as_deref(), gutter_style);
+            let mut line = code_line_with_prefix(prefix_segments, gutter_text.as_deref(), gutter_style);
             if is_omitted {
                 line.push_segment(gutter_style, src);
             } else {
@@ -332,9 +317,7 @@ fn render_diff_code_block(
     for line in normalize_diff_lines(code) {
         let trimmed = line.trim_end_matches('\n');
         let trimmed_start = trimmed.trim_start();
-        if let Some(path) =
-            parse_diff_git_path(trimmed_start).or_else(|| parse_diff_marker_path(trimmed_start))
-        {
+        if let Some(path) = parse_diff_git_path(trimmed_start).or_else(|| parse_diff_marker_path(trimmed_start)) {
             current_language_hint = language_hint_from_path(&path);
         }
         if let Some((path, additions, deletions)) = parse_diff_summary_line(trimmed_start) {
@@ -372,9 +355,7 @@ fn render_diff_code_block(
                 let marker_len = trimmed.chars().next().map(|ch| ch.len_utf8()).unwrap_or_default();
                 let (marker, content) = trimmed.split_at(marker_len);
                 line.push_segment(style, marker);
-                for segment in
-                    render_diff_content_segments(content, current_language_hint.as_deref(), style)
-                {
+                for segment in render_diff_content_segments(content, current_language_hint.as_deref(), style) {
                     line.push_segment(segment.style, &segment.text);
                 }
             }
@@ -488,10 +469,7 @@ fn parse_omitted_line_count(text: &str) -> Option<usize> {
 fn code_block_contains_table(content: &str, language: Option<&str>) -> bool {
     if let Some(lang) = language {
         let lang_lower = lang.to_ascii_lowercase();
-        if !matches!(
-            lang_lower.as_str(),
-            "markdown" | "md" | "text" | "txt" | "plaintext" | "plain"
-        ) {
+        if !matches!(lang_lower.as_str(), "markdown" | "md" | "text" | "txt" | "plaintext" | "plain") {
             return false;
         }
     }
@@ -542,9 +520,7 @@ fn bump_diff_counters(line: &str, additions: &mut usize, deletions: &mut usize) 
 }
 
 fn is_diff_language(language: Option<&str>) -> bool {
-    language.is_some_and(|lang| {
-        matches!(lang.to_ascii_lowercase().as_str(), "diff" | "patch" | "udiff" | "git")
-    })
+    language.is_some_and(|lang| matches!(lang.to_ascii_lowercase().as_str(), "diff" | "patch" | "udiff" | "git"))
 }
 
 fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
@@ -565,11 +541,7 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
     style
 }
 
-pub(crate) fn normalize_code_indentation(
-    code: &str,
-    language: Option<&str>,
-    preserve_indentation: bool,
-) -> String {
+pub(crate) fn normalize_code_indentation(code: &str, language: Option<&str>, preserve_indentation: bool) -> String {
     if preserve_indentation {
         return code.to_string();
     }
@@ -659,37 +631,17 @@ pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec
                 let fg = style.get_fg_color().map(|c| match c {
                     anstyle::Color::Rgb(rgb) => {
                         let brighten = |v: u8| (v as u16 * 120 / 100).min(255) as u8;
-                        anstyle::Color::Rgb(anstyle::RgbColor(
-                            brighten(rgb.0),
-                            brighten(rgb.1),
-                            brighten(rgb.2),
-                        ))
+                        anstyle::Color::Rgb(anstyle::RgbColor(brighten(rgb.0), brighten(rgb.1), brighten(rgb.2)))
                     }
                     anstyle::Color::Ansi(ansi) => match ansi {
-                        anstyle::AnsiColor::Black => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite)
-                        }
-                        anstyle::AnsiColor::Red => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed)
-                        }
-                        anstyle::AnsiColor::Green => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen)
-                        }
-                        anstyle::AnsiColor::Yellow => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightYellow)
-                        }
-                        anstyle::AnsiColor::Blue => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlue)
-                        }
-                        anstyle::AnsiColor::Magenta => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightMagenta)
-                        }
-                        anstyle::AnsiColor::Cyan => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightCyan)
-                        }
-                        anstyle::AnsiColor::White => {
-                            anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite)
-                        }
+                        anstyle::AnsiColor::Black => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
+                        anstyle::AnsiColor::Red => anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed),
+                        anstyle::AnsiColor::Green => anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen),
+                        anstyle::AnsiColor::Yellow => anstyle::Color::Ansi(anstyle::AnsiColor::BrightYellow),
+                        anstyle::AnsiColor::Blue => anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlue),
+                        anstyle::AnsiColor::Magenta => anstyle::Color::Ansi(anstyle::AnsiColor::BrightMagenta),
+                        anstyle::AnsiColor::Cyan => anstyle::Color::Ansi(anstyle::AnsiColor::BrightCyan),
+                        anstyle::AnsiColor::White => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
                         other => anstyle::Color::Ansi(other),
                     },
                     other => other,
@@ -737,8 +689,7 @@ fn try_highlight(
     if let Some(lang) = language
         && !config.enabled_languages.is_empty()
     {
-        let direct_match =
-            config.enabled_languages.iter().any(|entry| entry.eq_ignore_ascii_case(lang));
+        let direct_match = config.enabled_languages.iter().any(|entry| entry.eq_ignore_ascii_case(lang));
         if !direct_match {
             let syntax_ref = syntax_highlight::find_syntax_by_token(lang);
             let resolved_match = config
@@ -751,12 +702,7 @@ fn try_highlight(
         }
     }
 
-    let rendered = syntax_highlight::highlight_code_to_anstyle_line_segments(
-        code,
-        language,
-        &config.theme,
-        true,
-    );
+    let rendered = syntax_highlight::highlight_code_to_anstyle_line_segments(code, language, &config.theme, true);
 
     Some(rendered)
 }

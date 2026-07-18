@@ -5,9 +5,7 @@ use std::path::Path;
 use anstyle::Ansi256Color;
 use anyhow::{Context, Result, bail};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
-use vtcode_core::utils::dot_config::{
-    WorkspaceTrustLevel, load_workspace_trust_level, update_workspace_trust,
-};
+use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, load_workspace_trust_level, update_workspace_trust};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::{ansi_capabilities, ansi_capabilities::ColorScheme};
@@ -68,9 +66,7 @@ pub(crate) async fn auto_grant_tui_full_auto_workspace_trust(workspace: &Path) -
     }
 
     if matches!(parse_env_trust_override().ok().flatten(), Some(EnvTrustOverride::Deny)) {
-        bail!(
-            "Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny; auto agent switch cannot continue."
-        );
+        bail!("Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny; auto agent switch cannot continue.");
     }
 
     update_workspace_trust(workspace, WorkspaceTrustLevel::FullAuto)
@@ -92,9 +88,7 @@ pub(crate) async fn ensure_full_auto_workspace_trust(workspace: &Path) -> Result
             Ok(false)
         }
         TrustOutcome::EnvDenied => {
-            let msg = format!(
-                "Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny. Exiting benchmark command."
-            );
+            let msg = format!("Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny. Exiting benchmark command.");
             tui_safe_println(&render_styled(&msg, palette.warning, None));
             Ok(false)
         }
@@ -120,9 +114,9 @@ pub(crate) async fn require_full_auto_workspace_trust(
     let outcome = resolve_full_auto_workspace_trust(workspace, command_name).await?;
     match outcome {
         TrustOutcome::Granted => Ok(()),
-        TrustOutcome::UserDeclined => bail!(
-            "Workspace trust declined. {denied_action} requires full-auto trust before continuing."
-        ),
+        TrustOutcome::UserDeclined => {
+            bail!("Workspace trust declined. {denied_action} requires full-auto trust before continuing.")
+        }
         TrustOutcome::EnvDenied => bail!(
             "Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny; {denied_action} cannot continue. Unset the variable or set it to full-auto."
         ),
@@ -135,10 +129,7 @@ pub(crate) async fn require_full_auto_workspace_trust(
     }
 }
 
-async fn resolve_full_auto_workspace_trust(
-    workspace: &Path,
-    command_name: &str,
-) -> Result<TrustOutcome> {
+async fn resolve_full_auto_workspace_trust(workspace: &Path, command_name: &str) -> Result<TrustOutcome> {
     let current_level = load_workspace_trust_level(workspace)
         .await
         .with_context(|| format!("Failed to determine workspace trust level for {command_name}"))?;
@@ -155,9 +146,7 @@ async fn resolve_full_auto_workspace_trust(
                     .context("Failed to persist full-auto workspace trust")?;
                 if !quiet_env_overrides() {
                     let palette = ColorPalette::default();
-                    let msg = format!(
-                        "Workspace trusted via {TRUST_OVERRIDE_ENV}=full-auto for {command_name}."
-                    );
+                    let msg = format!("Workspace trusted via {TRUST_OVERRIDE_ENV}=full-auto for {command_name}.");
                     println!("{}", render_styled(&msg, palette.success, None));
                 }
                 Ok(TrustOutcome::Granted)
@@ -210,10 +199,7 @@ fn tui_safe_println(msg: &str) {
 }
 
 fn quiet_env_overrides() -> bool {
-    matches!(
-        env::var("VTCODE_TRUST_WORKSPACE_QUIET").ok().as_deref(),
-        Some("1") | Some("true") | Some("yes")
-    )
+    matches!(env::var("VTCODE_TRUST_WORKSPACE_QUIET").ok().as_deref(), Some("1") | Some("true") | Some("yes"))
 }
 
 fn parse_env_trust_override() -> Result<Option<EnvTrustOverride>> {
@@ -233,16 +219,12 @@ fn parse_env_trust_override() -> Result<Option<EnvTrustOverride>> {
 fn classify_env_trust_value(raw: &str) -> Result<EnvTrustOverride> {
     let normalized = raw.trim().to_ascii_lowercase();
     match normalized.as_str() {
-        "" => bail!(
-            "value is empty. Use 'full-auto' to grant trust or 'deny' to refuse without prompting."
-        ),
+        "" => bail!("value is empty. Use 'full-auto' to grant trust or 'deny' to refuse without prompting."),
         "full-auto" | "full_auto" | "fullauto" | "trust" | "trusted" | "1" | "yes" | "on" => {
             Ok(EnvTrustOverride::FullAuto)
         }
         "deny" | "denied" | "0" | "no" | "off" => Ok(EnvTrustOverride::Deny),
-        _ => bail!(
-            "unsupported value. Use 'full-auto' to grant trust or 'deny' to refuse without prompting."
-        ),
+        _ => bail!("unsupported value. Use 'full-auto' to grant trust or 'deny' to refuse without prompting."),
     }
 }
 
@@ -250,23 +232,12 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     println!();
     print_prompt_line("[WARN] Workspace Trust Required", PromptTone::Heading);
     println!();
-    print_prompt_line(
-        "VT Code can execute code and access files in your workspace.",
-        PromptTone::Body,
-    );
-    print_prompt_line(
-        "Trusting this workspace also trusts all MCP servers configured here.",
-        PromptTone::Body,
-    );
+    print_prompt_line("VT Code can execute code and access files in your workspace.", PromptTone::Body);
+    print_prompt_line("Trusting this workspace also trusts all MCP servers configured here.", PromptTone::Body);
     println!();
+    print_prompt_line("Full-auto, exec, and autonomous runs require workspace trust.", PromptTone::Body);
     print_prompt_line(
-        "Full-auto, exec, and autonomous runs require workspace trust.",
-        PromptTone::Body,
-    );
-    print_prompt_line(
-        &format!(
-            "Set {TRUST_OVERRIDE_ENV}=full-auto to skip this prompt in CI / non-interactive runs."
-        ),
+        &format!("Set {TRUST_OVERRIDE_ENV}=full-auto to skip this prompt in CI / non-interactive runs."),
         PromptTone::Body,
     );
     println!();
@@ -337,8 +308,7 @@ fn styled_prompt_message(message: &str, tone: PromptTone) -> String {
         PromptTone::Body => (INFO_RGB, false),
     };
 
-    let color =
-        Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(rgb.0, rgb.1, rgb.2, is_light_theme)));
+    let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(rgb.0, rgb.1, rgb.2, is_light_theme)));
     if is_heading {
         render_styled(message, color, Some("bold".to_string()))
     } else {
@@ -442,10 +412,7 @@ mod tests {
 
         env_guard.restore_var(TRUST_OVERRIDE_ENV, previous);
 
-        assert!(
-            err.to_string().contains("not trusted"),
-            "expected a not-trusted error, got: {err}"
-        );
+        assert!(err.to_string().contains("not trusted"), "expected a not-trusted error, got: {err}");
     }
 
     #[tokio::test]
@@ -464,10 +431,7 @@ mod tests {
         vtcode_core::ui::set_tui_mode(was_tui);
         env_guard.restore_var(TRUST_OVERRIDE_ENV, previous_env);
 
-        assert_eq!(
-            load_workspace_trust_level(temp.path()).await.unwrap(),
-            Some(WorkspaceTrustLevel::FullAuto)
-        );
+        assert_eq!(load_workspace_trust_level(temp.path()).await.unwrap(), Some(WorkspaceTrustLevel::FullAuto));
     }
 
     #[tokio::test]

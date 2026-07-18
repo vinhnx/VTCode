@@ -107,11 +107,7 @@ impl FileOpsTool {
             }));
         } else if base.is_dir() {
             let mut entries = tokio::fs::read_dir(&base).await.with_context(|| {
-                format!(
-                    "Failed to read directory: {}. Workspace root: {}",
-                    input.path,
-                    self.workspace_root.display()
-                )
+                format!("Failed to read directory: {}. Workspace root: {}", input.path, self.workspace_root.display())
             })?;
 
             // Copy the ignore state up front so no async lock is held during directory IO.
@@ -159,8 +155,7 @@ impl FileOpsTool {
                 is_dir = base.is_dir(),
                 "Path does not exist or is neither file nor directory"
             );
-            let suggestion =
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+            let suggestion = self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
             return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
         }
 
@@ -204,24 +199,20 @@ impl FileOpsTool {
             let file_count = page_items
                 .iter()
                 .filter(|item| {
-                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str())
-                        == Some("file")
+                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("file")
                 })
                 .count();
             let dir_count = page_items
                 .iter()
                 .filter(|item| {
-                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str())
-                        == Some("directory")
+                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("directory")
                 })
                 .count();
 
             let mut sample_names = page_items
                 .iter()
                 .take(5)
-                .filter_map(|item| {
-                    item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str())
-                })
+                .filter_map(|item| item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str()))
                 .collect::<Vec<_>>();
 
             if sample_names.len() > 3 {
@@ -238,19 +229,9 @@ impl FileOpsTool {
                     sample_names.join(", ")
                 )
             } else if file_count > 0 {
-                format!(
-                    "{} files (showing first {}: {})",
-                    file_count,
-                    sample_names.len(),
-                    sample_names.join(", ")
-                )
+                format!("{} files (showing first {}: {})", file_count, sample_names.len(), sample_names.join(", "))
             } else if dir_count > 0 {
-                format!(
-                    "{} directories (showing first {}: {})",
-                    dir_count,
-                    sample_names.len(),
-                    sample_names.join(", ")
-                )
+                format!("{} directories (showing first {}: {})", dir_count, sample_names.len(), sample_names.join(", "))
             } else {
                 "Empty directory".to_string()
             };
@@ -302,10 +283,7 @@ impl FileOpsTool {
     }
 
     /// Execute tree view of directory structure
-    pub(super) fn execute_tree_view<'a>(
-        &'a self,
-        input: &'a ListInput,
-    ) -> impl Future<Output = Result<Value>> + 'a {
+    pub(super) fn execute_tree_view<'a>(&'a self, input: &'a ListInput) -> impl Future<Output = Result<Value>> + 'a {
         tree::execute_tree_view(self, input)
     }
 
@@ -317,8 +295,7 @@ impl FileOpsTool {
         mode: &str,
         pattern: Option<&str>,
     ) -> Value {
-        let (page, per_page) =
-            (input.page.unwrap_or(1).max(1), input.per_page.unwrap_or(50).max(1));
+        let (page, per_page) = (input.page.unwrap_or(1).max(1), input.per_page.unwrap_or(50).max(1));
         let total_capped = total_count.min(input.max_items);
         let start = (page - 1).saturating_mul(per_page);
         let end = (start + per_page).min(total_capped);
@@ -413,8 +390,7 @@ mod tests {
     async fn missing_list_path_suggests_similar_workspace_path() {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/agent")).expect("create agent dir");
-        let grep_manager =
-            std::sync::Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
         let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);
 
         let err = file_ops

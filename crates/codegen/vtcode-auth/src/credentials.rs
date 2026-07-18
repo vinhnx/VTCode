@@ -148,19 +148,13 @@ fn ensure_native_keyring_store() -> keyring_core::Result<()> {
     }
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    let store = dbus_secret_service_keyring_store::Store::new_with_configuration(
-        &std::collections::HashMap::new(),
-    )?;
+    let store = dbus_secret_service_keyring_store::Store::new_with_configuration(&std::collections::HashMap::new())?;
 
     #[cfg(target_os = "macos")]
-    let store = apple_native_keyring_store::keychain::Store::new_with_configuration(
-        &std::collections::HashMap::new(),
-    )?;
+    let store = apple_native_keyring_store::keychain::Store::new_with_configuration(&std::collections::HashMap::new())?;
 
     #[cfg(target_os = "windows")]
-    let store = windows_native_keyring_store::Store::new_with_configuration(
-        &std::collections::HashMap::new(),
-    )?;
+    let store = windows_native_keyring_store::Store::new_with_configuration(&std::collections::HashMap::new())?;
 
     #[cfg(not(any(
         target_os = "linux",
@@ -193,10 +187,7 @@ pub(crate) fn keyring_disabled() -> bool {
     if cfg!(debug_assertions) {
         if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
             // Explicit opt-in: the user wants keyring even in debug builds.
-            if matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "" | "0" | "false" | "no" | "off"
-            ) {
+            if matches!(value.trim().to_ascii_lowercase().as_str(), "" | "0" | "false" | "no" | "off") {
                 return false;
             }
         }
@@ -208,23 +199,16 @@ pub(crate) fn keyring_disabled() -> bool {
     }
 
     if let Ok(value) = std::env::var("VTCODE_DISABLE_KEYRING") {
-        return !matches!(
-            value.trim().to_ascii_lowercase().as_str(),
-            "" | "0" | "false" | "no" | "off"
-        );
+        return !matches!(value.trim().to_ascii_lowercase().as_str(), "" | "0" | "false" | "no" | "off");
     }
 
     std::env::var_os("CI").is_some()
 }
 
-pub(crate) fn keyring_entry(
-    service: &str,
-    user: &str,
-) -> keyring_core::Result<keyring_core::Entry> {
+pub(crate) fn keyring_entry(service: &str, user: &str) -> keyring_core::Result<keyring_core::Entry> {
     if keyring_disabled() {
         return Err(keyring_core::Error::NotSupportedByStore(
-            "VT Code keyring access is disabled (test run or VTCODE_DISABLE_KEYRING/CI set)"
-                .to_string(),
+            "VT Code keyring access is disabled (test run or VTCODE_DISABLE_KEYRING/CI set)".to_string(),
         ));
     }
 
@@ -288,8 +272,7 @@ impl CredentialStorage {
 
     /// Store credential in OS keyring.
     fn store_keyring(&self, value: &str) -> Result<()> {
-        let entry =
-            keyring_entry(&self.service, &self.user).context("Failed to access OS keyring")?;
+        let entry = keyring_entry(&self.service, &self.user).context("Failed to access OS keyring")?;
 
         entry.set_password(value).context("Failed to store credential in OS keyring")?;
 
@@ -357,10 +340,7 @@ impl CredentialStorage {
                 if errors.is_empty() {
                     Ok(())
                 } else {
-                    Err(anyhow!(
-                        "Failed to clear credential from secure storage: {}",
-                        errors.join("; ")
-                    ))
+                    Err(anyhow!("Failed to clear credential from secure storage: {}", errors.join("; ")))
                 }
             }
             AuthCredentialsStoreMode::File => self.clear_file(),
@@ -382,11 +362,7 @@ impl CredentialStorage {
 
         match entry.delete_credential() {
             Ok(_) => {
-                tracing::debug!(
-                    "Credential cleared from keyring for {}/{}",
-                    self.service,
-                    self.user
-                );
+                tracing::debug!("Credential cleared from keyring for {}/{}", self.service, self.user);
             }
             Err(keyring_core::Error::NoEntry) => {}
             Err(e) => return Err(anyhow!("Failed to clear keyring entry: {e}")),
@@ -398,8 +374,7 @@ impl CredentialStorage {
     fn store_file(&self, value: &str) -> Result<()> {
         let path = self.file_path()?;
         let encrypted = encrypt_credential(value)?;
-        let payload = serde_json::to_vec_pretty(&encrypted)
-            .context("failed to serialize encrypted credential")?;
+        let payload = serde_json::to_vec_pretty(&encrypted).context("failed to serialize encrypted credential")?;
         write_private_file(&path, &payload).context("failed to write encrypted credential file")?;
 
         Ok(())
@@ -529,12 +504,8 @@ fn encrypt_credential(value: &str) -> Result<EncryptedCredential> {
         .map_err(|_| anyhow!("failed to generate credential nonce"))?;
 
     let mut ciphertext = value.as_bytes().to_vec();
-    key.seal_in_place_append_tag(
-        Nonce::assume_unique_for_key(nonce_bytes),
-        Aad::empty(),
-        &mut ciphertext,
-    )
-    .map_err(|_| anyhow!("failed to encrypt credential"))?;
+    key.seal_in_place_append_tag(Nonce::assume_unique_for_key(nonce_bytes), Aad::empty(), &mut ciphertext)
+        .map_err(|_| anyhow!("failed to encrypt credential"))?;
 
     Ok(EncryptedCredential {
         nonce: STANDARD.encode(nonce_bytes),
@@ -549,8 +520,7 @@ fn decrypt_credential(encrypted: &EncryptedCredential) -> Result<String> {
         return Err(anyhow!("unsupported encrypted credential format"));
     }
 
-    let nonce_bytes =
-        STANDARD.decode(&encrypted.nonce).context("failed to decode credential nonce")?;
+    let nonce_bytes = STANDARD.decode(&encrypted.nonce).context("failed to decode credential nonce")?;
     let nonce_array: [u8; NONCE_LEN] =
         nonce_bytes.try_into().map_err(|_| anyhow!("invalid credential nonce length"))?;
     let mut ciphertext = STANDARD
@@ -599,8 +569,8 @@ fn derive_file_encryption_key(salt: Option<&str>) -> Result<LessSafeKey> {
     let key_bytes: &[u8; 32] = hash.as_ref()[..32]
         .try_into()
         .context("credential encryption key was too short")?;
-    let unbound = UnboundKey::new(&aead::AES_256_GCM, key_bytes)
-        .map_err(|_| anyhow!("invalid credential encryption key"))?;
+    let unbound =
+        UnboundKey::new(&aead::AES_256_GCM, key_bytes).map_err(|_| anyhow!("invalid credential encryption key"))?;
     Ok(LessSafeKey::new(unbound))
 }
 
@@ -612,8 +582,7 @@ fn load_legacy_auth_file_for_provider(provider: &str) -> Result<Option<LegacyAut
         Err(err) => return Err(anyhow!("failed to read legacy auth file: {err}")),
     };
 
-    let legacy: LegacyAuthFile =
-        serde_json::from_slice(&data).context("failed to parse legacy auth file")?;
+    let legacy: LegacyAuthFile = serde_json::from_slice(&data).context("failed to parse legacy auth file")?;
     let matches_provider = legacy.provider.eq_ignore_ascii_case(provider);
     let stores_api_key = legacy.mode.eq_ignore_ascii_case("api_key");
     let has_key = !legacy.api_key.trim().is_empty();
@@ -683,10 +652,7 @@ pub fn migrate_custom_api_keys_to_keyring(
 ///
 /// # Returns
 /// A BTreeMap of provider names to their API keys (only includes providers with stored keys)
-pub fn load_custom_api_keys(
-    providers: &[String],
-    mode: AuthCredentialsStoreMode,
-) -> Result<BTreeMap<String, String>> {
+pub fn load_custom_api_keys(providers: &[String], mode: AuthCredentialsStoreMode) -> Result<BTreeMap<String, String>> {
     let mut api_keys = BTreeMap::new();
 
     for provider in providers {
@@ -728,12 +694,9 @@ mod tests {
     impl TestAuthDirGuard {
         fn new() -> Self {
             let temp_dir = TempDir::new().expect("create temp auth dir");
-            let previous = crate::storage_paths::auth_storage_dir_override_for_tests()
-                .expect("read auth dir override");
-            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(
-                temp_dir.path().to_path_buf(),
-            ))
-            .expect("set auth dir override");
+            let previous = crate::storage_paths::auth_storage_dir_override_for_tests().expect("read auth dir override");
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(temp_dir.path().to_path_buf()))
+                .expect("set auth dir override");
 
             Self { temp_dir: Some(temp_dir), previous }
         }
@@ -756,17 +719,13 @@ mod tests {
 
     #[test]
     fn test_storage_mode_effective_mode() {
-        assert_eq!(
-            AuthCredentialsStoreMode::Keyring.effective_mode(),
-            AuthCredentialsStoreMode::Keyring
-        );
+        assert_eq!(AuthCredentialsStoreMode::Keyring.effective_mode(), AuthCredentialsStoreMode::Keyring);
         assert_eq!(AuthCredentialsStoreMode::File.effective_mode(), AuthCredentialsStoreMode::File);
 
         // Auto should resolve to either Keyring or File
         let auto_permission = AuthCredentialsStoreMode::Auto.effective_mode();
         assert!(
-            auto_permission == AuthCredentialsStoreMode::Keyring
-                || auto_permission == AuthCredentialsStoreMode::File
+            auto_permission == AuthCredentialsStoreMode::Keyring || auto_permission == AuthCredentialsStoreMode::File
         );
     }
 
@@ -821,8 +780,8 @@ mod tests {
             .expect("load encrypted credential");
         assert_eq!(loaded.as_deref(), Some("secret_api_key"));
 
-        let stored = fs::read_to_string(storage.file_path().expect("credential path"))
-            .expect("read encrypted credential file");
+        let stored =
+            fs::read_to_string(storage.file_path().expect("credential path")).expect("read encrypted credential file");
         assert!(!stored.contains("secret_api_key"));
     }
 
@@ -855,8 +814,7 @@ mod tests {
             .store_with_mode("secret_api_key", AuthCredentialsStoreMode::File)
             .expect("store encrypted credential");
 
-        let metadata = fs::metadata(storage.file_path().expect("credential path"))
-            .expect("read credential metadata");
+        let metadata = fs::metadata(storage.file_path().expect("credential path")).expect("read credential metadata");
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 
@@ -874,8 +832,7 @@ mod tests {
             .expect("store initial credential");
 
         let path = storage.file_path().expect("credential path");
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
-            .expect("broaden existing credential permissions");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("broaden existing credential permissions");
 
         storage
             .store_with_mode("secret_api_key_updated", AuthCredentialsStoreMode::File)

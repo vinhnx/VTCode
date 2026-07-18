@@ -59,8 +59,8 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
     let skill_md = skill_path.join("SKILL.md");
     anyhow::ensure!(skill_md.exists(), "SKILL.md not found at {}", skill_md.display());
 
-    let content = fs::read_to_string(&skill_md)
-        .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
+    let content =
+        fs::read_to_string(&skill_md).context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
 
     let (manifest, instructions) = parse_skill_content(&content)?;
 
@@ -106,10 +106,7 @@ fn validate_frontmatter_keys(yaml_str: &str) {
         // Only check top-level keys (no leading whitespace).
         if let Some(colon_pos) = trimmed.find(':') {
             let key = trimmed[..colon_pos].trim();
-            if !key.is_empty()
-                && !key.starts_with('#')
-                && !SUPPORTED_FRONTMATTER_KEYS.contains(&key)
-            {
+            if !key.is_empty() && !key.starts_with('#') && !SUPPORTED_FRONTMATTER_KEYS.contains(&key) {
                 tracing::warn!(
                     key = key,
                     "Unknown SKILL.md frontmatter key (supported: {:?})",
@@ -136,8 +133,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     validate_frontmatter_keys(yaml_str);
 
     // Parse YAML frontmatter
-    let yaml: SkillYaml =
-        serde_saphyr::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
+    let yaml: SkillYaml = serde_saphyr::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
 
     let name = yaml.name.trim().to_string();
     anyhow::ensure!(!name.is_empty(), "name is required and must not be empty");
@@ -186,9 +182,7 @@ fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
     match field {
         AllowedToolsField::List(tools) => {
             if !tools.is_empty() && !ALLOWED_TOOLS_ARRAY_WARNED.swap(true, Ordering::Relaxed) {
-                tracing::warn!(
-                    "allowed-tools uses deprecated array format, please use a string instead"
-                );
+                tracing::warn!("allowed-tools uses deprecated array format, please use a string instead");
             }
             Ok(tools.join(" "))
         }
@@ -199,9 +193,7 @@ fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
             }
             let has_commas = trimmed.contains(',');
             if has_commas {
-                tracing::warn!(
-                    "allowed-tools uses comma-separated format; normalizing to space-delimited"
-                );
+                tracing::warn!("allowed-tools uses comma-separated format; normalizing to space-delimited");
             }
             let parts = if has_commas {
                 trimmed
@@ -372,10 +364,7 @@ metadata:
 
         assert_eq!(metadata.get("author"), Some(&json!("leonardomso")));
         assert_eq!(metadata.get("version"), Some(&json!("1.0.0")));
-        assert_eq!(
-            metadata.get("sources"),
-            Some(&json!(["Rust API Guidelines", "Rust Performance Book"]))
-        );
+        assert_eq!(metadata.get("sources"), Some(&json!(["Rust API Guidelines", "Rust Performance Book"])));
     }
 
     #[test]

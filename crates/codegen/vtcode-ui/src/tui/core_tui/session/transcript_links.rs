@@ -203,15 +203,13 @@ impl Session {
 
     pub(crate) fn update_transcript_file_link_hover(&mut self, column: u16, row: u16) -> bool {
         let previous_position = self.last_mouse_position;
-        let previous_modal_hover = previous_position.and_then(|(previous_column, previous_row)| {
-            self.modal_link_target_index_at(previous_column, previous_row)
-        });
+        let previous_modal_hover = previous_position
+            .and_then(|(previous_column, previous_row)| self.modal_link_target_index_at(previous_column, previous_row));
         self.last_mouse_position = Some((column, row));
 
         let hovered = self.mouse_hovered_transcript_file_link_index();
         let transcript_hover_changed = hovered != self.hovered_transcript_file_link;
-        let modal_hover_changed =
-            previous_modal_hover != self.modal_link_target_index_at(column, row);
+        let modal_hover_changed = previous_modal_hover != self.modal_link_target_index_at(column, row);
 
         self.hovered_transcript_file_link = hovered;
         transcript_hover_changed || modal_hover_changed
@@ -245,22 +243,14 @@ impl Session {
         )
     }
 
-    pub(crate) fn transcript_file_link_double_click_action(
-        &self,
-        column: u16,
-        row: u16,
-    ) -> TranscriptLinkClickAction {
+    pub(crate) fn transcript_file_link_double_click_action(&self, column: u16, row: u16) -> TranscriptLinkClickAction {
         self.link_open_action(
             self.transcript_link_target_index_at(column, row)
                 .and_then(|index| self.transcript_file_link_targets.get(index)),
         )
     }
 
-    pub(crate) fn modal_link_double_click_action(
-        &self,
-        column: u16,
-        row: u16,
-    ) -> TranscriptLinkClickAction {
+    pub(crate) fn modal_link_double_click_action(&self, column: u16, row: u16) -> TranscriptLinkClickAction {
         self.link_open_action(
             self.modal_link_target_index_at(column, row)
                 .and_then(|index| self.modal_link_targets.get(index)),
@@ -280,8 +270,7 @@ impl Session {
         };
         let now = Instant::now();
         if self.last_link_open.as_ref().is_some_and(|(last_key, last_at)| {
-            last_key == &key
-                && now.saturating_duration_since(*last_at) <= LINK_OPEN_THROTTLE_INTERVAL
+            last_key == &key && now.saturating_duration_since(*last_at) <= LINK_OPEN_THROTTLE_INTERVAL
         }) {
             return TranscriptLinkClickAction::Consume;
         }
@@ -301,10 +290,7 @@ impl Session {
         }
     }
 
-    pub(crate) fn pending_link_click_action(
-        &mut self,
-        action: TranscriptLinkClickAction,
-    ) -> TranscriptLinkClickAction {
+    pub(crate) fn pending_link_click_action(&mut self, action: TranscriptLinkClickAction) -> TranscriptLinkClickAction {
         let Some(pending_key) = self.pending_link_open.clone() else {
             return TranscriptLinkClickAction::Ignore;
         };
@@ -376,18 +362,13 @@ impl Session {
         self.link_open_action(Some(target))
     }
 
-    fn link_open_action(
-        &self,
-        target: Option<&TranscriptFileLinkTarget>,
-    ) -> TranscriptLinkClickAction {
+    fn link_open_action(&self, target: Option<&TranscriptFileLinkTarget>) -> TranscriptLinkClickAction {
         let Some(target) = target else {
             return TranscriptLinkClickAction::Ignore;
         };
 
         TranscriptLinkClickAction::Open(match &target.target {
-            TranscriptLinkTarget::File(target) => {
-                InlineEvent::OpenFileInEditor(target.canonical_string())
-            }
+            TranscriptLinkTarget::File(target) => InlineEvent::OpenFileInEditor(target.canonical_string()),
             TranscriptLinkTarget::Url(url) => InlineEvent::OpenUrl(url.clone()),
         })
     }
@@ -439,8 +420,7 @@ fn decorate_transcript_line(
                 width as u16,
                 1,
             );
-            let hovered = last_mouse_position
-                .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+            let hovered = last_mouse_position.is_some_and(|(column, row)| point_in_rect(target_area, column, row));
 
             targets.push(TranscriptFileLinkTarget { area: target_area, target });
             styled_matches.push(StyledLinkMatch { start, end, hovered });
@@ -480,21 +460,11 @@ fn should_consume_transcript_link_click(modifiers: KeyModifiers) -> bool {
 
 fn modifier_key_flag(code: KeyCode) -> Option<KeyModifiers> {
     match code {
-        KeyCode::Modifier(ModifierKeyCode::LeftShift | ModifierKeyCode::RightShift) => {
-            Some(KeyModifiers::SHIFT)
-        }
-        KeyCode::Modifier(ModifierKeyCode::LeftControl | ModifierKeyCode::RightControl) => {
-            Some(KeyModifiers::CONTROL)
-        }
-        KeyCode::Modifier(ModifierKeyCode::LeftAlt | ModifierKeyCode::RightAlt) => {
-            Some(KeyModifiers::ALT)
-        }
-        KeyCode::Modifier(ModifierKeyCode::LeftSuper | ModifierKeyCode::RightSuper) => {
-            Some(KeyModifiers::SUPER)
-        }
-        KeyCode::Modifier(ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta) => {
-            Some(KeyModifiers::META)
-        }
+        KeyCode::Modifier(ModifierKeyCode::LeftShift | ModifierKeyCode::RightShift) => Some(KeyModifiers::SHIFT),
+        KeyCode::Modifier(ModifierKeyCode::LeftControl | ModifierKeyCode::RightControl) => Some(KeyModifiers::CONTROL),
+        KeyCode::Modifier(ModifierKeyCode::LeftAlt | ModifierKeyCode::RightAlt) => Some(KeyModifiers::ALT),
+        KeyCode::Modifier(ModifierKeyCode::LeftSuper | ModifierKeyCode::RightSuper) => Some(KeyModifiers::SUPER),
+        KeyCode::Modifier(ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta) => Some(KeyModifiers::META),
         _ => None,
     }
 }
@@ -515,8 +485,7 @@ fn append_explicit_link_matches(
             explicit.width as u16,
             1,
         );
-        let hovered = last_mouse_position
-            .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+        let hovered = last_mouse_position.is_some_and(|(column, row)| point_in_rect(target_area, column, row));
         let target = match &explicit.target {
             InlineLinkTarget::Url(url) => resolve_transcript_file_target(url, workspace_root)
                 .map(TranscriptLinkTarget::File)
@@ -641,22 +610,12 @@ fn style_transcript_file_link_line(
             let relative_end = overlap_end.saturating_sub(span_start);
 
             if relative_start > local_offset {
-                spans.push(Span::styled(
-                    content[local_offset..relative_start].to_string(),
-                    span.style,
-                ));
+                spans.push(Span::styled(content[local_offset..relative_start].to_string(), span.style));
             }
 
             if relative_end > relative_start {
-                let style = if link_match.hovered {
-                    hovered_style
-                } else {
-                    link_style
-                };
-                spans.push(Span::styled(
-                    content[relative_start..relative_end].to_string(),
-                    span.style.patch(style),
-                ));
+                let style = if link_match.hovered { hovered_style } else { link_style };
+                spans.push(Span::styled(content[relative_start..relative_end].to_string(), span.style.patch(style)));
             }
 
             local_offset = relative_end;
@@ -743,15 +702,9 @@ pub(crate) fn decorate_detected_link_lines(
                     width as u16,
                     1,
                 );
-                let hovered = last_mouse_position
-                    .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
-                targets
-                    .push(TranscriptFileLinkTarget { area: target_area, target: target.clone() });
-                styled_matches.push(StyledLinkMatch {
-                    start: relative_start,
-                    end: relative_end,
-                    hovered,
-                });
+                let hovered = last_mouse_position.is_some_and(|(column, row)| point_in_rect(target_area, column, row));
+                targets.push(TranscriptFileLinkTarget { area: target_area, target: target.clone() });
+                styled_matches.push(StyledLinkMatch { start: relative_start, end: relative_end, hovered });
             }
 
             if styled_matches.is_empty() {
@@ -848,36 +801,28 @@ pub(crate) fn detect_rendered_transcript_links(
         .collect()
 }
 
-pub(crate) fn detect_transcript_link_matches(
-    text: &str,
-    workspace_root: Option<&Path>,
-) -> Vec<DetectedLinkMatch> {
+pub(crate) fn detect_transcript_link_matches(text: &str, workspace_root: Option<&Path>) -> Vec<DetectedLinkMatch> {
     let mut matches = Vec::new();
 
     for quoted_match in QUOTED_PATH_PATTERN.find_iter(text) {
-        if let Some(link_match) = build_transcript_link_match(
-            text,
-            quoted_match.start(),
-            quoted_match.end(),
-            workspace_root,
-        ) {
+        if let Some(link_match) =
+            build_transcript_link_match(text, quoted_match.start(), quoted_match.end(), workspace_root)
+        {
             matches.push(link_match);
         }
     }
 
     for token_match in NON_WHITESPACE_TOKEN_PATTERN.find_iter(text) {
-        if matches.iter().any(|existing| {
-            token_match.start() < existing.end && token_match.end() > existing.start
-        }) {
+        if matches
+            .iter()
+            .any(|existing| token_match.start() < existing.end && token_match.end() > existing.start)
+        {
             continue;
         }
 
-        if let Some(link_match) = build_transcript_link_match(
-            text,
-            token_match.start(),
-            token_match.end(),
-            workspace_root,
-        ) {
+        if let Some(link_match) =
+            build_transcript_link_match(text, token_match.start(), token_match.end(), workspace_root)
+        {
             matches.push(link_match);
         }
     }
@@ -910,11 +855,9 @@ fn build_transcript_link_match(
     let start = token_start + trimmed_start;
     let end = token_start + trimmed_end;
     let candidate = &text[start..end];
-    let target =
-        resolve_transcript_url(candidate).map(TranscriptLinkTarget::Url).or_else(|| {
-            resolve_transcript_file_target(candidate, workspace_root)
-                .map(TranscriptLinkTarget::File)
-        })?;
+    let target = resolve_transcript_url(candidate)
+        .map(TranscriptLinkTarget::Url)
+        .or_else(|| resolve_transcript_file_target(candidate, workspace_root).map(TranscriptLinkTarget::File))?;
 
     Some(DetectedLinkMatch { start, end, target })
 }
@@ -965,10 +908,7 @@ fn location_paren_suffix_start(token: &str) -> Option<usize> {
     valid.then_some(paren_start)
 }
 
-fn resolve_transcript_file_target(
-    token: &str,
-    workspace_root: Option<&Path>,
-) -> Option<EditorTarget> {
+fn resolve_transcript_file_target(token: &str, workspace_root: Option<&Path>) -> Option<EditorTarget> {
     let token = token.trim();
     if token.is_empty() {
         return None;
@@ -1089,8 +1029,6 @@ mod tests {
         assert_eq!(projected[0].len(), 1);
         assert_eq!(projected[0][0].start, 0);
         assert!(projected[0][0].end <= "crates/codegen/vtcode-core/src/tool_policy.rs —".len());
-        assert!(
-            "crates/codegen/vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end)
-        );
+        assert!("crates/codegen/vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end));
     }
 }

@@ -11,10 +11,7 @@ use super::backup::ConfigBackupManager;
 use super::detector::{TerminalFeature, TerminalSetupAvailability, TerminalType};
 
 /// Run the interactive terminal setup wizard
-pub async fn run_terminal_setup_wizard(
-    renderer: &mut AnsiRenderer,
-    _config: &VTCodeConfig,
-) -> Result<()> {
+pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VTCodeConfig) -> Result<()> {
     // Step 1: Welcome and Detection
     display_welcome(renderer)?;
 
@@ -36,11 +33,7 @@ pub async fn run_terminal_setup_wizard(
 
     for feature in &features {
         let supported = terminal_type.supports_feature(*feature);
-        let status = if supported {
-            "✓"
-        } else {
-            "✗ (not supported)"
-        };
+        let status = if supported { "✓" } else { "✗ (not supported)" };
         renderer.line(
             if supported {
                 MessageStyle::Status
@@ -79,18 +72,12 @@ pub async fn run_terminal_setup_wizard(
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
     if config_path.exists() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Creating backup of {}...", config_path.display()),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Creating backup of {}...", config_path.display()))?;
 
         let backup_manager = ConfigBackupManager::new(terminal_type);
         match backup_manager.backup_config(&config_path) {
             Ok(backup_path) => {
-                renderer.line(
-                    MessageStyle::Status,
-                    &format!("  → Backup created: {}", backup_path.display()),
-                )?;
+                renderer.line(MessageStyle::Status, &format!("  → Backup created: {}", backup_path.display()))?;
             }
             Err(e) => {
                 renderer.line(MessageStyle::Error, &format!("Failed to create backup: {e}"))?;
@@ -98,10 +85,7 @@ pub async fn run_terminal_setup_wizard(
             }
         }
     } else {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Config file does not exist yet: {}", config_path.display()),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Config file does not exist yet: {}", config_path.display()))?;
         renderer.line(MessageStyle::Info, "A new config file will be created.")?;
     }
 
@@ -125,12 +109,8 @@ pub async fn run_terminal_setup_wizard(
         | TerminalType::ITerm2 => {
             anyhow::bail!("native-support terminals should return before config generation")
         }
-        TerminalType::Alacritty => {
-            crate::terminal_setup::terminals::alacritty::generate_config(&enabled_features)?
-        }
-        TerminalType::Zed => {
-            crate::terminal_setup::terminals::zed::generate_config(&enabled_features)?
-        }
+        TerminalType::Alacritty => crate::terminal_setup::terminals::alacritty::generate_config(&enabled_features)?,
+        TerminalType::Zed => crate::terminal_setup::terminals::zed::generate_config(&enabled_features)?,
         TerminalType::TerminalApp
         | TerminalType::Xterm
         | TerminalType::WindowsTerminal
@@ -141,8 +121,7 @@ pub async fn run_terminal_setup_wizard(
         }
         TerminalType::VSCode => {
             // VS Code requires manual setup - display instructions
-            let instructions =
-                crate::terminal_setup::terminals::vscode::generate_config(&enabled_features)?;
+            let instructions = crate::terminal_setup::terminals::vscode::generate_config(&enabled_features)?;
             renderer.line_if_not_empty(MessageStyle::Info)?;
             for line in instructions.lines() {
                 renderer.line(MessageStyle::Info, line)?;
@@ -166,10 +145,7 @@ pub async fn run_terminal_setup_wizard(
     // Write the configuration
     ConfigWriter::write_atomic(&config_path, &merged_config)?;
 
-    renderer.line(
-        MessageStyle::Status,
-        &format!("✓ Configuration written to {}", config_path.display()),
-    )?;
+    renderer.line(MessageStyle::Status, &format!("✓ Configuration written to {}", config_path.display()))?;
 
     // Step 5: Show completion message
     renderer.line_if_not_empty(MessageStyle::Info)?;
@@ -184,10 +160,7 @@ pub async fn run_terminal_setup_wizard(
         let backups = backup_manager.list_backups(&config_path)?;
         if let Some(latest_backup) = backups.first() {
             renderer.line_if_not_empty(MessageStyle::Info)?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Backup saved to: {}", latest_backup.display()),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Backup saved to: {}", latest_backup.display()))?;
         }
     }
 
@@ -200,16 +173,12 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(MessageStyle::Info, "  VT Code Terminal Setup Wizard")?;
     renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    renderer.line(
-        MessageStyle::Info,
-        "This wizard helps you verify or configure your terminal for VT Code.",
-    )?;
+    renderer.line(MessageStyle::Info, "This wizard helps you verify or configure your terminal for VT Code.")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(MessageStyle::Info, "Features:")?;
     renderer.line(MessageStyle::Info, "  • Shift+Enter for multiline input")?;
     renderer.line(MessageStyle::Info, "  • Enhanced copy/paste integration")?;
-    renderer
-        .line(MessageStyle::Info, "  • Shell integration (working directory, command status)")?;
+    renderer.line(MessageStyle::Info, "  • Shell integration (working directory, command status)")?;
     renderer.line(MessageStyle::Info, "  • Theme synchronization")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
@@ -235,27 +204,14 @@ fn native_terminal_setup_messages(terminal_type: TerminalType) -> Vec<String> {
 
     match terminal_type {
         TerminalType::ITerm2 => {
-            lines.push(
-                "Optional macOS shortcut: set Left/Right Option to \"Esc+\" in Profiles -> Keys."
-                    .to_string(),
-            );
-            lines.extend(
-                crate::terminal_setup::features::notifications::get_notification_instructions(
-                    terminal_type,
-                ),
-            );
+            lines.push("Optional macOS shortcut: set Left/Right Option to \"Esc+\" in Profiles -> Keys.".to_string());
+            lines.extend(crate::terminal_setup::features::notifications::get_notification_instructions(terminal_type));
         }
         TerminalType::Ghostty | TerminalType::Kitty | TerminalType::WezTerm => {
-            lines.extend(
-                crate::terminal_setup::features::notifications::get_notification_instructions(
-                    terminal_type,
-                ),
-            );
+            lines.extend(crate::terminal_setup::features::notifications::get_notification_instructions(terminal_type));
         }
         TerminalType::Warp => {
-            lines.push(
-                "Warp already provides multiline input and terminal notifications.".to_string(),
-            );
+            lines.push("Warp already provides multiline input and terminal notifications.".to_string());
         }
         _ => {}
     }
@@ -267,7 +223,8 @@ fn guidance_only_messages(terminal_type: TerminalType) -> Vec<String> {
     match terminal_type {
         TerminalType::TerminalApp => vec![
             "VT Code does not auto-configure Terminal.app.".to_string(),
-            "Use Settings -> Profiles -> Keyboard and enable \"Use Option as Meta Key\" for Option+Enter workflows.".to_string(),
+            "Use Settings -> Profiles -> Keyboard and enable \"Use Option as Meta Key\" for Option+Enter workflows."
+                .to_string(),
             "Configure notifications from Terminal -> Settings -> Profiles -> Advanced.".to_string(),
         ],
         TerminalType::Xterm => vec![
@@ -292,7 +249,8 @@ fn guidance_only_messages(terminal_type: TerminalType) -> Vec<String> {
         ],
         TerminalType::Unknown => vec![
             "Could not detect a supported terminal profile for automatic VT Code setup.".to_string(),
-            "Use \\ + Enter for multiline input, or configure your terminal to send a newline on Shift+Enter.".to_string(),
+            "Use \\ + Enter for multiline input, or configure your terminal to send a newline on Shift+Enter."
+                .to_string(),
             "On macOS, Option+Enter is often the simplest fallback once Option is configured as Meta.".to_string(),
         ],
         _ => vec![format!(

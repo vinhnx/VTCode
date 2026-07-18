@@ -51,9 +51,7 @@ impl ProviderOverrideConfig {
         for model in &self.models {
             let trimmed = model.trim();
             if trimmed.is_empty() {
-                return Err(format!(
-                    "providers[{provider_name}]: `models` entries must not be empty"
-                ));
+                return Err(format!("providers[{provider_name}]: `models` entries must not be empty"));
             }
             if !seen.insert(trimmed.to_lowercase()) {
                 return Err(format!("providers[{provider_name}]: duplicate model `{trimmed}`"));
@@ -131,11 +129,7 @@ mod tests {
     #[test]
     fn validate_rejects_duplicate_models() {
         let config = ProviderOverrideConfig {
-            models: vec![
-                "model-a".to_string(),
-                "model-b".to_string(),
-                "model-a".to_string(),
-            ],
+            models: vec!["model-a".to_string(), "model-b".to_string(), "model-a".to_string()],
             base_url: None,
             api_key_env: None,
         };

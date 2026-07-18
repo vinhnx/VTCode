@@ -85,11 +85,7 @@ pub(crate) fn render_write_file_preview(
     Ok(())
 }
 
-pub(crate) fn render_list_dir_output(
-    renderer: &mut AnsiRenderer,
-    val: &Value,
-    _ls_styles: &LsStyles,
-) -> Result<()> {
+pub(crate) fn render_list_dir_output(renderer: &mut AnsiRenderer, val: &Value, _ls_styles: &LsStyles) -> Result<()> {
     // Get pagination info first
     let count = get_u64(val, "count").unwrap_or(0);
     let total = get_u64(val, "total").unwrap_or(0);
@@ -100,10 +96,8 @@ pub(crate) fn render_list_dir_output(
     // Show path - always display root directory for clarity
     if let Some(path) = get_string(val, "path") {
         let display_path = if path.is_empty() { "/" } else { path };
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("{}{}", display_path, if !path.is_empty() { "/" } else { "" }),
-        )?;
+        renderer
+            .line(MessageStyle::ToolDetail, &format!("{}{}", display_path, if !path.is_empty() { "/" } else { "" }))?;
     }
 
     // Show summary - compact format
@@ -206,8 +200,7 @@ pub(crate) fn render_list_dir_output(
                 renderer.line(MessageStyle::ToolDetail, "[Directories]")?;
                 for (name, _size) in &directories {
                     let name_with_slash = format!("{name}/");
-                    let display =
-                        preview::pad_to_display_width(&name_with_slash, max_name_width, ' ');
+                    let display = preview::pad_to_display_width(&name_with_slash, max_name_width, ' ');
                     renderer.line(MessageStyle::ToolDetail, &display)?;
                 }
 
@@ -229,8 +222,7 @@ pub(crate) fn render_list_dir_output(
 
             let omitted = items.len().saturating_sub(MAX_DISPLAYED_FILES);
             if omitted > 0 {
-                renderer
-                    .line(MessageStyle::ToolDetail, &format!("+ {omitted} more items not shown"))?;
+                renderer.line(MessageStyle::ToolDetail, &format!("+ {omitted} more items not shown"))?;
             }
         }
     }
@@ -264,10 +256,8 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
                         .get("ranges")
                         .and_then(Value::as_array)
                         .map(|ranges| {
-                            let total_lines: u64 = ranges
-                                .iter()
-                                .filter_map(|r| r.get("lines_read").and_then(Value::as_u64))
-                                .sum();
+                            let total_lines: u64 =
+                                ranges.iter().filter_map(|r| r.get("lines_read").and_then(Value::as_u64)).sum();
                             format!(" ({total_lines} lines)")
                         })
                         .unwrap_or_default();
@@ -276,10 +266,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
             }
         }
         if items.len() > MAX_BATCH_DISPLAY_FILES {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!("  … +{} more", items.len() - MAX_BATCH_DISPLAY_FILES),
-            )?;
+            renderer.line(MessageStyle::ToolDetail, &format!("  … +{} more", items.len() - MAX_BATCH_DISPLAY_FILES))?;
         }
         return Ok(());
     }
@@ -359,11 +346,7 @@ pub(super) fn colorize_diff_summary_line(line: &str, _supports_color: bool) -> O
         || trimmed.contains(" insertions(+)")
         || trimmed.contains(" deletion(-)")
         || trimmed.contains(" deletions(-)");
-    if is_summary {
-        Some(line.to_string())
-    } else {
-        None
-    }
+    if is_summary { Some(line.to_string()) } else { None }
 }
 
 #[cfg(test)]

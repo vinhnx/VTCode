@@ -27,13 +27,9 @@ use vtcode_core::{build_primary_agent_hook_config, build_primary_agent_runtime_c
 use vtcode_ui::tui::app::{ContentPart as UiContentPart, SubmittedInput};
 
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
-use crate::agent::runloop::unified::async_mcp_manager::{
-    AsyncMcpManager, approval_policy_from_human_in_the_loop,
-};
+use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, approval_policy_from_human_in_the_loop};
 use crate::agent::runloop::unified::inline_events::InlineLoopAction;
-use crate::agent::runloop::unified::interactive_features::{
-    PromptSuggestionSource, generate_inline_prompt_suggestion,
-};
+use crate::agent::runloop::unified::interactive_features::{PromptSuggestionSource, generate_inline_prompt_suggestion};
 use crate::agent::runloop::unified::session_setup::{
     active_deferred_tool_policy, apply_ide_context_snapshot, ide_context_status_label_from_bridge,
     refresh_tool_snapshot,
@@ -45,13 +41,10 @@ use crate::startup::{auto_grant_tui_full_auto_workspace_trust, ensure_full_auto_
 use crate::agent::runloop::unified::planning_workflow_state::transition_to_planning_workflow;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
-use super::super::interaction_loop::{
-    InteractionLoopContext, InteractionOutcome, InteractionState,
-};
+use super::super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 
 const FALLBACK_ARGS_PREVIEW_LIMIT: usize = 240;
-const REVIEW_SCROLLBACK_EXIT_HINT: &str =
-    "[Native scrollback view. Press Esc, q, or Alt+O to return to fullscreen.]";
+const REVIEW_SCROLLBACK_EXIT_HINT: &str = "[Native scrollback view. Press Esc, q, or Alt+O to return to fullscreen.]";
 
 #[derive(Debug, Deserialize)]
 struct ToolErrorPayloadHint {
@@ -98,9 +91,7 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
             continue;
         };
 
-        if let Some(next_continue) =
-            obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value)
-        {
+        if let Some(next_continue) = obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value) {
             return Some((
                 tool_names::WRITE_STDIN.to_string(),
                 json!({
@@ -110,9 +101,7 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
             ));
         }
 
-        if let Some(next_read) =
-            obj.get("next_read_args").and_then(ReadChunkContinuationArgs::from_value)
-        {
+        if let Some(next_read) = obj.get("next_read_args").and_then(ReadChunkContinuationArgs::from_value) {
             return Some((
                 tool_names::UNIFIED_FILE.to_string(),
                 json!({
@@ -125,11 +114,8 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
         }
 
         let content_ref: &str = content.as_ref();
-        if content_ref.contains("\"fallback_tool\"")
-            && content_ref.contains("\"fallback_tool_args\"")
-        {
-            let Some(parsed) = serde_json::from_str::<ToolErrorPayloadHint>(content_ref).ok()
-            else {
+        if content_ref.contains("\"fallback_tool\"") && content_ref.contains("\"fallback_tool_args\"") {
+            let Some(parsed) = serde_json::from_str::<ToolErrorPayloadHint>(content_ref).ok() else {
                 continue;
             };
             let Some(fallback_tool) = parsed.fallback_tool else {
@@ -160,20 +146,15 @@ fn review_editor_launch_config(editor_config: &EditorToolConfig) -> EditorLaunch
     }
 }
 
-async fn open_transcript_review_in_editor(
-    ctx: &mut InteractionLoopContext<'_>,
-    text: String,
-) -> Result<()> {
+async fn open_transcript_review_in_editor(ctx: &mut InteractionLoopContext<'_>, text: String) -> Result<()> {
     let editor_config = ctx
         .vt_cfg
         .as_ref()
         .map(|config| config.tools.editor.clone())
         .unwrap_or_default();
     if !editor_config.enabled {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "External editor is disabled (`tools.editor.enabled = false`).",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "External editor is disabled (`tools.editor.enabled = false`).")?;
         return Ok(());
     }
 
@@ -195,10 +176,8 @@ async fn open_transcript_review_in_editor(
             ctx.renderer.line(MessageStyle::Info, "Transcript review opened in editor.")?;
         }
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to open transcript review in editor: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to open transcript review in editor: {err}"))?;
         }
     }
 
@@ -209,20 +188,15 @@ async fn open_transcript_review_in_editor(
     Ok(())
 }
 
-async fn launch_input_editor_with_draft(
-    ctx: &mut InteractionLoopContext<'_>,
-    draft: &str,
-) -> Result<()> {
+async fn launch_input_editor_with_draft(ctx: &mut InteractionLoopContext<'_>, draft: &str) -> Result<()> {
     let editor_config = ctx
         .vt_cfg
         .as_ref()
         .map(|config| config.tools.editor.clone())
         .unwrap_or_default();
     if !editor_config.enabled {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "External editor is disabled (`tools.editor.enabled = false`).",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "External editor is disabled (`tools.editor.enabled = false`).")?;
         return Ok(());
     }
 
@@ -239,9 +213,8 @@ async fn launch_input_editor_with_draft(
 
     let (message_style, message) = match result {
         Ok(_) => {
-            let content = fs::read_to_string(&path).with_context(|| {
-                format!("failed to read edited content from {}", path.display())
-            })?;
+            let content = fs::read_to_string(&path)
+                .with_context(|| format!("failed to read edited content from {}", path.display()))?;
             ctx.handle.set_input(content);
             (MessageStyle::Info, "Editor closed. Input updated with edited content.".to_owned())
         }
@@ -260,9 +233,8 @@ async fn launch_input_editor_with_draft(
 fn show_transcript_review_in_scrollback(text: &str, mouse_capture: bool) -> Result<()> {
     use ratatui::crossterm::{
         event::{
-            self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture,
-            EnableBracketedPaste, EnableFocusChange, EnableMouseCapture, Event, KeyCode,
-            KeyEventKind, KeyModifiers,
+            self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+            EnableFocusChange, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
         },
         execute,
         terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
@@ -286,11 +258,9 @@ fn show_transcript_review_in_scrollback(text: &str, mouse_capture: bool) -> Resu
         match event::read()? {
             Event::Key(key)
                 if matches!(key.kind, KeyEventKind::Press)
-                    && (matches!(
-                        key.code,
-                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q')
-                    ) || (key.modifiers.contains(KeyModifiers::ALT)
-                        && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')))) =>
+                    && (matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q'))
+                        || (key.modifiers.contains(KeyModifiers::ALT)
+                            && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')))) =>
             {
                 break;
             }
@@ -307,32 +277,25 @@ fn show_transcript_review_in_scrollback(text: &str, mouse_capture: bool) -> Resu
     Ok(())
 }
 
-async fn open_transcript_review_scrollback(
-    ctx: &mut InteractionLoopContext<'_>,
-    text: String,
-) -> Result<()> {
+async fn open_transcript_review_scrollback(ctx: &mut InteractionLoopContext<'_>, text: String) -> Result<()> {
     let mouse_capture = ctx
         .vt_cfg
         .as_ref()
         .map(|config| config.ui.fullscreen.mouse_capture)
         .unwrap_or(true);
-    let result = run_with_event_loop_suspended(ctx.handle, true, || {
-        show_transcript_review_in_scrollback(&text, mouse_capture)
-    })
-    .await;
+    let result =
+        run_with_event_loop_suspended(ctx.handle, true, || show_transcript_review_in_scrollback(&text, mouse_capture))
+            .await;
     ctx.handle.force_redraw();
     if let Err(err) = result {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to open transcript in native scrollback: {err}"),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Error, &format!("Failed to open transcript in native scrollback: {err}"))?;
     }
     Ok(())
 }
 
 pub(super) fn fallback_args_preview(args: &Value) -> String {
-    let serialized =
-        serde_json::to_string(args).unwrap_or_else(|_| "{\"action\":\"list\"}".to_string());
+    let serialized = serde_json::to_string(args).unwrap_or_else(|_| "{\"action\":\"list\"}".to_string());
     let mut chars = serialized.chars();
     let mut preview = String::with_capacity(FALLBACK_ARGS_PREVIEW_LIMIT + 3);
     for _ in 0..FALLBACK_ARGS_PREVIEW_LIMIT {
@@ -348,10 +311,7 @@ pub(super) fn fallback_args_preview(args: &Value) -> String {
     preview
 }
 
-pub(super) fn stalled_follow_up_recovery_prompt(
-    stall_reason: &str,
-    has_fallback_hint: bool,
-) -> String {
+pub(super) fn stalled_follow_up_recovery_prompt(stall_reason: &str, has_fallback_hint: bool) -> String {
     if has_fallback_hint {
         format!(
             "Continue autonomously from the last stalled turn. Stall reason: {stall_reason}. Use the recovered fallback hint as the first adjusted strategy, then continue until you can provide a concrete conclusion and final review."
@@ -370,11 +330,7 @@ fn append_trailing_text_part(content: &mut uni::MessageContent, trailing_text: S
     }
 }
 
-fn append_file_reference_metadata(
-    content: &mut uni::MessageContent,
-    input: &str,
-    workspace: &Path,
-) {
+fn append_file_reference_metadata(content: &mut uni::MessageContent, input: &str, workspace: &Path) {
     let Some(metadata) = build_file_reference_metadata(input, workspace) else {
         return;
     };
@@ -395,10 +351,7 @@ fn append_agent_reference_metadata(content: &mut uni::MessageContent, selected_a
     append_trailing_text_part(content, metadata);
 }
 
-fn supports_native_openai_file_inputs(
-    provider_name: &str,
-    model_supports_responses_compaction: bool,
-) -> bool {
+fn supports_native_openai_file_inputs(provider_name: &str, model_supports_responses_compaction: bool) -> bool {
     provider_name.eq_ignore_ascii_case("openai") && model_supports_responses_compaction
 }
 
@@ -420,10 +373,8 @@ async fn handle_inline_prompt_suggestion_request(
     .await
     else {
         ctx.handle.clear_inline_prompt_suggestion();
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "No inline prompt suggestion is available for the current draft.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "No inline prompt suggestion is available for the current draft.")?;
         return Ok(());
     };
 
@@ -442,10 +393,8 @@ async fn handle_inline_prompt_suggestion_request(
         *state.inline_prompt_cost_notice_shown = true;
     }
 
-    ctx.handle.set_inline_prompt_suggestion(
-        suggestion.prompt,
-        suggestion.source == PromptSuggestionSource::Llm,
-    );
+    ctx.handle
+        .set_inline_prompt_suggestion(suggestion.prompt, suggestion.source == PromptSuggestionSource::Llm);
     Ok(())
 }
 
@@ -469,7 +418,9 @@ fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String
     for (alias, full_path) in &alias_to_full_path {
         let _ = writeln!(metadata, "{alias}={full_path}");
     }
-    metadata.push_str("Hint: Read each referenced file once using the resolved path above. Do not re-read unless truncated.\n");
+    metadata.push_str(
+        "Hint: Read each referenced file once using the resolved path above. Do not re-read unless truncated.\n",
+    );
 
     Some(metadata)
 }
@@ -485,8 +436,7 @@ fn resolve_full_path_for_alias(alias: &str, workspace: &Path) -> Option<String> 
         return None;
     }
 
-    let resolved =
-        vtcode_commons::paths::resolve_workspace_path(workspace, Path::new(trimmed)).ok()?;
+    let resolved = vtcode_commons::paths::resolve_workspace_path(workspace, Path::new(trimmed)).ok()?;
     Some(resolved.to_string_lossy().to_string())
 }
 
@@ -518,8 +468,7 @@ pub(super) async fn build_user_message_content(
 
     let refined_content = match &processed_content {
         uni::MessageContent::Text(text) => {
-            let refined_text =
-                refine_and_enrich_prompt(text, ctx.config, ctx.vt_cfg.as_ref()).await;
+            let refined_text = refine_and_enrich_prompt(text, ctx.config, ctx.vt_cfg.as_ref()).await;
             uni::MessageContent::text(refined_text)
         }
         uni::MessageContent::Parts(parts) => {
@@ -527,8 +476,7 @@ pub(super) async fn build_user_message_content(
             for part in parts {
                 match part {
                     uni::ContentPart::Text { text } => {
-                        let refined_text =
-                            refine_and_enrich_prompt(text, ctx.config, ctx.vt_cfg.as_ref()).await;
+                        let refined_text = refine_and_enrich_prompt(text, ctx.config, ctx.vt_cfg.as_ref()).await;
                         refined_parts.push(uni::ContentPart::text(refined_text));
                     }
                     _ => refined_parts.push(part.clone()),
@@ -537,12 +485,11 @@ pub(super) async fn build_user_message_content(
             uni::MessageContent::parts(refined_parts)
         }
     };
-    let selected_agents: Vec<String> =
-        if let Some(controller) = ctx.tool_registry.subagent_controller() {
-            controller.set_turn_delegation_hints_from_input(text).await
-        } else {
-            Vec::new()
-        };
+    let selected_agents: Vec<String> = if let Some(controller) = ctx.tool_registry.subagent_controller() {
+        controller.set_turn_delegation_hints_from_input(text).await
+    } else {
+        Vec::new()
+    };
     let mut refined_content = refined_content;
     append_submitted_attachments(&mut refined_content, input.attachments.as_slice());
     append_file_reference_metadata(&mut refined_content, text, &ctx.config.workspace);
@@ -568,9 +515,7 @@ fn append_submitted_attachments(content: &mut uni::MessageContent, attachments: 
 
     parts.extend(attachments.iter().map(|attachment| match attachment {
         UiContentPart::Text { text } => uni::ContentPart::text(text.clone()),
-        UiContentPart::Image { data, media_type } => {
-            uni::ContentPart::image(data.clone(), media_type.clone())
-        }
+        UiContentPart::Image { data, media_type } => uni::ContentPart::image(data.clone(), media_type.clone()),
     }));
 
     *content = uni::MessageContent::parts(parts);
@@ -621,10 +566,7 @@ fn parse_image_capability_provider(provider_key: &str) -> Option<Provider> {
     trimmed.starts_with("OpenAI").then_some(Provider::OpenAI)
 }
 
-fn model_id_input_modalities_for_provider(
-    provider: Provider,
-    model: &str,
-) -> Option<&'static [&'static str]> {
+fn model_id_input_modalities_for_provider(provider: Provider, model: &str) -> Option<&'static [&'static str]> {
     for candidate in model_id_candidates(model) {
         let Ok(model_id) = candidate.parse::<ModelId>() else {
             continue;
@@ -708,10 +650,7 @@ pub(super) fn refresh_ide_context_before_user_turn(
     );
 }
 
-pub(super) fn apply_live_theme_and_appearance(
-    handle: &vtcode_ui::tui::app::InlineHandle,
-    cfg: &VTCodeConfig,
-) {
+pub(super) fn apply_live_theme_and_appearance(handle: &vtcode_ui::tui::app::InlineHandle, cfg: &VTCodeConfig) {
     let color_config = theme::ColorAccessibilityConfig {
         minimum_contrast: cfg.ui.minimum_contrast,
         bold_is_bright: cfg.ui.bold_is_bright,
@@ -741,10 +680,7 @@ pub(super) fn apply_live_theme_and_appearance(
     handle.force_redraw();
 }
 
-fn sync_mcp_approval_policy(
-    async_mcp_manager: Option<&AsyncMcpManager>,
-    vt_cfg: Option<&VTCodeConfig>,
-) {
+fn sync_mcp_approval_policy(async_mcp_manager: Option<&AsyncMcpManager>, vt_cfg: Option<&VTCodeConfig>) {
     let (Some(mcp_manager), Some(cfg)) = (async_mcp_manager, vt_cfg) else {
         return;
     };
@@ -774,18 +710,14 @@ pub(super) fn build_durable_scheduler_daemon() -> Result<SchedulerDaemon> {
 }
 
 pub(super) fn refresh_live_ide_context_update(
-    ide_context_bridge: &mut Option<
-        crate::agent::runloop::unified::session_setup::IdeContextBridge,
-    >,
+    ide_context_bridge: &mut Option<crate::agent::runloop::unified::session_setup::IdeContextBridge>,
 ) -> LiveIdeContextUpdate {
     let Some(bridge) = ide_context_bridge.as_mut() else {
         return LiveIdeContextUpdate::default();
     };
 
     match bridge.refresh() {
-        Ok((snapshot, refresh_state)) => {
-            LiveIdeContextUpdate { snapshot, changed: refresh_state.changed }
-        }
+        Ok((snapshot, refresh_state)) => LiveIdeContextUpdate { snapshot, changed: refresh_state.changed },
         Err(err) => {
             tracing::warn!(
                 error = %err,
@@ -900,9 +832,7 @@ pub(super) async fn resolve_inline_loop_action(
             open_transcript_review_scrollback(ctx, text).await?;
             InlineLoopActionResolution::ContinueLoop
         }
-        InlineLoopAction::Exit(reason) => {
-            InlineLoopActionResolution::Outcome(InteractionOutcome::Exit { reason })
-        }
+        InlineLoopAction::Exit(reason) => InlineLoopActionResolution::Outcome(InteractionOutcome::Exit { reason }),
         InlineLoopAction::PlanApproved { auto_accept } => {
             let mode = if auto_accept {
                 "auto-accept edits"
@@ -914,10 +844,8 @@ pub(super) async fn resolve_inline_loop_action(
             InlineLoopActionResolution::Outcome(InteractionOutcome::PlanApproved { auto_accept })
         }
         InlineLoopAction::PlanEditRequested => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Continuing the planning workflow. Refine the plan before execution.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Continuing the planning workflow. Refine the plan before execution.")?;
             InlineLoopActionResolution::ContinueLoop
         }
         InlineLoopAction::ResumeSession(session_id) => {
@@ -954,9 +882,7 @@ pub(super) async fn resolve_inline_loop_action(
             launch_input_editor_with_draft(ctx, &draft).await?;
             InlineLoopActionResolution::ContinueLoop
         }
-        InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
-            InlineLoopActionResolution::ContinueLoop
-        }
+        InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => InlineLoopActionResolution::ContinueLoop,
     };
     Ok(resolution)
 }
@@ -1025,10 +951,8 @@ pub(crate) async fn handle_select_primary_agent(
         auto_grant_tui_full_auto_workspace_trust(&ctx.config.workspace).await?;
 
         if !ensure_full_auto_workspace_trust(&ctx.config.workspace).await? {
-            ctx.renderer.line(
-                MessageStyle::Warning,
-                "Workspace trust required for auto agent. Keeping previous agent.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Warning, "Workspace trust required for auto agent. Keeping previous agent.")?;
             return Ok(());
         }
     }
@@ -1041,13 +965,8 @@ pub(crate) async fn handle_select_primary_agent(
             sync_primary_agent_hook_runtime(ctx).await?;
             // Apply per-agent tool policy overrides before refreshing the tool snapshot
             for (tool_name, policy) in &policy_overrides {
-                if let Err(err) = ctx.tool_registry.set_tool_policy(tool_name, policy.clone()).await
-                {
-                    tracing::warn!(
-                        "Failed to apply tool policy override for '{}' on agent switch: {}",
-                        tool_name,
-                        err
-                    );
+                if let Err(err) = ctx.tool_registry.set_tool_policy(tool_name, policy.clone()).await {
+                    tracing::warn!("Failed to apply tool policy override for '{}' on agent switch: {}", tool_name, err);
                 }
             }
             sync_primary_agent_mcp_runtime(ctx, state).await?;
@@ -1078,9 +997,7 @@ pub(crate) async fn handle_select_primary_agent(
                 .await;
             }
         }
-        Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
-            requested,
-        }) => {
+        Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent { requested }) => {
             ctx.renderer
                 .line(MessageStyle::Error, &format!("Unknown primary agent '{requested}'."))?;
         }
@@ -1100,8 +1017,7 @@ async fn sync_primary_agent_hook_runtime(ctx: &mut InteractionLoopContext<'_>) -
         Some(hooks) => hooks.transcript_path().await,
         None => None,
     };
-    let hooks_config =
-        build_primary_agent_hook_config(&cfg.hooks, ctx.active_primary_agent.active());
+    let hooks_config = build_primary_agent_hook_config(&cfg.hooks, ctx.active_primary_agent.active());
     let next = LifecycleHookEngine::new_with_session(
         ctx.config.workspace.clone(),
         &hooks_config,
@@ -1135,8 +1051,7 @@ async fn sync_primary_agent_mcp_runtime(
     *state.pending_mcp_refresh = true;
 
     let tool_documentation_mode = cfg.agent.tool_documentation_mode;
-    let deferred_tool_policy =
-        active_deferred_tool_policy(ctx.config, ctx.vt_cfg.as_ref(), &**ctx.provider_client);
+    let deferred_tool_policy = active_deferred_tool_policy(ctx.config, ctx.vt_cfg.as_ref(), &**ctx.provider_client);
     refresh_tool_snapshot(
         ctx.tool_registry,
         ctx.tools,
@@ -1169,9 +1084,7 @@ async fn load_primary_agent_specs_or_report(
     }
 }
 
-async fn load_primary_agent_specs(
-    ctx: &InteractionLoopContext<'_>,
-) -> Result<Vec<vtcode_config::SubagentSpec>> {
+async fn load_primary_agent_specs(ctx: &InteractionLoopContext<'_>) -> Result<Vec<vtcode_config::SubagentSpec>> {
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
         let specs = controller
             .effective_specs()
@@ -1184,12 +1097,9 @@ async fn load_primary_agent_specs(
         }
     }
 
-    let discovered = vtcode_config::discover_subagents(
-        &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
-    )
-    .with_context(|| {
-        format!("Failed to discover primary agents in {}", ctx.config.workspace.display())
-    })?;
+    let discovered =
+        vtcode_config::discover_subagents(&vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()))
+            .with_context(|| format!("Failed to discover primary agents in {}", ctx.config.workspace.display()))?;
     Ok(discovered.effective.into_iter().filter(|spec| spec.is_primary()).collect())
 }
 
@@ -1272,9 +1182,7 @@ fn agent_needs_trust(specs: &[vtcode_config::SubagentSpec], name: &str) -> bool 
 mod tests {
     use super::*;
     use crate::agent::runloop::unified::context_manager::ContextManager;
-    use crate::agent::runloop::unified::session_setup::{
-        IdeContextBridge, ide_context_status_label_from_bridge,
-    };
+    use crate::agent::runloop::unified::session_setup::{IdeContextBridge, ide_context_status_label_from_bridge};
     use hashbrown::HashMap;
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -1286,10 +1194,7 @@ mod tests {
     fn next_primary_agent_name_starts_with_first_sorted_agent() {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
 
-        assert_eq!(
-            next_primary_agent_name(&default_active_primary_agent(), &specs),
-            Some("alpha".to_string())
-        );
+        assert_eq!(next_primary_agent_name(&default_active_primary_agent(), &specs), Some("alpha".to_string()));
     }
 
     #[test]
@@ -1351,21 +1256,14 @@ mod tests {
         worker.mode = vtcode_config::AgentMode::Subagent;
         let specs = vec![worker, test_subagent_spec("duck")];
 
-        assert_eq!(
-            next_primary_agent_name(&default_active_primary_agent(), &specs),
-            Some("duck".to_string())
-        );
+        assert_eq!(next_primary_agent_name(&default_active_primary_agent(), &specs), Some("duck".to_string()));
     }
 
     #[test]
     fn auto_and_plan_remain_reachable_when_cycling_agents() {
         let mut auto = test_subagent_spec("auto");
         auto.permissions = AgentPermissionsConfig::new(PermissionDefault::Auto);
-        let specs = vec![
-            test_subagent_spec("build"),
-            test_subagent_spec("plan"),
-            auto,
-        ];
+        let specs = vec![test_subagent_spec("build"), test_subagent_spec("plan"), auto];
 
         let build = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[0]);
         let plan = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
@@ -1570,11 +1468,7 @@ mod tests {
         )];
 
         let (tool_name, args) = extract_recent_follow_up_hint(&history).expect("continuation hint");
-        assert_eq!(
-            tool_name,
-            tool_names::WRITE_STDIN,
-            "continuation hints must use the public write_stdin tool"
-        );
+        assert_eq!(tool_name, tool_names::WRITE_STDIN, "continuation hints must use the public write_stdin tool");
         assert_ne!(tool_name, tool_names::UNIFIED_EXEC);
         assert_eq!(
             args,
@@ -1642,8 +1536,7 @@ mod tests {
         fs::write(&file_path, "fn main() {}\n").expect("write file");
 
         let metadata =
-            build_file_reference_metadata("check @src/main.rs and continue", temp_dir.path())
-                .expect("metadata");
+            build_file_reference_metadata("check @src/main.rs and continue", temp_dir.path()).expect("metadata");
 
         assert!(metadata.contains("@src/main.rs="));
         assert!(metadata.contains("src/main.rs"));
@@ -1720,10 +1613,7 @@ mod tests {
         .await
         .expect("parse image");
 
-        append_submitted_attachments(
-            &mut content,
-            &[UiContentPart::image("pasted-image", "image/png")],
-        );
+        append_submitted_attachments(&mut content, &[UiContentPart::image("pasted-image", "image/png")]);
 
         assert_image_payload_order(&content, &["iVBOR", "pasted-image"]);
     }
@@ -1738,10 +1628,7 @@ mod tests {
         .await
         .expect("parse data image");
 
-        append_submitted_attachments(
-            &mut content,
-            &[UiContentPart::image("pasted-image", "image/png")],
-        );
+        append_submitted_attachments(&mut content, &[UiContentPart::image("pasted-image", "image/png")]);
 
         assert_image_payload_order(&content, &["parsedimage", "pasted-image"]);
     }
@@ -1753,10 +1640,7 @@ mod tests {
             uni::ContentPart::image("parsed-image".to_string(), "image/png".to_string()),
         ]);
 
-        append_submitted_attachments(
-            &mut content,
-            &[UiContentPart::image("pasted-image", "image/png")],
-        );
+        append_submitted_attachments(&mut content, &[UiContentPart::image("pasted-image", "image/png")]);
 
         match content {
             uni::MessageContent::Parts(parts) => {
@@ -1781,25 +1665,13 @@ mod tests {
     fn inline_image_placeholder_text_stays_before_pasted_image_part() {
         let mut content = uni::MessageContent::text("[Image #1] and here?".to_string());
 
-        append_submitted_attachments(
-            &mut content,
-            &[UiContentPart::image("pasted-image", "image/png")],
-        );
+        append_submitted_attachments(&mut content, &[UiContentPart::image("pasted-image", "image/png")]);
 
         match content {
             uni::MessageContent::Parts(parts) => {
-                assert!(matches!(
-                    parts.as_slice(),
-                    [
-                        uni::ContentPart::Text { .. },
-                        uni::ContentPart::Image { .. }
-                    ]
-                ));
+                assert!(matches!(parts.as_slice(), [uni::ContentPart::Text { .. }, uni::ContentPart::Image { .. }]));
                 assert_eq!(parts[0].as_text(), Some("[Image #1] and here?"));
-                assert_eq!(
-                    image_payloads(&uni::MessageContent::parts(parts)),
-                    vec!["pasted-image".to_string()]
-                );
+                assert_eq!(image_payloads(&uni::MessageContent::parts(parts)), vec!["pasted-image".to_string()]);
             }
             uni::MessageContent::Text(_) => panic!("expected parts"),
         }
@@ -1814,10 +1686,7 @@ mod tests {
             uni::ContentPart::text("check @README.md".to_string()),
             uni::ContentPart::image("parsed-image".to_string(), "image/png".to_string()),
         ]);
-        append_submitted_attachments(
-            &mut content,
-            &[UiContentPart::image("pasted-image", "image/png")],
-        );
+        append_submitted_attachments(&mut content, &[UiContentPart::image("pasted-image", "image/png")]);
 
         append_file_reference_metadata(&mut content, "check @README.md", temp_dir.path());
         append_agent_reference_metadata(&mut content, &[String::from("rust-engineer")]);
@@ -1838,10 +1707,7 @@ mod tests {
     #[test]
     fn unsupported_model_rejects_submitted_image_attachments() {
         let temp_dir = TempDir::new().expect("temp dir");
-        let input = SubmittedInput::new(
-            "please inspect this",
-            vec![UiContentPart::image("pasted-image", "image/png")],
-        );
+        let input = SubmittedInput::new("please inspect this", vec![UiContentPart::image("pasted-image", "image/png")]);
 
         assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
         assert!(!submitted_images_are_unsupported(&input, true, temp_dir.path()));
@@ -1916,8 +1782,7 @@ mod tests {
     #[test]
     fn unsupported_model_rejects_text_image_url() {
         let temp_dir = TempDir::new().expect("temp dir");
-        let input =
-            SubmittedInput::from("look @https://example.com/sample.png?cache=1".to_string());
+        let input = SubmittedInput::from("look @https://example.com/sample.png?cache=1".to_string());
 
         assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
         assert!(input.attachments.is_empty());
@@ -1938,9 +1803,9 @@ mod tests {
 
     fn tiny_png_bytes() -> &'static [u8] {
         &[
-            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
-            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
-            5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31,
+            21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0,
+            73, 69, 78, 68, 174, 66, 96, 130,
         ]
     }
 
@@ -1961,10 +1826,7 @@ mod tests {
         let payloads = image_payloads(content);
         assert_eq!(payloads.len(), expected_prefixes.len());
         for (payload, expected_prefix) in payloads.iter().zip(expected_prefixes) {
-            assert!(
-                payload.starts_with(expected_prefix),
-                "payload {payload:?} should start with {expected_prefix:?}"
-            );
+            assert!(payload.starts_with(expected_prefix), "payload {payload:?} should start with {expected_prefix:?}");
         }
     }
 
@@ -1973,8 +1835,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let workspace = temp_dir.path();
         fs::create_dir_all(workspace.join(".vtcode")).expect("create ide context dir");
-        let context_manager =
-            ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+        let context_manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
         let snapshot_path = workspace.join(".vtcode/ide-context.json");
         let mut bridge = Some(IdeContextBridge::new(workspace));
@@ -2001,13 +1862,7 @@ mod tests {
         let first = refresh_live_ide_context_update(&mut bridge);
         assert!(first.changed);
         assert_eq!(
-            ide_context_status_label_from_bridge(
-                &context_manager,
-                workspace,
-                None,
-                bridge.as_ref()
-            )
-            .as_deref(),
+            ide_context_status_label_from_bridge(&context_manager, workspace, None, bridge.as_ref()).as_deref(),
             Some("IDE Context (VS Code): src/alpha.rs")
         );
 
@@ -2033,13 +1888,7 @@ mod tests {
         let second = refresh_live_ide_context_update(&mut bridge);
         assert!(second.changed);
         assert_eq!(
-            ide_context_status_label_from_bridge(
-                &context_manager,
-                workspace,
-                None,
-                bridge.as_ref()
-            )
-            .as_deref(),
+            ide_context_status_label_from_bridge(&context_manager, workspace, None, bridge.as_ref()).as_deref(),
             Some("IDE Context (VS Code): src/beta.rs")
         );
     }

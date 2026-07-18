@@ -12,9 +12,7 @@ use std::sync::LazyLock;
 use crate::llm::provider::{ContentPart, MessageContent};
 use crate::utils::file_input::read_input_file_any_path;
 use crate::utils::image_processing::{read_image_file_any_path, read_image_from_url};
-use vtcode_commons::fs::{
-    is_windows_absolute_path, trim_trailing_image_path_str, unescape_whitespace,
-};
+use vtcode_commons::fs::{is_windows_absolute_path, trim_trailing_image_path_str, unescape_whitespace};
 use vtcode_commons::paths::is_safe_relative_path;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -48,8 +46,7 @@ pub async fn parse_at_patterns_with_options(
     options: AtPatternOptions,
 ) -> Result<MessageContent> {
     let at_matches = vtcode_commons::at_pattern::find_at_patterns(input);
-    let protected_ranges: Vec<(usize, usize)> =
-        at_matches.iter().map(|m| (m.start, m.end)).collect();
+    let protected_ranges: Vec<(usize, usize)> = at_matches.iter().map(|m| (m.start, m.end)).collect();
     let raw_matches = find_raw_image_path_matches(input, &protected_ranges);
     let data_url_matches = find_data_url_matches(input, &protected_ranges);
 
@@ -137,10 +134,7 @@ pub async fn parse_at_patterns_with_options(
                     } else if options.allow_local_non_image_file_inputs {
                         match read_input_file_any_path(&file_path).await {
                             Ok(file_data) => {
-                                parts.push(ContentPart::file_from_data(
-                                    file_data.filename,
-                                    file_data.base64_data,
-                                ));
+                                parts.push(ContentPart::file_from_data(file_data.filename, file_data.base64_data));
                             }
                             Err(_) => {
                                 parts.push(ContentPart::text(full_match));
@@ -176,11 +170,7 @@ pub async fn parse_at_patterns_with_options(
                 }
             }
             PathMatch::DataUrl { mime_type, data, .. } => {
-                parts.push(ContentPart::Image {
-                    data,
-                    mime_type,
-                    content_type: "image".to_owned(),
-                });
+                parts.push(ContentPart::Image { data, mime_type, content_type: "image".to_owned() });
             }
         }
 
@@ -210,8 +200,7 @@ pub async fn parse_at_patterns_with_options(
 /// attempt to turn into an image content part.
 pub fn input_may_parse_image_parts(input: &str, base_dir: &Path) -> bool {
     let at_matches = vtcode_commons::at_pattern::find_at_patterns(input);
-    let protected_ranges: Vec<(usize, usize)> =
-        at_matches.iter().map(|m| (m.start, m.end)).collect();
+    let protected_ranges: Vec<(usize, usize)> = at_matches.iter().map(|m| (m.start, m.end)).collect();
 
     if at_matches.iter().any(|m| {
         let path = m.path;
@@ -219,8 +208,7 @@ pub fn input_may_parse_image_parts(input: &str, base_dir: &Path) -> bool {
             looks_like_image_url(path)
         } else {
             resolve_image_path(path, base_dir).is_some_and(|file_path| {
-                crate::utils::image_processing::has_supported_image_extension(&file_path)
-                    && file_path.exists()
+                crate::utils::image_processing::has_supported_image_extension(&file_path) && file_path.exists()
             })
         }
     }) {
@@ -289,10 +277,7 @@ impl PathMatch {
     }
 }
 
-fn find_raw_image_path_matches(
-    input: &str,
-    protected_ranges: &[(usize, usize)],
-) -> Vec<RawPathMatch> {
+fn find_raw_image_path_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Vec<RawPathMatch> {
     let mut matches = Vec::new();
     let mut quote_ranges = Vec::new();
     let mut active_quote: Option<(char, usize)> = None;
@@ -305,9 +290,7 @@ fn find_raw_image_path_matches(
                     quote_ranges.push((start, end));
                     let inner_start = start + quote.len_utf8();
                     let inner_end = idx;
-                    if inner_end > inner_start
-                        && !overlaps_range(inner_start, inner_end, protected_ranges)
-                    {
+                    if inner_end > inner_start && !overlaps_range(inner_start, inner_end, protected_ranges) {
                         let inner = &input[inner_start..inner_end];
                         if looks_like_image_path(inner) {
                             matches.push(RawPathMatch {
@@ -341,13 +324,7 @@ fn find_raw_image_path_matches(
             }
             if pos >= range_start {
                 if let Some(start) = token_start.take() {
-                    collect_unquoted_match(
-                        input,
-                        start,
-                        range_start,
-                        protected_ranges,
-                        &mut matches,
-                    );
+                    collect_unquoted_match(input, start, range_start, protected_ranges, &mut matches);
                 }
                 pos = range_end;
                 continue;
@@ -636,8 +613,7 @@ mod tests {
             .unwrap();
         temp_file.flush().unwrap();
 
-        let input =
-            format!("Look at this image: @{}", image_path.file_name().unwrap().to_string_lossy());
+        let input = format!("Look at this image: @{}", image_path.file_name().unwrap().to_string_lossy());
 
         let result = parse_at_patterns(&input, temp_dir.path()).await.unwrap();
 
@@ -1038,14 +1014,8 @@ mod tests {
         let captures: Vec<_> = ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
         assert_eq!(captures.len(), 1, "Should match exactly one image path");
         let matched = captures[0].get(1).unwrap().as_str();
-        assert!(
-            !matched.contains("can you"),
-            "Match should not include trailing text, got: {matched}"
-        );
-        assert!(
-            matched.ends_with(".png"),
-            "Match should end with the image extension, got: {matched}"
-        );
+        assert!(!matched.contains("can you"), "Match should not include trailing text, got: {matched}");
+        assert!(matched.ends_with(".png"), "Match should end with the image extension, got: {matched}");
     }
 
     #[test]
@@ -1087,8 +1057,7 @@ mod tests {
         let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
-                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
-                0x44, 0x52,
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
             ])
             .unwrap();
         temp_file.flush().unwrap();
@@ -1098,8 +1067,7 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                let image_count =
-                    parts.iter().filter(|p| matches!(p, ContentPart::Image { .. })).count();
+                let image_count = parts.iter().filter(|p| matches!(p, ContentPart::Image { .. })).count();
                 assert_eq!(image_count, 1, "Should detect exactly one image");
             }
             other => panic!("Expected multi-part content, got {other:?}"),

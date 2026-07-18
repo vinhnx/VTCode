@@ -15,7 +15,7 @@ Keep this file concise and under 150 lines. Root guidance belongs here; detailed
 - `clippy.toml` allows `unwrap`/`panic`/indexing in tests only.
 - Dev profile has `incremental = false` (sccache). Set `CARGO_INCREMENTAL=1` to override.
 - **All built-in themes must meet WCAG AA 4.5:1 contrast** for foreground and all accent fields against background. Validate with `cargo nextest run -p vtcode-ui -E 'test(theme)'`. See `.vtcode/memory/gotchas.md` for catppuccin-latte special-case.
-- **Every new major feature must update docs**: user-facing behavior → `docs/development/` guide + a table row/section in the relevant quick-reference; agent-facing tool surface → prompt guidance (`vtcode-core/src/prompts/guidelines.rs`) + schema (`vtcode-utility-tool-specs`); runtime contract → `vtcode-exec-events::ThreadEvent`. No feature is "done" until the docs it changes are updated and the AGENTS.md detailed-guides links still resolve.
+- **Every new major feature must update docs**: user-facing behavior → `docs/development/` guide + a table row/section in the relevant quick-reference; agent-facing tool surface → prompt guidance (`crates/codegen/vtcode-core/src/prompts/guidelines.rs`) + schema (`crates/common/vtcode-utility-tool-specs`); runtime contract → `vtcode-exec-events::ThreadEvent`. No feature is "done" until the docs it changes are updated and the AGENTS.md detailed-guides links still resolve.
 
 ## Detailed Guides
 
@@ -118,7 +118,7 @@ Narrow commands: `cargo check`, `cargo nextest run`, `cargo nextest run --profil
 - Single crate: `cargo nextest run -p vtcode-core`.
 - Profiles: `default` (full), `quick` (TDD, skips integration/e2e/slow), `changed` (delta since HEAD~1), `ci` (retries flaky, no fail-fast).
 - Harness regressions: `cargo nextest run -p vtcode-core -E 'binary(/pty_tests/)'`; `cargo nextest run -p vtcode-bash-runner -E 'binary(/pipe_tests/)'`; `cargo nextest run -p vtcode -E 'binary(/inline_events/)'`.
-- Integration tests: `tests/` at workspace root. Unit tests: in-module.
+- Integration tests (Rust): `tests/` at workspace root. Shell/script tests: `scripts/tests/`. Unit tests: in-module.
 
 ## Skills & Special Workflows
 

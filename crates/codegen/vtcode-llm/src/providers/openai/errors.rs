@@ -57,10 +57,7 @@ fn parse_openai_error_details(body: &str) -> OpenAIErrorDetails {
 
 /// Detect if an OpenAI API error indicates the model was not found or is inaccessible.
 pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
-    if !matches!(
-        status,
-        StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
-    ) {
+    if !matches!(status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY) {
         return false;
     }
 
@@ -135,8 +132,7 @@ pub fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
 
     (status == StatusCode::NOT_FOUND && lower.trim().is_empty())
         || lower.contains("not enabled for the responses api")
-        || lower.contains("responses api")
-            && (lower.contains("unsupported") || lower.contains("not supported"))
+        || lower.contains("responses api") && (lower.contains("unsupported") || lower.contains("not supported"))
         || lower.contains("invalid api parameter")
         || lower.contains("unsupported parameter")
         || lower.contains("1210")
@@ -159,8 +155,8 @@ pub fn is_flex_service_tier_unsupported(status: StatusCode, body: &str) -> bool 
 #[cfg(test)]
 mod tests {
     use super::{
-        OpenAIErrorDetails, format_openai_error, is_flex_service_tier_unsupported,
-        is_model_not_found, is_responses_api_unsupported, parse_openai_error_details,
+        OpenAIErrorDetails, format_openai_error, is_flex_service_tier_unsupported, is_model_not_found,
+        is_responses_api_unsupported, parse_openai_error_details,
     };
     use reqwest::StatusCode;
     use reqwest::header::{HeaderMap, HeaderValue};

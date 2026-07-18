@@ -25,14 +25,8 @@ fn display_memory_report(report: &MemoryReport) {
     println!("  RSS (Resident Set): {} MB", style(format!("{:.1}", report.current_rss_mb)).cyan());
 
     println!("\n{} Thresholds:", style("[LIMITS]").dim());
-    println!(
-        "  Soft Limit: {} MB (warning level)",
-        style(format!("{:.1}", report.soft_limit_mb)).cyan()
-    );
-    println!(
-        "  Hard Limit: {} MB (critical level)",
-        style(format!("{:.1}", report.hard_limit_mb)).red()
-    );
+    println!("  Soft Limit: {} MB (warning level)", style(format!("{:.1}", report.soft_limit_mb)).cyan());
+    println!("  Hard Limit: {} MB (critical level)", style(format!("{:.1}", report.hard_limit_mb)).red());
 
     println!("\n{} Pressure Status:", style("[PRESSURE]").dim());
     let pressure_str = report.pressure.to_string();

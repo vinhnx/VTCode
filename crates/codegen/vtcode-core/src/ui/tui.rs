@@ -9,12 +9,11 @@
 // ── Shared data types (always available from vtcode-commons) ────────────────
 
 pub use vtcode_commons::ui_protocol::{
-    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
-    InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LayoutModeOverride,
-    PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
-    SessionSurface, SlashCommandItem, ThinkingBlockState, UiMode, WizardModalMode, WizardStep,
-    convert_style, theme_from_color_fields,
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
+    InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineTextStyle, InlineTheme, LayoutModeOverride, PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode,
+    RewindAction, SecurePromptConfig, SessionSurface, SlashCommandItem, ThinkingBlockState, UiMode, WizardModalMode,
+    WizardStep, convert_style, theme_from_color_fields,
 };
 
 pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
@@ -31,8 +30,8 @@ mod headless {
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
     use super::{
-        InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
-        InlineSegment, SecurePromptConfig,
+        InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+        SecurePromptConfig,
     };
 
     use crate::ui::theme::ThemeStyles;
@@ -115,23 +114,13 @@ mod headless {
         pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
             self.send_command(InlineCommand::AppendLine { kind, segments });
         }
-        pub fn append_pasted_message(
-            &self,
-            kind: InlineMessageKind,
-            text: String,
-            line_count: usize,
-        ) {
+        pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
             self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
         }
         pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
             self.send_command(InlineCommand::Inline { kind, segment });
         }
-        pub fn replace_last(
-            &self,
-            count: usize,
-            kind: InlineMessageKind,
-            lines: Vec<Vec<InlineSegment>>,
-        ) {
+        pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
             self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
         }
         pub fn force_redraw(&self) {
@@ -143,13 +132,7 @@ mod headless {
         pub fn clear_screen(&self) {
             self.send_command(InlineCommand::ClearScreen);
         }
-        pub fn show_modal(
-            &self,
-            _title: String,
-            _lines: Vec<String>,
-            _secure_prompt: Option<SecurePromptConfig>,
-        ) {
-        }
+        pub fn show_modal(&self, _title: String, _lines: Vec<String>, _secure_prompt: Option<SecurePromptConfig>) {}
         pub fn show_list_modal(
             &self,
             _title: String,

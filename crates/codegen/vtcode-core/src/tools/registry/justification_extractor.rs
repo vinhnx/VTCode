@@ -77,10 +77,7 @@ impl JustificationExtractor {
 
     /// Suggest justification based on tool name and context
     /// Used as fallback when decision context doesn't have explicit reasoning
-    pub fn suggest_default_justification(
-        tool_name: &str,
-        risk_level: &RiskLevel,
-    ) -> Option<ToolJustification> {
+    pub fn suggest_default_justification(tool_name: &str, risk_level: &RiskLevel) -> Option<ToolJustification> {
         let (reason, outcome) = match tool_name {
             "run_command" | "execute" => (
                 "Execute command to perform necessary system operation or build/test task.",
@@ -90,12 +87,12 @@ impl JustificationExtractor {
                 "Modify code or configuration to implement necessary changes.",
                 Some("Will create/update file with the generated content."),
             ),
-            crate::config::constants::tools::GREP_FILE
-            | "find_files"
-            | crate::config::constants::tools::LIST_FILES => (
-                "Search or list files to understand codebase structure.",
-                Some("Will return matching files and their contents for analysis."),
-            ),
+            crate::config::constants::tools::GREP_FILE | "find_files" | crate::config::constants::tools::LIST_FILES => {
+                (
+                    "Search or list files to understand codebase structure.",
+                    Some("Will return matching files and their contents for analysis."),
+                )
+            }
             "delete_file" | "remove_file" => (
                 "Remove unnecessary or generated files as part of cleanup.",
                 Some("Will delete the specified file(s)."),
@@ -149,8 +146,7 @@ mod tests {
     #[test]
     fn test_extract_from_decision_low_risk() {
         let decision = create_test_decision("Read the source file");
-        let just =
-            JustificationExtractor::extract_from_decision(&decision, "read_file", &RiskLevel::Low);
+        let just = JustificationExtractor::extract_from_decision(&decision, "read_file", &RiskLevel::Low);
 
         assert!(just.is_none()); // Low risk shouldn't generate justification
     }
@@ -158,11 +154,7 @@ mod tests {
     #[test]
     fn test_extract_from_decision_high_risk() {
         let decision = create_test_decision("Need to understand code structure deeply");
-        let just = JustificationExtractor::extract_from_decision(
-            &decision,
-            "run_command",
-            &RiskLevel::High,
-        );
+        let just = JustificationExtractor::extract_from_decision(&decision, "run_command", &RiskLevel::High);
 
         assert!(just.is_some());
         let just = just.unwrap();
@@ -174,19 +166,14 @@ mod tests {
     #[test]
     fn test_extract_from_decision_empty_reasoning() {
         let decision = create_test_decision("");
-        let just = JustificationExtractor::extract_from_decision(
-            &decision,
-            "run_command",
-            &RiskLevel::High,
-        );
+        let just = JustificationExtractor::extract_from_decision(&decision, "run_command", &RiskLevel::High);
 
         assert!(just.is_none()); // Empty reasoning should return None
     }
 
     #[test]
     fn test_suggest_default_justification() {
-        let just =
-            JustificationExtractor::suggest_default_justification("run_command", &RiskLevel::High);
+        let just = JustificationExtractor::suggest_default_justification("run_command", &RiskLevel::High);
 
         assert!(just.is_some());
         let just = just.unwrap();
@@ -196,8 +183,7 @@ mod tests {
 
     #[test]
     fn test_suggest_default_for_write_file() {
-        let just =
-            JustificationExtractor::suggest_default_justification("write_file", &RiskLevel::Medium);
+        let just = JustificationExtractor::suggest_default_justification("write_file", &RiskLevel::Medium);
 
         assert!(just.is_some());
         let just = just.unwrap();
@@ -206,8 +192,7 @@ mod tests {
 
     #[test]
     fn test_suggest_default_for_unknown_tool() {
-        let just =
-            JustificationExtractor::suggest_default_justification("unknown_tool", &RiskLevel::High);
+        let just = JustificationExtractor::suggest_default_justification("unknown_tool", &RiskLevel::High);
 
         assert!(just.is_none()); // Unknown tools should return None
     }

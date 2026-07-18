@@ -28,8 +28,8 @@ use vtcode_config::TimeoutsConfig;
 use vtcode_config::auth::{OpenAIChatGptAuthHandle, OpenAIChatGptSession};
 use vtcode_config::constants::models;
 use vtcode_config::core::{
-    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIPromptCacheSettings,
-    OpenAIServiceTier, PromptCachingConfig,
+    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIHostedShellConfig, OpenAIPromptCacheSettings, OpenAIServiceTier,
+    PromptCachingConfig,
 };
 
 // Import from extracted modules
@@ -52,8 +52,7 @@ use super::super::{
 };
 use crate::system_prompt::default_system_prompt;
 
-const INLINE_FILE_LIMIT_ERROR_PREFIX: &str =
-    "Inline OpenAI input_file payload exceeds the 50 MB request limit";
+const INLINE_FILE_LIMIT_ERROR_PREFIX: &str = "Inline OpenAI input_file payload exceeds the 50 MB request limit";
 
 pub struct OpenAIProvider {
     api_key: Arc<str>,
@@ -103,10 +102,7 @@ impl OpenAIProvider {
         find_family_for_model(model).supports_reasoning_summaries
     }
 
-    fn normalize_reasoning_output(
-        model: &str,
-        mut response: provider::LLMResponse,
-    ) -> provider::LLMResponse {
+    fn normalize_reasoning_output(model: &str, mut response: provider::LLMResponse) -> provider::LLMResponse {
         if !Self::model_supports_reasoning_summaries(model) {
             response.reasoning = None;
             response.reasoning_details = None;
@@ -151,16 +147,7 @@ impl OpenAIProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            None,
-            model,
-            None,
-            None,
-            TimeoutsConfig::default(),
-            None,
-            None,
-        )
+        Self::with_model_internal(api_key, None, model, None, None, TimeoutsConfig::default(), None, None)
     }
 
     pub fn new_with_client(
@@ -363,10 +350,7 @@ impl OpenAIProvider {
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 
-    pub(crate) fn manual_openai_compaction_unavailable_message_for_model(
-        &self,
-        model: &str,
-    ) -> String {
+    pub(crate) fn manual_openai_compaction_unavailable_message_for_model(&self, model: &str) -> String {
         let requested = if model.trim().is_empty() {
             self.model.as_ref()
         } else {
@@ -376,8 +360,7 @@ impl OpenAIProvider {
         let (backend, reason) = if self.uses_chatgpt_auth() {
             (
                 "ChatGPT subscription auth via chatgpt.com backend".to_string(),
-                "ChatGPT subscription auth does not expose the standalone `/responses/compact` endpoint"
-                    .to_string(),
+                "ChatGPT subscription auth does not expose the standalone `/responses/compact` endpoint".to_string(),
             )
         } else if self.provider_key_override.is_some() {
             (
@@ -470,10 +453,7 @@ impl OpenAIProvider {
     fn format_auth_error(&self, error: impl std::fmt::Display) -> provider::LLMError {
         let label = self.provider_display_override.as_deref().unwrap_or("OpenAI");
         provider::LLMError::Authentication {
-            message: error_display::format_llm_error(
-                label,
-                &format!("Authentication error: {error}"),
-            ),
+            message: error_display::format_llm_error(label, &format!("Authentication error: {error}")),
             metadata: None,
         }
     }
@@ -511,9 +491,7 @@ impl OpenAIProvider {
         Ok(self.request_auth_from_session(session))
     }
 
-    async fn refresh_request_auth_for_retry(
-        &self,
-    ) -> Result<OpenAIRequestAuth, provider::LLMError> {
+    async fn refresh_request_auth_for_retry(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
             return Ok(OpenAIRequestAuth::bearer_token(
                 handle.force_refresh().await.map_err(|e| self.format_auth_error(e))?,
@@ -542,16 +520,12 @@ impl OpenAIProvider {
         handle.current_api_key().map_err(|e| self.format_auth_error(e))
     }
 
-    async fn send_authorized<F>(
-        &self,
-        build_request: F,
-    ) -> Result<reqwest::Response, provider::LLMError>
+    async fn send_authorized<F>(&self, build_request: F) -> Result<reqwest::Response, provider::LLMError>
     where
         F: Fn(&OpenAIRequestAuth) -> reqwest::RequestBuilder,
     {
         let auth = self.current_request_auth().await?;
-        let response =
-            build_request(&auth).send().await.map_err(|e| self.format_network_error(e))?;
+        let response = build_request(&auth).send().await.map_err(|e| self.format_network_error(e))?;
 
         if self.uses_refreshable_auth() && Self::auth_retryable_status(response.status()) {
             let retry_auth = self.refresh_request_auth_for_retry().await?;
@@ -565,9 +539,7 @@ impl OpenAIProvider {
     }
 
     fn supports_temperature_parameter(model: &str) -> bool {
-        if model == models::openai::GPT_5
-            || model == models::openai::GPT_5_MINI
-            || model == models::openai::GPT_5_NANO
+        if model == models::openai::GPT_5 || model == models::openai::GPT_5_MINI || model == models::openai::GPT_5_NANO
         {
             return false;
         }
@@ -598,9 +570,7 @@ impl OpenAIProvider {
         modes.insert(model.to_string(), state);
     }
 
-    fn validate_inline_file_inputs(
-        request: &provider::LLMRequest,
-    ) -> Result<(), provider::LLMError> {
+    fn validate_inline_file_inputs(request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
         Self::validate_inline_file_inputs_with_limit(request, MAX_INPUT_FILE_BYTES)
     }
 
@@ -635,34 +605,24 @@ impl OpenAIProvider {
                     let file_label = filename.as_deref().unwrap_or("attached file");
                     let formatted = error_display::format_llm_error(
                         "OpenAI",
-                        &format!(
-                            "{INLINE_FILE_LIMIT_ERROR_PREFIX}: '{file_label}' is {inline_file_bytes} bytes"
-                        ),
+                        &format!("{INLINE_FILE_LIMIT_ERROR_PREFIX}: '{file_label}' is {inline_file_bytes} bytes"),
                     );
-                    return Err(provider::LLMError::InvalidRequest {
-                        message: formatted,
-                        metadata: None,
-                    });
+                    return Err(provider::LLMError::InvalidRequest { message: formatted, metadata: None });
                 }
 
-                total_inline_file_bytes = total_inline_file_bytes
-                    .checked_add(inline_file_bytes)
-                    .ok_or_else(|| provider::LLMError::InvalidRequest {
-                        message: error_display::format_llm_error(
-                            "OpenAI",
-                            INLINE_FILE_LIMIT_ERROR_PREFIX,
-                        ),
+                total_inline_file_bytes = total_inline_file_bytes.checked_add(inline_file_bytes).ok_or_else(|| {
+                    provider::LLMError::InvalidRequest {
+                        message: error_display::format_llm_error("OpenAI", INLINE_FILE_LIMIT_ERROR_PREFIX),
                         metadata: None,
-                    })?;
+                    }
+                })?;
             }
         }
 
         if total_inline_file_bytes > max_inline_file_bytes {
             let formatted = error_display::format_llm_error(
                 "OpenAI",
-                &format!(
-                    "{INLINE_FILE_LIMIT_ERROR_PREFIX}: total inline file bytes = {total_inline_file_bytes}"
-                ),
+                &format!("{INLINE_FILE_LIMIT_ERROR_PREFIX}: total inline file bytes = {total_inline_file_bytes}"),
             );
             return Err(provider::LLMError::InvalidRequest { message: formatted, metadata: None });
         }
@@ -670,10 +630,7 @@ impl OpenAIProvider {
         Ok(())
     }
 
-    fn convert_to_openai_format(
-        &self,
-        request: &provider::LLMRequest,
-    ) -> Result<Value, provider::LLMError> {
+    fn convert_to_openai_format(&self, request: &provider::LLMRequest) -> Result<Value, provider::LLMError> {
         let is_native_openai = self.is_native_openai_api();
         let prompt_cache_key = if is_native_openai {
             request.prompt_cache_key.as_deref()
@@ -731,21 +688,15 @@ impl OpenAIProvider {
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
             include_prompt_cache_retention: backend_defaults.include_prompt_cache_retention,
-            prompt_cache_retention: self
-                .prompt_cache_settings
-                .prompt_cache_retention
-                .as_ref()
-                .map(|r| r.as_str()),
+            prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_ref().map(|r| r.as_str()),
             default_service_tier,
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())
                 .then_some(self.responses_include.as_slice()),
             include_encrypted_reasoning: backend_defaults.include_encrypted_reasoning,
             hosted_shell: self.hosted_shell_for_model(&request.model),
-            include_structured_history_in_input: backend_defaults
-                .include_structured_history_in_input,
-            preserve_structured_history_on_replay: backend_defaults
-                .preserve_structured_history_on_replay,
+            include_structured_history_in_input: backend_defaults.include_structured_history_in_input,
+            preserve_structured_history_on_replay: backend_defaults.preserve_structured_history_on_replay,
             preserve_assistant_phase_on_replay: false,
             reasoning_context: None,
             safety_identifier: None,
@@ -759,13 +710,9 @@ impl OpenAIProvider {
         response_json: Value,
         model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        let include_cached_prompt_tokens =
-            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        let response = response_parser::parse_chat_response(
-            response_json,
-            model.clone(),
-            include_cached_prompt_tokens,
-        )?;
+        let include_cached_prompt_tokens = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        let response =
+            response_parser::parse_chat_response(response_json, model.clone(), include_cached_prompt_tokens)?;
         Ok(Self::normalize_reasoning_output(&model, response))
     }
 
@@ -774,8 +721,7 @@ impl OpenAIProvider {
         response_json: Value,
         model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
-        let include_metrics =
-            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         let response = parse_responses_payload(response_json, model.clone(), include_metrics)?;
         Ok(Self::normalize_reasoning_output(&model, response))
     }

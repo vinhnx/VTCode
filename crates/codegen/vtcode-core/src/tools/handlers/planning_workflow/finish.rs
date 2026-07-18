@@ -36,8 +36,7 @@ impl FinishPlanningTool {
 #[async_trait]
 impl Tool for FinishPlanningTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: FinishPlanningArgs =
-            serde_json::from_value(args).unwrap_or(FinishPlanningArgs { reason: None });
+        let args: FinishPlanningArgs = serde_json::from_value(args).unwrap_or(FinishPlanningArgs { reason: None });
         let auto_trigger = args
             .reason
             .as_deref()
@@ -86,33 +85,25 @@ impl Tool for FinishPlanningTool {
 
         // Parse structured plan content for the confirmation dialog
         let structured_plan = plan_content.as_ref().map(|content| {
-            PlanContent::from_markdown(
-                plan_title.clone(),
-                content,
-                plan_file.as_ref().map(|p| p.display().to_string()),
-            )
+            PlanContent::from_markdown(plan_title.clone(), content, plan_file.as_ref().map(|p| p.display().to_string()))
         });
 
-        let plan_validation =
-            plan_content.as_deref().map(validate_plan_content).unwrap_or_default();
+        let plan_validation = plan_content.as_deref().map(validate_plan_content).unwrap_or_default();
         let plan_ready = plan_validation.is_ready();
-        let plan_recently_updated =
-            if let (Some(path), Some(baseline)) = (plan_file.as_ref(), plan_baseline) {
-                match tokio::fs::metadata(path).await.and_then(|meta| meta.modified()) {
-                    Ok(modified) => modified > baseline,
-                    Err(_) => false,
-                }
-            } else {
-                true
-            };
+        let plan_recently_updated = if let (Some(path), Some(baseline)) = (plan_file.as_ref(), plan_baseline) {
+            match tokio::fs::metadata(path).await.and_then(|meta| meta.modified()) {
+                Ok(modified) => modified > baseline,
+                Err(_) => false,
+            }
+        } else {
+            true
+        };
 
         if !plan_ready || !plan_recently_updated {
             let mut blockers = Vec::new();
             if !plan_validation.missing_sections.is_empty() {
-                blockers.push(format!(
-                    "Missing or incomplete sections: {}",
-                    plan_validation.missing_sections.join(", ")
-                ));
+                blockers
+                    .push(format!("Missing or incomplete sections: {}", plan_validation.missing_sections.join(", ")));
             }
             if !plan_validation.placeholder_tokens.is_empty() {
                 blockers.push(format!(
@@ -121,15 +112,10 @@ impl Tool for FinishPlanningTool {
                 ));
             }
             if !plan_validation.open_decisions.is_empty() {
-                blockers.push(format!(
-                    "Open decisions remain: {}",
-                    plan_validation.open_decisions.join(" | ")
-                ));
+                blockers.push(format!("Open decisions remain: {}", plan_validation.open_decisions.join(" | ")));
             }
             if !plan_recently_updated {
-                blockers.push(
-                    "Plan file has not been updated since entering Planning workflow.".to_string(),
-                );
+                blockers.push("Plan file has not been updated since entering Planning workflow.".to_string());
             }
             if auto_trigger {
                 return Ok(json!({

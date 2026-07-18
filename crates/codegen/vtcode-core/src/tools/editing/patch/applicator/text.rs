@@ -24,9 +24,7 @@ impl LineEnding {
     }
 }
 
-pub(super) async fn load_file_lines(
-    path: &Path,
-) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
+pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
     let file = fs::File::open(path).await.map_err(|err| {
         if err.kind() == ErrorKind::NotFound {
             PatchError::MissingFile { path: path.display().to_string() }
@@ -137,13 +135,7 @@ pub(super) async fn compute_replacements(
         }
 
         let mut found = if context_found {
-            seek_segment(
-                &matcher,
-                &mut old_segment,
-                &mut new_segment,
-                line_index,
-                chunk.is_end_of_file(),
-            )
+            seek_segment(&matcher, &mut old_segment, &mut new_segment, line_index, chunk.is_end_of_file())
         } else {
             None
         };
@@ -164,18 +156,10 @@ pub(super) async fn compute_replacements(
                     old_segment = semantic.old_segment;
                     new_segment = semantic.new_segment;
                 }
-                Err(PatchError::SemanticResolutionFailed { reason, .. })
-                    if reason.contains("unsupported language") =>
-                {
+                Err(PatchError::SemanticResolutionFailed { reason, .. }) if reason.contains("unsupported language") => {
                     // Language not supported by ast-grep (e.g. markdown, yaml).
                     // Fall back to exact text search from the beginning of the file.
-                    found = seek_segment(
-                        &matcher,
-                        &mut old_segment,
-                        &mut new_segment,
-                        0,
-                        chunk.is_end_of_file(),
-                    );
+                    found = seek_segment(&matcher, &mut old_segment, &mut new_segment, 0, chunk.is_end_of_file());
                 }
                 Err(err) => return Err(err),
             }
@@ -212,8 +196,7 @@ pub(super) async fn render_patched_text_from_content(
 ) -> Result<String, PatchError> {
     let (original_lines, had_trailing_newline, line_ending) = lines_from_content(content);
     let replacements = compute_replacements(source_path, &original_lines, chunks, path).await?;
-    let ensure_trailing_newline =
-        had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
+    let ensure_trailing_newline = had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
     Ok(render_patched_content(original_lines, replacements, ensure_trailing_newline, line_ending))
 }
 

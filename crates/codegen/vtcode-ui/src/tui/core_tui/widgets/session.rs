@@ -4,10 +4,7 @@ use ratatui::{
     widgets::Widget,
 };
 
-use super::{
-    FooterWidget, HeaderWidget, LayoutMode, SidebarWidget, TranscriptWidget, footer_hints,
-    panel::new_panel,
-};
+use super::{FooterWidget, HeaderWidget, LayoutMode, SidebarWidget, TranscriptWidget, footer_hints, panel::new_panel};
 use crate::tui::ui::tui::session::Session;
 
 /// Root compositor widget that orchestrates rendering of the entire session UI
@@ -179,8 +176,7 @@ impl Widget for &mut SessionWidget<'_> {
         // Determine layout mode from viewport or override
         let mode = self.layout_mode.unwrap_or_else(|| self.session.resolved_layout_mode(area));
 
-        if let (Some(header_area), Some(transcript_area)) = (self.header_area, self.transcript_area)
-        {
+        if let (Some(header_area), Some(transcript_area)) = (self.header_area, self.transcript_area) {
             self.session.poll_log_entries();
 
             if header_area.width > 0 && header_area.height > 0 {
@@ -194,14 +190,10 @@ impl Widget for &mut SessionWidget<'_> {
 
             if transcript_area.width > 0 && transcript_area.height > 0 {
                 self.session.apply_view_rows(transcript_area.height);
-                let has_logs =
-                    self.session.show_logs && self.session.has_logs() && mode.show_logs_panel();
+                let has_logs = self.session.show_logs && self.session.has_logs() && mode.show_logs_panel();
                 if has_logs {
                     let [transcript, logs] = transcript_area
-                        .try_layout(&Layout::vertical([
-                            Constraint::Percentage(70),
-                            Constraint::Percentage(30),
-                        ]))
+                        .try_layout(&Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)]))
                         .unwrap_or([transcript_area, Rect::ZERO]);
                     TranscriptWidget::new(self.session).render(transcript, buf);
                     self.render_logs(logs, buf, mode);
@@ -255,10 +247,7 @@ impl Widget for &mut SessionWidget<'_> {
         if has_logs {
             let [transcript, logs] = layout
                 .main
-                .try_layout(&Layout::vertical([
-                    Constraint::Percentage(70),
-                    Constraint::Percentage(30),
-                ]))
+                .try_layout(&Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)]))
                 .unwrap_or([layout.main, Rect::ZERO]);
             TranscriptWidget::new(self.session).render(transcript, buf);
             self.render_logs(logs, buf, mode);
@@ -292,33 +281,31 @@ impl<'a> SessionWidget<'a> {
             return;
         }
 
-        let paragraph =
-            Paragraph::new((*self.session.log_text()).clone()).wrap(Wrap { trim: false });
+        let paragraph = Paragraph::new((*self.session.log_text()).clone()).wrap(Wrap { trim: false });
         paragraph.render(inner, buf);
     }
 
     fn render_sidebar(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
-        let queue_items: Vec<String> =
-            if let Some(cached) = &self.session.queued_inputs_preview_cache {
-                cached.clone()
-            } else {
-                let items: Vec<String> = self
-                    .session
-                    .queued_inputs
-                    .iter()
-                    .take(5)
-                    .map(|input| {
-                        if input.chars().count() > 50 {
-                            let preview: String = input.chars().take(50).collect();
-                            format!("{preview}{}", crate::design::constants::ELLIPSIS)
-                        } else {
-                            input.clone()
-                        }
-                    })
-                    .collect();
-                self.session.queued_inputs_preview_cache = Some(items.clone());
-                items
-            };
+        let queue_items: Vec<String> = if let Some(cached) = &self.session.queued_inputs_preview_cache {
+            cached.clone()
+        } else {
+            let items: Vec<String> = self
+                .session
+                .queued_inputs
+                .iter()
+                .take(5)
+                .map(|input| {
+                    if input.chars().count() > 50 {
+                        let preview: String = input.chars().take(50).collect();
+                        format!("{preview}{}", crate::design::constants::ELLIPSIS)
+                    } else {
+                        input.clone()
+                    }
+                })
+                .collect();
+            self.session.queued_inputs_preview_cache = Some(items.clone());
+            items
+        };
 
         let context_info = self.session.input_status_right.as_deref().unwrap_or("Ready");
 
@@ -349,8 +336,7 @@ impl<'a> SessionWidget<'a> {
             footer_hints::EDITING
         };
 
-        let shimmer_phase =
-            self.session.is_shimmer_active().then_some(self.session.shimmer_state.phase());
+        let shimmer_phase = self.session.is_shimmer_active().then_some(self.session.shimmer_state.phase());
 
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
@@ -372,8 +358,7 @@ impl<'a> SessionWidget<'a> {
 
 #[expect(dead_code)]
 fn has_input_status(session: &Session) -> bool {
-    let left_present =
-        session.input_status_left.as_ref().is_some_and(|value| !value.trim().is_empty());
+    let left_present = session.input_status_left.as_ref().is_some_and(|value| !value.trim().is_empty());
     if left_present {
         return true;
     }
@@ -386,9 +371,7 @@ fn has_input_status(session: &Session) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::core_tui::types::{
-        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    };
+    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
     use std::sync::Arc;
 
     fn segment(text: &str) -> InlineSegment {

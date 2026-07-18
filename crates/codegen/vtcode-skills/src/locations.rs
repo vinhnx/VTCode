@@ -83,14 +83,8 @@ impl SkillLocation {
         }
 
         if self.recursive {
-            if matches!(
-                self.location_type,
-                SkillLocationType::ClaudeUser | SkillLocationType::ClaudeProject
-            ) {
-                return skill_path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|s| s.to_string());
+            if matches!(self.location_type, SkillLocationType::ClaudeUser | SkillLocationType::ClaudeProject) {
+                return skill_path.file_name().and_then(|name| name.to_str()).map(|s| s.to_string());
             }
             // For recursive locations, build name with separators
             match skill_path.strip_prefix(&self.base_path) {
@@ -199,27 +193,15 @@ impl SkillLocations {
             info!(
                 "Scanning location: {} ({})",
                 location.base_path.display(),
-                if location.recursive {
-                    "recursive"
-                } else {
-                    "one-level"
-                }
+                if location.recursive { "recursive" } else { "one-level" }
             );
 
             discovery_stats.locations_scanned += 1;
 
             if location.recursive {
-                self.scan_recursive_location(
-                    location,
-                    &mut discovered_skills,
-                    &mut discovery_stats,
-                )?;
+                self.scan_recursive_location(location, &mut discovered_skills, &mut discovery_stats)?;
             } else {
-                self.scan_one_level_location(
-                    location,
-                    &mut discovered_skills,
-                    &mut discovery_stats,
-                )?;
+                self.scan_one_level_location(location, &mut discovered_skills, &mut discovery_stats)?;
             }
         }
 
@@ -234,9 +216,7 @@ impl SkillLocations {
 
         // Sort by location precedence (highest first) and then by name
         final_skills.sort_by(|a, b| match a.location_type.cmp(&b.location_type) {
-            std::cmp::Ordering::Equal => {
-                a.skill_context.manifest().name.cmp(&b.skill_context.manifest().name)
-            }
+            std::cmp::Ordering::Equal => a.skill_context.manifest().name.cmp(&b.skill_context.manifest().name),
             other => other.reverse(),
         });
 
@@ -279,9 +259,7 @@ fn walk_directory(
                 let existing_entry = discovered.get(&manifest.name);
                 let had_existing = existing_entry.is_some();
 
-                if let Some(existing) =
-                    existing_entry.filter(|e| e.location_type > location.location_type)
-                {
+                if let Some(existing) = existing_entry.filter(|e| e.location_type > location.location_type) {
                     // Existing skill has higher precedence, skip this one
                     stats.skips_due_to_precedence += 1;
                     debug!(
@@ -301,12 +279,7 @@ fn walk_directory(
 
                 discovered.insert(manifest.name.clone(), discovered_skill);
                 stats.skills_found += 1;
-                info!(
-                    "Discovered skill: '{}' from {} at {}",
-                    manifest.name,
-                    location.location_type,
-                    dir.display()
-                );
+                info!("Discovered skill: '{}' from {} at {}", manifest.name, location.location_type, dir.display());
 
                 if had_existing {
                     stats.skills_with_higher_precedence += 1;
@@ -362,10 +335,7 @@ impl SkillLocations {
 
                         let discovered_skill = DiscoveredSkill {
                             location_type: location.location_type,
-                            skill_context: SkillContext::MetadataOnly(
-                                manifest.clone(),
-                                path.clone(),
-                            ),
+                            skill_context: SkillContext::MetadataOnly(manifest.clone(), path.clone()),
                             skill_path: path.clone(),
                             skill_name: skill_name.clone(),
                         };
@@ -458,9 +428,8 @@ mod tests {
     fn create_test_skill(root: &Path, relative_dir: &str, name: &str) {
         let skill_dir = root.join(relative_dir);
         std::fs::create_dir_all(&skill_dir).unwrap();
-        let skill_md = format!(
-            "---\nname: {name}\ndescription: Test skill {name}\n---\n# {name}\n\nTest instructions.\n"
-        );
+        let skill_md =
+            format!("---\nname: {name}\ndescription: Test skill {name}\n---\n# {name}\n\nTest instructions.\n");
         std::fs::write(skill_dir.join("SKILL.md"), skill_md).unwrap();
     }
 
@@ -506,8 +475,7 @@ mod tests {
         std::fs::create_dir_all(&skill_path).unwrap();
         std::fs::write(skill_path.join("SKILL.md"), "---\nname: file-analyzer\n---\n").unwrap();
 
-        let location =
-            SkillLocation::new(SkillLocationType::ClaudeProject, base_path.to_path_buf(), true);
+        let location = SkillLocation::new(SkillLocationType::ClaudeProject, base_path.to_path_buf(), true);
 
         let skill_name = location.get_skill_name(&skill_path);
         assert_eq!(skill_name, Some("file-analyzer".to_string()));
@@ -531,8 +499,7 @@ mod tests {
         ]);
 
         let discovered = locations.discover_skills().unwrap();
-        let skill_names: Vec<String> =
-            discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
+        let skill_names: Vec<String> = discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
         assert!(skill_names.contains(&"doc-generator".to_string()));
         assert!(skill_names.contains(&"spreadsheet-generator".to_string()));
         assert!(skill_names.contains(&"pdf-report-generator".to_string()));
@@ -562,18 +529,11 @@ mod tests {
         ]);
 
         let discovered = locations.discover_skills().unwrap();
-        let skill_names: Vec<String> =
-            discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
+        let skill_names: Vec<String> = discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
 
         assert!(skill_names.contains(&"doc-generator".to_string()), "Should find doc-generator");
-        assert!(
-            skill_names.contains(&"spreadsheet-generator".to_string()),
-            "Should find spreadsheet-generator"
-        );
-        assert!(
-            skill_names.contains(&"pdf-report-generator".to_string()),
-            "Should find pdf-report-generator"
-        );
+        assert!(skill_names.contains(&"spreadsheet-generator".to_string()), "Should find spreadsheet-generator");
+        assert!(skill_names.contains(&"pdf-report-generator".to_string()), "Should find pdf-report-generator");
         let doc_generator = discovered
             .iter()
             .find(|d| d.skill_context.manifest().name == "doc-generator")

@@ -84,10 +84,7 @@ mod tests {
         let snapshot = ResolvedSessionConfig::load_from_workspace(temp.path())?;
 
         assert_eq!(snapshot.effective().agent.provider, "openai");
-        assert!(
-            snapshot.origin_for("agent.provider").is_some(),
-            "expected origin metadata for agent.provider"
-        );
+        assert!(snapshot.origin_for("agent.provider").is_some(), "expected origin metadata for agent.provider");
 
         Ok(())
     }

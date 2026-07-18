@@ -35,9 +35,7 @@ impl Session {
         if width == 0 {
             let mut lines: Vec<Line<'static>> = Vec::new();
             for (index, _) in self.lines.iter().enumerate() {
-                lines.extend(
-                    self.reflow_message_lines(index, 0, false).into_iter().map(|line| line.line),
-                );
+                lines.extend(self.reflow_message_lines(index, 0, false).into_iter().map(|line| line.line));
             }
             if lines.is_empty() {
                 lines.push(Line::default());
@@ -47,9 +45,7 @@ impl Session {
 
         let mut wrapped_lines = Vec::new();
         for (index, _) in self.lines.iter().enumerate() {
-            wrapped_lines.extend(
-                self.reflow_message_lines(index, width, false).into_iter().map(|line| line.line),
-            );
+            wrapped_lines.extend(self.reflow_message_lines(index, width, false).into_iter().map(|line| line.line));
         }
 
         if wrapped_lines.is_empty() {
@@ -84,10 +80,7 @@ impl Session {
         }
 
         if message.kind == InlineMessageKind::Tool {
-            return into_transcript_lines(
-                self.reflow_tool_lines(index, width),
-                self.workspace_root.as_deref(),
-            );
+            return into_transcript_lines(self.reflow_tool_lines(index, width), self.workspace_root.as_deref());
         }
 
         if message.kind == InlineMessageKind::Pty {
@@ -125,10 +118,8 @@ impl Session {
             None
         };
         let is_new_turn = prev_kind.is_none()
-            || (message.kind == InlineMessageKind::User
-                && prev_kind != Some(InlineMessageKind::User))
-            || (message.kind == InlineMessageKind::Agent
-                && prev_kind != Some(InlineMessageKind::Agent));
+            || (message.kind == InlineMessageKind::User && prev_kind != Some(InlineMessageKind::User))
+            || (message.kind == InlineMessageKind::Agent && prev_kind != Some(InlineMessageKind::Agent));
 
         let spacing = self.appearance.message_block_spacing.min(2) as usize;
 
@@ -140,8 +131,7 @@ impl Session {
                 }
             }
             let divider = self.message_divider_line(max_width, message.kind);
-            wrapped
-                .push(transcript_line_with_detected_links(divider, self.workspace_root.as_deref()));
+            wrapped.push(transcript_line_with_detected_links(divider, self.workspace_root.as_deref()));
         }
 
         let lines = if message.kind == InlineMessageKind::Agent {
@@ -170,9 +160,7 @@ impl Session {
             InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Warning => {
                 let skip_spacing = is_tool_summary_line(message)
                     && match next_line {
-                        Some(next) if next.kind == InlineMessageKind::Info => {
-                            is_tool_summary_line(next)
-                        }
+                        Some(next) if next.kind == InlineMessageKind::Info => is_tool_summary_line(next),
                         Some(next) if next.kind == InlineMessageKind::Tool => true,
                         _ => false,
                     };
@@ -198,9 +186,7 @@ impl Session {
             // Always separate an agent response from the following turn with at
             // least one blank line (even when message_block_spacing is 0), so
             // the response reads as a distinct block.
-            InlineMessageKind::Agent
-                if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) =>
-            {
+            InlineMessageKind::Agent if next_kind.is_some() && next_kind != Some(InlineMessageKind::Agent) => {
                 let gap = spacing.max(1);
                 for _ in 0..gap {
                     wrapped.push(TranscriptLine::default());
@@ -212,13 +198,8 @@ impl Session {
         wrapped
     }
 
-    pub(crate) fn reflow_message_lines_for_review(
-        &self,
-        index: usize,
-        width: u16,
-    ) -> Vec<TranscriptLine> {
-        let Some(collapsed) = self.collapsed_pastes.iter().find(|paste| paste.line_index == index)
-        else {
+    pub(crate) fn reflow_message_lines_for_review(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
+        let Some(collapsed) = self.collapsed_pastes.iter().find(|paste| paste.line_index == index) else {
             return self.reflow_message_lines(index, width, false);
         };
 
@@ -250,20 +231,12 @@ impl Session {
 
     /// Reflow error, warning, and info messages with a bordered block.
     #[expect(dead_code)]
-    pub(super) fn reflow_error_warning_lines(
-        &self,
-        index: usize,
-        width: u16,
-    ) -> Vec<TranscriptLine> {
+    pub(super) fn reflow_error_warning_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
         let Some(line) = self.lines.get(index) else {
             return vec![TranscriptLine::default()];
         };
 
-        let max_width = if width == 0 {
-            usize::MAX
-        } else {
-            width as usize
-        };
+        let max_width = if width == 0 { usize::MAX } else { width as usize };
 
         let mut grouped_lines = Vec::new();
         let mut cursor = index;
@@ -328,13 +301,7 @@ impl Session {
                 let side = rule_width.saturating_sub(label_width);
                 let left = side / 2;
                 let right = side - left;
-                format!(
-                    "{}{}{}{}",
-                    rule_indent,
-                    dash.repeat(left),
-                    label_segment,
-                    dash.repeat(right)
-                )
+                format!("{}{}{}{}", rule_indent, dash.repeat(left), label_segment, dash.repeat(right))
             }
         };
         let bottom = format!("{}{}", rule_indent, dash.repeat(rule_width));
@@ -394,8 +361,8 @@ impl Session {
 
         let mut prefix_spans = render::agent_prefix_spans(self, message);
         let left_padding = ui::INLINE_AGENT_MESSAGE_LEFT_PADDING;
-        let prefix_width = prefix_spans.iter().map(|span| span.width()).sum::<usize>()
-            + UnicodeWidthStr::width(left_padding);
+        let prefix_width =
+            prefix_spans.iter().map(|span| span.width()).sum::<usize>() + UnicodeWidthStr::width(left_padding);
 
         let content_width = max_width.saturating_sub(prefix_width);
         let fallback = self.text_fallback(message.kind).or(self.theme.foreground);
@@ -412,8 +379,7 @@ impl Session {
         let (mut wrapped, mut explicit_links) = if content_width == 0 {
             (vec![Line::default()], vec![Vec::new()])
         } else if let Some(prefix) = code_continuation_prefix.as_deref() {
-            let wrapped =
-                text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix);
+            let wrapped = text_utils::wrap_line_with_hanging_prefix(content_line, content_width, prefix);
             let explicit_links = transcript_links::project_detected_links_onto_wrapped_lines(
                 &wrapped,
                 &content_text,
@@ -466,9 +432,7 @@ impl Session {
         let first_line_prefix_width = UnicodeWidthStr::width(first_line_prefix_text.as_str());
         let indent = " ".repeat(prefix_width);
         let mut lines = Vec::with_capacity(wrapped.len());
-        for (index, (mut line, mut line_links)) in
-            wrapped.into_iter().zip(explicit_links).enumerate()
-        {
+        for (index, (mut line, mut line_links)) in wrapped.into_iter().zip(explicit_links).enumerate() {
             let mut spans = Vec::new();
             let (prefix_len, prefix_width) = if index == 0 {
                 (first_line_prefix_text.len(), first_line_prefix_width)
@@ -514,10 +478,7 @@ pub(super) fn transcript_line_with_detected_links(
     TranscriptLine { line, explicit_links }
 }
 
-fn into_transcript_lines(
-    lines: Vec<Line<'static>>,
-    workspace_root: Option<&Path>,
-) -> Vec<TranscriptLine> {
+fn into_transcript_lines(lines: Vec<Line<'static>>, workspace_root: Option<&Path>) -> Vec<TranscriptLine> {
     lines
         .into_iter()
         .map(|line| transcript_line_with_detected_links(line, workspace_root))

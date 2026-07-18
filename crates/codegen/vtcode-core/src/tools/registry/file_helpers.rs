@@ -103,11 +103,7 @@ fn ws_normalize(s: &str) -> String {
     result
 }
 
-fn apply_edit_replacement(
-    content: &str,
-    effective_old_str: &str,
-    effective_new_str: &str,
-) -> Option<String> {
+fn apply_edit_replacement(content: &str, effective_old_str: &str, effective_new_str: &str) -> Option<String> {
     let had_trailing_newline = content.ends_with('\n');
     let mut replacement_occurred = false;
     let mut new_content = content.to_owned();
@@ -125,8 +121,7 @@ fn apply_edit_replacement(
         'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
             if utils::lines_match(window, &old_lines) {
                 let mut result_lines = Vec::with_capacity(
-                    i + replacement_lines.len()
-                        + content_lines.len().saturating_sub(i + old_lines.len()),
+                    i + replacement_lines.len() + content_lines.len().saturating_sub(i + old_lines.len()),
                 );
                 result_lines.extend_from_slice(&content_lines[..i]);
                 result_lines.extend_from_slice(&replacement_lines);
@@ -153,8 +148,7 @@ fn apply_edit_replacement(
 
                 if ok {
                     let mut result_lines = Vec::with_capacity(
-                        i + replacement_lines.len()
-                            + content_lines.len().saturating_sub(i + old_lines.len()),
+                        i + replacement_lines.len() + content_lines.len().saturating_sub(i + old_lines.len()),
                     );
                     result_lines.extend_from_slice(&content_lines[..i]);
                     result_lines.extend_from_slice(&replacement_lines);
@@ -246,8 +240,7 @@ impl ToolRegistry {
         let requested_path = PathBuf::from(&input.path);
         let canonical_path = resolve_workspace_path(self.workspace_root(), &requested_path)
             .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?;
-        let _mutation_lease =
-            self.edited_file_monitor_ref().acquire_mutation(&canonical_path).await;
+        let _mutation_lease = self.edited_file_monitor_ref().acquire_mutation(&canonical_path).await;
 
         let metadata = fs::metadata(&canonical_path)
             .await
@@ -256,18 +249,14 @@ impl ToolRegistry {
             let actual = metadata.len();
             let max = EDIT_FILE_MAX_BYTES;
             let guidance = crate::tools::error_helpers::USE_PATCH_OR_WRITE_FOR_LARGE_FILES;
-            return Err(anyhow!(
-                "File too large for edit_file: {actual} bytes (max: {max} bytes). {guidance}",
-            ));
+            return Err(anyhow!("File too large for edit_file: {actual} bytes (max: {max} bytes). {guidance}",));
         }
 
         let intended_content = self
             .edited_file_monitor_ref()
             .tracked_read_text(&canonical_path)
             .await
-            .and_then(|content| {
-                apply_edit_replacement(&content, &effective_old_str, &effective_new_str)
-            });
+            .and_then(|content| apply_edit_replacement(&content, &effective_old_str, &effective_new_str));
 
         if let Some(conflict) = self
             .edited_file_monitor_ref()
@@ -280,15 +269,8 @@ impl ToolRegistry {
         let current_content = fs::read_to_string(&canonical_path)
             .await
             .with_context(|| format!("Cannot read file: {}", canonical_path.display()))?;
-        let Some(new_content) =
-            apply_edit_replacement(&current_content, &effective_old_str, &effective_new_str)
-        else {
-            return Err(edit_not_found_error(
-                &current_content,
-                &effective_old_str,
-                stripped_old,
-                stripped_new,
-            ));
+        let Some(new_content) = apply_edit_replacement(&current_content, &effective_old_str, &effective_new_str) else {
+            return Err(edit_not_found_error(&current_content, &effective_old_str, stripped_old, stripped_new));
         };
 
         let mut write_args = json!({

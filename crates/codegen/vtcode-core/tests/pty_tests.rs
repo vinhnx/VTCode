@@ -123,7 +123,8 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
         vec![
             "sh".to_string(),
             "-c".to_string(),
-            "while read line; do if [ \"$line\" = \"exit\" ]; then break; fi; printf 'got:%s\\n' \"$line\"; done".to_string(),
+            "while read line; do if [ \"$line\" = \"exit\" ]; then break; fi; printf 'got:%s\\n' \"$line\"; done"
+                .to_string(),
         ],
         working_dir,
         size,

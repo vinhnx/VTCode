@@ -8,11 +8,7 @@ use crate::tui::config::constants::ui;
 impl Session {
     /// Create a message divider line
     #[expect(dead_code)]
-    pub(super) fn message_divider_line(
-        &self,
-        width: usize,
-        kind: InlineMessageKind,
-    ) -> Line<'static> {
+    pub(super) fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
         if width == 0 {
             return Line::default();
         }
@@ -55,16 +51,13 @@ impl Session {
             let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
                 std::borrow::Cow::Borrowed(&*line.spans[0].content)
             } else {
-                std::borrow::Cow::Owned(
-                    line.spans.iter().map(|span| &*span.content).collect::<String>(),
-                )
+                std::borrow::Cow::Owned(line.spans.iter().map(|span| &*span.content).collect::<String>())
             };
             let line_text: &str = &line_text_storage;
             let trimmed_start = line_text.trim_start();
 
             let mut next_in_fenced_block = in_fenced_block;
-            let is_fence_line =
-                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
+            let is_fence_line = trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
             if is_fence_line {
                 next_in_fenced_block = !in_fenced_block;
             }
@@ -75,9 +68,7 @@ impl Session {
             // Extend diff line backgrounds to full width
             let processed_line = if self.is_diff_line(&line) {
                 self.pad_diff_line(&line, max_width)
-            } else if todo_state == text_utils::TodoState::Completed
-                && self.appearance.dim_completed_todos
-            {
+            } else if todo_state == text_utils::TodoState::Completed && self.appearance.dim_completed_todos {
                 // Dim completed todo items for visual hierarchy
                 self.apply_completed_todo_style(&line)
             } else if kind == InlineMessageKind::Agent
@@ -114,12 +105,7 @@ impl Session {
 
     /// Check if a message line should be justified
     #[expect(dead_code)]
-    pub(super) fn should_justify_message_line(
-        &self,
-        line: &Line<'static>,
-        max_width: usize,
-        is_last: bool,
-    ) -> bool {
+    pub(super) fn should_justify_message_line(&self, line: &Line<'static>, max_width: usize, is_last: bool) -> bool {
         if is_last || max_width == 0 {
             return false;
         }
@@ -150,11 +136,7 @@ impl Session {
 
     /// Justify a message line by distributing spaces
     #[expect(dead_code)]
-    pub(super) fn justify_message_line(
-        &self,
-        line: &Line<'static>,
-        max_width: usize,
-    ) -> Line<'static> {
+    pub(super) fn justify_message_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
         let span = &line.spans[0];
         if let Some(justified) = text_utils::justify_plain_text(&span.content, max_width) {
             Line::from(justified).style(span.style)

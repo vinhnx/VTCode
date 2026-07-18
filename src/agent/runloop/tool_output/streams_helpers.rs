@@ -15,10 +15,7 @@ use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
-pub(crate) fn render_code_fence_blocks(
-    renderer: &mut AnsiRenderer,
-    blocks: &[CodeFenceBlock],
-) -> Result<()> {
+pub(crate) fn render_code_fence_blocks(renderer: &mut AnsiRenderer, blocks: &[CodeFenceBlock]) -> Result<()> {
     for (index, block) in blocks.iter().enumerate() {
         if block.lines.is_empty() {
             renderer.line(MessageStyle::ToolDetail, "(no content)")?;
@@ -31,8 +28,7 @@ pub(crate) fn render_code_fence_blocks(
                 &block.lines[..]
             };
             let display_lines = display_lines.iter().map(String::as_str).collect::<Vec<_>>();
-            let markdown =
-                build_markdown_code_block(&display_lines, block.language.as_deref(), false);
+            let markdown = build_markdown_code_block(&display_lines, block.language.as_deref(), false);
 
             renderer.render_markdown_output(MessageStyle::ToolDetail, &markdown)?;
 
@@ -59,11 +55,7 @@ pub(super) fn should_render_as_code_block(style: MessageStyle) -> bool {
     matches!(style, MessageStyle::ToolOutput | MessageStyle::Output)
 }
 
-pub(crate) fn build_markdown_code_block(
-    lines: &[&str],
-    language: Option<&str>,
-    truncate_long_lines: bool,
-) -> String {
+pub(crate) fn build_markdown_code_block(lines: &[&str], language: Option<&str>, truncate_long_lines: bool) -> String {
     let mut markdown = String::with_capacity(lines.len() * 80 + 16);
     markdown.push_str("```");
     markdown.push_str(language.unwrap_or(""));
@@ -135,9 +127,8 @@ pub(super) async fn spool_output_if_needed(
 
     // Run blocking write in the tokio blocking pool since callers are usually async.
     let join_result = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
-        ensure_dir_exists_sync(&spool_dir_clone).with_context(|| {
-            format!("Failed to create spool directory: {}", spool_dir_clone.display())
-        })?;
+        ensure_dir_exists_sync(&spool_dir_clone)
+            .with_context(|| format!("Failed to create spool directory: {}", spool_dir_clone.display()))?;
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -161,10 +152,7 @@ pub(super) async fn spool_output_if_needed(
     Ok(Some(path))
 }
 
-pub(super) fn tail_lines_streaming<'a>(
-    text: &'a str,
-    limit: usize,
-) -> (SmallVec<[&'a str; 32]>, usize) {
+pub(super) fn tail_lines_streaming<'a>(text: &'a str, limit: usize) -> (SmallVec<[&'a str; 32]>, usize) {
     if text.is_empty() {
         return (SmallVec::new(), 0);
     }
@@ -252,8 +240,7 @@ mod markdown_block_tests {
     #[test]
     fn render_code_fence_blocks_keeps_truncation_notice() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let lines = (0..=super::super::MAX_CODE_LINES)
             .map(|idx| format!("line-{idx}"))
             .collect::<Vec<_>>();
@@ -285,8 +272,7 @@ mod ansi_stripping_tests {
 
     #[test]
     fn test_simple_color_code() {
-        let input =
-            "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
+        let input = "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
         let result = strip_ansi_codes(input);
         assert_eq!(result, "warning: function check_prompt_reference_trigger is never used");
     }
@@ -300,8 +286,7 @@ mod ansi_stripping_tests {
 
     #[test]
     fn test_cargo_check_output() {
-        let input =
-            "\u{1b}[0m\u{1b}[1;32m Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)";
+        let input = "\u{1b}[0m\u{1b}[1;32m Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)";
         let result = strip_ansi_codes(input);
         assert_eq!(result, " Finished dev [unoptimized + debuginfo] target(s)");
     }
@@ -428,8 +413,7 @@ fn select_stream_lines(
     tail_limit: usize,
     prefer_full: bool,
 ) -> (Vec<&str>, usize, bool) {
-    let (lines, total, truncated) =
-        select_stream_lines_streaming(content, mode, tail_limit, prefer_full);
+    let (lines, total, truncated) = select_stream_lines_streaming(content, mode, tail_limit, prefer_full);
     (lines.into_vec(), total, truncated)
 }
 
@@ -440,8 +424,7 @@ mod tests {
     #[test]
     fn compact_mode_truncates_when_not_inline() {
         let content = (1..=50).map(|index| format!("line-{index}")).collect::<Vec<_>>().join("\n");
-        let (lines, total, truncated) =
-            select_stream_lines(&content, ToolOutputMode::Compact, 10, false);
+        let (lines, total, truncated) = select_stream_lines(&content, ToolOutputMode::Compact, 10, false);
         assert_eq!(total, 50);
         assert_eq!(lines.len(), 10);
         assert!(truncated);
@@ -451,8 +434,7 @@ mod tests {
     #[test]
     fn inline_rendering_preserves_full_scrollback() {
         let content = (1..=30).map(|index| format!("row-{index}")).collect::<Vec<_>>().join("\n");
-        let (lines, total, truncated) =
-            select_stream_lines(&content, ToolOutputMode::Compact, 5, true);
+        let (lines, total, truncated) = select_stream_lines(&content, ToolOutputMode::Compact, 5, true);
         assert_eq!(total, 30);
         assert_eq!(lines.len(), 30);
         assert!(!truncated);

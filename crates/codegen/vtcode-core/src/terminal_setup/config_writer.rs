@@ -44,9 +44,7 @@ impl ConfigWriter {
 
         // Create temp file in the same directory for atomic rename
         let temp_file = NamedTempFile::new_in(path.parent().unwrap_or_else(|| Path::new(".")))
-            .with_context(|| {
-                format!("Failed to create temp file in directory: {}", path.display())
-            })?;
+            .with_context(|| format!("Failed to create temp file in directory: {}", path.display()))?;
 
         // Write content to temp file
         temp_file
@@ -71,11 +69,7 @@ impl ConfigWriter {
     /// Merge new VT Code configuration section with existing config
     ///
     /// Removes old VT Code sections and adds the new section, preserving user customizations
-    pub fn merge_with_markers(
-        existing: &str,
-        new_section: &str,
-        format: ConfigFormat,
-    ) -> Result<String> {
+    pub fn merge_with_markers(existing: &str, new_section: &str, format: ConfigFormat) -> Result<String> {
         // Remove any existing VT Code section
         let cleaned = Self::remove_vtcode_section(existing);
 
@@ -199,9 +193,7 @@ user_setting = 1
 
         let new_section = "vtcode_setting = 2";
 
-        let result =
-            ConfigWriter::merge_with_markers(existing, new_section, ConfigFormat::PlainText)
-                .unwrap();
+        let result = ConfigWriter::merge_with_markers(existing, new_section, ConfigFormat::PlainText).unwrap();
 
         assert!(result.contains("user_setting"));
         assert!(result.contains("vtcode_setting"));
@@ -217,8 +209,7 @@ user_setting = 1
     fn test_merge_empty_file() {
         let new_section = "vtcode_setting = 1";
 
-        let result =
-            ConfigWriter::merge_with_markers("", new_section, ConfigFormat::PlainText).unwrap();
+        let result = ConfigWriter::merge_with_markers("", new_section, ConfigFormat::PlainText).unwrap();
 
         assert!(result.contains("vtcode_setting"));
         assert!(result.contains(VTCODE_BEGIN_MARKER));

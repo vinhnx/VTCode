@@ -262,9 +262,8 @@ pub(crate) fn spool_large_output(
     let session_dir = config.base_dir.join(&session_hash);
 
     // Create session directory
-    ensure_dir_exists_sync(&session_dir).with_context(|| {
-        format!("Failed to create output spool directory: {}", session_dir.display())
-    })?;
+    ensure_dir_exists_sync(&session_dir)
+        .with_context(|| format!("Failed to create output spool directory: {}", session_dir.display()))?;
 
     // Generate unique call ID
     let call_id = generate_call_id();

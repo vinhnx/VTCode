@@ -157,9 +157,7 @@ impl ModelId {
     /// Merges the hardcoded model list with custom models defined in
     /// `[providers.<name>]` config sections. Custom models are appended
     /// as `ModelId::Custom` variants keyed by provider name.
-    pub fn all_models_with_overrides(
-        overrides: &BTreeMap<String, ProviderOverrideConfig>,
-    ) -> Vec<ModelId> {
+    pub fn all_models_with_overrides(overrides: &BTreeMap<String, ProviderOverrideConfig>) -> Vec<ModelId> {
         let mut models = Self::all_models();
         for (provider_key, config) in overrides {
             for model_name in &config.models {

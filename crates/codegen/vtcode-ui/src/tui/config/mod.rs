@@ -13,10 +13,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use vtcode_commons::terminal_detection::is_ghostty_terminal;
 
-pub use types::{
-    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
-    VerbosityLevel,
-};
+pub use types::{ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel};
 
 /// Controls how tool call output is displayed in the TUI.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
@@ -365,9 +362,7 @@ impl Default for PtyConfig {
 }
 
 /// Convert KeyboardProtocolConfig to crossterm keyboard enhancement flags.
-pub fn keyboard_protocol_to_flags(
-    config: &KeyboardProtocolConfig,
-) -> crossterm::event::KeyboardEnhancementFlags {
+pub fn keyboard_protocol_to_flags(config: &KeyboardProtocolConfig) -> crossterm::event::KeyboardEnhancementFlags {
     keyboard_protocol_to_flags_for_terminal(
         config,
         cfg!(target_os = "macos"),
@@ -431,12 +426,7 @@ fn keyboard_protocol_to_flags_for_terminal(
     flags
 }
 
-fn should_force_report_all_keys(
-    mode: &str,
-    is_macos: bool,
-    term_program: Option<&str>,
-    term: Option<&str>,
-) -> bool {
+fn should_force_report_all_keys(mode: &str, is_macos: bool, term_program: Option<&str>, term: Option<&str>) -> bool {
     if !is_macos || !matches!(mode, "default") {
         return false;
     }

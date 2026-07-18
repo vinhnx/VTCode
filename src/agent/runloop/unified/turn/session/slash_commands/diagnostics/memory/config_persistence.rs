@@ -13,15 +13,12 @@ use super::super::super::config_toml::{
 };
 use super::SlashCommandContext;
 
-pub(crate) async fn persist_workspace_config_change<F>(
-    ctx: &mut SlashCommandContext<'_>,
-    update: F,
-) -> Result<()>
+pub(crate) async fn persist_workspace_config_change<F>(ctx: &mut SlashCommandContext<'_>, update: F) -> Result<()>
 where
     F: FnOnce(&mut toml::map::Map<String, TomlValue>) -> Result<()>,
 {
-    let manager = ConfigManager::load_from_workspace(&ctx.config.workspace)
-        .context("Failed to load VT Code configuration")?;
+    let manager =
+        ConfigManager::load_from_workspace(&ctx.config.workspace).context("Failed to load VT Code configuration")?;
     let workspace_config_path = preferred_workspace_config_path(&manager, &ctx.config.workspace);
     let mut root = load_toml_value(&workspace_config_path)?;
     let root_table = root.as_table_mut().context("Workspace config root is not a TOML table")?;
@@ -43,10 +40,9 @@ pub(super) async fn persist_user_directory_override(
     ctx: &mut SlashCommandContext<'_>,
     value: Option<String>,
 ) -> Result<()> {
-    let manager = ConfigManager::load_from_workspace(&ctx.config.workspace)
-        .context("Failed to load VT Code configuration")?;
-    let user_config_path =
-        preferred_user_config_path(&manager).context("Could not resolve user config path")?;
+    let manager =
+        ConfigManager::load_from_workspace(&ctx.config.workspace).context("Failed to load VT Code configuration")?;
+    let user_config_path = preferred_user_config_path(&manager).context("Could not resolve user config path")?;
     write_user_directory_override(&user_config_path, value)?;
     refresh_runtime_config_from_manager(
         ctx.renderer,
@@ -93,10 +89,7 @@ pub(super) fn write_user_directory_override(path: &Path, value: Option<String>) 
     save_toml_value(path, &root)
 }
 
-pub(super) fn set_workspace_memory_enabled(
-    root_table: &mut toml::map::Map<String, TomlValue>,
-    value: bool,
-) {
+pub(super) fn set_workspace_memory_enabled(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
     let features_table = ensure_child_table(root_table, "features");
     features_table.insert("memories".to_string(), TomlValue::Boolean(value));
 
@@ -105,10 +98,7 @@ pub(super) fn set_workspace_memory_enabled(
     memory_table.insert("enabled".to_string(), TomlValue::Boolean(value));
 }
 
-pub(super) fn set_workspace_memory_auto_write(
-    root_table: &mut toml::map::Map<String, TomlValue>,
-    value: bool,
-) {
+pub(super) fn set_workspace_memory_auto_write(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
     let agent_table = ensure_child_table(root_table, "agent");
     let memory_table = ensure_child_table(agent_table, "persistent_memory");
     memory_table.insert("auto_write".to_string(), TomlValue::Boolean(value));
@@ -163,19 +153,13 @@ pub(super) fn set_workspace_instruction_excludes(
     );
 }
 
-pub(super) fn set_workspace_small_model_for_memory(
-    root_table: &mut toml::map::Map<String, TomlValue>,
-    value: bool,
-) {
+pub(super) fn set_workspace_small_model_for_memory(root_table: &mut toml::map::Map<String, TomlValue>, value: bool) {
     let agent_table = ensure_child_table(root_table, "agent");
     let small_model_table = ensure_child_table(agent_table, "small_model");
     small_model_table.insert("use_for_memory".to_string(), TomlValue::Boolean(value));
 }
 
-pub(super) fn set_workspace_small_model_model(
-    root_table: &mut toml::map::Map<String, TomlValue>,
-    value: String,
-) {
+pub(super) fn set_workspace_small_model_model(root_table: &mut toml::map::Map<String, TomlValue>, value: String) {
     let agent_table = ensure_child_table(root_table, "agent");
     let small_model_table = ensure_child_table(agent_table, "small_model");
     small_model_table.insert("model".to_string(), TomlValue::String(value));
@@ -234,11 +218,8 @@ mod tests {
     fn workspace_memory_settings_preserve_unrelated_keys() {
         let temp = tempdir().expect("tempdir");
         let path = temp.path().join("vtcode.toml");
-        std::fs::write(
-            &path,
-            "[agent]\ntheme = \"ciapre\"\n[agent.small_model]\nmodel = \"gpt-5-mini\"\n",
-        )
-        .expect("seed config");
+        std::fs::write(&path, "[agent]\ntheme = \"ciapre\"\n[agent.small_model]\nmodel = \"gpt-5-mini\"\n")
+            .expect("seed config");
 
         let mut root = load_toml_value(&path).expect("load config");
         let root_table = root.as_table_mut().expect("root table");
@@ -247,10 +228,7 @@ mod tests {
         set_workspace_memory_line_limit(root_table, 111).expect("line limit");
         set_workspace_memory_byte_limit(root_table, 222).expect("byte limit");
         set_workspace_instruction_import_depth(root_table, 7).expect("import depth");
-        set_workspace_instruction_excludes(
-            root_table,
-            vec!["**/other-team/.vtcode/rules/**".to_string()],
-        );
+        set_workspace_instruction_excludes(root_table, vec!["**/other-team/.vtcode/rules/**".to_string()]);
         set_workspace_small_model_for_memory(root_table, false);
         save_toml_value(&path, &root).expect("save config");
 
@@ -258,10 +236,7 @@ mod tests {
         let agent = saved.get("agent").and_then(TomlValue::as_table).expect("agent table");
         assert_eq!(agent.get("theme").and_then(TomlValue::as_str), Some("ciapre"));
         assert!(agent.get("provider").is_none());
-        assert_eq!(
-            agent.get("instruction_import_max_depth").and_then(TomlValue::as_integer),
-            Some(7)
-        );
+        assert_eq!(agent.get("instruction_import_max_depth").and_then(TomlValue::as_integer), Some(7));
         assert_eq!(
             agent
                 .get("instruction_excludes")

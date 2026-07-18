@@ -167,8 +167,7 @@ impl EntityResolver {
                 .await
                 .with_context(|| format!("Failed to read entity cache at {cache_path:?}"))?;
 
-            self.index = serde_json::from_str(&content)
-                .with_context(|| "Failed to deserialize entity cache")?;
+            self.index = serde_json::from_str(&content).with_context(|| "Failed to deserialize entity cache")?;
         }
         Ok(())
     }
@@ -176,8 +175,8 @@ impl EntityResolver {
     /// Save index to cache file
     pub async fn save_cache(&self) -> Result<()> {
         if let Some(cache_path) = &self.cache_path {
-            let content = serde_json::to_string_pretty(&self.index)
-                .with_context(|| "Failed to serialize entity cache")?;
+            let content =
+                serde_json::to_string_pretty(&self.index).with_context(|| "Failed to serialize entity cache")?;
 
             write_file_with_context(cache_path, &content, "entity cache")
                 .await
@@ -188,9 +187,7 @@ impl EntityResolver {
 
     /// Check if the entity index is empty
     pub fn index_is_empty(&self) -> bool {
-        self.index.ui_components.is_empty()
-            && self.index.functions.is_empty()
-            && self.index.classes.is_empty()
+        self.index.ui_components.is_empty() && self.index.functions.is_empty() && self.index.classes.is_empty()
     }
 
     /// Resolve a vague term to entity matches
@@ -231,12 +228,7 @@ impl EntityResolver {
     }
 
     /// Search a hashmap for matching entities
-    fn search_hashmap(
-        &self,
-        map: &HashMap<String, Vec<FileLocation>>,
-        term: &str,
-        matches: &mut Vec<EntityMatch>,
-    ) {
+    fn search_hashmap(&self, map: &HashMap<String, Vec<FileLocation>>, term: &str, matches: &mut Vec<EntityMatch>) {
         for (entity, locations) in map {
             let entity_lower = entity.to_lowercase();
 
@@ -288,9 +280,7 @@ impl EntityResolver {
         let now = current_timestamp();
 
         // Check if entity was recently edited (within 5 minutes)
-        if let Some(edit) =
-            self.index.recent_edits.iter().rev().find(|e| e.entity.to_lowercase() == entity)
-        {
+        if let Some(edit) = self.index.recent_edits.iter().rev().find(|e| e.entity.to_lowercase() == entity) {
             let age_seconds = now.saturating_sub(edit.timestamp);
             if age_seconds < 300 {
                 // Score decays over 5 minutes

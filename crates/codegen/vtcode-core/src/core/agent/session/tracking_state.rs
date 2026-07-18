@@ -68,10 +68,7 @@ impl TrackingState {
 
     /// Get the total number of side effects recorded.
     pub fn total_side_effects(&self) -> usize {
-        self.modified_files.len()
-            + self.executed_commands.len()
-            + self.created_contexts.len()
-            + self.warnings.len()
+        self.modified_files.len() + self.executed_commands.len() + self.created_contexts.len() + self.warnings.len()
     }
 }
 

@@ -42,8 +42,7 @@ impl ToolRegistry {
         F: FnOnce(Arc<crate::subagents::SubagentController>, Request) -> Fut,
         Fut: Future<Output = Result<Response>>,
     {
-        let request =
-            serde_json::from_value::<Request>(args).with_context(|| parse_context.to_string())?;
+        let request = serde_json::from_value::<Request>(args).with_context(|| parse_context.to_string())?;
         self.execute_subagent_call(|controller| executor(controller, request)).await
     }
 
@@ -99,22 +98,12 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn spawn_background_subprocess_executor(
-        &self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
+    pub(crate) fn spawn_background_subprocess_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            self.execute_subagent_request::<
-                crate::subagents::SpawnBackgroundSubprocessRequest,
-                _,
-                _,
-                _,
-            >(
+            self.execute_subagent_request::<crate::subagents::SpawnBackgroundSubprocessRequest, _, _, _>(
                 args,
                 "Invalid spawn_background_subprocess arguments",
-                |controller, request| async move {
-                    controller.spawn_background_subprocess(request).await
-                },
+                |controller, request| async move { controller.spawn_background_subprocess(request).await },
             )
             .await
         })
@@ -160,10 +149,8 @@ impl ToolRegistry {
                 .and_then(Value::as_str)
                 .ok_or_else(|| anyhow!("resume_agent requires id"))?
                 .to_string();
-            self.execute_subagent_call(
-                move |controller| async move { controller.resume(&target).await },
-            )
-            .await
+            self.execute_subagent_call(move |controller| async move { controller.resume(&target).await })
+                .await
         })
     }
 
@@ -174,10 +161,8 @@ impl ToolRegistry {
                 .and_then(Value::as_str)
                 .ok_or_else(|| anyhow!("close_agent requires id"))?
                 .to_string();
-            self.execute_subagent_call(
-                move |controller| async move { controller.close(&target).await },
-            )
-            .await
+            self.execute_subagent_call(move |controller| async move { controller.close(&target).await })
+                .await
         })
     }
 }

@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use super::large_output::{
-    LargeOutputConfig, SpoolResult, format_spool_notification, generate_session_hash,
-    spool_large_output,
+    LargeOutputConfig, SpoolResult, format_spool_notification, generate_session_hash, spool_large_output,
 };
 
 #[test]

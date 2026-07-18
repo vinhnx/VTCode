@@ -43,12 +43,8 @@ async fn test_lifecycle_hook_engine_creation() {
 
     // Test with empty config - should return None
     let empty_config = HooksConfig::default();
-    let result = LifecycleHookEngine::new(
-        workspace.to_path_buf(),
-        &empty_config,
-        SessionStartTrigger::Startup,
-    )
-    .expect("Failed to create hook engine");
+    let result = LifecycleHookEngine::new(workspace.to_path_buf(), &empty_config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine");
 
     assert!(result.is_none());
 
@@ -67,18 +63,14 @@ async fn test_lifecycle_hook_engine_creation() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let result =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine");
+    let result = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine");
 
     assert!(result.is_some());
 }
 
 #[tokio::test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "Lifecycle hooks are for local development only"
-)]
+#[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
 async fn test_session_start_hook_execution() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();
@@ -89,8 +81,7 @@ async fn test_session_start_hook_execution() {
             matcher: None, // Match all
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "printf '{\"additional_context\": \"Session started successfully\"}'"
-                    .into(),
+                command: "printf '{\"additional_context\": \"Session started successfully\"}'".into(),
                 timeout_seconds: None,
             }],
         }],
@@ -99,10 +90,9 @@ async fn test_session_start_hook_execution() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
 
@@ -112,10 +102,7 @@ async fn test_session_start_hook_execution() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "Lifecycle hooks are for local development only"
-)]
+#[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
 async fn test_session_start_hook_with_plain_text_output() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();
@@ -135,10 +122,9 @@ async fn test_session_start_hook_with_plain_text_output() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
 
@@ -166,10 +152,9 @@ async fn test_session_start_new_session_source_is_distinct_from_startup() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let startup_engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create startup hook engine")
-            .unwrap();
+    let startup_engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create startup hook engine")
+        .unwrap();
 
     let startup_outcome = startup_engine
         .run_session_start()
@@ -214,10 +199,9 @@ async fn test_session_end_hook_execution() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let messages = engine
         .run_session_end("turn-1", SessionEndReason::Completed)
@@ -248,10 +232,9 @@ async fn test_notification_hook_execution_uses_notification_type_matcher() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let messages = engine
         .run_notification(
@@ -285,10 +268,9 @@ async fn test_pre_compact_hook_execution_uses_trigger_matcher() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_compact(
@@ -323,10 +305,9 @@ async fn test_subagent_start_payload_includes_thread_context() {
             ..Default::default()
         },
     };
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let transcript_path = workspace.join("subagents/agent-1.jsonl");
     let payload = engine
@@ -371,21 +352,12 @@ async fn test_subagent_start_hook_execution_uses_agent_name_matcher() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let messages = engine
-        .run_subagent_start(
-            "parent-session",
-            "child-thread",
-            "worker",
-            "@worker",
-            false,
-            "running",
-            None,
-        )
+        .run_subagent_start("parent-session", "child-thread", "worker", "@worker", false, "running", None)
         .await
         .expect("run subagent start hook");
 
@@ -412,21 +384,12 @@ async fn test_subagent_stop_hook_execution_uses_agent_name_matcher() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let messages = engine
-        .run_subagent_stop(
-            "parent-session",
-            "child-thread",
-            "worker",
-            "@worker",
-            true,
-            "completed",
-            None,
-        )
+        .run_subagent_stop("parent-session", "child-thread", "worker", "@worker", true, "completed", None)
         .await
         .expect("run subagent stop hook");
 
@@ -452,10 +415,9 @@ async fn test_user_prompt_submit_payload_includes_turn_id() {
             ..Default::default()
         },
     };
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let payload = engine
         .build_user_prompt_payload("turn-42", "Test prompt")
@@ -485,10 +447,9 @@ async fn test_pre_tool_use_hook_receives_tool_call_id_in_payload() {
             ..Default::default()
         },
     };
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let outcome = engine
         .run_pre_tool_use("read_file", Some(&json!({"path": "src/main.rs"})), Some("tool_call_7"))
@@ -516,10 +477,9 @@ async fn test_post_tool_use_hook_receives_tool_call_id_in_payload() {
             ..Default::default()
         },
     };
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let outcome = engine
         .run_post_tool_use(
@@ -552,10 +512,9 @@ async fn test_session_end_payload_includes_turn_id() {
             ..Default::default()
         },
     };
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("engine");
 
     let payload = engine
         .build_session_end_payload("turn-99", SessionEndReason::Completed)
@@ -568,10 +527,7 @@ async fn test_session_end_payload_includes_turn_id() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "Lifecycle hooks are for local development only"
-)]
+#[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
 async fn test_user_prompt_submit_hook_allows_prompt_by_default() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();
@@ -591,10 +547,9 @@ async fn test_user_prompt_submit_hook_allows_prompt_by_default() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -628,10 +583,9 @@ async fn test_user_prompt_submit_hook_blocks_prompt_with_exit_code_2() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -654,8 +608,7 @@ async fn test_user_prompt_submit_hook_blocks_prompt_preserves_stdout_context() {
             matcher: None,
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "printf 'Retry with a narrower scope.'; echo 'Prompt blocked' >&2; exit 2"
-                    .into(),
+                command: "printf 'Retry with a narrower scope.'; echo 'Prompt blocked' >&2; exit 2".into(),
                 timeout_seconds: None,
             }],
         }],
@@ -664,10 +617,9 @@ async fn test_user_prompt_submit_hook_blocks_prompt_preserves_stdout_context() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -698,10 +650,9 @@ async fn test_session_start_json_like_stdout_failure_does_not_become_context() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine.run_session_start().await.expect("run session start hook");
 
@@ -733,10 +684,9 @@ async fn test_session_start_structured_message_and_context_are_both_applied() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine.run_session_start().await.expect("run session start hook");
 
@@ -763,10 +713,9 @@ async fn test_user_prompt_submit_block_requires_stderr_feedback() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -802,10 +751,9 @@ async fn test_user_prompt_submit_json_block_requires_reason() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -851,18 +799,16 @@ async fn primary_agent_hooks_dispatch_after_global_hooks() {
     spec.hooks = Some(primary);
     let active = ActivePrimaryAgent::from_spec(&spec);
     let config = build_primary_agent_hook_config(&global, &active);
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .expect("hook engine");
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .expect("hook engine");
 
     engine
         .run_user_prompt_submit("turn-1", "Test prompt")
         .await
         .expect("Failed to run prompt hooks");
 
-    let order = std::fs::read_to_string(workspace.join("hook-order.txt"))
-        .expect("hook order should be recorded");
+    let order = std::fs::read_to_string(workspace.join("hook-order.txt")).expect("hook order should be recorded");
     assert_eq!(order, "global\nprimary\n");
 }
 

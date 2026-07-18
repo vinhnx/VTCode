@@ -1,9 +1,7 @@
 use toml::Value as TomlValue;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
-use crate::agent::runloop::unified::config_section_headings::{
-    heading_for_path, humanize_identifier,
-};
+use crate::agent::runloop::unified::config_section_headings::{heading_for_path, humanize_identifier};
 
 use super::docs::FieldDoc;
 use vtcode_commons::formatting::truncate_middle;
@@ -50,11 +48,7 @@ pub(super) fn collection_subtitle(summary: String, description: &str) -> String 
     parts.join(" • ")
 }
 
-pub(super) fn search_value_for_missing_doc(
-    path: &str,
-    label: &str,
-    doc: Option<&FieldDoc>,
-) -> String {
+pub(super) fn search_value_for_missing_doc(path: &str, label: &str, doc: Option<&FieldDoc>) -> String {
     let mut parts = vec![path.to_string(), label.to_string(), "unset".to_string()];
     if let Some(doc) = doc {
         if !doc.description.is_empty() {
@@ -78,12 +72,7 @@ pub(super) fn section_item(label: &str) -> InlineListItem {
     }
 }
 
-pub(super) fn action_item(
-    title: &str,
-    subtitle: &str,
-    badge: Option<&str>,
-    action: &str,
-) -> InlineListItem {
+pub(super) fn action_item(title: &str, subtitle: &str, badge: Option<&str>, action: &str) -> InlineListItem {
     InlineListItem {
         title: title.to_string(),
         subtitle: Some(subtitle.to_string()),
@@ -94,17 +83,8 @@ pub(super) fn action_item(
     }
 }
 
-pub(super) fn search_value_with_content(
-    path: &str,
-    label: &str,
-    value: &TomlValue,
-    doc: Option<&FieldDoc>,
-) -> String {
-    let mut parts = vec![
-        path.to_string(),
-        label.to_string(),
-        display_title(label, path, value),
-    ];
+pub(super) fn search_value_with_content(path: &str, label: &str, value: &TomlValue, doc: Option<&FieldDoc>) -> String {
+    let mut parts = vec![path.to_string(), label.to_string(), display_title(label, path, value)];
 
     if matches!(value, TomlValue::Table(_)) {
         let heading = heading_for_path(path);

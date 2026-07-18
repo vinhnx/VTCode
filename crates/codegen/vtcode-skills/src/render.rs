@@ -39,8 +39,7 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
     let mut lines = Vec::new();
     lines.push("## Skills".to_string());
     lines.push(
-        "Use a skill only when the user names it or the task clearly matches. Load details on demand."
-            .to_string(),
+        "Use a skill only when the user names it or the task clearly matches. Load details on demand.".to_string(),
     );
 
     let mut sorted_skills = visible_skills;
@@ -247,8 +246,7 @@ mod tests {
             manifest: None,
         };
 
-        let output = render_prompt_skills_section(&[hidden_skill, normal_skill])
-            .expect("prompt skills section");
+        let output = render_prompt_skills_section(&[hidden_skill, normal_skill]).expect("prompt skills section");
 
         assert!(output.contains("repo-skill"));
         assert!(!output.contains("hidden-skill"));

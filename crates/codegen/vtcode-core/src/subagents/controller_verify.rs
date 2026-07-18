@@ -154,20 +154,14 @@ impl SubagentController {
     /// This avoids borrowing `&self` across spawn boundaries, which would make
     /// the parent `tokio::spawn` future non-Send due to the recursive spawn
     /// chain through `verify_proposed_change`.
-    pub(super) async fn run_worktree_reconciliation(
-        &self,
-        child_id: &str,
-        wt_path: &std::path::Path,
-        wt_name: &str,
-    ) {
+    pub(super) async fn run_worktree_reconciliation(&self, child_id: &str, wt_path: &std::path::Path, wt_name: &str) {
         let ws = self.config.workspace_root.clone();
         let wt_name_owned = wt_name.to_string();
         let wt_path_owned = wt_path.to_path_buf();
 
         let result = tokio::task::spawn_blocking(move || {
             let reconciler = crate::git::WorktreeReconciler::new(&ws, "main");
-            let verifier: Box<dyn crate::git::DiffVerifier + Send + Sync> =
-                Box::new(crate::git::HeuristicDiffVerifier);
+            let verifier: Box<dyn crate::git::DiffVerifier + Send + Sync> = Box::new(crate::git::HeuristicDiffVerifier);
             reconciler.reconcile(&wt_name_owned, &wt_path_owned, verifier.as_ref())
         })
         .await;

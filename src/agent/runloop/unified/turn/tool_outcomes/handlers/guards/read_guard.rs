@@ -15,9 +15,7 @@ use super::super::ValidationResult;
 use super::super::looping::low_signal_family_key;
 use super::common::{extract_read_path, is_read_action, push_guard_failure_messages};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    find_duplicate_in_history, signature_key_for,
-};
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{find_duplicate_in_history, signature_key_for};
 use crate::agent::runloop::unified::turn::tool_outcomes::response_content::maybe_inline_spooled;
 
 /// Maximum consecutive reads of the same file with the same slice (offset/limit/raw).
@@ -90,8 +88,7 @@ pub(crate) fn check_read_family_cap(
     streak: usize,
     cap: usize,
 ) -> ReadFamilyCapDecision {
-    let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args)
-    else {
+    let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args) else {
         return ReadFamilyCapDecision::BelowCap;
     };
     if streak < cap {
@@ -114,9 +111,7 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
     }
 
     match canonical_tool_name {
-        tool_names::READ_FILE | tool_names::UNIFIED_FILE => {
-            low_signal_family_key(canonical_tool_name, args)
-        }
+        tool_names::READ_FILE | tool_names::UNIFIED_FILE => low_signal_family_key(canonical_tool_name, args),
         tool_names::UNIFIED_EXEC | "command_session" => {
             // Track file-reading shell commands in the family guard to prevent
             // bypass via unified_exec. Only commands on the is_readonly_unified_exec_command
@@ -226,22 +221,14 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
         // is delegated to the pure `check_read_family_cap` helper so it can be
         // tested without the full TurnProcessingContext harness.
         let streak = ctx.harness_state.record_file_read_family_call(family_key);
-        if let ReadFamilyCapDecision::Tripped { target: _, block_reason, error_content } =
-            check_read_family_cap(
-                canonical_tool_name,
-                effective_args,
-                streak,
-                MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
-            )
-        {
+        if let ReadFamilyCapDecision::Tripped { target: _, block_reason, error_content } = check_read_family_cap(
+            canonical_tool_name,
+            effective_args,
+            streak,
+            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+        ) {
             ctx.activate_recovery(block_reason.clone());
-            push_guard_failure_messages(
-                ctx,
-                tool_call_id,
-                canonical_tool_name,
-                error_content,
-                &block_reason,
-            );
+            push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
             return Some(ValidationResult::Blocked);
         }
     }
@@ -259,13 +246,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
                 );
                 let error_content = build_repeated_file_read_family_error_content(&path);
                 ctx.activate_recovery(block_reason.clone());
-                push_guard_failure_messages(
-                    ctx,
-                    tool_call_id,
-                    canonical_tool_name,
-                    error_content,
-                    &block_reason,
-                );
+                push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
                 return Some(ValidationResult::Blocked);
             }
         }
@@ -455,18 +436,9 @@ mod tests {
 
     #[test]
     fn read_family_target_strips_slice_suffix() {
-        assert_eq!(
-            read_family_target("unified_file::read::src/cli/update.rs::off=81::lim=229"),
-            "src/cli/update.rs"
-        );
-        assert_eq!(
-            read_family_target("read_file::src/main.rs::off=80::lim=200::raw=true"),
-            "src/main.rs"
-        );
-        assert_eq!(
-            read_family_target("unified_file::read::src/cli/update.rs"),
-            "src/cli/update.rs"
-        );
+        assert_eq!(read_family_target("unified_file::read::src/cli/update.rs::off=81::lim=229"), "src/cli/update.rs");
+        assert_eq!(read_family_target("read_file::src/main.rs::off=80::lim=200::raw=true"), "src/main.rs");
+        assert_eq!(read_family_target("unified_file::read::src/cli/update.rs"), "src/cli/update.rs");
         assert_eq!(read_family_target("unified_exec::run::cat README.md"), "cat README.md");
         assert_eq!(read_family_target("read_file::src/lib.rs"), "src/lib.rs");
     }
@@ -504,10 +476,7 @@ mod tests {
             tool_names::UNIFIED_FILE,
             &serde_json::json!({"action": "read", "path": "src/lib.rs"})
         ));
-        assert!(is_read_action(
-            tool_names::UNIFIED_FILE,
-            &serde_json::json!({"path": "src/lib.rs"})
-        ));
+        assert!(is_read_action(tool_names::UNIFIED_FILE, &serde_json::json!({"path": "src/lib.rs"})));
         assert!(!is_read_action(
             tool_names::UNIFIED_FILE,
             &serde_json::json!({"action": "write", "path": "src/lib.rs"})
@@ -516,10 +485,7 @@ mod tests {
 
     #[test]
     fn extract_read_path_returns_path_from_args() {
-        assert_eq!(
-            extract_read_path(&serde_json::json!({"path": "src/lib.rs"})),
-            Some("src/lib.rs".to_string())
-        );
+        assert_eq!(extract_read_path(&serde_json::json!({"path": "src/lib.rs"})), Some("src/lib.rs".to_string()));
         assert_eq!(extract_read_path(&serde_json::json!({})), None);
     }
 
@@ -529,9 +495,6 @@ mod tests {
             MAX_SAME_FILE_PATH_READ_CALLS >= MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
             "per-file-path cap must be >= family cap"
         );
-        const _: () = assert!(
-            MAX_SAME_FILE_PATH_READ_CALLS < 10,
-            "per-file-path cap must catch excessive reads"
-        );
+        const _: () = assert!(MAX_SAME_FILE_PATH_READ_CALLS < 10, "per-file-path cap must catch excessive reads");
     }
 }

@@ -67,11 +67,7 @@ impl BaseProviderConfig {
     }
 
     /// Resolve base URL with environment variable fallback
-    fn resolve_base_url(
-        base_url: Option<String>,
-        default_url: &'static str,
-        env_var: &'static str,
-    ) -> Result<String> {
+    fn resolve_base_url(base_url: Option<String>, default_url: &'static str, env_var: &'static str) -> Result<String> {
         if let Some(url) = base_url {
             Ok(url.trim().to_string())
         } else if let Ok(env_val) = std::env::var(env_var) {
@@ -117,13 +113,7 @@ pub trait OpenAICompatibleProvider: Send + Sync {
         model: String,
         include_cache: bool,
     ) -> Result<crate::provider::LLMResponse> {
-        crate::utils::parse_response_openai_format(
-            response,
-            self.provider_name(),
-            model,
-            include_cache,
-            None,
-        )
+        crate::utils::parse_response_openai_format(response, self.provider_name(), model, include_cache, None)
     }
 }
 
@@ -149,8 +139,7 @@ impl ErrorHandler {
             _ => format!("HTTP {}: {}", status, error_text.trim()),
         };
 
-        let formatted_error =
-            crate::error_display::format_llm_error(self._provider_name, &error_message);
+        let formatted_error = crate::error_display::format_llm_error(self._provider_name, &error_message);
 
         // Handle different error types based on status code
         if status == StatusCode::TOO_MANY_REQUESTS {
@@ -380,11 +369,7 @@ impl ModelResolver {
         }
 
         if !self.supported_models.contains(&model) {
-            anyhow::bail!(
-                "Unsupported model: {}. Supported models: {:?}",
-                model,
-                self.supported_models
-            )
+            anyhow::bail!("Unsupported model: {}. Supported models: {:?}", model, self.supported_models)
         }
 
         Ok(())
@@ -417,8 +402,7 @@ mod tests {
     fn test_error_handler() {
         let handler = ErrorHandler::new("test_provider");
 
-        let unauthorized =
-            handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
+        let unauthorized = handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
         let rate_limited = handler.handle_http_error(reqwest::StatusCode::TOO_MANY_REQUESTS, "");
 
         assert!(matches!(unauthorized, LLMError::Provider { message: _, metadata: _ }));

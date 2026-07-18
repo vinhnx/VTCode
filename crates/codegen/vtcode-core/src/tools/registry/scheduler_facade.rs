@@ -27,10 +27,7 @@ impl ToolRegistry {
         scheduler.delete(query)
     }
 
-    pub async fn collect_due_session_prompts(
-        &self,
-        now: DateTime<Utc>,
-    ) -> Result<Vec<DueSessionPrompt>> {
+    pub async fn collect_due_session_prompts(&self, now: DateTime<Utc>) -> Result<Vec<DueSessionPrompt>> {
         let mut scheduler = self.session_scheduler.lock().await;
         scheduler.collect_due_prompts(now)
     }

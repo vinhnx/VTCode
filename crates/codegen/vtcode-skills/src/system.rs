@@ -2,13 +2,10 @@ use include_dir::Dir;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use vtcode_commons::fs::{
-    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
-};
+use vtcode_commons::fs::{ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync};
 use vtcode_commons::utils::calculate_sha256;
 
-const SYSTEM_SKILLS_DIR: Dir =
-    include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/skills/assets/samples");
+const SYSTEM_SKILLS_DIR: Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/src/skills/assets/samples");
 
 const SYSTEM_SKILLS_DIR_NAME: &str = ".system";
 const SKILLS_DIR_NAME: &str = "skills";
@@ -41,9 +38,7 @@ pub fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkillsError>
 
     let marker_path = dest_system.join(SYSTEM_SKILLS_MARKER_FILENAME);
     let expected_fingerprint = embedded_system_skills_fingerprint();
-    if dest_system.is_dir()
-        && read_marker(&marker_path).is_ok_and(|marker| marker == expected_fingerprint)
-    {
+    if dest_system.is_dir() && read_marker(&marker_path).is_ok_and(|marker| marker == expected_fingerprint) {
         return Ok(());
     }
 
@@ -53,12 +48,8 @@ pub fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkillsError>
     }
 
     write_embedded_dir(&SYSTEM_SKILLS_DIR, &dest_system)?;
-    write_file_with_context_sync(
-        &marker_path,
-        &format!("{expected_fingerprint}\n"),
-        "system skills marker",
-    )
-    .map_err(|source| SystemSkillsError::io("write system skills marker", anyhow_to_io(source)))?;
+    write_file_with_context_sync(&marker_path, &format!("{expected_fingerprint}\n"), "system skills marker")
+        .map_err(|source| SystemSkillsError::io("write system skills marker", anyhow_to_io(source)))?;
     Ok(())
 }
 
@@ -121,35 +112,28 @@ fn embedded_system_skills_fingerprint() -> String {
 ///
 /// Preserves the embedded directory structure.
 fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsError> {
-    ensure_dir_exists_sync(dest).map_err(|source| {
-        SystemSkillsError::io("create system skills dir", anyhow_to_io(source))
-    })?;
+    ensure_dir_exists_sync(dest)
+        .map_err(|source| SystemSkillsError::io("create system skills dir", anyhow_to_io(source)))?;
 
     for entry in dir.entries() {
         match entry {
             include_dir::DirEntry::Dir(subdir) => {
                 let subdir_dest = dest.join(subdir.path());
-                ensure_dir_exists_sync(&subdir_dest).map_err(|source| {
-                    SystemSkillsError::io("create system skills subdir", anyhow_to_io(source))
-                })?;
+                ensure_dir_exists_sync(&subdir_dest)
+                    .map_err(|source| SystemSkillsError::io("create system skills subdir", anyhow_to_io(source)))?;
                 write_embedded_dir(subdir, dest)?;
             }
             include_dir::DirEntry::File(file) => {
                 let path = dest.join(file.path());
                 if let Some(parent) = path.parent() {
                     ensure_dir_exists_sync(parent).map_err(|source| {
-                        SystemSkillsError::io(
-                            "create system skills file parent",
-                            anyhow_to_io(source),
-                        )
+                        SystemSkillsError::io("create system skills file parent", anyhow_to_io(source))
                     })?;
                 }
-                let contents = std::str::from_utf8(file.contents()).map_err(|source| {
-                    SystemSkillsError::Utf8 { path: file.path().to_path_buf(), source }
-                })?;
-                write_file_with_context_sync(&path, contents, "system skill file").map_err(
-                    |source| SystemSkillsError::io("write system skill file", anyhow_to_io(source)),
-                )?;
+                let contents = std::str::from_utf8(file.contents())
+                    .map_err(|source| SystemSkillsError::Utf8 { path: file.path().to_path_buf(), source })?;
+                write_file_with_context_sync(&path, contents, "system skill file")
+                    .map_err(|source| SystemSkillsError::io("write system skill file", anyhow_to_io(source)))?;
             }
         }
     }
@@ -181,9 +165,7 @@ impl SystemSkillsError {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        SYSTEM_SKILLS_MARKER_SALT, embedded_system_skills_fingerprint, stable_manifest_fingerprint,
-    };
+    use super::{SYSTEM_SKILLS_MARKER_SALT, embedded_system_skills_fingerprint, stable_manifest_fingerprint};
 
     #[test]
     fn stable_manifest_fingerprint_matches_known_digest() {
@@ -191,14 +173,8 @@ mod tests {
             SYSTEM_SKILLS_MARKER_SALT,
             [
                 ("alpha", None),
-                (
-                    "alpha/config.json",
-                    Some("77c7ce9a5d86bb386d443bb96390dcf0ecf6afb7b74f84a88d64e6d4e8dcb5e0"),
-                ),
-                (
-                    "beta.md",
-                    Some("3f89f6a04a1a1f8cb46fc4b356f7b81b8d18102fdb8b795f5b2f89e7cfefb3af"),
-                ),
+                ("alpha/config.json", Some("77c7ce9a5d86bb386d443bb96390dcf0ecf6afb7b74f84a88d64e6d4e8dcb5e0")),
+                ("beta.md", Some("3f89f6a04a1a1f8cb46fc4b356f7b81b8d18102fdb8b795f5b2f89e7cfefb3af")),
             ],
         );
 

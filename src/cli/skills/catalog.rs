@@ -10,9 +10,9 @@ use crate::cli::SkillsCommandOptions;
 use crate::cli::messages;
 
 use super::render::{
-    BuiltInSkillRow, CliToolRow, LoadedSkillSummary, TraditionalSkillRow, print_built_in_skills,
-    print_cli_tools, print_empty_list, print_list_header, print_list_usage, print_loaded_skill,
-    print_skill_config, print_skill_ready, print_traditional_skills,
+    BuiltInSkillRow, CliToolRow, LoadedSkillSummary, TraditionalSkillRow, print_built_in_skills, print_cli_tools,
+    print_empty_list, print_list_header, print_list_usage, print_loaded_skill, print_skill_config, print_skill_ready,
+    print_traditional_skills,
 };
 
 /// List available skills.
@@ -22,8 +22,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
     print_list_header();
 
-    let discovery_result =
-        loader.discover_all_skills().await.context("Failed to discover skills")?;
+    let discovery_result = loader.discover_all_skills().await.context("Failed to discover skills")?;
 
     if discovery_result.skills.is_empty() && discovery_result.tools.is_empty() {
         print_empty_list();
@@ -43,17 +42,11 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                 let analysis = temp_loader.check_container_requirements(&skill);
                 let status = match analysis.requirement {
                     ContainerSkillsRequirement::Required => {
-                        warnings.push(format!(
-                            "x {} - Requires container skills (not compatible)",
-                            manifest.name
-                        ));
+                        warnings.push(format!("x {} - Requires container skills (not compatible)", manifest.name));
                         "x"
                     }
                     ContainerSkillsRequirement::RequiredWithFallback => {
-                        warnings.push(format!(
-                            "[!]  {} - Has container skills fallback",
-                            manifest.name
-                        ));
+                        warnings.push(format!("[!]  {} - Has container skills fallback", manifest.name));
                         "[!]"
                     }
                     _ => "✓",
@@ -73,10 +66,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
             }
             Ok(EnhancedSkill::CliTool(_)) | Ok(EnhancedSkill::NativePlugin(_)) => {}
             Err(_) => {
-                warnings.push(format!(
-                    "x {} - Requires container skills (validation failed)",
-                    manifest.name
-                ));
+                warnings.push(format!("x {} - Requires container skills (validation failed)", manifest.name));
                 skill_rows.push(TraditionalSkillRow {
                     status: "x",
                     name: manifest.name.clone(),
@@ -105,11 +95,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 }
 
 /// Load a skill for the current session.
-pub async fn handle_skills_load(
-    options: &SkillsCommandOptions,
-    name: &str,
-    path: Option<PathBuf>,
-) -> Result<()> {
+pub async fn handle_skills_load(options: &SkillsCommandOptions, name: &str, path: Option<PathBuf>) -> Result<()> {
     println!("Loading skill: {name}...");
 
     let skill = resolve_skill_load(options, name, path.as_deref()).await?;
@@ -161,9 +147,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
                     println!(" Requires Anthropic container skills - NOT COMPATIBLE with VT Code");
                 }
                 ContainerSkillsRequirement::RequiredWithFallback => {
-                    println!(
-                        "  Uses container skills but provides VT Code-compatible alternatives"
-                    );
+                    println!("  Uses container skills but provides VT Code-compatible alternatives");
                 }
                 ContainerSkillsRequirement::NotRequired => {
                     println!(" Fully compatible with VT Code");
@@ -262,9 +246,7 @@ async fn resolve_skill_load(
     if matches!(skill, EnhancedSkill::BuiltInCommand(_)) {
         bail!(
             "{}\n{}",
-            messages::error(&format!(
-                "Skill '{requested_name}' is a built-in command skill and cannot be loaded."
-            )),
+            messages::error(&format!("Skill '{requested_name}' is a built-in command skill and cannot be loaded.")),
             messages::hint(&format!("Use `/skills use {requested_name}` in chat mode instead."))
         );
     }
@@ -275,8 +257,8 @@ async fn resolve_skill_load(
 fn load_skill_from_path(path: &Path) -> Result<Skill> {
     validate_skill_path(path)?;
 
-    let (manifest, instructions) = parse_skill_file(path)
-        .with_context(|| format!("Failed to parse skill manifest at {}", path.display()))?;
+    let (manifest, instructions) =
+        parse_skill_file(path).with_context(|| format!("Failed to parse skill manifest at {}", path.display()))?;
     Skill::new(manifest, path.to_path_buf(), instructions)
         .with_context(|| format!("Failed to load skill at {}", path.display()))
 }
@@ -348,9 +330,7 @@ fn print_loaded_skill_summary(skill: EnhancedSkill) -> String {
 }
 
 async fn refresh_skill_index(options: &SkillsCommandOptions) {
-    if let Err(err) =
-        crate::cli::skills_index::generate_comprehensive_skills_index(&options.workspace).await
-    {
+    if let Err(err) = crate::cli::skills_index::generate_comprehensive_skills_index(&options.workspace).await {
         tracing::warn!("Failed to regenerate skills index: {err}");
     }
 }
@@ -413,8 +393,7 @@ Use this skill.
         .expect("write skill");
 
         let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
-        let result =
-            handle_skills_load(&options, "standalone-skill", Some(skill_path.clone())).await;
+        let result = handle_skills_load(&options, "standalone-skill", Some(skill_path.clone())).await;
 
         assert!(result.is_ok(), "{result:#?}");
     }
@@ -424,12 +403,7 @@ Use this skill.
         let temp_dir = TempDir::new().expect("temp dir");
         let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
 
-        let result = handle_skills_load(
-            &options,
-            "missing-skill",
-            Some(temp_dir.path().join("missing-skill")),
-        )
-        .await;
+        let result = handle_skills_load(&options, "missing-skill", Some(temp_dir.path().join("missing-skill"))).await;
 
         let err = result.expect_err("expected missing path error");
         assert!(err.to_string().contains("does not exist"));

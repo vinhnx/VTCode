@@ -35,18 +35,12 @@ impl PluginLoader {
     }
 
     /// Install a plugin from a source
-    pub async fn install_plugin(
-        &self,
-        source: PluginSource,
-        name: Option<String>,
-    ) -> PluginResult<()> {
+    pub async fn install_plugin(&self, source: PluginSource, name: Option<String>) -> PluginResult<()> {
         let plugin_dir = match source {
             PluginSource::Local(path) => self.install_from_local(path).await?,
             PluginSource::Git(url) => self.install_from_git(&url, name.as_deref()).await?,
             PluginSource::Http(url) => self.install_from_http(&url, name.as_deref()).await?,
-            PluginSource::Marketplace(id) => {
-                self.install_from_marketplace(&id, name.as_deref()).await?
-            }
+            PluginSource::Marketplace(id) => self.install_from_marketplace(&id, name.as_deref()).await?,
         };
 
         // Load the installed plugin
@@ -57,10 +51,7 @@ impl PluginLoader {
     /// Install plugin from local directory
     async fn install_from_local(&self, source_path: PathBuf) -> PluginResult<PathBuf> {
         if !source_path.exists() {
-            return Err(PluginError::LoadingError(format!(
-                "Source path does not exist: {}",
-                source_path.display()
-            )));
+            return Err(PluginError::LoadingError(format!("Source path does not exist: {}", source_path.display())));
         }
 
         // Validate that it contains a plugin manifest
@@ -77,15 +68,14 @@ impl PluginLoader {
             .await
             .map_err(|e| PluginError::LoadingError(format!("Failed to read manifest: {e}")))?;
 
-        let manifest: PluginManifest = serde_json::from_str(&manifest_content).map_err(|e| {
-            PluginError::ManifestValidationError(format!("Invalid manifest JSON: {e}"))
-        })?;
+        let manifest: PluginManifest = serde_json::from_str(&manifest_content)
+            .map_err(|e| PluginError::ManifestValidationError(format!("Invalid manifest JSON: {e}")))?;
 
         // Create installation directory
         let install_dir = self.plugins_dir.join(&manifest.name);
-        fs::create_dir_all(&install_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create plugin directory: {e}"))
-        })?;
+        fs::create_dir_all(&install_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create plugin directory: {e}")))?;
 
         // Copy plugin files to installation directory
         self.copy_directory(&source_path, &install_dir).await?;
@@ -99,9 +89,8 @@ impl PluginLoader {
         use tokio::process::Command;
 
         // Create a temporary directory for the git clone
-        let temp_dir = TempDir::new().map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create temporary directory: {e}"))
-        })?;
+        let temp_dir = TempDir::new()
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create temporary directory: {e}")))?;
         let temp_path = temp_dir.path();
 
         // Execute git clone command
@@ -125,9 +114,9 @@ impl PluginLoader {
 
         // Create installation directory
         let install_dir = self.plugins_dir.join(&plugin_name);
-        fs::create_dir_all(&install_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create plugin directory: {e}"))
-        })?;
+        fs::create_dir_all(&install_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create plugin directory: {e}")))?;
 
         // Copy the cloned repository contents to the installation directory
         self.copy_directory(temp_path, &install_dir).await?;
@@ -146,13 +135,12 @@ impl PluginLoader {
     /// Install plugin from HTTP URL
     async fn install_from_http(&self, url: &str, name: Option<&str>) -> PluginResult<PathBuf> {
         // For now, create a placeholder implementation
-        let plugin_name =
-            name.map(|s| s.to_string()).unwrap_or_else(|| self.extract_name_from_url(url));
+        let plugin_name = name.map(|s| s.to_string()).unwrap_or_else(|| self.extract_name_from_url(url));
 
         let install_dir = self.plugins_dir.join(&plugin_name);
-        fs::create_dir_all(&install_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create plugin directory: {e}"))
-        })?;
+        fs::create_dir_all(&install_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create plugin directory: {e}")))?;
 
         // Create a placeholder manifest file
         let placeholder_manifest = format!(
@@ -165,33 +153,27 @@ impl PluginLoader {
 
         let manifest_path = install_dir.join(".vtcode-plugin/plugin.json");
         let manifest_parent = manifest_path.parent().ok_or_else(|| {
-            PluginError::LoadingError(
-                "Failed to resolve parent directory for plugin manifest path".to_string(),
-            )
+            PluginError::LoadingError("Failed to resolve parent directory for plugin manifest path".to_string())
         })?;
         fs::create_dir_all(manifest_parent).await?;
-        fs::write(&manifest_path, placeholder_manifest).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
-        })?;
+        fs::write(&manifest_path, placeholder_manifest)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}")))?;
 
         Ok(install_dir)
     }
 
     /// Install plugin from marketplace
-    async fn install_from_marketplace(
-        &self,
-        marketplace_id: &str,
-        name: Option<&str>,
-    ) -> PluginResult<PathBuf> {
+    async fn install_from_marketplace(&self, marketplace_id: &str, name: Option<&str>) -> PluginResult<PathBuf> {
         // For now, create a placeholder implementation
-        let plugin_name = name.map(|s| s.to_string()).unwrap_or_else(|| {
-            marketplace_id.split('/').next_back().unwrap_or(marketplace_id).to_string()
-        });
+        let plugin_name = name
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| marketplace_id.split('/').next_back().unwrap_or(marketplace_id).to_string());
 
         let install_dir = self.plugins_dir.join(&plugin_name);
-        fs::create_dir_all(&install_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create plugin directory: {e}"))
-        })?;
+        fs::create_dir_all(&install_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create plugin directory: {e}")))?;
 
         // Create a placeholder manifest file
         let placeholder_manifest = format!(
@@ -204,14 +186,12 @@ impl PluginLoader {
 
         let manifest_path = install_dir.join(".vtcode-plugin/plugin.json");
         let manifest_parent = manifest_path.parent().ok_or_else(|| {
-            PluginError::LoadingError(
-                "Failed to resolve parent directory for plugin manifest path".to_string(),
-            )
+            PluginError::LoadingError("Failed to resolve parent directory for plugin manifest path".to_string())
         })?;
         fs::create_dir_all(manifest_parent).await?;
-        fs::write(&manifest_path, placeholder_manifest).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
-        })?;
+        fs::write(&manifest_path, placeholder_manifest)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}")))?;
 
         Ok(install_dir)
     }
@@ -228,9 +208,9 @@ impl PluginLoader {
         self.runtime.unload_plugin(plugin_name).await?;
 
         // Remove the plugin directory
-        fs::remove_dir_all(&plugin_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to remove plugin directory: {e}"))
-        })?;
+        fs::remove_dir_all(&plugin_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to remove plugin directory: {e}")))?;
 
         Ok(())
     }
@@ -243,13 +223,15 @@ impl PluginLoader {
             return Ok(plugins);
         }
 
-        let mut entries = fs::read_dir(&self.plugins_dir).await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to read plugins directory: {e}"))
-        })?;
+        let mut entries = fs::read_dir(&self.plugins_dir)
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to read plugins directory: {e}")))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            PluginError::LoadingError(format!("Failed to read directory entry: {e}"))
-        })? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| PluginError::LoadingError(format!("Failed to read directory entry: {e}")))?
+        {
             let path = entry.path();
             if path.is_dir() {
                 // Check if it contains a plugin manifest
@@ -269,32 +251,31 @@ impl PluginLoader {
     async fn copy_directory(&self, src: &Path, dst: &Path) -> PluginResult<()> {
         Box::pin(async {
             if !src.is_dir() {
-                return Err(PluginError::LoadingError(format!(
-                    "Source is not a directory: {}",
-                    src.display()
-                )));
+                return Err(PluginError::LoadingError(format!("Source is not a directory: {}", src.display())));
             }
 
-            fs::create_dir_all(dst).await.map_err(|e| {
-                PluginError::LoadingError(format!("Failed to create destination directory: {e}"))
-            })?;
+            fs::create_dir_all(dst)
+                .await
+                .map_err(|e| PluginError::LoadingError(format!("Failed to create destination directory: {e}")))?;
 
-            let mut entries = fs::read_dir(src).await.map_err(|e| {
-                PluginError::LoadingError(format!("Failed to read source directory: {e}"))
-            })?;
+            let mut entries = fs::read_dir(src)
+                .await
+                .map_err(|e| PluginError::LoadingError(format!("Failed to read source directory: {e}")))?;
 
-            while let Some(entry) = entries.next_entry().await.map_err(|e| {
-                PluginError::LoadingError(format!("Failed to read directory entry: {e}"))
-            })? {
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| PluginError::LoadingError(format!("Failed to read directory entry: {e}")))?
+            {
                 let src_path = entry.path();
                 let dst_path = dst.join(entry.file_name());
 
                 if src_path.is_dir() {
                     self.copy_directory(&src_path, &dst_path).await?;
                 } else {
-                    fs::copy(&src_path, &dst_path).await.map_err(|e| {
-                        PluginError::LoadingError(format!("Failed to copy file: {e}"))
-                    })?;
+                    fs::copy(&src_path, &dst_path)
+                        .await
+                        .map_err(|e| PluginError::LoadingError(format!("Failed to copy file: {e}")))?;
                 }
             }
 

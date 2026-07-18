@@ -182,11 +182,7 @@ pub trait ToolCatalog: Send + Sync {
     fn workspace_root(&self) -> PathBuf;
 
     /// List public tool names for a given surface and capability level.
-    async fn public_tool_names(
-        &self,
-        surface: SessionSurface,
-        capability_level: CapabilityLevel,
-    ) -> Vec<String>;
+    async fn public_tool_names(&self, surface: SessionSurface, capability_level: CapabilityLevel) -> Vec<String>;
 
     /// Get schema entries for all available tools.
     async fn schema_entries(&self, config: SessionToolsConfig) -> Vec<ToolSchemaEntry>;
@@ -244,15 +240,7 @@ pub trait ToolMetrics: Send + Sync {
 ///
 /// `ToolRegistry` implements this supertrait automatically.
 pub trait ToolRegistryApi:
-    ToolSecurity
-    + PtySessionControl
-    + McpBridge
-    + ToolResilience
-    + ToolCatalog
-    + ToolMetrics
-    + Send
-    + Sync
-    + 'static
+    ToolSecurity + PtySessionControl + McpBridge + ToolResilience + ToolCatalog + ToolMetrics + Send + Sync + 'static
 {
 }
 

@@ -3,9 +3,7 @@ use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::core::PromptCachingConfig;
 
 use super::extract_reasoning_trace;
-use super::openai_compat::{
-    OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider,
-};
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider};
 use crate::provider::{LLMError, LLMRequest};
 
 pub struct DeepSeekSpec;
@@ -26,14 +24,12 @@ impl OpenAiCompatSpec for DeepSeekSpec {
     const DEFAULT_BASE_URL: &'static str = urls::DEEPSEEK_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::DEEPSEEK_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::deepseek::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::deepseek::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::deepseek::SUPPORTED_MODELS);
 
     const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::TopLevelField;
     const STREAM_OPTIONS_INCLUDE_USAGE: bool = true;
     const INCLUDE_USER_ID: bool = true;
-    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
-        Some(deepseek_reasoning);
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> = Some(deepseek_reasoning);
 
     fn prompt_cache_enabled(prompt_cache: Option<&PromptCachingConfig>) -> bool {
         prompt_cache.is_some_and(|cfg| {
@@ -62,8 +58,7 @@ impl OpenAiCompatSpec for DeepSeekSpec {
                 use crate::rig_adapter::RigProviderCapabilities;
                 use vtcode_config::models::Provider;
                 if let Some(params) =
-                    RigProviderCapabilities::new(Provider::DeepSeek, &request.model)
-                        .reasoning_parameters(effort)
+                    RigProviderCapabilities::new(Provider::DeepSeek, &request.model).reasoning_parameters(effort)
                     && let Some(obj) = params.as_object()
                 {
                     for (k, v) in obj {

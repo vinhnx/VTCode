@@ -19,8 +19,8 @@ use std::sync::{
 
 #[cfg(feature = "exec-events")]
 use vtcode_exec_events::{
-    CommandExecutionItem, CommandExecutionStatus, EventEmitter, ItemCompletedEvent,
-    ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
+    CommandExecutionItem, CommandExecutionStatus, EventEmitter, ItemCompletedEvent, ItemStartedEvent, ThreadEvent,
+    ThreadItem, ThreadItemDetails,
 };
 
 /// Logical grouping for commands issued by the [`BashRunner`][crate::BashRunner].
@@ -57,12 +57,7 @@ pub struct CommandInvocation {
 }
 
 impl CommandInvocation {
-    pub fn new(
-        shell: ShellKind,
-        command: String,
-        category: CommandCategory,
-        working_dir: PathBuf,
-    ) -> Self {
+    pub fn new(shell: ShellKind, command: String, category: CommandCategory, working_dir: PathBuf) -> Self {
         Self {
             shell,
             command,
@@ -130,11 +125,7 @@ impl CommandOutput {
         }
     }
 
-    pub fn failure(
-        code: Option<i32>,
-        stdout: impl Into<String>,
-        stderr: impl Into<String>,
-    ) -> Self {
+    pub fn failure(code: Option<i32>, stdout: impl Into<String>, stderr: impl Into<String>) -> Self {
         Self {
             status: CommandStatus::failure(code),
             stdout: stdout.into(),
@@ -180,9 +171,7 @@ impl CommandExecutor for ProcessCommandExecutor {
             ShellKind::Windows => {
                 #[cfg(not(feature = "powershell-process"))]
                 {
-                    bail!(
-                        "powershell-process feature disabled; enable it to execute Windows commands"
-                    );
+                    bail!("powershell-process feature disabled; enable it to execute Windows commands");
                 }
                 #[cfg(feature = "powershell-process")]
                 let mut command = Command::new("powershell");
@@ -265,11 +254,9 @@ impl PureRustCommandExecutor {
 
     fn mkdir(path: &Path, command: &str) -> Result<()> {
         if command.contains("-p") || command.contains("-Force") {
-            fs::create_dir_all(path)
-                .with_context(|| format!("failed to create directory `{}`", path.display()))?
+            fs::create_dir_all(path).with_context(|| format!("failed to create directory `{}`", path.display()))?
         } else {
-            fs::create_dir(path)
-                .with_context(|| format!("failed to create directory `{}`", path.display()))?
+            fs::create_dir(path).with_context(|| format!("failed to create directory `{}`", path.display()))?
         }
         Ok(())
     }
@@ -277,15 +264,12 @@ impl PureRustCommandExecutor {
     fn rm(path: &Path, command: &str) -> Result<()> {
         if path.is_dir() {
             if command.contains("-r") || command.contains("-Recurse") {
-                fs::remove_dir_all(path)
-                    .with_context(|| format!("failed to remove directory `{}`", path.display()))?
+                fs::remove_dir_all(path).with_context(|| format!("failed to remove directory `{}`", path.display()))?
             } else {
-                fs::remove_dir(path)
-                    .with_context(|| format!("failed to remove directory `{}`", path.display()))?
+                fs::remove_dir(path).with_context(|| format!("failed to remove directory `{}`", path.display()))?
             }
         } else if path.exists() {
-            fs::remove_file(path)
-                .with_context(|| format!("failed to remove file `{}`", path.display()))?
+            fs::remove_file(path).with_context(|| format!("failed to remove file `{}`", path.display()))?
         }
         Ok(())
     }
@@ -295,10 +279,9 @@ impl PureRustCommandExecutor {
             if !recursive {
                 bail!("copying directory `{}` requires recursive flag", source.display());
             }
-            fs::create_dir_all(dest)
-                .with_context(|| format!("failed to create directory `{}`", dest.display()))?;
-            for entry in fs::read_dir(source)
-                .with_context(|| format!("failed to read directory `{}`", source.display()))?
+            fs::create_dir_all(dest).with_context(|| format!("failed to create directory `{}`", dest.display()))?;
+            for entry in
+                fs::read_dir(source).with_context(|| format!("failed to read directory `{}`", source.display()))?
             {
                 let entry = entry?;
                 let entry_path = entry.path();
@@ -317,32 +300,25 @@ impl PureRustCommandExecutor {
 
     fn copy_file(source: &Path, dest: &Path) -> Result<()> {
         if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to prepare destination directory `{}`", parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to prepare destination directory `{}`", parent.display()))?;
         }
-        fs::copy(source, dest).with_context(|| {
-            format!("failed to copy `{}` to `{}`", source.display(), dest.display())
-        })?;
+        fs::copy(source, dest)
+            .with_context(|| format!("failed to copy `{}` to `{}`", source.display(), dest.display()))?;
         Ok(())
     }
 
     fn move_path(source: &Path, dest: &Path) -> Result<()> {
         if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to prepare destination directory `{}`", parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to prepare destination directory `{}`", parent.display()))?;
         }
 
         if let Err(rename_err) = fs::rename(source, dest) {
             Self::copy_recursive(source, dest, true)
                 .and_then(|_| Self::rm(source, "-r -f"))
                 .with_context(|| {
-                    format!(
-                        "failed to move `{}` to `{}` via rename: {rename_err}",
-                        source.display(),
-                        dest.display()
-                    )
+                    format!("failed to move `{}` to `{}` via rename: {rename_err}", source.display(), dest.display())
                 })?;
         }
         Ok(())
@@ -356,8 +332,8 @@ impl CommandExecutor for PureRustCommandExecutor {
             CommandCategory::ListDirectory => {
                 let path = Self::resolve_primary_path(invocation)?;
                 let mut entries = Vec::new();
-                for entry in fs::read_dir(path)
-                    .with_context(|| format!("failed to read directory `{}`", path.display()))?
+                for entry in
+                    fs::read_dir(path).with_context(|| format!("failed to read directory `{}`", path.display()))?
                 {
                     let entry = entry?;
                     let name = entry.file_name();
@@ -389,8 +365,7 @@ impl CommandExecutor for PureRustCommandExecutor {
                     .touched_paths
                     .get(1)
                     .ok_or_else(|| anyhow!("copy missing destination path"))?;
-                let recursive =
-                    invocation.command.contains("-r") || invocation.command.contains("-Recurse");
+                let recursive = invocation.command.contains("-r") || invocation.command.contains("-Recurse");
                 Self::copy_recursive(source.as_path(), dest.as_path(), recursive)?;
                 Ok(CommandOutput::success(String::new()))
             }
@@ -406,9 +381,9 @@ impl CommandExecutor for PureRustCommandExecutor {
                 Self::move_path(source.as_path(), dest.as_path())?;
                 Ok(CommandOutput::success(String::new()))
             }
-            CommandCategory::Search => bail!(
-                "pure-rust executor does not implement search; enable std-process or provide a custom executor"
-            ),
+            CommandCategory::Search => {
+                bail!("pure-rust executor does not implement search; enable std-process or provide a custom executor")
+            }
             CommandCategory::ChangeDirectory | CommandCategory::PrintDirectory => {
                 Ok(CommandOutput::success(String::new()))
             }
@@ -508,16 +483,16 @@ where
                     CommandExecutionStatus::Failed
                 };
 
-                let completed_item =
-                    ThreadItem {
-                        id: item_id,
-                        details: ThreadItemDetails::CommandExecution(Box::new(
-                            self.command_details(invocation, status, Some(&output), None),
-                        )),
-                    };
-                self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                    item: completed_item,
-                }));
+                let completed_item = ThreadItem {
+                    id: item_id,
+                    details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
+                        invocation,
+                        status,
+                        Some(&output),
+                        None,
+                    ))),
+                };
+                self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }));
                 Ok(output)
             }
             Err(err) => {

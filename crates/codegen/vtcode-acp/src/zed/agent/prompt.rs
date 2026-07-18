@@ -55,21 +55,21 @@ impl ZedAgent {
             return self.resolve_workspace_path(candidate, TOOL_READ_FILE_URI_ARG);
         }
 
-        let parsed = Url::parse(uri)
-            .map_err(|_err| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
+        let parsed =
+            Url::parse(uri).map_err(|_err| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
 
         let path = match parsed.scheme() {
-            "file" => parsed.to_file_path().map_err(|_err| {
-                format!("Unable to resolve URI provided to {}", tools::READ_FILE)
-            })?,
+            "file" => parsed
+                .to_file_path()
+                .map_err(|_err| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?,
             "zed" | "zed-fs" => {
                 let raw_path = parsed.path();
                 if raw_path.is_empty() {
                     return Err(format!("Unable to resolve URI provided to {}", tools::READ_FILE));
                 }
-                let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_err| {
-                    format!("Unable to resolve URI provided to {}", tools::READ_FILE)
-                })?;
+                let decoded = percent_decode_str(raw_path)
+                    .decode_utf8()
+                    .map_err(|_err| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
                 PathBuf::from(&*decoded)
             }
             _ => {
@@ -96,17 +96,13 @@ impl ZedAgent {
                 }
                 acp::ContentBlock::Resource(resource) => match &resource.resource {
                     acp::EmbeddedResourceResource::TextResourceContents(text) => {
-                        let rendered =
-                            Self::render_context_block(&text.uri, &text.uri, Some(&text.text));
+                        let rendered = Self::render_context_block(&text.uri, &text.uri, Some(&text.text));
                         Self::append_segment(&mut aggregated, &rendered);
                     }
                     acp::EmbeddedResourceResource::BlobResourceContents(blob) => {
                         warn!(uri = blob.uri, "Ignoring unsupported embedded blob resource");
-                        let rendered = format!(
-                            "{RESOURCE_FAILURE_LABEL} {name} ({uri})",
-                            name = blob.uri,
-                            uri = blob.uri
-                        );
+                        let rendered =
+                            format!("{RESOURCE_FAILURE_LABEL} {name} ({uri})", name = blob.uri, uri = blob.uri);
                         Self::append_segment(&mut aggregated, &rendered);
                     }
                     _ => {}
@@ -117,8 +113,7 @@ impl ZedAgent {
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
                 acp::ContentBlock::Audio(audio) => {
-                    let placeholder =
-                        format!("{RESOURCE_FALLBACK_LABEL} audio ({mime})", mime = audio.mime_type);
+                    let placeholder = format!("{RESOURCE_FALLBACK_LABEL} audio ({mime})", mime = audio.mime_type);
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
                 _ => {}
@@ -151,18 +146,10 @@ impl ZedAgent {
         let request = acp::ReadTextFileRequest::new(session_id.clone(), path);
 
         match ConnectionHandle::read_text_file(&client, request).await {
-            Ok(response) => Ok(Self::render_context_block(
-                &link.name,
-                &link.uri,
-                Some(response.content.as_str()),
-            )),
+            Ok(response) => Ok(Self::render_context_block(&link.name, &link.uri, Some(response.content.as_str()))),
             Err(error) => {
                 warn!(%error, uri = link.uri, name = link.name, "Failed to read linked resource");
-                Ok(format!(
-                    "{RESOURCE_FAILURE_LABEL} {name} ({uri})",
-                    name = link.name,
-                    uri = link.uri
-                ))
+                Ok(format!("{RESOURCE_FAILURE_LABEL} {name} ({uri})", name = link.name, uri = link.uri))
             }
         }
     }

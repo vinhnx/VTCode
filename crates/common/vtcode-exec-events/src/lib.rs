@@ -130,10 +130,7 @@ mod log_support {
             if log::log_enabled!(self.level) {
                 match json::to_string(event) {
                     Ok(serialized) => log::log!(self.level, "{serialized}"),
-                    Err(err) => log::log!(
-                        self.level,
-                        "failed to serialize vtcode exec event for logging: {err}"
-                    ),
+                    Err(err) => log::log!(self.level, "failed to serialize vtcode exec event for logging: {err}"),
                 }
             }
         }
@@ -274,37 +271,19 @@ mod otel_support {
                 }
                 ThreadEvent::ThreadCompleted(e) => {
                     if let Some(ref cost) = e.total_cost_usd {
-                        span.set_attribute(KeyValue::new(
-                            "total_cost_usd",
-                            cost.as_f64().unwrap_or(0.0),
-                        ));
+                        span.set_attribute(KeyValue::new("total_cost_usd", cost.as_f64().unwrap_or(0.0)));
                     }
                     span.set_attribute(KeyValue::new("input_tokens", e.usage.input_tokens as i64));
-                    span.set_attribute(KeyValue::new(
-                        "output_tokens",
-                        e.usage.output_tokens as i64,
-                    ));
-                    span.set_attribute(KeyValue::new(
-                        "completion_subtype",
-                        e.subtype.as_str().to_string(),
-                    ));
+                    span.set_attribute(KeyValue::new("output_tokens", e.usage.output_tokens as i64));
+                    span.set_attribute(KeyValue::new("completion_subtype", e.subtype.as_str().to_string()));
                 }
                 ThreadEvent::TurnCompleted(e) => {
-                    span.set_attribute(KeyValue::new(
-                        "turn_input_tokens",
-                        e.usage.input_tokens as i64,
-                    ));
-                    span.set_attribute(KeyValue::new(
-                        "turn_output_tokens",
-                        e.usage.output_tokens as i64,
-                    ));
+                    span.set_attribute(KeyValue::new("turn_input_tokens", e.usage.input_tokens as i64));
+                    span.set_attribute(KeyValue::new("turn_output_tokens", e.usage.output_tokens as i64));
                 }
                 ThreadEvent::ItemCompleted(e) => {
                     if let ThreadItemDetails::Harness(harness) = &e.item.details {
-                        span.set_attribute(KeyValue::new(
-                            "harness_event",
-                            format!("{:?}", harness.event),
-                        ));
+                        span.set_attribute(KeyValue::new("harness_event", format!("{:?}", harness.event)));
                         if let Some(ref msg) = harness.message {
                             span.set_attribute(KeyValue::new("harness_message", msg.clone()));
                         }
@@ -314,8 +293,7 @@ mod otel_support {
                         if let Some(dur) = harness.duration_ms {
                             span.set_attribute(KeyValue::new("duration_ms", dur as i64));
                         }
-                        let mut event_attrs =
-                            vec![KeyValue::new("event_kind", format!("{:?}", harness.event))];
+                        let mut event_attrs = vec![KeyValue::new("event_kind", format!("{:?}", harness.event))];
                         if let Some(ref msg) = harness.message {
                             event_attrs.push(KeyValue::new("message", msg.clone()));
                         }
@@ -643,10 +621,8 @@ impl Usage {
     /// Accumulate another usage sample into this one.
     pub fn add(&mut self, other: &Usage) {
         self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
-        self.cached_input_tokens =
-            self.cached_input_tokens.saturating_add(other.cached_input_tokens);
-        self.cache_creation_tokens =
-            self.cache_creation_tokens.saturating_add(other.cache_creation_tokens);
+        self.cached_input_tokens = self.cached_input_tokens.saturating_add(other.cached_input_tokens);
+        self.cache_creation_tokens = self.cache_creation_tokens.saturating_add(other.cache_creation_tokens);
         self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
     }
 }
@@ -1108,9 +1084,7 @@ mod tests {
         let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: "item-1".to_string(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: "hello".to_string(),
-                }),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "hello".to_string() }),
             },
         });
 

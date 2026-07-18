@@ -35,10 +35,7 @@ pub(crate) fn trimmed_non_empty(text: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn allow_plain_success_stdout(
-    result: &HookCommandResult,
-    quiet_success_output: bool,
-) -> bool {
+pub(crate) fn allow_plain_success_stdout(result: &HookCommandResult, quiet_success_output: bool) -> bool {
     if !quiet_success_output {
         return true;
     }
@@ -59,10 +56,7 @@ pub(crate) struct CommonJsonFields {
     pub(super) hook_specific: Option<Value>,
 }
 
-pub(crate) fn extract_common_fields(
-    json: &Value,
-    messages: &mut Vec<HookMessage>,
-) -> CommonJsonFields {
+pub(crate) fn extract_common_fields(json: &Value, messages: &mut Vec<HookMessage>) -> CommonJsonFields {
     if let Some(system_message) = json
         .get("systemMessage")
         .and_then(|value| value.as_str())
@@ -78,10 +72,7 @@ pub(crate) fn extract_common_fields(
             .get("stopReason")
             .and_then(|value| value.as_str())
             .map(|value| value.to_owned()),
-        suppress_stdout: json
-            .get("suppressOutput")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false),
+        suppress_stdout: json.get("suppressOutput").and_then(|value| value.as_bool()).unwrap_or(false),
         decision: json
             .get("decision")
             .and_then(|value| value.as_str())
@@ -101,11 +92,7 @@ pub(crate) fn matches_hook_event(spec: &serde_json::Map<String, Value>, event_na
     }
 }
 
-pub(crate) fn handle_timeout(
-    command: &HookCommandConfig,
-    result: &HookCommandResult,
-    messages: &mut Vec<HookMessage>,
-) {
+pub(crate) fn handle_timeout(command: &HookCommandConfig, result: &HookCommandResult, messages: &mut Vec<HookMessage>) {
     if result.timed_out {
         messages.push(HookMessage::error(format!(
             "Hook `{}` timed out after {}s",

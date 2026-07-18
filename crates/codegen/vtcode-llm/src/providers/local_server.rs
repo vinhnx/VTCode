@@ -252,15 +252,10 @@ pub fn troubleshoot(status: &LocalServerStatus, caps: &LocalServerCapabilities) 
                     lines.push("  Pull a model: ollama pull gemma3".to_string());
                 }
                 LocalProvider::LmStudio => {
-                    lines.push(
-                        "  Download a model in LM Studio or run: lms get <model>".to_string(),
-                    );
+                    lines.push("  Download a model in LM Studio or run: lms get <model>".to_string());
                 }
                 LocalProvider::LlamaCpp => {
-                    lines.push(format!(
-                        "  Set {}=/path/to/model.gguf and restart",
-                        env_vars::LLAMACPP_MODEL_PATH
-                    ));
+                    lines.push(format!("  Set {}=/path/to/model.gguf and restart", env_vars::LLAMACPP_MODEL_PATH));
                 }
             }
         }
@@ -302,18 +297,12 @@ pub fn troubleshoot(status: &LocalServerStatus, caps: &LocalServerCapabilities) 
             if !caps.binary_found {
                 lines.push("llama-server binary not found.".to_string());
                 lines.push("  Install: https://llama.app".to_string());
-                lines.push(format!(
-                    "  Or set {}=/path/to/llama-server",
-                    env_vars::LLAMACPP_BINARY_PATH
-                ));
+                lines.push(format!("  Or set {}=/path/to/llama-server", env_vars::LLAMACPP_BINARY_PATH));
             } else {
                 lines.push("llama.cpp server is not running.".to_string());
                 let model_path = std::env::var(env_vars::LLAMACPP_MODEL_PATH).ok();
                 if model_path.is_none() {
-                    lines.push(format!(
-                        "  Set {}=/path/to/model.gguf for auto-start",
-                        env_vars::LLAMACPP_MODEL_PATH
-                    ));
+                    lines.push(format!("  Set {}=/path/to/model.gguf for auto-start", env_vars::LLAMACPP_MODEL_PATH));
                 }
                 lines.push("  Or: /local start llamacpp".to_string());
             }
@@ -345,10 +334,7 @@ async fn probe_ollama() -> LocalServerStatus {
     };
 
     if !tags_resp.status().is_success() {
-        return LocalServerStatus::not_running(
-            LocalProvider::Ollama,
-            format!("HTTP {}", tags_resp.status()),
-        );
+        return LocalServerStatus::not_running(LocalProvider::Ollama, format!("HTTP {}", tags_resp.status()));
     }
 
     let available_models = tags_resp
@@ -366,10 +352,9 @@ async fn probe_ollama() -> LocalServerStatus {
 
     // Check /api/version
     let version_url = format!("{}/api/version", base.trim_end_matches('/'));
-    let version =
-        parse_json_opt::<OllamaVersionResponse>(client.get(&version_url).send().await.ok())
-            .await
-            .and_then(|r| r.version);
+    let version = parse_json_opt::<OllamaVersionResponse>(client.get(&version_url).send().await.ok())
+        .await
+        .and_then(|r| r.version);
 
     LocalServerStatus {
         provider: LocalProvider::Ollama,
@@ -393,10 +378,7 @@ async fn probe_lmstudio() -> LocalServerStatus {
     };
 
     if !resp.status().is_success() {
-        return LocalServerStatus::not_running(
-            LocalProvider::LmStudio,
-            format!("HTTP {}", resp.status()),
-        );
+        return LocalServerStatus::not_running(LocalProvider::LmStudio, format!("HTTP {}", resp.status()));
     }
 
     let available_models = resp
@@ -428,19 +410,15 @@ async fn probe_llamacpp() -> LocalServerStatus {
     };
 
     if !health_resp.status().is_success() {
-        return LocalServerStatus::not_running(
-            LocalProvider::LlamaCpp,
-            format!("HTTP {}", health_resp.status()),
-        );
+        return LocalServerStatus::not_running(LocalProvider::LlamaCpp, format!("HTTP {}", health_resp.status()));
     }
 
     // Check /models
     let models_url = format!("{}/models", base.trim_end_matches('/'));
-    let available_models =
-        parse_json_opt::<LlamaCppModelsResponse>(client.get(&models_url).send().await.ok())
-            .await
-            .map(|r| r.data.into_iter().map(|m| m.id).collect())
-            .unwrap_or_default();
+    let available_models = parse_json_opt::<LlamaCppModelsResponse>(client.get(&models_url).send().await.ok())
+        .await
+        .map(|r| r.data.into_iter().map(|m| m.id).collect())
+        .unwrap_or_default();
 
     LocalServerStatus {
         provider: LocalProvider::LlamaCpp,
@@ -555,15 +533,9 @@ async fn start_llamacpp() -> Result<String> {
     };
 
     let binary = caps.binary_path.unwrap_or_else(|| "llama-server".to_string());
-    let port = extract_port(&LocalProvider::LlamaCpp.base_url())
-        .unwrap_or(LocalProvider::LlamaCpp.default_port());
+    let port = extract_port(&LocalProvider::LlamaCpp.base_url()).unwrap_or(LocalProvider::LlamaCpp.default_port());
 
-    let mut args = vec![
-        "-m".to_string(),
-        model_path,
-        "--port".to_string(),
-        port.to_string(),
-    ];
+    let mut args = vec!["-m".to_string(), model_path, "--port".to_string(), port.to_string()];
     if let Ok(extra) = std::env::var(env_vars::LLAMACPP_EXTRA_ARGS)
         && !extra.trim().is_empty()
     {
@@ -577,9 +549,9 @@ async fn start_llamacpp() -> Result<String> {
         .stderr(Stdio::null())
         .kill_on_drop(true);
 
-    let child = cmd.spawn().with_context(|| {
-        format!("Failed to start llama-server (`{binary} -m <model> --port {port}`)")
-    })?;
+    let child = cmd
+        .spawn()
+        .with_context(|| format!("Failed to start llama-server (`{binary} -m <model> --port {port}`)"))?;
 
     store_managed_child(LocalProvider::LlamaCpp, child);
 
@@ -854,9 +826,7 @@ struct LlamaCppModel {
 }
 
 // Helper: parse response as JSON, returning None on failure
-async fn parse_json_opt<T: serde::de::DeserializeOwned>(
-    resp: Option<reqwest::Response>,
-) -> Option<T> {
+async fn parse_json_opt<T: serde::de::DeserializeOwned>(resp: Option<reqwest::Response>) -> Option<T> {
     let resp = resp?;
     if !resp.status().is_success() {
         return None;

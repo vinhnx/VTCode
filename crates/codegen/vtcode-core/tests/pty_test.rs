@@ -10,8 +10,7 @@ async fn temp_registry() -> (TempDir, ToolRegistry) {
 
 async fn temp_registry_with_config(vtcode_toml: Option<&str>) -> (TempDir, ToolRegistry) {
     let temp = TempDir::new().expect("temp workspace");
-    fs::write(temp.path().join("Cargo.toml"), "[package]\nname = \"pty-test\"\n")
-        .expect("write fixture Cargo.toml");
+    fs::write(temp.path().join("Cargo.toml"), "[package]\nname = \"pty-test\"\n").expect("write fixture Cargo.toml");
     if let Some(config) = vtcode_toml {
         fs::write(temp.path().join("vtcode.toml"), config).expect("write fixture vtcode.toml");
     }
@@ -83,9 +82,7 @@ async fn test_pty_functionality() {
     assert!(output.contains("Cargo.toml"));
     assert!(response["session_id"].as_str().is_some());
     assert!(response["command"].as_str().unwrap_or_default().contains("ls"));
-    assert!(
-        response["working_directory"].is_string() || response.get("working_directory").is_none()
-    );
+    assert!(response["working_directory"].is_string() || response.get("working_directory").is_none());
     assert!(response["rows"].is_number());
     assert!(response["cols"].is_number());
     assert!(response["is_exited"].is_boolean());
@@ -396,11 +393,12 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
         .await
         .expect("list sessions");
 
-    let active_sessions =
-        sessions["sessions"].as_array().expect("sessions list should be an array");
-    assert!(!active_sessions.iter().any(|session| {
-        session.get("id").and_then(|value| value.as_str()) == Some(sid.as_str())
-    }));
+    let active_sessions = sessions["sessions"].as_array().expect("sessions list should be an array");
+    assert!(
+        !active_sessions
+            .iter()
+            .any(|session| { session.get("id").and_then(|value| value.as_str()) == Some(sid.as_str()) })
+    );
 
     let reread = registry
         .execute_tool(
@@ -462,8 +460,7 @@ async fn test_exec_command_write_preserves_whitespace() {
         read_session_until_exit(&registry, sid.as_str(), 8, 100).await
     };
     assert_eq!(final_read["success"], true);
-    let combined_output =
-        format!("{}{}", write["output"].as_str().unwrap_or_default(), tail_output);
+    let combined_output = format!("{}{}", write["output"].as_str().unwrap_or_default(), tail_output);
     assert!(combined_output.contains("<  keep  >"), "combined output was: {combined_output:?}");
 }
 
@@ -612,10 +609,7 @@ spool_max_age_secs = 12
     assert_eq!(poll["is_exited"].as_bool(), Some(false));
     assert_eq!(poll["truncated"].as_bool(), Some(true));
     let spool_path = poll["spool_path"].as_str().expect("capped poll output should be spooled");
-    assert!(
-        spool_path.contains("write_stdin_"),
-        "spool path should use the public tool name: {spool_path}"
-    );
+    assert!(spool_path.contains("write_stdin_"), "spool path should use the public tool name: {spool_path}");
     let spooled = fs::read_to_string(temp.path().join(spool_path)).expect("read spool file");
     assert!(
         spooled.contains("abcdefghijklmnopqrstuvwxyz"),
@@ -729,10 +723,7 @@ async fn test_write_stdin_reports_missing_and_closed_session_ids() {
         )
         .await
         .expect("closed session should return structured tool error");
-    assert!(
-        closed.get("error").is_some(),
-        "closed session response should be a structured error: {closed:?}"
-    );
+    assert!(closed.get("error").is_some(), "closed session response should be a structured error: {closed:?}");
     assert_eq!(closed["error"]["tool_name"], "write_stdin");
 }
 
@@ -780,10 +771,7 @@ spool_max_age_secs = 12
     let spool_path = write["spool_path"]
         .as_str()
         .expect("capped write_stdin output should be spooled");
-    assert!(
-        spool_path.contains("write_stdin_"),
-        "spool path should use the public tool name: {spool_path}"
-    );
+    assert!(spool_path.contains("write_stdin_"), "spool path should use the public tool name: {spool_path}");
     let spooled = fs::read_to_string(temp.path().join(spool_path)).expect("read spool file");
     assert!(
         spooled.contains(payload.trim_end()),

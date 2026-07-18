@@ -186,11 +186,8 @@ mod tests {
 
     #[test]
     fn definition_to_mcp_tool_rejects_unrelated_canonical_names() {
-        let tool = ToolDefinition::function(
-            "search_docs".to_owned(),
-            "Search docs".to_owned(),
-            json!({"type": "object"}),
-        );
+        let tool =
+            ToolDefinition::function("search_docs".to_owned(), "Search docs".to_owned(), json!({"type": "object"}));
         // The canonical name doesn't start with `mcp::fetch::`, so the reverse
         // conversion refuses it (instead of returning a bogus prefix-stripped
         // name).

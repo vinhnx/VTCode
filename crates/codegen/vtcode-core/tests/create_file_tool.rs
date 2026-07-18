@@ -50,8 +50,7 @@ async fn create_file_fails_when_file_exists() {
         .expect("tool execution should return error payload");
 
     // Should have error or not success
-    let has_error = value.get("error").is_some()
-        || value.get("success").and_then(|v| v.as_bool()) == Some(false);
+    let has_error = value.get("error").is_some() || value.get("success").and_then(|v| v.as_bool()) == Some(false);
     assert!(has_error, "expect error payload or success=false");
 
     let persisted = tokio::fs::read_to_string(existing_path)

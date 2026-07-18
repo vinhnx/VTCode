@@ -4,12 +4,8 @@ use super::tool_execution_guard::ToolExecutionGuard;
 use super::tool_rejection::{
     emit_failed_tool_outputs_for_completed_invocations, reject_denied_tool, reject_invalid_args,
 };
-use super::tool_types::{
-    PreparedRunnerToolBatch, PreparedRunnerToolCall, RunnerCallAdmission, ToolCallItemRef,
-};
-use crate::core::agent::events::{
-    ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value,
-};
+use super::tool_types::{PreparedRunnerToolBatch, PreparedRunnerToolCall, RunnerCallAdmission, ToolCallItemRef};
+use crate::core::agent::events::{ExecEventRecorder, tool_invocation_completed_event, tool_output_payload_from_value};
 use crate::core::agent::harness_kernel::{
     FallbackRecommendation, PreparedToolBatch, PreparedToolBatchKind, reduce_tool_result,
 };
@@ -36,9 +32,7 @@ fn snapshot_circuit_diagnostics(
 
 fn record_circuit_transition(
     runner: &AgentRunner,
-    error_recovery: &Arc<
-        parking_lot::Mutex<crate::core::agent::error_recovery::ErrorRecoveryState>,
-    >,
+    error_recovery: &Arc<parking_lot::Mutex<crate::core::agent::error_recovery::ErrorRecoveryState>>,
     tool_name: &str,
     before: Option<crate::tools::circuit_breaker::ToolCircuitDiagnostics>,
 ) {
@@ -134,21 +128,8 @@ fn apply_tool_success(
     runtime
         .state
         .push_tool_result(call_id.to_string(), name, &optimized_result, is_gemini);
-    complete_tool_invocation(
-        runtime,
-        event_recorder,
-        call_id,
-        name,
-        args,
-        tool_call_item,
-        ToolCallStatus::Completed,
-    );
-    finish_successful_tool_output(
-        event_recorder,
-        &tool_call_item.call_item_id,
-        call_id,
-        &optimized_result,
-    );
+    complete_tool_invocation(runtime, event_recorder, call_id, name, args, tool_call_item, ToolCallStatus::Completed);
+    finish_successful_tool_output(event_recorder, &tool_call_item.call_item_id, call_id, &optimized_result);
 }
 
 /// The outcome of evaluating whether a tool failure should halt further tool
@@ -177,12 +158,10 @@ fn classify_halt_decision(category: ErrorCategory) -> ToolHaltDecision {
             warning: "Tool was rate limited; halting further tool calls this turn.",
             mark_loop_limit: true,
         },
-        ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => {
-            ToolHaltDecision::Halt {
-                warning: "Tool denied by policy; halting further tool calls this turn.",
-                mark_loop_limit: false,
-            }
-        }
+        ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => ToolHaltDecision::Halt {
+            warning: "Tool denied by policy; halting further tool calls this turn.",
+            mark_loop_limit: false,
+        },
         _ => ToolHaltDecision::Continue,
     }
 }
@@ -203,10 +182,7 @@ fn apply_tool_failure_halt_policy(
     }
 }
 
-fn align_prepared_batches(
-    calls: Vec<PreparedRunnerToolCall>,
-    allow_parallel: bool,
-) -> Vec<PreparedRunnerToolBatch> {
+fn align_prepared_batches(calls: Vec<PreparedRunnerToolCall>, allow_parallel: bool) -> Vec<PreparedRunnerToolBatch> {
     let layout = PreparedToolBatch::plan_layout_with_names(
         calls
             .iter()
@@ -217,10 +193,7 @@ fn align_prepared_batches(
 
     layout
         .into_iter()
-        .map(|(kind, len)| PreparedRunnerToolBatch {
-            kind,
-            calls: calls.by_ref().take(len).collect(),
-        })
+        .map(|(kind, len)| PreparedRunnerToolBatch { kind, calls: calls.by_ref().take(len).collect() })
         .collect()
 }
 
@@ -277,26 +250,24 @@ impl AgentRunner {
             );
 
             match self.admit_tool_call(&step.tool_name, step.args.clone(), &mut runtime.state) {
-                Ok(fallback_prepared) => {
-                    match self.execute_prepared_tool_internal(&fallback_prepared).await {
-                        Ok((res, _attempts)) => {
-                            info!(
-                                agent = %agent_prefix,
-                                fallback_tool = %step.tool_name,
-                                "Fallback step succeeded"
-                            );
-                            return Some((res, step.tool_name, step.args));
-                        }
-                        Err(fallback_err) => {
-                            warn!(
-                                agent = %agent_prefix,
-                                tool = %step.tool_name,
-                                error = %fallback_err.message,
-                                "Fallback step failed; trying next"
-                            );
-                        }
+                Ok(fallback_prepared) => match self.execute_prepared_tool_internal(&fallback_prepared).await {
+                    Ok((res, _attempts)) => {
+                        info!(
+                            agent = %agent_prefix,
+                            fallback_tool = %step.tool_name,
+                            "Fallback step succeeded"
+                        );
+                        return Some((res, step.tool_name, step.args));
                     }
-                }
+                    Err(fallback_err) => {
+                        warn!(
+                            agent = %agent_prefix,
+                            tool = %step.tool_name,
+                            error = %fallback_err.message,
+                            "Fallback step failed; trying next"
+                        );
+                    }
+                },
                 Err(admit_err) => {
                     warn!(
                         agent = %agent_prefix,
@@ -377,11 +348,7 @@ impl AgentRunner {
             }
         };
 
-        if self.check_for_loop(
-            &prepared.canonical_name,
-            &prepared.effective_args,
-            &mut runtime.state,
-        ) {
+        if self.check_for_loop(&prepared.canonical_name, &prepared.effective_args, &mut runtime.state) {
             return Ok(RunnerCallAdmission::StopTurn);
         }
 
@@ -399,10 +366,7 @@ impl AgentRunner {
             return Ok(RunnerCallAdmission::Rejected);
         }
 
-        Ok(RunnerCallAdmission::Prepared(Box::new(PreparedRunnerToolCall {
-            tool_call_id: call.id,
-            prepared,
-        })))
+        Ok(RunnerCallAdmission::Prepared(Box::new(PreparedRunnerToolCall { tool_call_id: call.id, prepared })))
     }
 
     async fn execute_prepared_parallel_tool_calls(
@@ -418,16 +382,15 @@ impl AgentRunner {
         // Extract fallback recommendations before consuming the Vec.  Only
         // entries that actually carry a fallback are stored, keeping the map
         // small (most tool calls have no fallback).
-        let fallback_map: std::collections::HashMap<String, FallbackRecommendation> =
-            prepared_calls
-                .iter()
-                .filter_map(|c| {
-                    c.prepared
-                        .fallback_recommendation
-                        .as_ref()
-                        .map(|fb| (c.tool_call_id.clone(), fb.clone()))
-                })
-                .collect();
+        let fallback_map: std::collections::HashMap<String, FallbackRecommendation> = prepared_calls
+            .iter()
+            .filter_map(|c| {
+                c.prepared
+                    .fallback_recommendation
+                    .as_ref()
+                    .map(|fb| (c.tool_call_id.clone(), fb.clone()))
+            })
+            .collect();
 
         let max_parallel = self.config().agent.harness.max_parallel_tool_calls;
         // Build a semaphore only when a finite concurrency cap is configured.
@@ -449,8 +412,7 @@ impl AgentRunner {
             let PreparedRunnerToolCall { tool_call_id, prepared } = call;
             let name = prepared.canonical_name.clone();
             let args = prepared.effective_args.clone();
-            let tool_call_item =
-                resolve_tool_call_item(runtime, event_recorder, &name, &args, &tool_call_id);
+            let tool_call_item = resolve_tool_call_item(runtime, event_recorder, &name, &args, &tool_call_id);
             let runner = self;
             let circuit_before = snapshot_circuit_diagnostics(runner, &name);
             let sem = semaphore.clone();
@@ -497,8 +459,7 @@ impl AgentRunner {
                     if attempts > 1 {
                         event_recorder.error_recovered(&name, attempts, "transient");
                     }
-                    event_recorder
-                        .tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
+                    event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call_id));
                     apply_tool_success(
                         self,
                         runtime,
@@ -545,8 +506,7 @@ impl AgentRunner {
                         )?;
                     } else {
                         let category = e.category;
-                        let should_halt =
-                            apply_tool_failure_halt_policy(&mut runtime.state, category);
+                        let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
                         complete_tool_invocation(
                             runtime,
                             event_recorder,
@@ -556,21 +516,15 @@ impl AgentRunner {
                             &tool_call_item,
                             ToolCallStatus::Failed,
                         );
-                        let mut failure_ctx =
-                            super::tool_dispatch_common::build_tool_failure_context(
-                                agent_prefix,
-                                &mut runtime.state,
-                                event_recorder,
-                                &call_id,
-                                Some(tool_call_item.call_item_id.as_str()),
-                                is_gemini,
-                            );
-                        self.record_tool_failure(
-                            &mut failure_ctx,
-                            &name,
-                            &e,
-                            Some(call_id.as_str()),
+                        let mut failure_ctx = super::tool_dispatch_common::build_tool_failure_context(
+                            agent_prefix,
+                            &mut runtime.state,
+                            event_recorder,
+                            &call_id,
+                            Some(tool_call_item.call_item_id.as_str()),
+                            is_gemini,
                         );
+                        self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call_id.as_str()));
                         if should_halt {
                             halt_turn = true;
                             break;
@@ -598,18 +552,13 @@ impl AgentRunner {
             info!(agent = %self.agent_type, tool = %name, "Calling tool");
         }
 
-        let tool_call_item =
-            resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.tool_call_id);
+        let tool_call_item = resolve_tool_call_item(runtime, event_recorder, &name, &args, &call.tool_call_id);
         event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(&call.tool_call_id));
         let circuit_before = snapshot_circuit_diagnostics(self, &name);
 
         self.throttle_repeated_tool(&name).await;
 
-        let mut guard = ToolExecutionGuard::new(
-            &name,
-            &call.tool_call_id,
-            runtime.state.error_recovery.clone(),
-        );
+        let mut guard = ToolExecutionGuard::new(&name, &call.tool_call_id, runtime.state.error_recovery.clone());
         let _tool_start = std::time::Instant::now();
         match self.execute_prepared_tool_internal(&call.prepared).await {
             Ok((result, attempts)) => {
@@ -621,12 +570,7 @@ impl AgentRunner {
                     event_recorder.error_recovered(&name, attempts, "transient");
                 }
                 guard.mark_completed();
-                record_circuit_transition(
-                    self,
-                    &runtime.state.error_recovery,
-                    &name,
-                    circuit_before,
-                );
+                record_circuit_transition(self, &runtime.state.error_recovery, &name, circuit_before);
                 apply_tool_success(
                     self,
                     runtime,
@@ -658,21 +602,15 @@ impl AgentRunner {
                     );
                 }
                 // Try fallback first before declaring failure.
-                let fallback_outcome =
-                    if let Some(fallback) = &call.prepared.fallback_recommendation {
-                        self.try_execute_fallback(fallback, runtime, agent_prefix, &name).await
-                    } else {
-                        None
-                    };
+                let fallback_outcome = if let Some(fallback) = &call.prepared.fallback_recommendation {
+                    self.try_execute_fallback(fallback, runtime, agent_prefix, &name).await
+                } else {
+                    None
+                };
 
                 if let Some((res, f_name, f_args)) = fallback_outcome {
                     guard.mark_completed();
-                    record_circuit_transition(
-                        self,
-                        &runtime.state.error_recovery,
-                        &f_name,
-                        circuit_before,
-                    );
+                    record_circuit_transition(self, &runtime.state.error_recovery, &f_name, circuit_before);
                     self.apply_fallback_success(
                         runtime,
                         event_recorder,
@@ -688,12 +626,7 @@ impl AgentRunner {
                 } else {
                     // Main failure and fallback failed / not present
                     guard.mark_completed();
-                    record_circuit_transition(
-                        self,
-                        &runtime.state.error_recovery,
-                        &name,
-                        circuit_before,
-                    );
+                    record_circuit_transition(self, &runtime.state.error_recovery, &name, circuit_before);
                     let category = e.category;
                     let should_halt = apply_tool_failure_halt_policy(&mut runtime.state, category);
 
@@ -714,12 +647,7 @@ impl AgentRunner {
                         Some(tool_call_item.call_item_id.as_str()),
                         is_gemini,
                     );
-                    self.record_tool_failure(
-                        &mut failure_ctx,
-                        &name,
-                        &e,
-                        Some(call.tool_call_id.as_str()),
-                    );
+                    self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.tool_call_id.as_str()));
 
                     Ok(should_halt)
                 }
@@ -775,13 +703,7 @@ impl AgentRunner {
             if allow_parallel {
                 while let Some(next_call) = pending.pop_front() {
                     match self
-                        .admit_runner_tool_call(
-                            next_call,
-                            runtime,
-                            event_recorder,
-                            agent_prefix,
-                            is_gemini,
-                        )
+                        .admit_runner_tool_call(next_call, runtime, event_recorder, agent_prefix, is_gemini)
                         .await?
                     {
                         RunnerCallAdmission::Prepared(call) if call.prepared.can_parallelize() => {
@@ -878,12 +800,9 @@ impl AgentRunner {
 
         self.update_last_paths_from_args(tool_name, tool_args, &mut runtime.state);
 
-        runtime.state.push_tool_result(
-            call_id.to_string(),
-            tool_name,
-            &optimized_result,
-            is_gemini,
-        );
+        runtime
+            .state
+            .push_tool_result(call_id.to_string(), tool_name, &optimized_result, is_gemini);
         complete_tool_invocation(
             runtime,
             event_recorder,
@@ -894,12 +813,7 @@ impl AgentRunner {
             ToolCallStatus::Completed,
         );
         event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(call_id));
-        finish_successful_tool_output(
-            event_recorder,
-            &tool_call_item.call_item_id,
-            call_id,
-            &optimized_result,
-        );
+        finish_successful_tool_output(event_recorder, &tool_call_item.call_item_id, call_id, &optimized_result);
 
         Ok(())
     }

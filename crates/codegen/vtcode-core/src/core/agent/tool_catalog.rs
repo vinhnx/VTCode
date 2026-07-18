@@ -50,8 +50,7 @@ impl SessionToolCatalogSnapshot {
         active_tool_names: Arc<Vec<String>>,
         cache_hit: bool,
     ) -> Self {
-        let tool_catalog_hash =
-            super::harness_kernel::hash_tool_definitions(snapshot.as_deref().map(Vec::as_slice));
+        let tool_catalog_hash = super::harness_kernel::hash_tool_definitions(snapshot.as_deref().map(Vec::as_slice));
         Self {
             version,
             epoch,

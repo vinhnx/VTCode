@@ -13,9 +13,7 @@ use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::ui::inline_theme_from_core_styles;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_ui::tui::app::{
-    InlineHandle, InlineSession, SessionOptions, spawn_session_with_options,
-};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession, SessionOptions, spawn_session_with_options};
 
 /// Helper function to create test registry with common setup
 async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
@@ -80,9 +78,7 @@ impl TestContext {
             },
         ) {
             Ok(session) => session,
-            Err(err) if err.to_string().contains("stdin is not a terminal") => {
-                create_headless_session()
-            }
+            Err(err) if err.to_string().contains("stdin is not a terminal") => create_headless_session(),
             Err(err) => panic!("failed to spawn test session: {err:#}"),
         };
         // Skip confirmations for tests to ensure non-interactive success
@@ -114,16 +110,8 @@ async fn test_execute_tool_with_timeout() {
     let ctrl_c_notify = Arc::new(Notify::new());
 
     // Test a simple tool execution with unknown tool
-    let result = execute_tool_with_timeout(
-        &registry,
-        "test_tool",
-        json!({}),
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        0,
-    )
-    .await;
+    let result =
+        execute_tool_with_timeout(&registry, "test_tool", json!({}), &ctrl_c_state, &ctrl_c_notify, None, 0).await;
 
     // Verify the result - unknown tool should return error or failure
     match result {
@@ -227,19 +215,13 @@ fn test_process_tool_output_loop_detection() {
         assert_eq!(output.get("repeat_count").and_then(|v| v.as_u64()), Some(5));
         assert_eq!(output.get("tool").and_then(|v| v.as_str()), Some("read_file"));
     } else {
-        panic!(
-            "Expected Success variant for loop detection (to avoid blocked-streak increment), got: {status:?}"
-        );
+        panic!("Expected Success variant for loop detection (to avoid blocked-streak increment), got: {status:?}");
     }
 }
 
 #[test]
 fn test_create_timeout_error() {
-    let status = create_timeout_error(
-        "test_tool",
-        ToolTimeoutCategory::Default,
-        Some(Duration::from_secs(42)),
-    );
+    let status = create_timeout_error("test_tool", ToolTimeoutCategory::Default, Some(Duration::from_secs(42)));
     if let ToolExecutionStatus::Timeout { error } = status {
         assert!(error.message.contains("test_tool"));
         assert!(error.message.contains("timeout ceiling"));

@@ -89,17 +89,15 @@ impl TaskOutcome {
         match self {
             Self::Success => "Task completed successfully".into(),
             Self::StoppedNoAction => "Stopped after agent signaled no further actions".into(),
-            Self::TurnLimitReached { max_turns, actual_turns } => format!(
-                "Stopped after reaching turn limit (max: {max_turns}, reached: {actual_turns})"
-            ),
-            Self::BudgetLimitReached { max_budget_usd, actual_cost_usd } => format!(
-                "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${actual_cost_usd:.4})"
-            ),
+            Self::TurnLimitReached { max_turns, actual_turns } => {
+                format!("Stopped after reaching turn limit (max: {max_turns}, reached: {actual_turns})")
+            }
+            Self::BudgetLimitReached { max_budget_usd, actual_cost_usd } => {
+                format!("Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${actual_cost_usd:.4})")
+            }
             Self::ToolLoopLimitReached { max_tool_loops, actual_tool_loops } => {
                 if *max_tool_loops == 0 {
-                    format!(
-                        "Stopped after a tool-loop safeguard halted execution (reached: {actual_tool_loops})"
-                    )
+                    format!("Stopped after a tool-loop safeguard halted execution (reached: {actual_tool_loops})")
                 } else {
                     format!(
                         "Stopped after reaching tool loop limit (max: {max_tool_loops}, reached: {actual_tool_loops})"
@@ -216,14 +214,8 @@ mod tests {
 
     #[test]
     fn thread_completion_subtype_matches_public_result_states() {
-        assert_eq!(
-            TaskOutcome::Success.thread_completion_subtype(),
-            ThreadCompletionSubtype::Success
-        );
-        assert_eq!(
-            TaskOutcome::StoppedNoAction.thread_completion_subtype(),
-            ThreadCompletionSubtype::Success
-        );
+        assert_eq!(TaskOutcome::Success.thread_completion_subtype(), ThreadCompletionSubtype::Success);
+        assert_eq!(TaskOutcome::StoppedNoAction.thread_completion_subtype(), ThreadCompletionSubtype::Success);
         assert_eq!(
             TaskOutcome::turn_limit_reached(3, 3).thread_completion_subtype(),
             ThreadCompletionSubtype::ErrorMaxTurns
@@ -232,13 +224,9 @@ mod tests {
             TaskOutcome::budget_limit_reached(1.0, 1.2).thread_completion_subtype(),
             ThreadCompletionSubtype::ErrorMaxBudgetUsd
         );
+        assert_eq!(TaskOutcome::Cancelled.thread_completion_subtype(), ThreadCompletionSubtype::Cancelled);
         assert_eq!(
-            TaskOutcome::Cancelled.thread_completion_subtype(),
-            ThreadCompletionSubtype::Cancelled
-        );
-        assert_eq!(
-            (TaskOutcome::failed("boom".to_string(), vec![], None, None))
-                .thread_completion_subtype(),
+            (TaskOutcome::failed("boom".to_string(), vec![], None, None)).thread_completion_subtype(),
             ThreadCompletionSubtype::ErrorDuringExecution
         );
     }

@@ -181,10 +181,7 @@ impl ModelsManager {
             }
             _ => {
                 // For other providers, we don't have remote discovery yet
-                info!(
-                    "Remote model discovery for {:?} not implemented, using local presets",
-                    provider
-                );
+                info!("Remote model discovery for {:?} not implemented, using local presets", provider);
                 Ok(())
             }
         }
@@ -297,9 +294,7 @@ impl ModelsManager {
     /// Get the default model for a specific provider
     pub fn get_default_model_for_provider(&self, provider: Provider) -> String {
         // First check if there's a default in local presets
-        if let Some(preset) =
-            self.local_models.iter().find(|p| p.provider == provider && p.is_default)
-        {
+        if let Some(preset) = self.local_models.iter().find(|p| p.provider == provider && p.is_default) {
             return preset.model.clone();
         }
 
@@ -308,46 +303,24 @@ impl ModelsManager {
             Provider::Gemini => GEMINI_DEFAULT_MODEL.to_string(),
             Provider::OpenAI => OPENAI_DEFAULT_MODEL.to_string(),
             Provider::Anthropic => ANTHROPIC_DEFAULT_MODEL.to_string(),
-            Provider::Copilot => {
-                crate::config::constants::models::copilot::DEFAULT_MODEL.to_string()
-            }
+            Provider::Copilot => crate::config::constants::models::copilot::DEFAULT_MODEL.to_string(),
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
             Provider::ZAI => "glm-5.2".to_string(),
-            Provider::Minimax => {
-                crate::config::constants::models::minimax::DEFAULT_MODEL.to_string()
-            }
-            Provider::Mistral => {
-                crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string()
-            }
+            Provider::Minimax => crate::config::constants::models::minimax::DEFAULT_MODEL.to_string(),
+            Provider::Mistral => crate::config::constants::models::mistral::MISTRAL_LARGE_3.to_string(),
             Provider::OpenRouter => "xiaomi/mimo-v2.5-pro".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
-            Provider::LmStudio => {
-                crate::config::constants::models::lmstudio::DEFAULT_MODEL.to_string()
-            }
-            Provider::LlamaCpp => {
-                crate::config::constants::models::llamacpp::DEFAULT_MODEL.to_string()
-            }
-            Provider::Moonshot => {
-                crate::config::constants::models::moonshot::DEFAULT_MODEL.to_string()
-            }
+            Provider::LmStudio => crate::config::constants::models::lmstudio::DEFAULT_MODEL.to_string(),
+            Provider::LlamaCpp => crate::config::constants::models::llamacpp::DEFAULT_MODEL.to_string(),
+            Provider::Moonshot => crate::config::constants::models::moonshot::DEFAULT_MODEL.to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
-            Provider::OpenCodeZen => {
-                crate::config::constants::models::opencode_zen::DEFAULT_MODEL.to_string()
-            }
-            Provider::OpenCodeGo => {
-                crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string()
-            }
+            Provider::OpenCodeZen => crate::config::constants::models::opencode_zen::DEFAULT_MODEL.to_string(),
+            Provider::OpenCodeGo => crate::config::constants::models::opencode_go::DEFAULT_MODEL.to_string(),
             Provider::MiMo => crate::config::constants::models::mimo::DEFAULT_MODEL.to_string(),
             Provider::Qwen => crate::config::constants::models::qwen::DEFAULT_MODEL.to_string(),
-            Provider::StepFun => {
-                crate::config::constants::models::stepfun::DEFAULT_MODEL.to_string()
-            }
-            Provider::Evolink => {
-                crate::config::constants::models::evolink::DEFAULT_MODEL.to_string()
-            }
-            Provider::Poolside => {
-                crate::config::constants::models::poolside::DEFAULT_MODEL.to_string()
-            }
+            Provider::StepFun => crate::config::constants::models::stepfun::DEFAULT_MODEL.to_string(),
+            Provider::Evolink => crate::config::constants::models::evolink::DEFAULT_MODEL.to_string(),
+            Provider::Poolside => crate::config::constants::models::poolside::DEFAULT_MODEL.to_string(),
         }
     }
 
@@ -436,16 +409,12 @@ impl ModelsManager {
     }
 
     /// Merge remote and local presets, preferring remote when duplicates exist
-    fn merge_presets(
-        remote_presets: Vec<ModelPreset>,
-        existing_presets: Vec<ModelPreset>,
-    ) -> Vec<ModelPreset> {
+    fn merge_presets(remote_presets: Vec<ModelPreset>, existing_presets: Vec<ModelPreset>) -> Vec<ModelPreset> {
         if remote_presets.is_empty() {
             return existing_presets;
         }
 
-        let remote_slugs: HashSet<String> =
-            remote_presets.iter().map(|preset| preset.model.clone()).collect();
+        let remote_slugs: HashSet<String> = remote_presets.iter().map(|preset| preset.model.clone()).collect();
 
         let mut merged_presets = remote_presets;
         for mut preset in existing_presets {

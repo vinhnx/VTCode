@@ -74,9 +74,7 @@ pub struct ThinkingConfig {
     pub thinking_level: Option<String>,
 }
 
-fn deserialize_boxed_generation_config_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<Box<GenerationConfig>>, D::Error>
+fn deserialize_boxed_generation_config_opt<'de, D>(deserializer: D) -> Result<Option<Box<GenerationConfig>>, D::Error>
 where
     D: Deserializer<'de>,
 {

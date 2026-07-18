@@ -25,12 +25,7 @@ pub(super) fn update_previous_response_chain_after_success(
     messages: &[uni::Message],
 ) {
     if records_responses_continuation_state(provider_name, provider_supports_responses_compaction) {
-        session_stats.set_previous_response_chain(
-            provider_name,
-            active_model,
-            response_request_id,
-            messages,
-        );
+        session_stats.set_previous_response_chain(provider_name, active_model, response_request_id, messages);
     }
 }
 

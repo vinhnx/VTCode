@@ -139,10 +139,7 @@ impl EvaluationRubric {
         };
 
         let feedback = if overall_pass {
-            format!(
-                "Sprint PASSED. Overall score: {:.0}%. All dimensions meet hard thresholds.",
-                overall_score * 100.0,
-            )
+            format!("Sprint PASSED. Overall score: {:.0}%. All dimensions meet hard thresholds.", overall_score * 100.0,)
         } else {
             format!(
                 "Sprint FAILED. Overall score: {:.0}%. {} dimension(s) below hard threshold: {}",

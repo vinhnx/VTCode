@@ -3,9 +3,7 @@ use crate::config::types::{ResolvedShellPromptProfile, ShellPromptProfile};
 use once_cell::sync::Lazy;
 
 static TOOL_USAGE_PROMPT: Lazy<String> = Lazy::new(|| {
-    PromptTemplates::tool_usage_prompt_for_profile(
-        ShellPromptProfile::Auto.resolve_for_current_platform(),
-    )
+    PromptTemplates::tool_usage_prompt_for_profile(ShellPromptProfile::Auto.resolve_for_current_platform())
 });
 
 /// Prompt template collection
@@ -20,18 +18,10 @@ impl PromptTemplates {
     /// Get personality-specific prompt addition
     pub fn personality_prompt(personality: &AgentPersonality) -> &'static str {
         match personality {
-            AgentPersonality::Professional => {
-                "Maintain a professional, focused approach to problem-solving."
-            }
-            AgentPersonality::Friendly => {
-                "Be friendly and encouraging while helping with coding tasks."
-            }
-            AgentPersonality::Technical => {
-                "Provide detailed technical explanations and focus on best practices."
-            }
-            AgentPersonality::Creative => {
-                "Think creatively and suggest innovative solutions to problems."
-            }
+            AgentPersonality::Professional => "Maintain a professional, focused approach to problem-solving.",
+            AgentPersonality::Friendly => "Be friendly and encouraging while helping with coding tasks.",
+            AgentPersonality::Technical => "Provide detailed technical explanations and focus on best practices.",
+            AgentPersonality::Creative => "Think creatively and suggest innovative solutions to problems.",
         }
     }
 
@@ -42,12 +32,8 @@ impl PromptTemplates {
                 "Lead with the conclusion. Include the evidence needed to support it, any material caveat, and the next action. Omit secondary detail and repetition."
             }
             ResponseStyle::Detailed => "Provide detailed explanations and comprehensive answers.",
-            ResponseStyle::Conversational => {
-                "Use a conversational tone and explain concepts clearly."
-            }
-            ResponseStyle::Technical => {
-                "Focus on technical accuracy and include relevant implementation details."
-            }
+            ResponseStyle::Conversational => "Use a conversational tone and explain concepts clearly.",
+            ResponseStyle::Technical => "Focus on technical accuracy and include relevant implementation details.",
         }
     }
 
@@ -103,8 +89,7 @@ mod tests {
 
     #[test]
     fn tool_usage_prompt_prefers_codex_baseline_tools() {
-        let prompt =
-            PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::UnixLike);
+        let prompt = PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::UnixLike);
         assert!(prompt.contains("exec_command"));
         assert!(prompt.contains("exec_command.cmd"));
         assert!(prompt.contains("write_stdin"));
@@ -126,8 +111,7 @@ mod tests {
 
     #[test]
     fn tool_usage_prompt_supports_powershell_profile() {
-        let prompt =
-            PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::PowerShell);
+        let prompt = PromptTemplates::tool_usage_prompt_for_profile(ResolvedShellPromptProfile::PowerShell);
 
         assert!(prompt.contains("native PowerShell commands"));
         assert!(prompt.contains("`Get-ChildItem`"));

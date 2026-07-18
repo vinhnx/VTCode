@@ -19,8 +19,7 @@ pub async fn collect_single_response(
         match event? {
             NormalizedStreamEvent::TextDelta { delta } => streamed_content.push_str(&delta),
             NormalizedStreamEvent::ReasoningDelta { delta } => streamed_reasoning.push_str(&delta),
-            NormalizedStreamEvent::ToolCallStart { .. }
-            | NormalizedStreamEvent::ToolCallDelta { .. } => {}
+            NormalizedStreamEvent::ToolCallStart { .. } | NormalizedStreamEvent::ToolCallDelta { .. } => {}
             NormalizedStreamEvent::Usage { usage } => streamed_usage = Some(usage),
             NormalizedStreamEvent::Done { response } => {
                 completed = Some(*response);

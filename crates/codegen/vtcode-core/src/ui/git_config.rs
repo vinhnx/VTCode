@@ -160,12 +160,11 @@ impl GitColorConfig {
             Ok(regex) => regex,
             Err(error) => panic!("open bracket regex must compile: {error}"),
         });
-        let section_end =
-            if let Some(next_section) = OPEN_BRACKET_RE.find(&content[section_start..]) {
-                section_start + next_section.start()
-            } else {
-                content.len()
-            };
+        let section_end = if let Some(next_section) = OPEN_BRACKET_RE.find(&content[section_start..]) {
+            section_start + next_section.start()
+        } else {
+            content.len()
+        };
 
         let section_content = &content[section_start..section_end];
 
@@ -180,16 +179,7 @@ impl GitColorConfig {
         let color_name = value.split_whitespace().find(|word| {
             matches!(
                 word.to_lowercase().as_str(),
-                "normal"
-                    | "black"
-                    | "red"
-                    | "green"
-                    | "yellow"
-                    | "blue"
-                    | "magenta"
-                    | "purple"
-                    | "cyan"
-                    | "white"
+                "normal" | "black" | "red" | "green" | "yellow" | "blue" | "magenta" | "purple" | "cyan" | "white"
             )
         })?;
 

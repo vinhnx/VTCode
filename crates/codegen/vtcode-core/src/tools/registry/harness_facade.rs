@@ -32,19 +32,14 @@ impl ToolRegistry {
     }
 
     /// Attach the runloop's shared per-tool circuit breaker.
-    pub fn set_shared_circuit_breaker(
-        &self,
-        circuit_breaker: Arc<crate::tools::circuit_breaker::CircuitBreaker>,
-    ) {
+    pub fn set_shared_circuit_breaker(&self, circuit_breaker: Arc<crate::tools::circuit_breaker::CircuitBreaker>) {
         if let Ok(mut slot) = self.shared_circuit_breaker.write() {
             *slot = Some(circuit_breaker);
         }
     }
 
     /// Return the shared per-tool circuit breaker when configured.
-    pub fn shared_circuit_breaker(
-        &self,
-    ) -> Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>> {
+    pub fn shared_circuit_breaker(&self) -> Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>> {
         self.shared_circuit_breaker.read().ok().and_then(|g| g.clone())
     }
 
@@ -63,11 +58,7 @@ impl ToolRegistry {
         self.process_harness_command_session_output(value).await
     }
 
-    pub async fn read_harness_exec_session_output(
-        &self,
-        session_id: &str,
-        drain: bool,
-    ) -> Result<Option<String>> {
+    pub async fn read_harness_exec_session_output(&self, session_id: &str, drain: bool) -> Result<Option<String>> {
         self.exec_sessions.read_session_output(session_id, drain).await
     }
 
@@ -83,10 +74,7 @@ impl ToolRegistry {
 
     /// Inline-delegating wrapper over
     /// [`Self::terminate_harness_exec_session`].
-    pub fn terminate_harness_exec_session<'a>(
-        &'a self,
-        session_id: &'a str,
-    ) -> impl Future<Output = Result<()>> + 'a {
+    pub fn terminate_harness_exec_session<'a>(&'a self, session_id: &'a str) -> impl Future<Output = Result<()>> + 'a {
         self.exec_sessions.terminate_session(session_id)
     }
 

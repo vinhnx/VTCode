@@ -6,12 +6,11 @@ use std::sync::LazyLock;
 /// Regex to match @ followed by a potential file path or URL
 /// Handles both quoted paths (with spaces) and unquoted paths
 #[allow(clippy::panic)]
-pub static AT_PATTERN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r#"@(?:\"([^\"]+)\"|'([^']+)'|([^\s"'\[\](){}<>|\\^`]+))"#) {
+pub static AT_PATTERN_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r#"@(?:\"([^\"]+)\"|'([^']+)'|([^\s"'\[\](){}<>|\\^`]+))"#) {
         Ok(regex) => regex,
         Err(error) => panic!("Failed to compile @ pattern regex: {error}"),
-    }
-});
+    });
 
 /// A parsed match of an @ pattern
 #[derive(Debug, Clone, PartialEq, Eq)]

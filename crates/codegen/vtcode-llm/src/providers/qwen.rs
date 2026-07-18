@@ -22,21 +22,17 @@ impl OpenAiCompatSpec for QwenSpec {
     const DEFAULT_BASE_URL: &'static str = urls::QWEN_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::QWEN_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::qwen::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::qwen::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::qwen::SUPPORTED_MODELS);
 
     const STREAM_OPTIONS_INCLUDE_USAGE: bool = true;
     const INCLUDE_USER_ID: bool = true;
-    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
-        Some(qwen_reasoning);
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> = Some(qwen_reasoning);
 
     fn resolve_api_key(api_key: Option<String>) -> String {
         api_key
             .filter(|key| !key.trim().is_empty())
             .or_else(|| std::env::var(Self::API_KEY_ENV).ok().filter(|key| !key.trim().is_empty()))
-            .or_else(|| {
-                std::env::var("DASHSCOPE_API_KEY").ok().filter(|key| !key.trim().is_empty())
-            })
+            .or_else(|| std::env::var("DASHSCOPE_API_KEY").ok().filter(|key| !key.trim().is_empty()))
             .unwrap_or_default()
     }
 

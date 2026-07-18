@@ -75,10 +75,9 @@ fn loads_config_from_workspace_root_before_config_dir() -> Result<()> {
     write_config(&config_dir_config, "config-dir")?;
     write_config(&home_config, "home")?;
 
-    let manager =
-        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
-            ConfigManager::load_from_workspace(workspace_root)
-        })?;
+    let manager = with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+        ConfigManager::load_from_workspace(workspace_root)
+    })?;
     let expected_root_config = fs::canonicalize(&root_config)?;
 
     assert_eq!(manager.config().agent.provider, "workspace-root");
@@ -101,10 +100,9 @@ fn loads_config_from_config_dir_when_root_missing() -> Result<()> {
     write_config(&config_dir_config, "config-dir")?;
     write_config(&home_config, "home")?;
 
-    let manager =
-        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
-            ConfigManager::load_from_workspace(workspace_root)
-        })?;
+    let manager = with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+        ConfigManager::load_from_workspace(workspace_root)
+    })?;
     let expected_config_dir_config = fs::canonicalize(&config_dir_config)?;
 
     assert_eq!(manager.config().agent.provider, "config-dir");
@@ -124,10 +122,9 @@ fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
     let home_config = workspace_root.join("home").join("vtcode.toml");
     write_config(&home_config, "home")?;
 
-    let manager =
-        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
-            ConfigManager::load_from_workspace(workspace_root)
-        })?;
+    let manager = with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+        ConfigManager::load_from_workspace(workspace_root)
+    })?;
     let expected_home_config = fs::canonicalize(&home_config)?;
 
     assert_eq!(manager.config().agent.provider, "home");
@@ -239,10 +236,9 @@ fn use_root_config_discards_lower_precedence_layers() -> Result<()> {
     // Only workspace root layer (+ any runtime) should remain
     let layers = manager.layer_stack().layers();
     assert!(
-        layers.iter().all(|l| matches!(
-            &l.source,
-            ConfigLayerSource::Workspace { .. } | ConfigLayerSource::Runtime
-        )),
+        layers
+            .iter()
+            .all(|l| matches!(&l.source, ConfigLayerSource::Workspace { .. } | ConfigLayerSource::Runtime)),
         "expected only workspace/runtime layers, got: {:?}",
         layers.iter().map(|l| l.source.label()).collect::<Vec<_>>()
     );
@@ -324,10 +320,9 @@ fn use_root_config_from_file_discards_lower_precedence_layers() -> Result<()> {
     // Only workspace layer (+ any runtime) should remain; no system/user layers
     let layers = manager.layer_stack().layers();
     assert!(
-        layers.iter().all(|l| matches!(
-            &l.source,
-            ConfigLayerSource::Workspace { .. } | ConfigLayerSource::Runtime
-        )),
+        layers
+            .iter()
+            .all(|l| matches!(&l.source, ConfigLayerSource::Workspace { .. } | ConfigLayerSource::Runtime)),
         "expected only workspace/runtime layers, got: {:?}",
         layers.iter().map(|l| l.source.label()).collect::<Vec<_>>()
     );

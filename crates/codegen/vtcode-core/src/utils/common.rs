@@ -9,9 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub use vtcode_commons::project::{ProjectOverview, build_project_overview};
-pub use vtcode_commons::utils::{
-    current_timestamp, extract_readme_excerpt, extract_toml_str, safe_replace_text,
-};
+pub use vtcode_commons::utils::{current_timestamp, extract_readme_excerpt, extract_toml_str, safe_replace_text};
 
 /// Merge a base list of patterns with patterns loaded from an environment variable.
 /// The environment variable, if set, is expected to be a comma-separated list of values.
@@ -160,8 +158,8 @@ fn display_language_from_extension(extension: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_workspace_languages, display_language_from_editor_language_id,
-        display_language_from_path, summarize_workspace_languages,
+        detect_workspace_languages, display_language_from_editor_language_id, display_language_from_path,
+        summarize_workspace_languages,
     };
     use std::fs;
     use std::path::Path;

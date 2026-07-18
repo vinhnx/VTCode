@@ -66,9 +66,7 @@ impl SubagentController {
             {
                 Ok(Some(output)) => extract_tail_lines(&output, SUBAGENT_PREVIEW_LINES),
                 Ok(None) | Err(_) => {
-                    if let Some(path) =
-                        entry.transcript_path.as_ref().or(entry.archive_path.as_ref())
-                    {
+                    if let Some(path) = entry.transcript_path.as_ref().or(entry.archive_path.as_ref()) {
                         load_archive_preview(path).await.unwrap_or_default()
                     } else {
                         String::new()
@@ -121,13 +119,8 @@ impl SubagentController {
         if should_stop {
             self.graceful_stop_background(&target_id).await
         } else {
-            self.ensure_background_record_running(
-                agent_name.as_str(),
-                Some(target_id.as_str()),
-                0,
-                None,
-            )
-            .await
+            self.ensure_background_record_running(agent_name.as_str(), Some(target_id.as_str()), 0, None)
+                .await
         }
     }
 
@@ -222,8 +215,7 @@ impl SubagentController {
             let changed_this_record = {
                 let state = self.state.read().await;
                 state.background_children.get(&record_id).is_some_and(|r| {
-                    r.status != before_status.unwrap_or(BackgroundSubprocessStatus::Starting)
-                        || r.error != before_error
+                    r.status != before_status.unwrap_or(BackgroundSubprocessStatus::Starting) || r.error != before_error
                 })
             };
             changed |= changed_this_record;
@@ -276,11 +268,7 @@ impl SubagentController {
                         attempt = next_restart_attempt,
                         "Background subprocess exited unexpectedly; scheduling restart"
                     );
-                    return Ok(Some((
-                        record.agent_name.clone(),
-                        record.id.clone(),
-                        next_restart_attempt,
-                    )));
+                    return Ok(Some((record.agent_name.clone(), record.id.clone(), next_restart_attempt)));
                 }
                 Self::mark_background_record_stopped_or_error(record, &snapshot, &self.config);
             }
@@ -304,11 +292,7 @@ impl SubagentController {
                     attempt = next_restart_attempt,
                     "Background subprocess is missing; scheduling restart"
                 );
-                return Ok(Some((
-                    record.agent_name.clone(),
-                    record.id.clone(),
-                    next_restart_attempt,
-                )));
+                return Ok(Some((record.agent_name.clone(), record.id.clone(), next_restart_attempt)));
             }
             record.status = BackgroundSubprocessStatus::Error;
             record.error = Some("Background subprocess is not running".to_string());
@@ -337,10 +321,7 @@ impl SubagentController {
     }
 
     /// Gracefully stops a background subprocess by setting its desired state to disabled.
-    pub async fn graceful_stop_background(
-        &self,
-        target: &str,
-    ) -> Result<BackgroundSubprocessEntry> {
+    pub async fn graceful_stop_background(&self, target: &str) -> Result<BackgroundSubprocessEntry> {
         let (agent_name, exec_session_id) = {
             let mut state = self.state.write().await;
             let record = state
@@ -451,16 +432,13 @@ impl SubagentController {
             )
         };
 
-        let effective_config = effective_config.ok_or_else(|| {
-            anyhow!("Subagent {target} does not have a captured runtime configuration yet")
-        })?;
+        let effective_config = effective_config
+            .ok_or_else(|| anyhow!("Subagent {target} does not have a captured runtime configuration yet"))?;
         let snapshot = match thread_handle {
             Some(handle) => handle.snapshot(),
             None => {
                 let archive_listing = match archive_path.as_ref() {
-                    Some(path) if tokio::fs::metadata(path).await.is_ok() => {
-                        load_session_listing(path).await.ok()
-                    }
+                    Some(path) if tokio::fs::metadata(path).await.is_ok() => load_session_listing(path).await.ok(),
                     _ => None,
                 };
                 let metadata = archive_listing

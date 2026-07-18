@@ -26,38 +26,30 @@ pub(super) fn load_toml_value(path: &Path) -> Result<TomlValue> {
         return Ok(TomlValue::Table(Default::default()));
     }
 
-    let content =
-        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let content = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
     if content.trim().is_empty() {
         return Ok(TomlValue::Table(Default::default()));
     }
 
-    toml::from_str::<TomlValue>(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    toml::from_str::<TomlValue>(&content).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 pub(super) fn save_toml_value(path: &Path, root: &TomlValue) -> Result<()> {
     let is_empty = root.as_table().is_some_and(|table| table.is_empty());
     if is_empty {
         if path.exists() {
-            fs::remove_file(path)
-                .with_context(|| format!("Failed to remove {}", path.display()))?;
+            fs::remove_file(path).with_context(|| format!("Failed to remove {}", path.display()))?;
         }
         return Ok(());
     }
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
-    fs::write(path, toml::to_string_pretty(root)?)
-        .with_context(|| format!("Failed to write {}", path.display()))
+    fs::write(path, toml::to_string_pretty(root)?).with_context(|| format!("Failed to write {}", path.display()))
 }
 
-pub(super) fn preferred_workspace_config_path(
-    manager: &ConfigManager,
-    workspace: &Path,
-) -> PathBuf {
+pub(super) fn preferred_workspace_config_path(manager: &ConfigManager, workspace: &Path) -> PathBuf {
     manager
         .layer_stack()
         .layers()

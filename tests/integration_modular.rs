@@ -38,8 +38,8 @@ fn test_config_module_integration() {
     // config file (defaults apply). Loading from "." would pick up any local
     // vtcode.toml (e.g. a custom provider), making this test non-deterministic.
     let temp_workspace = tempfile::tempdir().expect("Failed to create temp workspace");
-    let manager = ConfigManager::load_from_workspace(temp_workspace.path())
-        .expect("Failed to load config from temp workspace");
+    let manager =
+        ConfigManager::load_from_workspace(temp_workspace.path()).expect("Failed to load config from temp workspace");
     let loaded_config = manager.config();
     assert!(
         Provider::from_str(loaded_config.agent.provider.as_str()).is_ok(),

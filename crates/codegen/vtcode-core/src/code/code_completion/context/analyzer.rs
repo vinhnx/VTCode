@@ -23,13 +23,9 @@ impl ContextAnalyzer {
 
     fn detect_language(&self, source: &str) -> String {
         let first_lines: String = source.lines().take(20).collect::<Vec<_>>().join("\n");
-        if first_lines.contains("use std::")
-            || first_lines.contains("fn ") && first_lines.contains("->")
-        {
+        if first_lines.contains("use std::") || first_lines.contains("fn ") && first_lines.contains("->") {
             "rust".into()
-        } else if first_lines.contains("import ") && first_lines.contains("from ")
-            || first_lines.contains("def ")
-        {
+        } else if first_lines.contains("import ") && first_lines.contains("from ") || first_lines.contains("def ") {
             "python".into()
         } else if first_lines.contains("interface ")
             || first_lines.contains(": string")

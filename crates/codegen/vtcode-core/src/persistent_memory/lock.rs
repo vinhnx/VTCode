@@ -24,10 +24,7 @@ impl MemoryLock {
     /// Same as [`Self::acquire`] but with a caller-supplied staleness threshold,
     /// so the stale-lock recovery path can be exercised in tests without
     /// waiting for the full `LOCK_STALE_AFTER_SECS` duration.
-    pub(crate) async fn acquire_with_stale_after(
-        path: &Path,
-        stale_after: Duration,
-    ) -> Result<Self> {
+    pub(crate) async fn acquire_with_stale_after(path: &Path, stale_after: Duration) -> Result<Self> {
         for _ in 0..LOCK_RETRY_ATTEMPTS {
             match tokio::fs::OpenOptions::new().create_new(true).write(true).open(path).await {
                 Ok(_) => {
@@ -46,8 +43,7 @@ impl MemoryLock {
                     sleep(Duration::from_millis(LOCK_RETRY_DELAY_MS)).await
                 }
                 Err(err) => {
-                    return Err(err)
-                        .with_context(|| format!("Failed to acquire {}", path.display()));
+                    return Err(err).with_context(|| format!("Failed to acquire {}", path.display()));
                 }
             }
         }

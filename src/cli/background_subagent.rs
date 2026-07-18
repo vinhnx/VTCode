@@ -77,16 +77,10 @@ pub(crate) async fn handle_background_subagent_command(
         if let Some(error) = status.error.as_deref() {
             eprintln!("background-subagent-error: {}", error.trim());
         }
-        if !status.status.is_terminal()
-            || matches!(status.status, vtcode_core::subagents::SubagentStatus::Completed)
-        {
+        if !status.status.is_terminal() || matches!(status.status, vtcode_core::subagents::SubagentStatus::Completed) {
             println!("background-subagent-ready: {} {}", status.agent_name, status.session_id);
         } else {
-            bail!(
-                "background subagent '{}' exited with status {}",
-                status.agent_name,
-                status.status.as_str()
-            );
+            bail!("background subagent '{}' exited with status {}", status.agent_name, status.status.as_str());
         }
     } else {
         println!("background-subagent-ready: {} {}", args.agent_name, args.session_id);
@@ -97,10 +91,7 @@ pub(crate) async fn handle_background_subagent_command(
     }
 }
 
-async fn run_background_demo_subprocess(
-    startup: &StartupContext,
-    args: &BackgroundSubagentArgs,
-) -> Result<()> {
+async fn run_background_demo_subprocess(startup: &StartupContext, args: &BackgroundSubagentArgs) -> Result<()> {
     let workspace_root = startup.agent_config.workspace.clone();
     let script_path = workspace_root.join("scripts/demo-background-subagent.sh");
     if !script_path.exists() {

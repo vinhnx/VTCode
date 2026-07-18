@@ -81,11 +81,7 @@ pub struct MarketplaceSystem {
 
 impl MarketplaceSystem {
     /// Create a new marketplace system
-    pub fn new(
-        base_dir: PathBuf,
-        config: MarketplaceConfig,
-        plugin_runtime: Option<PluginRuntime>,
-    ) -> Self {
+    pub fn new(base_dir: PathBuf, config: MarketplaceConfig, plugin_runtime: Option<PluginRuntime>) -> Self {
         let registry = MarketplaceRegistry::new(base_dir.clone());
         let installer = PluginInstaller::new(base_dir.join("plugins"), plugin_runtime);
 

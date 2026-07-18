@@ -19,8 +19,7 @@ use super::time::modified_age_secs;
 /// "installation already in progress" rather than an error.
 pub(crate) fn acquire_lock_file(lock_path: &Path, max_age_secs: u64) -> Result<Option<File>> {
     if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
 
     if let Some(file) = try_create_new_lock_file(lock_path)? {
@@ -43,9 +42,7 @@ fn try_create_new_lock_file(lock_path: &Path) -> Result<Option<File>> {
     match OpenOptions::new().create_new(true).write(true).open(lock_path) {
         Ok(file) => Ok(Some(file)),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(None),
-        Err(err) => {
-            Err(err).with_context(|| format!("Failed to create lock file {}", lock_path.display()))
-        }
+        Err(err) => Err(err).with_context(|| format!("Failed to create lock file {}", lock_path.display())),
     }
 }
 

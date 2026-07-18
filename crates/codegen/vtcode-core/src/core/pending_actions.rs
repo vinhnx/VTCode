@@ -64,8 +64,7 @@ impl PendingAction {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        matches!(self.status, PendingActionStatus::InFlight)
-            && now.saturating_sub(self.issued_at) > timeout_secs
+        matches!(self.status, PendingActionStatus::InFlight) && now.saturating_sub(self.issued_at) > timeout_secs
     }
 }
 
@@ -300,10 +299,7 @@ mod tests {
 
     #[test]
     fn test_expected_outcome_side_effects() {
-        assert!(
-            ExpectedOutcome::FileModification { paths: vec!["a.txt".to_string()] }
-                .has_side_effects()
-        );
+        assert!(ExpectedOutcome::FileModification { paths: vec!["a.txt".to_string()] }.has_side_effects());
         assert!(ExpectedOutcome::CommandExecution.has_side_effects());
         assert!(!ExpectedOutcome::ReadOperation.has_side_effects());
         assert!(!ExpectedOutcome::SearchOperation.has_side_effects());

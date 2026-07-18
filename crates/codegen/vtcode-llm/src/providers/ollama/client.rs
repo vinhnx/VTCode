@@ -109,10 +109,7 @@ impl OllamaClient {
     }
 
     /// Start a model pull and return a stream of events.
-    pub async fn pull_model_stream(
-        &self,
-        model: &str,
-    ) -> io::Result<BoxStream<'static, OllamaPullEvent>> {
+    pub async fn pull_model_stream(&self, model: &str) -> io::Result<BoxStream<'static, OllamaPullEvent>> {
         let url = format!("{}/api/pull", self.host_root.trim_end_matches('/'));
         let resp = self
             .client

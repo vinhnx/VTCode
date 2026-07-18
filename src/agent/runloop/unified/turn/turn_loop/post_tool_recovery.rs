@@ -8,9 +8,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::{
     MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
-    PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW, POST_TOOL_RECOVERY_REASON,
-    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
-    RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+    PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW, POST_TOOL_RECOVERY_REASON, POST_TOOL_RECOVERY_REASON_PLAN_MODE,
+    POST_TOOL_RESUME_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
 use crate::agent::runloop::unified::planning_workflow_state::{
@@ -33,9 +32,11 @@ pub(super) fn has_tool_response_since(messages: &[uni::Message], baseline_len: u
 }
 
 fn ensure_recent_system_message(working_history: &mut Vec<uni::Message>, content: &str) {
-    let already_present = working_history.iter().rev().take(3).any(|message| {
-        message.role == uni::MessageRole::System && message.content.as_text() == content
-    });
+    let already_present = working_history
+        .iter()
+        .rev()
+        .take(3)
+        .any(|message| message.role == uni::MessageRole::System && message.content.as_text() == content);
     if already_present {
         return;
     }
@@ -47,10 +48,7 @@ pub(super) fn ensure_post_tool_resume_directive(working_history: &mut Vec<uni::M
     ensure_recent_system_message(working_history, POST_TOOL_RESUME_DIRECTIVE);
 }
 
-pub(crate) fn prepare_post_tool_tool_free_recovery(
-    working_history: &mut Vec<uni::Message>,
-    reason: &str,
-) {
+pub(crate) fn prepare_post_tool_tool_free_recovery(working_history: &mut Vec<uni::Message>, reason: &str) {
     // Deliberately do NOT push POST_TOOL_RESUME_DIRECTIVE here: it instructs
     // the model to follow tool-output guidance (`next_action`, `fallback_tool`,
     // `rerun_hint`), which contradicts the tool-free recovery contract and
@@ -70,8 +68,7 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     allow_tool_free_retry: bool,
     planning_active: bool,
 ) -> Result<PostToolFailureRecovery> {
-    let has_partial_tool_progress =
-        has_tool_response_since(working_history, turn_history_start_len);
+    let has_partial_tool_progress = has_tool_response_since(working_history, turn_history_start_len);
     if !has_partial_tool_progress {
         return Ok(PostToolFailureRecovery::NotApplicable);
     }
@@ -82,20 +79,18 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
     } else {
         ""
     };
-    let summary = format!(
-        "Tool execution completed, but the model follow-up failed{transient_hint}. Output above is valid.",
-    );
+    let summary =
+        format!("Tool execution completed, but the model follow-up failed{transient_hint}. Output above is valid.",);
     renderer.line(MessageStyle::Info, &summary)?;
-    renderer
-        .line(MessageStyle::Info, &format!("Follow-up error category: {}", err_cat.user_label()))?;
+    renderer.line(MessageStyle::Info, &format!("Follow-up error category: {}", err_cat.user_label()))?;
     if !err_cat.is_retryable() {
         renderer.line(
             MessageStyle::Info,
             "Tip: rerun with a narrower prompt or switch provider/model for the follow-up.",
         )?;
     }
-    let should_retry = allow_tool_free_retry
-        && (err_cat.is_retryable() || matches!(err_cat, ErrorCategory::ExecutionError));
+    let should_retry =
+        allow_tool_free_retry && (err_cat.is_retryable() || matches!(err_cat, ErrorCategory::ExecutionError));
     let action = if should_retry {
         // Tool-free recovery: inject only the tools-disabled recovery reason.
         // The resume directive would contradict it (see
@@ -261,8 +256,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
             } else {
                 PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW
             };
-            let mut planning_fallback =
-                plan_mode_recovery_fallback(salvaged_text, finalize_message, working_history);
+            let mut planning_fallback = plan_mode_recovery_fallback(salvaged_text, finalize_message, working_history);
             planning_fallback.push_str("\n\n");
             planning_fallback.push_str(&short_confirmation_hint_with_fallback());
             push_final_answer_if_absent(working_history, &planning_fallback);
@@ -276,11 +270,8 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
             return TurnLoopResult::Completed;
         }
         plan_session.mark_interview_pending();
-        let planning_fallback = plan_mode_recovery_fallback(
-            salvaged_text,
-            PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
-            working_history,
-        );
+        let planning_fallback =
+            plan_mode_recovery_fallback(salvaged_text, PLANNING_RECOVERY_SYNTHESIS_FALLBACK, working_history);
         push_final_answer_if_absent(working_history, &planning_fallback);
         tracing::warn!(
             stage = failure_stage,
@@ -306,8 +297,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
         return TurnLoopResult::Completed;
     }
 
-    let fallback =
-        build_recovery_fallback(working_history, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
+    let fallback = build_recovery_fallback(working_history, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
     push_final_answer_if_absent(working_history, &fallback);
 
     tracing::warn!(
@@ -329,10 +319,8 @@ fn push_final_answer_if_absent(working_history: &mut Vec<uni::Message>, text: &s
             && message.content.as_text() == text
     });
     if !already_present {
-        working_history.push(
-            uni::Message::assistant(text.to_string())
-                .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
-        );
+        working_history
+            .push(uni::Message::assistant(text.to_string()).with_phase(Some(uni::AssistantPhase::FinalAnswer)));
     }
 }
 
@@ -400,9 +388,7 @@ pub(super) struct PostToolRecoveryContext<'a> {
 ///
 /// Returns the action the caller should take: continue the loop, break with a
 /// result, or fall through to error display.
-pub(super) async fn dispatch_post_tool_failure(
-    ctx: PostToolRecoveryContext<'_>,
-) -> Result<PostToolFailureAction> {
+pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>) -> Result<PostToolFailureAction> {
     let PostToolRecoveryContext {
         renderer,
         working_history,
@@ -597,10 +583,7 @@ mod tests {
     async fn tool_free_recovery_keeps_planning_alive_on_non_transient_error() {
         let mut working_history: Vec<uni::Message> = Vec::new();
         let mut plan_session = PlanningWorkflowSessionState::default();
-        let err = anyhow::Error::new(LLMError::InvalidRequest {
-            message: "bad request".to_string(),
-            metadata: None,
-        });
+        let err = anyhow::Error::new(LLMError::InvalidRequest { message: "bad request".to_string(), metadata: None });
 
         let result = complete_turn_after_failed_tool_free_recovery(
             &mut working_history,
@@ -621,20 +604,13 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_marks_recovery_exhausted_when_wall_clock_exhausted_in_plan_mode() {
-        use crate::agent::runloop::unified::run_loop_context::{
-            HarnessTurnState, TurnId, TurnRunId,
-        };
+        use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
         use vtcode_core::utils::ansi::AnsiRenderer;
 
         let mut renderer = AnsiRenderer::stdout();
         let mut working_history: Vec<uni::Message> = Vec::new();
-        let mut harness_state = HarnessTurnState::new(
-            TurnRunId("test-run".to_string()),
-            TurnId("test-turn".to_string()),
-            4,
-            600,
-            0,
-        );
+        let mut harness_state =
+            HarnessTurnState::new(TurnRunId("test-run".to_string()), TurnId("test-turn".to_string()), 4, 600, 0);
         harness_state.wall_clock_exhausted_emitted = true;
         let mut plan_session = PlanningWorkflowSessionState::default();
         let err = transient_err();
@@ -659,10 +635,7 @@ mod tests {
             "wall-clock exhaustion during planning must mark the session \
              recovery-exhausted so the plan finalizes instead of looping"
         );
-        assert!(
-            !plan_session.interview_pending(),
-            "must not re-force the interview after wall-clock exhaustion"
-        );
+        assert!(!plan_session.interview_pending(), "must not re-force the interview after wall-clock exhaustion");
         assert!(matches!(action, PostToolFailureAction::Break(_)));
     }
 
@@ -714,10 +687,7 @@ mod tests {
         .await;
 
         assert!(matches!(result, TurnLoopResult::Completed));
-        assert!(
-            plan_session.interview_pending(),
-            "non-exhausted plan failure must re-force the interview"
-        );
+        assert!(plan_session.interview_pending(), "non-exhausted plan failure must re-force the interview");
         let text = working_history
             .iter()
             .rev()
@@ -729,10 +699,7 @@ mod tests {
             text.contains("final synthesis failed"),
             "plan-mode fallback must be the structured message, not garbled salvage: {text}"
         );
-        assert!(
-            !text.contains("unified_search"),
-            "garbled tool-call salvage must not leak into the plan: {text}"
-        );
+        assert!(!text.contains("unified_search"), "garbled tool-call salvage must not leak into the plan: {text}");
     }
 
     #[tokio::test]
@@ -740,7 +707,8 @@ mod tests {
         // A real (if partial) proposed plan in the salvage is worth keeping.
         let mut working_history: Vec<uni::Message> = Vec::new();
         let mut plan_session = PlanningWorkflowSessionState::default();
-        let partial_plan = "<proposed_plan>\n- Action: add caching -> src/cache.rs\n  verify: cargo test\n</proposed_plan>";
+        let partial_plan =
+            "<proposed_plan>\n- Action: add caching -> src/cache.rs\n  verify: cargo test\n</proposed_plan>";
 
         let result = complete_turn_after_failed_tool_free_recovery(
             &mut working_history,
@@ -760,10 +728,7 @@ mod tests {
             .expect("a final answer must be pushed")
             .content
             .as_text();
-        assert!(
-            text.contains("<proposed_plan"),
-            "a real partial plan must be kept as the plan: {text}"
-        );
+        assert!(text.contains("<proposed_plan"), "a real partial plan must be kept as the plan: {text}");
     }
 
     #[tokio::test]
@@ -798,8 +763,8 @@ mod tests {
         .await;
 
         assert!(matches!(result, TurnLoopResult::Completed));
-        let content = std::fs::read_to_string(&plan_file)
-            .expect("salvaged plan must be persisted to the session plan file");
+        let content =
+            std::fs::read_to_string(&plan_file).expect("salvaged plan must be persisted to the session plan file");
         assert!(
             content.contains("add caching"),
             "salvaged plan must be written to the session plan file, got: {content}"

@@ -75,11 +75,10 @@ impl LLMFactory {
         provider_name: &str,
         config: ProviderConfig,
     ) -> Result<Box<dyn LLMProvider>, LLMError> {
-        let factory_fn =
-            self.providers.get(provider_name).ok_or_else(|| LLMError::InvalidRequest {
-                message: format!("Unknown provider: {provider_name}"),
-                metadata: None,
-            })?;
+        let factory_fn = self.providers.get(provider_name).ok_or_else(|| LLMError::InvalidRequest {
+            message: format!("Unknown provider: {provider_name}"),
+            metadata: None,
+        })?;
 
         Ok(factory_fn(config))
     }
@@ -154,10 +153,7 @@ pub fn create_provider_for_model(
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     // Validate model exists in ModelsManager (non-blocking check using local presets)
     if !get_models_manager().model_exists_sync(model) {
-        tracing::warn!(
-            model = model,
-            "Model not found in ModelsManager presets, proceeding with factory heuristics"
-        );
+        tracing::warn!(model = model, "Model not found in ModelsManager presets, proceeding with factory heuristics");
     }
 
     let provider_name = infer_provider_from_model(model)
@@ -255,8 +251,7 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                 api_key.or_else(|| std::env::var(&api_key_env).ok())
             };
 
-            let model =
-                model.filter(|m| !m.trim().is_empty()).unwrap_or_else(|| default_model.clone());
+            let model = model.filter(|m| !m.trim().is_empty()).unwrap_or_else(|| default_model.clone());
 
             let base_url = base_url
                 .clone()
@@ -266,13 +261,12 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                 .clone()
                 .map(|auth| CustomProviderAuthHandle::new(auth, workspace_root.clone()));
 
-            let models_override = if supported_models.len() > 1
-                || (supported_models.len() == 1 && supported_models[0] != model)
-            {
-                Some(supported_models.clone())
-            } else {
-                None
-            };
+            let models_override =
+                if supported_models.len() > 1 || (supported_models.len() == 1 && supported_models[0] != model) {
+                    Some(supported_models.clone())
+                } else {
+                    None
+                };
 
             Box::new(vtcode_llm::providers::OpenAIProvider::from_custom_config(
                 key.clone(),
@@ -299,9 +293,7 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
 
 #[cfg(test)]
 mod tests {
-    use super::super::provider_config::{
-        AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig,
-    };
+    use super::super::provider_config::{AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig};
     use super::super::providers::OllamaProvider;
     use super::*;
     use vtcode_config::core::CustomProviderConfig;
@@ -353,10 +345,7 @@ mod tests {
                     openai_chatgpt_auth: None,
                     copilot_auth: None,
                     base_url: None,
-                    model: Some(
-                        vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW
-                            .to_string(),
-                    ),
+                    model: Some(vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string()),
                     prompt_cache: None,
                     timeouts: None,
                     openai: None,
@@ -381,9 +370,7 @@ mod tests {
                     openai_chatgpt_auth: None,
                     copilot_auth: None,
                     base_url: None,
-                    model: Some(
-                        vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string(),
-                    ),
+                    model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
                     prompt_cache: None,
                     timeouts: None,
                     openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
@@ -408,9 +395,7 @@ mod tests {
                     openai_chatgpt_auth: None,
                     copilot_auth: None,
                     base_url: None,
-                    model: Some(
-                        vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string(),
-                    ),
+                    model: Some(vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
                     prompt_cache: None,
                     timeouts: None,
                     openai: None,
@@ -468,9 +453,7 @@ mod tests {
                     openai_chatgpt_auth: None,
                     copilot_auth: None,
                     base_url: None,
-                    model: Some(
-                        vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string(),
-                    ),
+                    model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
                     prompt_cache: None,
                     timeouts: None,
                     openai: None,
@@ -681,35 +664,31 @@ mod tests {
 
     #[test]
     fn create_provider_for_bare_minimax_model_uses_minimax_provider() {
-        let provider =
-            create_provider_for_model("MiniMax-M2.5", "test-key".to_string(), None, None)
-                .expect("bare minimax model should resolve to minimax provider");
+        let provider = create_provider_for_model("MiniMax-M2.5", "test-key".to_string(), None, None)
+            .expect("bare minimax model should resolve to minimax provider");
 
         assert_eq!(provider.name(), "minimax");
     }
 
     #[test]
     fn create_provider_for_mistral_model_uses_mistral_provider() {
-        let provider =
-            create_provider_for_model("mistral-large-2512", "test-key".to_string(), None, None)
-                .expect("mistral models should resolve through mistral provider");
+        let provider = create_provider_for_model("mistral-large-2512", "test-key".to_string(), None, None)
+            .expect("mistral models should resolve through mistral provider");
 
         assert_eq!(provider.name(), "mistral");
     }
 
     #[test]
     fn create_provider_for_openai_repo_id_uses_openrouter_provider() {
-        let provider =
-            create_provider_for_model("openai/gpt-oss-20b", "test-key".to_string(), None, None)
-                .expect("repo identifiers should preserve openrouter routing");
+        let provider = create_provider_for_model("openai/gpt-oss-20b", "test-key".to_string(), None, None)
+            .expect("repo identifiers should preserve openrouter routing");
 
         assert_eq!(provider.name(), "openrouter");
     }
 
     #[test]
     fn create_provider_for_unknown_model_returns_error() {
-        match create_provider_for_model("totally-unknown-model", "test-key".to_string(), None, None)
-        {
+        match create_provider_for_model("totally-unknown-model", "test-key".to_string(), None, None) {
             Err(LLMError::InvalidRequest { .. }) => {}
             Err(error) => panic!("expected invalid request error, got {error:?}"),
             Ok(_) => panic!("unknown models should remain rejected"),

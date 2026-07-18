@@ -14,8 +14,8 @@ use crate::tools::traits::Tool;
 
 // Re-export from shared utils to break the tool_policy <-> tools cycle.
 pub use crate::utils::tool_name_parsing::{
-    MCP_QUALIFIED_TOOL_PREFIX, is_legacy_mcp_tool_name, legacy_mcp_tool_name,
-    model_visible_mcp_tool_name, parse_canonical_mcp_tool_name,
+    MCP_QUALIFIED_TOOL_PREFIX, is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name,
+    parse_canonical_mcp_tool_name,
 };
 
 /// Build a ToolRegistration for a remote MCP tool.
@@ -56,19 +56,14 @@ pub fn build_mcp_registration(
         metadata = metadata.with_server_hint(hint);
     }
 
-    ToolRegistration::from_tool_with_metadata(
-        primary_name,
-        CapabilityLevel::Basic,
-        Arc::new(proxy),
-        metadata,
-    )
-    .with_catalog_source(ToolCatalogSource::Mcp)
-    .with_llm_visibility(false)
-    .with_native_cgp_factory(native_cgp_tool_factory(move || McpProxyTool {
-        client: Arc::clone(&client),
-        remote_name: remote_name.clone(),
-        input_schema: input_schema.clone(),
-    }))
+    ToolRegistration::from_tool_with_metadata(primary_name, CapabilityLevel::Basic, Arc::new(proxy), metadata)
+        .with_catalog_source(ToolCatalogSource::Mcp)
+        .with_llm_visibility(false)
+        .with_native_cgp_factory(native_cgp_tool_factory(move || McpProxyTool {
+            client: Arc::clone(&client),
+            remote_name: remote_name.clone(),
+            input_schema: input_schema.clone(),
+        }))
 }
 
 struct McpProxyTool {
@@ -107,8 +102,8 @@ impl Tool for McpProxyTool {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name,
-        model_visible_mcp_tool_name, parse_canonical_mcp_tool_name,
+        build_mcp_registration, is_legacy_mcp_tool_name, legacy_mcp_tool_name, model_visible_mcp_tool_name,
+        parse_canonical_mcp_tool_name,
     };
     use crate::mcp::{McpClient, McpToolInfo};
     use crate::tool_policy::ToolPolicy;
@@ -139,10 +134,7 @@ mod tests {
 
     #[test]
     fn parse_canonical_name_extracts_provider_and_tool() {
-        assert_eq!(
-            parse_canonical_mcp_tool_name("mcp::context7::search-docs"),
-            Some(("context7", "search-docs"))
-        );
+        assert_eq!(parse_canonical_mcp_tool_name("mcp::context7::search-docs"), Some(("context7", "search-docs")));
         assert_eq!(parse_canonical_mcp_tool_name("mcp__context7__search"), None);
     }
 
@@ -161,13 +153,11 @@ mod tests {
             }),
         };
 
-        let registration =
-            build_mcp_registration(client, "context7", &tool, Some("provider hint".to_string()));
+        let registration = build_mcp_registration(client, "context7", &tool, Some("provider hint".to_string()));
         let native_factory = registration
             .native_cgp_factory()
             .expect("MCP registration should expose native CGP factory");
-        let wrapped =
-            native_factory(&registration, PathBuf::from("/tmp/test"), CgpRuntimeMode::Interactive);
+        let wrapped = native_factory(&registration, PathBuf::from("/tmp/test"), CgpRuntimeMode::Interactive);
 
         assert_eq!(wrapped.name(), "mcp::context7::search-docs");
         assert_eq!(wrapped.description(), "Search docs\nHint: provider hint");

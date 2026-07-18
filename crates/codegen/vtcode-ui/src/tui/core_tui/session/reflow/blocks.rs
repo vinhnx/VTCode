@@ -71,14 +71,7 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
-        self.wrap_block_lines_with_options(
-            first_prefix,
-            continuation_prefix,
-            content,
-            max_width,
-            border_style,
-            true,
-        )
+        self.wrap_block_lines_with_options(first_prefix, continuation_prefix, content, max_width, border_style, true)
     }
 
     /// Wrap content with left border only (no right border)
@@ -91,14 +84,7 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
-        self.wrap_block_lines_with_options(
-            first_prefix,
-            continuation_prefix,
-            content,
-            max_width,
-            border_style,
-            false,
-        )
+        self.wrap_block_lines_with_options(first_prefix, continuation_prefix, content, max_width, border_style, false)
     }
 
     /// Wrap content with configurable border options
@@ -160,11 +146,7 @@ impl Session {
                 0
             };
 
-            let active_prefix = if idx == 0 {
-                first_prefix
-            } else {
-                continuation_prefix
-            };
+            let active_prefix = if idx == 0 { first_prefix } else { continuation_prefix };
             let mut new_spans = vec![Span::styled(active_prefix.to_owned(), border_style)];
 
             // For diff lines, preserve hanging indent/prefix on continuation lines.
@@ -201,11 +183,7 @@ impl Session {
             return vec![Line::default()];
         };
 
-        let max_width = if width == 0 {
-            usize::MAX
-        } else {
-            width as usize
-        };
+        let max_width = if width == 0 { usize::MAX } else { width as usize };
 
         let border_style = self.styles.border_style();
 
@@ -233,9 +211,10 @@ impl Session {
         if is_start {
             let spacing = self.appearance.message_block_spacing.min(2) as usize;
             let skip_spacing = index > 0
-                && self.lines.get(index - 1).is_some_and(|prev| {
-                    prev.kind == InlineMessageKind::Info && is_tool_summary_line(prev)
-                });
+                && self
+                    .lines
+                    .get(index - 1)
+                    .is_some_and(|prev| prev.kind == InlineMessageKind::Info && is_tool_summary_line(prev));
             if index > 0 && !skip_spacing {
                 for _ in 0..spacing {
                     lines.push(Line::default());
@@ -343,11 +322,7 @@ impl Session {
             return vec![TranscriptLine::default()];
         };
 
-        let max_width = if width == 0 {
-            usize::MAX
-        } else {
-            width as usize
-        };
+        let max_width = if width == 0 { usize::MAX } else { width as usize };
 
         if !self.pty_block_has_content(index) {
             return Vec::new();
@@ -394,8 +369,7 @@ impl Session {
         }
 
         let body_prefix = "  ";
-        let continuation_prefix =
-            text_utils::pty_wrapped_continuation_prefix(body_prefix, combined.as_str());
+        let continuation_prefix = text_utils::pty_wrapped_continuation_prefix(body_prefix, combined.as_str());
         lines.extend(self.wrap_block_lines_no_right_border(
             body_prefix,
             continuation_prefix.as_str(),
@@ -408,12 +382,7 @@ impl Session {
             lines.push(Line::default());
         }
 
-        build_pty_transcript_lines(
-            lines,
-            &line.link_ranges,
-            body_prefix,
-            continuation_prefix.as_str(),
-        )
+        build_pty_transcript_lines(lines, &line.link_ranges, body_prefix, continuation_prefix.as_str())
     }
 }
 
@@ -427,11 +396,7 @@ fn build_pty_transcript_lines(
     let mut transcript_lines = Vec::with_capacity(lines.len());
 
     for (index, line) in lines.into_iter().enumerate() {
-        let prefix = if index == 0 {
-            first_prefix
-        } else {
-            continuation_prefix
-        };
+        let prefix = if index == 0 { first_prefix } else { continuation_prefix };
         let full_text: String = line.spans.iter().map(|span| span.content.as_ref()).collect();
         let body_text = full_text.strip_prefix(prefix).unwrap_or(full_text.as_str());
         let body_end = combined_offset + body_text.len();
@@ -446,8 +411,7 @@ fn build_pty_transcript_lines(
 
             let local_start = start - combined_offset;
             let local_end = end - combined_offset;
-            let start_col =
-                UnicodeWidthStr::width(prefix) + UnicodeWidthStr::width(&body_text[..local_start]);
+            let start_col = UnicodeWidthStr::width(prefix) + UnicodeWidthStr::width(&body_text[..local_start]);
             let width = UnicodeWidthStr::width(&body_text[local_start..local_end]);
             if width == 0 {
                 continue;

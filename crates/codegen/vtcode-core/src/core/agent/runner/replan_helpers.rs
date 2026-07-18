@@ -60,14 +60,7 @@ impl AgentRunner {
                 ("contract", &contract_path),
                 ("feature_list", &feature_list_path),
             ] {
-                annotate_artifact(
-                    &self._workspace,
-                    path,
-                    label,
-                    &evaluation.summary,
-                    revision_round,
-                )
-                .await;
+                annotate_artifact(&self._workspace, path, label, &evaluation.summary, revision_round).await;
             }
         }
 
@@ -112,9 +105,7 @@ impl AgentRunner {
         if let Some(ref feature_list) = replan.revised_feature_list {
             let trimmed = feature_list.trim();
             if !trimmed.is_empty() {
-                if let Err(e) =
-                    harness_artifacts::write_feature_list(&self._workspace, trimmed).await
-                {
+                if let Err(e) = harness_artifacts::write_feature_list(&self._workspace, trimmed).await {
                     warn!(error = %e, "failed to write revised feature list");
                 }
             }
@@ -126,8 +117,7 @@ impl AgentRunner {
                 let contract_path = harness_artifacts::current_contract_path(&self._workspace);
                 let existing = tokio::fs::read_to_string(&contract_path).await.unwrap_or_default();
                 let updated = format!("{existing}\n\n--- Replan Addendum ---\n{trimmed}\n");
-                if let Err(e) = harness_artifacts::write_contract(&self._workspace, &updated).await
-                {
+                if let Err(e) = harness_artifacts::write_contract(&self._workspace, &updated).await {
                     warn!(error = %e, "failed to write contract addendum");
                 }
             }
@@ -195,6 +185,5 @@ async fn annotate_artifact(
         "feature_list" => harness_artifacts::write_feature_list(workspace, &annotated).await,
         _ => harness_artifacts::write_contract(workspace, &annotated).await,
     };
-    let _ = write_fn
-        .inspect_err(|e| warn!(error = %e, "annotate_artifact: failed to annotate {label}"));
+    let _ = write_fn.inspect_err(|e| warn!(error = %e, "annotate_artifact: failed to annotate {label}"));
 }

@@ -9,9 +9,8 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession,
-    ListOverlayRequest, PlanContent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
-    TransientRequest, TransientSubmission,
+    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession, ListOverlayRequest,
+    PlanContent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -43,8 +42,7 @@ pub(crate) async fn present_start_planning_confirmation(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<StartPlanningDecision> {
-    let mut lines =
-        vec!["The agent wants to enter the Planning workflow before making edits.".to_string()];
+    let mut lines = vec!["The agent wants to enter the Planning workflow before making edits.".to_string()];
     if let Some(description) = description
         && !description.trim().is_empty()
     {
@@ -53,29 +51,19 @@ pub(crate) async fn present_start_planning_confirmation(
     if let Some(plan_file) = plan_file {
         lines.push(format!("Plan file: {plan_file}"));
     }
-    lines.push(
-        "Planning workflow keeps mutating tools disabled until you explicitly approve execution."
-            .to_string(),
-    );
+    lines.push("Planning workflow keeps mutating tools disabled until you explicitly approve execution.".to_string());
 
     let overlay = TransientRequest::List(ListOverlayRequest {
         title: "Enter Planning workflow?".to_string(),
         lines,
-        footer_hint: Some(
-            "Choose whether to enter the Planning workflow before the agent continues.".to_string(),
-        ),
+        footer_hint: Some("Choose whether to enter the Planning workflow before the agent continues.".to_string()),
         items: vec![
             InlineListItem {
                 title: "Enter Planning workflow".to_string(),
-                subtitle: Some(
-                    "Enter the Planning workflow and persist the draft under .vtcode/plans."
-                        .to_string(),
-                ),
+                subtitle: Some("Enter the Planning workflow and persist the draft under .vtcode/plans.".to_string()),
                 badge: Some("Recommended".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    START_PLANNING_APPROVE_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(START_PLANNING_APPROVE_ACTION.to_string())),
                 search_value: None,
             },
             InlineListItem {
@@ -83,26 +71,17 @@ pub(crate) async fn present_start_planning_confirmation(
                 subtitle: Some("Continue without entering the Planning workflow.".to_string()),
                 badge: None,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    START_PLANNING_STAY_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(START_PLANNING_STAY_ACTION.to_string())),
                 search_value: None,
             },
         ],
-        selected: Some(InlineListSelection::ConfigAction(
-            START_PLANNING_APPROVE_ACTION.to_string(),
-        )),
+        selected: Some(InlineListSelection::ConfigAction(START_PLANNING_APPROVE_ACTION.to_string())),
         search: None,
         hotkeys: Vec::new(),
     });
 
-    let confirmation = show_overlay_and_wait(
-        handle,
-        session,
-        overlay,
-        ctrl_c_state,
-        ctrl_c_notify,
-        |submission| match submission {
+    let confirmation =
+        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == START_PLANNING_APPROVE_ACTION =>
             {
@@ -115,9 +94,8 @@ pub(crate) async fn present_start_planning_confirmation(
             }
             TransientSubmission::Selection(_) => Some(StartPlanningDecision::Stay),
             _ => None,
-        },
-    )
-    .await;
+        })
+        .await;
 
     Ok(match confirmation {
         Ok(OverlayWaitOutcome::Submitted(choice)) => choice,
@@ -156,11 +134,7 @@ fn append_message(handle: &InlineHandle, kind: InlineMessageKind, text: impl Int
 
 fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     append_message(handle, InlineMessageKind::Info, "Ready to code?");
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "A plan is ready to execute. Would you like to proceed?",
-    );
+    append_message(handle, InlineMessageKind::Info, "A plan is ready to execute. Would you like to proceed?");
 
     // Keep confirmation compact to avoid duplicating the already-rendered plan content.
     if !plan.summary.trim().is_empty() {
@@ -282,10 +256,7 @@ fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -
         },
         InlineListItem {
             title: "Switch to build agent".to_string(),
-            subtitle: Some(
-                "Hand off to the build agent to execute the plan with manual edit approvals."
-                    .to_string(),
-            ),
+            subtitle: Some("Hand off to the build agent to execute the plan with manual edit approvals.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalSwitchBuild),
@@ -294,8 +265,7 @@ fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -
         InlineListItem {
             title: "Switch to auto agent".to_string(),
             subtitle: Some(
-                "Hand off to the auto agent to auto-execute the plan (skip per-step confirmations)."
-                    .to_string(),
+                "Hand off to the auto agent to auto-execute the plan (skip per-step confirmations).".to_string(),
             ),
             badge: None,
             indent: 0,
@@ -349,9 +319,7 @@ pub(crate) fn plan_confirmation_submission_to_outcome(
         TransientSubmission::Selection(InlineListSelection::PlanApprovalSwitchAuto) => {
             Some(PlanConfirmationOutcome::SwitchAuto)
         }
-        TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor) => {
-            Some(PlanConfirmationOutcome::EditPlan)
-        }
+        TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor) => Some(PlanConfirmationOutcome::EditPlan),
         TransientSubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
         _ => None,
     }
@@ -386,9 +354,9 @@ pub(crate) async fn execute_plan_confirmation(
 
     Ok(match outcome {
         OverlayWaitOutcome::Submitted(outcome) => outcome,
-        OverlayWaitOutcome::Cancelled
-        | OverlayWaitOutcome::Interrupted
-        | OverlayWaitOutcome::Exit => PlanConfirmationOutcome::Cancel,
+        OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted | OverlayWaitOutcome::Exit => {
+            PlanConfirmationOutcome::Cancel
+        }
     })
 }
 
@@ -432,13 +400,11 @@ pub(crate) fn plan_confirmation_outcome_to_json(outcome: &PlanConfirmationOutcom
 #[cfg(test)]
 mod tests {
     use super::{
-        PlanConfirmationOutcome, build_plan_confirmation_request,
-        plan_confirmation_outcome_to_json, plan_confirmation_submission_to_outcome,
-        render_structured_plan,
+        PlanConfirmationOutcome, build_plan_confirmation_request, plan_confirmation_outcome_to_json,
+        plan_confirmation_submission_to_outcome, render_structured_plan,
     };
     use vtcode_ui::tui::app::{
-        InlineListSelection, ListOverlayRequest, TransientHotkeyAction, TransientRequest,
-        TransientSubmission,
+        InlineListSelection, ListOverlayRequest, TransientHotkeyAction, TransientRequest, TransientSubmission,
     };
     use vtcode_ui::tui::app::{PlanContent, PlanPhase, PlanStep};
 
@@ -486,10 +452,7 @@ mod tests {
         assert!(joined.contains("files: src/a.rs"));
         assert!(joined.contains("Open questions:"));
         assert!(joined.contains("Should we cap retries?"));
-        assert!(
-            !joined.contains("RAW fallback content"),
-            "structured phases must take precedence over raw_content"
-        );
+        assert!(!joined.contains("RAW fallback content"), "structured phases must take precedence over raw_content");
     }
 
     #[test]
@@ -574,9 +537,7 @@ mod tests {
             Some(PlanConfirmationOutcome::Cancel)
         );
         assert_eq!(
-            plan_confirmation_submission_to_outcome(&TransientSubmission::Hotkey(
-                TransientHotkeyAction::LaunchEditor
-            )),
+            plan_confirmation_submission_to_outcome(&TransientSubmission::Hotkey(TransientHotkeyAction::LaunchEditor)),
             Some(PlanConfirmationOutcome::EditPlan)
         );
     }
@@ -588,8 +549,7 @@ mod tests {
             TransientRequest::List(list) => list,
             _ => panic!("expected a list overlay request"),
         };
-        let selections: Vec<InlineListSelection> =
-            items.into_iter().filter_map(|item| item.selection).collect();
+        let selections: Vec<InlineListSelection> = items.into_iter().filter_map(|item| item.selection).collect();
         assert!(
             selections
                 .iter()

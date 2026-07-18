@@ -8,17 +8,12 @@ use vtcode_core::core::threads::{SessionQueryScope, list_recent_sessions_in_scop
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
-use crate::cli::auth::{
-    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, supports_auth_provider,
-};
+use crate::cli::auth::{COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, supports_auth_provider};
 
 use super::SlashCommandOutcome;
 use super::{OAuthProviderAction, SessionPaletteMode};
 
-fn parse_session_palette_args(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<Option<(usize, bool)>> {
+fn parse_session_palette_args(args: &str, renderer: &mut AnsiRenderer) -> Result<Option<(usize, bool)>> {
     let mut limit = 5usize;
     let mut show_all = false;
 
@@ -29,10 +24,7 @@ fn parse_session_palette_args(
                 if let Ok(parsed) = value.parse::<usize>() {
                     limit = parsed.clamp(1, 25);
                 } else {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Usage: /resume [limit] [--all] or /fork [limit] [--all]",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Usage: /resume [limit] [--all] or /fork [limit] [--all]")?;
                     return Ok(None);
                 }
             }
@@ -77,12 +69,8 @@ async fn handle_session_palette_command(
                         renderer.line(MessageStyle::Info, "")?;
                     }
 
-                    let ended_local =
-                        listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
-                    let duration = listing
-                        .snapshot
-                        .ended_at
-                        .signed_duration_since(listing.snapshot.started_at);
+                    let ended_local = listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
+                    let duration = listing.snapshot.ended_at.signed_duration_since(listing.snapshot.started_at);
                     let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
                     let duration_label = format_duration_label(duration_std);
                     let tool_count = listing.snapshot.distinct_tools.len();
@@ -109,16 +97,12 @@ async fn handle_session_palette_command(
                         renderer.line(MessageStyle::Info, &format!("    Reply: {reply}"))?;
                     }
 
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("    File: {}", listing.path.display()),
-                    )?;
+                    renderer.line(MessageStyle::Info, &format!("    File: {}", listing.path.display()))?;
                 }
             }
         }
         Err(err) => {
-            renderer
-                .line(MessageStyle::Error, &format!("Failed to load session archives: {err}"))?;
+            renderer.line(MessageStyle::Error, &format!("Failed to load session archives: {err}"))?;
         }
     }
     Ok(SlashCommandOutcome::Handled)
@@ -140,10 +124,7 @@ pub(super) fn handle_fork_command<'a>(
     handle_session_palette_command(args, renderer, workspace, SessionPaletteMode::Fork)
 }
 
-pub(super) fn handle_continue_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_continue_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let mut show_all = false;
     for token in args.split_whitespace() {
         match token {
@@ -157,10 +138,7 @@ pub(super) fn handle_continue_command(
     Ok(SlashCommandOutcome::ContinueLatest { show_all })
 }
 
-pub(super) fn handle_rewind_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_rewind_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     // Parse arguments for rewind command
     let tokens: Vec<&str> = args.split_whitespace().collect();
 
@@ -183,17 +161,13 @@ pub(super) fn handle_rewind_command(
     // Determine the revert scope
     let scope = if let Some(scope_str) = scope_str {
         match scope_str.to_ascii_lowercase().as_str() {
-            "conversation" | "chat" => {
-                vtcode_core::core::agent::snapshots::RevertScope::Conversation
-            }
+            "conversation" | "chat" => vtcode_core::core::agent::snapshots::RevertScope::Conversation,
             "code" | "files" => vtcode_core::core::agent::snapshots::RevertScope::Code,
             "both" | "full" => vtcode_core::core::agent::snapshots::RevertScope::Both,
             _ => {
                 renderer.line(
                     MessageStyle::Error,
-                    &format!(
-                        "Unknown revert scope '{scope_str}'. Use conversation, code, or both."
-                    ),
+                    &format!("Unknown revert scope '{scope_str}'. Use conversation, code, or both."),
                 )?;
                 return Ok(SlashCommandOutcome::Handled);
             }
@@ -213,10 +187,7 @@ pub(super) fn handle_rewind_command(
     }
 }
 
-pub(super) fn handle_plan_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_plan_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let trimmed = args.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("toggle") {
         return Ok(SlashCommandOutcome::TogglePlanningWorkflow { enable: None, prompt: None });
@@ -229,11 +200,7 @@ pub(super) fn handle_plan_command(
     match first.to_ascii_lowercase().as_str() {
         "on" | "enable" => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
-            prompt: if rest.is_empty() {
-                None
-            } else {
-                Some(rest.to_string())
-            },
+            prompt: if rest.is_empty() { None } else { Some(rest.to_string()) },
         }),
         "off" | "disable" => {
             if !rest.is_empty() {
@@ -241,14 +208,8 @@ pub(super) fn handle_plan_command(
                     MessageStyle::Error,
                     "Usage: /plan [on|off] [task] - Start planning and optionally submit a planning prompt",
                 )?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "  /plan <task> - Start the planning workflow with a task",
-                )?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "  /plan on <task> - Start the planning workflow with a task",
-                )?;
+                renderer.line(MessageStyle::Info, "  /plan <task> - Start the planning workflow with a task")?;
+                renderer.line(MessageStyle::Info, "  /plan on <task> - Start the planning workflow with a task")?;
                 renderer.line(MessageStyle::Info, "  /plan off - Finish planning")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
@@ -261,16 +222,11 @@ pub(super) fn handle_plan_command(
     }
 }
 
-pub(super) fn handle_login_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_login_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let provider = args.trim().to_ascii_lowercase();
     if provider.is_empty() {
         if renderer.supports_inline_ui() {
-            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Login,
-            });
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Login });
         }
         renderer.line(MessageStyle::Info, "Usage: /login <provider>")?;
         renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
@@ -279,14 +235,9 @@ pub(super) fn handle_login_command(
         return Ok(SlashCommandOutcome::Handled);
     }
     if !supports_auth_provider(&provider) {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Provider '{provider}' does not support VT Code authentication."),
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "Supported authentication providers: openai, openrouter, copilot",
-        )?;
+        renderer
+            .line(MessageStyle::Error, &format!("Provider '{provider}' does not support VT Code authentication."))?;
+        renderer.line(MessageStyle::Info, "Supported authentication providers: openai, openrouter, copilot")?;
         renderer.line(MessageStyle::Output, "")?;
         renderer.line(
             MessageStyle::Output,
@@ -297,16 +248,11 @@ pub(super) fn handle_login_command(
     Ok(SlashCommandOutcome::OAuthLogin { provider })
 }
 
-pub(super) fn handle_logout_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_logout_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let provider = args.trim().to_ascii_lowercase();
     if provider.is_empty() {
         if renderer.supports_inline_ui() {
-            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Logout,
-            });
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Logout });
         }
         renderer.line(MessageStyle::Info, "Usage: /logout <provider>")?;
         renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
@@ -324,26 +270,18 @@ pub(super) fn handle_logout_command(
     Ok(SlashCommandOutcome::OAuthLogout { provider })
 }
 
-pub(super) fn handle_refresh_oauth_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
+pub(super) fn handle_refresh_oauth_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     let provider = args.trim().to_ascii_lowercase();
     if provider.is_empty() {
         if renderer.supports_inline_ui() {
-            return Ok(SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Refresh,
-            });
+            return Ok(SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Refresh });
         }
         renderer.line(MessageStyle::Info, "Usage: /refresh-oauth <provider>")?;
         renderer.line(MessageStyle::Output, &format!("  {OPENAI_PROVIDER}"))?;
         return Ok(SlashCommandOutcome::Handled);
     }
     if provider != OPENAI_PROVIDER && provider != OPENROUTER_PROVIDER {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Provider '{provider}' does not support refresh-oauth."),
-        )?;
+        renderer.line(MessageStyle::Error, &format!("Provider '{provider}' does not support refresh-oauth."))?;
         return Ok(SlashCommandOutcome::Handled);
     }
     Ok(SlashCommandOutcome::RefreshOAuth { provider })
@@ -410,8 +348,7 @@ mod tests {
         let handle = InlineHandle::new_for_tests(sender);
         let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
 
-        let outcome =
-            handle_refresh_oauth_command("", &mut renderer).expect("refresh-oauth outcome");
+        let outcome = handle_refresh_oauth_command("", &mut renderer).expect("refresh-oauth outcome");
 
         assert!(matches!(
             outcome,
@@ -432,8 +369,7 @@ mod tests {
     fn session_palette_args_clamp_limit_and_keep_all_flag() {
         let mut renderer = AnsiRenderer::stdout();
 
-        let parsed =
-            parse_session_palette_args("0 --all", &mut renderer).expect("args should parse");
+        let parsed = parse_session_palette_args("0 --all", &mut renderer).expect("args should parse");
 
         assert_eq!(parsed, Some((1, true)));
     }
@@ -442,8 +378,7 @@ mod tests {
     fn session_palette_args_reject_unknown_tokens() {
         let mut renderer = AnsiRenderer::stdout();
 
-        let parsed =
-            parse_session_palette_args("--bogus", &mut renderer).expect("parse should succeed");
+        let parsed = parse_session_palette_args("--bogus", &mut renderer).expect("parse should succeed");
 
         assert_eq!(parsed, None);
     }

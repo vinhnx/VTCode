@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::constants::tools;
 use crate::tools::handlers::planning_workflow::persistence::{
-    detect_validation_command_hints, initialize_plan_file, plan_file_baseline, plan_title_seed,
-    resolve_plan_path,
+    detect_validation_command_hints, initialize_plan_file, plan_file_baseline, plan_title_seed, resolve_plan_path,
 };
 use crate::tools::handlers::planning_workflow::state::PlanningWorkflowState;
 use crate::tools::traits::Tool;
@@ -55,13 +54,7 @@ impl StartPlanningTool {
                 // Sanitize the name for filesystem
                 name.to_lowercase()
                     .chars()
-                    .map(|c| {
-                        if c.is_alphanumeric() || c == '-' {
-                            c
-                        } else {
-                            '-'
-                        }
-                    })
+                    .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
                     .collect()
             }
             None => {
@@ -131,8 +124,7 @@ impl Tool for StartPlanningTool {
         if self.state.is_active() {
             let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
             let existing_plan_file = self.state.get_plan_file().await;
-            let existing_plan_file_exists =
-                existing_plan_file.as_ref().is_some_and(|path| path.exists());
+            let existing_plan_file_exists = existing_plan_file.as_ref().is_some_and(|path| path.exists());
 
             if existing_plan_file_exists {
                 return Ok(json!({
@@ -152,21 +144,15 @@ impl Tool for StartPlanningTool {
             let plan_title = title_from_plan_name(&plan_title_seed);
 
             if let Some(parent) = plan_file.parent() {
-                ensure_dir_exists(parent).await.with_context(|| {
-                    format!("Failed to create plan directory: {}", parent.display())
-                })?;
+                ensure_dir_exists(parent)
+                    .await
+                    .with_context(|| format!("Failed to create plan directory: {}", parent.display()))?;
             }
 
             let mut created_plan_file = false;
             if !plan_file.exists() {
                 created_plan_file = true;
-                initialize_plan_file(
-                    &plan_file,
-                    &plan_title,
-                    args.description.as_deref(),
-                    &validation_hints,
-                )
-                .await?;
+                initialize_plan_file(&plan_file, &plan_title, args.description.as_deref(), &validation_hints).await?;
             }
 
             self.state.set_plan_file(Some(plan_file.clone())).await;
@@ -211,18 +197,12 @@ impl Tool for StartPlanningTool {
         self.state.enable();
 
         if let Some(parent) = plan_file.parent() {
-            ensure_dir_exists(parent).await.with_context(|| {
-                format!("Failed to create plan directory: {}", parent.display())
-            })?;
+            ensure_dir_exists(parent)
+                .await
+                .with_context(|| format!("Failed to create plan directory: {}", parent.display()))?;
         }
 
-        initialize_plan_file(
-            &plan_file,
-            &plan_title,
-            args.description.as_deref(),
-            &validation_hints,
-        )
-        .await?;
+        initialize_plan_file(&plan_file, &plan_title, args.description.as_deref(), &validation_hints).await?;
 
         // Track the current plan file
         self.state.set_plan_file(Some(plan_file.clone())).await;

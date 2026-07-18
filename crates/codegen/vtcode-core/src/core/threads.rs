@@ -1,9 +1,8 @@
 use crate::exec::events::ThreadEvent;
 use crate::llm::provider::Message;
 use crate::utils::session_archive::{
-    SessionArchive, SessionArchiveMetadata, SessionForkMode, SessionListing,
-    find_session_by_identifier, list_recent_sessions, reserve_session_archive_identifier,
-    session_listing_matches_workspace,
+    SessionArchive, SessionArchiveMetadata, SessionForkMode, SessionListing, find_session_by_identifier,
+    list_recent_sessions, reserve_session_archive_identifier, session_listing_matches_workspace,
 };
 use crate::utils::session_debug::runtime_archive_session_id;
 use anyhow::{Result, anyhow};
@@ -264,12 +263,7 @@ impl ThreadRuntimeHandle {
         self.inner.session.lock().turn_in_flight = false;
     }
 
-    pub fn record_event(
-        &self,
-        submission_id: Option<SubmissionId>,
-        turn_id: Option<String>,
-        event: ThreadEvent,
-    ) {
+    pub fn record_event(&self, submission_id: Option<SubmissionId>, turn_id: Option<String>, event: ThreadEvent) {
         let thread_id = self.thread_id();
         self.inner.event_store.lock().push(&thread_id, submission_id, turn_id, event);
     }
@@ -312,11 +306,7 @@ impl ThreadManager {
         identifier: impl Into<String>,
         bootstrap: ThreadBootstrap,
     ) -> ThreadRuntimeHandle {
-        ThreadRuntimeHandle::new(
-            ThreadId::new(identifier.into()),
-            bootstrap,
-            self.event_buffer_capacity,
-        )
+        ThreadRuntimeHandle::new(ThreadId::new(identifier.into()), bootstrap, self.event_buffer_capacity)
     }
 
     pub async fn start_thread(
@@ -332,18 +322,12 @@ impl ThreadManager {
     pub async fn resume_thread(&self, identifier: &str) -> Result<Option<ThreadRuntimeHandle>> {
         let listing = find_session_by_identifier(identifier).await?;
         Ok(listing.map(|listing| {
-            self.start_thread_with_identifier(
-                listing.identifier(),
-                ThreadBootstrap::from_listing(listing),
-            )
+            self.start_thread_with_identifier(listing.identifier(), ThreadBootstrap::from_listing(listing))
         }))
     }
 }
 
-pub async fn list_recent_sessions_in_scope(
-    limit: usize,
-    scope: &SessionQueryScope,
-) -> Result<Vec<SessionListing>> {
+pub async fn list_recent_sessions_in_scope(limit: usize, scope: &SessionQueryScope) -> Result<Vec<SessionListing>> {
     let mut listings = list_recent_sessions(limit.saturating_mul(4).max(limit)).await?;
     if let SessionQueryScope::CurrentWorkspace(workspace) = scope {
         listings.retain(|listing| session_listing_matches_workspace(listing, workspace));
@@ -371,8 +355,7 @@ pub async fn prepare_archived_session(
     intent: ArchivedSessionIntent,
     reserved_identifier: Option<String>,
 ) -> Result<PreparedArchivedSession> {
-    let mut metadata =
-        preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
+    let mut metadata = preserve_prompt_cache_lineage_if_compatible(metadata, &source.snapshot.metadata);
     metadata.continuation_metadata = source.snapshot.metadata.continuation_metadata.clone();
     // Preserve the source session's primary agent ("mode") so a resume/fork keeps
     // running the same agent instead of falling back to the config default.
@@ -388,8 +371,7 @@ pub async fn prepare_archived_session(
             if let Some(identifier) = reserved_identifier {
                 identifier
             } else {
-                reserve_session_archive_identifier(&metadata.workspace_label, custom_suffix.clone())
-                    .await?
+                reserve_session_archive_identifier(&metadata.workspace_label, custom_suffix.clone()).await?
             }
         }
     };
@@ -405,9 +387,7 @@ pub async fn prepare_archived_session(
     }
 
     let archive = match intent {
-        ArchivedSessionIntent::ResumeInPlace => {
-            SessionArchive::resume_from_listing(&source, metadata)
-        }
+        ArchivedSessionIntent::ResumeInPlace => SessionArchive::resume_from_listing(&source, metadata),
         ArchivedSessionIntent::ForkNewArchive { .. } => {
             SessionArchive::new_with_identifier(metadata, thread_id.clone()).await?
         }
@@ -458,8 +438,7 @@ pub fn build_thread_archive_metadata(
     theme: &str,
     reasoning_effort: &str,
 ) -> SessionArchiveMetadata {
-    let workspace_label =
-        workspace.file_name().and_then(|value| value.to_str()).unwrap_or("workspace");
+    let workspace_label = workspace.file_name().and_then(|value| value.to_str()).unwrap_or("workspace");
 
     SessionArchiveMetadata::new(
         workspace_label,
@@ -500,16 +479,12 @@ mod tests {
         handle.record_event(
             None,
             Some("turn-1".to_string()),
-            ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "thread-1-turn-1".to_string(),
-            }),
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1-turn-1".to_string() }),
         );
         handle.record_event(
             None,
             Some("turn-2".to_string()),
-            ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "thread-1-turn-2".to_string(),
-            }),
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1-turn-2".to_string() }),
         );
 
         let records = handle.replay_recent();
@@ -572,11 +547,8 @@ mod tests {
                 error_logs: Vec::new(),
             },
         };
-        std::fs::write(
-            &listing.path,
-            serde_json::to_string(&listing.snapshot).expect("serialize snapshot"),
-        )
-        .expect("write listing");
+        std::fs::write(&listing.path, serde_json::to_string(&listing.snapshot).expect("serialize snapshot"))
+            .expect("write listing");
 
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let filtered = runtime
@@ -658,10 +630,7 @@ mod tests {
         assert_eq!(prepared.bootstrap.loaded_skills, vec!["skill_a".to_string()]);
         assert_eq!(prepared.bootstrap.metadata.as_ref().expect("metadata").model, "new-model");
         // Resume preserves the source session's primary agent ("mode").
-        assert_eq!(
-            prepared.bootstrap.metadata.as_ref().expect("metadata").primary_agent.as_deref(),
-            Some("plan")
-        );
+        assert_eq!(prepared.bootstrap.metadata.as_ref().expect("metadata").primary_agent.as_deref(), Some("plan"));
     }
 
     #[test]
@@ -861,9 +830,7 @@ mod tests {
         let listing = SessionListing {
             path: PathBuf::from("session.json"),
             snapshot: SessionSnapshot {
-                metadata: SessionArchiveMetadata::new(
-                    "ws", "/tmp/ws", "gpt-5.4", "openai", "theme", "medium",
-                ),
+                metadata: SessionArchiveMetadata::new("ws", "/tmp/ws", "gpt-5.4", "openai", "theme", "medium"),
                 started_at: Utc::now(),
                 ended_at: Utc::now(),
                 total_messages: 2,
@@ -878,9 +845,8 @@ mod tests {
                                 .with_phase(Some(crate::llm::provider::AssistantPhase::Commentary)),
                         ),
                         SessionMessage::from(
-                            &Message::assistant("Done".to_string()).with_phase(Some(
-                                crate::llm::provider::AssistantPhase::FinalAnswer,
-                            )),
+                            &Message::assistant("Done".to_string())
+                                .with_phase(Some(crate::llm::provider::AssistantPhase::FinalAnswer)),
                         ),
                     ],
                     tool_summaries: Vec::new(),

@@ -6,19 +6,17 @@ use vtcode_core::utils::ansi::MessageStyle;
 #[cfg(test)]
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use vtcode_ui::tui::app::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest,
-    TransientEvent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
-    TransientSelectionChange, TransientSubmission,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, TransientEvent, TransientHotkey,
+    TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSelectionChange, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::session_setup::refresh_local_agents;
 
 use super::{
-    ACTIVE_AGENT_INSPECTOR_REFRESH_MS, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE,
-    SUBPROCESS_ARCHIVE_PREFIX, SUBPROCESS_CANCEL_PREFIX, SUBPROCESS_STOP_PREFIX,
-    SUBPROCESS_TRANSCRIPT_PREFIX, SlashCommandContext, SlashCommandControl, THREAD_CANCEL_PREFIX,
-    THREAD_INSPECT_PREFIX, THREAD_TRANSCRIPT_PREFIX, render_missing_subagent_controller,
-    status_label, wait_for_list_modal_selection,
+    ACTIVE_AGENT_INSPECTOR_REFRESH_MS, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE, SUBPROCESS_ARCHIVE_PREFIX,
+    SUBPROCESS_CANCEL_PREFIX, SUBPROCESS_STOP_PREFIX, SUBPROCESS_TRANSCRIPT_PREFIX, SlashCommandContext,
+    SlashCommandControl, THREAD_CANCEL_PREFIX, THREAD_INSPECT_PREFIX, THREAD_TRANSCRIPT_PREFIX,
+    render_missing_subagent_controller, status_label, wait_for_list_modal_selection,
 };
 
 pub(super) async fn close_subagent_entry(
@@ -49,9 +47,7 @@ pub(super) async fn apply_background_subprocess_action(
     Ok(entry)
 }
 
-pub(super) async fn show_threads_modal(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(super) async fn show_threads_modal(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
         return render_missing_subagent_controller(&mut ctx);
     };
@@ -81,10 +77,7 @@ pub(super) async fn show_threads_modal(
                     "Foreground".to_string()
                 }),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(format!(
-                    "{THREAD_INSPECT_PREFIX}{}",
-                    entry.id
-                ))),
+                selection: Some(InlineListSelection::ConfigAction(format!("{THREAD_INSPECT_PREFIX}{}", entry.id))),
                 search_value: Some(format!(
                     "{} {} {} {}",
                     entry.id, entry.display_label, entry.agent_name, entry.description
@@ -92,65 +85,47 @@ pub(super) async fn show_threads_modal(
             })
             .collect::<Vec<_>>();
         let selected = items.first().and_then(|item| item.selection.clone());
-        ctx.handle
-            .show_transient(TransientRequest::List(ListOverlayRequest {
-                title: "Delegated agents".to_string(),
-                lines: vec![
-                    format!("Main session stays on {}.", ctx.active_thread_label),
-                    if active_count > 0 {
-                        format!(
-                            "{active_count} active. Recent completed runs remain inspectable here."
-                        )
-                    } else {
-                        "No active delegated agents right now. Recent runs remain inspectable here."
-                            .to_string()
-                    },
-                    "Select an agent for transcript or lifecycle actions. Live preview stays in the sidebar."
-                        .to_string(),
-                ],
-                footer_hint: Some(
-                    "enter inspect · ctrl-r reload · ctrl-k close selected agent · esc close"
-                        .to_string(),
-                ),
-                items,
-                selected: selected.clone(),
-                search: Some(InlineListSearchConfig {
-                    label: "Search active agents".to_string(),
-                    placeholder: Some("id, agent, source, status".to_string()),
-                }),
-                hotkeys: vec![
-                    TransientHotkey {
-                        key: TransientHotkeyKey::CtrlChar('r'),
-                        action: TransientHotkeyAction::ReloadSubagentInspector,
-                    },
-                    TransientHotkey {
-                        key: TransientHotkeyKey::CtrlChar('k'),
-                        action: TransientHotkeyAction::GracefulStopSubagent,
-                    },
-                ],
-            }));
+        ctx.handle.show_transient(TransientRequest::List(ListOverlayRequest {
+            title: "Delegated agents".to_string(),
+            lines: vec![
+                format!("Main session stays on {}.", ctx.active_thread_label),
+                if active_count > 0 {
+                    format!("{active_count} active. Recent completed runs remain inspectable here.")
+                } else {
+                    "No active delegated agents right now. Recent runs remain inspectable here.".to_string()
+                },
+                "Select an agent for transcript or lifecycle actions. Live preview stays in the sidebar.".to_string(),
+            ],
+            footer_hint: Some("enter inspect · ctrl-r reload · ctrl-k close selected agent · esc close".to_string()),
+            items,
+            selected: selected.clone(),
+            search: Some(InlineListSearchConfig {
+                label: "Search active agents".to_string(),
+                placeholder: Some("id, agent, source, status".to_string()),
+            }),
+            hotkeys: vec![
+                TransientHotkey {
+                    key: TransientHotkeyKey::CtrlChar('r'),
+                    action: TransientHotkeyAction::ReloadSubagentInspector,
+                },
+                TransientHotkey {
+                    key: TransientHotkeyKey::CtrlChar('k'),
+                    action: TransientHotkeyAction::GracefulStopSubagent,
+                },
+            ],
+        }));
 
-        let Some(action) = wait_for_inspector_action(
-            ctx.handle,
-            ctx.session,
-            ctx.ctrl_c_state,
-            ctx.ctrl_c_notify,
-            selected,
-            None,
-        )
-        .await
+        let Some(action) =
+            wait_for_inspector_action(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify, selected, None)
+                .await
         else {
             return Ok(SlashCommandControl::Continue);
         };
 
         match action.kind {
             InspectorActionKind::Reload => continue,
-            InspectorActionKind::Inspect
-            | InspectorActionKind::GracefulStop
-            | InspectorActionKind::ForceCancel => {
-                let Some(id) =
-                    selection_config_action(action.selection.as_ref(), THREAD_INSPECT_PREFIX)
-                else {
+            InspectorActionKind::Inspect | InspectorActionKind::GracefulStop | InspectorActionKind::ForceCancel => {
+                let Some(id) = selection_config_action(action.selection.as_ref(), THREAD_INSPECT_PREFIX) else {
                     return Ok(SlashCommandControl::Continue);
                 };
                 let entry = threads
@@ -164,10 +139,8 @@ pub(super) async fn show_threads_modal(
                 if confirm_subagent_cancellation(&mut ctx, entry.display_label.as_str()).await? {
                     controller.close(&entry.id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        &format!("Closed delegated agent {}.", entry.display_label),
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Info, &format!("Closed delegated agent {}.", entry.display_label))?;
                 }
                 return Ok(SlashCommandControl::Continue);
             }
@@ -235,24 +208,22 @@ async fn wait_for_inspector_action(
             )) => {
                 current_selection = Some(selection);
             }
-            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Selection(selection),
-            )) => {
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                selection,
+            ))) => {
                 ctrl_c_state.reset();
                 return Some(InspectorAction {
                     kind: InspectorActionKind::Inspect,
                     selection: Some(selection),
                 });
             }
-            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Hotkey(action),
-            )) => {
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(
+                action,
+            ))) => {
                 ctrl_c_state.reset();
                 let kind = match action {
                     TransientHotkeyAction::ReloadSubagentInspector => InspectorActionKind::Reload,
-                    TransientHotkeyAction::GracefulStopSubagent => {
-                        InspectorActionKind::GracefulStop
-                    }
+                    TransientHotkeyAction::GracefulStopSubagent => InspectorActionKind::GracefulStop,
                     TransientHotkeyAction::ForceCancelSubagent => InspectorActionKind::ForceCancel,
                     _ => continue,
                 };
@@ -379,17 +350,13 @@ pub(super) async fn show_active_agent_inspector(
                 return Ok(SlashCommandControl::Continue);
             }
             InspectorActionKind::Inspect => {
-                if let Some(path) = selection_path(
-                    action.selection.as_ref(),
-                    THREAD_TRANSCRIPT_PREFIX,
-                    &current_entry.transcript_path,
-                ) {
+                if let Some(path) =
+                    selection_path(action.selection.as_ref(), THREAD_TRANSCRIPT_PREFIX, &current_entry.transcript_path)
+                {
                     return launch_editor_path(ctx, path).await;
                 }
-                if selection_config_action(action.selection.as_ref(), THREAD_CANCEL_PREFIX)
-                    .is_some()
-                    && confirm_subagent_cancellation(ctx, current_entry.display_label.as_str())
-                        .await?
+                if selection_config_action(action.selection.as_ref(), THREAD_CANCEL_PREFIX).is_some()
+                    && confirm_subagent_cancellation(ctx, current_entry.display_label.as_str()).await?
                 {
                     controller.close(&agent_id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
@@ -511,9 +478,7 @@ pub(super) async fn show_background_subprocess_inspector(
         match action.kind {
             InspectorActionKind::Reload => continue,
             InspectorActionKind::GracefulStop => {
-                if confirm_subprocess_action(ctx, current_entry.display_label.as_str(), false)
-                    .await?
-                {
+                if confirm_subprocess_action(ctx, current_entry.display_label.as_str(), false).await? {
                     let updated = controller.graceful_stop_background(&record_id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
                     render_subprocess_status(ctx, &updated)?;
@@ -521,9 +486,7 @@ pub(super) async fn show_background_subprocess_inspector(
                 return Ok(SlashCommandControl::Continue);
             }
             InspectorActionKind::ForceCancel => {
-                if confirm_subprocess_action(ctx, current_entry.display_label.as_str(), true)
-                    .await?
-                {
+                if confirm_subprocess_action(ctx, current_entry.display_label.as_str(), true).await? {
                     let updated = controller.force_cancel_background(&record_id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
                     render_subprocess_status(ctx, &updated)?;
@@ -538,26 +501,20 @@ pub(super) async fn show_background_subprocess_inspector(
                 ) {
                     return launch_editor_path(ctx, path).await;
                 }
-                if let Some(path) = selection_path(
-                    action.selection.as_ref(),
-                    SUBPROCESS_ARCHIVE_PREFIX,
-                    &current_entry.archive_path,
-                ) {
+                if let Some(path) =
+                    selection_path(action.selection.as_ref(), SUBPROCESS_ARCHIVE_PREFIX, &current_entry.archive_path)
+                {
                     return launch_editor_path(ctx, path).await;
                 }
-                if selection_config_action(action.selection.as_ref(), SUBPROCESS_STOP_PREFIX)
-                    .is_some()
-                    && confirm_subprocess_action(ctx, current_entry.display_label.as_str(), false)
-                        .await?
+                if selection_config_action(action.selection.as_ref(), SUBPROCESS_STOP_PREFIX).is_some()
+                    && confirm_subprocess_action(ctx, current_entry.display_label.as_str(), false).await?
                 {
                     let updated = controller.graceful_stop_background(&record_id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
                     render_subprocess_status(ctx, &updated)?;
                 }
-                if selection_config_action(action.selection.as_ref(), SUBPROCESS_CANCEL_PREFIX)
-                    .is_some()
-                    && confirm_subprocess_action(ctx, current_entry.display_label.as_str(), true)
-                        .await?
+                if selection_config_action(action.selection.as_ref(), SUBPROCESS_CANCEL_PREFIX).is_some()
+                    && confirm_subprocess_action(ctx, current_entry.display_label.as_str(), true).await?
                 {
                     let updated = controller.force_cancel_background(&record_id).await?;
                     refresh_local_agents(ctx.handle, &controller).await?;
@@ -590,10 +547,7 @@ fn background_subprocess_refresh_after(
 }
 
 fn inspector_live_updates_label(refresh_after: Option<Duration>) -> String {
-    refresh_after.map_or_else(
-        || "manual (Ctrl+R)".to_string(),
-        |delay| format!("auto every {} ms", delay.as_millis()),
-    )
+    refresh_after.map_or_else(|| "manual (Ctrl+R)".to_string(), |delay| format!("auto every {} ms", delay.as_millis()))
 }
 
 fn active_agent_summary(
@@ -634,9 +588,7 @@ pub(super) fn background_subprocess_summary(entry: &BackgroundSubprocessEntry) -
                 "Running; waiting for transcript output.".to_string()
             }
             vtcode_core::subagents::BackgroundSubprocessStatus::Stopped
-            | vtcode_core::subagents::BackgroundSubprocessStatus::Error => {
-                "No summary recorded".to_string()
-            }
+            | vtcode_core::subagents::BackgroundSubprocessStatus::Error => "No summary recorded".to_string(),
         })
 }
 
@@ -649,9 +601,7 @@ fn background_subprocess_preview_placeholder(entry: &BackgroundSubprocessEntry) 
             "Subprocess is running; waiting for the next transcript update.".to_string()
         }
         vtcode_core::subagents::BackgroundSubprocessStatus::Stopped
-        | vtcode_core::subagents::BackgroundSubprocessStatus::Error => {
-            "No recent output yet.".to_string()
-        }
+        | vtcode_core::subagents::BackgroundSubprocessStatus::Error => "No recent output yet.".to_string(),
     }
 }
 
@@ -702,20 +652,12 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
         }
         ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
             .map(|text| format!("tool output: {text}"))
+            .unwrap_or_else(|| format!("tool output: {}", tool_status_label(output.status.clone()))),
+        ThreadItemDetails::CommandExecution(command) => summarize_preview_text(&command.aggregated_output)
+            .map(|text| format!("command {}: {}", command.command, text))
             .unwrap_or_else(|| {
-                format!("tool output: {}", tool_status_label(output.status.clone()))
+                format!("command {}: {}", command.command, command_status_label(command.status.clone()))
             }),
-        ThreadItemDetails::CommandExecution(command) => {
-            summarize_preview_text(&command.aggregated_output)
-                .map(|text| format!("command {}: {}", command.command, text))
-                .unwrap_or_else(|| {
-                    format!(
-                        "command {}: {}",
-                        command.command,
-                        command_status_label(command.status.clone())
-                    )
-                })
-        }
         _ => return None,
     };
 
@@ -781,10 +723,7 @@ fn active_agent_inspector_items(entry: &SubagentStatusEntry) -> Vec<InlineListIt
             subtitle: Some("Open the archived child transcript in your editor".to_string()),
             badge: Some("Open".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{THREAD_TRANSCRIPT_PREFIX}{}",
-                entry.id
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{THREAD_TRANSCRIPT_PREFIX}{}", entry.id))),
             search_value: Some("open transcript".to_string()),
         });
     }
@@ -793,10 +732,7 @@ fn active_agent_inspector_items(entry: &SubagentStatusEntry) -> Vec<InlineListIt
         subtitle: Some("Stop this delegated agent and keep the main session active".to_string()),
         badge: Some("Ctrl+K".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{THREAD_CANCEL_PREFIX}{}",
-            entry.id
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{THREAD_CANCEL_PREFIX}{}", entry.id))),
         search_value: Some("cancel active agent".to_string()),
     });
     items
@@ -810,10 +746,7 @@ fn background_subprocess_inspector_items(entry: &BackgroundSubprocessEntry) -> V
             subtitle: Some("Open the archived subprocess transcript".to_string()),
             badge: Some("Open".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBPROCESS_TRANSCRIPT_PREFIX}{}",
-                entry.id
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{SUBPROCESS_TRANSCRIPT_PREFIX}{}", entry.id))),
             search_value: Some("open subprocess transcript".to_string()),
         });
     }
@@ -823,10 +756,7 @@ fn background_subprocess_inspector_items(entry: &BackgroundSubprocessEntry) -> V
             subtitle: Some("Open the persisted session archive".to_string()),
             badge: Some("Open".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBPROCESS_ARCHIVE_PREFIX}{}",
-                entry.id
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{SUBPROCESS_ARCHIVE_PREFIX}{}", entry.id))),
             search_value: Some("open subprocess archive".to_string()),
         });
     }
@@ -835,10 +765,7 @@ fn background_subprocess_inspector_items(entry: &BackgroundSubprocessEntry) -> V
         subtitle: Some("Request a clean shutdown for this subprocess".to_string()),
         badge: Some("Ctrl+K".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{SUBPROCESS_STOP_PREFIX}{}",
-            entry.id
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{SUBPROCESS_STOP_PREFIX}{}", entry.id))),
         search_value: Some("graceful stop subprocess".to_string()),
     });
     items.push(InlineListItem {
@@ -846,39 +773,26 @@ fn background_subprocess_inspector_items(entry: &BackgroundSubprocessEntry) -> V
         subtitle: Some("Close the subprocess immediately and clean up".to_string()),
         badge: Some("Ctrl+X".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{SUBPROCESS_CANCEL_PREFIX}{}",
-            entry.id
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{SUBPROCESS_CANCEL_PREFIX}{}", entry.id))),
         search_value: Some("force cancel subprocess".to_string()),
     });
     items
 }
 
-fn selection_config_action<'a>(
-    selection: Option<&'a InlineListSelection>,
-    prefix: &str,
-) -> Option<&'a str> {
+fn selection_config_action<'a>(selection: Option<&'a InlineListSelection>, prefix: &str) -> Option<&'a str> {
     match selection {
         Some(InlineListSelection::ConfigAction(action)) => action.strip_prefix(prefix),
         _ => None,
     }
 }
 
-fn selection_path(
-    selection: Option<&InlineListSelection>,
-    prefix: &str,
-    path: &Option<PathBuf>,
-) -> Option<String> {
+fn selection_path(selection: Option<&InlineListSelection>, prefix: &str, path: &Option<PathBuf>) -> Option<String> {
     selection_config_action(selection, prefix)
         .and(path.as_ref())
         .map(|path| path.display().to_string())
 }
 
-async fn confirm_subagent_cancellation(
-    ctx: &mut SlashCommandContext<'_>,
-    name: &str,
-) -> Result<bool> {
+async fn confirm_subagent_cancellation(ctx: &mut SlashCommandContext<'_>, name: &str) -> Result<bool> {
     confirm_list_action(
         ctx,
         "Close delegated agent",
@@ -888,25 +802,17 @@ async fn confirm_subagent_cancellation(
     .await
 }
 
-async fn confirm_subprocess_action(
-    ctx: &mut SlashCommandContext<'_>,
-    name: &str,
-    force: bool,
-) -> Result<bool> {
+async fn confirm_subprocess_action(ctx: &mut SlashCommandContext<'_>, name: &str, force: bool) -> Result<bool> {
     let (title, message, confirm_label) = subprocess_action_prompt(name, force);
     confirm_list_action(ctx, title, &message, confirm_label).await
 }
 
 #[cfg(test)]
-pub(super) fn active_subagent_entries(
-    entries: Vec<SubagentStatusEntry>,
-) -> Vec<SubagentStatusEntry> {
+pub(super) fn active_subagent_entries(entries: Vec<SubagentStatusEntry>) -> Vec<SubagentStatusEntry> {
     entries.into_iter().filter(|entry| !entry.status.is_terminal()).collect()
 }
 
-pub(super) fn visible_subagent_entries(
-    mut entries: Vec<SubagentStatusEntry>,
-) -> Vec<SubagentStatusEntry> {
+pub(super) fn visible_subagent_entries(mut entries: Vec<SubagentStatusEntry>) -> Vec<SubagentStatusEntry> {
     entries.retain(|entry| entry.status != vtcode_core::subagents::SubagentStatus::Closed);
     entries.sort_by(|left, right| {
         left.status
@@ -918,18 +824,11 @@ pub(super) fn visible_subagent_entries(
     entries
 }
 
-pub(super) fn subprocess_action_prompt(
-    name: &str,
-    force: bool,
-) -> (&'static str, String, &'static str) {
+pub(super) fn subprocess_action_prompt(name: &str, force: bool) -> (&'static str, String, &'static str) {
     if force {
         ("Force cancel subprocess", format!("Force cancel `{name}` immediately?"), "Force cancel")
     } else {
-        (
-            "Graceful stop subprocess",
-            format!("Request a graceful shutdown for `{name}`?"),
-            "Graceful stop",
-        )
+        ("Graceful stop subprocess", format!("Request a graceful shutdown for `{name}`?"), "Graceful stop")
     }
 }
 
@@ -948,9 +847,7 @@ async fn confirm_list_action(
                 subtitle: Some("Proceed with the selected action".to_string()),
                 badge: Some("Confirm".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "agents:confirm-action".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("agents:confirm-action".to_string())),
                 search_value: Some("confirm action".to_string()),
             },
             InlineListItem {
@@ -958,9 +855,7 @@ async fn confirm_list_action(
                 subtitle: Some("Keep the subprocess/session running".to_string()),
                 badge: None,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "agents:cancel-action".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("agents:cancel-action".to_string())),
                 search_value: Some("cancel".to_string()),
             },
         ],
@@ -1010,10 +905,8 @@ pub(super) fn render_active_agent_status_text(
             }
         ),
     )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("Summary: {}", active_agent_summary(entry, snapshot)),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Output, &format!("Summary: {}", active_agent_summary(entry, snapshot)))?;
     if let Some(path) = entry.transcript_path.as_ref() {
         ctx.renderer
             .line(MessageStyle::Info, &format!("Transcript: {}", path.display()))?;
@@ -1026,9 +919,7 @@ pub(super) fn render_background_subprocess_status_text(
     snapshot: &vtcode_core::subagents::BackgroundSubprocessSnapshot,
 ) -> Result<()> {
     render_subprocess_status(ctx, &snapshot.entry)?;
-    if let Some(path) =
-        snapshot.entry.transcript_path.as_ref().or(snapshot.entry.archive_path.as_ref())
-    {
+    if let Some(path) = snapshot.entry.transcript_path.as_ref().or(snapshot.entry.archive_path.as_ref()) {
         ctx.renderer
             .line(MessageStyle::Info, &format!("Transcript: {}", path.display()))?;
     }
@@ -1054,19 +945,15 @@ pub(super) fn render_subprocess_status(
             entry.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "-".to_string())
         ),
     )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("Summary: {}", background_subprocess_summary(entry)),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Output, &format!("Summary: {}", background_subprocess_summary(entry)))?;
     if let Some(error) = entry.error.as_deref() {
         ctx.renderer.line(MessageStyle::Error, &format!("Error: {error}"))?;
     }
     Ok(())
 }
 
-pub(super) async fn handle_list_subprocesses_text(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(super) async fn handle_list_subprocesses_text(ctx: &mut SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
         ctx.renderer.line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
         return Ok(SlashCommandControl::Continue);
@@ -1085,10 +972,7 @@ pub(super) async fn handle_list_subprocesses_text(
     Ok(SlashCommandControl::Continue)
 }
 
-async fn launch_editor_path(
-    ctx: &mut SlashCommandContext<'_>,
-    path: String,
-) -> Result<SlashCommandControl> {
+async fn launch_editor_path(ctx: &mut SlashCommandContext<'_>, path: String) -> Result<SlashCommandControl> {
     super::super::apps::launch_editor_from_context(ctx, Some(path)).await
 }
 
@@ -1113,9 +997,7 @@ fn format_uptime(started_at: chrono::DateTime<chrono::Utc>) -> String {
     }
 }
 
-pub(super) async fn handle_list_threads_text(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(super) async fn handle_list_threads_text(ctx: &mut SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
         ctx.renderer.line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
         return Ok(SlashCommandControl::Continue);
@@ -1123,10 +1005,8 @@ pub(super) async fn handle_list_threads_text(
 
     let threads = visible_subagent_entries(controller.status_entries().await);
     if threads.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("No delegated agents in main thread {}.", ctx.thread_id),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("No delegated agents in main thread {}.", ctx.thread_id))?;
         return Ok(SlashCommandControl::Continue);
     }
 

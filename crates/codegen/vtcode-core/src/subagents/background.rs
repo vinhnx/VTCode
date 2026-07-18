@@ -21,9 +21,7 @@ pub(crate) fn background_state_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(".vtcode").join("state").join("background_subagents.json")
 }
 
-pub(crate) async fn load_background_state(
-    workspace_root: &Path,
-) -> Result<PersistedBackgroundState> {
+pub(crate) async fn load_background_state(workspace_root: &Path) -> Result<PersistedBackgroundState> {
     let path = background_state_path(workspace_root);
     let raw = match fs::read_to_string(&path).await {
         Ok(raw) => raw,
@@ -98,8 +96,7 @@ pub fn build_background_subagent_command(
     reasoning_override: Option<&str>,
 ) -> Result<Vec<String>> {
     let executable = std::env::current_exe().context("Failed to resolve current vtcode binary")?;
-    let executable =
-        resolve_background_subagent_executable_for_workspace(workspace_root, &executable);
+    let executable = resolve_background_subagent_executable_for_workspace(workspace_root, &executable);
     let mut command = vec![
         executable.to_string_lossy().into_owned(),
         "background-subagent".to_string(),
@@ -135,10 +132,7 @@ pub fn build_background_subagent_command(
     Ok(command)
 }
 
-fn resolve_background_subagent_executable_for_workspace(
-    workspace_root: &Path,
-    current_exe: &Path,
-) -> PathBuf {
+fn resolve_background_subagent_executable_for_workspace(workspace_root: &Path, current_exe: &Path) -> PathBuf {
     let workspace_target = workspace_root.join("target");
     if current_exe.starts_with(&workspace_target) {
         return current_exe.to_path_buf();
@@ -191,17 +185,14 @@ async fn load_session_listing(path: &Path) -> Result<SessionListing> {
     let raw = fs::read_to_string(path)
         .await
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
-    let snapshot: SessionSnapshot = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
+    let snapshot: SessionSnapshot =
+        serde_json::from_str(&raw).with_context(|| format!("Failed to parse session archive {}", path.display()))?;
     Ok(SessionListing { path: path.to_path_buf(), snapshot })
 }
 
 #[must_use]
 pub(crate) fn exec_session_is_running(session: &crate::tools::types::VTCodeExecSession) -> bool {
-    matches!(
-        session.lifecycle_state,
-        Some(crate::tools::types::VTCodeSessionLifecycleState::Running)
-    )
+    matches!(session.lifecycle_state, Some(crate::tools::types::VTCodeSessionLifecycleState::Running))
 }
 
 pub fn subagent_display_label(spec: &vtcode_config::SubagentSpec) -> String {
@@ -210,9 +201,7 @@ pub fn subagent_display_label(spec: &vtcode_config::SubagentSpec) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_background_launch_spec, resolve_background_subagent_executable_for_workspace,
-    };
+    use super::{build_background_launch_spec, resolve_background_subagent_executable_for_workspace};
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -225,10 +214,8 @@ mod tests {
         fs::create_dir_all(candidate.parent().expect("parent")).expect("mkdir");
         fs::write(&candidate, b"binary").expect("write candidate");
 
-        let resolved = resolve_background_subagent_executable_for_workspace(
-            workspace_root,
-            Path::new("/usr/local/bin/vtcode"),
-        );
+        let resolved =
+            resolve_background_subagent_executable_for_workspace(workspace_root, Path::new("/usr/local/bin/vtcode"));
 
         assert_eq!(resolved, candidate);
     }
@@ -241,8 +228,7 @@ mod tests {
         fs::create_dir_all(current.parent().expect("parent")).expect("mkdir");
         fs::write(&current, b"binary").expect("write current");
 
-        let resolved =
-            resolve_background_subagent_executable_for_workspace(workspace_root, &current);
+        let resolved = resolve_background_subagent_executable_for_workspace(workspace_root, &current);
 
         assert_eq!(resolved, current);
     }

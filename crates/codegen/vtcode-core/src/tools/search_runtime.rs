@@ -50,8 +50,7 @@ impl SearchToolBundleStatus {
 
     #[must_use]
     pub fn has_errors(self) -> bool {
-        matches!(self.ripgrep, SearchToolReadiness::Error)
-            || matches!(self.ast_grep, SearchToolReadiness::Error)
+        matches!(self.ripgrep, SearchToolReadiness::Error) || matches!(self.ast_grep, SearchToolReadiness::Error)
     }
 
     #[must_use]
@@ -59,11 +58,7 @@ impl SearchToolBundleStatus {
         if self.all_ready() {
             return "Search: ripgrep \u{00b7} ast-grep".to_string();
         }
-        format!(
-            "Search: ripgrep {} \u{00b7} ast-grep {}",
-            self.ripgrep.label(),
-            self.ast_grep.label()
-        )
+        format!("Search: ripgrep {} \u{00b7} ast-grep {}", self.ripgrep.label(), self.ast_grep.label())
     }
 }
 
@@ -77,8 +72,7 @@ pub(crate) struct SearchRuntimeSnapshot {
     pub(crate) bash_tree_sitter_ready: bool,
 }
 
-static SEARCH_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, SearchRuntimeSnapshot>>> =
-    OnceLock::new();
+static SEARCH_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, SearchRuntimeSnapshot>>> = OnceLock::new();
 
 pub(crate) fn snapshot_for_workspace(workspace_root: &Path) -> SearchRuntimeSnapshot {
     let workspace_root = workspace_root.to_path_buf();
@@ -101,9 +95,7 @@ pub(crate) fn snapshot_for_workspace(workspace_root: &Path) -> SearchRuntimeSnap
         ast_grep: SearchToolReadiness::from_ast_grep_status(AstGrepStatus::check()),
     };
     let snapshot = SearchRuntimeSnapshot {
-        code_tree_sitter_languages: prewarm_workspace_languages(
-            workspace_languages.iter().map(String::as_str),
-        ),
+        code_tree_sitter_languages: prewarm_workspace_languages(workspace_languages.iter().map(String::as_str)),
         workspace_languages,
         search_tools,
         ripgrep_ready: search_tools.ripgrep.is_ready(),
@@ -146,10 +138,7 @@ impl SearchToolReadiness {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language,
-        snapshot_for_workspace,
-    };
+    use super::{SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language, snapshot_for_workspace};
     use std::fs;
     use tempfile::TempDir;
 
@@ -163,16 +152,10 @@ mod tests {
 
         let snapshot = snapshot_for_workspace(workspace.path());
 
-        assert_eq!(
-            snapshot.workspace_languages,
-            vec!["Rust".to_string(), "TypeScript".to_string()]
-        );
+        assert_eq!(snapshot.workspace_languages, vec!["Rust".to_string(), "TypeScript".to_string()]);
         assert_eq!(snapshot.ripgrep_ready, snapshot.search_tools.ripgrep.is_ready());
         assert_eq!(snapshot.ast_grep_ready, snapshot.search_tools.ast_grep.is_ready());
-        assert_eq!(
-            snapshot.code_tree_sitter_languages,
-            vec!["Rust".to_string(), "TypeScript".to_string()]
-        );
+        assert_eq!(snapshot.code_tree_sitter_languages, vec!["Rust".to_string(), "TypeScript".to_string()]);
         assert!(snapshot.bash_tree_sitter_ready);
     }
 

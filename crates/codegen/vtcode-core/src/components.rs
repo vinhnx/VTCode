@@ -239,32 +239,11 @@ pub trait LoggingProvider<Ctx>: Send + Sync {
 
     fn on_cache_hit(_ctx: &Ctx, _tool_name: &str, _args: &Value) {}
 
-    fn on_success(
-        _ctx: &Ctx,
-        _tool_name: &str,
-        _duration: Duration,
-        _attempt: u32,
-        _from_cache: bool,
-    ) {
-    }
+    fn on_success(_ctx: &Ctx, _tool_name: &str, _duration: Duration, _attempt: u32, _from_cache: bool) {}
 
-    fn on_retry(
-        _ctx: &Ctx,
-        _tool_name: &str,
-        _next_attempt: u32,
-        _backoff: Duration,
-        _error: &Error,
-    ) {
-    }
+    fn on_retry(_ctx: &Ctx, _tool_name: &str, _next_attempt: u32, _backoff: Duration, _error: &Error) {}
 
-    fn on_failure(
-        _ctx: &Ctx,
-        _tool_name: &str,
-        _duration: Duration,
-        _attempt: u32,
-        _error: &Error,
-    ) {
-    }
+    fn on_failure(_ctx: &Ctx, _tool_name: &str, _duration: Duration, _attempt: u32, _error: &Error) {}
 }
 
 /// Provider trait for cached tool results.
@@ -626,15 +605,11 @@ where
     type Output = Value;
 
     fn get_cached(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Self::Output> {
-        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_json(
-            ctx, tool_name, args,
-        )
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_json(ctx, tool_name, args)
     }
 
     fn put_cached(ctx: &Ctx, tool_name: &str, args: &Value, result: &Self::Output) {
-        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_json(
-            ctx, tool_name, args, result,
-        );
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_json(ctx, tool_name, args, result);
     }
 
     async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output> {
@@ -654,20 +629,15 @@ where
     type Output = SplitToolResult;
 
     fn get_cached(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Self::Output> {
-        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_dual(
-            ctx, tool_name, args,
-        )
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::get_dual(ctx, tool_name, args)
     }
 
     fn put_cached(ctx: &Ctx, tool_name: &str, args: &Value, result: &Self::Output) {
-        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_dual(
-            ctx, tool_name, args, result,
-        );
+        <ComponentProvider<Ctx, CacheComponent> as CacheProvider<Ctx>>::put_dual(ctx, tool_name, args, result);
     }
 
     async fn execute(ctx: &Ctx, args: Value) -> Result<Self::Output> {
-        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute_dual(ctx, args)
-            .await
+        <ComponentProvider<Ctx, ExecuteComponent> as ExecuteProvider<Ctx>>::execute_dual(ctx, args).await
     }
 }
 
@@ -676,17 +646,11 @@ where
     Ctx: HasComponent<RetryComponent> + Send + Sync,
     ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
 {
-    <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::backoff_duration(
-        ctx, tool_name, attempt,
-    )
-    .min(MAX_RETRY_BACKOFF)
+    <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::backoff_duration(ctx, tool_name, attempt)
+        .min(MAX_RETRY_BACKOFF)
 }
 
-async fn execute_tool_with_mode<Ctx, Mode>(
-    ctx: &Ctx,
-    tool_name: &str,
-    args: Value,
-) -> Result<Mode::Output>
+async fn execute_tool_with_mode<Ctx, Mode>(ctx: &Ctx, tool_name: &str, args: Value) -> Result<Mode::Output>
 where
     Ctx: HasComponent<ExecuteComponent>
         + HasComponent<LoggingComponent>
@@ -700,14 +664,10 @@ where
     ComponentProvider<Ctx, RetryComponent>: RetryProvider<Ctx>,
     Mode: ExecutionMode<Ctx>,
 {
-    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(
-        ctx, tool_name, &args,
-    );
+    <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_start(ctx, tool_name, &args);
 
     if let Some(result) = Mode::get_cached(ctx, tool_name, &args) {
-        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(
-            ctx, tool_name, &args,
-        );
+        <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_cache_hit(ctx, tool_name, &args);
         <ComponentProvider<Ctx, LoggingComponent> as LoggingProvider<Ctx>>::on_success(
             ctx,
             tool_name,
@@ -720,10 +680,8 @@ where
 
     let started = Instant::now();
     let max_attempts =
-        <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(
-            ctx, tool_name, &args,
-        )
-        .clamp(1, MAX_RETRY_ATTEMPTS);
+        <ComponentProvider<Ctx, RetryComponent> as RetryProvider<Ctx>>::max_attempts(ctx, tool_name, &args)
+            .clamp(1, MAX_RETRY_ATTEMPTS);
 
     let mut attempt = 1;
     loop {
@@ -874,9 +832,7 @@ where
     }
 
     fn default_permission(&self) -> ToolPolicy {
-        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::default_permission(
-            self,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::default_permission(self)
     }
 
     fn allow_patterns(&self) -> Option<&'static [&'static str]> {
@@ -900,9 +856,7 @@ where
     }
 
     fn resource_hints(&self, args: &Value) -> Vec<String> {
-        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::resource_hints(
-            self, args,
-        )
+        <ComponentProvider<Ctx, MetadataComponent> as MetadataProvider<Ctx>>::resource_hints(self, args)
     }
 
     fn execution_cost(&self) -> u8 {
@@ -1109,11 +1063,7 @@ impl ComposableRuntime {
 
     /// Full pipeline: approval → sandbox check → delegate to caller for
     /// execution.
-    pub async fn run_with_sandbox<Ctx>(
-        ctx: &Ctx,
-        tool_name: &str,
-        description: &str,
-    ) -> Result<bool>
+    pub async fn run_with_sandbox<Ctx>(ctx: &Ctx, tool_name: &str, description: &str) -> Result<bool>
     where
         Ctx: CanApproveTool + CanResolveSandbox + Send + Sync,
     {
@@ -1311,10 +1261,7 @@ pub fn wrap_tool_interactive(
 ///
 /// Prefer `wrap_native_tool_ci()` when you still own the concrete tool
 /// instance. Use this bridge when the tool is already shared elsewhere.
-pub fn wrap_tool_ci(
-    tool: Arc<dyn Tool>,
-    workspace_root: PathBuf,
-) -> ToolFacade<ToolBridgeCtx<CiCtx>> {
+pub fn wrap_tool_ci(tool: Arc<dyn Tool>, workspace_root: PathBuf) -> ToolFacade<ToolBridgeCtx<CiCtx>> {
     let ctx = ToolBridgeCtx { inner: tool, runtime: CiCtx::new(workspace_root) };
     ToolFacade::new(ctx)
 }
@@ -1453,9 +1400,7 @@ impl<Runtime, T> TypedToolCtx<Runtime, T> {
     }
 }
 
-impl<Runtime: HasWorkspaceRoot + Send + Sync, T: Send + Sync> HasWorkspaceRoot
-    for TypedToolCtx<Runtime, T>
-{
+impl<Runtime: HasWorkspaceRoot + Send + Sync, T: Send + Sync> HasWorkspaceRoot for TypedToolCtx<Runtime, T> {
     fn workspace_root(&self) -> &PathBuf {
         self.runtime.workspace_root()
     }
@@ -1520,10 +1465,7 @@ where
 ///
 /// Prefer this path when the caller still owns the tool and does not need
 /// shared ownership.
-pub fn wrap_native_tool_interactive<T>(
-    tool: T,
-    workspace_root: PathBuf,
-) -> ToolFacade<TypedToolCtx<InteractiveCtx, T>>
+pub fn wrap_native_tool_interactive<T>(tool: T, workspace_root: PathBuf) -> ToolFacade<TypedToolCtx<InteractiveCtx, T>>
 where
     T: Tool + Send + Sync + 'static,
 {
@@ -1535,10 +1477,7 @@ where
 ///
 /// Prefer this path when the caller still owns the tool and does not need
 /// shared ownership.
-pub fn wrap_native_tool_ci<T>(
-    tool: T,
-    workspace_root: PathBuf,
-) -> ToolFacade<TypedToolCtx<CiCtx, T>>
+pub fn wrap_native_tool_ci<T>(tool: T, workspace_root: PathBuf) -> ToolFacade<TypedToolCtx<CiCtx, T>>
 where
     T: Tool + Send + Sync + 'static,
 {

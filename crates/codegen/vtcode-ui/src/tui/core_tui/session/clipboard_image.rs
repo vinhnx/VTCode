@@ -74,12 +74,7 @@ struct CommandRunOutput {
 }
 
 trait ClipboardCommandRunner {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        timeout: Duration,
-    ) -> std::io::Result<CommandRunOutput>;
+    fn run(&self, program: &str, args: &[&str], timeout: Duration) -> std::io::Result<CommandRunOutput>;
 }
 
 pub(crate) fn read_clipboard_image() -> Result<ContentPart, ClipboardImageError> {
@@ -119,9 +114,7 @@ fn read_clipboard_image_with(
     }
 }
 
-fn read_clipboard_png(
-    source: &mut impl ClipboardImageSource,
-) -> Result<Vec<u8>, ClipboardImageError> {
+fn read_clipboard_png(source: &mut impl ClipboardImageSource) -> Result<Vec<u8>, ClipboardImageError> {
     let mut file_list_error = None;
     match source.file_paths() {
         Ok(paths) => {
@@ -137,9 +130,7 @@ fn read_clipboard_png(
     match source.rgba_image() {
         Ok(image) => encode_rgba_png(image.width, image.height, &image.bytes),
         Err(ClipboardImageError::NoImage) => match file_list_error {
-            Some(ClipboardImageError::ClipboardUnavailable) => {
-                Err(ClipboardImageError::ClipboardUnavailable)
-            }
+            Some(ClipboardImageError::ClipboardUnavailable) => Err(ClipboardImageError::ClipboardUnavailable),
             Some(error) if error != ClipboardImageError::NoImage => Err(error),
             _ => Err(ClipboardImageError::NoImage),
         },
@@ -148,16 +139,12 @@ fn read_clipboard_png(
 }
 
 fn first_readable_image_file_as_png(paths: Vec<PathBuf>) -> Option<Vec<u8>> {
-    paths.into_iter().find_map(|path| {
-        image::open(path).ok().and_then(|image| encode_dynamic_image_png(&image).ok())
-    })
+    paths
+        .into_iter()
+        .find_map(|path| image::open(path).ok().and_then(|image| encode_dynamic_image_png(&image).ok()))
 }
 
-fn encode_rgba_png(
-    width: usize,
-    height: usize,
-    bytes: &[u8],
-) -> Result<Vec<u8>, ClipboardImageError> {
+fn encode_rgba_png(width: usize, height: usize, bytes: &[u8]) -> Result<Vec<u8>, ClipboardImageError> {
     let width_u32 = u32::try_from(width).map_err(|_| ClipboardImageError::NoImage)?;
     let height_u32 = u32::try_from(height).map_err(|_| ClipboardImageError::NoImage)?;
     let buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(width_u32, height_u32, bytes.to_vec())
@@ -179,9 +166,7 @@ fn png_bytes_to_content_part(png_bytes: &[u8]) -> Result<ContentPart, ClipboardI
     Ok(ContentPart::image(BASE64.encode(png_bytes), PNG_MEDIA_TYPE))
 }
 
-fn read_wsl_fallback_image(
-    command_runner: &impl ClipboardCommandRunner,
-) -> Result<ContentPart, ClipboardImageError> {
+fn read_wsl_fallback_image(command_runner: &impl ClipboardCommandRunner) -> Result<ContentPart, ClipboardImageError> {
     let attempts: [(&str, &[&str]); 2] = [
         (
             "powershell.exe",
@@ -193,15 +178,7 @@ fn read_wsl_fallback_image(
                 POWERSHELL_CLIPBOARD_SCRIPT,
             ],
         ),
-        (
-            "pwsh.exe",
-            &[
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                POWERSHELL_CLIPBOARD_SCRIPT,
-            ],
-        ),
+        ("pwsh.exe", &["-NoProfile", "-NonInteractive", "-Command", POWERSHELL_CLIPBOARD_SCRIPT]),
     ];
 
     for (program, args) in attempts {
@@ -216,8 +193,7 @@ fn read_wsl_fallback_image(
             return Err(ClipboardImageError::NoImage);
         }
         if output.status_code == Some(0) {
-            let stdout = String::from_utf8(output.stdout)
-                .map_err(|_| ClipboardImageError::WslFallbackFailure)?;
+            let stdout = String::from_utf8(output.stdout).map_err(|_| ClipboardImageError::WslFallbackFailure)?;
             let png_bytes = BASE64
                 .decode(stdout.trim())
                 .map_err(|_| ClipboardImageError::WslFallbackFailure)?;
@@ -273,12 +249,10 @@ impl ClipboardImageSource for ArboardClipboardSource {
 #[cfg(not(target_os = "android"))]
 fn map_arboard_error(error: arboard::Error) -> ClipboardImageError {
     match error {
-        arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure => {
-            ClipboardImageError::NoImage
+        arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure => ClipboardImageError::NoImage,
+        arboard::Error::ClipboardNotSupported | arboard::Error::ClipboardOccupied | arboard::Error::Unknown { .. } => {
+            ClipboardImageError::ClipboardUnavailable
         }
-        arboard::Error::ClipboardNotSupported
-        | arboard::Error::ClipboardOccupied
-        | arboard::Error::Unknown { .. } => ClipboardImageError::ClipboardUnavailable,
         _ => ClipboardImageError::ClipboardUnavailable,
     }
 }
@@ -286,12 +260,7 @@ fn map_arboard_error(error: arboard::Error) -> ClipboardImageError {
 struct SystemCommandRunner;
 
 impl ClipboardCommandRunner for SystemCommandRunner {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        timeout: Duration,
-    ) -> std::io::Result<CommandRunOutput> {
+    fn run(&self, program: &str, args: &[&str], timeout: Duration) -> std::io::Result<CommandRunOutput> {
         let mut child = Command::new(program)
             .args(args)
             .stdin(Stdio::null())
@@ -312,8 +281,7 @@ impl ClipboardCommandRunner for SystemCommandRunner {
         let start = Instant::now();
         loop {
             if let Some(status) = child.try_wait()? {
-                let stdout =
-                    stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
+                let stdout = stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
                 return Ok(CommandRunOutput {
                     status_code: status.code(),
                     stdout,
@@ -324,8 +292,7 @@ impl ClipboardCommandRunner for SystemCommandRunner {
             if start.elapsed() >= timeout {
                 let _ = child.kill();
                 let _ = child.wait();
-                let stdout =
-                    stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
+                let stdout = stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
                 return Ok(CommandRunOutput { status_code: None, stdout, timed_out: true });
             }
 
@@ -376,12 +343,7 @@ mod tests {
     }
 
     impl ClipboardCommandRunner for MockCommandRunner {
-        fn run(
-            &self,
-            program: &str,
-            _args: &[&str],
-            _timeout: Duration,
-        ) -> std::io::Result<CommandRunOutput> {
+        fn run(&self, program: &str, _args: &[&str], _timeout: Duration) -> std::io::Result<CommandRunOutput> {
             self.calls
                 .lock()
                 .expect("mock command calls should not be poisoned")
@@ -390,9 +352,7 @@ mod tests {
                 .lock()
                 .expect("mock command outputs should not be poisoned")
                 .pop_front()
-                .unwrap_or_else(|| {
-                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing mock command"))
-                })
+                .unwrap_or_else(|| Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing mock command")))
         }
     }
 
@@ -421,15 +381,13 @@ mod tests {
     }
 
     fn assert_png_decodes(png_bytes: &[u8]) {
-        image::load_from_memory_with_format(png_bytes, ImageFormat::Png)
-            .expect("PNG bytes should decode");
+        image::load_from_memory_with_format(png_bytes, ImageFormat::Png).expect("PNG bytes should decode");
     }
 
     #[test]
     fn encodes_png_from_small_rgba_buffer() {
         let image = tiny_rgba();
-        let png = encode_rgba_png(image.width, image.height, &image.bytes)
-            .expect("RGBA buffer should encode as PNG");
+        let png = encode_rgba_png(image.width, image.height, &image.bytes).expect("RGBA buffer should encode as PNG");
 
         assert_png_decodes(&png);
     }
@@ -438,8 +396,7 @@ mod tests {
     fn decodes_file_path_image_as_png() {
         let path = temp_file("single.png");
         let image = tiny_rgba();
-        let png = encode_rgba_png(image.width, image.height, &image.bytes)
-            .expect("RGBA buffer should encode as PNG");
+        let png = encode_rgba_png(image.width, image.height, &image.bytes).expect("RGBA buffer should encode as PNG");
         fs::write(&path, &png).expect("write generated PNG");
 
         let mut source = MockClipboardSource {
@@ -448,8 +405,7 @@ mod tests {
         };
         let runner = MockCommandRunner::default();
 
-        let part = read_clipboard_image_with(&mut source, &runner, false)
-            .expect("file path image should be read");
+        let part = read_clipboard_image_with(&mut source, &runner, false).expect("file path image should be read");
         let decoded = decoded_content_part_png(part);
         assert_png_decodes(&decoded);
 
@@ -473,8 +429,7 @@ mod tests {
         };
         let runner = MockCommandRunner::default();
 
-        let part = read_clipboard_image_with(&mut source, &runner, false)
-            .expect("first readable file should be used");
+        let part = read_clipboard_image_with(&mut source, &runner, false).expect("first readable file should be used");
         assert_eq!(decoded_content_part_png(part), first_png);
 
         let _ = fs::remove_file(first);
@@ -490,8 +445,8 @@ mod tests {
         };
         let runner = MockCommandRunner::default();
 
-        let part = read_clipboard_image_with(&mut source, &runner, false)
-            .expect("raw clipboard image should be converted");
+        let part =
+            read_clipboard_image_with(&mut source, &runner, false).expect("raw clipboard image should be converted");
         let decoded = decoded_content_part_png(part);
 
         assert_png_decodes(&decoded);
@@ -505,8 +460,8 @@ mod tests {
         };
         let runner = MockCommandRunner::default();
 
-        let error = read_clipboard_image_with(&mut source, &runner, false)
-            .expect_err("empty clipboard should map to no image");
+        let error =
+            read_clipboard_image_with(&mut source, &runner, false).expect_err("empty clipboard should map to no image");
 
         assert_eq!(error, ClipboardImageError::NoImage);
         assert!(runner.called_programs().is_empty());
@@ -540,8 +495,7 @@ mod tests {
             rgba_result: Some(Err(ClipboardImageError::NoImage)),
         };
 
-        let part = read_clipboard_image_with(&mut source, &runner, true)
-            .expect("WSL fallback should provide image");
+        let part = read_clipboard_image_with(&mut source, &runner, true).expect("WSL fallback should provide image");
 
         assert_eq!(decoded_content_part_png(part), png);
         assert_eq!(runner.called_programs(), vec!["powershell.exe"]);
@@ -559,8 +513,8 @@ mod tests {
             rgba_result: Some(Err(ClipboardImageError::NoImage)),
         };
 
-        let error = read_clipboard_image_with(&mut source, &runner, true)
-            .expect_err("WSL no-image exit should stay no-image");
+        let error =
+            read_clipboard_image_with(&mut source, &runner, true).expect_err("WSL no-image exit should stay no-image");
 
         assert_eq!(error, ClipboardImageError::NoImage);
     }
@@ -584,8 +538,8 @@ mod tests {
             rgba_result: Some(Err(ClipboardImageError::NoImage)),
         };
 
-        let error = read_clipboard_image_with(&mut source, &runner, true)
-            .expect_err("invalid WSL fallback output should fail");
+        let error =
+            read_clipboard_image_with(&mut source, &runner, true).expect_err("invalid WSL fallback output should fail");
 
         assert_eq!(error, ClipboardImageError::WslFallbackFailure);
         assert_eq!(runner.called_programs(), vec!["powershell.exe", "pwsh.exe"]);
@@ -603,8 +557,8 @@ mod tests {
             rgba_result: Some(Err(ClipboardImageError::NoImage)),
         };
 
-        let error = read_clipboard_image_with(&mut source, &runner, true)
-            .expect_err("timed out WSL fallback should fail");
+        let error =
+            read_clipboard_image_with(&mut source, &runner, true).expect_err("timed out WSL fallback should fail");
 
         assert_eq!(error, ClipboardImageError::WslFallbackFailure);
     }

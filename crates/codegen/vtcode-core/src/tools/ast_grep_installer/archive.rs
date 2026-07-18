@@ -13,19 +13,12 @@ use zip::ZipArchive;
 
 use super::state::InstallPaths;
 
-pub(super) fn install_archive(
-    paths: &InstallPaths,
-    archive_name: &str,
-    archive_bytes: &[u8],
-) -> Result<()> {
-    fs::create_dir_all(&paths.bin_dir)
-        .with_context(|| format!("Failed to create {}", paths.bin_dir.display()))?;
+pub(super) fn install_archive(paths: &InstallPaths, archive_name: &str, archive_bytes: &[u8]) -> Result<()> {
+    fs::create_dir_all(&paths.bin_dir).with_context(|| format!("Failed to create {}", paths.bin_dir.display()))?;
 
-    let temp_dir =
-        TempDir::new().context("Failed to create temp directory for ast-grep install")?;
+    let temp_dir = TempDir::new().context("Failed to create temp directory for ast-grep install")?;
     let extract_dir = temp_dir.path().join("extract");
-    fs::create_dir_all(&extract_dir)
-        .with_context(|| format!("Failed to create {}", extract_dir.display()))?;
+    fs::create_dir_all(&extract_dir).with_context(|| format!("Failed to create {}", extract_dir.display()))?;
 
     extract_archive(archive_name, archive_bytes, &extract_dir)?;
     let extracted_binary = find_extracted_binary(&extract_dir)?;
@@ -38,9 +31,8 @@ pub(super) fn install_archive(
             let _ = fs::remove_file(stale_alias);
         }
     } else if let Some(alias_path) = &paths.alias_path {
-        fs::copy(&paths.binary_path, alias_path).with_context(|| {
-            format!("Failed to install ast-grep alias to {}", alias_path.display())
-        })?;
+        fs::copy(&paths.binary_path, alias_path)
+            .with_context(|| format!("Failed to install ast-grep alias to {}", alias_path.display()))?;
         set_executable_permissions(alias_path)?;
     }
 
@@ -79,8 +71,7 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
 
     if archive_name.ends_with(".zip") {
         let cursor = Cursor::new(archive_bytes);
-        let mut archive =
-            ZipArchive::new(cursor).with_context(|| format!("Failed to open {archive_name}"))?;
+        let mut archive = ZipArchive::new(cursor).with_context(|| format!("Failed to open {archive_name}"))?;
         for index in 0..archive.len() {
             let mut file = archive
                 .by_index(index)
@@ -88,20 +79,17 @@ fn extract_archive(archive_name: &str, archive_bytes: &[u8], destination: &Path)
             let outpath = destination.join(file.mangled_name());
 
             if file.is_dir() {
-                fs::create_dir_all(&outpath)
-                    .with_context(|| format!("Failed to create {}", outpath.display()))?;
+                fs::create_dir_all(&outpath).with_context(|| format!("Failed to create {}", outpath.display()))?;
                 continue;
             }
 
             if let Some(parent) = outpath.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create {}", parent.display()))?;
+                fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
             }
 
-            let mut outfile = File::create(&outpath)
-                .with_context(|| format!("Failed to create {}", outpath.display()))?;
-            io::copy(&mut file, &mut outfile)
-                .with_context(|| format!("Failed to extract {}", outpath.display()))?;
+            let mut outfile =
+                File::create(&outpath).with_context(|| format!("Failed to create {}", outpath.display()))?;
+            io::copy(&mut file, &mut outfile).with_context(|| format!("Failed to extract {}", outpath.display()))?;
         }
         return Ok(());
     }
@@ -117,9 +105,7 @@ fn find_extracted_binary(root: &Path) -> Result<PathBuf> {
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .find_map(|entry| {
             let name = entry.file_name().to_string_lossy();
-            if name == canonical_ast_grep_binary_name()
-                || alias_name.is_some_and(|alias| name == alias)
-            {
+            if name == canonical_ast_grep_binary_name() || alias_name.is_some_and(|alias| name == alias) {
                 Some(entry.into_path())
             } else {
                 None
@@ -137,27 +123,21 @@ fn find_extracted_binary(root: &Path) -> Result<PathBuf> {
 /// than a byte-by-byte copy into the live path. This prevents two concurrent
 /// installers -- or a process killed mid-copy -- from leaving a corrupted or
 /// half-written binary at `destination`.
-fn install_binary_atomically(
-    source: &Path,
-    destination: &Path,
-    destination_dir: &Path,
-) -> Result<()> {
-    let mut source_file = File::open(source)
-        .with_context(|| format!("Failed to open extracted binary {}", source.display()))?;
+fn install_binary_atomically(source: &Path, destination: &Path, destination_dir: &Path) -> Result<()> {
+    let mut source_file =
+        File::open(source).with_context(|| format!("Failed to open extracted binary {}", source.display()))?;
 
-    let mut staged = NamedTempFile::new_in(destination_dir).with_context(|| {
-        format!("Failed to create staging file in {}", destination_dir.display())
-    })?;
+    let mut staged = NamedTempFile::new_in(destination_dir)
+        .with_context(|| format!("Failed to create staging file in {}", destination_dir.display()))?;
 
-    io::copy(&mut source_file, staged.as_file_mut()).with_context(|| {
-        format!("Failed to stage ast-grep binary at {}", staged.path().display())
-    })?;
+    io::copy(&mut source_file, staged.as_file_mut())
+        .with_context(|| format!("Failed to stage ast-grep binary at {}", staged.path().display()))?;
 
     set_executable_permissions(staged.path())?;
 
-    staged.persist(destination).with_context(|| {
-        format!("Failed to publish ast-grep binary to {}", destination.display())
-    })?;
+    staged
+        .persist(destination)
+        .with_context(|| format!("Failed to publish ast-grep binary to {}", destination.display()))?;
 
     Ok(())
 }

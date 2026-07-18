@@ -10,13 +10,7 @@ pub struct RetryConfig {
     pub retryable_errors: Vec<String>,
 }
 
-const RETRYABLE_ERRORS: &[&str] = &[
-    "timeout",
-    "connection",
-    "rate_limit",
-    "server_error",
-    "network",
-];
+const RETRYABLE_ERRORS: &[&str] = &["timeout", "connection", "rate_limit", "server_error", "network"];
 
 impl Default for RetryConfig {
     fn default() -> Self {

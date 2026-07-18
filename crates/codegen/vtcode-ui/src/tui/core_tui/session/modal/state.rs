@@ -1,9 +1,9 @@
 use crate::tui::config::constants::ui;
 use crate::tui::ui::search::{exact_terms_match, normalize_query};
 use crate::tui::ui::tui::types::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent,
-    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange,
-    OverlaySubmission, SecurePromptConfig, WizardModalMode, WizardStep,
+    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent, OverlayHotkey,
+    OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange, OverlaySubmission, SecurePromptConfig,
+    WizardModalMode, WizardStep,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
@@ -97,8 +97,7 @@ enum ModalListDensityBehavior {
     FixedComfortable,
 }
 
-const CONFIG_LIST_NAVIGATION_HINT: &str =
-    "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close";
+const CONFIG_LIST_NAVIGATION_HINT: &str = "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close";
 
 #[derive(Clone)]
 pub struct ModalListItem {
@@ -159,18 +158,13 @@ impl ModalSearchState {
 }
 
 impl ModalState {
-    pub fn hotkey_action(
-        &self,
-        key: &KeyEvent,
-        modifiers: ModalKeyModifiers,
-    ) -> Option<OverlayHotkeyAction> {
+    pub fn hotkey_action(&self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> Option<OverlayHotkeyAction> {
         self.hotkeys.iter().find_map(|hotkey| match hotkey.key {
             OverlayHotkeyKey::CtrlChar(ch)
                 if modifiers.control
                     && !modifiers.alt
                     && !modifiers.command
-                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
-            =>
+                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch)) =>
             {
                 Some(hotkey.action)
             }
@@ -178,8 +172,7 @@ impl ModalState {
                 if !modifiers.control
                     && !modifiers.alt
                     && !modifiers.command
-                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
-            =>
+                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch)) =>
             {
                 Some(hotkey.action)
             }
@@ -187,11 +180,7 @@ impl ModalState {
         })
     }
 
-    pub fn handle_list_key_event(
-        &mut self,
-        key: &KeyEvent,
-        modifiers: ModalKeyModifiers,
-    ) -> ModalListKeyResult {
+    pub fn handle_list_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
         let Some(list) = self.list.as_mut() else {
             return ModalListKeyResult::NotHandled;
         };
@@ -332,9 +321,9 @@ impl ModalState {
                 if let Some(selection) = list.current_selection()
                     && let Some(adjusted) = map_config_selection_for_arrow(&selection, true)
                 {
-                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
-                        OverlayEvent::Submitted(OverlaySubmission::Selection(adjusted)),
-                    ));
+                    return ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                        OverlaySubmission::Selection(adjusted),
+                    )));
                 }
                 list.select_previous();
                 if let Some(event) = selection_change_event(list, previous_selection) {
@@ -347,9 +336,9 @@ impl ModalState {
                 if let Some(selection) = list.current_selection()
                     && let Some(adjusted) = map_config_selection_for_arrow(&selection, false)
                 {
-                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
-                        OverlayEvent::Submitted(OverlaySubmission::Selection(adjusted)),
-                    ));
+                    return ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                        OverlaySubmission::Selection(adjusted),
+                    )));
                 }
                 list.select_next();
                 if let Some(event) = selection_change_event(list, previous_selection) {
@@ -367,13 +356,9 @@ impl ModalState {
                     ModalListKeyResult::HandledNoRedraw
                 }
             }
-            KeyCode::Esc => {
-                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
-            }
+            KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled)),
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
-                'c' | 'C' if modifiers.control => {
-                    ModalListKeyResult::Cancel(InlineEvent::Interrupt)
-                }
+                'c' | 'C' if modifiers.control => ModalListKeyResult::Cancel(InlineEvent::Interrupt),
                 'n' | 'N' | 'j' | 'J' => {
                     list.select_next();
                     if let Some(event) = selection_change_event(list, previous_selection) {
@@ -449,19 +434,13 @@ impl ModalState {
     }
 }
 
-fn selection_change_event(
-    list: &ModalListState,
-    previous: Option<InlineListSelection>,
-) -> Option<InlineEvent> {
+fn selection_change_event(list: &ModalListState, previous: Option<InlineListSelection>) -> Option<InlineEvent> {
     let current = list.current_selection();
     if current == previous {
         return None;
     }
-    current.map(|selection| {
-        InlineEvent::Overlay(OverlayEvent::SelectionChanged(OverlaySelectionChange::List(
-            selection,
-        )))
-    })
+    current
+        .map(|selection| InlineEvent::Overlay(OverlayEvent::SelectionChanged(OverlaySelectionChange::List(selection))))
 }
 
 fn is_custom_note_selection(selection: &InlineListSelection) -> bool {
@@ -475,10 +454,7 @@ fn is_custom_note_selection(selection: &InlineListSelection) -> bool {
     )
 }
 
-fn map_config_selection_for_arrow(
-    selection: &InlineListSelection,
-    is_left: bool,
-) -> Option<InlineListSelection> {
+fn map_config_selection_for_arrow(selection: &InlineListSelection, is_left: bool) -> Option<InlineListSelection> {
     let InlineListSelection::ConfigAction(action) = selection else {
         return None;
     };
@@ -555,8 +531,7 @@ impl ModalListState {
             .into_iter()
             .map(|item| {
                 let is_divider = is_divider_title(&item);
-                let search_value =
-                    item.search_value.as_ref().map(|value| value.to_ascii_lowercase());
+                let search_value = item.search_value.as_ref().map(|value| value.to_ascii_lowercase());
                 ModalListItem {
                     title: item.title,
                     subtitle: item.subtitle,
@@ -574,8 +549,7 @@ impl ModalListState {
             .any(|item| item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty()));
         let density_behavior = Self::density_behavior_for_items(&converted);
         let is_model_picker_list = Self::is_model_picker_list(&converted);
-        let compact_rows =
-            Self::initial_compact_rows(density_behavior, has_two_line_items, is_model_picker_list);
+        let compact_rows = Self::initial_compact_rows(density_behavior, has_two_line_items, is_model_picker_list);
         let mut modal_state = Self {
             visible_indices: (0..converted.len()).collect(),
             items: converted,
@@ -818,11 +792,7 @@ impl ModalListState {
         self.apply_search_with_preference(query, preferred);
     }
 
-    pub fn apply_search_with_preference(
-        &mut self,
-        query: &str,
-        preferred: Option<InlineListSelection>,
-    ) {
+    pub fn apply_search_with_preference(&mut self, query: &str, preferred: Option<InlineListSelection>) {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             if self.filter_query.is_none() {
@@ -963,12 +933,8 @@ impl ModalListState {
             return None;
         }
         match self.density_behavior {
-            ModalListDensityBehavior::FixedComfortable => {
-                Some(CONFIG_LIST_NAVIGATION_HINT.to_owned())
-            }
-            ModalListDensityBehavior::Adjustable => {
-                footer_hint.filter(|hint| !hint.is_empty()).map(ToOwned::to_owned)
-            }
+            ModalListDensityBehavior::FixedComfortable => Some(CONFIG_LIST_NAVIGATION_HINT.to_owned()),
+            ModalListDensityBehavior::Adjustable => footer_hint.filter(|hint| !hint.is_empty()).map(ToOwned::to_owned),
         }
     }
 
@@ -983,9 +949,7 @@ impl ModalListState {
     fn has_non_filter_summary(&self, footer_hint: Option<&str>) -> bool {
         match self.density_behavior {
             ModalListDensityBehavior::FixedComfortable => true,
-            ModalListDensityBehavior::Adjustable => {
-                footer_hint.is_some_and(|hint| !hint.is_empty())
-            }
+            ModalListDensityBehavior::Adjustable => footer_hint.is_some_and(|hint| !hint.is_empty()),
         }
     }
 
@@ -1012,15 +976,14 @@ impl WizardModalState {
         let step_states: Vec<WizardStepState> = steps
             .into_iter()
             .map(|step| {
-                let notes_active =
-                    step.items.first().and_then(|item| item.selection.as_ref()).is_some_and(
-                        |selection| match selection {
-                            InlineListSelection::RequestUserInputAnswer {
-                                selected, other, ..
-                            } => selected.is_empty() && other.is_some(),
-                            _ => false,
-                        },
-                    );
+                let notes_active = step.items.first().and_then(|item| item.selection.as_ref()).is_some_and(
+                    |selection| match selection {
+                        InlineListSelection::RequestUserInputAnswer { selected, other, .. } => {
+                            selected.is_empty() && other.is_some()
+                        }
+                        _ => false,
+                    },
+                );
                 WizardStepState {
                     title: step.title,
                     question: step.question,
@@ -1053,11 +1016,7 @@ impl WizardModalState {
     }
 
     /// Handle key event for wizard navigation
-    pub fn handle_key_event(
-        &mut self,
-        key: &KeyEvent,
-        modifiers: ModalKeyModifiers,
-    ) -> ModalListKeyResult {
+    pub fn handle_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
         if let Some(step) = self.steps.get_mut(self.current_step)
             && step.notes_active
         {
@@ -1178,9 +1137,7 @@ impl WizardModalState {
         }
 
         match key.code {
-            KeyCode::Char('n') | KeyCode::Char('N')
-                if modifiers.control && self.mode == WizardModalMode::MultiStep =>
-            {
+            KeyCode::Char('n') | KeyCode::Char('N') if modifiers.control && self.mode == WizardModalMode::MultiStep => {
                 if self.current_step < self.steps.len().saturating_sub(1) {
                     self.current_step += 1;
                     ModalListKeyResult::Redraw
@@ -1214,9 +1171,7 @@ impl WizardModalState {
             // Enter: select current item and mark step complete
             KeyCode::Enter => self.submit_current_selection(),
             // Escape or Ctrl+C: cancel wizard
-            KeyCode::Esc => {
-                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
-            }
+            KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled)),
             KeyCode::Char('c') | KeyCode::Char('C') if modifiers.control => {
                 ModalListKeyResult::Cancel(InlineEvent::Interrupt)
             }
@@ -1243,8 +1198,7 @@ impl WizardModalState {
                         }
                         KeyCode::Tab => {
                             if self.search.is_none()
-                                && (step.allow_freeform
-                                    || Self::step_selected_custom_note_item_index(step).is_some())
+                                && (step.allow_freeform || Self::step_selected_custom_note_item_index(step).is_some())
                             {
                                 step.notes_active = !step.notes_active;
                                 ModalListKeyResult::Redraw
@@ -1291,10 +1245,7 @@ impl WizardModalState {
                     step.list.ensure_visible(rows);
                 }
 
-                if clicked_custom_note
-                    && step.notes.trim().is_empty()
-                    && !step.has_freeform_default()
-                {
+                if clicked_custom_note && step.notes.trim().is_empty() && !step.has_freeform_default() {
                     step.notes_active = true;
                     return ModalListKeyResult::Redraw;
                 }
@@ -1351,11 +1302,7 @@ impl WizardModalState {
                     } else {
                         Some(step.notes.trim().to_string())
                     };
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other: next_other,
-                    }
+                    InlineListSelection::RequestUserInputAnswer { question_id, selected, other: next_other }
                 }
                 InlineListSelection::AskUserChoice { tab_id, choice_id, .. } => {
                     let notes = step.notes.trim();
@@ -1402,8 +1349,7 @@ impl WizardModalState {
             .is_some_and(|selection| {
                 matches!(
                     selection,
-                    InlineListSelection::RequestUserInputAnswer { .. }
-                        | InlineListSelection::AskUserChoice { .. }
+                    InlineListSelection::RequestUserInputAnswer { .. } | InlineListSelection::AskUserChoice { .. }
                 )
             })
     }
@@ -1456,8 +1402,7 @@ impl WizardModalState {
         if self.notes_active() {
             if custom_note_selected {
                 vec![if self.current_step_has_freeform_default() {
-                    "type custom note | enter to submit or accept default | esc to clear"
-                        .to_string()
+                    "type custom note | enter to submit or accept default | esc to clear".to_string()
                 } else {
                     "type custom note | enter to continue | esc to clear".to_string()
                 }]
@@ -1510,9 +1455,9 @@ impl WizardModalState {
         };
 
         match self.mode {
-            WizardModalMode::TabbedList => ModalListKeyResult::Submit(InlineEvent::Overlay(
-                OverlayEvent::Submitted(OverlaySubmission::Wizard(vec![selection])),
-            )),
+            WizardModalMode::TabbedList => ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                OverlaySubmission::Wizard(vec![selection]),
+            ))),
             WizardModalMode::MultiStep => {
                 self.complete_current_step(selection);
                 if self.current_step < self.steps.len().saturating_sub(1) {

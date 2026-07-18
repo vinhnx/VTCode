@@ -1,6 +1,4 @@
-use crate::agent::runloop::unified::shell::{
-    detect_explicit_run_command, strip_run_command_prefixes,
-};
+use crate::agent::runloop::unified::shell::{detect_explicit_run_command, strip_run_command_prefixes};
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Reset, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -17,12 +15,10 @@ pub(crate) async fn persist_theme_preference(
     theme_id: &str,
 ) -> Result<()> {
     if let Err(err) = update_theme_preference(theme_id).await {
-        renderer
-            .line(MessageStyle::Error, &format!("Failed to persist theme preference: {err}"))?;
+        renderer.line(MessageStyle::Error, &format!("Failed to persist theme preference: {err}"))?;
     }
     if let Err(err) = persist_theme_config(workspace, theme_id) {
-        renderer
-            .line(MessageStyle::Error, &format!("Failed to persist theme in vtcode.toml: {err}"))?;
+        renderer.line(MessageStyle::Error, &format!("Failed to persist theme in vtcode.toml: {err}"))?;
     }
     Ok(())
 }
@@ -39,8 +35,8 @@ pub(crate) fn sync_runtime_theme_selection(
 }
 
 fn persist_theme_config(workspace: &Path, theme_id: &str) -> Result<()> {
-    let mut manager = ConfigManager::load_from_workspace(workspace)
-        .context("Failed to load configuration for theme update")?;
+    let mut manager =
+        ConfigManager::load_from_workspace(workspace).context("Failed to load configuration for theme update")?;
     let mut config = manager.config().clone();
     if config.agent.theme != theme_id {
         config.agent.theme = theme_id.to_string();
@@ -139,11 +135,7 @@ fn style_for_token(token: &str, expect_command: &mut bool) -> Option<AnsiStyle> 
         *expect_command = true;
         return None;
     }
-    if token.starts_with('"')
-        || token.starts_with('\'')
-        || token.ends_with('"')
-        || token.ends_with('\'')
-    {
+    if token.starts_with('"') || token.starts_with('\'') || token.ends_with('"') || token.ends_with('\'') {
         *expect_command = false;
         return Some(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow))));
     }
@@ -230,13 +222,7 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
         let prefix_style = AnsiStyle::new()
             .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::White)))
             .effects(Effects::DIMMED);
-        let prefix = format!(
-            "{}{}!{}{}",
-            prefix_style,
-            &message[..leading_ws_bytes],
-            &rest[..prefix_len],
-            Reset
-        );
+        let prefix = format!("{}{}!{}{}", prefix_style, &message[..leading_ws_bytes], &rest[..prefix_len], Reset);
         return Some(format!("{}{}", prefix, highlight_shell_command(command)));
     }
 
@@ -249,13 +235,8 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
         let prefix_style = AnsiStyle::new()
             .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::White)))
             .effects(Effects::DIMMED);
-        let prefix_rendered =
-            format!("{}{}{}{}", prefix_style, &message[..leading_ws_bytes], prefix, Reset);
-        return Some(format!(
-            "{}{}",
-            prefix_rendered,
-            highlight_shell_command_preserve_text(command)
-        ));
+        let prefix_rendered = format!("{}{}{}{}", prefix_style, &message[..leading_ws_bytes], prefix, Reset);
+        return Some(format!("{}{}", prefix_rendered, highlight_shell_command_preserve_text(command)));
     }
 
     None
@@ -267,9 +248,7 @@ mod theme_sync_tests {
     use std::collections::BTreeMap;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::loader::VTCodeConfig;
-    use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, UiSurfacePreference,
-    };
+    use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource, UiSurfacePreference};
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
@@ -386,15 +365,13 @@ mod tests {
 
     #[test]
     fn preserves_text_with_unix_command_wrapper() {
-        let highlighted =
-            highlight_shell_user_input("run unix command ls -la").expect("should highlight");
+        let highlighted = highlight_shell_user_input("run unix command ls -la").expect("should highlight");
         assert_eq!(strip_ansi(&highlighted), "run unix command ls -la");
     }
 
     #[test]
     fn preserves_text_with_mixed_wrappers() {
-        let highlighted =
-            highlight_shell_user_input("run command please cargo check").expect("should highlight");
+        let highlighted = highlight_shell_user_input("run command please cargo check").expect("should highlight");
         assert_eq!(strip_ansi(&highlighted), "run command please cargo check");
     }
 

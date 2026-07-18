@@ -22,11 +22,9 @@ impl GenerationHelper {
     /// Creates a verification message for a specific file
     pub async fn verify_and_report(&self, filename: &str) -> Result<String> {
         match self.file_tracker.verify_file_exists(filename).await? {
-            Some(file_info) => Ok(format!(
-                "✓ Generated: {} ({} bytes)",
-                file_info.absolute_path.display(),
-                file_info.size
-            )),
+            Some(file_info) => {
+                Ok(format!("✓ Generated: {} ({} bytes)", file_info.absolute_path.display(), file_info.size))
+            }
             None => Ok(format!(
                 "⚠ File not found: {filename}. Generation may have failed or file was created in a different location."
             )),
@@ -34,11 +32,7 @@ impl GenerationHelper {
     }
 
     /// Generates a complete response with file verification
-    pub async fn create_verified_response(
-        &self,
-        filename: &str,
-        additional_info: Option<&str>,
-    ) -> Result<String> {
+    pub async fn create_verified_response(&self, filename: &str, additional_info: Option<&str>) -> Result<String> {
         let file_report = self.verify_and_report(filename).await?;
 
         let response = if let Some(info) = additional_info {

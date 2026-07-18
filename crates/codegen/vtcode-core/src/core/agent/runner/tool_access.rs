@@ -65,11 +65,7 @@ impl AgentRunner {
         self.tool_registry.admit_public_tool_call(tool_name, &normalized_args)
     }
 
-    fn ensure_active_primary_agent_allows_tool_call(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> Result<()> {
+    fn ensure_active_primary_agent_allows_tool_call(&self, tool_name: &str, args: &Value) -> Result<()> {
         let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
             return Ok(());
         };
@@ -88,12 +84,8 @@ impl AgentRunner {
         }
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| self._workspace.clone());
-        let permission_request = build_permission_request(
-            &self._workspace,
-            &current_dir,
-            &normalized_tool_name,
-            Some(args),
-        );
+        let permission_request =
+            build_permission_request(&self._workspace, &current_dir, &normalized_tool_name, Some(args));
         let decision = evaluate_effective_permissions(
             &self.config().permissions,
             &active_primary_agent.permissions,
@@ -116,19 +108,15 @@ impl AgentRunner {
     /// Check if a tool is allowed for this agent
     pub(super) async fn is_tool_allowed(&self, tool_name: &str) -> bool {
         let policy = self.tool_registry.get_tool_policy(tool_name).await;
-        matches!(
-            policy,
-            crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt
-        )
+        matches!(policy, crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt)
     }
 
     /// Check if a tool is exposed to the active runtime after feature gating.
     pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
-        if !self.features().allows_tool_name(
-            tool_name,
-            self.tool_registry.is_planning_active(),
-            false,
-        ) {
+        if !self
+            .features()
+            .allows_tool_name(tool_name, self.tool_registry.is_planning_active(), false)
+        {
             return false;
         }
 
@@ -146,20 +134,9 @@ impl AgentRunner {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| self._workspace.clone());
         if tool_name == tools::EXEC_COMMAND {
             let bash_probe_args = serde_json::json!({ "cmd": "true" });
-            let bash_probe = build_permission_request(
-                &self._workspace,
-                &current_dir,
-                tool_name,
-                Some(&bash_probe_args),
-            );
-            if evaluate_permissions(
-                &self.config().permissions,
-                &self._workspace,
-                &current_dir,
-                &bash_probe,
-            )
-            .deny
-            {
+            let bash_probe =
+                build_permission_request(&self._workspace, &current_dir, tool_name, Some(&bash_probe_args));
+            if evaluate_permissions(&self.config().permissions, &self._workspace, &current_dir, &bash_probe).deny {
                 return false;
             }
             if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
@@ -180,13 +157,7 @@ impl AgentRunner {
             build_advertised_permission_requests(&self._workspace, &current_dir, tool_name)
         };
         if advertised_requests.iter().any(|request| {
-            evaluate_permissions(
-                &self.config().permissions,
-                &self._workspace,
-                &current_dir,
-                request,
-            )
-            .deny
+            evaluate_permissions(&self.config().permissions, &self._workspace, &current_dir, request).deny
         }) {
             return false;
         }
@@ -231,8 +202,7 @@ impl AgentRunner {
         let resolved_tool_name = prepared.canonical_name.as_str();
         let args = &prepared.effective_args;
         let shell_command = if tool_intent::is_command_run_tool_call(resolved_tool_name, args)
-            || (resolved_tool_name == tools::UNIFIED_EXEC
-                && tool_intent::command_session_action(args).is_none())
+            || (resolved_tool_name == tools::UNIFIED_EXEC && tool_intent::command_session_action(args).is_none())
         {
             command_args::command_text(args).ok().flatten()
         } else {
@@ -243,17 +213,14 @@ impl AgentRunner {
         if let Some(cmd_text) = shell_command {
             let cfg = self.config();
 
-            let agent_prefix =
-                format!("VTCODE_{}_COMMANDS_", self.agent_type.to_string().to_uppercase());
+            let agent_prefix = format!("VTCODE_{}_COMMANDS_", self.agent_type.to_string().to_uppercase());
 
             let deny_regex_patterns = crate::utils::merge_env_patterns(
                 &cfg.commands.deny_regex,
                 &format!("{}{}", agent_prefix, "DENY_REGEX"),
             );
-            let deny_glob_patterns = crate::utils::merge_env_patterns(
-                &cfg.commands.deny_glob,
-                &format!("{}{}", agent_prefix, "DENY_GLOB"),
-            );
+            let deny_glob_patterns =
+                crate::utils::merge_env_patterns(&cfg.commands.deny_glob, &format!("{}{}", agent_prefix, "DENY_GLOB"));
 
             self.tool_registry
                 .check_shell_policy(&cmd_text, &deny_regex_patterns, &deny_glob_patterns)
@@ -298,9 +265,7 @@ impl AgentRunner {
                     return Err(ToolExecutionError::new(
                         resolved_tool_name.to_string(),
                         ToolErrorType::Timeout,
-                        format!(
-                            "tool execution exceeded the harness wall-clock budget of {wall_clock_secs}s"
-                        ),
+                        format!("tool execution exceeded the harness wall-clock budget of {wall_clock_secs}s"),
                     )
                     .with_surface("agent_runner"));
                 }
@@ -328,18 +293,10 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> std::result::Result<Value, ToolExecutionError> {
-        let prepared =
-            self.tool_registry.admit_public_tool_call(tool_name, args).map_err(|error| {
-                ToolExecutionError::from_anyhow(
-                    tool_name,
-                    &error,
-                    0,
-                    false,
-                    false,
-                    Some("agent_runner"),
-                )
+        let prepared = self.tool_registry.admit_public_tool_call(tool_name, args).map_err(|error| {
+            ToolExecutionError::from_anyhow(tool_name, &error, 0, false, false, Some("agent_runner"))
                 .with_tool_call_context(tool_name, args)
-            })?;
+        })?;
         self.execute_prepared_tool_internal(&prepared)
             .await
             .map(|(value, _attempts)| value)
@@ -403,9 +360,6 @@ mod tests {
 
         assert!(d0.delay.is_some(), "first retry should have a delay");
         assert!(d1.delay.is_some(), "second retry should have a delay");
-        assert!(
-            d1.delay.unwrap_or_default() >= d0.delay.unwrap_or_default(),
-            "backoff should increase"
-        );
+        assert!(d1.delay.unwrap_or_default() >= d0.delay.unwrap_or_default(), "backoff should increase");
     }
 }

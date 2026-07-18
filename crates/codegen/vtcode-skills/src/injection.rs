@@ -12,10 +12,7 @@ pub struct SkillInjections {
 /// Builds injections for the specified skills.
 ///
 /// `skill_names` is a list of skill names that should be loaded (e.g. detected from user input).
-pub async fn build_skill_injections(
-    skill_names: &[String],
-    skills: Option<&SkillLoadOutcome>,
-) -> SkillInjections {
+pub async fn build_skill_injections(skill_names: &[String], skills: Option<&SkillLoadOutcome>) -> SkillInjections {
     if skill_names.is_empty() {
         return SkillInjections::default();
     }
@@ -40,11 +37,7 @@ pub async fn build_skill_injections(
                     });
                 }
                 Err(err) => {
-                    let message = format!(
-                        "Failed to load skill {} at {}: {err:#}",
-                        skill.name,
-                        skill.path.display()
-                    );
+                    let message = format!("Failed to load skill {} at {}: {err:#}", skill.name, skill.path.display());
                     result.warnings.push(message);
                 }
             }

@@ -14,11 +14,7 @@ impl OutputStyleApplier {
         }
     }
 
-    pub async fn load_styles_from_config(
-        &self,
-        _config: &VTCodeConfig,
-        workspace: &Path,
-    ) -> anyhow::Result<()> {
+    pub async fn load_styles_from_config(&self, _config: &VTCodeConfig, workspace: &Path) -> anyhow::Result<()> {
         let output_styles_dir = workspace.join(".vtcode").join("output-styles");
         let manager = OutputStyleManager::load_from_directory(&output_styles_dir)?;
 
@@ -30,12 +26,7 @@ impl OutputStyleApplier {
         Ok(())
     }
 
-    pub async fn apply_style(
-        &self,
-        style_name: &str,
-        base_prompt: &str,
-        config: &VTCodeConfig,
-    ) -> String {
+    pub async fn apply_style(&self, style_name: &str, base_prompt: &str, config: &VTCodeConfig) -> String {
         let guard = self.manager.read().await;
 
         if let Some(style) = guard.get_style(style_name) {

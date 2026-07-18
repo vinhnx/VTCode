@@ -22,9 +22,7 @@ fn reasoning_effort_value(effort: ReasoningEffortLevel) -> Option<&'static str> 
         ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => None,
         ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => Some("low"),
         ReasoningEffortLevel::Medium => Some("medium"),
-        ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => {
-            Some("high")
-        }
+        ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => Some("high"),
     }
 }
 
@@ -36,12 +34,10 @@ impl OpenAiCompatSpec for StepFunSpec {
     const DEFAULT_BASE_URL: &'static str = urls::STEPFUN_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::STEPFUN_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::stepfun::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::stepfun::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::stepfun::SUPPORTED_MODELS);
 
     const STREAM_REASONING_FIELDS: &'static [&'static str] = &["reasoning"];
-    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
-        Some(stepfun_reasoning);
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> = Some(stepfun_reasoning);
 
     fn resolve_api_key(api_key: Option<String>) -> String {
         api_key

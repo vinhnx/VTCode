@@ -98,8 +98,7 @@ impl PatternDetector {
                 // Pattern appears at least twice.
                 let success_count = events.iter().filter(|e| e.success).count();
                 let success_rate = success_count as f64 / events.len() as f64;
-                let avg_duration =
-                    events.iter().map(|e| e.duration_ms).sum::<u64>() / events.len() as u64;
+                let avg_duration = events.iter().map(|e| e.duration_ms).sum::<u64>() / events.len() as u64;
 
                 // Confidence: based on frequency and consistency.
                 let confidence = (success_rate * (frequency as f64 / 10.0).min(1.0)).min(1.0);
@@ -125,9 +124,7 @@ impl PatternDetector {
     /// Get detected patterns.
     pub fn patterns(&self) -> Vec<DetectedPattern> {
         let mut patterns: Vec<_> = self.patterns.values().cloned().collect();
-        patterns.sort_unstable_by(|a, b| {
-            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        patterns.sort_unstable_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
         patterns
     }
 
@@ -153,13 +150,12 @@ impl PatternDetector {
         features.push(self.events.len() as f64);
 
         // Feature 2: Success rate.
-        let success_rate = self.events.iter().filter(|e| e.success).count() as f64
-            / self.events.len().max(1) as f64;
+        let success_rate = self.events.iter().filter(|e| e.success).count() as f64 / self.events.len().max(1) as f64;
         features.push(success_rate);
 
         // Feature 3: Average duration.
-        let avg_duration = self.events.iter().map(|e| e.duration_ms).sum::<u64>() as f64
-            / self.events.len().max(1) as f64;
+        let avg_duration =
+            self.events.iter().map(|e| e.duration_ms).sum::<u64>() as f64 / self.events.len().max(1) as f64;
         features.push(avg_duration);
 
         // Feature 4: Tool diversity (unique tools).

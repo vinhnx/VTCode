@@ -22,8 +22,8 @@ use crate::agent::runloop::unified::turn::turn_processing::extract_interview_que
 use gating::interview_need_state;
 pub(crate) use gating::planning_workflow_interview_ready;
 use interview_forcing::{
-    filter_interview_tool_calls, inject_planning_workflow_interview,
-    maybe_append_planning_workflow_reminder, strip_assistant_text,
+    filter_interview_tool_calls, inject_planning_workflow_interview, maybe_append_planning_workflow_reminder,
+    strip_assistant_text,
 };
 
 #[cfg(test)]
@@ -33,8 +33,7 @@ use super::response_processing::prepare_tool_calls;
 use vtcode_core::llm::provider as uni;
 
 const MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW: usize = 1;
-const PLANNING_WORKFLOW_REMINDER: &str =
-    vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENT_REMINDER;
+const PLANNING_WORKFLOW_REMINDER: &str = vtcode_core::prompts::system::PLANNING_WORKFLOW_IMPLEMENT_REMINDER;
 
 pub(crate) fn maybe_force_planning_workflow_interview(
     processing_result: TurnProcessingResult,
@@ -49,9 +48,7 @@ pub(crate) fn maybe_force_planning_workflow_interview(
     // re-forcing the interview would re-research and loop forever. Likewise,
     // once the interview has been permanently denied by policy, forcing it
     // again just repeats the same denial (checkpoint turn_655/turn_660).
-    if plan_session.is_budget_exhausted()
-        || plan_session.is_recovery_exhausted()
-        || plan_session.is_interview_denied()
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() || plan_session.is_interview_denied()
     {
         return processing_result;
     }
@@ -107,11 +104,7 @@ pub(crate) fn maybe_force_planning_workflow_interview(
             return processing_result;
         }
 
-        return inject_planning_workflow_interview(
-            processing_result,
-            plan_session,
-            conversation_len,
-        );
+        return inject_planning_workflow_interview(processing_result, plan_session, conversation_len);
     }
 
     let explicit_questions = response_text

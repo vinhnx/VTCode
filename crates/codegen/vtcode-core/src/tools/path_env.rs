@@ -13,11 +13,10 @@ static UNIX_ENV_PATTERN: Lazy<Regex> =
     });
 
 /// Regex pattern for Windows-style environment variables: %VAR%
-static WINDOWS_ENV_PATTERN: Lazy<Regex> =
-    Lazy::new(|| match Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%") {
-        Ok(regex) => regex,
-        Err(error) => panic!("valid windows env regex must compile: {error}"),
-    });
+static WINDOWS_ENV_PATTERN: Lazy<Regex> = Lazy::new(|| match Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%") {
+    Ok(regex) => regex,
+    Err(error) => panic!("valid windows env regex must compile: {error}"),
+});
 
 /// Expand environment variables and home directory within a path entry.
 fn expand_entry(entry: &str, workspace_root: &Path) -> Option<PathBuf> {
@@ -45,15 +44,12 @@ fn expand_entry(entry: &str, workspace_root: &Path) -> Option<PathBuf> {
 fn expand_environment_variables(input: &str) -> String {
     let unix_expanded = UNIX_ENV_PATTERN
         .replace_all(input, |caps: &regex::Captures<'_>| {
-            let var_name =
-                caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str()).unwrap_or_default();
+            let var_name = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str()).unwrap_or_default();
             // Try to get the environment variable, with special handling for HOME
             match var_name {
-                "HOME" => {
-                    std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_else(
-                        |_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default(),
-                    )
-                }
+                "HOME" => std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .unwrap_or_else(|_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default()),
                 _ => std::env::var(var_name).unwrap_or_default(),
             }
         })
@@ -64,11 +60,9 @@ fn expand_environment_variables(input: &str) -> String {
             let var_name = &caps[1];
             // Try to get the environment variable, with special handling for HOME/USERPROFILE
             match var_name {
-                "HOME" | "USERPROFILE" => {
-                    std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_else(
-                        |_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default(),
-                    )
-                }
+                "HOME" | "USERPROFILE" => std::env::var("USERPROFILE")
+                    .or_else(|_| std::env::var("HOME"))
+                    .unwrap_or_else(|_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default()),
                 _ => std::env::var(var_name).unwrap_or_default(),
             }
         })
@@ -76,10 +70,7 @@ fn expand_environment_variables(input: &str) -> String {
 }
 
 /// Compute the list of additional search paths for command execution.
-pub(crate) fn compute_extra_search_paths(
-    entries: &[String],
-    workspace_root: &Path,
-) -> Vec<PathBuf> {
+pub(crate) fn compute_extra_search_paths(entries: &[String], workspace_root: &Path) -> Vec<PathBuf> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
 
@@ -96,10 +87,7 @@ pub(crate) fn compute_extra_search_paths(
 
 /// Attempt to resolve a program against the provided path iterator.
 #[allow(dead_code)] // Function is deprecated but kept for explicit path iteration tests
-pub(crate) fn resolve_program_path_from_paths(
-    program: &str,
-    paths: impl Iterator<Item = PathBuf>,
-) -> Option<String> {
+pub(crate) fn resolve_program_path_from_paths(program: &str, paths: impl Iterator<Item = PathBuf>) -> Option<String> {
     for path_dir in paths {
         let full_path = path_dir.join(program);
         if full_path.is_file() {
@@ -119,8 +107,7 @@ pub(crate) fn merge_path_env(current: Option<&OsStr>, extra_paths: &[PathBuf]) -
         return None;
     }
 
-    let mut combined: Vec<PathBuf> =
-        current.map(|value| std::env::split_paths(value).collect()).unwrap_or_default();
+    let mut combined: Vec<PathBuf> = current.map(|value| std::env::split_paths(value).collect()).unwrap_or_default();
 
     // Ensure common development tool paths are included for fallback
     // These paths are often added by shell initialization files but we include them
@@ -207,8 +194,7 @@ mod tests {
             std::fs::set_permissions(&fake, perms).expect("set perms");
         }
 
-        let resolved =
-            resolve_program_path_from_paths("fake-tool", [bin_dir.to_path_buf()].into_iter());
+        let resolved = resolve_program_path_from_paths("fake-tool", [bin_dir.to_path_buf()].into_iter());
         assert_eq!(resolved, Some(fake.to_string_lossy().into_owned()))
     }
 }

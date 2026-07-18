@@ -1,9 +1,7 @@
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 
-use crate::agent::runloop::text_tools::canonical::{
-    apply_exec_command_defaults, exec_command_defaults_for_name,
-};
+use crate::agent::runloop::text_tools::canonical::{apply_exec_command_defaults, exec_command_defaults_for_name};
 use crate::agent::runloop::text_tools::parse_args::parse_textual_arguments;
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
@@ -37,8 +35,7 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
             let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
 
             let after_to = &header[to_pos + 3..];
-            let tool_ref =
-                after_to.split(|c: char| c.is_whitespace() || c == '<').next().unwrap_or("");
+            let tool_ref = after_to.split(|c: char| c.is_whitespace() || c == '<').next().unwrap_or("");
             let tool_name = parse_tool_name_from_reference(tool_ref);
             if tool_name.is_empty() {
                 continue;
@@ -73,10 +70,7 @@ pub(super) fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
     }
 }
 
-pub(super) fn convert_harmony_args_to_tool_format(
-    tool_name: &str,
-    parsed: Value,
-) -> Result<Value, String> {
+pub(super) fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Result<Value, String> {
     if let Some(defaults) = exec_command_defaults_for_name(tool_name) {
         let mut result = serde_json::Map::new();
         apply_exec_command_defaults(&mut result, defaults);

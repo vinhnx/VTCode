@@ -12,9 +12,9 @@ mod mcp_tool;
 mod responses_api;
 
 pub use collaboration::{
-    agent_parameters, close_agent_parameters, request_user_input_description,
-    request_user_input_parameters, resume_agent_parameters, send_input_parameters,
-    spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
+    agent_parameters, close_agent_parameters, request_user_input_description, request_user_input_parameters,
+    resume_agent_parameters, send_input_parameters, spawn_agent_parameters, spawn_background_subprocess_parameters,
+    wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
 #[cfg(feature = "mcp")]
@@ -31,7 +31,8 @@ pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
 /// identical, complete format guidance (see checkpoint turn_615 for the
 /// failure this prevents).
 pub const APPLY_PATCH_ALIAS_DESCRIPTION: &str = "Patch in VT Code format (*** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch). Same envelope as 'input'; do NOT use unified diff (--- /+++ format).";
-pub const DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION: &str = "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch";
+pub const DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION: &str =
+    "Patch in VT Code format: *** Begin Patch, *** Update File: path, @@ hunk, -/+ lines, *** End Patch";
 
 #[must_use]
 pub fn with_semantic_anchor_guidance(base: &str) -> String {
@@ -337,14 +338,10 @@ mod tests {
             "string"
         );
         assert_eq!(
-            exec_params["properties"]["additional_permissions"]["properties"]["fs_write"]["items"]
-                ["type"],
+            exec_params["properties"]["additional_permissions"]["properties"]["fs_write"]["items"]["type"],
             "string"
         );
-        assert_eq!(
-            exec_params["properties"]["additional_permissions"]["additionalProperties"],
-            false
-        );
+        assert_eq!(exec_params["properties"]["additional_permissions"]["additionalProperties"], false);
         assert_eq!(exec_params["properties"]["justification"]["type"], "string");
         assert_eq!(exec_params["additionalProperties"], false);
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {

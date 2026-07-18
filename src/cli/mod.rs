@@ -53,11 +53,7 @@ pub struct SkillsCommandOptions {
     pub workspace: std::path::PathBuf,
 }
 
-pub async fn dispatch(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: Option<String>,
-) -> Result<()> {
+pub async fn dispatch(args: &Cli, startup: &StartupContext, print_mode: Option<String>) -> Result<()> {
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;
 
@@ -71,22 +67,10 @@ pub async fn dispatch(
 
     match resolve_action(args, startup, print_mode)? {
         ResolvedCliAction::Ask { prompt, options } => {
-            handle_ask_single_command(
-                core_cfg.clone(),
-                Some(startup.config.clone()),
-                prompt,
-                options,
-            )
-            .await?;
+            handle_ask_single_command(core_cfg.clone(), Some(startup.config.clone()), prompt, options).await?;
         }
         ResolvedCliAction::FullAuto { prompt } => {
-            auto::handle_auto_task_command(
-                core_cfg,
-                cfg,
-                &prompt,
-                startup.primary_agent_explicitly_configured,
-            )
-            .await?;
+            auto::handle_auto_task_command(core_cfg, cfg, &prompt, startup.primary_agent_explicitly_configured).await?;
         }
         ResolvedCliAction::Resume { mode } => {
             handle_resume_session_command(
@@ -119,8 +103,8 @@ pub async fn dispatch(
     // update is available and the user didn't just run the update command
     // or exit an interactive chat session (the TUI already shows it there).
     let is_update_subcommand = matches!(args.command, Some(Commands::Update { .. }));
-    let is_interactive_chat = args.command.is_none()
-        || matches!(args.command, Some(Commands::Chat | Commands::ChatVerbose));
+    let is_interactive_chat =
+        args.command.is_none() || matches!(args.command, Some(Commands::Chat | Commands::ChatVerbose));
     if !is_update_subcommand
         && !is_interactive_chat
         && let Some(notice) = crate::updater::get_preflight_notice()
@@ -148,8 +132,7 @@ mod tests {
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
-        UiSurfacePreference,
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
@@ -157,8 +140,7 @@ mod tests {
 
     fn runtime_config() -> CoreAgentConfig {
         CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
-                .to_string(),
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-key".to_string(),
             provider: "gemini".to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
@@ -198,8 +180,7 @@ mod tests {
             resume_show_all: false,
             custom_session_id: None,
             summarize_fork: false,
-            planning_entry_source:
-                vtcode_core::core::interfaces::session::PlanningEntrySource::None,
+            planning_entry_source: vtcode_core::core::interfaces::session::PlanningEntrySource::None,
         }
     }
 
@@ -210,17 +191,14 @@ mod tests {
         startup.automation_prompt = Some("auto prompt".to_string());
         startup.session_resume = Some(SessionResumeMode::Latest);
 
-        let action = resolve_action(&args, &startup, Some("summarize this".to_string()))
-            .expect("print mode should resolve");
+        let action =
+            resolve_action(&args, &startup, Some("summarize this".to_string())).expect("print mode should resolve");
 
         match action {
             ResolvedCliAction::Ask { prompt, .. } => {
                 assert_eq!(
                     prompt,
-                    Some(
-                        crate::main_helpers::build_print_prompt("summarize this".to_string())
-                            .expect("print prompt")
-                    )
+                    Some(crate::main_helpers::build_print_prompt("summarize this".to_string()).expect("print prompt"))
                 );
             }
             other => panic!("expected ask action, got {other:?}"),
@@ -284,24 +262,13 @@ mod tests {
     #[tokio::test]
     async fn resume_session_command_is_wired_to_sessions_handler() {
         let cfg = runtime_config();
-        let unique_suffix =
-            SystemTime::now().duration_since(UNIX_EPOCH).expect("unix time").as_nanos();
+        let unique_suffix = SystemTime::now().duration_since(UNIX_EPOCH).expect("unix time").as_nanos();
         let fake_id = format!("nonexistent-session-{unique_suffix}");
 
-        let result = handle_resume_session_command(
-            &cfg,
-            SessionResumeMode::Specific(fake_id),
-            false,
-            None,
-            false,
-            true,
-        )
-        .await;
+        let result =
+            handle_resume_session_command(&cfg, SessionResumeMode::Specific(fake_id), false, None, false, true).await;
 
         let err = result.expect_err("expected missing session error");
-        assert!(
-            err.to_string().contains("No session with identifier"),
-            "unexpected error: {err:#}"
-        );
+        assert!(err.to_string().contains("No session with identifier"), "unexpected error: {err:#}");
     }
 }

@@ -18,11 +18,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("acp.zed.tools", "Zed Tool Bridge", "Which file tools are exposed to the Zed client."),
     ("agent", "Agent Defaults", "Primary model, prompt, and chat behavior."),
     ("agent.checkpointing", "Checkpoints", "Automatic turn snapshots and retention limits."),
-    (
-        "agent.circuit_breaker",
-        "Circuit Breaker",
-        "Failure pause thresholds and recovery guardrails.",
-    ),
+    ("agent.circuit_breaker", "Circuit Breaker", "Failure pause thresholds and recovery guardrails."),
     (
         "agent.codex_app_server",
         "Codex App Server",
@@ -57,11 +53,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Session-scoped loops and durable local automation jobs.",
     ),
     ("chat", "Chat Surface", "Interactive chat features and assistant affordances."),
-    (
-        "chat.askQuestions",
-        "Ask Questions Tool",
-        "Inline clarification prompts during chat sessions.",
-    ),
+    ("chat.askQuestions", "Ask Questions Tool", "Inline clarification prompts during chat sessions."),
     ("commands", "Command Policies", "Allow and deny rules for shell execution."),
     (
         "custom_providers",
@@ -74,21 +66,13 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Display name, base URL, and API key settings for one endpoint.",
     ),
     ("context", "Context Budget", "How much history and workspace context is retained."),
-    (
-        "context.dynamic",
-        "Dynamic Context",
-        "Spooled outputs and generated workspace context artifacts.",
-    ),
+    ("context.dynamic", "Dynamic Context", "Spooled outputs and generated workspace context artifacts."),
     ("context.ledger", "Decision Ledger", "Important decisions kept across the session."),
     ("debug", "Debug Logging", "Tracing and local diagnostics output."),
     ("dotfile_protection", "Dotfile Protection", "Extra safeguards for shell and editor dotfiles."),
     ("hooks", "Lifecycle Hooks", "Automations triggered around session events."),
     ("hooks.lifecycle", "Lifecycle Events", "Hook groups for session and tool milestones."),
-    (
-        "ide_context",
-        "IDE Context",
-        "Cross-IDE active editor context injected into prompts and inline UI.",
-    ),
+    ("ide_context", "IDE Context", "Cross-IDE active editor context injected into prompts and inline UI."),
     (
         "ide_context.providers",
         "IDE Providers",
@@ -106,16 +90,8 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Enable file-bridge snapshots from JetBrains and other external adapters.",
     ),
     ("mcp", "MCP Servers", "Model Context Protocol providers and defaults."),
-    (
-        "mcp.allowlist",
-        "MCP Allowlist",
-        "Default restrictions for MCP resources, prompts, and config.",
-    ),
-    (
-        "mcp.allowlist.default",
-        "Default MCP Rules",
-        "Fallback allowlist applied to every MCP provider.",
-    ),
+    ("mcp.allowlist", "MCP Allowlist", "Default restrictions for MCP resources, prompts, and config."),
+    ("mcp.allowlist.default", "Default MCP Rules", "Fallback allowlist applied to every MCP provider."),
     ("mcp.allowlist.providers", "Provider Overrides", "Per-provider MCP allowlist exceptions."),
     (
         "mcp.requirements",
@@ -134,11 +110,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("mcp.ui.renderers", "MCP Renderers", "Presentation rules for specific MCP tool outputs."),
     ("model", "Model Defaults", "Shared model selection and context settings."),
     ("model_config", "Model Config", "Focused main-model and lightweight-model configuration."),
-    (
-        "model_config.main",
-        "Main Model",
-        "Provider and default model for the active conversation model.",
-    ),
+    ("model_config.main", "Main Model", "Provider and default model for the active conversation model."),
     (
         "model_config.lightweight",
         "Lightweight Model",
@@ -150,33 +122,17 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
         "Agent Execution",
         "Concurrency and execution scheduling for agent turns.",
     ),
-    (
-        "optimization.async_pipeline",
-        "Async Pipeline",
-        "Background streaming and async pipeline tuning.",
-    ),
+    ("optimization.async_pipeline", "Async Pipeline", "Background streaming and async pipeline tuning."),
     ("optimization.command_cache", "Command Cache", "Cache repeated shell command results."),
-    (
-        "optimization.file_read_cache",
-        "File Read Cache",
-        "Reuse hot file reads to reduce I/O churn.",
-    ),
+    ("optimization.file_read_cache", "File Read Cache", "Reuse hot file reads to reduce I/O churn."),
     ("optimization.llm_client", "LLM Client", "HTTP client behavior for model requests."),
     ("optimization.memory_pool", "Memory Pool", "Allocator and buffer reuse settings."),
     ("optimization.profiling", "Profiling", "Performance instrumentation and trace sampling."),
-    (
-        "optimization.tool_registry",
-        "Tool Registry",
-        "Startup and lookup behavior for tool metadata.",
-    ),
+    ("optimization.tool_registry", "Tool Registry", "Startup and lookup behavior for tool metadata."),
     ("output_style", "Output Style", "Formatting and readability preferences."),
     ("permissions", "Permissions", "Default approval and trust behavior."),
     ("prompt_cache", "Prompt Cache", "Reuse prompts to cut duplicate provider work."),
-    (
-        "prompt_cache.providers",
-        "Prompt Cache Providers",
-        "Provider-specific prompt cache behavior.",
-    ),
+    ("prompt_cache.providers", "Prompt Cache Providers", "Provider-specific prompt cache behavior."),
     ("provider", "Provider Endpoints", "Network and provider-specific API settings."),
     ("provider.anthropic", "Anthropic", "Anthropic-specific request settings."),
     (
@@ -201,17 +157,9 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("sandbox.external.docker", "Docker Sandbox", "Docker-based sandbox execution settings."),
     ("sandbox.external.microvm", "MicroVM Sandbox", "MicroVM-backed isolation settings."),
     ("sandbox.network", "Sandbox Network", "Outbound network restrictions inside the sandbox."),
-    (
-        "sandbox.resource_limits",
-        "Resource Limits",
-        "CPU, memory, and disk ceilings for sandbox runs.",
-    ),
+    ("sandbox.resource_limits", "Resource Limits", "CPU, memory, and disk ceilings for sandbox runs."),
     ("sandbox.seccomp", "Seccomp Filters", "Linux syscall restrictions for sandboxed processes."),
-    (
-        "sandbox.sensitive_paths",
-        "Sensitive Paths",
-        "Protected host paths denied to sandboxed runs.",
-    ),
+    ("sandbox.sensitive_paths", "Sensitive Paths", "Protected host paths denied to sandboxed runs."),
     ("security", "Security Gate", "Approvals and blocking rules for risky actions."),
     ("security.gatekeeper", "Gatekeeper", "Extra approval checks and enforcement rules."),
     ("skills", "Skills", "Skill discovery, rendering, and loading behavior."),
@@ -220,11 +168,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("timeouts", "Timeouts", "Global operation time limits."),
     ("tools", "Tool Defaults", "Loop limits and default tool behavior."),
     ("tools.editor", "External Editor", "Editor launch command and editor fallback."),
-    (
-        "tools.loop_thresholds",
-        "Loop Thresholds",
-        "Warn or stop when repeated tool loops are detected.",
-    ),
+    ("tools.loop_thresholds", "Loop Thresholds", "Warn or stop when repeated tool loops are detected."),
     ("tools.plugins", "Tool Plugins", "Plugin loading and trust settings."),
     ("tools.policies", "Tool Policies", "Per-tool allow, prompt, or deny rules."),
     ("tools.web_fetch", "Web Fetch", "Remote fetch limits and safety checks."),
@@ -240,9 +184,7 @@ pub(super) fn normalize_config_path(path: &str) -> String {
 
 pub(super) fn heading_for_path(path: &str) -> SectionHeading {
     let normalized_path = normalize_config_path(path);
-    if let Some((_, title, summary)) =
-        SECTION_HEADINGS.iter().find(|(key, _, _)| *key == normalized_path)
-    {
+    if let Some((_, title, summary)) = SECTION_HEADINGS.iter().find(|(key, _, _)| *key == normalized_path) {
         return SectionHeading {
             title: Cow::Borrowed(title),
             summary: Cow::Borrowed(summary),

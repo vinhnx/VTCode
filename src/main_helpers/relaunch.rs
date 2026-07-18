@@ -138,23 +138,15 @@ fn relaunch_attempts(
     let current_exe = current_exe.map(|path| path.as_os_str().to_os_string());
 
     let candidates = match preference {
-        RelaunchPreference::PreferPathCommand => vec![
-            Some(OsString::from("vtcode")),
-            original_program,
-            current_exe,
-        ],
-        RelaunchPreference::PreferOriginalExecutable => vec![
-            original_program,
-            current_exe,
-            Some(OsString::from("vtcode")),
-        ],
+        RelaunchPreference::PreferPathCommand => vec![Some(OsString::from("vtcode")), original_program, current_exe],
+        RelaunchPreference::PreferOriginalExecutable => {
+            vec![original_program, current_exe, Some(OsString::from("vtcode"))]
+        }
     };
 
     let mut attempts = Vec::with_capacity(candidates.len());
     for candidate in candidates.into_iter().flatten() {
-        if candidate.is_empty()
-            || attempts.iter().any(|attempt: &RelaunchAttempt| attempt.program == candidate)
-        {
+        if candidate.is_empty() || attempts.iter().any(|attempt: &RelaunchAttempt| attempt.program == candidate) {
             continue;
         }
         attempts.push(RelaunchAttempt { program: candidate, args: args.clone() });
@@ -169,10 +161,7 @@ mod tests {
     #[test]
     fn relaunch_attempts_prefer_path_for_managed_installs() {
         let attempts = relaunch_attempts(
-            &[
-                OsString::from("/usr/local/bin/vtcode"),
-                OsString::from("--resume"),
-            ],
+            &[OsString::from("/usr/local/bin/vtcode"), OsString::from("--resume")],
             Some(Path::new("/tmp/current-vtcode")),
             RelaunchPreference::PreferPathCommand,
         );

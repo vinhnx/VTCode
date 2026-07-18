@@ -107,24 +107,19 @@ fn retention_removes_oldest_sessions() {
         log.complete().expect("complete");
         let mpath = sessions_root(dir.path()).join(format!("sess-{i}")).join("manifest.json");
         let mut m: crate::SessionManifest =
-            serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest"))
-                .expect("parse");
+            serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest")).expect("parse");
         // First 3 are old (2020), last 2 keep today's timestamp.
         if i < 3 {
             m.updated_at = format!("2020-01-{:02}T00:00:00Z", i + 1);
-            fs::write(&mpath, serde_json::to_string_pretty(&m).expect("ser"))
-                .expect("write manifest");
+            fs::write(&mpath, serde_json::to_string_pretty(&m).expect("ser")).expect("write manifest");
         }
     }
 
     // max_sessions=4: count-based eviction removes 1 oldest (sess-0).
     // max_age_days=30: age-based eviction removes 2 more old sessions (sess-1, sess-2).
     // Total: 3 removed, 2 recent remain.
-    let removed = apply_retention(
-        dir.path(),
-        crate::retention::RetentionPolicy { max_sessions: 4, max_age_days: 30 },
-    )
-    .expect("retain");
+    let removed = apply_retention(dir.path(), crate::retention::RetentionPolicy { max_sessions: 4, max_age_days: 30 })
+        .expect("retain");
     assert_eq!(removed, 3);
     let remaining = recent_sessions(dir.path(), 100);
     assert_eq!(remaining.len(), 2);
@@ -143,21 +138,16 @@ fn retention_evicts_old_sessions_even_when_under_count_cap() {
         if i == 0 {
             let mpath = sessions_root(dir.path()).join("sess-0").join("manifest.json");
             let mut m: crate::SessionManifest =
-                serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest"))
-                    .expect("parse");
+                serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest")).expect("parse");
             m.updated_at = "2020-01-01T00:00:00Z".to_string();
-            fs::write(&mpath, serde_json::to_string_pretty(&m).expect("ser"))
-                .expect("write manifest");
+            fs::write(&mpath, serde_json::to_string_pretty(&m).expect("ser")).expect("write manifest");
         }
     }
 
     // max_sessions=10: count cap is not exceeded (3 < 10).
     // max_age_days=30: age-based eviction should still remove sess-0.
-    let removed = apply_retention(
-        dir.path(),
-        crate::retention::RetentionPolicy { max_sessions: 10, max_age_days: 30 },
-    )
-    .expect("retain");
+    let removed = apply_retention(dir.path(), crate::retention::RetentionPolicy { max_sessions: 10, max_age_days: 30 })
+        .expect("retain");
     assert_eq!(removed, 1);
     let remaining = recent_sessions(dir.path(), 100);
     assert_eq!(remaining.len(), 2);

@@ -36,19 +36,12 @@ impl ThemeManager {
             let theme_path = workspace.join(".vtcode").join("theme.toml");
             match ThemeConfig::load_from_file(&theme_path) {
                 Ok(config) => {
-                    tracing::info!(
-                        "Loaded custom theme configuration from: {}",
-                        theme_path.display()
-                    );
+                    tracing::info!("Loaded custom theme configuration from: {}", theme_path.display());
                     Some(config)
                 }
                 Err(e) => {
                     if theme_path.exists() {
-                        tracing::warn!(
-                            "Failed to load theme config from {}: {}",
-                            theme_path.display(),
-                            e
-                        );
+                        tracing::warn!("Failed to load theme config from {}: {}", theme_path.display(), e);
                     }
                     None
                 }
@@ -65,18 +58,11 @@ impl ThemeManager {
             if git_config_path.exists() {
                 match GitColorConfig::from_git_config(&git_config_path) {
                     Ok(config) => {
-                        tracing::info!(
-                            "Loaded Git color configuration from: {}",
-                            git_config_path.display()
-                        );
+                        tracing::info!("Loaded Git color configuration from: {}", git_config_path.display());
                         Some(config)
                     }
                     Err(e) => {
-                        tracing::warn!(
-                            "Failed to load Git config from {}: {}",
-                            git_config_path.display(),
-                            e
-                        );
+                        tracing::warn!("Failed to load Git config from {}: {}", git_config_path.display(), e);
                         GitColorConfig::default().into()
                     }
                 }

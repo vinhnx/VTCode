@@ -141,12 +141,7 @@ pub struct SessionConstraints {
 }
 
 impl AgentSessionState {
-    pub fn new(
-        session_id: String,
-        max_turns: usize,
-        max_tool_loops: usize,
-        max_context_tokens: usize,
-    ) -> Self {
+    pub fn new(session_id: String, max_turns: usize, max_tool_loops: usize, max_context_tokens: usize) -> Self {
         Self {
             session_id,
             schema_version: SchemaVersion::CURRENT,
@@ -207,10 +202,7 @@ impl AgentSessionState {
     /// baseline. Returns `true` only when a prior effort was recorded and it
     /// differs from `effort` (i.e. this is a genuine mid-task change, not the
     /// first request of the session).
-    pub fn note_reasoning_effort_change(
-        &mut self,
-        effort: Option<crate::config::types::ReasoningEffortLevel>,
-    ) -> bool {
+    pub fn note_reasoning_effort_change(&mut self, effort: Option<crate::config::types::ReasoningEffortLevel>) -> bool {
         let changed = matches!(
             (self.last_reasoning_effort, effort),
             (Some(previous), Some(current)) if previous != current
@@ -246,10 +238,8 @@ impl AgentSessionState {
         }
         // Priority order: tool loop limit > completion > turn limit
         if self.tool_loop_limit_hit {
-            self.outcome = TaskOutcome::tool_loop_limit_reached(
-                self.constraints.max_tool_loops,
-                self.consecutive_tool_loops,
-            );
+            self.outcome =
+                TaskOutcome::tool_loop_limit_reached(self.constraints.max_tool_loops, self.consecutive_tool_loops);
         } else if self.is_completed {
             self.outcome = TaskOutcome::Success;
         } else if self.stats.turns_executed >= max_turns {
@@ -272,13 +262,8 @@ impl AgentSessionState {
             .map(|chain| chain.response_id.clone())
     }
 
-    pub fn previous_response_chain_for(
-        &self,
-        provider: &str,
-        model: &str,
-    ) -> Option<&ResponsesContinuationState> {
-        responses_continuation_key(provider, model)
-            .and_then(|key| self.previous_response_chains.get(&key))
+    pub fn previous_response_chain_for(&self, provider: &str, model: &str) -> Option<&ResponsesContinuationState> {
+        responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
     }
 
     pub fn set_previous_response_chain(
@@ -296,10 +281,8 @@ impl AgentSessionState {
             return;
         };
 
-        self.previous_response_chains.insert(
-            key,
-            ResponsesContinuationState { response_id: response_id.to_string(), messages },
-        );
+        self.previous_response_chains
+            .insert(key, ResponsesContinuationState { response_id: response_id.to_string(), messages });
     }
 
     pub fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
@@ -317,10 +300,8 @@ impl AgentSessionState {
             return;
         }
         self.tool_loop_limit_hit = true;
-        self.outcome = TaskOutcome::tool_loop_limit_reached(
-            self.constraints.max_tool_loops,
-            self.consecutive_tool_loops,
-        );
+        self.outcome =
+            TaskOutcome::tool_loop_limit_reached(self.constraints.max_tool_loops, self.consecutive_tool_loops);
     }
 
     /// Mutable access to the conversation history.
@@ -352,8 +333,7 @@ impl AgentSessionState {
     /// Compute a hash of the current assistant response content for progress tracking.
     fn assistant_response_hash(&self) -> Option<u64> {
         use crate::llm::provider::{MessageContent, MessageRole};
-        let last_assistant =
-            self.messages.iter().rev().find(|m| m.role == MessageRole::Assistant)?;
+        let last_assistant = self.messages.iter().rev().find(|m| m.role == MessageRole::Assistant)?;
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         match &last_assistant.content {
@@ -391,27 +371,13 @@ impl AgentSessionState {
     /// to annotate LLM responses and tool results after they are pushed.
     pub fn attach_metadata_to_last(&mut self, source: &str, estimated_tokens: usize) {
         if let Some(last) = self.messages_mut().last_mut() {
-            let now =
-                SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
             let metadata = match source {
-                "llm_response" => crate::core::message_metadata::MessageMetadata::llm_response(
-                    now,
-                    estimated_tokens,
-                ),
-                "tool_result" => crate::core::message_metadata::MessageMetadata::tool_result(
-                    now,
-                    estimated_tokens,
-                ),
-                "system" => {
-                    crate::core::message_metadata::MessageMetadata::system(now, estimated_tokens)
-                }
-                "synthetic" => {
-                    crate::core::message_metadata::MessageMetadata::synthetic(now, estimated_tokens)
-                }
-                _ => crate::core::message_metadata::MessageMetadata::user_input(
-                    now,
-                    estimated_tokens,
-                ),
+                "llm_response" => crate::core::message_metadata::MessageMetadata::llm_response(now, estimated_tokens),
+                "tool_result" => crate::core::message_metadata::MessageMetadata::tool_result(now, estimated_tokens),
+                "system" => crate::core::message_metadata::MessageMetadata::system(now, estimated_tokens),
+                "synthetic" => crate::core::message_metadata::MessageMetadata::synthetic(now, estimated_tokens),
+                _ => crate::core::message_metadata::MessageMetadata::user_input(now, estimated_tokens),
             };
             last.metadata = Some(metadata);
         }
@@ -446,11 +412,9 @@ impl AgentSessionState {
     pub fn adjust_token_count(&mut self, delta: isize) {
         if delta >= 0 {
             // `delta >= 0` is checked above, so the conversion is infallible
-            self.cached_total_tokens =
-                self.cached_total_tokens.saturating_add(usize::try_from(delta).unwrap());
+            self.cached_total_tokens = self.cached_total_tokens.saturating_add(usize::try_from(delta).unwrap());
         } else {
-            self.cached_total_tokens =
-                self.cached_total_tokens.saturating_sub(delta.unsigned_abs());
+            self.cached_total_tokens = self.cached_total_tokens.saturating_sub(delta.unsigned_abs());
         }
     }
 
@@ -477,11 +441,7 @@ impl AgentSessionState {
 
     /// Find a safe split point for history trimming that doesn't break tool call/output pairs.
     pub fn find_safe_split_point(&self, preferred_split_at: usize) -> usize {
-        crate::core::agent::state::safe_history_split_point(
-            &self.messages,
-            self.conversation.len(),
-            preferred_split_at,
-        )
+        crate::core::agent::state::safe_history_split_point(&self.messages, self.conversation.len(), preferred_split_at)
     }
 
     /// Normalize history to enforce call/output pairing invariants.
@@ -550,13 +510,7 @@ impl AgentSessionState {
     ///
     /// Shared implementation for `push_tool_result` and `push_tool_error` to
     /// eliminate the duplicated Gemini FunctionResponse construction.
-    fn push_tool_event(
-        &mut self,
-        call_id: String,
-        tool_name: &str,
-        value: &serde_json::Value,
-        is_gemini: bool,
-    ) {
+    fn push_tool_event(&mut self, call_id: String, tool_name: &str, value: &serde_json::Value, is_gemini: bool) {
         if is_gemini {
             self.conversation.push(Content {
                 role: "function".to_string(),
@@ -578,13 +532,7 @@ impl AgentSessionState {
     }
 
     /// Push a successful tool result to both conversation (for Gemini) and messages.
-    pub fn push_tool_result(
-        &mut self,
-        call_id: String,
-        tool_name: &str,
-        result: &serde_json::Value,
-        is_gemini: bool,
-    ) {
+    pub fn push_tool_result(&mut self, call_id: String, tool_name: &str, result: &serde_json::Value, is_gemini: bool) {
         self.push_tool_event(call_id, tool_name, result, is_gemini);
         self.executed_commands.push(tool_name.to_owned());
     }
@@ -653,37 +601,18 @@ mod tests {
         let messages_52 = vec![Message::user("hello".to_string())];
         let messages_54 = vec![Message::user("continue".to_string())];
 
-        state.set_previous_response_chain(
-            "openai",
-            "gpt-5.2",
-            Some("resp_123"),
-            Arc::new(messages_52.clone()),
-        );
-        state.set_previous_response_chain(
-            "openai",
-            "gpt-5.4",
-            Some("resp_456"),
-            Arc::new(messages_54.clone()),
-        );
+        state.set_previous_response_chain("openai", "gpt-5.2", Some("resp_123"), Arc::new(messages_52.clone()));
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_456"), Arc::new(messages_54.clone()));
 
-        assert_eq!(
-            state.previous_response_id_for("openai", "gpt-5.2"),
-            Some("resp_123".to_string())
-        );
-        assert_eq!(
-            state.previous_response_id_for("openai", "gpt-5.4"),
-            Some("resp_456".to_string())
-        );
+        assert_eq!(state.previous_response_id_for("openai", "gpt-5.2"), Some("resp_123".to_string()));
+        assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), Some("resp_456".to_string()));
         assert_eq!(state.previous_response_id_for("gemini", "gpt-5.2"), None);
 
         state.clear_previous_response_chain_for("openai", "gpt-5.2");
 
         assert_eq!(state.previous_response_id_for("openai", "gpt-5.2"), None);
         assert_eq!(state.previous_response_chain_for("openai", "gpt-5.2"), None);
-        assert_eq!(
-            state.previous_response_id_for("openai", "gpt-5.4"),
-            Some("resp_456".to_string())
-        );
+        assert_eq!(state.previous_response_id_for("openai", "gpt-5.4"), Some("resp_456".to_string()));
         assert_eq!(
             state
                 .previous_response_chain_for("openai", "gpt-5.4")
@@ -730,10 +659,7 @@ mod tests {
             other => panic!("expected function response, got {other:?}"),
         }
         let expected_serialized = serde_json::to_string(&payload).unwrap();
-        assert_eq!(
-            state.messages[0],
-            Message::tool_response("call_1".to_string(), expected_serialized)
-        );
+        assert_eq!(state.messages[0], Message::tool_response("call_1".to_string(), expected_serialized));
     }
 
     #[test]
@@ -769,10 +695,7 @@ mod tests {
 
         // Simulate external mutation (bypassing push methods)
         state.messages_mut().push(Message::assistant("extra response".to_string()));
-        assert_ne!(
-            state.total_tokens(),
-            before + Message::assistant("extra response".to_string()).estimate_tokens()
-        );
+        assert_ne!(state.total_tokens(), before + Message::assistant("extra response".to_string()).estimate_tokens());
 
         // Reconcile should fix it
         state.reconcile_token_count();

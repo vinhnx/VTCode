@@ -15,9 +15,7 @@ use std::sync::Arc;
 
 use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::permissions::{
-    build_advertised_permission_requests, evaluate_effective_permissions,
-};
+use vtcode_core::permissions::{build_advertised_permission_requests, evaluate_effective_permissions};
 use vtcode_core::{ActivePrimaryAgent, apply_primary_agent_tool_policy};
 
 pub(super) fn uses_out_of_band_copilot_tools(provider_name: &str) -> bool {
@@ -31,8 +29,7 @@ pub(super) fn apply_primary_agent_policy_to_tool_snapshot(
     vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
 ) -> SessionToolCatalogSnapshot {
     let filtered = apply_primary_agent_tool_policy(snapshot.snapshot, active_primary_agent);
-    let filtered =
-        apply_permission_policy_to_tools(filtered, active_primary_agent, workspace, vt_cfg);
+    let filtered = apply_permission_policy_to_tools(filtered, active_primary_agent, workspace, vt_cfg);
     SessionToolCatalogSnapshot::new(
         snapshot.version,
         snapshot.epoch,
@@ -71,17 +68,16 @@ fn apply_permission_policy_to_tools(
     // config so interactive auto has the same blast radius as --full-auto.
     // An empty allowlist means no tools are allowed (matching CLI behaviour);
     // a wildcard ["*"] means unrestricted.
-    let full_auto_allowlist: Option<&[String]> =
-        if agent_permissions.default == PermissionDefault::Auto {
-            let allowed = &cfg.automation.full_auto.allowed_tools;
-            if cfg.automation.full_auto.enabled && !allowed.iter().any(|t| t == "*") {
-                Some(allowed.as_slice())
-            } else {
-                None
-            }
+    let full_auto_allowlist: Option<&[String]> = if agent_permissions.default == PermissionDefault::Auto {
+        let allowed = &cfg.automation.full_auto.allowed_tools;
+        if cfg.automation.full_auto.enabled && !allowed.iter().any(|t| t == "*") {
+            Some(allowed.as_slice())
         } else {
             None
-        };
+        }
+    } else {
+        None
+    };
 
     let filtered: Vec<_> = tools
         .iter()
@@ -101,13 +97,8 @@ fn apply_permission_policy_to_tools(
             }
             // Hide the tool only when ALL advertised actions are denied.
             let all_denied = requests.iter().all(|request| {
-                evaluate_effective_permissions(
-                    &cfg.permissions,
-                    agent_permissions,
-                    workspace,
-                    &current_dir,
-                    request,
-                ) == ResolvedPermissionDecision::Deny
+                evaluate_effective_permissions(&cfg.permissions, agent_permissions, workspace, &current_dir, request)
+                    == ResolvedPermissionDecision::Deny
             });
             !all_denied
         })

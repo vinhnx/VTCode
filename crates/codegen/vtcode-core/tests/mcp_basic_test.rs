@@ -5,8 +5,7 @@
 
 use hashbrown::HashMap;
 use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
-    McpUiMode,
+    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 use vtcode_core::mcp::McpClient;
 

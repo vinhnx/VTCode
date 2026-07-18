@@ -63,11 +63,7 @@ impl ReadChunkContinuationArgs {
     }
 
     /// Create byte-based continuation args.
-    pub fn new_byte_range(
-        path: impl Into<String>,
-        offset_bytes: u64,
-        page_size_bytes: usize,
-    ) -> Self {
+    pub fn new_byte_range(path: impl Into<String>, offset_bytes: u64, page_size_bytes: usize) -> Self {
         Self {
             path: path.into(),
             offset: 1,

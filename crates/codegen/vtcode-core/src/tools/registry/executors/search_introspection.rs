@@ -54,8 +54,7 @@ impl ToolRegistry {
             .or_else(|| args.get("keyword"))
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("query is required"))?;
-        let detail_level =
-            parse_detail_level(args.get("detail_level").and_then(Value::as_str).unwrap_or(""));
+        let detail_level = parse_detail_level(args.get("detail_level").and_then(Value::as_str).unwrap_or(""));
         let max_results = args
             .get("limit")
             .and_then(Value::as_u64)

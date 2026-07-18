@@ -129,9 +129,7 @@ impl FileReferenceValidator {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() {
-                        references.push(
-                            path.strip_prefix(&self.skill_root).unwrap_or(&path).to_path_buf(),
-                        );
+                        references.push(path.strip_prefix(&self.skill_root).unwrap_or(&path).to_path_buf());
                     }
                 }
             }

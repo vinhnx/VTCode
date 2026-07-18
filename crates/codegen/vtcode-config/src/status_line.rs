@@ -99,8 +99,8 @@ mod tests {
             ("\"command\"", StatusLineMode::Command),
             ("\"hidden\"", StatusLineMode::Hidden),
         ] {
-            let parsed: Wrapper = toml::from_str(&format!("mode = {input}"))
-                .expect("lowercase status line mode must parse");
+            let parsed: Wrapper =
+                toml::from_str(&format!("mode = {input}")).expect("lowercase status line mode must parse");
             assert_eq!(parsed.mode, expected, "input {input}");
         }
     }

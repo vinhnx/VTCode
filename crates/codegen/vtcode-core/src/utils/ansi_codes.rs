@@ -11,8 +11,9 @@ pub fn notify_attention_with_terminal_method(
     method: vtcode_config::TerminalNotificationMethod,
 ) {
     let override_mode = match method {
-        vtcode_config::TerminalNotificationMethod::Auto
-        | vtcode_config::TerminalNotificationMethod::Unknown => NotifyMethodOverride::Auto,
+        vtcode_config::TerminalNotificationMethod::Auto | vtcode_config::TerminalNotificationMethod::Unknown => {
+            NotifyMethodOverride::Auto
+        }
         vtcode_config::TerminalNotificationMethod::Bel => NotifyMethodOverride::Bell,
         vtcode_config::TerminalNotificationMethod::Osc9 => NotifyMethodOverride::Osc9,
     };

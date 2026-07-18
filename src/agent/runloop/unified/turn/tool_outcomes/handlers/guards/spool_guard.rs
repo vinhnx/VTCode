@@ -17,9 +17,7 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use super::super::ValidationResult;
 use super::super::looping::spool_chunk_read_path;
 use super::common::push_guard_failure_messages;
-use crate::agent::runloop::unified::tool_reads::{
-    read_spool_head_for_error_check, spool_content_looks_like_error,
-};
+use crate::agent::runloop::unified::tool_reads::{read_spool_head_for_error_check, spool_content_looks_like_error};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 const SPOOL_CHUNK_GREP_PATTERN: &str = "warning|error|TODO";
@@ -265,15 +263,10 @@ mod tests {
 
     #[test]
     fn spool_chunk_guard_error_resolves_to_pty_poll_for_run_prefix() {
-        let payload =
-            build_spool_chunk_guard_error_content(".vtcode/context/tool_outputs/run-1.txt", 3);
-        let parsed: Value =
-            serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
+        let payload = build_spool_chunk_guard_error_content(".vtcode/context/tool_outputs/run-1.txt", 3);
+        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
 
-        assert_eq!(
-            parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::WRITE_STDIN)
-        );
+        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::WRITE_STDIN));
         assert_eq!(parsed["fallback_tool_args"]["session_id"], "1");
         assert_eq!(parsed["fallback_tool_args"]["chars"], "");
         assert!(parsed.get("next_action").and_then(Value::as_str).is_some());
@@ -287,13 +280,9 @@ mod tests {
             ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt",
             3,
         );
-        let parsed: Value =
-            serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
+        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
 
-        assert_eq!(
-            parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::EXEC_COMMAND)
-        );
+        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::EXEC_COMMAND));
         assert!(
             parsed["fallback_tool_args"]["cmd"]
                 .as_str()
@@ -305,17 +294,10 @@ mod tests {
 
     #[test]
     fn spool_chunk_guard_error_falls_back_to_warning_error_todo_for_unknown_prefix() {
-        let payload = build_spool_chunk_guard_error_content(
-            ".vtcode/context/tool_outputs/custom_tool_42.txt",
-            3,
-        );
-        let parsed: Value =
-            serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
+        let payload = build_spool_chunk_guard_error_content(".vtcode/context/tool_outputs/custom_tool_42.txt", 3);
+        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
 
-        assert_eq!(
-            parsed.get("fallback_tool").and_then(Value::as_str),
-            Some(tool_names::EXEC_COMMAND)
-        );
+        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::EXEC_COMMAND));
         assert!(
             parsed["fallback_tool_args"]["cmd"]
                 .as_str()

@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use serde_json::Value as JsonValue;
 
-pub const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+pub const LMSTUDIO_CONNECTION_ERROR: &str =
+    "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Client for interacting with a local LM Studio instance.
 ///
@@ -34,10 +35,7 @@ impl LMStudioClient {
     ///
     /// - `use_native_api = false`: Use OpenAI-compatible endpoints at `/v1/*` (default)
     /// - `use_native_api = true`: Use native REST API at `/api/v0/*`
-    pub async fn try_from_base_url_with_api_version(
-        base_url: &str,
-        use_native_api: bool,
-    ) -> io::Result<Self> {
+    pub async fn try_from_base_url_with_api_version(base_url: &str, use_native_api: bool) -> io::Result<Self> {
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
             .build()
@@ -72,10 +70,7 @@ impl LMStudioClient {
             if resp.status().is_success() {
                 Ok(())
             } else {
-                Err(io::Error::other(format!(
-                    "Server returned error: {} {LMSTUDIO_CONNECTION_ERROR}",
-                    resp.status()
-                )))
+                Err(io::Error::other(format!("Server returned error: {} {LMSTUDIO_CONNECTION_ERROR}", resp.status())))
             }
         } else {
             Err(io::Error::other(LMSTUDIO_CONNECTION_ERROR))
@@ -93,15 +88,14 @@ impl LMStudioClient {
             .map_err(|e| io::Error::other(format!("Request failed: {e}")))?;
 
         if response.status().is_success() {
-            let json: JsonValue = response.json().await.map_err(|e| {
-                io::Error::new(io::ErrorKind::InvalidData, format!("JSON parse error: {e}"))
-            })?;
+            let json: JsonValue = response
+                .json()
+                .await
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("JSON parse error: {e}")))?;
 
             let models = json["data"]
                 .as_array()
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "No 'data' array in response")
-                })?
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No 'data' array in response"))?
                 .iter()
                 .filter_map(|model| model["id"].as_str())
                 .map(ToString::to_string)
@@ -171,9 +165,7 @@ impl LMStudioClient {
     /// This endpoint requires `use_native_api = true`.
     pub async fn unload_model(&self, model: &str) -> io::Result<()> {
         if !self.use_native_api {
-            return Err(io::Error::other(
-                "Model unload requires native API (use_native_api = true)",
-            ));
+            return Err(io::Error::other("Model unload requires native API (use_native_api = true)"));
         }
 
         let url = format!("{}/api/v0/models/unload", self.base_url.trim_end_matches('/'));
@@ -250,9 +242,7 @@ impl LMStudioClient {
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::null())
             .status()
-            .map_err(|e| {
-                io::Error::other(format!("Failed to execute '{lms} get --yes {model}': {e}"))
-            })?;
+            .map_err(|e| io::Error::other(format!("Failed to execute '{lms} get --yes {model}': {e}")))?;
 
         if !status.success() {
             return Err(io::Error::other(format!(
@@ -285,9 +275,7 @@ mod tests {
             Ok(server) => Some(server),
             Err(err) if err.is_panic() => {
                 let message = panic_message(err.into_panic());
-                if message.contains("Operation not permitted")
-                    || message.contains("PermissionDenied")
-                {
+                if message.contains("Operation not permitted") || message.contains("PermissionDenied") {
                     return None;
                 }
                 panic!("mock server should start: {message}");

@@ -36,7 +36,8 @@ const MAX_SNIPPET_CHARS: usize = 400;
 
 /// Browser-like user agent. DuckDuckGo's HTML endpoint blocks obvious bots, so a
 /// realistic UA reduces (but does not eliminate) the chance of being challenged.
-const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const BROWSER_USER_AGENT: &str =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 pub(crate) const WEB_SEARCH_DESCRIPTION: &str = "Searches the web for a query and returns a ranked list of results (title, url, snippet) inline. Accepts: { query: string, max_results?: number }. Uses the keyless DuckDuckGo HTML endpoint (best-effort, may be rate-limited). Results are cached for a few minutes to avoid repeat hits. Use web_fetch on the most promising result URL to read full content. Returns { query, provider: \"duckduckgo\", count, cached, results: [{ title, url, snippet }] }.";
 
@@ -136,8 +137,8 @@ impl WebSearchTool {
     }
 
     async fn run(&self, raw_args: Value) -> Result<Value> {
-        let args: WebSearchArgs = serde_json::from_value(raw_args)
-            .context("Invalid arguments for web_search. Provide a 'query' string.")?;
+        let args: WebSearchArgs =
+            serde_json::from_value(raw_args).context("Invalid arguments for web_search. Provide a 'query' string.")?;
 
         let query = args.query.trim().to_string();
         if query.is_empty() {
@@ -159,16 +160,13 @@ impl WebSearchTool {
         let cache_key = format!("{max_results}::{query}");
 
         // Fast path: cache hit. Avoid the network entirely.
-        if let Some(cached) =
-            self.state.lock().ok().and_then(|guard| guard.cache_get(&cache_key, cache_ttl))
-        {
+        if let Some(cached) = self.state.lock().ok().and_then(|guard| guard.cache_get(&cache_key, cache_ttl)) {
             return Ok(mark_cached(cached));
         }
 
         // Enforce session-wide request cap before touching the network.
         {
-            let state =
-                self.state.lock().map_err(|e| anyhow!("web_search state lock poisoned: {e}"))?;
+            let state = self.state.lock().map_err(|e| anyhow!("web_search state lock poisoned: {e}"))?;
             if state.requests_made >= session_cap {
                 return Ok(session_cap_reached_response(&query, session_cap));
             }
@@ -312,18 +310,12 @@ fn build_client(timeout_secs: u64) -> Result<reqwest::Client> {
 // ---------------------------------------------------------------------------
 
 static DDG_RESULT_ANCHOR: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#)
-        .expect("valid DDG anchor regex")
+    Regex::new(r#"(?s)<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).expect("valid DDG anchor regex")
 });
-static DDG_SNIPPET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)class="result__snippet"[^>]*>(.*?)</a>"#).expect("valid DDG snippet regex")
-});
+static DDG_SNIPPET: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?s)class="result__snippet"[^>]*>(.*?)</a>"#).expect("valid DDG snippet regex"));
 
-async fn duckduckgo_search(
-    query: &str,
-    max_results: usize,
-    timeout_secs: u64,
-) -> Result<Vec<SearchResult>> {
+async fn duckduckgo_search(query: &str, max_results: usize, timeout_secs: u64) -> Result<Vec<SearchResult>> {
     let client = build_client(timeout_secs)?;
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static(BROWSER_USER_AGENT));
@@ -357,8 +349,7 @@ async fn duckduckgo_search(
 /// Extract ranked results from a DuckDuckGo HTML body. Pure function so it can
 /// be exercised in unit tests against a local fixture (no live network).
 pub fn parse_duckduckgo_html(body: &str, max_results: usize) -> Vec<SearchResult> {
-    let snippets: Vec<String> =
-        DDG_SNIPPET.captures_iter(body).map(|c| clean_html(&c[1])).collect();
+    let snippets: Vec<String> = DDG_SNIPPET.captures_iter(body).map(|c| clean_html(&c[1])).collect();
 
     let mut results = Vec::new();
     for (idx, caps) in DDG_RESULT_ANCHOR.captures_iter(body).enumerate() {
@@ -420,8 +411,7 @@ fn validate_result_url(url: &str) -> Option<String> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-static HTML_TAG: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<[^>]+>").expect("valid html tag regex"));
+static HTML_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").expect("valid html tag regex"));
 
 /// Strip HTML tags and decode common entities from a snippet/title fragment.
 fn clean_html(input: &str) -> String {
@@ -473,10 +463,7 @@ mod tests {
 
     #[test]
     fn clean_html_strips_tags_and_decodes_entities() {
-        assert_eq!(
-            clean_html("<b>Rust</b> &amp; <i>Cargo</i> &#39;build&#39;"),
-            "Rust & Cargo 'build'"
-        );
+        assert_eq!(clean_html("<b>Rust</b> &amp; <i>Cargo</i> &#39;build&#39;"), "Rust & Cargo 'build'");
     }
 
     #[test]
@@ -666,10 +653,7 @@ mod tests {
             "DuckDuckGo declined the request (HTTP 202), likely an anti-bot challenge for this network.",
         );
         assert_eq!(kind, "antiban_blocked");
-        assert!(
-            action.contains("Do NOT retry"),
-            "action should discourage immediate retry; got: {action}"
-        );
+        assert!(action.contains("Do NOT retry"), "action should discourage immediate retry; got: {action}");
     }
 
     #[test]

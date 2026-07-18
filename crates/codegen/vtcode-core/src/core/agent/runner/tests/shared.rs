@@ -14,12 +14,8 @@ pub use crate::core::agent::steering::SteeringMessage;
 pub use crate::core::agent::task::{Task, TaskOutcome, TaskResults};
 pub use crate::core::agent::types::AgentType;
 pub use crate::core::threads::ThreadBootstrap;
-pub use crate::exec::events::{
-    HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus,
-};
-pub use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice,
-};
+pub use crate::exec::events::{HarnessEventKind, ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
+pub use crate::llm::provider::{FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, ToolCall, ToolChoice};
 pub use crate::primary_agent::ActivePrimaryAgent;
 pub use crate::tool_policy::ToolPolicy;
 pub use crate::tools::Tool;
@@ -48,10 +44,7 @@ pub fn provider_tool_names(snapshot: &SessionToolCatalogSnapshot) -> Vec<&str> {
 
 pub fn assert_provider_exposes_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: &str) {
     let names = provider_tool_names(snapshot);
-    assert!(
-        names.contains(&tool_name),
-        "provider-facing snapshot should include {tool_name}; got {names:?}"
-    );
+    assert!(names.contains(&tool_name), "provider-facing snapshot should include {tool_name}; got {names:?}");
     assert!(
         snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should include {tool_name}"
@@ -60,25 +53,16 @@ pub fn assert_provider_exposes_tool(snapshot: &SessionToolCatalogSnapshot, tool_
 
 pub fn assert_provider_hides_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: &str) {
     let names = provider_tool_names(snapshot);
-    assert!(
-        !names.contains(&tool_name),
-        "provider-facing snapshot should hide {tool_name}; got {names:?}"
-    );
+    assert!(!names.contains(&tool_name), "provider-facing snapshot should hide {tool_name}; got {names:?}");
     assert!(
         !snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should hide {tool_name}"
     );
 }
 
-pub fn assert_provider_catalogues_inactive_tool(
-    snapshot: &SessionToolCatalogSnapshot,
-    tool_name: &str,
-) {
+pub fn assert_provider_catalogues_inactive_tool(snapshot: &SessionToolCatalogSnapshot, tool_name: &str) {
     let names = provider_tool_names(snapshot);
-    assert!(
-        names.contains(&tool_name),
-        "stable provider catalogue should include {tool_name}; got {names:?}"
-    );
+    assert!(names.contains(&tool_name), "stable provider catalogue should include {tool_name}; got {names:?}");
     assert!(
         !snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should hide {tool_name}"
@@ -259,9 +243,7 @@ fn default_response_for(role: HarnessRole) -> LLMResponse {
     match role {
         HarnessRole::Planner => json_response(planner_response_json("pwd")),
         HarnessRole::Build => text_response("All requested changes have been applied."),
-        HarnessRole::Evaluator => {
-            json_response(evaluator_response_json("pass", "default evaluator response", 0))
-        }
+        HarnessRole::Evaluator => json_response(evaluator_response_json("pass", "default evaluator response", 0)),
         HarnessRole::Replanner => text_response("Revision 1: task is complete."),
     }
 }
@@ -350,11 +332,7 @@ pub fn planner_response_json(verify_command: &str) -> serde_json::Value {
     })
 }
 
-pub fn evaluator_response_json(
-    verdict: &str,
-    summary: &str,
-    high_severity_findings: usize,
-) -> serde_json::Value {
+pub fn evaluator_response_json(verdict: &str, summary: &str, high_severity_findings: usize) -> serde_json::Value {
     let scores = if verdict.eq_ignore_ascii_case("pass") && high_severity_findings == 0 {
         (5, 5, 5, 5)
     } else {
@@ -390,11 +368,7 @@ pub fn evaluator_response_json_with_scorecard(
     })
 }
 
-pub fn tool_call_response_with_request_id(
-    tool_name: &str,
-    args: serde_json::Value,
-    request_id: &str,
-) -> LLMResponse {
+pub fn tool_call_response_with_request_id(tool_name: &str, args: serde_json::Value, request_id: &str) -> LLMResponse {
     let mut response = tool_call_response(tool_name, args);
     response.request_id = Some(request_id.to_string());
     response
@@ -433,10 +407,8 @@ pub async fn make_runner_for_model(
 }
 
 pub async fn seed_tracker(workspace_root: &Path, items: serde_json::Value) {
-    let tool = TaskTrackerTool::new(
-        workspace_root.to_path_buf(),
-        PlanningWorkflowState::new(workspace_root.to_path_buf()),
-    );
+    let tool =
+        TaskTrackerTool::new(workspace_root.to_path_buf(), PlanningWorkflowState::new(workspace_root.to_path_buf()));
     tool.execute(json!({
         "action": "create",
         "title": "Harness hardening",
@@ -474,9 +446,7 @@ pub fn harness_paths(results: &TaskResults, kind: HarnessEventKind) -> Vec<Strin
         .iter()
         .filter_map(|event| match event {
             ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
-                ThreadItemDetails::Harness(harness) if harness.event == kind => {
-                    harness.path.clone()
-                }
+                ThreadItemDetails::Harness(harness) if harness.event == kind => harness.path.clone(),
                 _ => None,
             },
             _ => None,
@@ -484,15 +454,10 @@ pub fn harness_paths(results: &TaskResults, kind: HarnessEventKind) -> Vec<Strin
         .collect()
 }
 
-pub fn completed_tool_invocation_item_id(
-    events: &[ThreadEvent],
-    tool_call_id: &str,
-) -> Option<String> {
+pub fn completed_tool_invocation_item_id(events: &[ThreadEvent], tool_call_id: &str) -> Option<String> {
     events.iter().find_map(|event| match event {
         ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
-            ThreadItemDetails::ToolInvocation(details)
-                if details.tool_call_id.as_deref() == Some(tool_call_id) =>
-            {
+            ThreadItemDetails::ToolInvocation(details) if details.tool_call_id.as_deref() == Some(tool_call_id) => {
                 Some(item.id.clone())
             }
             _ => None,

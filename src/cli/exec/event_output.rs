@@ -7,9 +7,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use vtcode_core::core::agent::task::TaskResults;
-use vtcode_core::exec::events::{
-    CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus,
-};
+use vtcode_core::exec::events::{CommandExecutionStatus, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus};
 use vtcode_core::utils::colors::style;
 
 pub(super) struct ExecEventProcessor<WStdout, WEvents, WStderr> {
@@ -127,8 +125,7 @@ where
         if !self.emit_human_output {
             return;
         }
-        let warning =
-            format!("Warning: no last agent message; wrote empty content to {}", path.display());
+        let warning = format!("Warning: no last agent message; wrote empty content to {}", path.display());
         if let Err(err) = self.write_stderr_line(&warning) {
             self.capture_error(err);
         }
@@ -223,8 +220,7 @@ where
 }
 
 pub(super) fn serialize_event_line(event: &ThreadEvent) -> Result<String> {
-    let mut line =
-        serde_json::to_string(event).context("Failed to serialize exec event to JSON")?;
+    let mut line = serde_json::to_string(event).context("Failed to serialize exec event to JSON")?;
     line.push('\n');
     Ok(line)
 }
@@ -244,28 +240,16 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
             ThreadItemDetails::CommandExecution(details)
                 if matches!(details.status, CommandExecutionStatus::Failed) =>
             {
-                let exit_suffix =
-                    details.exit_code.map(|code| format!(" (exit {code})")).unwrap_or_default();
-                Some(format!(
-                    "{} {}{}",
-                    style("[COMMAND FAILED]").red().bold(),
-                    details.command,
-                    exit_suffix
-                ))
+                let exit_suffix = details.exit_code.map(|code| format!(" (exit {code})")).unwrap_or_default();
+                Some(format!("{} {}{}", style("[COMMAND FAILED]").red().bold(), details.command, exit_suffix))
             }
-            ThreadItemDetails::ToolInvocation(details)
-                if matches!(details.status, ToolCallStatus::Failed) =>
-            {
+            ThreadItemDetails::ToolInvocation(details) if matches!(details.status, ToolCallStatus::Failed) => {
                 Some(format!("{} {}", style("[TOOL FAILED]").red().bold(), details.tool_name))
             }
             ThreadItemDetails::Harness(item) => {
                 let label = match item.event {
-                    vtcode_core::exec::events::HarnessEventKind::PlanningStarted => {
-                        style("[PLAN]").cyan().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::PlanningCompleted => {
-                        style("[PLAN]").green().bold()
-                    }
+                    vtcode_core::exec::events::HarnessEventKind::PlanningStarted => style("[PLAN]").cyan().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::PlanningCompleted => style("[PLAN]").green().bold(),
                     vtcode_core::exec::events::HarnessEventKind::ContinuationStarted => {
                         style("[HARNESS]").cyan().bold()
                     }
@@ -275,24 +259,14 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     vtcode_core::exec::events::HarnessEventKind::BlockedHandoffWritten => {
                         style("[HANDOFF]").cyan().bold()
                     }
-                    vtcode_core::exec::events::HarnessEventKind::EvaluationStarted => {
-                        style("[EVAL]").cyan().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::EvaluationPassed => {
-                        style("[EVAL]").green().bold()
-                    }
+                    vtcode_core::exec::events::HarnessEventKind::EvaluationStarted => style("[EVAL]").cyan().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::EvaluationPassed => style("[EVAL]").green().bold(),
                     vtcode_core::exec::events::HarnessEventKind::EvaluationFailed => {
                         style("[EVAL FAILED]").red().bold()
                     }
-                    vtcode_core::exec::events::HarnessEventKind::RevisionStarted => {
-                        style("[REVISION]").cyan().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::VerificationStarted => {
-                        style("[VERIFY]").cyan().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::VerificationPassed => {
-                        style("[VERIFY]").green().bold()
-                    }
+                    vtcode_core::exec::events::HarnessEventKind::RevisionStarted => style("[REVISION]").cyan().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::VerificationStarted => style("[VERIFY]").cyan().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::VerificationPassed => style("[VERIFY]").green().bold(),
                     vtcode_core::exec::events::HarnessEventKind::VerificationFailed => {
                         style("[VERIFY FAILED]").red().bold()
                     }
@@ -302,43 +276,27 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     vtcode_core::exec::events::HarnessEventKind::EscalationBypassed => {
                         style("[ESCALATED]").green().bold()
                     }
-                    vtcode_core::exec::events::HarnessEventKind::ErrorRecovered => {
-                        style("[RECOVERED]").green().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::ToolRetryAttempted => {
-                        style("[RETRY]").yellow().bold()
-                    }
+                    vtcode_core::exec::events::HarnessEventKind::ErrorRecovered => style("[RECOVERED]").green().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::ToolRetryAttempted => style("[RETRY]").yellow().bold(),
                     vtcode_core::exec::events::HarnessEventKind::ToolLatencyRecorded => {
                         style("[LATENCY]").magenta().bold()
                     }
-                    vtcode_core::exec::events::HarnessEventKind::SnapshotCreated => {
-                        style("[SNAPSHOT]").cyan().bold()
-                    }
-                    vtcode_core::exec::events::HarnessEventKind::SnapshotRestored => {
-                        style("[REWIND]").yellow().bold()
-                    }
+                    vtcode_core::exec::events::HarnessEventKind::SnapshotCreated => style("[SNAPSHOT]").cyan().bold(),
+                    vtcode_core::exec::events::HarnessEventKind::SnapshotRestored => style("[REWIND]").yellow().bold(),
                 };
                 let detail = match (item.message.as_deref(), item.path.as_deref()) {
                     (Some(message), Some(path)) => format!("{message}: {path}"),
                     (Some(message), None) => message.to_string(),
                     (None, Some(path)) => path.to_string(),
-                    (None, None) => {
-                        item.command.clone().unwrap_or_else(|| "harness event".to_string())
-                    }
+                    (None, None) => item.command.clone().unwrap_or_else(|| "harness event".to_string()),
                 };
                 Some(format!("{label} {detail}"))
             }
-            ThreadItemDetails::Error(item) => {
-                Some(format!("{} {}", style("[WARNING]").red().bold(), item.message))
-            }
+            ThreadItemDetails::Error(item) => Some(format!("{} {}", style("[WARNING]").red().bold(), item.message)),
             _ => None,
         },
-        ThreadEvent::TurnFailed(failed) => {
-            Some(format!("{} {}", style("[ERROR]").red().bold(), failed.message))
-        }
-        ThreadEvent::Error(error) => {
-            Some(format!("{} {}", style("[ERROR]").red().bold(), error.message))
-        }
+        ThreadEvent::TurnFailed(failed) => Some(format!("{} {}", style("[ERROR]").red().bold(), failed.message)),
+        ThreadEvent::Error(error) => Some(format!("{} {}", style("[ERROR]").red().bold(), error.message)),
         _ => None,
     }
 }
@@ -348,8 +306,7 @@ pub(super) fn render_final_tail(result: &TaskResults, dry_run: bool) -> String {
     output.push('\n');
 
     if !result.summary.trim().is_empty() {
-        let _ =
-            writeln!(output, "{} {}\n", style("[SUMMARY]").green().bold(), result.summary.trim());
+        let _ = writeln!(output, "{} {}\n", style("[SUMMARY]").green().bold(), result.summary.trim());
     }
 
     let avg_display = result
@@ -401,12 +358,10 @@ pub(super) fn open_events_writer(path: &Path) -> Result<BufWriter<File>> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }
 
-    let file = File::create(path)
-        .with_context(|| format!("Failed to write exec events: {}", path.display()))?;
+    let file = File::create(path).with_context(|| format!("Failed to write exec events: {}", path.display()))?;
     Ok(BufWriter::new(file))
 }
 
@@ -417,9 +372,7 @@ pub(super) fn lock_or_recover<T>(mutex: &Arc<Mutex<T>>) -> MutexGuard<'_, T> {
     }
 }
 
-pub(super) fn exec_archive_transcript(
-    messages: &[vtcode_core::llm::provider::Message],
-) -> Vec<String> {
+pub(super) fn exec_archive_transcript(messages: &[vtcode_core::llm::provider::Message]) -> Vec<String> {
     messages
         .iter()
         .filter_map(|message| {

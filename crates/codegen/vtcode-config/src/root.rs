@@ -769,19 +769,13 @@ impl PtyConfig {
         {
             let path = std::path::Path::new(zsh_path);
             if !path.is_absolute() {
-                bail!(
-                    "pty.zsh_path '{zsh_path}' must be an absolute path when pty.shell_zsh_fork is enabled"
-                );
+                bail!("pty.zsh_path '{zsh_path}' must be an absolute path when pty.shell_zsh_fork is enabled");
             }
             if !path.exists() {
-                bail!(
-                    "pty.zsh_path '{zsh_path}' does not exist (required when pty.shell_zsh_fork is enabled)"
-                );
+                bail!("pty.zsh_path '{zsh_path}' does not exist (required when pty.shell_zsh_fork is enabled)");
             }
             if !path.is_file() {
-                bail!(
-                    "pty.zsh_path '{zsh_path}' is not a file (required when pty.shell_zsh_fork is enabled)"
-                );
+                bail!("pty.zsh_path '{zsh_path}' is not a file (required when pty.shell_zsh_fork is enabled)");
             }
 
             Ok(Some(zsh_path))

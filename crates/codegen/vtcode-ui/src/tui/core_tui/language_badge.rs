@@ -25,26 +25,11 @@ mod tests {
 
     #[test]
     fn language_badge_style_maps_expected_families() {
-        assert_eq!(
-            language_badge_style("Rust").and_then(|style| style.fg),
-            Some(Color::Rgb(0xCE, 0x7E, 0x47))
-        );
-        assert_eq!(
-            language_badge_style("Swift").and_then(|style| style.fg),
-            Some(Color::Rgb(0xF0, 0x91, 0x3E))
-        );
-        assert_eq!(
-            language_badge_style("Ruby").and_then(|style| style.fg),
-            Some(Color::Rgb(0xC7, 0x45, 0x45))
-        );
-        assert_eq!(
-            language_badge_style("TypeScript").and_then(|style| style.fg),
-            Some(Color::Rgb(0x4F, 0x8F, 0xD8))
-        );
-        assert_eq!(
-            language_badge_style("JavaScript").and_then(|style| style.fg),
-            Some(Color::Rgb(0x4F, 0x8F, 0xD8))
-        );
+        assert_eq!(language_badge_style("Rust").and_then(|style| style.fg), Some(Color::Rgb(0xCE, 0x7E, 0x47)));
+        assert_eq!(language_badge_style("Swift").and_then(|style| style.fg), Some(Color::Rgb(0xF0, 0x91, 0x3E)));
+        assert_eq!(language_badge_style("Ruby").and_then(|style| style.fg), Some(Color::Rgb(0xC7, 0x45, 0x45)));
+        assert_eq!(language_badge_style("TypeScript").and_then(|style| style.fg), Some(Color::Rgb(0x4F, 0x8F, 0xD8)));
+        assert_eq!(language_badge_style("JavaScript").and_then(|style| style.fg), Some(Color::Rgb(0x4F, 0x8F, 0xD8)));
         assert!(language_badge_style("Unknown").is_none());
     }
 }

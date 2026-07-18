@@ -78,9 +78,7 @@ impl PlanProgress {
     }
 
     pub(crate) fn complete_analysis(&mut self) -> bool {
-        if discriminant(&self.entries[self.analyze_index].status)
-            != discriminant(&acp::PlanEntryStatus::Completed)
-        {
+        if discriminant(&self.entries[self.analyze_index].status) != discriminant(&acp::PlanEntryStatus::Completed) {
             return self.update_status(self.analyze_index, acp::PlanEntryStatus::Completed);
         }
         false
@@ -88,8 +86,7 @@ impl PlanProgress {
 
     pub(crate) fn start_context(&mut self) -> bool {
         if let Some(index) = self.gather_index
-            && discriminant(&self.entries[index].status)
-                == discriminant(&acp::PlanEntryStatus::Pending)
+            && discriminant(&self.entries[index].status) == discriminant(&acp::PlanEntryStatus::Pending)
         {
             return self.update_status(index, acp::PlanEntryStatus::InProgress);
         }
@@ -98,8 +95,7 @@ impl PlanProgress {
 
     pub(crate) fn complete_context(&mut self) -> bool {
         if let Some(index) = self.gather_index
-            && discriminant(&self.entries[index].status)
-                != discriminant(&acp::PlanEntryStatus::Completed)
+            && discriminant(&self.entries[index].status) != discriminant(&acp::PlanEntryStatus::Completed)
         {
             return self.update_status(index, acp::PlanEntryStatus::Completed);
         }
@@ -112,26 +108,19 @@ impl PlanProgress {
 
     pub(crate) fn context_completed(&self) -> bool {
         self.gather_index
-            .map(|index| {
-                discriminant(&self.entries[index].status)
-                    == discriminant(&acp::PlanEntryStatus::Completed)
-            })
+            .map(|index| discriminant(&self.entries[index].status) == discriminant(&acp::PlanEntryStatus::Completed))
             .unwrap_or(true)
     }
 
     pub(crate) fn start_response(&mut self) -> bool {
-        if discriminant(&self.entries[self.respond_index].status)
-            == discriminant(&acp::PlanEntryStatus::Pending)
-        {
+        if discriminant(&self.entries[self.respond_index].status) == discriminant(&acp::PlanEntryStatus::Pending) {
             return self.update_status(self.respond_index, acp::PlanEntryStatus::InProgress);
         }
         false
     }
 
     pub(crate) fn complete_response(&mut self) -> bool {
-        if discriminant(&self.entries[self.respond_index].status)
-            != discriminant(&acp::PlanEntryStatus::Completed)
-        {
+        if discriminant(&self.entries[self.respond_index].status) != discriminant(&acp::PlanEntryStatus::Completed) {
             return self.update_status(self.respond_index, acp::PlanEntryStatus::Completed);
         }
         false

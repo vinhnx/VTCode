@@ -63,23 +63,23 @@ impl PodsStore {
     /// Persist the pod state to disk.
     pub async fn save_state(&self, state: &PodsState) -> Result<()> {
         ensure_dir_exists(&self.base_dir).await?;
-        write_json_file(&self.state_path(), state).await.with_context(|| {
-            format!("failed to write pod state at {}", self.state_path().display())
-        })
+        write_json_file(&self.state_path(), state)
+            .await
+            .with_context(|| format!("failed to write pod state at {}", self.state_path().display()))
     }
 
     /// Load the deployment catalog from disk.
     pub async fn load_catalog(&self) -> Result<PodCatalog> {
         self.ensure_initialized().await?;
-        read_json_file(&self.catalog_path()).await.with_context(|| {
-            format!("failed to read pod catalog at {}", self.catalog_path().display())
-        })
+        read_json_file(&self.catalog_path())
+            .await
+            .with_context(|| format!("failed to read pod catalog at {}", self.catalog_path().display()))
     }
 
     pub async fn save_catalog(&self, catalog: &PodCatalog) -> Result<()> {
         ensure_dir_exists(&self.base_dir).await?;
-        write_json_file(&self.catalog_path(), catalog).await.with_context(|| {
-            format!("failed to write pod catalog at {}", self.catalog_path().display())
-        })
+        write_json_file(&self.catalog_path(), catalog)
+            .await
+            .with_context(|| format!("failed to write pod catalog at {}", self.catalog_path().display()))
     }
 }

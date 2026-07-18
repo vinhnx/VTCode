@@ -221,10 +221,7 @@ mod tests {
     #[test]
     fn test_is_sandbox_wrapper_program() {
         assert!(is_sandbox_wrapper_program("sandbox-exec", &[]));
-        assert!(is_sandbox_wrapper_program(
-            "vtcode-linux-sandbox",
-            &["--sandbox-policy".to_string()]
-        ));
+        assert!(is_sandbox_wrapper_program("vtcode-linux-sandbox", &["--sandbox-policy".to_string()]));
         assert!(!is_sandbox_wrapper_program("bash", &["-lc".to_string(), "ls".to_string()]));
     }
 }

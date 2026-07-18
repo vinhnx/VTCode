@@ -90,11 +90,7 @@ pub struct TokenCounts {
 
 impl ToolResult {
     /// Create a new tool result with dual content
-    pub fn new(
-        tool_name: impl Into<String>,
-        llm_content: impl Into<String>,
-        ui_content: impl Into<String>,
-    ) -> Self {
+    pub fn new(tool_name: impl Into<String>, llm_content: impl Into<String>, ui_content: impl Into<String>) -> Self {
         let llm_str = llm_content.into();
         let ui_str = ui_content.into();
 
@@ -170,10 +166,7 @@ impl ToolResult {
     /// Get token savings summary for logging
     pub fn savings_summary(&self) -> String {
         let counts = &self.metadata.token_counts;
-        format!(
-            "{} → {} tokens ({:.1}% saved)",
-            counts.ui_tokens, counts.llm_tokens, counts.savings_percent
-        )
+        format!("{} → {} tokens ({:.1}% saved)", counts.ui_tokens, counts.llm_tokens, counts.savings_percent)
     }
 
     /// Check if this result has significant savings (>50%)

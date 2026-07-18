@@ -8,9 +8,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate complete Hyper configuration with all features
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment

@@ -8,9 +8,8 @@
 
 use crate::client::LLMClient;
 use crate::provider::{
-    ContentPart, FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition,
-    Usage,
+    ContentPart, FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
+    MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use anyhow::Result;
 use async_stream::try_stream;
@@ -31,16 +30,13 @@ pub mod url;
 
 pub use client::OllamaClient;
 pub use parser::pull_events_from_value;
-pub use pull::{
-    CliPullProgressReporter, OllamaPullEvent, OllamaPullProgressReporter, TuiPullProgressReporter,
-};
+pub use pull::{CliPullProgressReporter, OllamaPullEvent, OllamaPullProgressReporter, TuiPullProgressReporter};
 pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
 use super::common::{
-    assistant_interleaved_history_text, collect_history_system_directives,
-    extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
-    is_minimax_m2_model, merge_system_prompt_with_history_directives, override_base_url,
-    parse_client_prompt_common, resolve_model, serialize_reasoning_detail_values,
+    assistant_interleaved_history_text, collect_history_system_directives, extract_reasoning_text_from_detail_values,
+    extract_reasoning_text_from_serialized_details, is_minimax_m2_model, merge_system_prompt_with_history_directives,
+    override_base_url, parse_client_prompt_common, resolve_model, serialize_reasoning_detail_values,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 use super::local_readiness::{invalidate_readiness_cache, resolve_local_model};
@@ -52,14 +48,10 @@ use super::local_server::LocalProvider;
 /// - Checks if the model exists locally and pulls it if missing.
 ///
 /// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
-pub async fn ensure_oss_ready(
-    model: Option<&str>,
-    base_url: Option<String>,
-) -> std::io::Result<()> {
+pub async fn ensure_oss_ready(model: Option<&str>, base_url: Option<String>) -> std::io::Result<()> {
     let target_model = model.unwrap_or(models::ollama::DEFAULT_MODEL);
 
-    let resolved_base_url =
-        override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
+    let resolved_base_url = override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
 
     // Verify local Ollama is reachable
     let ollama_client = OllamaClient::try_from_base_url(&resolved_base_url).await?;
@@ -106,10 +98,7 @@ struct OllamaModelDetails {
     quantization_level: Option<String>,
 }
 
-pub(super) fn ollama_model_name_from_fields<'a>(
-    name: Option<&'a str>,
-    model: Option<&'a str>,
-) -> Option<&'a str> {
+pub(super) fn ollama_model_name_from_fields<'a>(name: Option<&'a str>, model: Option<&'a str>) -> Option<&'a str> {
     name.or(model).map(str::trim).filter(|value| !value.is_empty())
 }
 
@@ -120,15 +109,13 @@ pub(super) const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detec
 pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     use vtcode_config::constants::{env_vars, urls};
 
-    let resolved_base_url =
-        override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
+    let resolved_base_url = override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
 
     // Construct the tags endpoint URL
     let tags_url = format!("{resolved_base_url}/api/tags");
 
     // Create HTTP client with connection timeout
-    let client =
-        vtcode_commons::http::create_client_with_timeout(std::time::Duration::from_secs(5));
+    let client = vtcode_commons::http::create_client_with_timeout(std::time::Duration::from_secs(5));
 
     // Make GET request to fetch models
     let response = client
@@ -164,8 +151,7 @@ pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>
         .models
         .into_iter()
         .filter_map(|model| {
-            ollama_model_name_from_fields(model.name.as_deref(), model.model.as_deref())
-                .map(str::to_string)
+            ollama_model_name_from_fields(model.name.as_deref(), model.model.as_deref()).map(str::to_string)
         })
         .collect();
 
@@ -254,16 +240,11 @@ impl OllamaProvider {
             urls::OLLAMA_API_BASE
         };
 
-        let resolved_base =
-            override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL));
+        let resolved_base = override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL));
         let target_is_local = super::local_server::is_local_base_url(&resolved_base);
 
         // Never send API keys to local endpoints; keep keys for cloud/remote targets
-        let effective_api_key = if target_is_local {
-            None
-        } else {
-            normalized_api_key
-        };
+        let effective_api_key = if target_is_local { None } else { normalized_api_key };
 
         Self {
             http_client: vtcode_commons::http::create_default_client(),
@@ -304,9 +285,7 @@ impl OllamaProvider {
             Ok(model) => Ok(model),
             Err(err) if autopull => {
                 let model = match &err {
-                    super::local_readiness::LocalReadinessError::ModelMissing { model, .. } => {
-                        model.clone()
-                    }
+                    super::local_readiness::LocalReadinessError::ModelMissing { model, .. } => model.clone(),
                     _ => return Err(err.to_llm_error("Ollama")),
                 };
                 match ensure_oss_ready(Some(&model), Some(self.base_url.clone())).await {
@@ -390,11 +369,7 @@ impl OllamaProvider {
         })
     }
 
-    fn build_payload(
-        &self,
-        request: &LLMRequest,
-        stream: bool,
-    ) -> Result<OllamaChatRequest, LLMError> {
+    fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<OllamaChatRequest, LLMError> {
         let mut messages = Vec::new();
         let mut tool_names: HashMap<String, String> = HashMap::new();
         let minimax_tool_followup_compat = Self::minimax_tool_followup_compat_mode(request);
@@ -422,8 +397,7 @@ impl OllamaProvider {
             match message.role {
                 MessageRole::System => continue,
                 MessageRole::Tool => {
-                    let tool_name =
-                        message.tool_call_id.as_ref().and_then(|id| tool_names.get(id).cloned());
+                    let tool_name = message.tool_call_id.as_ref().and_then(|id| tool_names.get(id).cloned());
                     let tool_name = tool_name.or_else(|| message.origin_tool.clone());
                     let tool_call_id = if minimax_tool_followup_compat && tool_name.is_some() {
                         None
@@ -461,19 +435,14 @@ impl OllamaProvider {
                         for (index, tool_call) in tool_calls.iter().enumerate() {
                             if let Some(ref func) = tool_call.function {
                                 if !tool_call.id.is_empty() {
-                                    tool_names
-                                        .entry(tool_call.id.clone())
-                                        .or_insert_with(|| func.name.clone());
+                                    tool_names.entry(tool_call.id.clone()).or_insert_with(|| func.name.clone());
                                 }
 
-                                let arguments = tool_call.execution_arguments().map_err(|err| {
-                                    LLMError::InvalidRequest {
-                                        message: format!(
-                                            "Failed to parse tool arguments for Ollama: {err}"
-                                        ),
+                                let arguments =
+                                    tool_call.execution_arguments().map_err(|err| LLMError::InvalidRequest {
+                                        message: format!("Failed to parse tool arguments for Ollama: {err}"),
                                         metadata: None,
-                                    }
-                                })?;
+                                    })?;
                                 converted.push(OllamaToolCall {
                                     call_type: tool_call.call_type.clone(),
                                     function: OllamaToolFunctionCall {
@@ -567,11 +536,7 @@ impl OllamaProvider {
         }
 
         let text = content.as_text().into_owned();
-        let images = if images.is_empty() {
-            None
-        } else {
-            Some(images)
-        };
+        let images = if images.is_empty() { None } else { Some(images) };
         (text, images)
     }
 
@@ -599,9 +564,7 @@ impl OllamaProvider {
                 .any(|message| message.role == MessageRole::Tool || message.has_tool_calls())
     }
 
-    fn convert_tool_calls(
-        tool_calls: Option<Vec<OllamaResponseToolCall>>,
-    ) -> Result<Option<Vec<ToolCall>>, LLMError> {
+    fn convert_tool_calls(tool_calls: Option<Vec<OllamaResponseToolCall>>) -> Result<Option<Vec<ToolCall>>, LLMError> {
         let Some(tool_calls) = tool_calls else {
             return Ok(None);
         };
@@ -641,10 +604,7 @@ impl OllamaProvider {
         Ok(Some(converted))
     }
 
-    fn usage_from_counts(
-        prompt_tokens: Option<u32>,
-        completion_tokens: Option<u32>,
-    ) -> Option<Usage> {
+    fn usage_from_counts(prompt_tokens: Option<u32>, completion_tokens: Option<u32>) -> Option<Usage> {
         if prompt_tokens.is_none() && completion_tokens.is_none() {
             return None;
         }
@@ -701,17 +661,12 @@ impl OllamaProvider {
         }
     }
 
-    fn response_from_chat_payload(
-        model: String,
-        parsed: OllamaChatResponse,
-    ) -> Result<LLMResponse, LLMError> {
+    fn response_from_chat_payload(model: String, parsed: OllamaChatResponse) -> Result<LLMResponse, LLMError> {
         if let Some(error) = parsed.error {
             return Err(LLMError::Provider { message: error, metadata: None });
         }
 
-        let (content, reasoning, tool_calls, native_reasoning_details) = if let Some(message) =
-            parsed.message
-        {
+        let (content, reasoning, tool_calls, native_reasoning_details) = if let Some(message) = parsed.message {
             let content = message.content.and_then(|value| (!value.is_empty()).then_some(value));
             let reasoning = message.thinking.and_then(|value| (!value.is_empty()).then_some(value));
             let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
@@ -726,15 +681,13 @@ impl OllamaProvider {
                 .as_deref()
                 .and_then(extract_reasoning_text_from_detail_values)
         });
-        let mut reasoning_details =
-            native_reasoning_details.as_deref().and_then(serialize_reasoning_detail_values);
+        let mut reasoning_details = native_reasoning_details.as_deref().and_then(serialize_reasoning_detail_values);
 
         // Fallback: Extract reasoning from content if not provided natively
         // This handles MiniMax-M2.5 cloud models that use <think></think> tags
         let (final_reasoning, final_content) = if reasoning.is_none() {
             if let Some(ref content_str) = content {
-                let (reasoning_parts, cleaned_content) =
-                    crate::utils::extract_reasoning_content(content_str);
+                let (reasoning_parts, cleaned_content) = crate::utils::extract_reasoning_content(content_str);
                 if reasoning_parts.is_empty() {
                     (None, content)
                 } else {
@@ -763,11 +716,7 @@ impl OllamaProvider {
         ))
     }
 
-    fn authorized_post_with_key(
-        http_client: &HttpClient,
-        url: &str,
-        api_key: Option<&str>,
-    ) -> reqwest::RequestBuilder {
+    fn authorized_post_with_key(http_client: &HttpClient, url: &str, api_key: Option<&str>) -> reqwest::RequestBuilder {
         let builder = http_client.post(url.to_string());
         if let Some(value) = api_key {
             builder.bearer_auth(value)
@@ -792,8 +741,8 @@ impl OllamaProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            let error_message = Self::extract_error(&body)
-                .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
+            let error_message =
+                Self::extract_error(&body).unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
             return Err(LLMError::Provider { message: error_message, metadata: None });
         }
 
@@ -973,14 +922,7 @@ impl LLMProvider for OllamaProvider {
         let model = request.model.clone();
         let payload = self.build_payload(&request, false)?;
         let url = self.chat_url();
-        Self::request_non_stream_response(
-            &self.http_client,
-            &url,
-            self.api_key.as_deref(),
-            &payload,
-            model,
-        )
-        .await
+        Self::request_non_stream_response(&self.http_client, &url, self.api_key.as_deref(), &payload, model).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -1172,8 +1114,7 @@ impl LLMProvider for OllamaProvider {
                 ToolChoice::Auto | ToolChoice::None | ToolChoice::AllowedTools(_) => {}
                 _ => {
                     return Err(LLMError::InvalidRequest {
-                        message: "Ollama does not support explicit tool_choice overrides"
-                            .to_string(),
+                        message: "Ollama does not support explicit tool_choice overrides".to_string(),
                         metadata: None,
                     });
                 }
@@ -1245,22 +1186,16 @@ mod tests {
             }),
         };
 
-        let first =
-            OllamaProvider::convert_tool_calls(Some(vec![make_call("foo"), make_call("bar")]))
-                .expect("conversion should succeed")
-                .expect("calls expected");
+        let first = OllamaProvider::convert_tool_calls(Some(vec![make_call("foo"), make_call("bar")]))
+            .expect("conversion should succeed")
+            .expect("calls expected");
         let second = OllamaProvider::convert_tool_calls(Some(vec![make_call("foo")]))
             .expect("conversion should succeed")
             .expect("calls expected");
 
-        let ids: Vec<&str> =
-            first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
+        let ids: Vec<&str> = first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
         let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
-        assert_eq!(
-            unique.len(),
-            ids.len(),
-            "fabricated ids must be unique within and across responses"
-        );
+        assert_eq!(unique.len(), ids.len(), "fabricated ids must be unique within and across responses");
         for id in ids {
             assert!(id.starts_with("call_"));
         }
@@ -1318,10 +1253,7 @@ mod tests {
                         "{\"command\":\"cargo fmt\"}".to_string(),
                     )],
                 ),
-                Message::tool_response(
-                    tool_call_id,
-                    "{\"output\":\"\",\"exit_code\":0}".to_string(),
-                ),
+                Message::tool_response(tool_call_id, "{\"output\":\"\",\"exit_code\":0}".to_string()),
             ]
             .into(),
             reasoning_effort: Some(ReasoningEffortLevel::Low),
@@ -1351,10 +1283,7 @@ mod tests {
                         "{\"command\":\"cargo fmt\"}".to_string(),
                     )],
                 ),
-                Message::tool_response(
-                    tool_call_id.clone(),
-                    "{\"output\":\"\",\"exit_code\":0}".to_string(),
-                ),
+                Message::tool_response(tool_call_id.clone(), "{\"output\":\"\",\"exit_code\":0}".to_string()),
             ]
             .into(),
             reasoning_effort: Some(ReasoningEffortLevel::Low),
@@ -1469,8 +1398,7 @@ mod tests {
             .build_payload(&request, false)
             .expect("payload should recover malformed history tool arguments");
 
-        let tool_calls =
-            payload.messages[0].tool_calls.as_ref().expect("tool calls should be present");
+        let tool_calls = payload.messages[0].tool_calls.as_ref().expect("tool calls should be present");
         assert_eq!(tool_calls.len(), 1);
         assert_eq!(
             tool_calls[0].function.arguments,
@@ -1488,10 +1416,7 @@ mod tests {
         let provider = test_provider();
         let request = LLMRequest {
             model: models::ollama::GLM_5_1_CLOUD.to_string(),
-            messages: vec![
-                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ]
-            .into(),
+            messages: vec![Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string()))].into(),
             ..Default::default()
         };
 
@@ -1507,8 +1432,7 @@ mod tests {
         let request = LLMRequest {
             model: models::ollama::GPT_OSS_20B.to_string(),
             messages: vec![
-                Message::assistant("need a tool".to_string())
-                    .with_reasoning(Some("reasoning trace".to_string())),
+                Message::assistant("need a tool".to_string()).with_reasoning(Some("reasoning trace".to_string())),
             ]
             .into(),
             ..Default::default()
@@ -1526,9 +1450,7 @@ mod tests {
         let request = LLMRequest {
             model: "test-model".to_string(),
             messages: vec![Message::user("patch this file".to_string())].into(),
-            tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
-                "Apply VT Code patches".to_string(),
-            )])),
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch("Apply VT Code patches".to_string())])),
             ..Default::default()
         };
 
@@ -1568,8 +1490,7 @@ mod tests {
             .as_ref()
             .and_then(|details| details.first())
             .expect("reasoning detail should exist");
-        let parsed_detail: Value =
-            serde_json::from_str(first_detail).expect("reasoning detail should be json");
+        let parsed_detail: Value = serde_json::from_str(first_detail).expect("reasoning detail should be json");
         assert_eq!(parsed_detail["type"], "reasoning.text");
     }
 

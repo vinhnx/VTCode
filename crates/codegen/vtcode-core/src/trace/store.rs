@@ -56,8 +56,7 @@ impl TraceStore {
         let filename = self.trace_filename(trace);
         let path = self.base_dir.join(&filename);
 
-        let json = serde_json::to_string_pretty(trace)
-            .with_context(|| "Failed to serialize trace record")?;
+        let json = serde_json::to_string_pretty(trace).with_context(|| "Failed to serialize trace record")?;
 
         write_file_with_context_sync(&path, &json, "trace record")
             .with_context(|| format!("Failed to write trace to {path:?}"))?;
@@ -76,8 +75,8 @@ impl TraceStore {
         let content = read_file_with_context_sync(path, "trace record")
             .with_context(|| format!("Failed to read trace: {path:?}"))?;
 
-        let trace: TraceRecord = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse trace: {path:?}"))?;
+        let trace: TraceRecord =
+            serde_json::from_str(&content).with_context(|| format!("Failed to parse trace: {path:?}"))?;
 
         Ok(trace)
     }
@@ -186,8 +185,7 @@ impl TraceStore {
         let filename = self.trace_filename(trace);
         let path = self.base_dir.join(&filename);
 
-        let json = serde_json::to_string_pretty(trace)
-            .with_context(|| "Failed to serialize trace record")?;
+        let json = serde_json::to_string_pretty(trace).with_context(|| "Failed to serialize trace record")?;
 
         write_file_with_context(&path, &json, "trace record")
             .await
@@ -202,8 +200,8 @@ impl TraceStore {
             .await
             .with_context(|| format!("Failed to read trace: {path:?}"))?;
 
-        let trace: TraceRecord = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse trace: {path:?}"))?;
+        let trace: TraceRecord =
+            serde_json::from_str(&content).with_context(|| format!("Failed to parse trace: {path:?}"))?;
 
         Ok(trace)
     }
@@ -269,11 +267,7 @@ mod tests {
     fn create_test_trace() -> TraceRecord {
         TraceRecordBuilder::new()
             .git_revision("abc123def456789012345678901234567890abcd")
-            .file(TraceFile::with_ai_ranges(
-                "src/main.rs",
-                "anthropic/claude-opus-4",
-                vec![TraceRange::new(1, 50)],
-            ))
+            .file(TraceFile::with_ai_ranges("src/main.rs", "anthropic/claude-opus-4", vec![TraceRange::new(1, 50)]))
             .build()
     }
 
@@ -387,8 +381,7 @@ mod tests {
         assert_eq!(loaded.files.len(), 1);
 
         // Test read by revision async
-        let loaded_by_rev =
-            store.read_by_revision_async("abc123def456789012345678901234567890abcd").await?;
+        let loaded_by_rev = store.read_by_revision_async("abc123def456789012345678901234567890abcd").await?;
         assert!(loaded_by_rev.is_some());
 
         Ok(())

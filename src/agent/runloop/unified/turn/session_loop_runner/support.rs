@@ -1,15 +1,13 @@
 use super::archive::workspace_archive_label;
 use super::*;
-use crate::agent::runloop::git::{
-    DirtyWorktreeStatus, git_dirty_worktree_entries, workspace_relative_display,
-};
+use crate::agent::runloop::git::{DirtyWorktreeStatus, git_dirty_worktree_entries, workspace_relative_display};
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use std::sync::Arc;
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::utils::session_archive;
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest,
-    TransientRequest, TransientSubmission,
+    InlineHandle, InlineListItem, InlineListSelection, InlineSession, ListOverlayRequest, TransientRequest,
+    TransientSubmission,
 };
 
 const STARTUP_PLANNING_WORKFLOW_ENTER_ACTION: &str = "planning_active:start_enter";
@@ -62,14 +60,12 @@ impl TurnHistoryCheckpoint {
     }
 }
 
-pub(super) fn remove_transient_system_notes(
-    history: &mut Vec<vtcode_core::llm::provider::Message>,
-    notes: &[String],
-) {
+pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::provider::Message>, notes: &[String]) {
     for note in notes.iter().rev() {
-        if let Some(index) = history.iter().rposition(|message| {
-            message.role == MessageRole::System && message.content.as_text() == note.as_str()
-        }) {
+        if let Some(index) = history
+            .iter()
+            .rposition(|message| message.role == MessageRole::System && message.content.as_text() == note.as_str())
+        {
             let _ = history.remove(index);
         }
     }
@@ -104,10 +100,7 @@ pub(super) fn build_unrelated_dirty_worktree_note(
 
     let display_paths = entries
         .into_iter()
-        .filter(|entry| {
-            entry.status == DirtyWorktreeStatus::Modified
-                && !agent_touched_paths.contains(&entry.path)
-        })
+        .filter(|entry| entry.status == DirtyWorktreeStatus::Modified && !agent_touched_paths.contains(&entry.path))
         .map(|entry| format!("- {}", workspace_relative_display(workspace, &entry.path)))
         .collect::<Vec<_>>();
 
@@ -154,9 +147,7 @@ pub(super) fn append_transient_turn_notes(
     transient_system_notes
 }
 
-pub(super) fn latest_assistant_result_text(
-    messages: &[vtcode_core::llm::provider::Message],
-) -> Option<String> {
+pub(super) fn latest_assistant_result_text(messages: &[vtcode_core::llm::provider::Message]) -> Option<String> {
     messages
         .iter()
         .rev()
@@ -194,10 +185,9 @@ pub(super) fn live_reload_preserves_session_config(
         return true;
     };
 
-    let mut reloaded_vt_cfg =
-        vtcode_core::config::loader::ConfigManager::load_from_workspace(&runtime_cfg.workspace)
-            .ok()
-            .map(|manager| manager.config().clone());
+    let mut reloaded_vt_cfg = vtcode_core::config::loader::ConfigManager::load_from_workspace(&runtime_cfg.workspace)
+        .ok()
+        .map(|manager| manager.config().clone());
     crate::agent::agents::apply_runtime_overrides(reloaded_vt_cfg.as_mut(), runtime_cfg);
 
     let Some(reloaded_vt_cfg) = reloaded_vt_cfg else {
@@ -247,9 +237,7 @@ pub(super) fn prepare_resume_bootstrap_without_archive(
         vtcode_core::core::threads::ArchivedSessionIntent::ForkNewArchive { .. } => {
             reserved_archive_id.unwrap_or_else(|| {
                 session_archive::generate_session_archive_identifier(
-                    &workspace_archive_label(std::path::Path::new(
-                        &resume.snapshot().metadata.workspace_path,
-                    )),
+                    &workspace_archive_label(std::path::Path::new(&resume.snapshot().metadata.workspace_path)),
                     resume.custom_suffix().map(str::to_owned),
                 )
             })
@@ -264,8 +252,7 @@ pub(super) async fn checkpoint_session_archive_start(
     thread_handle: &vtcode_core::core::threads::ThreadRuntimeHandle,
 ) -> Result<()> {
     let snapshot = thread_handle.snapshot();
-    let messages: Vec<SessionMessage> =
-        snapshot.messages.iter().map(SessionMessage::from).collect();
+    let messages: Vec<SessionMessage> = snapshot.messages.iter().map(SessionMessage::from).collect();
     archive
         .persist_progress_async(SessionProgressArgs {
             total_messages: snapshot.messages.len(),
@@ -288,23 +275,16 @@ pub(super) async fn force_reload_workspace_config_for_execution(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     async_mcp_manager: Option<&crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager>,
 ) -> Result<()> {
-    crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
-        workspace,
-        runtime_cfg,
-        vt_cfg,
-    )
-    .await?;
+    crate::agent::runloop::unified::turn::workspace::refresh_vt_config(workspace, runtime_cfg, vt_cfg).await?;
 
     if let Some(cfg) = vt_cfg.as_ref() {
-        crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
-            tool_registry,
-            cfg,
-        )?;
+        crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(tool_registry, cfg)?;
 
         if let Some(mcp_manager) = async_mcp_manager {
-            let desired_policy = crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop(
-                cfg.security.human_in_the_loop,
-            );
+            let desired_policy =
+                crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop(
+                    cfg.security.human_in_the_loop,
+                );
             if mcp_manager.approval_policy() != desired_policy {
                 mcp_manager.set_approval_policy(desired_policy);
             }
@@ -324,8 +304,7 @@ pub(super) async fn prompt_startup_planning_workflow(
         title: "Start planning workflow?".to_string(),
         lines: vec![
             "Your configuration starts new sessions in the planning workflow.".to_string(),
-            "The planning workflow keeps mutating tools blocked until execution is approved."
-                .to_string(),
+            "The planning workflow keeps mutating tools blocked until execution is approved.".to_string(),
         ],
         footer_hint: Some("You can start or finish planning later with `/plan`.".to_string()),
         items: vec![
@@ -334,38 +313,25 @@ pub(super) async fn prompt_startup_planning_workflow(
                 subtitle: Some("Use the planning workflow before execution.".to_string()),
                 badge: Some("Recommended".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
                 search_value: None,
             },
             InlineListItem {
                 title: "Start normally".to_string(),
-                subtitle: Some(
-                    "Use the selected primary agent without planning first.".to_string(),
-                ),
+                subtitle: Some("Use the selected primary agent without planning first.".to_string()),
                 badge: None,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    STARTUP_PLANNING_WORKFLOW_STAY_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_STAY_ACTION.to_string())),
                 search_value: None,
             },
         ],
-        selected: Some(InlineListSelection::ConfigAction(
-            STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string(),
-        )),
+        selected: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
         search: None,
         hotkeys: Vec::new(),
     });
 
-    let outcome = show_overlay_and_wait(
-        handle,
-        session,
-        overlay,
-        ctrl_c_state,
-        ctrl_c_notify,
-        |submission| match submission {
+    let outcome =
+        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
             TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
                 if action == STARTUP_PLANNING_WORKFLOW_ENTER_ACTION =>
             {
@@ -378,9 +344,8 @@ pub(super) async fn prompt_startup_planning_workflow(
             }
             TransientSubmission::Selection(_) => Some(false),
             _ => None,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     Ok(matches!(outcome, OverlayWaitOutcome::Submitted(true)))
 }

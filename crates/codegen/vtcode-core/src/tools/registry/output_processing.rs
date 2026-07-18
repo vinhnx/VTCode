@@ -20,12 +20,7 @@ fn output_field_bytes(value: &Value) -> usize {
         .unwrap_or(0)
 }
 
-fn should_force_spool(
-    tool_name: &str,
-    value: &Value,
-    is_mcp: bool,
-    spooling_enabled: bool,
-) -> bool {
+fn should_force_spool(tool_name: &str, value: &Value, is_mcp: bool, spooling_enabled: bool) -> bool {
     if !spooling_enabled || is_mcp || !is_pty_output_tool(tool_name) {
         return false;
     }
@@ -79,8 +74,7 @@ impl ToolRegistry {
                     .map(|v| Self::clamp_value_recursive(v, entry_fuse, depth - 1))
                     .collect();
                 if overflow > 0 {
-                    let approx_tokens =
-                        trimmed.iter().map(|v| v.to_string().len() / 4).sum::<usize>();
+                    let approx_tokens = trimmed.iter().map(|v| v.to_string().len() / 4).sum::<usize>();
                     json!({
                         "truncated": true,
                         "note": "Array truncated to protect context budget",
@@ -103,10 +97,7 @@ impl ToolRegistry {
                     head.insert(k.clone(), Self::clamp_value_recursive(v, entry_fuse, depth - 1));
                 }
                 if overflow > 0 {
-                    let approx_tokens = head
-                        .iter()
-                        .map(|(k, v)| (k.len() + v.to_string().len()) / 4)
-                        .sum::<usize>();
+                    let approx_tokens = head.iter().map(|(k, v)| (k.len() + v.to_string().len()) / 4).sum::<usize>();
                     json!({
                         "truncated": true,
                         "note": "Object truncated to protect context budget",
@@ -156,12 +147,7 @@ impl ToolRegistry {
     ///
     /// This is more token-efficient as agents can inspect spooled files with
     /// shell commands or use `code_search` for code structure on demand.
-    pub(super) async fn process_tool_output(
-        &self,
-        tool_name: &str,
-        value: Value,
-        is_mcp: bool,
-    ) -> Value {
+    pub(super) async fn process_tool_output(&self, tool_name: &str, value: Value, is_mcp: bool) -> Value {
         let spooling_enabled = self.output_spooler.config().enabled;
         let force_spool = should_force_spool(tool_name, &value, is_mcp, spooling_enabled);
 
@@ -228,8 +214,7 @@ mod tests {
     #[tokio::test]
     async fn process_tool_output_skips_force_spool_when_dynamic_context_is_disabled() {
         let temp = tempfile::tempdir().unwrap();
-        std::fs::write(temp.path().join("vtcode.toml"), "[context.dynamic]\nenabled = false\n")
-            .unwrap();
+        std::fs::write(temp.path().join("vtcode.toml"), "[context.dynamic]\nenabled = false\n").unwrap();
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
         let value = json!({
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
@@ -267,13 +252,9 @@ mod tests {
             };
             let mut value = json!({});
             value[field] = json!(big);
-            let result =
-                registry.process_tool_output(tool, value.clone(), tool.starts_with("mcp")).await;
+            let result = registry.process_tool_output(tool, value.clone(), tool.starts_with("mcp")).await;
 
-            assert!(
-                result.get("spool_path").is_some(),
-                "tool {tool} should spool large output to a file path"
-            );
+            assert!(result.get("spool_path").is_some(), "tool {tool} should spool large output to a file path");
             assert!(
                 result.get("spool_note").is_some(),
                 "tool {tool} should explain how to post-process the spooled file"
@@ -283,10 +264,7 @@ mod tests {
                 .or_else(|| result.get("output"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            assert!(
-                inline.len() < big.len(),
-                "tool {tool} should condense the preview, not inline the full blob"
-            );
+            assert!(inline.len() < big.len(), "tool {tool} should condense the preview, not inline the full blob");
         }
     }
 }

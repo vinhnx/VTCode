@@ -10,8 +10,7 @@ use vtcode_core::retry::RetryPolicy;
 use vtcode_core::retry::RetryPolicyCoreExt;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::registry::{
-    ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest,
-    ToolRegistry,
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolExecutionError, ToolExecutionRequest, ToolRegistry,
 };
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -41,15 +40,7 @@ pub(crate) async fn execute_tool_with_timeout(
         state: ctrl_c_state.clone(),
         notify: ctrl_c_notify.clone(),
     };
-    execute_tool_with_timeout_ref_inner(
-        registry,
-        name,
-        &args,
-        &tokens,
-        progress_reporter,
-        max_tool_retries,
-    )
-    .await
+    execute_tool_with_timeout_ref_inner(registry, name, &args, &tokens, progress_reporter, max_tool_retries).await
 }
 
 #[cfg(test)]
@@ -67,15 +58,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         state: ctrl_c_state.clone(),
         notify: ctrl_c_notify.clone(),
     };
-    execute_tool_with_timeout_ref_inner(
-        registry,
-        name,
-        args,
-        &tokens,
-        progress_reporter,
-        max_tool_retries,
-    )
-    .await
+    execute_tool_with_timeout_ref_inner(registry, name, args, &tokens, progress_reporter, max_tool_retries).await
 }
 
 #[cfg(test)]
@@ -151,12 +134,8 @@ async fn execute_tool_with_timeout_ref_mode(
         .ceiling_for(timeout_category)
         .unwrap_or(DEFAULT_TOOL_TIMEOUT);
     let retry_allowed = is_retry_safe_tool(registry, name, args);
-    let mut retry_policy = RetryPolicy::from_retries(
-        max_tool_retries as u32,
-        RETRY_BACKOFF_BASE,
-        MAX_RETRY_BACKOFF,
-        2.0,
-    );
+    let mut retry_policy =
+        RetryPolicy::from_retries(max_tool_retries as u32, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0);
     retry_policy.jitter = 0.15;
 
     if !retry_allowed && max_tool_retries > 0 {
@@ -229,10 +208,7 @@ async fn execute_tool_with_progress(
 
     let remaining_timeout = deadline.saturating_duration_since(Instant::now());
     if remaining_timeout < Duration::from_secs(1)
-        && matches!(
-            status,
-            ToolExecutionStatus::Failure { .. } | ToolExecutionStatus::Timeout { .. }
-        )
+        && matches!(status, ToolExecutionStatus::Failure { .. } | ToolExecutionStatus::Timeout { .. })
     {
         status = create_timeout_error(name, timeout_category, Some(tool_timeout));
     }
@@ -314,13 +290,8 @@ async fn run_single_tool_attempt(
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
-    let mut warning_guard = TimeoutWarningGuard::new(
-        name,
-        start_time,
-        tool_timeout,
-        warning_fraction,
-        Some(progress_reporter.clone()),
-    );
+    let mut warning_guard =
+        TimeoutWarningGuard::new(name, start_time, tool_timeout, warning_fraction, Some(progress_reporter.clone()));
 
     progress_reporter.set_message(format!("Preparing {name}...")).await;
     progress_reporter.set_progress(5).await;
@@ -336,9 +307,7 @@ async fn run_single_tool_attempt(
     progress_reporter.set_progress(20).await;
 
     let _progress_update_guard = {
-        use crate::agent::runloop::unified::progress::{
-            ProgressUpdateGuard, spawn_elapsed_time_updater,
-        };
+        use crate::agent::runloop::unified::progress::{ProgressUpdateGuard, spawn_elapsed_time_updater};
         let handle = spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
         ProgressUpdateGuard::new(handle)
     };
@@ -367,8 +336,7 @@ async fn run_single_tool_attempt(
             policy.retry_multiplier = retry_policy.multiplier;
             policy.retry_jitter = retry_policy.jitter;
 
-            let request =
-                ToolExecutionRequest::new(name.to_string(), args.clone()).with_policy(policy);
+            let request = ToolExecutionRequest::new(name.to_string(), args.clone()).with_policy(policy);
             let outcome = registry.execute_public_tool_request(request).await;
             let result: Result<Value, Error> = if let Some(output) = outcome.output {
                 Ok(output)
@@ -538,8 +506,7 @@ fn emit_tool_retry_outcome_metric(
     }
 
     let attempts_made = retries_used.saturating_add(1);
-    let exhausted_retry_budget =
-        !success && retry_allowed && retries_used >= max_tool_retries && max_tool_retries > 0;
+    let exhausted_retry_budget = !success && retry_allowed && retries_used >= max_tool_retries && max_tool_retries > 0;
     tracing::info!(
         target: "vtcode.tool.metrics",
         metric = "tool_retry_outcome",
@@ -568,19 +535,15 @@ mod tests {
 
     #[test]
     fn first_retry_backoff_is_non_zero_and_meaningful() {
-        let delay = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0)
-            .delay_for_attempt(0);
+        let delay = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0).delay_for_attempt(0);
         assert!(delay >= RETRY_BACKOFF_BASE);
         assert!(delay <= MAX_RETRY_BACKOFF);
     }
 
     #[test]
     fn retry_delay_honors_retry_safety_gate() {
-        let timeout_status = create_timeout_error(
-            "read_file",
-            ToolTimeoutCategory::Default,
-            Some(Duration::from_secs(1)),
-        );
+        let timeout_status =
+            create_timeout_error("read_file", ToolTimeoutCategory::Default, Some(Duration::from_secs(1)));
         let policy = RetryPolicy::from_retries(2, RETRY_BACKOFF_BASE, MAX_RETRY_BACKOFF, 2.0);
 
         assert!(retry_delay_for_status(&timeout_status, 0, true, &policy).is_some());
@@ -681,8 +644,7 @@ mod tests {
             .await;
         assert!(matches!(
             safety_result.decision,
-            vtcode_core::tools::SafetyDecision::Allow
-                | vtcode_core::tools::SafetyDecision::NeedsApproval(_)
+            vtcode_core::tools::SafetyDecision::Allow | vtcode_core::tools::SafetyDecision::NeedsApproval(_)
         ));
 
         let ctrl_c_state = Arc::new(CtrlCState::new());

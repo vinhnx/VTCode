@@ -5,9 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::exec::events::Usage as HarnessUsage;
-use vtcode_core::llm::provider::{
-    Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key,
-};
+use vtcode_core::llm::provider::{Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key};
 use vtcode_core::llm::request_gap::RequestGapTracker;
 use vtcode_core::llm::usage_cost;
 
@@ -115,8 +113,7 @@ pub(crate) struct SessionStats {
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name =
-            vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name)
-                .unwrap_or(name);
+            vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name).unwrap_or(name);
         self.tools.insert(normalized_name.to_string());
     }
 
@@ -128,11 +125,7 @@ impl SessionStats {
         self.tools.iter().cloned().collect()
     }
 
-    pub(crate) fn record_usage(
-        &mut self,
-        provider: &str,
-        usage: &Option<vtcode_core::llm::provider::Usage>,
-    ) {
+    pub(crate) fn record_usage(&mut self, provider: &str, usage: &Option<vtcode_core::llm::provider::Usage>) {
         let Some(usage) = usage else {
             return;
         };
@@ -297,8 +290,7 @@ impl SessionStats {
         provider: &str,
         model: &str,
     ) -> Option<&ResponsesContinuationState> {
-        responses_continuation_key(provider, model)
-            .and_then(|key| self.previous_response_chains.get(&key))
+        responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
     }
 
     pub(crate) fn set_prompt_cache_lineage_id(&mut self, lineage_id: Option<String>) {
@@ -411,9 +403,7 @@ impl SessionStats {
                 continue;
             }
 
-            if let Some(existing) =
-                self.recent_touched_files.iter().position(|entry| entry == normalized)
-            {
+            if let Some(existing) = self.recent_touched_files.iter().position(|entry| entry == normalized) {
                 let _ = self.recent_touched_files.remove(existing);
             }
 
@@ -454,8 +444,7 @@ impl SessionStats {
         max_consecutive_denials: u32,
         max_total_denials: u32,
     ) -> bool {
-        self.auto_permission_consecutive_denials =
-            self.auto_permission_consecutive_denials.saturating_add(1);
+        self.auto_permission_consecutive_denials = self.auto_permission_consecutive_denials.saturating_add(1);
         self.auto_permission_total_denials = self.auto_permission_total_denials.saturating_add(1);
         self.last_auto_permission_denial = Some(denial);
         self.auto_permission_prompt_fallback = self.auto_permission_consecutive_denials
@@ -638,8 +627,7 @@ impl CtrlCState {
     /// exit. After this window, the state machine resets to `CancelRequested`
     /// on the next signal.
     pub(crate) fn register_signal(&self) -> CtrlCSignal {
-        let now =
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
         let current_phase = self.phase();
 
@@ -656,9 +644,7 @@ impl CtrlCState {
         let window_ms = DOUBLE_CTRL_C_WINDOW.as_millis() as u64;
         let is_within_window = last > 0 && now.saturating_sub(last) <= window_ms;
 
-        if matches!(current_phase, CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed)
-            && is_within_window
-        {
+        if matches!(current_phase, CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed) && is_within_window {
             self.set_phase(CtrlCPhase::ExitRequested);
             return CtrlCSignal::Exit;
         }
@@ -709,9 +695,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction,
-        PromptCacheDiagnostics, SessionStats, is_follow_up_prompt_like,
-        should_enforce_safe_mode_prompts,
+        AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PromptCacheDiagnostics, SessionStats,
+        is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
@@ -751,12 +736,7 @@ mod tests {
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
 
         let action = stats.register_follow_up_prompt("continue");
-        assert_eq!(
-            action,
-            FollowUpPromptAction::RecoverFromStall {
-                stall_reason: Some("turn blocked".to_string()),
-            }
-        );
+        assert_eq!(action, FollowUpPromptAction::RecoverFromStall { stall_reason: Some("turn blocked".to_string()) });
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
     }
@@ -770,10 +750,7 @@ mod tests {
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn aborted"));
 
-        assert_eq!(
-            stats.register_follow_up_prompt("run tests and summarize"),
-            FollowUpPromptAction::None
-        );
+        assert_eq!(stats.register_follow_up_prompt("run tests and summarize"), FollowUpPromptAction::None);
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
     }
@@ -782,14 +759,8 @@ mod tests {
     fn follow_up_prompt_variants_are_detected() {
         let mut stats = SessionStats::default();
         assert_eq!(stats.register_follow_up_prompt("continue."), FollowUpPromptAction::None);
-        assert_eq!(
-            stats.register_follow_up_prompt("continue with your recommendation"),
-            FollowUpPromptAction::None
-        );
-        assert_eq!(
-            stats.register_follow_up_prompt("please continue"),
-            FollowUpPromptAction::ForceConclusion
-        );
+        assert_eq!(stats.register_follow_up_prompt("continue with your recommendation"), FollowUpPromptAction::None);
+        assert_eq!(stats.register_follow_up_prompt("please continue"), FollowUpPromptAction::ForceConclusion);
     }
 
     #[test]
@@ -811,18 +782,14 @@ mod tests {
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
         stats.suppress_next_follow_up_prompt();
 
-        assert_eq!(
-            stats.register_follow_up_prompt("run tests and summarize"),
-            FollowUpPromptAction::None
-        );
+        assert_eq!(stats.register_follow_up_prompt("run tests and summarize"), FollowUpPromptAction::None);
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
     }
 
     #[test]
     fn follow_up_prompt_action_exposes_stall_reason() {
-        let action =
-            FollowUpPromptAction::RecoverFromStall { stall_reason: Some("blocked".to_string()) };
+        let action = FollowUpPromptAction::RecoverFromStall { stall_reason: Some("blocked".to_string()) };
 
         assert!(action.should_force_autonomous_response());
         assert!(action.is_stalled_recovery());
@@ -834,19 +801,13 @@ mod tests {
         assert!(is_follow_up_prompt_like("continue"));
         assert!(is_follow_up_prompt_like("continue."));
         assert!(is_follow_up_prompt_like("please continue"));
-        assert!(is_follow_up_prompt_like(
-            "Continue autonomously from the last stalled turn. Stall reason: x."
-        ));
+        assert!(is_follow_up_prompt_like("Continue autonomously from the last stalled turn. Stall reason: x."));
         assert!(!is_follow_up_prompt_like("run tests and summarize"));
     }
 
     #[test]
     fn safe_mode_prompts_are_disabled_for_auto_permission() {
-        assert!(!should_enforce_safe_mode_prompts(
-            false,
-            true,
-            Some(WorkspaceTrustLevel::ToolsPolicy),
-        ));
+        assert!(!should_enforce_safe_mode_prompts(false, true, Some(WorkspaceTrustLevel::ToolsPolicy),));
     }
 
     #[test]
@@ -898,10 +859,7 @@ mod tests {
         assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)), "unchanged");
         assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(22)), "stable_prefix");
         assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(44)), "tool_catalog");
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5", 55, Some(66)),
-            "stable_prefix+tool_catalog"
-        );
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 55, Some(66)), "stable_prefix+tool_catalog");
         assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5-mini", 55, Some(66)), "model");
 
         assert_eq!(
@@ -923,31 +881,16 @@ mod tests {
     #[test]
     fn previous_response_chain_clears_only_matching_scope() {
         let mut stats = SessionStats::default();
-        let openai_messages = vec![vtcode_core::llm::provider::Message::user(
-            "hello".to_string(),
-        )];
+        let openai_messages = vec![vtcode_core::llm::provider::Message::user("hello".to_string())];
         let gemini_messages = vec![vtcode_core::llm::provider::Message::user("hi".to_string())];
-        stats.set_previous_response_chain(
-            "openai",
-            "gpt-5.4",
-            Some("resp_openai"),
-            &openai_messages,
-        );
-        stats.set_previous_response_chain(
-            "gemini",
-            "gemini-2.5-pro",
-            Some("resp_gemini"),
-            &gemini_messages,
-        );
+        stats.set_previous_response_chain("openai", "gpt-5.4", Some("resp_openai"), &openai_messages);
+        stats.set_previous_response_chain("gemini", "gemini-2.5-pro", Some("resp_gemini"), &gemini_messages);
 
         stats.clear_previous_response_chain_for("openai", "gpt-5.4");
 
         assert_eq!(stats.previous_response_id_for("openai", "gpt-5.4"), None);
         assert_eq!(stats.previous_response_chain_for("openai", "gpt-5.4"), None);
-        assert_eq!(
-            stats.previous_response_id_for("gemini", "gemini-2.5-pro"),
-            Some("resp_gemini".to_string())
-        );
+        assert_eq!(stats.previous_response_id_for("gemini", "gemini-2.5-pro"), Some("resp_gemini".to_string()));
         assert_eq!(
             stats
                 .previous_response_chain_for("gemini", "gemini-2.5-pro")
@@ -958,16 +901,8 @@ mod tests {
 
     #[test]
     fn safe_mode_prompts_follow_workspace_trust_for_edit_mode() {
-        assert!(should_enforce_safe_mode_prompts(
-            false,
-            false,
-            Some(WorkspaceTrustLevel::ToolsPolicy),
-        ));
-        assert!(!should_enforce_safe_mode_prompts(
-            false,
-            false,
-            Some(WorkspaceTrustLevel::FullAuto),
-        ));
+        assert!(should_enforce_safe_mode_prompts(false, false, Some(WorkspaceTrustLevel::ToolsPolicy),));
+        assert!(!should_enforce_safe_mode_prompts(false, false, Some(WorkspaceTrustLevel::FullAuto),));
         assert!(should_enforce_safe_mode_prompts(false, false, None));
     }
 

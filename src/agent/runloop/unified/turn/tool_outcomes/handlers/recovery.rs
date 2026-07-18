@@ -1,9 +1,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
 
 use super::super::helpers::push_tool_response;
 use super::ValidationResult;

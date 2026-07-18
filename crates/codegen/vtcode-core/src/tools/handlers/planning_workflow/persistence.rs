@@ -10,14 +10,11 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::tools::handlers::planning_workflow::artifacts::{
-    PlanValidationReport, extract_embedded_tracker, generate_tracker_markdown_from_plan,
-    render_plan_with_tracker, tracker_file_for_plan_file, tracker_has_progress_or_notes,
-    validate_plan_content,
+    PlanValidationReport, extract_embedded_tracker, generate_tracker_markdown_from_plan, render_plan_with_tracker,
+    tracker_file_for_plan_file, tracker_has_progress_or_notes, validate_plan_content,
 };
 use crate::tools::handlers::planning_workflow::state::PlanningWorkflowState;
-use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_with_context,
-};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
 
 #[derive(Debug, Clone)]
 pub struct PersistedPlanDraft {
@@ -26,10 +23,7 @@ pub struct PersistedPlanDraft {
     pub validation: PlanValidationReport,
 }
 
-async fn persist_global_tracker_if_missing(
-    workspace_root: &Path,
-    tracker_markdown: &str,
-) -> Result<()> {
+async fn persist_global_tracker_if_missing(workspace_root: &Path, tracker_markdown: &str) -> Result<()> {
     if workspace_root.as_os_str().is_empty() {
         return Ok(());
     }
@@ -38,9 +32,9 @@ async fn persist_global_tracker_if_missing(
         return Ok(());
     }
     if let Some(parent) = task_file.parent() {
-        ensure_dir_exists(parent).await.with_context(|| {
-            format!("Failed to create task tracker directory: {}", parent.display())
-        })?;
+        ensure_dir_exists(parent)
+            .await
+            .with_context(|| format!("Failed to create task tracker directory: {}", parent.display()))?;
     }
     write_file_with_context(&task_file, tracker_markdown, "task checklist")
         .await
@@ -59,10 +53,7 @@ pub async fn sync_tracker_into_plan_file(plan_file: &Path, tracker_markdown: &st
     Ok(())
 }
 
-pub async fn persist_plan_draft(
-    state: &PlanningWorkflowState,
-    plan_markdown: &str,
-) -> Result<PersistedPlanDraft> {
+pub async fn persist_plan_draft(state: &PlanningWorkflowState, plan_markdown: &str) -> Result<PersistedPlanDraft> {
     let plan_file = state
         .get_plan_file()
         .await
@@ -96,8 +87,7 @@ pub async fn persist_plan_draft(
             .as_deref()
             .is_some_and(|tracker| !tracker_has_progress_or_notes(tracker));
     let validation = validate_plan_content(plan_markdown);
-    let allow_tracker_generation =
-        validation.implementation_step_count > 0 && validation.placeholder_tokens.is_empty();
+    let allow_tracker_generation = validation.implementation_step_count > 0 && validation.placeholder_tokens.is_empty();
     let generated_tracker = if allow_tracker_generation {
         generate_tracker_markdown_from_plan(plan_markdown)
     } else {
@@ -113,13 +103,11 @@ pub async fn persist_plan_draft(
         .await
         .with_context(|| format!("Failed to write plan file: {}", plan_file.display()))?;
 
-    if let (Some(path), Some(tracker_markdown)) =
-        (tracker_file.as_ref(), tracker_to_persist.as_deref())
-    {
+    if let (Some(path), Some(tracker_markdown)) = (tracker_file.as_ref(), tracker_to_persist.as_deref()) {
         if let Some(parent) = path.parent() {
-            ensure_dir_exists(parent).await.with_context(|| {
-                format!("Failed to create plan tracker directory: {}", parent.display())
-            })?;
+            ensure_dir_exists(parent)
+                .await
+                .with_context(|| format!("Failed to create plan tracker directory: {}", parent.display()))?;
         }
         write_file_with_context(path, tracker_markdown, "plan tracker file")
             .await
@@ -153,8 +141,7 @@ pub(super) async fn initialize_plan_file(
     description: Option<&str>,
     validation_hints: &ValidationCommandHints,
 ) -> Result<()> {
-    let initial_content =
-        render_initial_plan_file_content(plan_title, description, plan_file, validation_hints);
+    let initial_content = render_initial_plan_file_content(plan_title, description, plan_file, validation_hints);
     write_file_with_context(plan_file, &initial_content, "plan file")
         .await
         .with_context(|| format!("Failed to create plan file: {}", plan_file.display()))
@@ -200,8 +187,7 @@ pub(super) fn package_manager_for_workspace(workspace_root: &Path) -> &'static s
         "pnpm"
     } else if workspace_root.join("yarn.lock").exists() {
         "yarn"
-    } else if workspace_root.join("bun.lockb").exists() || workspace_root.join("bun.lock").exists()
-    {
+    } else if workspace_root.join("bun.lockb").exists() || workspace_root.join("bun.lock").exists() {
         "bun"
     } else {
         "npm"
@@ -232,8 +218,7 @@ pub(super) fn package_json_has_script(workspace_root: &Path, script: &str) -> bo
 pub(super) fn detect_validation_command_hints(workspace_root: &Path) -> ValidationCommandHints {
     if workspace_root.join("Cargo.toml").exists() {
         return ValidationCommandHints {
-            build_and_lint:
-                "`cargo check`; `cargo clippy --workspace --all-targets -- -D warnings`".to_string(),
+            build_and_lint: "`cargo check`; `cargo clippy --workspace --all-targets -- -D warnings`".to_string(),
             tests: "`cargo test` (or `cargo nextest run` if nextest is configured)".to_string(),
         };
     }
@@ -245,15 +230,10 @@ pub(super) fn detect_validation_command_hints(workspace_root: &Path) -> Validati
         let has_test = package_json_has_script(workspace_root, "test");
 
         let build_and_lint = match (has_build, has_lint) {
-            (true, true) => format!(
-                "`{}`; `{}`",
-                node_script_command(pm, "build"),
-                node_script_command(pm, "lint")
-            ),
-            (true, false) => format!(
-                "`{}`; plus configured lint command for the workspace",
-                node_script_command(pm, "build")
-            ),
+            (true, true) => format!("`{}`; `{}`", node_script_command(pm, "build"), node_script_command(pm, "lint")),
+            (true, false) => {
+                format!("`{}`; plus configured lint command for the workspace", node_script_command(pm, "build"))
+            }
             (false, true) => format!(
                 "`{}`; plus configured build/typecheck command for the workspace",
                 node_script_command(pm, "lint")
@@ -276,9 +256,7 @@ pub(super) fn detect_validation_command_hints(workspace_root: &Path) -> Validati
         || workspace_root.join("setup.py").exists()
     {
         return ValidationCommandHints {
-            build_and_lint:
-                "`python -m compileall .`; run configured linter (for example `ruff check .`)"
-                    .to_string(),
+            build_and_lint: "`python -m compileall .`; run configured linter (for example `ruff check .`)".to_string(),
             tests: "`pytest`".to_string(),
         };
     }

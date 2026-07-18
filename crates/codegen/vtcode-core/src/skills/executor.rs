@@ -41,8 +41,10 @@ use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
 type SkillToolArgTransform = dyn Fn(&str, Value) -> Value + Send + Sync;
 
-const EMPTY_SKILL_INPUT_PROMPT: &str = "No explicit user input was provided. Follow the skill instructions using their default behavior for empty input.";
-const SKILL_TOOL_FREE_SYNTHESIS_PROMPT: &str = "Do not make any more tool calls. Provide the best final answer you can using the information already gathered.";
+const EMPTY_SKILL_INPUT_PROMPT: &str =
+    "No explicit user input was provided. Follow the skill instructions using their default behavior for empty input.";
+const SKILL_TOOL_FREE_SYNTHESIS_PROMPT: &str =
+    "Do not make any more tool calls. Provide the best final answer you can using the information already gathered.";
 const MAX_SKILL_LLM_ITERATIONS: usize = 10;
 
 fn skill_tool_free_synthesis_prompt(reason: &str) -> String {
@@ -62,14 +64,7 @@ fn ensure_visible_skill_content(skill: &Skill, content: String) -> Result<String
 }
 
 /// Network-capable tool names that should be filtered based on skill network policy
-const NETWORK_TOOLS: &[&str] = &[
-    "http",
-    "fetch",
-    "browser",
-    "web_search",
-    "read_web_page",
-    "curl",
-];
+const NETWORK_TOOLS: &[&str] = &["http", "fetch", "browser", "web_search", "read_web_page", "curl"];
 
 fn is_function_network_tool(tool: &ToolDefinition) -> bool {
     tool.function.as_ref().is_some_and(|function| {
@@ -79,8 +74,7 @@ fn is_function_network_tool(tool: &ToolDefinition) -> bool {
 }
 
 fn is_native_web_search_tool(tool: &ToolDefinition) -> bool {
-    matches!(tool.tool_type.as_str(), "web_search" | "google_search")
-        || tool.tool_type.starts_with("web_search_")
+    matches!(tool.tool_type.as_str(), "web_search" | "google_search") || tool.tool_type.starts_with("web_search_")
 }
 
 fn is_gemini_native_network_tool(tool: &ToolDefinition) -> bool {
@@ -88,9 +82,7 @@ fn is_gemini_native_network_tool(tool: &ToolDefinition) -> bool {
 }
 
 fn is_network_capable_tool(tool: &ToolDefinition) -> bool {
-    is_native_web_search_tool(tool)
-        || is_gemini_native_network_tool(tool)
-        || is_function_network_tool(tool)
+    is_native_web_search_tool(tool) || is_gemini_native_network_tool(tool) || is_function_network_tool(tool)
 }
 
 fn json_string_array(config: &Map<String, Value>, key: &str) -> Result<Option<Vec<String>>> {
@@ -196,8 +188,7 @@ fn apply_web_search_policy(
         union_domains(existing_blocked, &policy.denied_domains)
     };
 
-    if updated.is_anthropic_web_search() && !merged_allowed.is_empty() && !merged_blocked.is_empty()
-    {
+    if updated.is_anthropic_web_search() && !merged_allowed.is_empty() && !merged_blocked.is_empty() {
         warn!(
             skill = skill.name(),
             tool_type = %tool.tool_type,
@@ -354,10 +345,7 @@ fn merge_skill_command_permissions(skill: &Skill, tool_name: &str, tool_args: Va
         None => SandboxPermissions::UseDefault,
     };
 
-    if matches!(
-        sandbox_permissions,
-        SandboxPermissions::RequireEscalated | SandboxPermissions::BypassSandbox
-    ) {
+    if matches!(sandbox_permissions, SandboxPermissions::RequireEscalated | SandboxPermissions::BypassSandbox) {
         return Value::Object(args);
     }
 
@@ -369,8 +357,7 @@ fn merge_skill_command_permissions(skill: &Skill, tool_name: &str, tool_args: Va
         None => AdditionalPermissions::default(),
     };
 
-    let merged_permissions =
-        merge_additional_permissions(&existing_permissions, &skill_permissions);
+    let merged_permissions = merge_additional_permissions(&existing_permissions, &skill_permissions);
     args.insert(
         "sandbox_permissions".to_string(),
         serde_json::to_value(SandboxPermissions::WithAdditionalPermissions)
@@ -380,11 +367,7 @@ fn merge_skill_command_permissions(skill: &Skill, tool_name: &str, tool_args: Va
         "additional_permissions".to_string(),
         serde_json::to_value(&merged_permissions).expect("additional permissions should serialize"),
     );
-    debug!(
-        "Applied skill-scoped sandbox permissions for '{}' to tool '{}'",
-        skill.name(),
-        tool_name
-    );
+    debug!("Applied skill-scoped sandbox permissions for '{}' to tool '{}'", skill.name(), tool_name);
 
     Value::Object(args)
 }
@@ -460,9 +443,7 @@ fn skill_runs_in_fork(skill: &Skill) -> bool {
 }
 
 fn skill_tool_arg_transform(skill: Skill) -> Arc<SkillToolArgTransform> {
-    Arc::new(move |tool_name, tool_args| {
-        merge_skill_command_permissions(&skill, tool_name, tool_args)
-    })
+    Arc::new(move |tool_name, tool_args| merge_skill_command_permissions(&skill, tool_name, tool_args))
 }
 
 fn fork_agent_type(skill: &Skill) -> AgentType {
@@ -504,8 +485,7 @@ fn blocked_handoff_paths(events: &[crate::exec::events::ThreadEvent]) -> Vec<Str
         let crate::exec::events::ThreadEvent::ItemCompleted(completed) = event else {
             continue;
         };
-        let crate::exec::events::ThreadItemDetails::Harness(harness) = &completed.item.details
-        else {
+        let crate::exec::events::ThreadItemDetails::Harness(harness) = &completed.item.details else {
             continue;
         };
         if harness.event == crate::exec::events::HarnessEventKind::BlockedHandoffWritten
@@ -638,9 +618,7 @@ pub async fn execute_skill_with_sub_llm(
         // Rate-limit tool-bearing iterations, but let the final no-tools recovery
         // pass complete immediately so a stalled skill can still synthesize a result.
         if !is_tool_free_synthesis {
-            if let Err(wait_hint) =
-                crate::tools::adaptive_rate_limiter::try_acquire_global(SKILL_RATE_LIMIT_KEY)
-            {
+            if let Err(wait_hint) = crate::tools::adaptive_rate_limiter::try_acquire_global(SKILL_RATE_LIMIT_KEY) {
                 wait_cycles += 1;
                 if wait_cycles > MAX_RATE_LIMIT_WAIT_CYCLES {
                     return Err(anyhow!(
@@ -648,8 +626,7 @@ pub async fn execute_skill_with_sub_llm(
                     ));
                 }
 
-                let delay =
-                    wait_hint.max(Duration::from_millis(backoff)).min(Duration::from_secs(2));
+                let delay = wait_hint.max(Duration::from_millis(backoff)).min(Duration::from_secs(2));
                 // If rate limited, wait a bit and retry without counting as an iteration
                 warn!("Rate limit hit for skill execution – backing off {}ms", delay.as_millis());
                 tokio::time::sleep(delay).await;
@@ -708,32 +685,22 @@ pub async fn execute_skill_with_sub_llm(
 
                         debug!("Executing tool '{}' for skill '{}'", tool_name, skill.name());
 
-                        let tool_args = tool_call
-                            .execution_arguments()
-                            .unwrap_or_else(|_| serde_json::json!({}));
-                        let tool_args =
-                            merge_skill_command_permissions(skill, &tool_name, tool_args);
+                        let tool_args = tool_call.execution_arguments().unwrap_or_else(|_| serde_json::json!({}));
+                        let tool_args = merge_skill_command_permissions(skill, &tool_name, tool_args);
 
-                        if let Some(loop_warning) =
-                            loop_detector.record_call(&tool_name, &tool_args)
+                        if let Some(loop_warning) = loop_detector.record_call(&tool_name, &tool_args)
                             && loop_detector.is_hard_limit_exceeded(&tool_name)
                         {
                             messages.push(Message::tool_response(
                                 tool_call.id.clone(),
-                                format!(
-                                    "{loop_warning}\n\nTool execution was skipped to prevent a loop."
-                                ),
+                                format!("{loop_warning}\n\nTool execution was skipped to prevent a loop."),
                             ));
-                            force_tool_free_synthesis_reason =
-                                Some(skill_tool_free_synthesis_prompt(&loop_warning));
+                            force_tool_free_synthesis_reason = Some(skill_tool_free_synthesis_prompt(&loop_warning));
                             break;
                         }
 
                         // Execute tool via registry
-                        let tool_output = match tool_registry
-                            .execute_public_tool_ref(&tool_name, &tool_args)
-                            .await
-                        {
+                        let tool_output = match tool_registry.execute_public_tool_ref(&tool_name, &tool_args).await {
                             Ok(result) => result,
                             Err(e) => {
                                 warn!("Tool '{}' failed: {}", tool_name, e);
@@ -756,12 +723,11 @@ pub async fn execute_skill_with_sub_llm(
                         if let Some(tool_error) = tool_error
                             && should_force_tool_free_synthesis(&tool_error)
                         {
-                            force_tool_free_synthesis_reason =
-                                Some(skill_tool_free_synthesis_prompt(&format!(
-                                    "The tool '{}' is not available for this skill. {}",
-                                    tool_name,
-                                    tool_error.user_message()
-                                )));
+                            force_tool_free_synthesis_reason = Some(skill_tool_free_synthesis_prompt(&format!(
+                                "The tool '{}' is not available for this skill. {}",
+                                tool_name,
+                                tool_error.user_message()
+                            )));
                             break;
                         }
                     } else {
@@ -812,9 +778,7 @@ pub async fn execute_skill_with_sub_llm(
                 // to process whatever triggered the pause (usually server-side tool use).
             }
             FinishReason::Refusal => {
-                return Err(anyhow!(
-                    "LLM refused to continue generating response due to policy violations"
-                ));
+                return Err(anyhow!("LLM refused to continue generating response due to policy violations"));
             }
         }
     }
@@ -959,8 +923,8 @@ mod tests {
     use super::*;
     use crate::config::types::CapabilityLevel;
     use crate::llm::provider::{
-        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse,
-        NormalizedStreamEvent, ToolCall,
+        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent,
+        ToolCall,
     };
     use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
     use crate::tools::registry::ToolRegistration;
@@ -1214,10 +1178,7 @@ mod tests {
             panic!("generate should not be called for streaming-only skill provider")
         }
 
-        async fn stream_normalized(
-            &self,
-            request: LLMRequest,
-        ) -> Result<LLMNormalizedStream, LLMError> {
+        async fn stream_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
             let mut stream_calls = self.stream_calls.lock().expect("stream calls mutex");
             *stream_calls += 1;
 
@@ -1385,8 +1346,8 @@ mod tests {
             ..Default::default()
         };
 
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string()).expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
         assert_eq!(adapter.skill().name(), "test-skill");
@@ -1773,21 +1734,13 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let tools = vec![
-            ToolDefinition::function(
-                "read_file".to_string(),
-                "Read".to_string(),
-                serde_json::json!({}),
-            ),
+            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
             ToolDefinition::web_search(serde_json::json!({})),
-            ToolDefinition::function(
-                "web_search".to_string(),
-                "Search".to_string(),
-                serde_json::json!({}),
-            ),
+            ToolDefinition::function("web_search".to_string(), "Search".to_string(), serde_json::json!({})),
         ];
         let filtered = filter_tools_for_skill(&skill, tools);
         assert_eq!(filtered.len(), 1);
@@ -1809,8 +1762,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let tools = vec![ToolDefinition::web_search(serde_json::json!({
             "user_location": "US"
@@ -1837,17 +1790,13 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let tools = vec![
             ToolDefinition::google_maps(serde_json::json!({})),
             ToolDefinition::url_context(serde_json::json!({})),
-            ToolDefinition::function(
-                "read_file".to_string(),
-                "Read".to_string(),
-                serde_json::json!({}),
-            ),
+            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
         ];
 
         let filtered = filter_tools_for_skill(&skill, tools);
@@ -1870,8 +1819,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let filtered = filter_tools_for_skill(
             &skill,
@@ -1899,20 +1848,12 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let tools = vec![
-            ToolDefinition::function(
-                "read_web_page".to_string(),
-                "Read web page".to_string(),
-                serde_json::json!({}),
-            ),
-            ToolDefinition::function(
-                "read_file".to_string(),
-                "Read".to_string(),
-                serde_json::json!({}),
-            ),
+            ToolDefinition::function("read_web_page".to_string(), "Read web page".to_string(), serde_json::json!({})),
+            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
         ];
         let filtered = filter_tools_for_skill(&skill, tools);
 
@@ -1935,8 +1876,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
         let mut anthropic_web_search = ToolDefinition::web_search(serde_json::json!({}));
         anthropic_web_search.tool_type = "web_search_20250305".to_string();
@@ -1955,8 +1896,8 @@ mod tests {
             ..Default::default()
         };
 
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string())
-            .expect("failed to create skill");
+        let skill =
+            Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string()).expect("failed to create skill");
 
         let tools = vec!["file_ops".to_string(), "shell".to_string()];
         let input = serde_json::json!({"test": "input"});
@@ -1991,18 +1932,11 @@ mod tests {
             ),
         }));
 
-        let merged =
-            merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
+        let merged = merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
 
         assert_eq!(merged["sandbox_permissions"], serde_json::json!("with_additional_permissions"));
-        assert_eq!(
-            merged["additional_permissions"]["fs_read"],
-            serde_json::json!(["/tmp/test-skill/references"])
-        );
-        assert_eq!(
-            merged["additional_permissions"]["fs_write"],
-            serde_json::json!(["/tmp/test-skill/outputs"])
-        );
+        assert_eq!(merged["additional_permissions"]["fs_read"], serde_json::json!(["/tmp/test-skill/references"]));
+        assert_eq!(merged["additional_permissions"]["fs_write"], serde_json::json!(["/tmp/test-skill/outputs"]));
     }
 
     #[test]

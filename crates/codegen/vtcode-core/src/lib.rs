@@ -225,14 +225,13 @@ pub use cli::args::{Cli, Commands};
 pub use code::code_completion::{CompletionEngine, CompletionSuggestion};
 pub use commands::stats::handle_stats_command;
 pub use config::types::{
-    AnalysisDepth, CapabilityLevel, OutputFormat, PerformanceMetrics, ReasoningEffortLevel,
-    SessionInfo,
+    AnalysisDepth, CapabilityLevel, OutputFormat, PerformanceMetrics, ReasoningEffortLevel, SessionInfo,
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
     AgentClientProtocolZedToolsConfig, AgentConfig, IdeContextConfig, IdeContextProviderConfig,
-    IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig,
-    PluginRuntimeConfig, PluginTrustLevel, ToolProfile, VTCodeConfig, WorkspaceTrustLevel,
+    IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig, PluginRuntimeConfig, PluginTrustLevel,
+    ToolProfile, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
@@ -243,52 +242,43 @@ pub use core::agent::task::{
 pub use core::memory_pool::{MemoryPool, global_pool};
 pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use core::threads::{
-    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,
-    ThreadSnapshot, build_thread_archive_metadata, loaded_skills_from_session_listing,
-    messages_from_session_listing,
+    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle, ThreadSnapshot,
+    build_thread_archive_metadata, loaded_skills_from_session_listing, messages_from_session_listing,
 };
 pub use ide_context::{
-    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
-    EditorSelectionRange,
+    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext, EditorSelectionRange,
 };
 pub use primary_agent::{
-    ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState,
-    PrimaryAgentResolutionError, active_primary_agent_permissions,
-    apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
-    build_primary_agent_hook_config, build_primary_agent_runtime_config,
-    evaluate_active_primary_agent_permissions, resolve_discovered_primary_agent,
-    resolve_primary_agent,
+    ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState, PrimaryAgentResolutionError,
+    active_primary_agent_permissions, apply_primary_agent_prompt_context, apply_primary_agent_tool_policy,
+    build_primary_agent_hook_config, build_primary_agent_runtime_config, evaluate_active_primary_agent_permissions,
+    resolve_discovered_primary_agent, resolve_primary_agent,
 };
 pub use subagents::{
     SendInputRequest as SubagentSendInputRequest, SpawnAgentRequest as SubagentSpawnRequest,
-    SpawnBackgroundSubprocessRequest as SubagentSpawnBackgroundSubprocessRequest,
-    SubagentController, SubagentControllerConfig, SubagentInputItem, SubagentStatus,
-    SubagentStatusEntry, VerificationResult,
+    SpawnBackgroundSubprocessRequest as SubagentSpawnBackgroundSubprocessRequest, SubagentController,
+    SubagentControllerConfig, SubagentInputItem, SubagentStatus, SubagentStatusEntry, VerificationResult,
 };
 pub use vtcode_bash_runner::BashRunner;
 
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
 pub use diagnostics::{
-    DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction,
-    RecoveryPlaybook,
+    DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction, RecoveryPlaybook,
 };
 pub use dotfile_protection::{
     AccessType as DotfileAccessType, AuditEntry as DotfileAuditEntry, AuditLog as DotfileAuditLog,
-    AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager, DotfileBackup,
-    DotfileGuardian, ProtectionDecision, ProtectionViolation, get_global_guardian,
-    init_global_guardian, is_protected_dotfile,
+    AuditOutcome as DotfileAuditOutcome, BackupManager as DotfileBackupManager, DotfileBackup, DotfileGuardian,
+    ProtectionDecision, ProtectionViolation, get_global_guardian, init_global_guardian, is_protected_dotfile,
 };
 pub use error::{
-    ErrorCategory as VtCodeErrorCategory, ErrorCode as VtCodeErrorCode, Result as VtCodeResult,
-    VtCodeError,
+    ErrorCategory as VtCodeErrorCategory, ErrorCode as VtCodeErrorCode, Result as VtCodeResult, VtCodeError,
 };
 pub use exec::events::{
-    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
-    ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
-    ItemUpdatedEvent, McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind,
-    PlanDeltaEvent, PlanItem, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ThreadStartedEvent, ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent,
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION, ErrorItem, FileChangeItem,
+    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, McpToolCallItem, McpToolCallStatus,
+    PatchApplyStatus, PatchChangeKind, PlanDeltaEvent, PlanItem, ReasoningItem, ThreadEvent, ThreadItem,
+    ThreadItemDetails, ThreadStartedEvent, ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent,
     TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent, WebSearchItem,
 };
 pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
@@ -300,25 +290,22 @@ pub use mcp::{
 };
 pub use memory::{MemoryMonitor, MemoryPressure, MemoryReport, RssCheckpoint};
 pub use models_manager::{
-    ModelFamily, ModelPreset, ModelsCache, ModelsManager, builtin_model_presets,
-    model_family::find_family_for_model,
+    ModelFamily, ModelPreset, ModelsCache, ModelsManager, builtin_model_presets, model_family::find_family_for_model,
 };
 pub use notifications::{
     NotificationConfig, NotificationEvent, NotificationManager, apply_global_notification_config,
-    apply_global_notification_config_from_vtcode, get_global_notification_manager,
-    init_global_notification_manager, init_global_notification_manager_with_config,
-    notify_command_failure, notify_error, notify_human_in_the_loop, notify_tool_failure,
-    notify_tool_success, send_global_notification,
+    apply_global_notification_config_from_vtcode, get_global_notification_manager, init_global_notification_manager,
+    init_global_notification_manager_with_config, notify_command_failure, notify_error, notify_human_in_the_loop,
+    notify_tool_failure, notify_tool_success, send_global_notification,
 };
 pub use orchestrator::{
-    DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
-    WorkExecutor,
+    DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork, WorkExecutor,
 };
 pub use pods::*;
 pub use prompts::SystemPromptReport;
 pub use prompts::{
-    generate_lightweight_instruction, generate_specialized_instruction,
-    generate_system_instruction, measure_system_prompt_size,
+    generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
+    measure_system_prompt_size,
 };
 pub use retry::{RetryDecision, RetryPolicy, RetryPolicyCoreExt};
 pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
@@ -327,22 +314,20 @@ pub use zsh_exec_bridge::maybe_run_zsh_exec_wrapper_mode;
 
 // Open Responses specification types (canonical module lives in vtcode-llm)
 pub use open_responses::{
-    ContentPart, CustomItem, DualEventEmitter, FunctionCallItem, FunctionCallOutputItem,
-    IncompleteDetails, IncompleteReason, InputTokensDetails, ItemStatus, MessageItem, MessageRole,
-    OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType, OpenResponsesCallback,
-    OpenResponsesIntegration, OpenResponsesProvider, OpenUsage, OutputItem, OutputItemId,
-    OutputTokensDetails, ReasoningItem as OpenReasoningItem, Response as OpenResponse,
-    ResponseBuilder, ResponseId, ResponseStatus, ResponseStreamEvent, StreamEventEmitter,
-    ToOpenResponse, VecStreamEmitter, generate_item_id, generate_response_id,
+    ContentPart, CustomItem, DualEventEmitter, FunctionCallItem, FunctionCallOutputItem, IncompleteDetails,
+    IncompleteReason, InputTokensDetails, ItemStatus, MessageItem, MessageRole, OpenResponseError,
+    OpenResponseErrorCode, OpenResponseErrorType, OpenResponsesCallback, OpenResponsesIntegration,
+    OpenResponsesProvider, OpenUsage, OutputItem, OutputItemId, OutputTokensDetails,
+    ReasoningItem as OpenReasoningItem, Response as OpenResponse, ResponseBuilder, ResponseId, ResponseStatus,
+    ResponseStreamEvent, StreamEventEmitter, ToOpenResponse, VecStreamEmitter, generate_item_id, generate_response_id,
 };
 
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 
 // Codex-style execution policy and sandboxing
 pub use exec_policy::{
-    AskForApproval, Decision, ExecApprovalRequirement, ExecPolicyAmendment, ExecPolicyConfig,
-    ExecPolicyManager, Policy, PolicyEvaluation, PolicyParser, PrefixRule, RuleMatch,
-    SharedExecPolicyManager,
+    AskForApproval, Decision, ExecApprovalRequirement, ExecPolicyAmendment, ExecPolicyConfig, ExecPolicyManager,
+    Policy, PolicyEvaluation, PolicyParser, PrefixRule, RuleMatch, SharedExecPolicyManager,
 };
 pub use sandboxing::{
     CommandSpec as SandboxCommandSpec, ExecEnv as SandboxExecEnv, ExecExpiration,
@@ -353,22 +338,20 @@ pub use sandboxing::{
 pub use tools::OptimizedToolRegistry;
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::registry::{
-    McpBridge, PtySessionControl, SharedRegistry, ToolCatalog, ToolGroup, ToolMetrics,
-    ToolRegistryApi, ToolResilience, ToolSecurity, tool_groups,
+    McpBridge, PtySessionControl, SharedRegistry, ToolCatalog, ToolGroup, ToolMetrics, ToolRegistryApi, ToolResilience,
+    ToolSecurity, tool_groups,
 };
 pub use tools::{ToolRegistration, ToolRegistry};
 pub use ui::diff_renderer::DiffRenderer;
 pub use utils::dot_config::{
-    CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences,
-    WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_user_config,
-    load_workspace_trust_level, save_user_config, update_model_preference, update_theme_preference,
-    update_workspace_trust,
+    CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences, WorkspaceTrustRecord,
+    WorkspaceTrustStore, initialize_dot_folder, load_user_config, load_workspace_trust_level, save_user_config,
+    update_model_preference, update_theme_preference, update_workspace_trust,
 };
 pub use utils::vtcodegitignore::initialize_vtcode_gitignore;
 pub use vtcode_indexer::SimpleIndexer;
 pub use vtcode_indexer::markdown_store::{
-    MarkdownStorage, ProjectData, ProjectStorage, SimpleCache, SimpleKVStorage,
-    SimpleProjectManager,
+    MarkdownStorage, ProjectData, ProjectStorage, SimpleCache, SimpleKVStorage, SimpleProjectManager,
 };
 
 #[cfg(test)]

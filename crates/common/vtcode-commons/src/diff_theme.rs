@@ -76,8 +76,7 @@ fn diff_color_level_for_terminal(
         return base_level;
     }
 
-    if has_wt_session || (base_level == DiffColorLevel::Ansi16 && is_windows_terminal(term_program))
-    {
+    if has_wt_session || (base_level == DiffColorLevel::Ansi16 && is_windows_terminal(term_program)) {
         return DiffColorLevel::TrueColor;
     }
 
@@ -161,42 +160,22 @@ mod tests {
             DiffColorLevel::Ansi256,
             DiffColorLevel::Ansi16,
         ] {
-            assert_eq!(
-                diff_add_bg(DiffTheme::Dark, level),
-                Color::Rgb(anstyle::RgbColor(20, 58, 45))
-            );
-            assert_eq!(
-                diff_del_bg(DiffTheme::Dark, level),
-                Color::Rgb(anstyle::RgbColor(70, 38, 42))
-            );
-            assert_eq!(
-                diff_add_bg(DiffTheme::Light, level),
-                Color::Rgb(anstyle::RgbColor(218, 246, 225))
-            );
-            assert_eq!(
-                diff_del_bg(DiffTheme::Light, level),
-                Color::Rgb(anstyle::RgbColor(255, 224, 224))
-            );
+            assert_eq!(diff_add_bg(DiffTheme::Dark, level), Color::Rgb(anstyle::RgbColor(20, 58, 45)));
+            assert_eq!(diff_del_bg(DiffTheme::Dark, level), Color::Rgb(anstyle::RgbColor(70, 38, 42)));
+            assert_eq!(diff_add_bg(DiffTheme::Light, level), Color::Rgb(anstyle::RgbColor(218, 246, 225)));
+            assert_eq!(diff_del_bg(DiffTheme::Light, level), Color::Rgb(anstyle::RgbColor(255, 224, 224)));
         }
     }
 
     #[test]
     fn wt_session_promotes_ansi16_to_truecolor() {
-        assert_eq!(
-            diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, false),
-            DiffColorLevel::TrueColor
-        );
+        assert_eq!(diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, false), DiffColorLevel::TrueColor);
     }
 
     #[test]
     fn windows_terminal_term_program_promotes_ansi16_to_truecolor() {
         assert_eq!(
-            diff_color_level_for_terminal(
-                DiffColorLevel::Ansi16,
-                Some("Windows_Terminal"),
-                false,
-                false
-            ),
+            diff_color_level_for_terminal(DiffColorLevel::Ansi16, Some("Windows_Terminal"), false, false),
             DiffColorLevel::TrueColor
         );
     }
@@ -211,18 +190,12 @@ mod tests {
 
     #[test]
     fn force_color_keeps_ansi16_when_wt_session_exists() {
-        assert_eq!(
-            diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, true),
-            DiffColorLevel::Ansi16
-        );
+        assert_eq!(diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, true), DiffColorLevel::Ansi16);
     }
 
     #[test]
     fn force_color_keeps_ansi256_when_wt_session_exists() {
-        assert_eq!(
-            diff_color_level_for_terminal(DiffColorLevel::Ansi256, None, true, true),
-            DiffColorLevel::Ansi256
-        );
+        assert_eq!(diff_color_level_for_terminal(DiffColorLevel::Ansi256, None, true, true), DiffColorLevel::Ansi256);
     }
 
     #[test]

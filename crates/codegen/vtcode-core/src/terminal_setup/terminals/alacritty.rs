@@ -8,9 +8,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate complete Alacritty configuration with all features
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment
@@ -44,9 +42,8 @@ pub fn generate_config(
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_sections.push("# Theme synchronization".to_string());
-                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
-                    TerminalType::Alacritty,
-                )?;
+                let theme_config =
+                    crate::terminal_setup::features::theme_sync::generate_config(TerminalType::Alacritty)?;
                 config_sections.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
@@ -54,8 +51,7 @@ pub fn generate_config(
                 config_sections.push("[bell]".to_string());
                 config_sections.push("animation = \"EaseOutExpo\"".to_string());
                 config_sections.push("duration = 0".to_string());
-                config_sections
-                    .push("command = [\"notify-send\", \"Alacritty\", \"Bell\"]".to_string());
+                config_sections.push("command = [\"notify-send\", \"Alacritty\", \"Bell\"]".to_string());
                 config_sections.push(String::new());
             }
         }
@@ -109,8 +105,7 @@ mod tests {
     #[test]
     fn test_merge_with_existing() {
         let existing = "# User config\n[font]\nsize = 12\n";
-        let new_config =
-            "[[keyboard.bindings]]\nkey = \"Return\"\nmods = \"Shift\"\nchars = \"\\n\"";
+        let new_config = "[[keyboard.bindings]]\nkey = \"Return\"\nmods = \"Shift\"\nchars = \"\\n\"";
 
         let merged = merge_with_existing(existing, new_config).unwrap();
 

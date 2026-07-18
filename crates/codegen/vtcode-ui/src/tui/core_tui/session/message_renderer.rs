@@ -129,10 +129,7 @@ fn render_styled_action_text(
             spans.push(Span::raw(" "));
         }
 
-        spans.push(Span::styled(
-            word.to_owned(),
-            ratatui_style_from_inline(body_style, theme.foreground),
-        ));
+        spans.push(Span::styled(word.to_owned(), ratatui_style_from_inline(body_style, theme.foreground)));
     }
 }
 

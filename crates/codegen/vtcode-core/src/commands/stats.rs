@@ -8,11 +8,7 @@ use crate::utils::colors::style;
 use anyhow::Result;
 
 /// Handle the stats command - display session statistics and performance metrics
-pub async fn handle_stats_command(
-    agent: &Agent,
-    detailed: bool,
-    format: String,
-) -> Result<PerformanceMetrics> {
+pub async fn handle_stats_command(agent: &Agent, detailed: bool, format: String) -> Result<PerformanceMetrics> {
     let output_format = match format.to_lowercase().as_str() {
         "text" => OutputFormat::Text,
         "json" => OutputFormat::Json,
@@ -37,23 +33,11 @@ pub async fn handle_stats_command(
     Ok(metrics)
 }
 
-fn display_text_stats(
-    config: &AgentConfig,
-    metrics: &PerformanceMetrics,
-    detailed: bool,
-    tool_names: &[String],
-) {
+fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detailed: bool, tool_names: &[String]) {
     println!("{} Configuration:", style("[CONFIG]").dim());
     println!("  Model: {}", style(&config.model).cyan());
     println!("  Workspace: {}", style(config.workspace.display()).cyan());
-    println!(
-        "  Verbose Mode: {}",
-        if config.verbose {
-            "Enabled"
-        } else {
-            "Disabled"
-        }
-    );
+    println!("  Verbose Mode: {}", if config.verbose { "Enabled" } else { "Disabled" });
 
     println!("\n{} Tool Information:", style("").dim());
     let tool_count = tool_names.len();
@@ -83,14 +67,7 @@ fn display_text_stats(
         println!("\n{} System Information:", style("[SYS]").dim());
         println!("  Rust Version: {}", style(env!("CARGO_PKG_RUST_VERSION")).cyan());
         println!("  vtcode Version: {}", style(env!("CARGO_PKG_VERSION")).cyan());
-        println!(
-            "  Build Profile: {}",
-            if cfg!(debug_assertions) {
-                "Debug"
-            } else {
-                "Release"
-            }
-        );
+        println!("  Build Profile: {}", if cfg!(debug_assertions) { "Debug" } else { "Release" });
     }
 }
 
@@ -135,14 +112,7 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("<ul>");
     println!("<li><strong>Model:</strong> {}</li>", config.model);
     println!("<li><strong>Workspace:</strong> {}</li>", config.workspace.display());
-    println!(
-        "<li><strong>Verbose Mode:</strong> {}</li>",
-        if config.verbose {
-            "Enabled"
-        } else {
-            "Disabled"
-        }
-    );
+    println!("<li><strong>Verbose Mode:</strong> {}</li>", if config.verbose { "Enabled" } else { "Disabled" });
     println!("</ul>");
 
     println!("<h2>Tool Information</h2>");
@@ -155,24 +125,15 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
 
     println!("<h2>Performance Metrics</h2>");
     println!("<ul>");
-    println!(
-        "<li><strong>Session Duration:</strong> {} seconds</li>",
-        metrics.session_duration_seconds
-    );
+    println!("<li><strong>Session Duration:</strong> {} seconds</li>", metrics.session_duration_seconds);
     println!("<li><strong>API Calls:</strong> {}</li>", metrics.total_api_calls);
     println!("<li><strong>Tool Executions:</strong> {}</li>", metrics.tool_execution_count);
     println!("<li><strong>Errors:</strong> {}</li>", metrics.error_count);
-    println!(
-        "<li><strong>Recovery Rate:</strong> {:.1}%</li>",
-        metrics.recovery_success_rate * 100.0
-    );
+    println!("<li><strong>Recovery Rate:</strong> {:.1}%</li>", metrics.recovery_success_rate * 100.0);
     if let Some(tokens) = metrics.total_tokens_used {
         println!("<li><strong>Total Tokens:</strong> {tokens}</li>");
     }
-    println!(
-        "<li><strong>Avg Response Time:</strong> {:.0}ms</li>",
-        metrics.average_response_time_ms
-    );
+    println!("<li><strong>Avg Response Time:</strong> {:.0}ms</li>", metrics.average_response_time_ms);
     println!("</ul>");
 
     println!("</body></html>");

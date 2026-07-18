@@ -92,10 +92,7 @@ impl TuiSessionDriver for Session {
         self.show_logs = show;
     }
 
-    fn set_active_pty_sessions(
-        &mut self,
-        sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
-    ) {
+    fn set_active_pty_sessions(&mut self, sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>) {
         self.active_pty_sessions = sessions;
     }
 
@@ -115,10 +112,7 @@ impl TuiSessionDriver for Session {
         self.set_fullscreen_interaction(config);
     }
 
-    fn set_preview_callback(
-        &mut self,
-        _callback: Option<crate::tui::core_tui::types::PreviewCallback>,
-    ) {
+    fn set_preview_callback(&mut self, _callback: Option<crate::tui::core_tui::types::PreviewCallback>) {
         // Core session does not use preview callbacks; only AppSession does.
     }
 }

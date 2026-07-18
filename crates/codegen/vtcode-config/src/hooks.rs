@@ -172,15 +172,11 @@ impl LifecycleHooksConfig {
 fn validate_groups(groups: &[HookGroupConfig], context_name: &str) -> Result<()> {
     for (index, group) in groups.iter().enumerate() {
         if let Some(pattern) = group.matcher.as_ref() {
-            validate_matcher(pattern).with_context(|| {
-                format!("Invalid matcher in hooks.{context_name}[{index}] -> matcher")
-            })?;
+            validate_matcher(pattern)
+                .with_context(|| format!("Invalid matcher in hooks.{context_name}[{index}] -> matcher"))?;
         }
 
-        ensure!(
-            !group.hooks.is_empty(),
-            "hooks.{context_name}[{index}] must define at least one hook command"
-        );
+        ensure!(!group.hooks.is_empty(), "hooks.{context_name}[{index}] must define at least one hook command");
 
         for (hook_index, hook) in group.hooks.iter().enumerate() {
             ensure!(
@@ -212,8 +208,7 @@ fn validate_matcher(pattern: &str) -> Result<()> {
     }
 
     let regex_pattern = format!("^(?:{trimmed})$");
-    Regex::new(&regex_pattern)
-        .with_context(|| format!("failed to compile lifecycle hook matcher: {pattern}"))?;
+    Regex::new(&regex_pattern).with_context(|| format!("failed to compile lifecycle hook matcher: {pattern}"))?;
     Ok(())
 }
 

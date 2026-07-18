@@ -40,11 +40,7 @@ impl Session {
     /// continuation lines emit an empty vector (the run is rendered once, from
     /// its start). The caller (the general message reflow path) uses these lines
     /// in place of the default per-line reflow.
-    pub(super) fn reflow_thinking_lines(
-        &self,
-        index: usize,
-        width: u16,
-    ) -> Option<Vec<TranscriptLine>> {
+    pub(super) fn reflow_thinking_lines(&self, index: usize, width: u16) -> Option<Vec<TranscriptLine>> {
         if index >= self.lines.len() {
             return None;
         }
@@ -101,8 +97,7 @@ impl Session {
     fn render_thinking_block(&self, start: usize, width: u16) -> Vec<TranscriptLine> {
         let collapsed = self.thinking_collapsed(start);
         let run_len = self.thinking_run_len(start);
-        let accent =
-            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
+        let accent = ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
         let header = Line::from(Span::styled("Thinking", accent));
         let mut result = vec![transcript_line_with_detected_links(
@@ -145,10 +140,7 @@ impl Session {
                 trim_leading_whitespace(line);
             }
             for line in wrapped {
-                result.push(transcript_line_with_detected_links(
-                    line,
-                    self.workspace_root.as_deref(),
-                ));
+                result.push(transcript_line_with_detected_links(line, self.workspace_root.as_deref()));
             }
         }
 

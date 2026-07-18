@@ -7,8 +7,7 @@
 
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment,
-    InlineTextStyle,
+    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 
 fn blank_terminal(width: usize, height: usize) -> String {
@@ -159,7 +158,9 @@ async fn test_tui_backend_smoke_tool_output() {
     handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
-            text: "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory.".to_string(),
+            text:
+                "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory."
+                    .to_string(),
             style: InlineTextStyle::default().into(),
         }],
     );
@@ -204,7 +205,9 @@ async fn test_tui_backend_smoke_error_content() {
     handle.append_line(
         InlineMessageKind::Error,
         vec![InlineSegment {
-            text: "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH.".to_string(),
+            text:
+                "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH."
+                    .to_string(),
             style: InlineTextStyle::default().into(),
         }],
     );

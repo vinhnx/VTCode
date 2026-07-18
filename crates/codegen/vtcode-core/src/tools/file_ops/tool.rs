@@ -58,9 +58,7 @@ impl FileOpsTool {
     }
 
     fn normalize_list_mode(mode: &str) -> Option<&'static str> {
-        if mode.eq_ignore_ascii_case("list")
-            || mode.eq_ignore_ascii_case("file")
-            || mode.eq_ignore_ascii_case("files")
+        if mode.eq_ignore_ascii_case("list") || mode.eq_ignore_ascii_case("file") || mode.eq_ignore_ascii_case("files")
         {
             Some("list")
         } else if mode.eq_ignore_ascii_case("recursive") {
@@ -100,8 +98,7 @@ impl Tool for FileOpsTool {
         }
 
         // Standard path extraction from args (handles aliases)
-        let path_args: PathArgs =
-            serde_json::from_value(args).unwrap_or(PathArgs { path: input.path.clone() });
+        let path_args: PathArgs = serde_json::from_value(args).unwrap_or(PathArgs { path: input.path.clone() });
         input.path = path_args.path;
 
         // Normalize path: strip /workspace prefix if present (common LLM pattern)
@@ -116,9 +113,11 @@ impl Tool for FileOpsTool {
         validate_non_root_listing_path(Some(input.path.as_str()))?;
 
         let should_promote_glob_to_recursive = input.mode.is_none()
-            && input.glob_pattern.as_deref().map(str::trim).is_some_and(|pattern| {
-                !pattern.is_empty() && (pattern.contains('/') || pattern.contains("**"))
-            });
+            && input
+                .glob_pattern
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|pattern| !pattern.is_empty() && (pattern.contains('/') || pattern.contains("**")));
         if should_promote_glob_to_recursive {
             input.mode = Some("recursive".to_string());
         }
@@ -159,14 +158,7 @@ impl FileTool for FileOpsTool {
 #[async_trait]
 impl ModeTool for FileOpsTool {
     fn supported_modes(&self) -> Vec<&'static str> {
-        vec![
-            "list",
-            "recursive",
-            "find_name",
-            "find_content",
-            "largest",
-            "tree",
-        ]
+        vec!["list", "recursive", "find_name", "find_content", "largest", "tree"]
     }
 
     async fn execute_mode(&self, mode: &str, args: Value) -> Result<Value> {
@@ -246,8 +238,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
         fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n").expect("write lib");
-        fs::write(temp_dir.path().join("src/nested/mod.rs"), "pub fn nested() {}\n")
-            .expect("write nested");
+        fs::write(temp_dir.path().join("src/nested/mod.rs"), "pub fn nested() {}\n").expect("write nested");
         fs::write(temp_dir.path().join("src/notes.md"), "# notes\n").expect("write notes");
 
         let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
@@ -325,8 +316,7 @@ mod tests {
     async fn blank_mode_allows_recursive_glob_promotion() {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
-        fs::write(temp_dir.path().join("src/nested/lib.rs"), "pub fn lib() {}\n")
-            .expect("write lib");
+        fs::write(temp_dir.path().join("src/nested/lib.rs"), "pub fn lib() {}\n").expect("write lib");
 
         let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
         let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);

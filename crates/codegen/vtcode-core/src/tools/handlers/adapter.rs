@@ -18,8 +18,8 @@ use serde_json::Value;
 use vtcode_commons::serde_helpers::json_to_string_pretty;
 
 use super::tool_handler::{
-    ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler,
-    ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
+    ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler, ToolInvocation,
+    ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
 };
 use crate::tool_policy::ToolPolicy;
 use crate::tools::result::ToolResult as SplitToolResult;
@@ -133,8 +133,7 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
 
                 // Create a summary for LLM (first ~500 bytes or key info)
                 let llm_content = if ui_content.len() > 500 {
-                    let truncated =
-                        vtcode_commons::formatting::truncate_byte_budget(&ui_content, 500, "");
+                    let truncated = vtcode_commons::formatting::truncate_byte_budget(&ui_content, 500, "");
                     format!("{}...[truncated, {} chars total]", truncated, ui_content.len())
                 } else {
                     ui_content.clone()
@@ -274,9 +273,7 @@ impl ToolSession for DefaultToolSession {
 
 /// Factory function to create a session for the current directory.
 pub fn create_cwd_session() -> Arc<dyn ToolSession> {
-    Arc::new(DefaultToolSession::new(
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
-    ))
+    Arc::new(DefaultToolSession::new(std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))))
 }
 
 #[cfg(test)]
@@ -319,13 +316,7 @@ mod tests {
             strict: false,
         });
 
-        let adapter = HandlerToToolAdapter::new(
-            TestHandler,
-            "test_tool",
-            "A test tool",
-            spec,
-            create_cwd_session,
-        );
+        let adapter = HandlerToToolAdapter::new(TestHandler, "test_tool", "A test tool", spec, create_cwd_session);
 
         assert_eq!(adapter.name(), "test_tool");
         assert_eq!(adapter.description(), "A test tool");
@@ -343,13 +334,7 @@ mod tests {
             strict: false,
         });
 
-        let adapter = HandlerToToolAdapter::new(
-            ErrorHandler,
-            "test_tool",
-            "A test tool",
-            spec,
-            create_cwd_session,
-        );
+        let adapter = HandlerToToolAdapter::new(ErrorHandler, "test_tool", "A test tool", spec, create_cwd_session);
 
         let err = adapter.execute_dual(serde_json::json!({})).await.unwrap_err();
         assert!(err.to_string().contains("boom"));

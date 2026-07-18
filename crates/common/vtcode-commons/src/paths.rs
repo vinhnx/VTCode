@@ -61,16 +61,11 @@ pub fn resolve_workspace_path(workspace_root: &Path, user_path: &Path) -> Result
     let canonical = std::fs::canonicalize(&candidate)
         .with_context(|| format!("Failed to canonicalize path {}", candidate.display()))?;
 
-    let workspace_canonical = std::fs::canonicalize(workspace_root).with_context(|| {
-        format!("Failed to canonicalize workspace root {}", workspace_root.display())
-    })?;
+    let workspace_canonical = std::fs::canonicalize(workspace_root)
+        .with_context(|| format!("Failed to canonicalize workspace root {}", workspace_root.display()))?;
 
     if !canonical.starts_with(&workspace_canonical) {
-        return Err(anyhow!(
-            "Path {} escapes workspace root {}",
-            canonical.display(),
-            workspace_canonical.display()
-        ));
+        return Err(anyhow!("Path {} escapes workspace root {}", canonical.display(), workspace_canonical.display()));
     }
 
     Ok(canonical)
@@ -121,10 +116,7 @@ pub fn ensure_path_within_workspace(candidate: &Path, workspace_root: &Path) -> 
 /// sides are normalized before comparison).
 ///
 /// Returns the normalized candidate path on success.
-pub async fn ensure_path_within_workspace_resolved(
-    candidate: &Path,
-    workspace_root: &Path,
-) -> Result<PathBuf> {
+pub async fn ensure_path_within_workspace_resolved(candidate: &Path, workspace_root: &Path) -> Result<PathBuf> {
     let normalized_root = normalize_path(workspace_root);
     let normalized_candidate = normalize_path(candidate);
 
@@ -161,15 +153,13 @@ pub async fn ensure_path_within_workspace_resolved(
                 if error.kind() == std::io::ErrorKind::NotFound {
                     break;
                 }
-                return Err(error).with_context(|| {
-                    format!("failed to inspect path component '{}'", prefix.display())
-                });
+                return Err(error).with_context(|| format!("failed to inspect path component '{}'", prefix.display()));
             }
         };
 
-        let resolved = tokio::fs::canonicalize(&prefix).await.with_context(|| {
-            format!("failed to canonicalize path component '{}'", prefix.display())
-        })?;
+        let resolved = tokio::fs::canonicalize(&prefix)
+            .await
+            .with_context(|| format!("failed to canonicalize path component '{}'", prefix.display()))?;
 
         if metadata.file_type().is_symlink() {
             if !resolved.starts_with(&canonical_root) {
@@ -258,9 +248,7 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
         // Reject absolute paths outside workspace
         // Note: We can't strictly block all absolute paths as the agent might need to access
         // explicitly allowed directories, but we can block obvious system critical paths.
-        static UNIX_CRITICAL: &[&str] = &[
-            "/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev",
-        ];
+        static UNIX_CRITICAL: &[&str] = &["/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev"];
         for prefix in UNIX_CRITICAL {
             let is_var_temp_exception = *prefix == "/var"
                 && (path.starts_with("/var/folders/")
@@ -331,9 +319,9 @@ pub fn file_name_from_path(path: &str) -> String {
 pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
     // If the path exists, canonicalize it directly
     if tokio::fs::try_exists(normalized).await.unwrap_or(false) {
-        return tokio::fs::canonicalize(normalized).await.map_err(|e| {
-            anyhow!("Failed to resolve canonical path for '{}': {}", normalized.display(), e)
-        });
+        return tokio::fs::canonicalize(normalized)
+            .await
+            .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", normalized.display(), e));
     }
 
     // Walk up the directory tree to find the nearest existing ancestor
@@ -341,9 +329,9 @@ pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
     while let Some(parent) = current.parent() {
         if tokio::fs::try_exists(parent).await.unwrap_or(false) {
             // Canonicalize the existing parent
-            let canonical_parent = tokio::fs::canonicalize(parent).await.map_err(|e| {
-                anyhow!("Failed to resolve canonical path for '{}': {}", parent.display(), e)
-            })?;
+            let canonical_parent = tokio::fs::canonicalize(parent)
+                .await
+                .map_err(|e| anyhow!("Failed to resolve canonical path for '{}': {}", parent.display(), e))?;
 
             // Get the remaining path components
             let remainder = normalized.strip_prefix(parent).unwrap_or_else(|_| Path::new(""));
@@ -576,10 +564,7 @@ mod tests {
             config: PathBuf::from("/tmp/project/config"),
         };
 
-        assert_eq!(
-            PathResolver::resolve(&paths, "subdir/file.txt"),
-            PathBuf::from("/tmp/project/subdir/file.txt")
-        );
+        assert_eq!(PathResolver::resolve(&paths, "subdir/file.txt"), PathBuf::from("/tmp/project/subdir/file.txt"));
         assert_eq!(
             PathResolver::resolve_config(&paths, "settings.toml"),
             PathBuf::from("/tmp/project/config/settings.toml")

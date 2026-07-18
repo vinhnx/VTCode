@@ -23,8 +23,8 @@ pub mod state;
 // `handlers/mod.rs`, `task_tracker.rs`, `planning_task_tracker.rs`,
 // `continuation.rs`, `turn/context.rs`, and `turn/.../plan_seed.rs`.
 pub use artifacts::{
-    PlanValidationReport, generate_tracker_markdown_from_plan, merge_plan_content,
-    plan_file_for_tracker_file, tracker_file_for_plan_file, validate_plan_content,
+    PlanValidationReport, generate_tracker_markdown_from_plan, merge_plan_content, plan_file_for_tracker_file,
+    tracker_file_for_plan_file, validate_plan_content,
 };
 pub use finish::FinishPlanningTool;
 pub use persistence::{PersistedPlanDraft, persist_plan_draft, sync_tracker_into_plan_file};
@@ -37,8 +37,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::artifacts::{
-        PLAN_TRACKER_END, PLAN_TRACKER_START, generate_tracker_markdown_from_plan,
-        render_plan_with_tracker,
+        PLAN_TRACKER_END, PLAN_TRACKER_START, generate_tracker_markdown_from_plan, render_plan_with_tracker,
     };
     use super::persistence::detect_validation_command_hints;
     use crate::tools::traits::Tool;
@@ -182,8 +181,7 @@ mod tests {
         )
         .unwrap();
         let tracker_file = plans_dir.join("merge-test.tasks.md");
-        std::fs::write(&tracker_file, "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n")
-            .unwrap();
+        std::fs::write(&tracker_file, "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n").unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = FinishPlanningTool::new(state.clone());
@@ -398,10 +396,8 @@ Persist a concrete draft and seed tracker state.
         let tracker_file = persisted.tracker_file.expect("tracker file should exist");
         let plan_content = std::fs::read_to_string(&persisted.plan_file).unwrap();
         let tracker_content = std::fs::read_to_string(&tracker_file).unwrap();
-        let global_task = std::fs::read_to_string(
-            temp_dir.path().join(".vtcode").join("tasks").join("current_task.md"),
-        )
-        .unwrap();
+        let global_task =
+            std::fs::read_to_string(temp_dir.path().join(".vtcode").join("tasks").join("current_task.md")).unwrap();
 
         assert!(persisted.validation.is_ready());
         assert!(plan_content.contains(PLAN_TRACKER_START));
@@ -425,11 +421,7 @@ Persist a concrete draft and seed tracker state.
             .expect("merge should produce content");
         assert!(merged.contains(PLAN_TRACKER_START));
         assert!(merged.contains(PLAN_TRACKER_END));
-        assert_eq!(
-            merged.matches(PLAN_TRACKER_START).count(),
-            1,
-            "tracker must be embedded exactly once"
-        );
+        assert_eq!(merged.matches(PLAN_TRACKER_START).count(), 1, "tracker must be embedded exactly once");
         assert!(merged.contains("- [~] Embedded step"));
     }
 

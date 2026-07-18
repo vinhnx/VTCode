@@ -190,8 +190,7 @@ mod tests {
 
     #[test]
     fn test_error_serialization() {
-        let err = OpenResponseError::server_error("Internal error")
-            .with_code(OpenResponseErrorCode::Timeout);
+        let err = OpenResponseError::server_error("Internal error").with_code(OpenResponseErrorCode::Timeout);
         let json = serde_json::to_string(&err).unwrap();
         assert!(json.contains("\"type\":\"server_error\""));
         assert!(json.contains("\"code\":\"timeout\""));

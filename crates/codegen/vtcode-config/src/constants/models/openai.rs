@@ -12,9 +12,9 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5.4-pro",
     "gpt-5.4-nano",
     "gpt-5.4-mini",
-    "gpt-5.3-codex", // GPT-5.3 Codex optimized for agentic coding with xhigh reasoning support
-    "gpt-5.2-codex", // GPT-5.2 Codex optimized for agentic coding with xhigh reasoning support
-    "gpt-5.1-codex", // GPT-5.1 Codex optimized for agentic coding
+    "gpt-5.3-codex",     // GPT-5.3 Codex optimized for agentic coding with xhigh reasoning support
+    "gpt-5.2-codex",     // GPT-5.2 Codex optimized for agentic coding with xhigh reasoning support
+    "gpt-5.1-codex",     // GPT-5.1 Codex optimized for agentic coding
     "gpt-5.1-codex-max", // GPT-5.1 Codex Max higher-compute coding variant
     "gpt-5.1-mini",
     "gpt-5-codex", // GPT-5 Codex optimized for agentic coding

@@ -59,9 +59,7 @@ impl CallOutcome {
         match self {
             CallOutcome::Success => None,
             CallOutcome::InvalidArgument => Some(ErrorCategory::InvalidParameters),
-            CallOutcome::ExecutionError | CallOutcome::Cancelled => {
-                Some(ErrorCategory::ExecutionError)
-            }
+            CallOutcome::ExecutionError | CallOutcome::Cancelled => Some(ErrorCategory::ExecutionError),
         }
     }
 }
@@ -135,9 +133,7 @@ impl ToolResilience {
             None => self.circuit_breaker.record_success_for_tool(tool_name),
             // Failure: the breaker API is a no-op for non-circuit-breaking
             // categories, so InvalidArgument collapses to a harmless call.
-            Some(category) => {
-                self.circuit_breaker.record_failure_category_for_tool(tool_name, category)
-            }
+            Some(category) => self.circuit_breaker.record_failure_category_for_tool(tool_name, category),
         }
     }
 
@@ -149,9 +145,8 @@ impl ToolResilience {
 
 /// Process-wide resilience facade. Constructed lazily from the shared adaptive
 /// rate limiter and a default circuit breaker.
-pub static GLOBAL_TOOL_RESILIENCE: Lazy<Arc<ToolResilience>> = Lazy::new(|| {
-    Arc::new(ToolResilience::new(AdaptiveRateLimiter::default(), CircuitBreaker::default()))
-});
+pub static GLOBAL_TOOL_RESILIENCE: Lazy<Arc<ToolResilience>> =
+    Lazy::new(|| Arc::new(ToolResilience::new(AdaptiveRateLimiter::default(), CircuitBreaker::default())));
 
 #[cfg(test)]
 mod tests {
@@ -161,10 +156,7 @@ mod tests {
     fn facade_records_success_and_failures() {
         let resilience = ToolResilience::new(
             AdaptiveRateLimiter::new(8.0, 4.0),
-            CircuitBreaker::new(circuit_breaker::CircuitBreakerConfig {
-                failure_threshold: 2,
-                ..Default::default()
-            }),
+            CircuitBreaker::new(circuit_breaker::CircuitBreakerConfig { failure_threshold: 2, ..Default::default() }),
         );
 
         // First two calls allowed; record two execution errors to open the circuit.
@@ -183,10 +175,7 @@ mod tests {
     fn invalid_argument_does_not_trip_breaker() {
         let resilience = ToolResilience::new(
             AdaptiveRateLimiter::new(8.0, 4.0),
-            CircuitBreaker::new(circuit_breaker::CircuitBreakerConfig {
-                failure_threshold: 1,
-                ..Default::default()
-            }),
+            CircuitBreaker::new(circuit_breaker::CircuitBreakerConfig { failure_threshold: 1, ..Default::default() }),
         );
 
         for _ in 0..3 {

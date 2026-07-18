@@ -63,16 +63,9 @@ impl ToolRegistry {
                 if let Some(registration) = self.inventory.get_registration(&canonical_name) {
                     mcp_tools.push(McpToolInfo {
                         name: tool_name.clone(),
-                        description: registration
-                            .metadata()
-                            .description()
-                            .unwrap_or("")
-                            .to_string(),
+                        description: registration.metadata().description().unwrap_or("").to_string(),
                         provider: provider.clone(),
-                        input_schema: registration
-                            .parameter_schema()
-                            .cloned()
-                            .unwrap_or(Value::Null),
+                        input_schema: registration.parameter_schema().cloned().unwrap_or(Value::Null),
                     });
                 }
             }
@@ -132,8 +125,7 @@ impl ToolRegistry {
                         last_err = Some(err);
                         let jitter = (attempt * 37) % 80;
                         let pow = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent
-                        let backoff =
-                            Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));
+                        let backoff = Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));
                         warn!(
                             attempt = attempt + 1,
                             delay_ms = %backoff.as_millis(),
@@ -167,9 +159,7 @@ impl ToolRegistry {
                 let index = self.mcp_tool_index.read().await;
                 index
                     .iter()
-                    .flat_map(|(provider, names)| {
-                        names.iter().map(move |name| format!("mcp::{provider}::{name}"))
-                    })
+                    .flat_map(|(provider, names)| names.iter().map(move |name| format!("mcp::{provider}::{name}")))
                     .collect()
             };
             for canonical_name in existing_tools {
@@ -188,8 +178,7 @@ impl ToolRegistry {
             for tool in &tools {
                 let canonical_name = format!("mcp::{}::{}", tool.provider, tool.name);
                 if seen_tools.insert(canonical_name.clone()) {
-                    let registration =
-                        build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
+                    let registration = build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
 
                     if let Err(err) = self.inventory.register_tool(registration) {
                         warn!(
@@ -227,9 +216,7 @@ impl ToolRegistry {
             // Convert FxHashMap to std HashMap for policy manager API compatibility
             let std_index: hashbrown::HashMap<String, Vec<String>> =
                 mcp_index.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-            if let Some(allowlist) =
-                self.policy_gateway.lock().await.update_mcp_tools(&std_index).await?
-            {
+            if let Some(allowlist) = self.policy_gateway.lock().await.update_mcp_tools(&std_index).await? {
                 mcp_client.update_allowlist(allowlist);
             }
 

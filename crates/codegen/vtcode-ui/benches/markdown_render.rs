@@ -36,9 +36,7 @@ fn large_mixed_markdown() -> String {
 fn nested_list_blockquote_markdown() -> String {
     let mut out = String::new();
     for i in 0..220 {
-        out.push_str(&format!(
-            "> - item {i}\n>   - nested {i}\n>     - deep {i}\n>       continuation line {i}\n"
-        ));
+        out.push_str(&format!("> - item {i}\n>   - nested {i}\n>     - deep {i}\n>       continuation line {i}\n"));
     }
     out
 }

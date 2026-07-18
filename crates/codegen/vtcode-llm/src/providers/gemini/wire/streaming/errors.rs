@@ -15,16 +15,10 @@ pub enum StreamingError {
     },
     /// Response parsing errors
     #[error("Parse error: {message}")]
-    ParseError {
-        message: String,
-        raw_response: String,
-    },
+    ParseError { message: String, raw_response: String },
     /// Timeout errors
     #[error("Timeout during {operation} after {duration:?}")]
-    TimeoutError {
-        operation: String,
-        duration: Duration,
-    },
+    TimeoutError { operation: String, duration: Duration },
     /// Content validation errors
     #[error("Content error: {message}")]
     ContentError { message: String },

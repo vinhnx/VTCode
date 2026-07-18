@@ -67,9 +67,9 @@ impl DotfileBackup {
         #[cfg(unix)]
         {
             let perms = Permissions::from_mode(self.permissions);
-            tokio::fs::set_permissions(original_path, perms).await.with_context(|| {
-                format!("Failed to restore permissions for: {}", self.original_path)
-            })?;
+            tokio::fs::set_permissions(original_path, perms)
+                .await
+                .with_context(|| format!("Failed to restore permissions for: {}", self.original_path))?;
         }
 
         tracing::info!("Restored dotfile {} from backup {}", self.original_path, self.backup_path);
@@ -126,8 +126,7 @@ impl BackupManager {
         // Generate backup path
         let timestamp = Utc::now();
         let safe_name = self.safe_filename(file_path);
-        let backup_filename =
-            format!("{}.{}.backup", safe_name, timestamp.format("%Y%m%d_%H%M%S_%3f"));
+        let backup_filename = format!("{}.{}.backup", safe_name, timestamp.format("%Y%m%d_%H%M%S_%3f"));
         let backup_path = self.backup_dir.join(&backup_filename);
 
         // Write backup
@@ -213,8 +212,7 @@ impl BackupManager {
         let file_path_str = file_path.to_string_lossy();
 
         // Get backups for this file, sorted by date (newest first)
-        let mut file_backups: Vec<_> =
-            backups.iter().filter(|b| b.original_path == file_path_str).collect();
+        let mut file_backups: Vec<_> = backups.iter().filter(|b| b.original_path == file_path_str).collect();
 
         file_backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
@@ -255,8 +253,7 @@ impl BackupManager {
         let backups = self.load_backup_index().await?;
         let file_path_str = file_path.to_string_lossy();
 
-        let mut file_backups: Vec<_> =
-            backups.into_iter().filter(|b| b.original_path == file_path_str).collect();
+        let mut file_backups: Vec<_> = backups.into_iter().filter(|b| b.original_path == file_path_str).collect();
 
         file_backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
@@ -324,8 +321,7 @@ mod tests {
         tokio::fs::write(&test_file, "test content").await.unwrap();
 
         let manager = BackupManager::new(&backup_dir, 5).await.unwrap();
-        let backup =
-            manager.create_backup(&test_file, "test backup", "test-session").await.unwrap();
+        let backup = manager.create_backup(&test_file, "test backup", "test-session").await.unwrap();
 
         assert_eq!(backup.original_path, test_file.to_string_lossy());
         assert!(Path::new(&backup.backup_path).exists());

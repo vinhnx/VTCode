@@ -1,6 +1,4 @@
-use super::layout::{
-    BottomPanelKind, resolve_bottom_panel_spec, split_input_and_bottom_panel_area,
-};
+use super::layout::{BottomPanelKind, resolve_bottom_panel_spec, split_input_and_bottom_panel_area};
 use super::*;
 use crate::tui::config::constants::ui;
 use crate::tui::core_tui::app::session::transient::TransientSurface;
@@ -31,8 +29,7 @@ impl Session {
         let layout = self.core.build_frame_layout(viewport, metrics, panel.height);
         self.core.set_modal_list_area(None);
         let transcript_area = layout.main_area;
-        let (input_area, bottom_panel_area) = if matches!(panel.kind, BottomPanelKind::LocalAgents)
-        {
+        let (input_area, bottom_panel_area) = if matches!(panel.kind, BottomPanelKind::LocalAgents) {
             (
                 Rect::new(layout.input_area.x, layout.input_area.y, layout.input_area.width, 0),
                 Some(layout.input_area),
@@ -70,11 +67,7 @@ impl Session {
         }
 
         if self.has_active_overlay() {
-            core_render::render_modal(
-                self,
-                frame,
-                core_render::floating_modal_area(layout.viewport),
-            );
+            core_render::render_modal(self, frame, core_render::floating_modal_area(layout.viewport));
         }
 
         if self.diff_preview_state().is_some() {
@@ -124,13 +117,7 @@ fn render_task_panel(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             .task_panel_lines
             .iter()
             .map(|line| {
-                (
-                    inline_list::InlineListRow::single(
-                        line.clone().into(),
-                        session.core.header_secondary_style(),
-                    ),
-                    1,
-                )
+                (inline_list::InlineListRow::single(line.clone().into(), session.core.header_secondary_style()), 1)
             })
             .collect()
     };

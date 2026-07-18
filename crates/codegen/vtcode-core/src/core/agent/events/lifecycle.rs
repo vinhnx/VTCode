@@ -1,7 +1,6 @@
 use crate::exec::events::{
-    AgentMessageItem, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent,
-    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem,
-    ToolOutputItem,
+    AgentMessageItem, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutputItem,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -132,13 +131,14 @@ fn summarize_list_items(output: &Value, items: &[Value]) -> String {
         .and_then(Value::as_u64)
         .unwrap_or(items.len() as u64);
 
-    let (files, directories) = items.iter().fold((0u64, 0u64), |(files, directories), item| {
-        match item.get("type").and_then(Value::as_str) {
-            Some("file") => (files + 1, directories),
-            Some("directory") => (files, directories + 1),
-            _ => (files, directories),
-        }
-    });
+    let (files, directories) =
+        items
+            .iter()
+            .fold((0u64, 0u64), |(files, directories), item| match item.get("type").and_then(Value::as_str) {
+                Some("file") => (files + 1, directories),
+                Some("directory") => (files, directories + 1),
+                _ => (files, directories),
+            });
 
     let mut summary = format!("Listed {total} {}", pluralize(total, "item", "items"));
     if files > 0 || directories > 0 {
@@ -301,9 +301,7 @@ impl SharedLifecycleEmitter {
         self.pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: item_id,
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: text.to_string(),
-                }),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.to_string() }),
             },
         }));
     }
@@ -431,22 +429,17 @@ impl SharedLifecycleEmitter {
     }
 
     /// Start tracking a tool call, emitting an item-started event.
-    pub fn start_tool_call(
-        &mut self,
-        call_id: &str,
-        tool_name: Option<String>,
-        item_id: Option<String>,
-    ) -> bool {
+    pub fn start_tool_call(&mut self, call_id: &str, tool_name: Option<String>, item_id: Option<String>) -> bool {
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer =
-            self.tool_calls
-                .entry(call_id.to_string())
-                .or_insert_with(|| ToolCallStreamState {
-                    item_id: generated_item_id,
-                    name: None,
-                    arguments: String::new(),
-                    started: false,
-                });
+        let buffer = self
+            .tool_calls
+            .entry(call_id.to_string())
+            .or_insert_with(|| ToolCallStreamState {
+                item_id: generated_item_id,
+                name: None,
+                arguments: String::new(),
+                started: false,
+            });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;
@@ -478,15 +471,15 @@ impl SharedLifecycleEmitter {
         }
 
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer =
-            self.tool_calls
-                .entry(call_id.to_string())
-                .or_insert_with(|| ToolCallStreamState {
-                    item_id: generated_item_id,
-                    name: None,
-                    arguments: String::new(),
-                    started: false,
-                });
+        let buffer = self
+            .tool_calls
+            .entry(call_id.to_string())
+            .or_insert_with(|| ToolCallStreamState {
+                item_id: generated_item_id,
+                name: None,
+                arguments: String::new(),
+                started: false,
+            });
 
         if !buffer.started {
             buffer.started = true;
@@ -551,15 +544,15 @@ impl SharedLifecycleEmitter {
         item_id: Option<String>,
     ) -> bool {
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer =
-            self.tool_calls
-                .entry(call_id.to_string())
-                .or_insert_with(|| ToolCallStreamState {
-                    item_id: generated_item_id,
-                    name: None,
-                    arguments: String::new(),
-                    started: false,
-                });
+        let buffer = self
+            .tool_calls
+            .entry(call_id.to_string())
+            .or_insert_with(|| ToolCallStreamState {
+                item_id: generated_item_id,
+                name: None,
+                arguments: String::new(),
+                started: false,
+            });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;
@@ -737,13 +730,7 @@ pub fn tool_started_event(
     tool_call_id: Option<&str>,
 ) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_invocation_item(
-            item_id,
-            tool_name,
-            arguments,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-        ),
+        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, ToolCallStatus::InProgress),
     })
 }
 
@@ -776,14 +763,7 @@ pub fn tool_invocation_completed_event(
 #[must_use]
 pub fn tool_output_started_event(call_item_id: String, tool_call_id: Option<&str>) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-            None,
-            None,
-            String::new(),
-        ),
+        item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, String::new()),
     })
 }
 
@@ -794,14 +774,7 @@ pub fn tool_output_updated_event(
     output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            ToolCallStatus::InProgress,
-            None,
-            None,
-            output,
-        ),
+        item: tool_output_item(&call_item_id, tool_call_id, ToolCallStatus::InProgress, None, None, output),
     })
 }
 

@@ -357,7 +357,7 @@ impl Default for LLMClientConfig {
 impl Default for AgentExecutionConfig {
     fn default() -> Self {
         Self {
-            use_optimized_loop: true, // Enable by default for better performance
+            use_optimized_loop: true,             // Enable by default for better performance
             enable_performance_prediction: false, // Conservative default
             state_history_size: 1000,
             resource_monitor_interval_ms: 100,

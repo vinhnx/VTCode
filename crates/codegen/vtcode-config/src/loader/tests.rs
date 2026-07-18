@@ -3,9 +3,7 @@ use super::*;
 use crate::core::CustomProviderConfig;
 use crate::core::prompt_cache::PromptCacheRetention;
 use crate::defaults::{self, SyntaxHighlightingDefaults, WorkspacePathsDefaults};
-use crate::ide_context::{
-    IdeContextProviderConfig, IdeContextProviderMode, IdeContextProvidersConfig,
-};
+use crate::ide_context::{IdeContextProviderConfig, IdeContextProviderMode, IdeContextProvidersConfig};
 use crate::loader::layers::ConfigLayerSource;
 use serial_test::serial;
 use std::fs;
@@ -45,8 +43,7 @@ fn test_layered_config_loading() {
     let home_dir = workspace_root.join("home");
     fs::create_dir_all(&home_dir).expect("failed to create home dir");
     let user_config_path = home_dir.join("vtcode.toml");
-    fs::write(&user_config_path, "agent.provider = \"anthropic\"")
-        .expect("failed to write user config");
+    fs::write(&user_config_path, "agent.provider = \"anthropic\"").expect("failed to write user config");
 
     // 2. Workspace config
     let workspace_config_path = workspace_root.join("vtcode.toml");
@@ -54,12 +51,10 @@ fn test_layered_config_loading() {
         .expect("failed to write workspace config");
 
     let static_paths = StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
-    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
-        .with_home_paths(vec![user_config_path.clone()]);
+    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![user_config_path.clone()]);
 
     defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
-        let manager =
-            ConfigManager::load_from_workspace(workspace_root).expect("failed to load config");
+        let manager = ConfigManager::load_from_workspace(workspace_root).expect("failed to load config");
 
         assert_eq!(manager.config().agent.provider, "anthropic");
         assert_eq!(manager.config().agent.default_model, "claude-haiku-4-5");
@@ -81,16 +76,13 @@ fn test_invalid_layer_is_reported_with_source_context() {
     let home_dir = workspace_root.join("home");
     fs::create_dir_all(&home_dir).expect("failed to create home dir");
     let user_config_path = home_dir.join("vtcode.toml");
-    fs::write(&user_config_path, "[agent\nprovider = \"openai\"")
-        .expect("failed to write invalid user config");
+    fs::write(&user_config_path, "[agent\nprovider = \"openai\"").expect("failed to write invalid user config");
 
     let workspace_config_path = workspace_root.join("vtcode.toml");
-    fs::write(&workspace_config_path, "agent.provider = \"anthropic\"")
-        .expect("failed to write workspace config");
+    fs::write(&workspace_config_path, "agent.provider = \"anthropic\"").expect("failed to write workspace config");
 
     let static_paths = StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
-    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
-        .with_home_paths(vec![user_config_path.clone()]);
+    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![user_config_path.clone()]);
 
     defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
         let result = ConfigManager::load_from_workspace(workspace_root);
@@ -113,8 +105,7 @@ fn test_config_builder_overrides() {
     let workspace_root = workspace.path();
 
     let workspace_config_path = workspace_root.join("vtcode.toml");
-    fs::write(&workspace_config_path, "agent.provider = \"openai\"")
-        .expect("failed to write workspace config");
+    fs::write(&workspace_config_path, "agent.provider = \"openai\"").expect("failed to write workspace config");
 
     let static_paths = StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
     let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![]);
@@ -123,10 +114,7 @@ fn test_config_builder_overrides() {
         let manager = ConfigBuilder::new()
             .workspace(workspace_root.to_path_buf())
             .cli_override("agent.provider".to_string(), toml::Value::String("gemini".to_string()))
-            .cli_override(
-                "agent.default_model".to_string(),
-                toml::Value::String("gemini-1.5-pro".to_string()),
-            )
+            .cli_override("agent.default_model".to_string(), toml::Value::String("gemini-1.5-pro".to_string()))
             .cli_overrides(&[("tools.profile".to_string(), "advanced_vtcode".to_string())])
             .build()
             .expect("failed to build config");
@@ -240,17 +228,13 @@ fn vtcode_config_validation_fails_for_invalid_highlight_timeout() {
     let error = config
         .validate()
         .expect_err("validation should fail for zero highlight timeout");
-    assert!(
-        format!("{error:#}").contains("highlight"),
-        "expected error to mention highlight, got: {error:#}"
-    );
+    assert!(format!("{error:#}").contains("highlight"), "expected error to mention highlight, got: {error:#}");
 }
 
 #[test]
 fn load_from_file_rejects_invalid_syntax_highlighting() {
     let mut temp_file = NamedTempFile::new().expect("failed to create temp file");
-    writeln!(temp_file, "[syntax_highlighting]\nhighlight_timeout_ms = 0\n")
-        .expect("failed to write temp config");
+    writeln!(temp_file, "[syntax_highlighting]\nhighlight_timeout_ms = 0\n").expect("failed to write temp config");
 
     let result = ConfigManager::load_from_file(temp_file.path());
     assert!(result.is_err(), "expected validation error");
@@ -333,10 +317,7 @@ prompt_cache_key_mode = "off"
 
     let manager = ConfigManager::load_from_file(&path).unwrap();
     let config = manager.config();
-    assert_eq!(
-        config.prompt_cache.providers.openai.prompt_cache_retention,
-        Some(PromptCacheRetention::H24)
-    );
+    assert_eq!(config.prompt_cache.providers.openai.prompt_cache_retention, Some(PromptCacheRetention::H24));
     assert_eq!(
         config.prompt_cache.providers.openai.prompt_cache_key_mode,
         crate::core::OpenAIPromptCacheKeyMode::Off
@@ -393,21 +374,14 @@ default_policy = "deny"
     let mut modified_config = manager.config().clone();
     modified_config.agent.default_model = "gpt-5".to_string();
 
-    ConfigManager::save_config_to_path(temp_file.path(), &modified_config)
-        .expect("failed to save config");
+    ConfigManager::save_config_to_path(temp_file.path(), &modified_config).expect("failed to save config");
 
     // Read back and verify comments are preserved
     let saved_content = fs::read_to_string(temp_file.path()).expect("failed to read saved config");
 
-    assert!(
-        saved_content.contains("# This is a test comment"),
-        "top-level comment should be preserved"
-    );
+    assert!(saved_content.contains("# This is a test comment"), "top-level comment should be preserved");
     assert!(saved_content.contains("# Provider comment"), "inline comment should be preserved");
-    assert!(
-        saved_content.contains("# Tools section comment"),
-        "section comment should be preserved"
-    );
+    assert!(saved_content.contains("# Tools section comment"), "section comment should be preserved");
     assert!(saved_content.contains("gpt-5"), "modified value should be present");
 }
 
@@ -421,8 +395,7 @@ fn config_defaults_provider_overrides_paths_and_theme() {
 
     let config_file_name = "custom-config.toml";
     let config_path = config_dir.join(config_file_name);
-    let serialized =
-        toml::to_string(&VTCodeConfig::default()).expect("failed to serialize default config");
+    let serialized = toml::to_string(&VTCodeConfig::default()).expect("failed to serialize default config");
     fs::write(&config_path, serialized).expect("failed to write config file");
 
     let static_paths = StaticWorkspacePaths::new(workspace_root, &config_dir);
@@ -433,14 +406,11 @@ fn config_defaults_provider_overrides_paths_and_theme() {
         .with_syntax_languages(vec!["zig".to_string()]);
 
     defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
-        let manager = ConfigManager::load_from_workspace(workspace_root)
-            .expect("failed to load workspace config");
+        let manager = ConfigManager::load_from_workspace(workspace_root).expect("failed to load workspace config");
 
         let resolved_path = manager.config_path().expect("config path should be resolved");
-        let resolved_canonical =
-            fs::canonicalize(resolved_path).expect("resolved config path should canonicalize");
-        let expected_canonical =
-            fs::canonicalize(&config_path).expect("expected config path should canonicalize");
+        let resolved_canonical = fs::canonicalize(resolved_path).expect("resolved config path should canonicalize");
+        let expected_canonical = fs::canonicalize(&config_path).expect("expected config path should canonicalize");
         assert_eq!(resolved_canonical, expected_canonical);
 
         assert_eq!(SyntaxHighlightingDefaults::theme(), "custom-theme");
@@ -487,8 +457,7 @@ show_sidebar = false
     );
 
     // Create a NEW manager to simulate reopening /config palette
-    let new_manager =
-        ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
+    let new_manager = ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
     assert_eq!(
         new_manager.config().ui.display_mode,
         crate::UiDisplayMode::Full,
@@ -496,8 +465,7 @@ show_sidebar = false
     );
 
     // Force disk read by loading from file directly
-    let new_manager2 =
-        ConfigManager::load_from_file(&config_path).expect("failed to reload from file");
+    let new_manager2 = ConfigManager::load_from_file(&config_path).expect("failed to reload from file");
     assert!(
         new_manager2.config().ui.show_sidebar,
         "reloaded config should have show_sidebar = true, got: {}",
@@ -535,10 +503,7 @@ fn save_config_writes_sparse_model_theme_and_permission_values() {
         !saved_content.contains("provider = \"openai\""),
         "default agent provider should not be expanded. Got:\n{saved_content}"
     );
-    assert!(
-        !saved_content.contains("[ui]"),
-        "default UI section should not be expanded. Got:\n{saved_content}"
-    );
+    assert!(!saved_content.contains("[ui]"), "default UI section should not be expanded. Got:\n{saved_content}");
 
     let reloaded = ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
     assert_eq!(reloaded.config().agent.default_model, "gpt-5.4");
@@ -570,8 +535,7 @@ fn deprecated_permission_keys_are_migrated_on_save() {
             .unwrap_or_else(|e| panic!("deprecated permission keys should load: {e:#}"));
 
         // Saving strips the deprecated keys (the save path migrates them away).
-        ConfigManager::save_config_to_path(&config_path, manager.config())
-            .expect("failed to save config");
+        ConfigManager::save_config_to_path(&config_path, manager.config()).expect("failed to save config");
 
         let written = fs::read_to_string(&config_path).unwrap();
         assert!(

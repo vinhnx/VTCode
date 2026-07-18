@@ -148,9 +148,6 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
     }
 }
 
-async fn execute_command<E: CommandExecutor>(
-    executor: &E,
-    invocation: &CommandInvocation,
-) -> Result<CommandOutput> {
+async fn execute_command<E: CommandExecutor>(executor: &E, invocation: &CommandInvocation) -> Result<CommandOutput> {
     executor.execute(invocation)
 }

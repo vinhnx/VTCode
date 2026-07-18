@@ -100,14 +100,7 @@ pub async fn test_path_writable(
         format!("touch '{}' && rm -f '{}'", test_file.display(), test_file.display()),
     ];
 
-    let result = debug_sandbox(
-        SandboxType::platform_default(),
-        policy,
-        &test_command,
-        cwd,
-        sandbox_executable,
-    )
-    .await?;
+    let result = debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, sandbox_executable).await?;
 
     Ok(result.success)
 }
@@ -124,14 +117,7 @@ pub async fn test_network_blocked(
         "curl -s --connect-timeout 2 https://example.com > /dev/null 2>&1".to_string(),
     ];
 
-    let result = debug_sandbox(
-        SandboxType::platform_default(),
-        policy,
-        &test_command,
-        cwd,
-        sandbox_executable,
-    )
-    .await?;
+    let result = debug_sandbox(SandboxType::platform_default(), policy, &test_command, cwd, sandbox_executable).await?;
 
     Ok(!result.success)
 }
@@ -151,20 +137,13 @@ pub fn sandbox_capabilities_summary() -> String {
         SandboxType::LinuxLandlock,
         SandboxType::WindowsRestrictedToken,
     ] {
-        let available = if sandbox_type.is_available() {
-            "✓"
-        } else {
-            "✗"
-        };
+        let available = if sandbox_type.is_available() { "✓" } else { "✗" };
         summary.push_str(&format!("  {available} {sandbox_type:?}\n"));
     }
 
     summary.push_str("\nSandbox policies:\n");
-    summary.push_str(
-        "  - ReadOnly: Read files, no writes except /dev/null, optional network policy\n",
-    );
-    summary
-        .push_str("  - WorkspaceWrite: Read all, write to workspace, optional network allowlist\n");
+    summary.push_str("  - ReadOnly: Read files, no writes except /dev/null, optional network policy\n");
+    summary.push_str("  - WorkspaceWrite: Read all, write to workspace, optional network allowlist\n");
     summary.push_str("  - DangerFullAccess: No restrictions (use with caution)\n");
 
     summary.push_str("\nSecurity features:\n");

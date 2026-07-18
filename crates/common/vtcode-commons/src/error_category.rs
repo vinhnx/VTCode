@@ -231,9 +231,7 @@ impl ErrorCategory {
                 Cow::Borrowed("Use alternative tools that comply with policies"),
             ],
             ErrorCategory::PlanningPolicyViolation => vec![
-                Cow::Borrowed(
-                    "This operation is not allowed in the Planning workflow with read-only permissions",
-                ),
+                Cow::Borrowed("This operation is not allowed in the Planning workflow with read-only permissions"),
                 Cow::Borrowed("Exit the Planning workflow to perform mutating operations"),
             ],
             ErrorCategory::SandboxFailure => vec![
@@ -294,10 +292,7 @@ impl ErrorCategory {
         guidance.push(format!("Authentication failed for {provider_label}."));
 
         if env_key.is_empty() {
-            guidance.push(
-                "This provider uses managed authentication — run the provider's login command."
-                    .to_string(),
-            );
+            guidance.push("This provider uses managed authentication — run the provider's login command.".to_string());
         } else {
             guidance.push(format!("To fix, set your API key ({env_key}):"));
             guidance.push(format!("  1. Export: export {env_key}=your-key"));
@@ -449,15 +444,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
     }
 
     // --- Priority 6: Tool not found ---
-    if contains_any(
-        &msg,
-        &[
-            "tool not found",
-            "unknown tool",
-            "unsupported tool",
-            "no such tool",
-        ],
-    ) {
+    if contains_any(&msg, &["tool not found", "unknown tool", "unsupported tool", "no such tool"]) {
         return ErrorCategory::ToolNotFound;
     }
 
@@ -622,8 +609,7 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
             crate::llm::LLMError::InvalidRequest { .. } => ErrorCategory::InvalidParameters,
             crate::llm::LLMError::Network { .. } => ErrorCategory::Network,
             crate::llm::LLMError::Provider { message, metadata } => {
-                let metadata_category =
-                    classify_llm_metadata(metadata.as_deref(), ErrorCategory::ExecutionError);
+                let metadata_category = classify_llm_metadata(metadata.as_deref(), ErrorCategory::ExecutionError);
                 if metadata_category != ErrorCategory::ExecutionError {
                     return metadata_category;
                 }
@@ -650,10 +636,7 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
     }
 }
 
-fn classify_llm_metadata(
-    metadata: Option<&crate::llm::LLMErrorMetadata>,
-    fallback: ErrorCategory,
-) -> ErrorCategory {
+fn classify_llm_metadata(metadata: Option<&crate::llm::LLMErrorMetadata>, fallback: ErrorCategory) -> ErrorCategory {
     let Some(metadata) = metadata else {
         return fallback;
     };
@@ -687,35 +670,23 @@ mod tests {
 
     #[test]
     fn policy_violation_takes_priority_over_permission() {
-        assert_eq!(
-            classify_error_message("tool permission denied by policy"),
-            ErrorCategory::PolicyViolation
-        );
+        assert_eq!(classify_error_message("tool permission denied by policy"), ErrorCategory::PolicyViolation);
     }
 
     #[test]
     fn rate_limit_classified_correctly() {
-        assert_eq!(
-            classify_error_message("provider returned 429 Too Many Requests"),
-            ErrorCategory::RateLimit
-        );
+        assert_eq!(classify_error_message("provider returned 429 Too Many Requests"), ErrorCategory::RateLimit);
         assert_eq!(classify_error_message("rate limit exceeded"), ErrorCategory::RateLimit);
     }
 
     #[test]
     fn service_unavailable_is_classified() {
-        assert_eq!(
-            classify_error_message("503 service unavailable"),
-            ErrorCategory::ServiceUnavailable
-        );
+        assert_eq!(classify_error_message("503 service unavailable"), ErrorCategory::ServiceUnavailable);
     }
 
     #[test]
     fn authentication_errors() {
-        assert_eq!(
-            classify_error_message("invalid api key provided"),
-            ErrorCategory::Authentication
-        );
+        assert_eq!(classify_error_message("invalid api key provided"), ErrorCategory::Authentication);
         assert_eq!(classify_error_message("401 unauthorized"), ErrorCategory::Authentication);
     }
 
@@ -725,10 +696,7 @@ mod tests {
             classify_error_message("you have reached your weekly usage limit"),
             ErrorCategory::ResourceExhausted
         );
-        assert_eq!(
-            classify_error_message("quota exceeded for this model"),
-            ErrorCategory::ResourceExhausted
-        );
+        assert_eq!(classify_error_message("quota exceeded for this model"), ErrorCategory::ResourceExhausted);
     }
 
     #[test]
@@ -745,18 +713,12 @@ mod tests {
 
     #[test]
     fn tool_not_found() {
-        assert_eq!(
-            classify_error_message("unknown tool: ask_questions"),
-            ErrorCategory::ToolNotFound
-        );
+        assert_eq!(classify_error_message("unknown tool: ask_questions"), ErrorCategory::ToolNotFound);
     }
 
     #[test]
     fn resource_not_found() {
-        assert_eq!(
-            classify_error_message("no such file or directory: /tmp/missing"),
-            ErrorCategory::ResourceNotFound
-        );
+        assert_eq!(classify_error_message("no such file or directory: /tmp/missing"), ErrorCategory::ResourceNotFound);
         assert_eq!(
             classify_error_message("Path 'crates/codegen/vtcode-core/src/agent' does not exist"),
             ErrorCategory::ResourceNotFound
@@ -774,37 +736,24 @@ mod tests {
             ErrorCategory::InvalidParameters
         );
         assert_eq!(
-            classify_error_message(
-                "invalid patch format: input looks like a standard unified diff (---/+++ format)"
-            ),
+            classify_error_message("invalid patch format: input looks like a standard unified diff (---/+++ format)"),
             ErrorCategory::InvalidParameters
         );
         assert_eq!(
             classify_error_message("invalid patch hunk on line 5: unexpected end of input"),
             ErrorCategory::InvalidParameters
         );
+        assert_eq!(classify_error_message("cannot parse empty patch input"), ErrorCategory::InvalidParameters);
+        assert_eq!(classify_error_message("patch does not contain any operations"), ErrorCategory::InvalidParameters);
         assert_eq!(
-            classify_error_message("cannot parse empty patch input"),
-            ErrorCategory::InvalidParameters
-        );
-        assert_eq!(
-            classify_error_message("patch does not contain any operations"),
-            ErrorCategory::InvalidParameters
-        );
-        assert_eq!(
-            classify_error_message(
-                "semantic patch anchor 'fn main' for 'src/main.rs' could not be resolved"
-            ),
+            classify_error_message("semantic patch anchor 'fn main' for 'src/main.rs' could not be resolved"),
             ErrorCategory::InvalidParameters
         );
     }
 
     #[test]
     fn permission_denied() {
-        assert_eq!(
-            classify_error_message("permission denied: /etc/shadow"),
-            ErrorCategory::PermissionDenied
-        );
+        assert_eq!(classify_error_message("permission denied: /etc/shadow"), ErrorCategory::PermissionDenied);
     }
 
     #[test]
@@ -814,18 +763,12 @@ mod tests {
 
     #[test]
     fn planning_policy_violation() {
-        assert_eq!(
-            classify_error_message("not allowed in planning workflow"),
-            ErrorCategory::PolicyViolation
-        );
+        assert_eq!(classify_error_message("not allowed in planning workflow"), ErrorCategory::PolicyViolation);
     }
 
     #[test]
     fn sandbox_failure() {
-        assert_eq!(
-            classify_error_message("sandbox denied this operation"),
-            ErrorCategory::SandboxFailure
-        );
+        assert_eq!(classify_error_message("sandbox denied this operation"), ErrorCategory::SandboxFailure);
     }
 
     #[test]
@@ -835,14 +778,9 @@ mod tests {
 
     #[test]
     fn invalid_parameters() {
+        assert_eq!(classify_error_message("invalid argument: missing path field"), ErrorCategory::InvalidParameters);
         assert_eq!(
-            classify_error_message("invalid argument: missing path field"),
-            ErrorCategory::InvalidParameters
-        );
-        assert_eq!(
-            classify_error_message(
-                "Failed to parse arguments for read_file handler: invalid type: boolean `false`"
-            ),
+            classify_error_message("Failed to parse arguments for read_file handler: invalid type: boolean `false`"),
             ErrorCategory::InvalidParameters
         );
         assert_eq!(
@@ -850,9 +788,7 @@ mod tests {
             ErrorCategory::InvalidParameters
         );
         assert_eq!(
-            classify_error_message(
-                "structural pattern preflight failed: pattern is not parseable as Rust syntax"
-            ),
+            classify_error_message("structural pattern preflight failed: pattern is not parseable as Rust syntax"),
             ErrorCategory::InvalidParameters
         );
     }
@@ -896,8 +832,7 @@ mod tests {
 
     #[test]
     fn llm_error_authentication_converts() {
-        let err =
-            crate::llm::LLMError::Authentication { message: "bad key".to_string(), metadata: None };
+        let err = crate::llm::LLMError::Authentication { message: "bad key".to_string(), metadata: None };
         assert_eq!(ErrorCategory::from(&err), ErrorCategory::Authentication);
     }
 
@@ -938,15 +873,7 @@ mod tests {
         use crate::llm::LLMErrorMetadata;
         let err = crate::llm::LLMError::Provider {
             message: "error".to_string(),
-            metadata: Some(LLMErrorMetadata::new(
-                "openai",
-                Some(503),
-                None,
-                None,
-                None,
-                None,
-                None,
-            )),
+            metadata: Some(LLMErrorMetadata::new("openai", Some(503), None, None, None, None, None)),
         };
         assert_eq!(ErrorCategory::from(&err), ErrorCategory::ServiceUnavailable);
     }
@@ -996,10 +923,7 @@ mod tests {
             ErrorCategory::PolicyViolation,
             ErrorCategory::ExecutionError,
         ] {
-            assert!(
-                !cat.recovery_suggestions().is_empty(),
-                "Missing recovery suggestions for {cat:?}"
-            );
+            assert!(!cat.recovery_suggestions().is_empty(), "Missing recovery suggestions for {cat:?}");
         }
     }
 

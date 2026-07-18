@@ -21,8 +21,7 @@ pub mod workspace_state;
 // Re-export key types for convenience
 pub use conversation_memory::{ConversationMemory, EntityMention, MentionHistory};
 pub use dynamic_init::{
-    DynamicContextDirs, ensure_mcp_dynamic_context, ensure_skills_dynamic_context,
-    initialize_dynamic_context,
+    DynamicContextDirs, ensure_mcp_dynamic_context, ensure_skills_dynamic_context, initialize_dynamic_context,
 };
 pub use entity_resolver::{EntityIndex, EntityMatch, EntityResolver, FileLocation};
 pub use history_files::{HistoryConfig, HistoryFileManager, HistoryMessage, HistoryWriteResult};

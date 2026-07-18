@@ -50,7 +50,7 @@ impl Default for CircuitBreakerConfig {
         Self {
             failure_threshold: 7,
             reset_timeout: Duration::from_secs(60),
-            min_backoff: Duration::from_secs(5), // Start with 5s
+            min_backoff: Duration::from_secs(5),   // Start with 5s
             max_backoff: Duration::from_secs(120), // Cap at 2m
             backoff_factor: 2.0,
             half_open_probe_count: 1,
@@ -63,9 +63,9 @@ struct ToolCircuitState {
     status: CircuitState,
     failure_count: u32,
     last_failure_time: Option<Instant>,
-    current_backoff: Duration, // Current backoff duration for this tool
+    current_backoff: Duration,          // Current backoff duration for this tool
     circuit_opened_at: Option<Instant>, // When circuit first opened (for diagnostics)
-    open_count: u32,           // How many times circuit has opened
+    open_count: u32,                    // How many times circuit has opened
     denied_requests: u32,
     last_denied_at: Option<Instant>,
     last_error_category: Option<ErrorCategory>,
@@ -472,10 +472,7 @@ mod tests {
 
     #[test]
     fn invalid_parameters_do_not_open_circuit() {
-        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
-            failure_threshold: 2,
-            ..Default::default()
-        });
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig { failure_threshold: 2, ..Default::default() });
 
         breaker.record_failure_category_for_tool("read_file", ErrorCategory::InvalidParameters);
         breaker.record_failure_category_for_tool("read_file", ErrorCategory::InvalidParameters);
@@ -596,10 +593,8 @@ mod tests {
 
     #[test]
     fn concurrent_failures_across_different_tools_are_independent() {
-        let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
-            failure_threshold: 3,
-            ..Default::default()
-        }));
+        let breaker =
+            Arc::new(CircuitBreaker::new(CircuitBreakerConfig { failure_threshold: 3, ..Default::default() }));
 
         // Spawn threads that fail different tools
         let mut handles = vec![];
@@ -609,10 +604,7 @@ mod tests {
             handles.push(std::thread::spawn(move || {
                 let tool_name = format!("tool_{}", i % 3);
                 for _ in 0..2 {
-                    breaker.record_failure_category_for_tool(
-                        &tool_name,
-                        ErrorCategory::ExecutionError,
-                    );
+                    breaker.record_failure_category_for_tool(&tool_name, ErrorCategory::ExecutionError);
                 }
             }));
         }
@@ -629,11 +621,7 @@ mod tests {
             let tool_name = format!("tool_{i}");
             let state = breaker.state_for_tool(&tool_name);
             // With 6 failures per tool (exceeds threshold of 3), circuit should be open
-            assert_eq!(
-                state,
-                CircuitState::Open,
-                "Tool {tool_name} should be Open after 6 failures"
-            );
+            assert_eq!(state, CircuitState::Open, "Tool {tool_name} should be Open after 6 failures");
         }
     }
 
@@ -641,10 +629,8 @@ mod tests {
     fn concurrent_successes_and_failures_maintain_consistency() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
-        let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
-            failure_threshold: 5,
-            ..Default::default()
-        }));
+        let breaker =
+            Arc::new(CircuitBreaker::new(CircuitBreakerConfig { failure_threshold: 5, ..Default::default() }));
 
         let success_count = Arc::new(AtomicUsize::new(0));
         let failure_count = Arc::new(AtomicUsize::new(0));
@@ -661,8 +647,7 @@ mod tests {
                     breaker.record_success_for_tool("tool_x");
                     success_count.fetch_add(1, Ordering::SeqCst);
                 } else {
-                    breaker
-                        .record_failure_category_for_tool("tool_x", ErrorCategory::ExecutionError);
+                    breaker.record_failure_category_for_tool("tool_x", ErrorCategory::ExecutionError);
                     failure_count.fetch_add(1, Ordering::SeqCst);
                 }
             }));

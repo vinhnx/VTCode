@@ -23,10 +23,7 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
 
     let first_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(first_submit.is_none());
-    assert!(
-        session.wizard_overlay().is_some(),
-        "wizard should remain open after intermediate step completion"
-    );
+    assert!(session.wizard_overlay().is_some(), "wizard should remain open after intermediate step completion");
     assert_eq!(session.wizard_overlay().map(|wizard| wizard.current_step), Some(1));
 
     let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -65,9 +62,7 @@ fn wizard_multistep_defaulted_enter_advances_and_returns_default_answer() {
 
     let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match final_submit {
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(
-            selections,
-        )))) => {
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Wizard(selections)))) => {
             assert_eq!(selections.len(), 2);
             match &selections[0] {
                 InlineListSelection::RequestUserInputAnswer { other, .. } => {

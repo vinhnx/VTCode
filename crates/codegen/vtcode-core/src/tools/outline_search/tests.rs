@@ -1,7 +1,7 @@
 use super::{
     BoundedRecordRead, CODE_SEARCH_OUTLINE_BYTE_CAP, CODE_SEARCH_OUTLINE_FIXED_ARGS,
-    CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE, arg_bytes, next_outline_path_batch_with_cap,
-    read_bounded_record, search_declarations_bounded, smart_case_eq,
+    CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE, arg_bytes, next_outline_path_batch_with_cap, read_bounded_record,
+    search_declarations_bounded, smart_case_eq,
 };
 use crate::tools::ast_grep_binary::set_ast_grep_binary_override_for_tests as set_read_only_ast_grep_override_for_tests;
 use crate::tools::ast_grep_language::AstGrepLanguage;
@@ -101,8 +101,7 @@ fn workspace_with_numbered_sources(count: usize) -> (TempDir, PathBuf) {
     let src = temp.path().join("src");
     fs::create_dir_all(&src).expect("src directory");
     for index in 0..count {
-        fs::write(src.join(format!("{index:03}.rs")), "pub fn alpha() {}\n")
-            .expect("source fixture");
+        fs::write(src.join(format!("{index:03}.rs")), "pub fn alpha() {}\n").expect("source fixture");
     }
     (temp, src)
 }
@@ -114,15 +113,10 @@ async fn code_search_declaration_stream_reaps_at_candidate_cap() {
     let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
     let temp = workspace_with_source();
 
-    let outcome = search_declarations_bounded(
-        temp.path(),
-        &temp.path().join("src"),
-        "alpha",
-        &[AstGrepLanguage::Rust],
-        1,
-    )
-    .await
-    .expect("candidate-bounded declaration stream");
+    let outcome =
+        search_declarations_bounded(temp.path(), &temp.path().join("src"), "alpha", &[AstGrepLanguage::Rust], 1)
+            .await
+            .expect("candidate-bounded declaration stream");
 
     assert_eq!(outcome.files.len(), 1);
     assert_eq!(outcome.files[0].declarations.len(), 1);
@@ -143,14 +137,12 @@ async fn code_search_declaration_candidate_cap_selects_stable_path_prefix() {
         fs::write(src.join(name), "pub fn alpha() {}\n").expect("source fixture");
     }
 
-    let first =
-        search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
-            .await
-            .expect("first bounded declaration search");
-    let second =
-        search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
-            .await
-            .expect("second bounded declaration search");
+    let first = search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
+        .await
+        .expect("first bounded declaration search");
+    let second = search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], 1)
+        .await
+        .expect("second bounded declaration search");
 
     assert_eq!(first, second);
     assert!(first.truncated);
@@ -167,24 +159,15 @@ async fn code_search_declaration_batches_preserve_stable_global_prefix() {
     let candidate_cap = CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 1;
     let (temp, src) = workspace_with_numbered_sources(file_count);
 
-    let outcome = search_declarations_bounded(
-        temp.path(),
-        &src,
-        "alpha",
-        &[AstGrepLanguage::Rust],
-        candidate_cap,
-    )
-    .await
-    .expect("multi-batch declaration search");
+    let outcome = search_declarations_bounded(temp.path(), &src, "alpha", &[AstGrepLanguage::Rust], candidate_cap)
+        .await
+        .expect("multi-batch declaration search");
 
     assert_eq!(outcome.files.len(), candidate_cap);
     assert!(outcome.truncated);
     assert!(!outcome.stream_complete);
     for (index, file) in outcome.files.iter().enumerate() {
-        assert!(
-            file.path.ends_with(format!("{index:03}.rs")),
-            "unexpected global prefix at {index}: {file:?}"
-        );
+        assert!(file.path.ends_with(format!("{index:03}.rs")), "unexpected global prefix at {index}: {file:?}");
     }
 }
 
@@ -196,10 +179,9 @@ async fn code_search_declaration_batches_keep_complete_file_inventory() {
     let file_count = CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 2;
     let (temp, src) = workspace_with_numbered_sources(file_count);
 
-    let outcome =
-        search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
-            .await
-            .expect("complete multi-batch declaration search");
+    let outcome = search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
+        .await
+        .expect("complete multi-batch declaration search");
 
     assert_eq!(outcome.files.len(), file_count);
     assert!(outcome.files.iter().all(|file| file.complete));
@@ -214,10 +196,9 @@ async fn code_search_declaration_batch_failure_fails_the_component() {
     let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
     let (temp, src) = workspace_with_numbered_sources(CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE + 1);
 
-    let error =
-        search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
-            .await
-            .expect_err("failed batch must fail declaration discovery");
+    let error = search_declarations_bounded(temp.path(), &src, "missing", &[AstGrepLanguage::Rust], 1)
+        .await
+        .expect_err("failed batch must fail declaration discovery");
 
     assert!(error.to_string().contains("definition search failed"));
 }
@@ -235,14 +216,8 @@ fn code_search_outline_path_batches_roll_over_at_byte_cap() {
     let cap = fixed_outline_arg_bytes(executable) + arg_bytes(&first) + arg_bytes(&second) - 1;
     let mut paths = vec![first.clone(), second.clone()].into_iter().peekable();
 
-    assert_eq!(
-        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("first batch"),
-        vec![first]
-    );
-    assert_eq!(
-        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("second batch"),
-        vec![second]
-    );
+    assert_eq!(next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("first batch"), vec![first]);
+    assert_eq!(next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("second batch"), vec![second]);
 }
 
 #[test]
@@ -250,8 +225,7 @@ fn code_search_outline_path_batch_counts_executable_and_nul() {
     let executable = std::path::Path::new("/long/path/to/ast-grep");
     let path = "a.rs".to_owned();
     let cap_without_executable =
-        CODE_SEARCH_OUTLINE_FIXED_ARGS.iter().map(|arg| arg_bytes(arg)).sum::<usize>()
-            + arg_bytes(&path);
+        CODE_SEARCH_OUTLINE_FIXED_ARGS.iter().map(|arg| arg_bytes(arg)).sum::<usize>() + arg_bytes(&path);
     let mut paths = vec![path.clone()].into_iter().peekable();
 
     let error = next_outline_path_batch_with_cap(executable, &mut paths, cap_without_executable)
@@ -265,12 +239,10 @@ fn code_search_outline_path_batch_counts_executable_and_nul() {
 fn code_search_outline_path_batch_preserves_input_order() {
     let executable = std::path::Path::new("ast-grep");
     let expected = vec!["c.rs".to_owned(), "a.rs".to_owned(), "b.rs".to_owned()];
-    let cap = fixed_outline_arg_bytes(executable)
-        + expected.iter().map(|path| arg_bytes(path)).sum::<usize>();
+    let cap = fixed_outline_arg_bytes(executable) + expected.iter().map(|path| arg_bytes(path)).sum::<usize>();
     let mut paths = expected.clone().into_iter().peekable();
 
-    let actual =
-        next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("ordered path batch");
+    let actual = next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("ordered path batch");
 
     assert_eq!(actual, expected);
 }
@@ -286,10 +258,7 @@ fn code_search_outline_path_batches_do_not_drop_paths() {
     let mut actual = Vec::new();
 
     while paths.peek().is_some() {
-        actual.extend(
-            next_outline_path_batch_with_cap(executable, &mut paths, cap)
-                .expect("bounded path batch"),
-        );
+        actual.extend(next_outline_path_batch_with_cap(executable, &mut paths, cap).expect("bounded path batch"));
     }
 
     assert_eq!(actual, expected);
@@ -317,15 +286,10 @@ async fn code_search_declaration_stream_reaps_at_byte_cap() {
     let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
     let temp = workspace_with_source();
 
-    let outcome = search_declarations_bounded(
-        temp.path(),
-        &temp.path().join("src"),
-        "alpha",
-        &[AstGrepLanguage::Rust],
-        20,
-    )
-    .await
-    .expect("byte-bounded declaration stream");
+    let outcome =
+        search_declarations_bounded(temp.path(), &temp.path().join("src"), "alpha", &[AstGrepLanguage::Rust], 20)
+            .await
+            .expect("byte-bounded declaration stream");
 
     assert!(outcome.files.is_empty(), "{outcome:?}");
     assert!(!outcome.stream_complete);
@@ -357,14 +321,9 @@ async fn code_search_outline_bounded_record_distinguishes_exact_eof_from_exhaust
     let mut oversized_record = Vec::with_capacity(3);
     let mut oversized_bytes_read = 0;
     assert_eq!(
-        read_bounded_record(
-            &mut oversized_reader,
-            &mut oversized_record,
-            &mut oversized_bytes_read,
-            3,
-        )
-        .await
-        .expect("oversized record"),
+        read_bounded_record(&mut oversized_reader, &mut oversized_record, &mut oversized_bytes_read, 3,)
+            .await
+            .expect("oversized record"),
         BoundedRecordRead::Exhausted
     );
     assert_eq!(oversized_record.len(), 3);

@@ -10,10 +10,10 @@ use crate::WebhookNotifier;
 use crate::agent_card::AgentCard;
 use crate::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::rpc::{
-    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams,
-    METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET,
-    METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET,
-    MessageSendParams, SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskQueryParams,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListTasksParams, METHOD_MESSAGE_SEND,
+    METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET, METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET,
+    METHOD_TASKS_PUSH_CONFIG_SET, MessageSendParams, SendStreamingMessageResponse, StreamingEvent, TaskIdParams,
+    TaskQueryParams,
 };
 use crate::task_manager::TaskManager;
 use crate::types::TaskState;
@@ -105,23 +105,13 @@ async fn handle_rpc(
 
     // Dispatch to method handler
     let result = match request.method.as_str() {
-        METHOD_MESSAGE_SEND => {
-            handle_message_send(&state, request.params, request.id.clone()).await
-        }
-        METHOD_MESSAGE_STREAM => {
-            handle_message_stream(&state, request.params, request.id.clone()).await
-        }
+        METHOD_MESSAGE_SEND => handle_message_send(&state, request.params, request.id.clone()).await,
+        METHOD_MESSAGE_STREAM => handle_message_stream(&state, request.params, request.id.clone()).await,
         METHOD_TASKS_GET => handle_tasks_get(&state, request.params, request.id.clone()).await,
         METHOD_TASKS_LIST => handle_tasks_list(&state, request.params, request.id.clone()).await,
-        METHOD_TASKS_CANCEL => {
-            handle_tasks_cancel(&state, request.params, request.id.clone()).await
-        }
-        METHOD_TASKS_PUSH_CONFIG_SET => {
-            handle_push_config_set(&state, request.params, request.id.clone()).await
-        }
-        METHOD_TASKS_PUSH_CONFIG_GET => {
-            handle_push_config_get(&state, request.params, request.id.clone()).await
-        }
+        METHOD_TASKS_CANCEL => handle_tasks_cancel(&state, request.params, request.id.clone()).await,
+        METHOD_TASKS_PUSH_CONFIG_SET => handle_push_config_set(&state, request.params, request.id.clone()).await,
+        METHOD_TASKS_PUSH_CONFIG_GET => handle_push_config_get(&state, request.params, request.id.clone()).await,
         _ => {
             return Err(A2aErrorResponse::method_not_found(&request.method, request.id));
         }
@@ -134,15 +124,9 @@ async fn handle_rpc(
 }
 
 /// Handle Server-Sent Events streaming
-async fn handle_stream(
-    State(state): State<A2aServerState>,
-    Json(request): Json<JsonRpcRequest>,
-) -> impl IntoResponse {
+async fn handle_stream(State(state): State<A2aServerState>, Json(request): Json<JsonRpcRequest>) -> impl IntoResponse {
     if request.jsonrpc != JSONRPC_VERSION {
-        return Err(A2aErrorResponse::invalid_request(
-            "Invalid JSON-RPC version",
-            request.id.clone(),
-        ));
+        return Err(A2aErrorResponse::invalid_request("Invalid JSON-RPC version", request.id.clone()));
     }
 
     if request.method != METHOD_MESSAGE_STREAM {
@@ -151,9 +135,7 @@ async fn handle_stream(
 
     // Parse params
     let params: MessageSendParams = serde_json::from_value(request.params.unwrap_or_default())
-        .map_err(|_e| {
-            A2aErrorResponse::invalid_request("Invalid message/stream params", request.id.clone())
-        })?;
+        .map_err(|_e| A2aErrorResponse::invalid_request("Invalid message/stream params", request.id.clone()))?;
 
     // Create or get task
     let task_id = if let Some(task_id) = params.task_id.clone() {
@@ -308,11 +290,7 @@ async fn handle_stream(
 // ============================================================================
 
 /// Handle message/send RPC method
-async fn handle_message_send(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
+async fn handle_message_send(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
     let params: MessageSendParams = serde_json::from_value(params.unwrap_or_default())
         .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid message/send params"))?;
 
@@ -335,15 +313,9 @@ async fn handle_message_send(
 }
 
 /// Handle tasks/pushNotificationConfig/set RPC method
-async fn handle_push_config_set(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
-    let config: crate::rpc::TaskPushNotificationConfig =
-        serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
-            A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/set params")
-        })?;
+async fn handle_push_config_set(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
+    let config: crate::rpc::TaskPushNotificationConfig = serde_json::from_value(params.unwrap_or_default())
+        .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/set params"))?;
 
     state.task_manager.set_webhook_config(config).await?;
 
@@ -351,15 +323,9 @@ async fn handle_push_config_set(
 }
 
 /// Handle tasks/pushNotificationConfig/get RPC method
-async fn handle_push_config_get(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
-    let params: TaskIdParams =
-        serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
-            A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/get params")
-        })?;
+async fn handle_push_config_get(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
+    let params: TaskIdParams = serde_json::from_value(params.unwrap_or_default())
+        .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/get params"))?;
 
     let config = state.task_manager.get_webhook_config(&params.id).await;
 
@@ -377,11 +343,7 @@ fn handle_message_stream<'a>(
 }
 
 /// Handle tasks/get RPC method
-async fn handle_tasks_get(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
+async fn handle_tasks_get(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
     let params: TaskQueryParams = serde_json::from_value(params.unwrap_or_default())
         .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/get params"))?;
 
@@ -391,13 +353,8 @@ async fn handle_tasks_get(
 }
 
 /// Handle tasks/list RPC method
-async fn handle_tasks_list(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
-    let params: ListTasksParams =
-        serde_json::from_value(params.unwrap_or_default()).unwrap_or_default();
+async fn handle_tasks_list(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
+    let params: ListTasksParams = serde_json::from_value(params.unwrap_or_default()).unwrap_or_default();
 
     let result = state.task_manager.list_tasks(params).await;
 
@@ -405,11 +362,7 @@ async fn handle_tasks_list(
 }
 
 /// Handle tasks/cancel RPC method
-async fn handle_tasks_cancel(
-    state: &A2aServerState,
-    params: Option<Value>,
-    _id: Value,
-) -> A2aResult<Value> {
+async fn handle_tasks_cancel(state: &A2aServerState, params: Option<Value>, _id: Value) -> A2aResult<Value> {
     let params: TaskIdParams = serde_json::from_value(params.unwrap_or_default())
         .map_err(|_e| A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid tasks/cancel params"))?;
 
@@ -495,8 +448,7 @@ mod tests {
     #[test]
     fn test_error_response_task_not_found() {
         use serde_json::json;
-        let err_response =
-            A2aErrorResponse::from_error(A2aError::TaskNotFound("test-id".to_string()), json!(1));
+        let err_response = A2aErrorResponse::from_error(A2aError::TaskNotFound("test-id".to_string()), json!(1));
         assert_eq!(err_response.status_code, StatusCode::NOT_FOUND);
     }
 

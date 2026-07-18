@@ -56,13 +56,7 @@ impl ExecutionMetrics {
         // Placeholder for tracking execution start if needed
     }
 
-    pub fn record_complete(
-        &mut self,
-        language: String,
-        duration_ms: u64,
-        memory_mb: u64,
-        success: bool,
-    ) {
+    pub fn record_complete(&mut self, language: String, duration_ms: u64, memory_mb: u64, success: bool) {
         self.total_executions += 1;
         if success {
             self.successful_executions += 1;

@@ -13,12 +13,7 @@ fn make_list_item(title: &str, cmd: &str) -> InlineListItem {
     }
 }
 
-fn show_list_modal(
-    session: &mut AppSession,
-    title: &str,
-    lines: Vec<&str>,
-    items: Vec<InlineListItem>,
-) {
+fn show_list_modal(session: &mut AppSession, title: &str, lines: Vec<&str>, items: Vec<InlineListItem>) {
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::List(app_types::ListOverlayRequest {
             title: title.to_string(),
@@ -69,19 +64,11 @@ fn show_overlay(
 #[test]
 fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(
-        &mut session,
-        "Pick one",
-        vec!["Choose an option"],
-        vec![make_list_item("Option A", "a")],
-    );
+    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
 
     let _terminal = render_session_to_terminal(&mut session, 30);
 
-    assert!(
-        session.has_active_overlay(),
-        "floating list modal should remain active after rendering"
-    );
+    assert!(session.has_active_overlay(), "floating list modal should remain active after rendering");
     assert!(
         session.core.bottom_panel_area().is_none(),
         "floating list modal should not render in the bottom panel"
@@ -91,12 +78,7 @@ fn show_list_modal_renders_as_floating_transient_without_bottom_panel() {
 #[test]
 fn show_list_modal_uses_bottom_half_of_terminal() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(
-        &mut session,
-        "Pick one",
-        vec!["Choose an option"],
-        vec![make_list_item("Option A", "a")],
-    );
+    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(
@@ -115,12 +97,7 @@ fn show_list_modal_uses_bottom_half_of_terminal() {
 #[test]
 fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(
-        &mut session,
-        "Pick one",
-        vec!["Choose an option"],
-        vec![make_list_item("Option A", "a")],
-    );
+    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
 
     let terminal = render_session_to_terminal(&mut session, 30);
 
@@ -164,8 +141,7 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
     terminal
         .draw(|frame| {
-            let filler =
-                (0..30).map(|_| Line::from("X".repeat(VIEW_WIDTH as usize))).collect::<Vec<_>>();
+            let filler = (0..30).map(|_| Line::from("X".repeat(VIEW_WIDTH as usize))).collect::<Vec<_>>();
             frame.render_widget(ratatui::widgets::Paragraph::new(filler), frame.area());
         })
         .expect("failed to prefill terminal buffer");
@@ -283,12 +259,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
 #[test]
 fn untitled_floating_modal_skips_title_chrome_rows() {
     let mut session = AppSession::new(InlineTheme::default(), None, 30);
-    show_list_modal(
-        &mut session,
-        "",
-        vec!["Choose an option"],
-        vec![make_list_item("Option A", "a")],
-    );
+    show_list_modal(&mut session, "", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(
@@ -310,17 +281,9 @@ fn closing_top_transient_restores_previous_bottom_panel() {
     session.set_task_panel_visible(true);
 
     let mut terminal = render_session_to_terminal(&mut session, 30);
-    assert!(
-        session.core.bottom_panel_area().is_some(),
-        "task panel should occupy the bottom panel when visible"
-    );
+    assert!(session.core.bottom_panel_area().is_some(), "task panel should occupy the bottom panel when visible");
 
-    show_list_modal(
-        &mut session,
-        "Pick one",
-        vec!["Choose an option"],
-        vec![make_list_item("Option A", "a")],
-    );
+    show_list_modal(&mut session, "Pick one", vec!["Choose an option"], vec![make_list_item("Option A", "a")]);
 
     terminal
         .draw(|frame| session.render(frame))
@@ -349,10 +312,7 @@ fn list_modal_keeps_last_selection_when_items_append() {
         &mut session,
         "Pick",
         vec!["Choose"],
-        vec![
-            make_list_item("First", "first"),
-            make_list_item("Second", "second"),
-        ],
+        vec![make_list_item("First", "first"), make_list_item("Second", "second")],
         Some(selected.clone()),
     );
     session.handle_command(InlineCommand::CloseOverlay);
@@ -380,8 +340,7 @@ fn list_modal_keeps_last_selection_when_items_append() {
 fn render_always_reserves_input_status_row() {
     let mut session = Session::new(InlineTheme::default(), None, 30);
     let input_width = VIEW_WIDTH.saturating_sub(2);
-    let base_input_height =
-        Session::input_block_height_for_lines(session.desired_input_lines(input_width));
+    let base_input_height = Session::input_block_height_for_lines(session.desired_input_lines(input_width));
 
     let _terminal = render_session_to_terminal_app(&mut session, 30);
 

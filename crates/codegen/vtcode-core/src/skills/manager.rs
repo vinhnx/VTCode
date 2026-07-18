@@ -2,8 +2,7 @@ use crate::skills::SkillMetadata;
 #[cfg(test)]
 use crate::skills::loader::discover_skill_metadata_lightweight_hermetic;
 use crate::skills::loader::{
-    SkillLoaderConfig, clear_lightweight_skill_metadata_cache, discover_skill_metadata_lightweight,
-    load_skills,
+    SkillLoaderConfig, clear_lightweight_skill_metadata_cache, discover_skill_metadata_lightweight, load_skills,
 };
 use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
@@ -88,10 +87,7 @@ impl SkillsManager {
         Self::new_with_bundled_skills_enabled(codex_home, true)
     }
 
-    pub fn new_with_bundled_skills_enabled(
-        codex_home: PathBuf,
-        bundled_skills_enabled: bool,
-    ) -> Self {
+    pub fn new_with_bundled_skills_enabled(codex_home: PathBuf, bundled_skills_enabled: bool) -> Self {
         let manager = Self {
             codex_home,
             bundled_skills_enabled,
@@ -291,11 +287,7 @@ impl SkillsManager {
         let outcome = self.skills_for_cwd(cwd);
         let available: Vec<String> = outcome.skills.iter().map(|s| s.name.clone()).collect();
         outcome.skills.into_iter().find(|s| s.name == skill_name).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Skill '{}' not found. Available skills: [{}]",
-                skill_name,
-                available.join(", ")
-            )
+            anyhow::anyhow!("Skill '{}' not found. Available skills: [{}]", skill_name, available.join(", "))
         })
     }
 
@@ -308,8 +300,7 @@ impl SkillsManager {
         }
 
         let outcome = self.skills_for_cwd(cwd);
-        let available: HashMap<String, &SkillMetadata> =
-            outcome.skills.iter().map(|s| (s.name.clone(), s)).collect();
+        let available: HashMap<String, &SkillMetadata> = outcome.skills.iter().map(|s| (s.name.clone(), s)).collect();
 
         let mut loaded = Vec::new();
         for name in skill_names {
@@ -565,8 +556,7 @@ mod tests {
         fs::create_dir_all(&stale_skill_dir).unwrap();
         fs::write(stale_skill_dir.join("SKILL.md"), "# stale\n").unwrap();
 
-        let _manager =
-            SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
+        let _manager = SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
 
         assert!(!temp_home.path().join("skills/.system").exists());
     }
@@ -583,8 +573,7 @@ mod tests {
         )
         .unwrap();
 
-        let manager =
-            SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
+        let manager = SkillsManager::new_with_bundled_skills_enabled(temp_home.path().to_path_buf(), false);
 
         fs::create_dir_all(&bundled_skill_dir).unwrap();
         fs::write(

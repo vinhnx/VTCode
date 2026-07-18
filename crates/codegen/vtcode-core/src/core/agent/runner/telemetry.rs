@@ -100,12 +100,7 @@ impl AgentRunner {
     ) {
         let failure_text = error.user_message();
         if !self.quiet {
-            println!(
-                "{} {} {}",
-                failure_ctx.agent_prefix,
-                style("(ERR)").red().bold(),
-                failure_text
-            );
+            println!("{} {} {}", failure_ctx.agent_prefix, style("(ERR)").red().bold(), failure_text);
         }
         if let Some(call_item_id) = failure_ctx.call_item_id {
             failure_ctx.event_recorder.tool_output_finished(

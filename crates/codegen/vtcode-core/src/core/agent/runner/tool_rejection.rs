@@ -26,11 +26,7 @@ pub(super) fn reject_tool_call(
         runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed);
         let lifecycle_events = runtime.take_emitted_events();
         event_recorder.record_thread_events(lifecycle_events.clone());
-        emit_failed_tool_outputs_for_completed_invocations(
-            event_recorder,
-            &lifecycle_events,
-            detail,
-        );
+        emit_failed_tool_outputs_for_completed_invocations(event_recorder, &lifecycle_events, detail);
         event_recorder.warning(detail);
         return;
     }
@@ -56,12 +52,9 @@ pub(super) fn reject_invalid_args(
     let detail = format!("Invalid arguments for tool '{tool_name}': {err}");
     error!(agent = %agent_prefix, tool = %tool_name, error = %err, "{log_msg}");
     reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail);
-    runtime.state.push_tool_error(
-        tool_call_id.to_string(),
-        tool_name,
-        &serde_json::Value::String(detail),
-        is_gemini,
-    );
+    runtime
+        .state
+        .push_tool_error(tool_call_id.to_string(), tool_name, &serde_json::Value::String(detail), is_gemini);
 }
 
 /// Reject a tool call that policy or feature gating disallows.

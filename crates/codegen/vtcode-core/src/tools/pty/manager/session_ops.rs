@@ -32,12 +32,7 @@ impl PtyManager {
         Ok(handle.is_output_drained())
     }
 
-    pub fn send_input_to_session(
-        &self,
-        session_id: &str,
-        data: &[u8],
-        append_newline: bool,
-    ) -> Result<usize> {
+    pub fn send_input_to_session(&self, session_id: &str, data: &[u8], append_newline: bool) -> Result<usize> {
         let handle = self.session_handle(session_id)?;
 
         // Acquire last_input lock once and update conditionally
@@ -118,9 +113,9 @@ impl PtyManager {
     /// - Agent can reference terminal output via grep/read_file
     pub async fn sync_sessions_to_files(&self) -> Result<Vec<std::path::PathBuf>> {
         let terminals_dir = self.workspace_root.join(".vtcode").join("terminals");
-        ensure_dir_exists(&terminals_dir).await.with_context(|| {
-            format!("Failed to create terminals directory: {}", terminals_dir.display())
-        })?;
+        ensure_dir_exists(&terminals_dir)
+            .await
+            .with_context(|| format!("Failed to create terminals directory: {}", terminals_dir.display()))?;
 
         let sessions = self.list_sessions();
         let mut written_files = Vec::with_capacity(sessions.len());
@@ -135,9 +130,7 @@ impl PtyManager {
             let content = format_terminal_file(session, &output);
             let file_path = terminals_dir.join(format!("{}.txt", sanitize_session_id(&session.id)));
 
-            if let Err(e) =
-                write_file_with_context(&file_path, &content, "terminal session file").await
-            {
+            if let Err(e) = write_file_with_context(&file_path, &content, "terminal session file").await {
                 warn!(
                     session_id = %session.id,
                     error = %e,
@@ -154,15 +147,9 @@ impl PtyManager {
         let index_path = terminals_dir.join("INDEX.md");
         write_file_with_context(&index_path, &index_content, "terminals index")
             .await
-            .with_context(|| {
-                format!("Failed to write terminals index: {}", index_path.display())
-            })?;
+            .with_context(|| format!("Failed to write terminals index: {}", index_path.display()))?;
 
-        tracing::info!(
-            sessions = sessions.len(),
-            files = written_files.len(),
-            "Synced terminal sessions to files"
-        );
+        tracing::info!(sessions = sessions.len(), files = written_files.len(), "Synced terminal sessions to files");
 
         Ok(written_files)
     }
@@ -183,8 +170,7 @@ impl PtyManager {
 
             for session in sessions {
                 let cwd = session.working_dir.as_deref().unwrap_or("-");
-                let cmd_truncated =
-                    vtcode_commons::formatting::truncate_byte_budget(&session.command, 22, "...");
+                let cmd_truncated = vtcode_commons::formatting::truncate_byte_budget(&session.command, 22, "...");
 
                 content.push_str(&format!(
                     "| `{}` | {} | {} | {}x{} |\n",
@@ -206,12 +192,9 @@ impl PtyManager {
                 if let Some(cwd) = &session.working_dir {
                     content.push_str(&format!("- **Working Dir**: {cwd}\n"));
                 }
+                content.push_str(&format!("- **Terminal Size**: {}x{}\n", session.cols, session.rows));
                 content
-                    .push_str(&format!("- **Terminal Size**: {}x{}\n", session.cols, session.rows));
-                content.push_str(&format!(
-                    "- **File**: `.vtcode/terminals/{}.txt`\n\n",
-                    sanitize_session_id(&session.id)
-                ));
+                    .push_str(&format!("- **File**: `.vtcode/terminals/{}.txt`\n\n", sanitize_session_id(&session.id)));
             }
         }
 

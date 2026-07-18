@@ -36,8 +36,7 @@ impl Default for TrajectoryRetention {
         Self {
             max_files: defaults::DEFAULT_TRAJECTORY_MAX_FILES,
             max_age_days: defaults::DEFAULT_TRAJECTORY_MAX_AGE_DAYS,
-            max_total_size_bytes: defaults::DEFAULT_TRAJECTORY_MAX_SIZE_MB
-                .saturating_mul(BYTES_PER_MB),
+            max_total_size_bytes: defaults::DEFAULT_TRAJECTORY_MAX_SIZE_MB.saturating_mul(BYTES_PER_MB),
         }
     }
 }
@@ -218,8 +217,7 @@ fn prune_trajectory_logs(dir: &Path, limits: TrajectoryRetention) -> anyhow::Res
             .unwrap_or(UNIX_EPOCH)
     };
 
-    let (expired, mut retained): (Vec<_>, Vec<_>) =
-        entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
+    let (expired, mut retained): (Vec<_>, Vec<_>) = entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
     remove_files(expired);
 
     retained.sort_by(|a, b| b.modified.cmp(&a.modified));

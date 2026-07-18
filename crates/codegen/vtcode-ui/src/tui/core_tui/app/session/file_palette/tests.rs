@@ -197,10 +197,7 @@ fn test_enter_dir_and_go_up() {
 #[test]
 fn test_go_up_reselects_entered_directory() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-    palette.load_files(vec![
-        "/workspace/src/a.rs".to_owned(),
-        "/workspace/src/b.rs".to_owned(),
-    ]);
+    palette.load_files(vec!["/workspace/src/a.rs".to_owned(), "/workspace/src/b.rs".to_owned()]);
 
     palette.enter_selected_dir(); // into src/
     palette.go_up(); // back to root
@@ -211,10 +208,7 @@ fn test_go_up_reselects_entered_directory() {
 #[test]
 fn test_browse_excludes_hidden_directories() {
     let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-    palette.load_files(vec![
-        "/workspace/.secret/key".to_owned(),
-        "/workspace/src/main.rs".to_owned(),
-    ]);
+    palette.load_files(vec!["/workspace/.secret/key".to_owned(), "/workspace/src/main.rs".to_owned()]);
 
     let entries = palette.list_entries();
     assert!(!entries.iter().any(|e| e.display_name == ".secret/"));
@@ -300,10 +294,7 @@ fn test_exact_match_ranked_first() {
         .filter(|(_, e)| e.relative_path.contains('/'))
         .map(|(i, _)| i)
         .collect();
-    assert!(
-        top_level_positions.iter().max().unwrap_or(&0)
-            < nested_positions.iter().min().unwrap_or(&usize::MAX)
-    );
+    assert!(top_level_positions.iter().max().unwrap_or(&0) < nested_positions.iter().min().unwrap_or(&usize::MAX));
 }
 
 #[test]
@@ -403,10 +394,7 @@ fn test_current_at_token_tracks_tokens_with_second_at() {
 
     for (cursor_pos, description) in test_cases {
         let result = extract_file_reference(input, cursor_pos);
-        assert_eq!(
-            result, None,
-            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
-        );
+        assert_eq!(result, None, "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}");
     }
 }
 
@@ -423,10 +411,7 @@ fn test_current_at_token_allows_file_queries_with_second_at() {
 
     for (cursor_pos, description) in test_cases {
         let result = extract_file_reference(input, cursor_pos);
-        assert!(
-            result.is_some(),
-            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
-        );
+        assert!(result.is_some(), "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}");
     }
 }
 
@@ -441,10 +426,7 @@ fn test_current_at_token_ignores_mid_word_at() {
 
     for (cursor_pos, description) in test_cases {
         let result = extract_file_reference(input, cursor_pos);
-        assert_eq!(
-            result, None,
-            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
-        );
+        assert_eq!(result, None, "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}");
     }
 }
 

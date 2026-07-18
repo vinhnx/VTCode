@@ -155,10 +155,7 @@ impl<K: Eq + Hash> PermissionCache<K> {
         matches!(
             self.grants.get(key),
             Some(
-                PermissionGrant::Once
-                    | PermissionGrant::Session
-                    | PermissionGrant::Permanent
-                    | PermissionGrant::Denied
+                PermissionGrant::Once | PermissionGrant::Session | PermissionGrant::Permanent | PermissionGrant::Denied
             )
         )
     }

@@ -38,8 +38,7 @@ pub fn parse_response_openai_format(
 
     // Extract usage information
     let usage = response.get("usage");
-    let input_tokens =
-        usage.and_then(|u| u.get("prompt_tokens")).and_then(|t| t.as_u64()).unwrap_or(0);
+    let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|t| t.as_u64()).unwrap_or(0);
 
     let output_tokens = usage
         .and_then(|u| u.get("completion_tokens"))
@@ -66,8 +65,7 @@ pub fn parse_response_openai_format(
         usage: Some(crate::provider::Usage {
             prompt_tokens: u32::try_from(input_tokens).unwrap_or(u32::MAX),
             completion_tokens: u32::try_from(output_tokens).unwrap_or(u32::MAX),
-            total_tokens: u32::try_from(input_tokens.saturating_add(output_tokens))
-                .unwrap_or(u32::MAX),
+            total_tokens: u32::try_from(input_tokens.saturating_add(output_tokens)).unwrap_or(u32::MAX),
             cached_prompt_tokens: if include_cache {
                 response.get("cache_hit").and_then(|c| c.as_bool()).map(|_| 0)
             } else {
@@ -99,10 +97,7 @@ pub fn parse_response_openai_format(
 }
 
 /// Parse stream event from OpenAI-compatible format
-pub fn parse_stream_event_openai_format(
-    json: Value,
-    _provider_name: &str,
-) -> Option<LLMStreamEvent> {
+pub fn parse_stream_event_openai_format(json: Value, _provider_name: &str) -> Option<LLMStreamEvent> {
     let choices = json.get("choices")?.as_array()?;
     if choices.is_empty() {
         return None;
@@ -127,9 +122,7 @@ pub fn parse_stream_event_openai_format(
 /// the extracted reasoning text (without tags) and cleaned_content is the
 /// remaining content with reasoning sections removed.
 pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>) {
-    if let Some((deprecated_reasoning, deprecated_content)) =
-        extract_deprecated_reasoning_sections(content)
-    {
+    if let Some((deprecated_reasoning, deprecated_content)) = extract_deprecated_reasoning_sections(content) {
         let reasoning_parts = deprecated_reasoning.map(|value| vec![value]).unwrap_or_default();
         return (reasoning_parts, deprecated_content);
     }
@@ -153,9 +146,7 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
     (reasoning_parts, final_content)
 }
 
-fn extract_deprecated_reasoning_sections(
-    content: &str,
-) -> Option<(Option<String>, Option<String>)> {
+fn extract_deprecated_reasoning_sections(content: &str) -> Option<(Option<String>, Option<String>)> {
     let mut reasoning_lines: Vec<String> = Vec::new();
     let mut content_lines: Vec<String> = Vec::new();
     let mut active_section: Option<&str> = None;
@@ -329,9 +320,7 @@ mod tests {
             "model": "gpt-5"
         });
 
-        let result =
-            parse_response_openai_format(response, "test", "gpt-5".to_string(), false, None)
-                .unwrap();
+        let result = parse_response_openai_format(response, "test", "gpt-5".to_string(), false, None).unwrap();
         assert_eq!(result.content_text(), "Hello world");
         let usage = result.usage.expect("usage should be present");
         assert_eq!(usage.prompt_tokens, 10);

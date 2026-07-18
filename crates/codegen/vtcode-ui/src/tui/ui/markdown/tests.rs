@@ -1,9 +1,7 @@
-use super::code_blocks::{
-    normalize_code_indentation, normalize_diff_lines, render_diff_content_segments,
-};
+use super::code_blocks::{normalize_code_indentation, normalize_diff_lines, render_diff_content_segments};
 use super::links::{
-    COLON_LOCATION_SUFFIX_RE, HASH_LOCATION_SUFFIX_RE, label_has_location_suffix,
-    label_segments_have_location_suffix, normalize_hash_location,
+    COLON_LOCATION_SUFFIX_RE, HASH_LOCATION_SUFFIX_RE, label_has_location_suffix, label_segments_have_location_suffix,
+    normalize_hash_location,
 };
 use super::*;
 use crate::tui::utils::diff_styles::DiffColorPalette;
@@ -53,8 +51,7 @@ fn test_markdown_inline_code_strips_backticks() {
 fn test_markdown_soft_break_renders_line_break() {
     let markdown = "first line\nsecond line";
     let lines = render_markdown(markdown);
-    let text_lines: Vec<String> =
-        lines_to_text(&lines).into_iter().filter(|line| !line.is_empty()).collect();
+    let text_lines: Vec<String> = lines_to_text(&lines).into_iter().filter(|line| !line.is_empty()).collect();
     assert_eq!(text_lines, vec!["first line".to_string(), "second line".to_string()]);
 }
 
@@ -99,10 +96,7 @@ fn test_markdown_table_box_drawing() {
         .join("\n");
 
     // Check for box-drawing character (│ instead of |)
-    assert!(
-        output.contains("│"),
-        "Should use box-drawing character (│) for table cells instead of pipe"
-    );
+    assert!(output.contains("│"), "Should use box-drawing character (│) for table cells instead of pipe");
 }
 
 #[test]
@@ -116,8 +110,7 @@ fn test_markdown_table_renders_header_separator_and_rows() {
 
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
-    let non_blank: Vec<&str> =
-        text_lines.iter().map(String::as_str).filter(|l| !l.is_empty()).collect();
+    let non_blank: Vec<&str> = text_lines.iter().map(String::as_str).filter(|l| !l.is_empty()).collect();
 
     assert!(non_blank.len() >= 4, "expected header + separator + 2 rows, got: {non_blank:?}");
     assert!(
@@ -126,16 +119,8 @@ fn test_markdown_table_renders_header_separator_and_rows() {
         non_blank[0]
     );
     assert!(non_blank[1].contains("┼"), "second line should be the separator: {}", non_blank[1]);
-    assert!(
-        non_blank[2].contains("src/main.rs"),
-        "third line should be first data row: {}",
-        non_blank[2]
-    );
-    assert!(
-        non_blank[3].contains("src/lib.rs"),
-        "fourth line should be second data row: {}",
-        non_blank[3]
-    );
+    assert!(non_blank[2].contains("src/main.rs"), "third line should be first data row: {}", non_blank[2]);
+    assert!(non_blank[3].contains("src/lib.rs"), "fourth line should be second data row: {}", non_blank[3]);
 }
 
 #[test]
@@ -158,10 +143,7 @@ fn test_table_inside_markdown_code_block_renders_as_table() {
         "Table inside ```markdown code block should render with box-drawing characters, got: {output}"
     );
     // Should NOT contain code-block line numbers
-    assert!(
-        !output.contains("  1  "),
-        "Table inside markdown code block should not have line numbers"
-    );
+    assert!(!output.contains("  1  "), "Table inside markdown code block should not have line numbers");
 }
 
 #[test]
@@ -190,23 +172,15 @@ fn test_table_code_block_reparse_guard_can_disable_table_reparse() {
         disable_code_block_table_reparse: true,
         table_max_width: None,
     };
-    let lines = render_markdown_to_lines_with_options(
-        markdown,
-        Style::default(),
-        &theme::active_styles(),
-        None,
-        options,
-    );
+    let lines =
+        render_markdown_to_lines_with_options(markdown, Style::default(), &theme::active_styles(), None, options);
     let output = lines_to_text(&lines).join("\n");
 
     assert!(
         output.contains("| Module | Purpose |"),
         "Guarded render should keep code-block content literal: {output}"
     );
-    assert!(
-        output.contains("  1  "),
-        "Guarded render should keep code-block line numbers: {output}"
-    );
+    assert!(output.contains("  1  "), "Guarded render should keep code-block line numbers: {output}");
 }
 
 #[test]
@@ -221,10 +195,7 @@ fn test_rust_code_block_with_pipes_not_treated_as_table() {
     let output = lines_to_text(&lines).join("\n");
 
     // Rust code blocks should NOT be reinterpreted as tables
-    assert!(
-        output.contains("| Header |"),
-        "Rust code block should keep raw pipe characters: {output}"
-    );
+    assert!(output.contains("| Header |"), "Rust code block should keep raw pipe characters: {output}");
 }
 
 #[test]
@@ -254,19 +225,13 @@ tail line\n\
         .iter()
         .find(|line| line.contains("lines omitted"))
         .expect("omitted line exists");
-    assert!(
-        omitted_line.contains("3-72  "),
-        "omitted line should render source range, got: {omitted_line}"
-    );
+    assert!(omitted_line.contains("3-72  "), "omitted line should render source range, got: {omitted_line}");
 
     let tail_line = text_lines
         .iter()
         .find(|line| line.contains("tail line"))
         .expect("tail line exists");
-    assert!(
-        tail_line.contains("73  "),
-        "tail line should continue from omitted range, got: {tail_line}"
-    );
+    assert!(tail_line.contains("73  "), "tail line should continue from omitted range, got: {tail_line}");
 }
 
 #[test]
@@ -405,8 +370,8 @@ fn test_markdown_unlabeled_minimal_hunk_detects_diff() {
 
 #[test]
 fn test_highlight_line_for_diff_strips_background_colors() {
-    let segments = highlight_line_for_diff("let changed = true;", Some("rust"))
-        .expect("highlighting should return segments");
+    let segments =
+        highlight_line_for_diff("let changed = true;", Some("rust")).expect("highlighting should return segments");
     assert!(segments.iter().all(|(style, _)| style.get_bg_color().is_none()));
 }
 
@@ -506,8 +471,7 @@ index 0000000..1111111 100644\n\
 
 #[test]
 fn test_markdown_file_link_hides_destination() {
-    let markdown =
-        "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+    let markdown = "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
 
@@ -653,9 +617,10 @@ fn test_plain_urls_are_not_file_links() {
 fn test_quoted_file_path_with_spaces_gets_link_target() {
     let markdown = "Open \"docs/My Notes.md\" for info.";
     let lines = render_markdown(markdown);
-    let has_link_target = lines.iter().flat_map(|line| line.segments.iter()).any(|seg| {
-        seg.text == "docs/My Notes.md" && seg.link_target.as_deref() == Some("docs/My Notes.md")
-    });
+    let has_link_target = lines
+        .iter()
+        .flat_map(|line| line.segments.iter())
+        .any(|seg| seg.text == "docs/My Notes.md" && seg.link_target.as_deref() == Some("docs/My Notes.md"));
     assert!(has_link_target);
 }
 
@@ -667,7 +632,8 @@ fn test_load_location_suffix_regexes() {
 
 #[test]
 fn test_file_link_hides_destination() {
-    let markdown = "[codex-rs/tui/src/markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs)";
+    let markdown =
+        "[codex-rs/tui/src/markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");
@@ -679,8 +645,7 @@ fn test_file_link_hides_destination() {
 
 #[test]
 fn test_file_link_appends_line_number_when_label_lacks_it() {
-    let markdown =
-        "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+    let markdown = "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");
@@ -692,8 +657,7 @@ fn test_file_link_appends_line_number_when_label_lacks_it() {
 
 #[test]
 fn test_file_link_uses_label_for_line_number() {
-    let markdown =
-        "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+    let markdown = "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");
@@ -727,7 +691,8 @@ fn test_file_link_appends_hash_anchor_when_label_lacks_it() {
 
 #[test]
 fn test_file_link_uses_label_for_hash_anchor() {
-    let markdown = "[markdown_render.rs#L74C3](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
+    let markdown =
+        "[markdown_render.rs#L74C3](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");
@@ -750,7 +715,8 @@ fn test_file_link_appends_range_when_label_lacks_it() {
 
 #[test]
 fn test_file_link_uses_label_for_range() {
-    let markdown = "[markdown_render.rs:74:3-76:9](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
+    let markdown =
+        "[markdown_render.rs:74:3-76:9](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");
@@ -763,7 +729,8 @@ fn test_file_link_uses_label_for_range() {
 
 #[test]
 fn test_file_link_appends_hash_range_when_label_lacks_it() {
-    let markdown = "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
+    let markdown =
+        "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
     let combined = text_lines.join("");

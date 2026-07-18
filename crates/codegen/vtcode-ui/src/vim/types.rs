@@ -29,15 +29,8 @@ pub(crate) enum Motion {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TextObjectSpec {
-    Word {
-        around: bool,
-        big: bool,
-    },
-    Delimited {
-        around: bool,
-        open: char,
-        close: char,
-    },
+    Word { around: bool, big: bool },
+    Delimited { around: bool, open: char, close: char },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,26 +71,12 @@ pub(crate) enum RepeatableCommand {
     PasteAfter,
     PasteBefore,
     JoinLines,
-    InsertText {
-        kind: InsertKind,
-        text: String,
-    },
-    OperateMotion {
-        operator: Operator,
-        motion: Motion,
-    },
-    OperateTextObject {
-        operator: Operator,
-        object: TextObjectSpec,
-    },
-    OperateLine {
-        operator: Operator,
-    },
+    InsertText { kind: InsertKind, text: String },
+    OperateMotion { operator: Operator, motion: Motion },
+    OperateTextObject { operator: Operator, object: TextObjectSpec },
+    OperateLine { operator: Operator },
     DeleteToLineEnd,
-    Change {
-        target: ChangeTarget,
-        text: String,
-    },
+    Change { target: ChangeTarget, text: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

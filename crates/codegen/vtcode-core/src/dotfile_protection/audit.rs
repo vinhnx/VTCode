@@ -232,8 +232,7 @@ impl AuditLog {
     fn read_last_hash(log_path: &Path) -> Result<String> {
         use std::io::{Read, Seek, SeekFrom};
 
-        const DEFAULT_HASH: &str =
-            "0000000000000000000000000000000000000000000000000000000000000000";
+        const DEFAULT_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
         let mut file = File::open(log_path).with_context(|| "Failed to open audit log")?;
         let len = file.metadata().with_context(|| "Failed to read audit log metadata")?.len();
@@ -283,8 +282,7 @@ impl AuditLog {
         }
 
         // Serialize and append to log
-        let json =
-            serde_json::to_string(&entry).with_context(|| "Failed to serialize audit entry")?;
+        let json = serde_json::to_string(&entry).with_context(|| "Failed to serialize audit entry")?;
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -322,8 +320,7 @@ impl AuditLog {
             if raw.trim().is_empty() {
                 continue;
             }
-            let entry: AuditEntry =
-                serde_json::from_str(raw).with_context(|| "Failed to parse audit entry")?;
+            let entry: AuditEntry = serde_json::from_str(raw).with_context(|| "Failed to parse audit entry")?;
             entries.push(entry);
         }
 
@@ -338,25 +335,18 @@ impl AuditLog {
             return Ok(true);
         }
 
-        let mut expected_prev_hash =
-            "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        let mut expected_prev_hash = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
 
         for entry in entries {
             // Verify entry hash
             if !entry.verify() {
-                tracing::warn!(
-                    "Audit log integrity violation: entry {} has invalid hash",
-                    entry.id
-                );
+                tracing::warn!("Audit log integrity violation: entry {} has invalid hash", entry.id);
                 return Ok(false);
             }
 
             // Verify chain
             if entry.previous_hash != expected_prev_hash {
-                tracing::warn!(
-                    "Audit log integrity violation: entry {} has broken chain",
-                    entry.id
-                );
+                tracing::warn!("Audit log integrity violation: entry {} has broken chain", entry.id);
                 return Ok(false);
             }
 
@@ -396,14 +386,8 @@ mod tests {
 
         let log = AuditLog::new(&log_path).await.unwrap();
 
-        let entry = AuditEntry::new(
-            ".gitignore",
-            AccessType::Write,
-            AuditOutcome::Blocked,
-            "write_file",
-            "test-session",
-            "",
-        );
+        let entry =
+            AuditEntry::new(".gitignore", AccessType::Write, AuditOutcome::Blocked, "write_file", "test-session", "");
 
         log.log(entry).await.unwrap();
 
@@ -446,15 +430,9 @@ mod tests {
 
     #[test]
     fn test_entry_hash() {
-        let entry = AuditEntry::new(
-            ".bashrc",
-            AccessType::Write,
-            AuditOutcome::UserRejected,
-            "shell",
-            "sess-123",
-            "prev-hash",
-        )
-        .finalize();
+        let entry =
+            AuditEntry::new(".bashrc", AccessType::Write, AuditOutcome::UserRejected, "shell", "sess-123", "prev-hash")
+                .finalize();
 
         assert!(entry.verify());
     }

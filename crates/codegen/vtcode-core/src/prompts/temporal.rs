@@ -26,10 +26,7 @@ use chrono::{DateTime, Local, Utc};
 pub fn generate_temporal_context(use_utc: bool) -> String {
     if use_utc {
         let now: DateTime<Utc> = Utc::now();
-        format!(
-            "\n\nCurrent date and time (UTC): {}",
-            now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-        )
+        format!("\n\nCurrent date and time (UTC): {}", now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
     } else {
         let now: DateTime<Local> = Local::now();
         format!("\n\nCurrent date and time: {}", now.format("%A, %B %d, %Y at %I:%M:%S %p %Z"))

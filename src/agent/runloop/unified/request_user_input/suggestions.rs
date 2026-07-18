@@ -1,8 +1,6 @@
 use super::schema::{RequestUserInputOption, RequestUserInputQuestion};
 
-pub(super) fn generate_suggested_options(
-    question: &RequestUserInputQuestion,
-) -> Option<Vec<RequestUserInputOption>> {
+pub(super) fn generate_suggested_options(question: &RequestUserInputQuestion) -> Option<Vec<RequestUserInputOption>> {
     let question_context = question.question.to_lowercase();
     let metadata_context = format!("{} {}", question.id, question.header).to_lowercase();
     let local_context = format!("{question_context} {metadata_context}");
@@ -22,9 +20,7 @@ pub(super) fn generate_suggested_options(
         QuestionIntent::OutcomeAndConstraints => outcome_and_constraint_options(),
         QuestionIntent::StepDecomposition => step_decomposition_options(),
         QuestionIntent::VerificationEvidence => verification_evidence_options(),
-        QuestionIntent::PrioritySelection => {
-            priority_selection_options(&local_context, &global_context)
-        }
+        QuestionIntent::PrioritySelection => priority_selection_options(&local_context, &global_context),
         QuestionIntent::GenericImprovement => generic_improvement_options(),
         QuestionIntent::GenericPlanning => generic_planning_options(),
     };
@@ -34,8 +30,7 @@ pub(super) fn generate_suggested_options(
     }
 
     options.truncate(3);
-    if let Some(first) = options.first_mut().filter(|first| !first.label.contains("(Recommended)"))
-    {
+    if let Some(first) = options.first_mut().filter(|first| !first.label.contains("(Recommended)")) {
         first.label.push_str(" (Recommended)");
     }
 
@@ -118,17 +113,7 @@ fn detect_question_intent(context: &str) -> Option<QuestionIntent> {
         return Some(QuestionIntent::PrioritySelection);
     }
 
-    if contains_any(
-        context,
-        &[
-            "improve",
-            "improvement",
-            "optimize",
-            "fix",
-            "priority",
-            "focus",
-        ],
-    ) {
+    if contains_any(context, &["improve", "improvement", "optimize", "fix", "priority", "focus"]) {
         return Some(QuestionIntent::GenericImprovement);
     }
 
@@ -139,11 +124,13 @@ fn outcome_and_constraint_options() -> Vec<RequestUserInputOption> {
     vec![
         RequestUserInputOption {
             label: "Define outcome metric".to_string(),
-            description: "Set one clear user-visible success metric and keep scope aligned to that outcome.".to_string(),
+            description: "Set one clear user-visible success metric and keep scope aligned to that outcome."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Lock constraints/non-goals".to_string(),
-            description: "Explicitly capture boundaries to avoid accidental scope expansion during implementation.".to_string(),
+            description: "Explicitly capture boundaries to avoid accidental scope expansion during implementation."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Scope MVP boundary".to_string(),
@@ -156,15 +143,18 @@ fn step_decomposition_options() -> Vec<RequestUserInputOption> {
     vec![
         RequestUserInputOption {
             label: "Dependency-first slices".to_string(),
-            description: "Break work by dependencies so each slice can be implemented and verified independently.".to_string(),
+            description: "Break work by dependencies so each slice can be implemented and verified independently."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "User-flow slices".to_string(),
-            description: "Split steps along the user journey so each slice improves one visible interaction path.".to_string(),
+            description: "Split steps along the user journey so each slice improves one visible interaction path."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Risk-isolated slices".to_string(),
-            description: "Isolate high-risk changes into separate steps to simplify rollback and debugging.".to_string(),
+            description: "Isolate high-risk changes into separate steps to simplify rollback and debugging."
+                .to_string(),
         },
     ]
 }
@@ -173,15 +163,18 @@ fn verification_evidence_options() -> Vec<RequestUserInputOption> {
     vec![
         RequestUserInputOption {
             label: "Command-based proof".to_string(),
-            description: "Require explicit check/test commands for each step to prove completion objectively.".to_string(),
+            description: "Require explicit check/test commands for each step to prove completion objectively."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Behavioral/manual proof".to_string(),
-            description: "Use concrete manual checks tied to user-visible behavior when automation is limited.".to_string(),
+            description: "Use concrete manual checks tied to user-visible behavior when automation is limited."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Hybrid proof strategy".to_string(),
-            description: "Combine automated checks with targeted manual verification for stronger confidence.".to_string(),
+            description: "Combine automated checks with targeted manual verification for stronger confidence."
+                .to_string(),
         },
     ]
 }
@@ -190,21 +183,15 @@ fn generic_improvement_options() -> Vec<RequestUserInputOption> {
     vec![
         RequestUserInputOption {
             label: "Fix highest-risk issue".to_string(),
-            description:
-                "Address the riskiest blocker first so follow-up work has lower failure risk."
-                    .to_string(),
+            description: "Address the riskiest blocker first so follow-up work has lower failure risk.".to_string(),
         },
         RequestUserInputOption {
             label: "Balance impact and effort".to_string(),
-            description:
-                "Choose a medium-scope improvement that ships quickly with clear validation."
-                    .to_string(),
+            description: "Choose a medium-scope improvement that ships quickly with clear validation.".to_string(),
         },
         RequestUserInputOption {
             label: "Deep quality pass".to_string(),
-            description:
-                "Prioritize thoroughness, including stronger tests and operational guardrails."
-                    .to_string(),
+            description: "Prioritize thoroughness, including stronger tests and operational guardrails.".to_string(),
         },
     ]
 }
@@ -213,29 +200,21 @@ pub(super) fn generic_planning_options() -> Vec<RequestUserInputOption> {
     vec![
         RequestUserInputOption {
             label: "Proceed with best default".to_string(),
-            description:
-                "Continue with the most conservative implementation path and document assumptions explicitly."
-                    .to_string(),
+            description: "Continue with the most conservative implementation path and document assumptions explicitly."
+                .to_string(),
         },
         RequestUserInputOption {
             label: "Constrain scope first".to_string(),
-            description:
-                "Lock a tighter MVP boundary before implementation to reduce risk and rework."
-                    .to_string(),
+            description: "Lock a tighter MVP boundary before implementation to reduce risk and rework.".to_string(),
         },
         RequestUserInputOption {
             label: "Surface key tradeoffs".to_string(),
-            description:
-                "Clarify the highest-impact tradeoff first so plan and execution stay aligned."
-                    .to_string(),
+            description: "Clarify the highest-impact tradeoff first so plan and execution stay aligned.".to_string(),
         },
     ]
 }
 
-fn priority_selection_options(
-    local_context: &str,
-    global_context: &str,
-) -> Vec<RequestUserInputOption> {
+fn priority_selection_options(local_context: &str, global_context: &str) -> Vec<RequestUserInputOption> {
     let mut options = Vec::new();
     append_domain_priority_options(&mut options, local_context);
     append_domain_priority_options(&mut options, global_context);
@@ -262,12 +241,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             "planning",
         ],
     ) {
-        if contains_any(
-            context,
-            &[
-                "timeout", "stream", "fallback", "provider", "retry", "latency",
-            ],
-        ) {
+        if contains_any(context, &["timeout", "stream", "fallback", "provider", "retry", "latency"]) {
             push_unique_option(
                 options,
                 "Provider fallback hardening",
@@ -302,17 +276,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             );
         }
 
-        if contains_any(
-            context,
-            &[
-                "token",
-                "context",
-                "verbose",
-                "length",
-                "compact",
-                "efficiency",
-            ],
-        ) {
+        if contains_any(context, &["token", "context", "verbose", "length", "compact", "efficiency"]) {
             push_unique_option(
                 options,
                 "Prompt token efficiency",
@@ -347,17 +311,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             );
         }
 
-        if contains_any(
-            context,
-            &[
-                "harness",
-                "docs",
-                "doc refs",
-                "invariant",
-                "tech debt",
-                "tracker",
-            ],
-        ) {
+        if contains_any(context, &["harness", "docs", "doc refs", "invariant", "tech debt", "tracker"]) {
             push_unique_option(
                 options,
                 "Harness integration strengthening",
@@ -365,15 +319,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             );
         }
 
-        if contains_any(
-            context,
-            &[
-                "minimal",
-                "lightweight",
-                "resource-constrained",
-                "compact mode",
-            ],
-        ) {
+        if contains_any(context, &["minimal", "lightweight", "resource-constrained", "compact mode"]) {
             push_unique_option(
                 options,
                 "Minimal/Lightweight optimization",

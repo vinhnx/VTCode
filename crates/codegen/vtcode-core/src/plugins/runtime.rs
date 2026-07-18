@@ -99,9 +99,8 @@ impl PluginRuntime {
             .await
             .map_err(|e| PluginError::LoadingError(format!("Failed to read manifest: {e}")))?;
 
-        let manifest: PluginManifest = serde_json::from_str(&manifest_content).map_err(|e| {
-            PluginError::ManifestValidationError(format!("Invalid manifest JSON: {e}"))
-        })?;
+        let manifest: PluginManifest = serde_json::from_str(&manifest_content)
+            .map_err(|e| PluginError::ManifestValidationError(format!("Invalid manifest JSON: {e}")))?;
 
         Ok(manifest)
     }
@@ -109,9 +108,7 @@ impl PluginRuntime {
     /// Validate plugin manifest
     fn validate_manifest(&self, manifest: &PluginManifest) -> PluginResult<()> {
         if manifest.name.is_empty() {
-            return Err(PluginError::ManifestValidationError(
-                "Plugin name is required".to_string(),
-            ));
+            return Err(PluginError::ManifestValidationError("Plugin name is required".to_string()));
         }
 
         // Validate name format (kebab-case)

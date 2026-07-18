@@ -1,10 +1,9 @@
 #[cfg(feature = "tui")]
 pub use vtcode_ui::tui::ui::syntax_highlight::{
-    available_themes, default_theme_name, find_syntax_by_extension, find_syntax_by_name,
-    find_syntax_by_token, find_syntax_plain_text, highlight_code_to_ansi,
-    highlight_code_to_anstyle_line_segments, highlight_code_to_line_segments,
-    highlight_code_to_segments, highlight_line_for_diff, highlight_line_to_anstyle_segments,
-    load_theme, should_highlight, syntax_set,
+    available_themes, default_theme_name, find_syntax_by_extension, find_syntax_by_name, find_syntax_by_token,
+    find_syntax_plain_text, highlight_code_to_ansi, highlight_code_to_anstyle_line_segments,
+    highlight_code_to_line_segments, highlight_code_to_segments, highlight_line_for_diff,
+    highlight_line_to_anstyle_segments, load_theme, should_highlight, syntax_set,
 };
 
 use crate::ui::theme::get_syntax_theme_for_ui_theme;
@@ -54,17 +53,10 @@ mod headless_highlight {
     ) -> Vec<Vec<(Style, String)>> {
         highlight_code_to_anstyle_line_segments(code, language, theme)
     }
-    pub fn highlight_code_to_segments(
-        code: &str,
-        _language: Option<&str>,
-        _theme: &str,
-    ) -> Vec<(Style, String)> {
+    pub fn highlight_code_to_segments(code: &str, _language: Option<&str>, _theme: &str) -> Vec<(Style, String)> {
         vec![(Style::default(), code.to_string())]
     }
-    pub fn highlight_line_for_diff(
-        line: &str,
-        _language: Option<&str>,
-    ) -> Option<Vec<(Style, String)>> {
+    pub fn highlight_line_for_diff(line: &str, _language: Option<&str>) -> Option<Vec<(Style, String)>> {
         Some(vec![(Style::default(), line.to_string())])
     }
     pub fn highlight_line_to_anstyle_segments(

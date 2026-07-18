@@ -31,11 +31,8 @@ impl AgentRunner {
         if !evaluation.findings.is_empty() {
             markdown.push_str("\n## Findings\n");
             for finding in &evaluation.findings {
-                let _ =
-                    write!(markdown, "- [{}] {}", finding.severity.trim(), finding.title.trim());
-                if let Some(detail) =
-                    finding.detail.as_deref().filter(|text| !text.trim().is_empty())
-                {
+                let _ = write!(markdown, "- [{}] {}", finding.severity.trim(), finding.title.trim());
+                if let Some(detail) = finding.detail.as_deref().filter(|text| !text.trim().is_empty()) {
                     markdown.push_str(": ");
                     markdown.push_str(detail.trim());
                 }
@@ -48,11 +45,7 @@ impl AgentRunner {
             "Unmet Contract Items",
             &evaluation.unmet_contract_items,
         );
-        super::orchestration::render_markdown_list(
-            &mut markdown,
-            "Residual Risks",
-            &evaluation.residual_risks,
-        );
+        super::orchestration::render_markdown_list(&mut markdown, "Residual Risks", &evaluation.residual_risks);
         super::orchestration::render_markdown_list(
             &mut markdown,
             "Required Tracker Updates",
@@ -63,15 +56,9 @@ impl AgentRunner {
     }
 
     /// Render an execution contract as markdown.
-    pub(super) fn render_contract_markdown(
-        &self,
-        task: &Task,
-        tracker_items: &[serde_json::Value],
-    ) -> String {
-        let mut markdown = format!(
-            "# Execution Contract\n\n## Goal\n{}\n\n## Done Criteria\n",
-            task.description.trim()
-        );
+    pub(super) fn render_contract_markdown(&self, task: &Task, tracker_items: &[serde_json::Value]) -> String {
+        let mut markdown =
+            format!("# Execution Contract\n\n## Goal\n{}\n\n## Done Criteria\n", task.description.trim());
 
         if tracker_items.is_empty() {
             markdown.push_str("- Deliver the requested change.\n");

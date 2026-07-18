@@ -212,12 +212,10 @@ impl StdioTransport {
     fn send_raw(&self, payload: Value) -> AcpResult<()> {
         let text = serde_json::to_string(&payload)?;
         self.write_tx.try_send(text).map_err(|e| match e {
-            mpsc::error::TrySendError::Full(_) => AcpError::Internal(
-                "stdio transport write channel full; subprocess may be slow".into(),
-            ),
-            mpsc::error::TrySendError::Closed(_) => {
-                AcpError::Internal("stdio transport writer channel closed".into())
+            mpsc::error::TrySendError::Full(_) => {
+                AcpError::Internal("stdio transport write channel full; subprocess may be slow".into())
             }
+            mpsc::error::TrySendError::Closed(_) => AcpError::Internal("stdio transport writer channel closed".into()),
         })
     }
 }
@@ -310,8 +308,7 @@ fn spawn_reader(
 
             // Clone the handler Arc out of the lock so the lock is released
             // before the handler runs (prevents re-entrancy / call-site latency).
-            if let Some(handler) =
-                notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
+            if let Some(handler) = notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
                 && let Err(e) = handler(message)
             {
                 tracing::warn!("stdio transport: notification handler error: {e}");

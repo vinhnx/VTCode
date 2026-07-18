@@ -200,8 +200,7 @@ async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
         }
     }
 
-    let content_length =
-        content_length.ok_or_else(|| anyhow!("copilot cli response missing Content-Length"))?;
+    let content_length = content_length.ok_or_else(|| anyhow!("copilot cli response missing Content-Length"))?;
     let payload = vtcode_commons::async_utils::read_exact_uninit(reader, content_length)
         .await
         .context("copilot cli payload read failed")?;

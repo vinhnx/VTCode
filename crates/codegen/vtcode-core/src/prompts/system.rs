@@ -9,9 +9,7 @@ use crate::config::types::{ShellPromptProfile, SystemPromptMode};
 use crate::llm::providers::gemini::wire::Content;
 use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
-use crate::prompts::guidelines::{
-    generate_tool_guidelines_for_profile, render_shell_profile_guidance,
-};
+use crate::prompts::guidelines::{generate_tool_guidelines_for_profile, render_shell_profile_guidance};
 use crate::prompts::output_styles::OutputStyleApplier;
 use crate::prompts::resources::{apply_system_prompt_layers, resolve_system_prompt_layers};
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
@@ -58,10 +56,10 @@ pub const PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE: &str =
 /// Implementation prompt used when transitioning from planning to execution.
 pub const PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT: &str = "Implement the approved plan.";
 /// Hint shown when planning workflow is active.
-pub const PLANNING_WORKFLOW_HINT: &str = "Planning workflow is active. Type `implement` to start execution or continue refining the plan.";
+pub const PLANNING_WORKFLOW_HINT: &str =
+    "Planning workflow is active. Type `implement` to start execution or continue refining the plan.";
 
-pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str =
-    "`task_tracker` remains available while planning.";
+pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str = "`task_tracker` remains available while planning.";
 /// Shared reminder appended when presenting plans while still in Planning workflow.
 pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is active with read-only permissions. Say “implement” to present the plan for user approval, or “stay in planning workflow” to revise. Calling `finish_planning` only presents the plan; mutating tools stay disabled until the user approves the plan. If a write tool is unavailable because planning workflow is active, do not emit the full artifact content in the chat. Instead, summarize the blocker briefly and ask the user to save the content, or call `finish_planning` to present the plan for approval.";
 
@@ -242,18 +240,11 @@ pub struct SystemPromptConfig;
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
     let current_dir = env::current_dir();
     let instruction = if let Ok(project_root) = current_dir.as_deref() {
-        compose_system_instruction_text(
-            project_root,
-            Some(&crate::config::VTCodeConfig::default()),
-            None,
-        )
-        .await
+        compose_system_instruction_text(project_root, Some(&crate::config::VTCodeConfig::default()), None).await
     } else {
         let mut prompt = default_system_prompt().to_string();
         prompt.push_str("\n\n");
-        prompt.push_str(&render_shell_profile_guidance(
-            ShellPromptProfile::Auto.resolve_for_current_platform(),
-        ));
+        prompt.push_str(&render_shell_profile_guidance(ShellPromptProfile::Auto.resolve_for_current_platform()));
         prompt
     };
 
@@ -426,19 +417,14 @@ pub async fn measure_system_prompt_size(
 /// Resolve the effective `(max_system_prompt_tokens, budget_warning_enabled,
 /// trim_enabled)` settings, falling back to the `AgentConfig` defaults when
 /// no config is available.
-fn system_prompt_budget_settings(
-    vtcode_config: Option<&crate::config::VTCodeConfig>,
-) -> (u64, bool, bool) {
-    vtcode_config.map_or(
-        (prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS, true, false),
-        |cfg| {
-            (
-                cfg.agent.max_system_prompt_tokens,
-                cfg.agent.system_prompt_budget_warning,
-                cfg.agent.trim_system_prompt,
-            )
-        },
-    )
+fn system_prompt_budget_settings(vtcode_config: Option<&crate::config::VTCodeConfig>) -> (u64, bool, bool) {
+    vtcode_config.map_or((prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS, true, false), |cfg| {
+        (
+            cfg.agent.max_system_prompt_tokens,
+            cfg.agent.system_prompt_budget_warning,
+            cfg.agent.trim_system_prompt,
+        )
+    })
 }
 
 /// Build the ordered prompt sections. Each section's text is stored exactly
@@ -489,11 +475,8 @@ async fn build_prompt_sections(
     });
 
     if let Some(ctx) = prompt_context {
-        let guidelines = generate_tool_guidelines_for_profile(
-            &ctx.available_tools,
-            ctx.capability_level,
-            shell_profile,
-        );
+        let guidelines =
+            generate_tool_guidelines_for_profile(&ctx.available_tools, ctx.capability_level, shell_profile);
         if !guidelines.is_empty() {
             sections.push(PromptSection {
                 kind: SectionKind::ToolGuidelines,
@@ -555,9 +538,7 @@ fn apply_token_budget(
                 let drop_index = sections
                     .iter()
                     .enumerate()
-                    .filter_map(|(index, section)| {
-                        section.kind.trim_priority().map(|priority| (priority, index))
-                    })
+                    .filter_map(|(index, section)| section.kind.trim_priority().map(|priority| (priority, index)))
                     .min_by_key(|(priority, _)| *priority)
                     .map(|(_, index)| index);
                 let Some(drop_index) = drop_index else {
@@ -609,10 +590,7 @@ fn apply_agent_identity(prompt: &str, agent_label: &str) -> String {
     // Replace the intro line: "VT Code. Be concise and safe." -> "{agent_label}. Be concise and safe."
     let old_intro = PROMPT_INTRO;
     if let Some(pos) = result.find(old_intro) {
-        result.replace_range(
-            pos..pos + old_intro.len(),
-            &format!("{agent_label}. Be concise and safe."),
-        );
+        result.replace_range(pos..pos + old_intro.len(), &format!("{agent_label}. Be concise and safe."));
     }
 
     result
@@ -651,12 +629,7 @@ fn build_contract_prompt(contract_groups: &[&[&str]]) -> String {
     let total_lines: usize = contract_groups.iter().map(|g| g.len()).sum();
     let lines_len: usize = contract_groups.iter().flat_map(|g| g.iter()).map(|l| l.len()).sum();
     let mut prompt = String::with_capacity(
-        PROMPT_TITLE.len()
-            + PROMPT_INTRO.len()
-            + CONTRACT_HEADER.len()
-            + lines_len
-            + total_lines * 3
-            + 8,
+        PROMPT_TITLE.len() + PROMPT_INTRO.len() + CONTRACT_HEADER.len() + lines_len + total_lines * 3 + 8,
     );
     prompt.push_str(PROMPT_TITLE);
     prompt.push_str("\n\n");
@@ -696,10 +669,7 @@ fn render_environment_addenda(
     if let Some(ctx) = prompt_context
         && !ctx.languages.is_empty()
     {
-        lines.push(format!(
-            "- Languages: {}. Match structural-search `lang` when needed.",
-            ctx.languages.join(", ")
-        ));
+        lines.push(format!("- Languages: {}. Match structural-search `lang` when needed.", ctx.languages.join(", ")));
     }
 
     if let Some(cfg) = vtcode_config {
@@ -772,8 +742,7 @@ pub async fn generate_system_instruction_with_config(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
     let (content, _report) =
-        generate_system_instruction_with_config_and_report(config, project_root, vtcode_config)
-            .await;
+        generate_system_instruction_with_config_and_report(config, project_root, vtcode_config).await;
     content
 }
 
@@ -789,8 +758,7 @@ pub async fn generate_system_instruction_with_config_and_report(
     let (instruction, report) = match PROMPT_CACHE.get(&cache_key) {
         Some(cached) => cached,
         None => {
-            let built =
-                compose_system_instruction_with_report(project_root, vtcode_config, None).await;
+            let built = compose_system_instruction_with_report(project_root, vtcode_config, None).await;
             PROMPT_CACHE.insert(cache_key, built.clone());
             built
         }
@@ -802,12 +770,8 @@ pub async fn generate_system_instruction_with_config_and_report(
 }
 
 /// Generate the stable base system instruction without workspace configuration.
-pub async fn generate_system_instruction_with_guidelines(
-    config: &SystemPromptConfig,
-    project_root: &Path,
-) -> Content {
-    let (content, _report) =
-        generate_system_instruction_with_guidelines_and_report(config, project_root).await;
+pub async fn generate_system_instruction_with_guidelines(config: &SystemPromptConfig, project_root: &Path) -> Content {
+    let (content, _report) = generate_system_instruction_with_guidelines_and_report(config, project_root).await;
     content
 }
 
@@ -949,10 +913,7 @@ mod tests {
 
     fn assert_no_removed_model_facing_tool_names(prompt: &str) {
         for tool_name in REMOVED_MODEL_FACING_TOOL_NAMES {
-            assert!(
-                !prompt.contains(tool_name),
-                "prompt should not mention removed tool name {tool_name}"
-            );
+            assert!(!prompt.contains(tool_name), "prompt should not mention removed tool name {tool_name}");
         }
     }
 
@@ -965,19 +926,11 @@ mod tests {
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 0;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         // Minimal prompt should remain compact and deterministic without AGENTS.md injection
-        assert!(
-            result.len() < 2800,
-            "Minimal mode should produce <2.8K chars (was {} chars)",
-            result.len()
-        );
-        assert!(
-            result.contains("VT Code") || result.contains("VT Code"),
-            "Should contain VT Code identifier"
-        );
+        assert!(result.len() < 2800, "Minimal mode should produce <2.8K chars (was {} chars)", result.len());
+        assert!(result.contains("VT Code") || result.contains("VT Code"), "Should contain VT Code identifier");
     }
 
     #[tokio::test]
@@ -989,14 +942,9 @@ mod tests {
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 0;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.len() <= 2800,
-            "Default mode should stay sparse (<=2.8K chars, was {} chars)",
-            result.len()
-        );
+        assert!(result.len() <= 2800, "Default mode should stay sparse (<=2.8K chars, was {} chars)", result.len());
         assert!(result.contains("`exec_command`, `write_stdin`, and `apply_patch`"));
         assert!(result.contains("## Shell Profile"));
         assert!(!result.contains("task_tracker"));
@@ -1013,15 +961,10 @@ mod tests {
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 0;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(result.len() > 100, "Lightweight should be >100 chars");
-        assert!(
-            result.len() < 2200,
-            "Lightweight should be compact (<2.2K chars, was {} chars)",
-            result.len()
-        );
+        assert!(result.len() < 2200, "Lightweight should be compact (<2.2K chars, was {} chars)", result.len());
         assert!(result.contains("task_tracker"));
         assert!(!result.contains("@file"));
         assert!(result.contains("Act and verify in one thread"));
@@ -1036,8 +979,7 @@ mod tests {
         config.agent.instruction_max_bytes = 0;
         config.agent.include_structured_reasoning_tags = None;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             !result.contains("## Structured Reasoning"),
@@ -1054,8 +996,7 @@ mod tests {
         config.agent.instruction_max_bytes = 0;
         config.agent.include_structured_reasoning_tags = Some(true);
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             result.contains("## Structured Reasoning"),
@@ -1072,8 +1013,7 @@ mod tests {
         config.agent.instruction_max_bytes = 0;
         config.agent.include_structured_reasoning_tags = None;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             !result.contains("## Structured Reasoning"),
@@ -1090,14 +1030,9 @@ mod tests {
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 0;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.len() <= 2900,
-            "Specialized should stay sparse (<=2.9K chars, was {} chars)",
-            result.len()
-        );
+        assert!(result.len() <= 2900, "Specialized should stay sparse (<=2.9K chars, was {} chars)", result.len());
         assert!(result.contains("task_tracker"));
         assert!(result.contains("<proposed_plan>"));
         assert!(result.contains("ARCHITECTURAL_INVARIANTS"));
@@ -1192,10 +1127,7 @@ mod tests {
 
             let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
-            assert!(
-                !result.contains("update_plan"),
-                "{mode_name} prompt should not reference deprecated update_plan"
-            );
+            assert!(!result.contains("update_plan"), "{mode_name} prompt should not reference deprecated update_plan");
         }
     }
 
@@ -1234,14 +1166,8 @@ mod tests {
 
             let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
-            assert!(
-                !result.contains("References\n"),
-                "{mode_name} prompt should not force a References section"
-            );
-            assert!(
-                !result.contains("Next action"),
-                "{mode_name} prompt should not force a Next action section"
-            );
+            assert!(!result.contains("References\n"), "{mode_name} prompt should not force a References section");
+            assert!(!result.contains("Next action"), "{mode_name} prompt should not force a Next action section");
             assert!(
                 !result.contains("Scope checkpoint"),
                 "{mode_name} prompt should not require the old plan blueprint bullets"
@@ -1280,10 +1206,7 @@ mod tests {
                 normalized.contains("verify") || normalized.contains("validation"),
                 "{mode_name} prompt should include verification guidance"
             );
-            assert!(
-                normalized.contains("do not guess"),
-                "{mode_name} prompt should gate missing context"
-            );
+            assert!(normalized.contains("do not guess"), "{mode_name} prompt should gate missing context");
             assert!(
                 normalized.contains("unblocked portion")
                     || normalized.contains("unblocked slices")
@@ -1291,14 +1214,10 @@ mod tests {
                 "{mode_name} prompt should require partial progress before clarification"
             );
             assert!(
-                normalized.contains("retrieved sources")
-                    || normalized.contains("retrieved evidence"),
+                normalized.contains("retrieved sources") || normalized.contains("retrieved evidence"),
                 "{mode_name} prompt should include grounding/citation guidance"
             );
-            assert!(
-                !result.contains('ƒ'),
-                "{mode_name} prompt should not contain stray prompt characters"
-            );
+            assert!(!result.contains('ƒ'), "{mode_name} prompt should not contain stray prompt characters");
         }
     }
 
@@ -1314,34 +1233,19 @@ mod tests {
 
     #[test]
     fn test_harness_awareness_in_prompts() {
-        assert!(
-            default_system_prompt().contains("AGENTS.md"),
-            "Default prompt should reference AGENTS.md as map"
-        );
+        assert!(default_system_prompt().contains("AGENTS.md"), "Default prompt should reference AGENTS.md as map");
         assert!(
             specialized_instruction_text().contains("ARCHITECTURAL_INVARIANTS"),
             "Specialized prompt should reference architectural invariants"
         );
-        assert!(
-            minimal_system_prompt().contains("AGENTS.md"),
-            "Minimal prompt should still reference AGENTS.md"
-        );
+        assert!(minimal_system_prompt().contains("AGENTS.md"), "Minimal prompt should still reference AGENTS.md");
     }
 
     #[test]
     fn test_prompts_reject_guessing_when_context_is_missing() {
-        assert!(
-            default_system_prompt().contains("do not guess"),
-            "Default prompt should reject guessing"
-        );
-        assert!(
-            specialized_instruction_text().contains("do not guess"),
-            "Specialized prompt should reject guessing"
-        );
-        assert!(
-            minimal_system_prompt().contains("do not guess"),
-            "Minimal prompt should still reject guessing"
-        );
+        assert!(default_system_prompt().contains("do not guess"), "Default prompt should reject guessing");
+        assert!(specialized_instruction_text().contains("do not guess"), "Specialized prompt should reject guessing");
+        assert!(minimal_system_prompt().contains("do not guess"), "Minimal prompt should still reject guessing");
     }
 
     #[test]
@@ -1372,14 +1276,8 @@ mod tests {
     fn test_default_prompt_stays_lean_but_complete() {
         let prompt = default_system_prompt();
 
-        assert!(
-            prompt.contains("## Contract"),
-            "Default prompt should include the lean contract section"
-        );
-        assert!(
-            prompt.contains("Keep outputs concise"),
-            "Default prompt should clamp output shape"
-        );
+        assert!(prompt.contains("## Contract"), "Default prompt should include the lean contract section");
+        assert!(prompt.contains("Keep outputs concise"), "Default prompt should clamp output shape");
         assert!(
             prompt.contains("Verify changes yourself"),
             "Default prompt should require verification before finalizing"
@@ -1395,10 +1293,7 @@ mod tests {
         let prompt = default_system_prompt();
 
         assert_no_removed_model_facing_tool_names(prompt);
-        assert!(
-            prompt.contains("exec_command"),
-            "Default prompt should keep baseline shell guidance"
-        );
+        assert!(prompt.contains("exec_command"), "Default prompt should keep baseline shell guidance");
     }
 
     #[tokio::test]
@@ -1409,14 +1304,10 @@ mod tests {
         config.agent.include_working_directory = false;
         config.agent.instruction_max_bytes = 0;
 
-        let prompt =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let prompt = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert_no_removed_model_facing_tool_names(&prompt);
-        assert!(
-            prompt.contains("exec_command"),
-            "Composed default prompt should keep baseline shell guidance"
-        );
+        assert!(prompt.contains("exec_command"), "Composed default prompt should keep baseline shell guidance");
         assert!(prompt.contains("## Shell Profile"));
         assert!(prompt.contains("controls prompt examples and expected command syntax only"));
     }
@@ -1436,8 +1327,7 @@ mod tests {
         assert!(unix_prompt.contains("does not translate GNU-to-BSD"));
 
         config.agent.shell_prompt_profile = ShellPromptProfile::PowerShell;
-        let powershell_prompt =
-            compose_system_instruction_text(&project_root, Some(&config), None).await;
+        let powershell_prompt = compose_system_instruction_text(&project_root, Some(&config), None).await;
         assert!(powershell_prompt.contains("Active shell profile: `powershell`"));
         assert!(powershell_prompt.contains("`Get-ChildItem`"));
         assert!(powershell_prompt.contains("use WSL"));
@@ -1482,8 +1372,7 @@ mod tests {
             "Default prompt should restrict delegation to bounded independent work"
         );
         assert!(
-            minimal_system_prompt()
-                .contains("Keep delegation and skills bounded, explicit, and narrow"),
+            minimal_system_prompt().contains("Keep delegation and skills bounded, explicit, and narrow"),
             "Minimal prompt should preserve the delegation contract"
         );
     }
@@ -1509,20 +1398,13 @@ mod tests {
     fn test_default_prompt_omits_accuracy_addendum() {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let config = VTCodeConfig::default();
-        let prompt = runtime.block_on(compose_system_instruction_text(
-            &PathBuf::from("."),
-            Some(&config),
-            None,
-        ));
+        let prompt = runtime.block_on(compose_system_instruction_text(&PathBuf::from("."), Some(&config), None));
 
         assert!(
             !prompt.contains("## Accuracy Optimization"),
             "Runtime prompt should omit the accuracy optimization section"
         );
-        assert!(
-            prompt.contains("do not guess"),
-            "Prompt should still preserve the uncertainty guardrail"
-        );
+        assert!(prompt.contains("do not guess"), "Prompt should still preserve the uncertainty guardrail");
     }
 
     #[test]
@@ -1571,10 +1453,7 @@ mod tests {
 
             let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
-            assert!(
-                result.contains("## Contract"),
-                "{mode_name} prompt should reuse the canonical base prompt"
-            );
+            assert!(result.contains("## Contract"), "{mode_name} prompt should reuse the canonical base prompt");
             assert!(
                 result.matches("## Operating Profile").count() == 1,
                 "{mode_name} prompt should add only one operating profile"
@@ -1593,10 +1472,7 @@ mod tests {
             guidelines.contains("`exec_command.cmd` with `ls`, `rg`"),
             "Tool guidance should browse through shell commands"
         );
-        assert!(
-            guidelines.contains("git diff -- <path>"),
-            "Tool guidance should keep diff guidance explicit"
-        );
+        assert!(guidelines.contains("git diff -- <path>"), "Tool guidance should keep diff guidance explicit");
     }
 
     // ENHANCEMENT TESTS
@@ -1613,8 +1489,7 @@ mod tests {
             ..PromptContext::default()
         };
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             result.contains("Capabilities: read-only"),
@@ -1632,8 +1507,7 @@ mod tests {
         ctx.add_tool(tools::WRITE_STDIN.to_string());
         ctx.add_tool(tools::APPLY_PATCH.to_string());
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(
             result.contains("exec_command") && result.contains("apply_patch"),
@@ -1652,8 +1526,7 @@ mod tests {
 
         let config = VTCodeConfig::default();
         let ctx = PromptContext::from_workspace_tools(workspace.path(), [tools::EXEC_COMMAND]);
-        let result =
-            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert!(result.contains("## Environment"));
         assert!(result.contains("Rust, TypeScript"));
@@ -1665,8 +1538,7 @@ mod tests {
         let workspace = tempfile::TempDir::new().expect("workspace tempdir");
         let config = VTCodeConfig::default();
         let ctx = PromptContext::from_workspace_tools(workspace.path(), [tools::EXEC_COMMAND]);
-        let result =
-            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert!(!result.contains("Languages:"));
     }
@@ -1674,11 +1546,8 @@ mod tests {
     #[tokio::test]
     async fn test_live_prompt_omits_project_docs_and_user_instructions_from_base_prompt() {
         let workspace = tempfile::TempDir::new().expect("workspace tempdir");
-        std::fs::write(
-            workspace.path().join("AGENTS.md"),
-            "- Root summary\n\nFollow the root guidance.\n",
-        )
-        .expect("write agents");
+        std::fs::write(workspace.path().join("AGENTS.md"), "- Root summary\n\nFollow the root guidance.\n")
+            .expect("write agents");
 
         let mut config = VTCodeConfig::default();
         config.agent.user_instructions = Some("keep responses terse".to_string());
@@ -1704,8 +1573,7 @@ mod tests {
         let prompts_dir = workspace.path().join(".vtcode/prompts");
         std::fs::create_dir_all(&prompts_dir).expect("create prompts dir");
         std::fs::write(prompts_dir.join("system.md"), "# Workspace system base").expect("system");
-        std::fs::write(prompts_dir.join("append-system.md"), "Workspace prompt appendix")
-            .expect("append");
+        std::fs::write(prompts_dir.join("append-system.md"), "Workspace prompt appendix").expect("append");
 
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = false;
@@ -1723,8 +1591,7 @@ mod tests {
         });
         ctx.set_current_directory(workspace.path().to_path_buf());
 
-        let result =
-            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert!(result.starts_with("# Workspace system base"));
         assert!(result.contains("Workspace prompt appendix"));
@@ -1749,8 +1616,7 @@ mod tests {
         config.prompt_cache.cache_friendly_prompt_shaping = false;
         config.agent.temporal_context_use_utc = false; // Local time
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(result.contains("Time:"), "Should include temporal context when enabled");
         let env_pos = result.find("## Environment");
@@ -1767,17 +1633,10 @@ mod tests {
         config.prompt_cache.cache_friendly_prompt_shaping = false;
         config.agent.temporal_context_use_utc = true; // UTC format
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.contains("UTC"),
-            "Should indicate UTC when temporal_context_use_utc is true"
-        );
-        assert!(
-            result.contains("T") && result.contains("Z"),
-            "Should use RFC3339 format for UTC (contains T and Z)"
-        );
+        assert!(result.contains("UTC"), "Should indicate UTC when temporal_context_use_utc is true");
+        assert!(result.contains("T") && result.contains("Z"), "Should use RFC3339 format for UTC (contains T and Z)");
     }
 
     #[tokio::test]
@@ -1785,8 +1644,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = false;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(!result.contains("Time:"), "Should not include temporal context when disabled");
     }
@@ -1797,8 +1655,7 @@ mod tests {
         config.agent.include_temporal_context = true;
         config.prompt_cache.cache_friendly_prompt_shaping = true;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(
             !result.contains("Time:"),
@@ -1815,8 +1672,7 @@ mod tests {
         config.ide_context.enabled = true;
         config.ide_context.inject_into_prompt = true;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(result.contains("## Environment"));
         assert!(result.contains("Interaction: approval may gate sensitive actions"));
@@ -1833,8 +1689,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.security.human_in_the_loop = false;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
         assert!(result.contains("Interaction: approval reduced by config"));
     }
@@ -1843,13 +1698,9 @@ mod tests {
     async fn test_default_environment_omits_default_interaction_guidance() {
         let config = VTCodeConfig::default();
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            !result.contains("Interaction:"),
-            "Default-on interaction guidance should stay out of the prompt"
-        );
+        assert!(!result.contains("Interaction:"), "Default-on interaction guidance should stay out of the prompt");
     }
 
     #[tokio::test]
@@ -1860,8 +1711,7 @@ mod tests {
         let mut ctx = PromptContext::default();
         ctx.set_current_directory(PathBuf::from("/tmp/test"));
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(result.contains("Working directory"), "Should include working directory label");
         assert!(result.contains("/tmp/test"), "Should show actual directory path");
@@ -1880,13 +1730,9 @@ mod tests {
         let mut ctx = PromptContext::default();
         ctx.set_current_directory(PathBuf::from("/tmp/test"));
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
-        assert!(
-            !result.contains("Working directory"),
-            "Should not include working directory when disabled"
-        );
+        assert!(!result.contains("Working directory"), "Should not include working directory when disabled");
     }
 
     #[tokio::test]
@@ -1905,10 +1751,7 @@ mod tests {
         assert!(result.len() > 600, "Should generate substantial prompt");
         assert!(result.contains("VT Code"), "Should contain base prompt content");
         // Should not have dynamic guidelines without context
-        assert!(
-            !result.contains("## Active Tools"),
-            "Should not have tool guidelines without prompt context"
-        );
+        assert!(!result.contains("## Active Tools"), "Should not have tool guidelines without prompt context");
     }
 
     #[tokio::test]
@@ -1934,8 +1777,7 @@ mod tests {
             manifest: None,
         });
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         // Verify all enhancements present
         assert!(result.contains("## Active Tools"), "Should have dynamic guidelines");
@@ -1972,8 +1814,7 @@ mod tests {
         ctx.add_language("Rust".to_string());
         ctx.set_current_directory(PathBuf::from("/workspace"));
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         let mode_pos = result.find("## Operating Profile").expect("operating profile section");
         let tools_pos = result.find("## Active Tools").expect("tools section");
@@ -2008,8 +1849,7 @@ mod tests {
             ),
         });
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         assert!(result.contains("## Skills"));
         assert!(result.contains("skill-creator: Create or update skills"));
@@ -2030,10 +1870,7 @@ mod tests {
         let lightweight_text = lightweight_instruction_text();
         let specialized_text = specialized_instruction_text();
 
-        assert!(
-            !minimal_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
-            "Minimal prompt has uninterpolated placeholder"
-        );
+        assert!(!minimal_text.contains("__UNIFIED_TOOL_GUIDANCE__"), "Minimal prompt has uninterpolated placeholder");
         assert!(
             !lightweight_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
             "Lightweight prompt has uninterpolated placeholder"
@@ -2082,14 +1919,9 @@ mod tests {
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.starts_with("# VT Code (Build mode)"),
-            "Should start with agent identity: {}",
-            &result[..50]
-        );
+        assert!(result.starts_with("# VT Code (Build mode)"), "Should start with agent identity: {}", &result[..50]);
         assert!(
             result.contains("VT Code (Build mode). Be concise and safe."),
             "Should include agent identity in intro"
@@ -2105,13 +1937,9 @@ mod tests {
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.starts_with("# VT Code (Auto mode)"),
-            "Should start with auto agent identity"
-        );
+        assert!(result.starts_with("# VT Code (Auto mode)"), "Should start with auto agent identity");
     }
 
     #[tokio::test]
@@ -2123,13 +1951,9 @@ mod tests {
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
 
-        let result =
-            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+        let result = compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.starts_with("# VT Code (Duck mode)"),
-            "Should start with duck agent identity"
-        );
+        assert!(result.starts_with("# VT Code (Duck mode)"), "Should start with duck agent identity");
     }
 
     #[test]
@@ -2190,10 +2014,7 @@ VT Code (Build mode). Be concise and safe.
 - On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.
 - The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.
 - VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags."#;
-        assert_eq!(
-            result, expected,
-            "single-section base-contract output must stay byte-identical"
-        );
+        assert_eq!(result, expected, "single-section base-contract output must stay byte-identical");
     }
 
     #[tokio::test]
@@ -2221,8 +2042,7 @@ VT Code (Build mode). Be concise and safe.
         });
         ctx.set_current_directory(PathBuf::from("/workspace"));
 
-        let result =
-            compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
+        let result = compose_system_instruction_text(workspace.path(), Some(&config), Some(&ctx)).await;
 
         let expected = r#"# VT Code (Build mode)
 
@@ -2311,22 +2131,14 @@ Use a skill only when the user names it or the task clearly matches. Load detail
         let sections = build_prompt_sections(workspace.path(), Some(&config), Some(&ctx)).await;
         let full_text = join_prompt_sections(&sections);
         let full_tokens = estimate_token_count(&full_text);
-        assert!(
-            full_tokens > config.agent.max_system_prompt_tokens,
-            "test setup must exceed the configured budget"
-        );
+        assert!(full_tokens > config.agent.max_system_prompt_tokens, "test setup must exceed the configured budget");
 
-        let (text, report) =
-            compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx))
-                .await;
+        let (text, report) = compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert_eq!(text, full_text, "trim disabled: full untrimmed text must still be used");
         assert!(report.over_budget, "token estimate exceeds configured budget");
         assert_eq!(report.token_estimate, full_tokens);
-        assert!(
-            report.trimmed_sections.is_empty(),
-            "no sections should be dropped when trimming is disabled"
-        );
+        assert!(report.trimmed_sections.is_empty(), "no sections should be dropped when trimming is disabled");
     }
 
     #[tokio::test]
@@ -2367,9 +2179,7 @@ Use a skill only when the user names it or the task clearly matches. Load detail
             .expect("base contract section is always present");
         config.agent.max_system_prompt_tokens = base_only_tokens;
 
-        let (text, report) =
-            compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx))
-                .await;
+        let (text, report) = compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx)).await;
 
         assert_eq!(
             report.trimmed_sections,
@@ -2405,8 +2215,7 @@ Use a skill only when the user names it or the task clearly matches. Load detail
         );
 
         let mut warning_changed = VTCodeConfig::default();
-        warning_changed.agent.system_prompt_budget_warning =
-            !warning_changed.agent.system_prompt_budget_warning;
+        warning_changed.agent.system_prompt_budget_warning = !warning_changed.agent.system_prompt_budget_warning;
         assert_ne!(
             base_key,
             cache_key(&project_root, Some(&warning_changed), None),
@@ -2477,10 +2286,6 @@ Use a skill only when the user names it or the task clearly matches. Load detail
         config.agent.max_system_prompt_tokens = 8_000;
         let report = measure_system_prompt_size(temp.path(), &config).await;
         // Default base prompt is well under 8k tokens for an empty workspace.
-        assert!(
-            !report.over_budget,
-            "default prompt should fit within 8k tokens, got {}",
-            report.token_estimate
-        );
+        assert!(!report.over_budget, "default prompt should fit within 8k tokens, got {}", report.token_estimate);
     }
 }

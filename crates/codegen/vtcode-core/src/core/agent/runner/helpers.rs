@@ -116,10 +116,7 @@ mod tests {
     #[test]
     fn converts_command_arrays_to_public_exec_command_shape() {
         let text = "```command_session\n{\"action\":\"run\",\"command\":[\"printf\",\"hello world\"]}\n```";
-        assert_eq!(
-            detect_textual_exec_tool_call(text),
-            Some(json!({"cmd":"printf 'hello world'"}))
-        );
+        assert_eq!(detect_textual_exec_tool_call(text), Some(json!({"cmd":"printf 'hello world'"})));
     }
 
     #[test]

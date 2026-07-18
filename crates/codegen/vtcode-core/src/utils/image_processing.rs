@@ -23,11 +23,7 @@ pub async fn read_image_from_url(url: &str) -> Result<ImageData> {
         .with_context(|| format!("Failed to fetch image from URL: {url}"))?;
 
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
-            "HTTP error when fetching image: {} (status: {})",
-            url,
-            response.status()
-        ));
+        return Err(anyhow::anyhow!("HTTP error when fetching image: {} (status: {})", url, response.status()));
     }
 
     let content_length = response.content_length().unwrap_or(0);

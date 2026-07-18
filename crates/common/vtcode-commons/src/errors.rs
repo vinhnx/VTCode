@@ -198,11 +198,7 @@ impl<E> MultiErrors<E> {
 
     /// Convert into `Result<()>` — succeeds if no errors were collected.
     pub fn ok(self) -> std::result::Result<(), Self> {
-        if self.errors.is_empty() {
-            Ok(())
-        } else {
-            Err(self)
-        }
+        if self.errors.is_empty() { Ok(()) } else { Err(self) }
     }
 
     /// Remove all errors from the collection.

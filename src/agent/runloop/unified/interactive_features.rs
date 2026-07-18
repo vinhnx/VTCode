@@ -6,8 +6,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::{
-    LightweightFeature, collect_single_response, create_provider_for_model_route,
-    resolve_lightweight_route,
+    LightweightFeature, collect_single_response, create_provider_for_model_route, resolve_lightweight_route,
 };
 use vtcode_core::tools::ToolRegistry;
 
@@ -79,13 +78,7 @@ pub(crate) async fn generate_prompt_suggestions(
 ) -> Vec<PromptSuggestion> {
     let routes = resolve_prompt_suggestion_routes(config, vt_cfg);
     log_prompt_suggestion_route_warning(&routes);
-    let cache_key = prompt_suggestion_cache_key(
-        &routes.primary,
-        workspace,
-        history,
-        session_stats,
-        tool_registry,
-    );
+    let cache_key = prompt_suggestion_cache_key(&routes.primary, workspace, history, session_stats, tool_registry);
     if let Some(cached) = PROMPT_SUGGESTION_CACHE
         .lock()
         .ok()
@@ -94,8 +87,7 @@ pub(crate) async fn generate_prompt_suggestions(
         return cached;
     }
 
-    let fallback =
-        deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
+    let fallback = deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
     let llm_generated = llm_prompt_suggestions(provider, config, vt_cfg, &routes, history).await;
     let resolved = if llm_generated.is_empty() {
         fallback
@@ -130,9 +122,7 @@ pub(crate) async fn generate_inline_prompt_suggestion(
 
     let routes = resolve_prompt_suggestion_routes(config, vt_cfg);
     log_prompt_suggestion_route_warning(&routes);
-    if let Some(prompt) =
-        llm_inline_prompt_suggestion(provider, config, vt_cfg, &routes, history, draft).await
-    {
+    if let Some(prompt) = llm_inline_prompt_suggestion(provider, config, vt_cfg, &routes, history, draft).await {
         return Some(InlinePromptSuggestion { prompt, source: PromptSuggestionSource::Llm });
     }
 
@@ -152,7 +142,8 @@ fn deterministic_prompt_suggestions(
         suggestions.push(PromptSuggestion {
             id: "plan-refine".to_string(),
             title: "Refine the current plan".to_string(),
-            prompt: "Refine the current plan, close any remaining open decisions, and keep it implementation-ready.".to_string(),
+            prompt: "Refine the current plan, close any remaining open decisions, and keep it implementation-ready."
+                .to_string(),
             subtitle: Some("Useful while Planning workflow is active.".to_string()),
             badge: Some("Plan".to_string()),
         });
@@ -172,7 +163,8 @@ fn deterministic_prompt_suggestions(
         suggestions.push(PromptSuggestion {
             id: "jobs-check".to_string(),
             title: "Check running jobs".to_string(),
-            prompt: "Inspect the active jobs, summarize which one matters most, and tell me the next action.".to_string(),
+            prompt: "Inspect the active jobs, summarize which one matters most, and tell me the next action."
+                .to_string(),
             subtitle: Some("Derived from active PTY sessions.".to_string()),
             badge: Some("Jobs".to_string()),
         });
@@ -222,9 +214,7 @@ fn deterministic_prompt_suggestions(
     suggestions.push(PromptSuggestion {
         id: "review-diff".to_string(),
         title: "Review the current diff".to_string(),
-        prompt:
-            "Review the current diff, call out the highest-risk issue, and suggest the next change."
-                .to_string(),
+        prompt: "Review the current diff, call out the highest-risk issue, and suggest the next change.".to_string(),
         subtitle: Some("General follow-up for active coding sessions.".to_string()),
         badge: Some("Review".to_string()),
     });
@@ -239,8 +229,7 @@ fn deterministic_inline_prompt_suggestion(
     tool_registry: &ToolRegistry,
     draft: &str,
 ) -> Option<String> {
-    let suggestions =
-        deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
+    let suggestions = deterministic_prompt_suggestions(workspace, history, session_stats, tool_registry);
     if suggestions.is_empty() {
         return None;
     }
@@ -263,8 +252,7 @@ async fn llm_prompt_suggestions(
     routes: &PromptSuggestionRoutes,
     history: &[uni::Message],
 ) -> Vec<PromptSuggestion> {
-    let primary =
-        llm_prompt_suggestions_for_route(provider, config, vt_cfg, &routes.primary, history).await;
+    let primary = llm_prompt_suggestions_for_route(provider, config, vt_cfg, &routes.primary, history).await;
     if !primary.is_empty() || routes.fallback.is_none() {
         return primary;
     }
@@ -293,13 +281,7 @@ async fn llm_prompt_suggestions_for_route(
     }
 
     if route.model == config.model {
-        return llm_prompt_suggestions_from_provider(
-            provider,
-            &route.model,
-            route.temperature,
-            history,
-        )
-        .await;
+        return llm_prompt_suggestions_from_provider(provider, &route.model, route.temperature, history).await;
     }
 
     let Some(provider) = create_prompt_suggestion_provider(route, config, vt_cfg) else {
@@ -317,15 +299,8 @@ async fn llm_inline_prompt_suggestion(
     history: &[uni::Message],
     draft: &str,
 ) -> Option<String> {
-    let primary = llm_inline_prompt_suggestion_for_route(
-        provider,
-        config,
-        vt_cfg,
-        &routes.primary,
-        history,
-        draft,
-    )
-    .await;
+    let primary =
+        llm_inline_prompt_suggestion_for_route(provider, config, vt_cfg, &routes.primary, history, draft).await;
     if primary.is_some() || routes.fallback.is_none() {
         return primary;
     }
@@ -355,26 +330,13 @@ async fn llm_inline_prompt_suggestion_for_route(
     }
 
     if route.model == config.model {
-        return llm_inline_prompt_suggestion_from_provider(
-            provider,
-            &route.model,
-            route.temperature,
-            history,
-            draft,
-        )
-        .await;
+        return llm_inline_prompt_suggestion_from_provider(provider, &route.model, route.temperature, history, draft)
+            .await;
     }
 
     let provider = create_prompt_suggestion_provider(route, config, vt_cfg)?;
 
-    llm_inline_prompt_suggestion_from_provider(
-        &*provider,
-        &route.model,
-        route.temperature,
-        history,
-        draft,
-    )
-    .await
+    llm_inline_prompt_suggestion_from_provider(&*provider, &route.model, route.temperature, history, draft).await
 }
 
 fn create_prompt_suggestion_provider(
@@ -567,10 +529,7 @@ fn prompt_suggestion_cache_key(
     )
 }
 
-fn resolve_prompt_suggestion_routes(
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-) -> PromptSuggestionRoutes {
+fn resolve_prompt_suggestion_routes(config: &CoreAgentConfig, vt_cfg: Option<&VTCodeConfig>) -> PromptSuggestionRoutes {
     let temperature = vt_cfg
         .map(|cfg| cfg.agent.prompt_suggestions.temperature)
         .unwrap_or(DEFAULT_PROMPT_SUGGESTION_TEMPERATURE);
@@ -760,14 +719,9 @@ mod tests {
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let tool_registry = runtime.block_on(ToolRegistry::new(PathBuf::from(".")));
 
-        let suggestion = deterministic_inline_prompt_suggestion(
-            Path::new("."),
-            &[],
-            &session_stats,
-            &tool_registry,
-            "",
-        )
-        .expect("suggestion");
+        let suggestion =
+            deterministic_inline_prompt_suggestion(Path::new("."), &[], &session_stats, &tool_registry, "")
+                .expect("suggestion");
 
         assert!(!suggestion.trim().is_empty());
     }
@@ -816,23 +770,14 @@ mod tests {
             normalize_inline_prompt_suggestion("Review the current diff", "Review the current"),
             Some("Review the current diff".to_string())
         );
-        assert_eq!(
-            normalize_inline_prompt_suggestion("Start a new plan", "Review the current"),
-            None
-        );
+        assert_eq!(normalize_inline_prompt_suggestion("Start a new plan", "Review the current"), None);
     }
 
     #[test]
     fn normalize_inline_prompt_suggestion_preserves_trailing_space_prefix() {
+        assert_eq!(normalize_inline_prompt_suggestion("Review the currentdiff", "Review the current "), None);
         assert_eq!(
-            normalize_inline_prompt_suggestion("Review the currentdiff", "Review the current "),
-            None
-        );
-        assert_eq!(
-            normalize_inline_prompt_suggestion(
-                "Review the current diff and summarize it",
-                "Review the current diff "
-            ),
+            normalize_inline_prompt_suggestion("Review the current diff and summarize it", "Review the current diff "),
             Some("Review the current diff and summarize it".to_string())
         );
     }
@@ -849,9 +794,7 @@ mod tests {
             &config,
             Some(&vt_cfg),
             Path::new("."),
-            &[uni::Message::user(
-                "Please keep reviewing the diff".to_string(),
-            )],
+            &[uni::Message::user("Please keep reviewing the diff".to_string())],
             &SessionStats::default(),
             &ToolRegistry::new(PathBuf::from(".")).await,
             "Review the current diff ",

@@ -89,10 +89,8 @@ impl<'a> Widget for InputWidget<'a> {
 
         // Handle cursor positioning using buffer API
         if input_data.cursor_should_be_visible && inner.width > 0 && inner.height > 0 {
-            let cursor_x =
-                input_data.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
-            let cursor_y =
-                input_data.cursor_y.min(inner.height.saturating_sub(1)).saturating_add(inner.y);
+            let cursor_x = input_data.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
+            let cursor_y = input_data.cursor_y.min(inner.height.saturating_sub(1)).saturating_add(inner.y);
 
             if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
                 if input_data.use_fake_cursor {
@@ -112,8 +110,7 @@ impl<'a> Widget for InputWidget<'a> {
 
         // Render status line if present
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {
-            let paragraph =
-                Paragraph::new(line).style(input_data.default_style).wrap(Wrap { trim: false });
+            let paragraph = Paragraph::new(line).style(input_data.default_style).wrap(Wrap { trim: false });
             paragraph.render(status_rect, buf);
         }
     }

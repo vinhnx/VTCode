@@ -32,9 +32,7 @@ pub fn maybe_extract_tool_fact(message: &Message) -> Option<GroundedFactRecord> 
     let candidate = serde_json::from_str::<serde_json::Value>(raw)
         .ok()
         .and_then(|value| {
-            if value.get("error").is_some()
-                || value.get("success") == Some(&serde_json::Value::Bool(false))
-            {
+            if value.get("error").is_some() || value.get("success") == Some(&serde_json::Value::Bool(false)) {
                 return None;
             }
             for key in ["summary", "message", "result", "output", "stdout"] {
@@ -124,9 +122,7 @@ fn strip_user_memory_note_marker(text: &str) -> Option<&str> {
 pub fn dedup_latest_facts(history: &[Message], limit: usize) -> Vec<GroundedFactRecord> {
     let mut facts = Vec::new();
     for message in history {
-        if let Some(fact) =
-            maybe_extract_tool_fact(message).or_else(|| maybe_extract_user_fact(message))
-        {
+        if let Some(fact) = maybe_extract_tool_fact(message).or_else(|| maybe_extract_user_fact(message)) {
             let normalized = normalize_whitespace(&fact.fact).to_ascii_lowercase();
             if let Some(existing_idx) = facts.iter().position(|entry: &GroundedFactRecord| {
                 normalize_whitespace(&entry.fact).to_ascii_lowercase() == normalized

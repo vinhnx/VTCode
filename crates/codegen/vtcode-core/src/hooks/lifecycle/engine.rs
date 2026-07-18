@@ -16,13 +16,13 @@ use crate::permissions::PermissionRequest;
 
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
-    HookCommandResult, interpret_permission_request, interpret_post_tool, interpret_pre_tool,
-    interpret_session_end, interpret_session_start, interpret_stop, interpret_user_prompt,
+    HookCommandResult, interpret_permission_request, interpret_post_tool, interpret_pre_tool, interpret_session_end,
+    interpret_session_start, interpret_stop, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
-    HookMessage, NotificationHookType, PermissionRequestHookOutcome, PostToolHookOutcome,
-    PreCompactHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
-    SessionStartHookOutcome, SessionStartTrigger, StopHookOutcome, UserPromptHookOutcome,
+    HookMessage, NotificationHookType, PermissionRequestHookOutcome, PostToolHookOutcome, PreCompactHookOutcome,
+    PreToolHookDecision, PreToolHookOutcome, SessionEndReason, SessionStartHookOutcome, SessionStartTrigger,
+    StopHookOutcome, UserPromptHookOutcome,
 };
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 
@@ -36,11 +36,7 @@ pub struct LifecycleHookEngine {
 }
 
 impl LifecycleHookEngine {
-    pub fn new(
-        workspace: PathBuf,
-        config: &HooksConfig,
-        trigger: SessionStartTrigger,
-    ) -> Result<Option<Self>> {
+    pub fn new(workspace: PathBuf, config: &HooksConfig, trigger: SessionStartTrigger) -> Result<Option<Self>> {
         Self::new_with_session(workspace, config, trigger, generate_session_id())
     }
 
@@ -95,10 +91,8 @@ impl LifecycleHookEngine {
                         &mut additional_context,
                         self.inner.hooks.quiet_success_output,
                     ),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "SessionStart hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Err(err) => messages
+                        .push(HookMessage::error(format!("SessionStart hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -106,11 +100,7 @@ impl LifecycleHookEngine {
         Ok(SessionStartHookOutcome { messages, additional_context })
     }
 
-    pub async fn run_session_end(
-        &self,
-        turn_id: &str,
-        reason: SessionEndReason,
-    ) -> Result<Vec<HookMessage>> {
+    pub async fn run_session_end(&self, turn_id: &str, reason: SessionEndReason) -> Result<Vec<HookMessage>> {
         let mut messages = Vec::new();
 
         if self.inner.hooks.session_end.is_empty() {
@@ -127,16 +117,11 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("SessionEnd", command, &payload).await {
-                    Ok(result) => interpret_session_end(
-                        command,
-                        &result,
-                        &mut messages,
-                        self.inner.hooks.quiet_success_output,
-                    ),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "SessionEnd hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Ok(result) => {
+                        interpret_session_end(command, &result, &mut messages, self.inner.hooks.quiet_success_output)
+                    }
+                    Err(err) => messages
+                        .push(HookMessage::error(format!("SessionEnd hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -180,16 +165,11 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("SubagentStart", command, &payload).await {
-                    Ok(result) => interpret_session_end(
-                        command,
-                        &result,
-                        &mut messages,
-                        self.inner.hooks.quiet_success_output,
-                    ),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "SubagentStart hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Ok(result) => {
+                        interpret_session_end(command, &result, &mut messages, self.inner.hooks.quiet_success_output)
+                    }
+                    Err(err) => messages
+                        .push(HookMessage::error(format!("SubagentStart hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -233,16 +213,11 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("SubagentStop", command, &payload).await {
-                    Ok(result) => interpret_session_end(
-                        command,
-                        &result,
-                        &mut messages,
-                        self.inner.hooks.quiet_success_output,
-                    ),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "SubagentStop hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Ok(result) => {
+                        interpret_session_end(command, &result, &mut messages, self.inner.hooks.quiet_success_output)
+                    }
+                    Err(err) => messages
+                        .push(HookMessage::error(format!("SubagentStop hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -251,11 +226,7 @@ impl LifecycleHookEngine {
     }
 
     /// Execute all `UserPromptSubmit` hooks that match the prompt content.
-    pub async fn run_user_prompt_submit(
-        &self,
-        turn_id: &str,
-        prompt: &str,
-    ) -> Result<UserPromptHookOutcome> {
+    pub async fn run_user_prompt_submit(&self, turn_id: &str, prompt: &str) -> Result<UserPromptHookOutcome> {
         let mut outcome = UserPromptHookOutcome::default();
 
         if self.inner.hooks.user_prompt_submit.is_empty() {
@@ -272,20 +243,14 @@ impl LifecycleHookEngine {
             for command in &group.commands {
                 match self.execute_command("UserPromptSubmit", command, &payload).await {
                     Ok(result) => {
-                        interpret_user_prompt(
-                            command,
-                            &result,
-                            &mut outcome,
-                            self.inner.hooks.quiet_success_output,
-                        );
+                        interpret_user_prompt(command, &result, &mut outcome, self.inner.hooks.quiet_success_output);
                         if !outcome.allow_prompt {
                             return Ok(outcome);
                         }
                     }
-                    Err(err) => outcome.messages.push(HookMessage::error(format!(
-                        "UserPromptSubmit hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Err(err) => outcome
+                        .messages
+                        .push(HookMessage::error(format!("UserPromptSubmit hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -308,12 +273,7 @@ impl LifecycleHookEngine {
         }
 
         let payload = self
-            .build_permission_request_payload(
-                tool_name,
-                tool_input,
-                permission_request,
-                permission_suggestions,
-            )
+            .build_permission_request_payload(tool_name, tool_input, permission_request, permission_suggestions)
             .await?;
 
         for group in &self.inner.hooks.permission_request {
@@ -368,12 +328,7 @@ impl LifecycleHookEngine {
             for command in &group.commands {
                 match self.execute_command("PreToolUse", command, &payload).await {
                     Ok(result) => {
-                        interpret_pre_tool(
-                            command,
-                            &result,
-                            &mut outcome,
-                            self.inner.hooks.quiet_success_output,
-                        );
+                        interpret_pre_tool(command, &result, &mut outcome, self.inner.hooks.quiet_success_output);
                         match outcome.decision {
                             PreToolHookDecision::Allow | PreToolHookDecision::Deny => {
                                 return Ok(outcome);
@@ -381,10 +336,9 @@ impl LifecycleHookEngine {
                             _ => {}
                         }
                     }
-                    Err(err) => outcome.messages.push(HookMessage::error(format!(
-                        "PreToolUse hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Err(err) => outcome
+                        .messages
+                        .push(HookMessage::error(format!("PreToolUse hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -417,16 +371,12 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("PostToolUse", command, &payload).await {
-                    Ok(result) => interpret_post_tool(
-                        command,
-                        &result,
-                        &mut outcome,
-                        self.inner.hooks.quiet_success_output,
-                    ),
-                    Err(err) => outcome.messages.push(HookMessage::error(format!(
-                        "PostToolUse hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Ok(result) => {
+                        interpret_post_tool(command, &result, &mut outcome, self.inner.hooks.quiet_success_output)
+                    }
+                    Err(err) => outcome
+                        .messages
+                        .push(HookMessage::error(format!("PostToolUse hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -475,10 +425,9 @@ impl LifecycleHookEngine {
                             self.inner.hooks.quiet_success_output,
                         );
                     }
-                    Err(err) => outcome.messages.push(HookMessage::error(format!(
-                        "PreCompact hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Err(err) => outcome
+                        .messages
+                        .push(HookMessage::error(format!("PreCompact hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -509,16 +458,11 @@ impl LifecycleHookEngine {
 
             for command in &group.commands {
                 match self.execute_command("Notification", command, &payload).await {
-                    Ok(result) => interpret_session_end(
-                        command,
-                        &result,
-                        &mut messages,
-                        self.inner.hooks.quiet_success_output,
-                    ),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "Notification hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Ok(result) => {
+                        interpret_session_end(command, &result, &mut messages, self.inner.hooks.quiet_success_output)
+                    }
+                    Err(err) => messages
+                        .push(HookMessage::error(format!("Notification hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -527,11 +471,7 @@ impl LifecycleHookEngine {
     }
 
     /// Execute all `Stop` hooks.
-    pub async fn run_stop(
-        &self,
-        last_assistant_message: &str,
-        stop_hook_active: bool,
-    ) -> Result<StopHookOutcome> {
+    pub async fn run_stop(&self, last_assistant_message: &str, stop_hook_active: bool) -> Result<StopHookOutcome> {
         let mut outcome = StopHookOutcome::default();
 
         if self.inner.hooks.stop.is_empty() {
@@ -548,20 +488,14 @@ impl LifecycleHookEngine {
             for command in &group.commands {
                 match self.execute_command("Stop", command, &payload).await {
                     Ok(result) => {
-                        interpret_stop(
-                            command,
-                            &result,
-                            &mut outcome,
-                            self.inner.hooks.quiet_success_output,
-                        );
+                        interpret_stop(command, &result, &mut outcome, self.inner.hooks.quiet_success_output);
                         if outcome.block_reason.is_some() {
                             return Ok(outcome);
                         }
                     }
-                    Err(err) => outcome.messages.push(HookMessage::error(format!(
-                        "Stop hook `{}` failed: {err}",
-                        command.command
-                    ))),
+                    Err(err) => outcome
+                        .messages
+                        .push(HookMessage::error(format!("Stop hook `{}` failed: {err}", command.command))),
                 }
             }
         }
@@ -612,8 +546,8 @@ impl LifecycleHookEngine {
             .with_context(|| format!("failed to spawn lifecycle hook `{}`", command.command))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            let mut payload_bytes = serde_json::to_vec(payload)
-                .context("failed to serialize lifecycle hook payload")?;
+            let mut payload_bytes =
+                serde_json::to_vec(payload).context("failed to serialize lifecycle hook payload")?;
             payload_bytes.push(b'\n');
             stdin
                 .write_all(&payload_bytes)

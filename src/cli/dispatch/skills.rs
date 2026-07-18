@@ -5,10 +5,7 @@ use vtcode_core::cli::args::{SkillsRefSubcommand, SkillsSubcommand};
 use crate::cli::adapters::skills_options;
 use crate::cli::{skills, skills_index, skills_ref};
 
-pub(super) async fn dispatch_skills_command(
-    startup: &StartupContext,
-    skills_cmd: SkillsSubcommand,
-) -> Result<()> {
+pub(super) async fn dispatch_skills_command(startup: &StartupContext, skills_cmd: SkillsSubcommand) -> Result<()> {
     let skills_options = skills_options(startup);
 
     match skills_cmd {

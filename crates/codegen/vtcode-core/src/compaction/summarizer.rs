@@ -2,11 +2,7 @@ use crate::llm::provider::{LLMProvider, LLMRequest, Message};
 use anyhow::{Context, Result};
 
 /// Summarize the provided text using the configured provider.
-pub async fn summarize_text(
-    provider: &dyn LLMProvider,
-    model: &str,
-    prompt: &str,
-) -> Result<String> {
+pub async fn summarize_text(provider: &dyn LLMProvider, model: &str, prompt: &str) -> Result<String> {
     let request = LLMRequest {
         messages: std::sync::Arc::new(vec![Message::user(prompt.to_string())]),
         model: model.to_string(),

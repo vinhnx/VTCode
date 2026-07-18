@@ -1,7 +1,6 @@
 use super::code_blocks::CodeBlockState;
 use super::links::{
-    extract_hidden_location_suffix, label_segments_have_location_suffix,
-    should_render_link_destination,
+    extract_hidden_location_suffix, label_segments_have_location_suffix, should_render_link_destination,
 };
 use super::tables::{TableBuffer, render_table};
 use super::{LIST_INDENT_WIDTH, MarkdownLine};
@@ -23,10 +22,9 @@ static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 const COMMON_FILE_EXTENSIONS: &[&str] = &[
-    "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java", "kt",
-    "swift", "c", "h", "cpp", "hpp", "cc", "m", "mm", "sh", "zsh", "bash", "fish", "ps1", "rb",
-    "php", "sql", "html", "css", "scss", "sass", "less", "xml", "ini", "cfg", "conf", "env",
-    "lock", "txt",
+    "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java", "kt", "swift", "c", "h",
+    "cpp", "hpp", "cc", "m", "mm", "sh", "zsh", "bash", "fish", "ps1", "rb", "php", "sql", "html", "css", "scss",
+    "sass", "less", "xml", "ini", "cfg", "conf", "env", "lock", "txt",
 ];
 const COMMON_FILE_NAMES: &[&str] = &["Makefile", "Dockerfile"];
 
@@ -261,37 +259,23 @@ pub(crate) fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
             ctx.flush_line();
             ctx.set_pending_list_continuation();
         }
-        TagEnd::Emphasis
-        | TagEnd::Strong
-        | TagEnd::Strikethrough
-        | TagEnd::Superscript
-        | TagEnd::Subscript => {
+        TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Superscript | TagEnd::Subscript => {
             ctx.pop_style();
         }
         TagEnd::Link | TagEnd::Image => {
             if let Some(link) = ctx.link_state.take() {
                 if link.show_destination {
-                    ctx.current_line.push_segment_with_link(
-                        ctx.current_style(),
-                        " (",
-                        Some(link.destination.clone()),
-                    );
+                    ctx.current_line
+                        .push_segment_with_link(ctx.current_style(), " (", Some(link.destination.clone()));
                     ctx.current_line.push_segment_with_link(
                         ctx.current_style(),
                         &link.destination,
                         Some(link.destination.clone()),
                     );
-                    ctx.current_line.push_segment_with_link(
-                        ctx.current_style(),
-                        ")",
-                        Some(link.destination.clone()),
-                    );
+                    ctx.current_line
+                        .push_segment_with_link(ctx.current_style(), ")", Some(link.destination.clone()));
                 } else if let Some(location_suffix) = link.hidden_location_suffix.as_deref() {
-                    let label_segments = ctx
-                        .current_line
-                        .segments
-                        .get(link.label_start_segment_idx..)
-                        .unwrap_or(&[]);
+                    let label_segments = ctx.current_line.segments.get(link.label_start_segment_idx..).unwrap_or(&[]);
 
                     if !label_segments_have_location_suffix(label_segments) {
                         ctx.current_line.push_segment_with_link(
@@ -383,23 +367,20 @@ fn detect_file_link_matches(text: &str) -> Vec<FileLinkMatch> {
     let mut matches = Vec::new();
 
     for quoted_match in QUOTED_PATH_PATTERN.find_iter(text) {
-        if let Some(link_match) =
-            build_file_link_match(text, quoted_match.start(), quoted_match.end())
-        {
+        if let Some(link_match) = build_file_link_match(text, quoted_match.start(), quoted_match.end()) {
             matches.push(link_match);
         }
     }
 
     for token_match in NON_WHITESPACE_TOKEN_PATTERN.find_iter(text) {
-        if matches.iter().any(|existing| {
-            token_match.start() < existing.end && token_match.end() > existing.start
-        }) {
+        if matches
+            .iter()
+            .any(|existing| token_match.start() < existing.end && token_match.end() > existing.start)
+        {
             continue;
         }
 
-        if let Some(link_match) =
-            build_file_link_match(text, token_match.start(), token_match.end())
-        {
+        if let Some(link_match) = build_file_link_match(text, token_match.start(), token_match.end()) {
             matches.push(link_match);
         }
     }
@@ -410,11 +391,7 @@ fn detect_file_link_matches(text: &str) -> Vec<FileLinkMatch> {
     matches
 }
 
-fn build_file_link_match(
-    text: &str,
-    token_start: usize,
-    token_end: usize,
-) -> Option<FileLinkMatch> {
+fn build_file_link_match(text: &str, token_start: usize, token_end: usize) -> Option<FileLinkMatch> {
     let token = &text[token_start..token_end];
     let (trimmed_start, trimmed_end) = trim_transcript_token_bounds(token);
     if trimmed_start >= trimmed_end {
@@ -538,12 +515,7 @@ fn location_paren_suffix_start(token: &str) -> Option<usize> {
     valid.then_some(paren_start)
 }
 
-fn append_text_segment(
-    segment: &str,
-    ctx: &mut MarkdownContext<'_>,
-    style: Style,
-    link_target: Option<String>,
-) {
+fn append_text_segment(segment: &str, ctx: &mut MarkdownContext<'_>, style: Style, link_target: Option<String>) {
     if segment.is_empty() {
         return;
     }
@@ -563,11 +535,8 @@ fn append_text_segment(
     let mut cursor = 0usize;
     for link_match in matches {
         if link_match.start > cursor {
-            ctx.current_line.push_segment_with_link(
-                style,
-                &segment[cursor..link_match.start],
-                None,
-            );
+            ctx.current_line
+                .push_segment_with_link(style, &segment[cursor..link_match.start], None);
         }
         if link_match.end > link_match.start {
             ctx.current_line.push_segment_with_link(
@@ -592,13 +561,7 @@ pub(crate) fn flush_current_line(
     base_style: Style,
 ) {
     if current_line.segments.is_empty() && pending_list_prefix.is_some() {
-        ensure_prefix(
-            current_line,
-            blockquote_depth,
-            list_continuation_prefix,
-            pending_list_prefix,
-            base_style,
-        );
+        ensure_prefix(current_line, blockquote_depth, list_continuation_prefix, pending_list_prefix, base_style);
     }
 
     if !current_line.segments.is_empty() {
@@ -687,11 +650,7 @@ fn strong_style(current: Style, theme_styles: &ThemeStyles, base_style: Style) -
     markdown_bold_accent_style(current.bold(), theme_styles, base_style)
 }
 
-fn markdown_bold_accent_style(
-    mut style: Style,
-    theme_styles: &ThemeStyles,
-    base_style: Style,
-) -> Style {
+fn markdown_bold_accent_style(mut style: Style, theme_styles: &ThemeStyles, base_style: Style) -> Style {
     if should_apply_markdown_accent(base_style, theme_styles)
         && let Some(color) = choose_markdown_accent(
             base_style,
@@ -719,10 +678,7 @@ fn choose_markdown_accent(base_style: Style, candidates: &[Style]) -> Option<ans
         .find_map(|candidate| candidate.get_fg_color().filter(|color| base_fg != Some(*color)))
 }
 
-fn rebuild_list_continuation_prefix(
-    list_stack: &[ListState],
-    list_continuation_prefix: &mut String,
-) {
+fn rebuild_list_continuation_prefix(list_stack: &[ListState], list_continuation_prefix: &mut String) {
     list_continuation_prefix.clear();
     for state in list_stack {
         list_continuation_prefix.push_str(&state.continuation);

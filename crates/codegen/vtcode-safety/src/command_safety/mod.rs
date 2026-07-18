@@ -39,9 +39,7 @@ pub use command_db::CommandDatabase;
 pub use dangerous_commands::command_might_be_dangerous;
 pub use safe_command_registry::{SafeCommandRegistry, SafetyDecision};
 pub use shell_parser::parse_bash_lc_commands;
-pub use unified::{
-    EvaluationReason, EvaluationResult, PolicyAwareEvaluator, UnifiedCommandEvaluator,
-};
+pub use unified::{EvaluationReason, EvaluationResult, PolicyAwareEvaluator, UnifiedCommandEvaluator};
 #[cfg(windows)]
 pub use windows_cmdlet_db::{CmdletCategory, CmdletDatabase, CmdletInfo, CmdletSeverity};
 #[cfg(windows)]
@@ -49,9 +47,7 @@ pub use windows_com_analyzer::{ComObjectAnalyzer, ComObjectContext, ComObjectInf
 #[cfg(windows)]
 pub use windows_enhanced::is_dangerous_windows_enhanced;
 #[cfg(windows)]
-pub use windows_registry_filter::{
-    RegistryAccessFilter, RegistryAccessPattern, RegistryPathInfo, RegistryRiskLevel,
-};
+pub use windows_registry_filter::{RegistryAccessFilter, RegistryAccessPattern, RegistryPathInfo, RegistryRiskLevel};
 
 /// Evaluates if a command is safe to execute.
 /// Returns true if the command passes all safety checks.
@@ -82,8 +78,7 @@ pub fn shell_string_might_be_dangerous(command: &str) -> bool {
         return true;
     }
 
-    let fallback_tokens: Vec<String> =
-        command.split_whitespace().map(ToString::to_string).collect();
+    let fallback_tokens: Vec<String> = command.split_whitespace().map(ToString::to_string).collect();
     !fallback_tokens.is_empty() && command_might_be_dangerous(&fallback_tokens)
 }
 

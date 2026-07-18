@@ -5,15 +5,13 @@ pub(crate) use self::memory_envelope::refresh_session_memory_envelope;
 pub(crate) use self::recovery_preview::build_recovery_context_previews_with_workspace;
 
 pub(crate) use vtcode_core::compaction::memory_envelope::{
-    MemoryEnvelopePersistence, MemoryEnvelopePlacement, SessionMemoryEnvelope,
-    SessionMemoryEnvelopeUpdate, build_session_memory_envelope,
-    build_zero_cost_summarized_fork_history, configured_retained_user_messages,
+    MemoryEnvelopePersistence, MemoryEnvelopePlacement, SessionMemoryEnvelope, SessionMemoryEnvelopeUpdate,
+    build_session_memory_envelope, build_zero_cost_summarized_fork_history, configured_retained_user_messages,
     dedup_repeated_file_reads_for_local_compaction, default_memory_envelope_path_for_session,
     derive_continuity_summary, effective_compaction_threshold, has_latest_memory_envelope,
-    insert_memory_envelope_message, latest_memory_envelope_path_for_session,
-    load_latest_memory_envelope, local_compaction_config, persist_memory_envelope,
-    read_task_tracker_snapshot, resolve_compaction_threshold, should_persist_memory_envelope,
-    strip_existing_memory_envelope, write_memory_envelope_to_path,
+    insert_memory_envelope_message, latest_memory_envelope_path_for_session, load_latest_memory_envelope,
+    local_compaction_config, persist_memory_envelope, read_task_tracker_snapshot, resolve_compaction_threshold,
+    should_persist_memory_envelope, strip_existing_memory_envelope, write_memory_envelope_to_path,
 };
 
 // Test-only symbols referenced by the runloop compaction test suite.
@@ -36,9 +34,7 @@ use vtcode_core::llm::provider::{LLMProvider, Message, MessageRole};
 use vtcode_core::persistent_memory::normalize_whitespace;
 
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, compact_boundary_event,
-};
+use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, compact_boundary_event};
 use crate::agent::runloop::unified::state::SessionStats;
 
 const RECOVERY_PREVIEW_MAX_CHARS: usize = 220;
@@ -154,11 +150,7 @@ pub(crate) async fn build_summarized_fork_history(
     let source_envelope = load_latest_memory_envelope(workspace_root, source_session_id);
     if let Some(envelope) = source_envelope.as_ref() {
         strip_existing_memory_envelope(&mut source_history);
-        insert_memory_envelope_message(
-            &mut source_history,
-            envelope,
-            MemoryEnvelopePlacement::Start,
-        );
+        insert_memory_envelope_message(&mut source_history, envelope, MemoryEnvelopePlacement::Start);
     }
 
     let mut compacted = if prefer_saved_summary && source_envelope.is_some() {
@@ -205,16 +197,7 @@ pub(crate) async fn compact_history_in_place(
     context_manager: &mut ContextManager,
 ) -> Result<Option<CompactionOutcome>> {
     compact_history_in_place_with_events(
-        CompactionContext::new(
-            provider,
-            model,
-            session_id,
-            session_id,
-            workspace_root,
-            vt_cfg,
-            None,
-            None,
-        ),
+        CompactionContext::new(provider, model, session_id, session_id, workspace_root, vt_cfg, None, None),
         CompactionState::new(history, session_stats, context_manager),
         vtcode_core::exec::events::CompactionTrigger::Manual,
     )
@@ -246,14 +229,8 @@ pub(crate) async fn manual_compact_history_in_place(
     options: &vtcode_core::compaction::ManualCompactionOptions,
     native_only: bool,
 ) -> Result<Option<CompactionOutcome>> {
-    run_manual_compaction(
-        context,
-        state,
-        options,
-        native_only,
-        vtcode_core::exec::events::CompactionTrigger::Manual,
-    )
-    .await
+    run_manual_compaction(context, state, options, native_only, vtcode_core::exec::events::CompactionTrigger::Manual)
+        .await
 }
 
 /// Compact the conversation when the main session model or provider is switched
@@ -302,8 +279,7 @@ async fn run_manual_compaction(
         anyhow::bail!(provider.manual_openai_compaction_unavailable_message(model));
     }
 
-    let previous_response_chain_present =
-        session_stats.previous_response_id_for(provider.name(), model).is_some();
+    let previous_response_chain_present = session_stats.previous_response_id_for(provider.name(), model).is_some();
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
@@ -385,8 +361,7 @@ async fn compact_history_segment_in_place(
     } = context;
     let CompactionState { history, session_stats, context_manager } = state;
 
-    let previous_response_chain_present =
-        session_stats.previous_response_id_for(provider.name(), model).is_some();
+    let previous_response_chain_present = session_stats.previous_response_id_for(provider.name(), model).is_some();
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
@@ -399,12 +374,11 @@ async fn compact_history_segment_in_place(
     // Local fallback, so recovery never aborts.
     let config = local_compaction_config(vt_cfg, false);
     let strategy = vtcode_core::compaction::manual_compaction_strategy(provider, model);
-    let compaction_history =
-        if matches!(strategy, vtcode_core::compaction::CompactionStrategy::Local) {
-            dedup_repeated_file_reads_for_local_compaction(&compaction_input)
-        } else {
-            compaction_input.clone()
-        };
+    let compaction_history = if matches!(strategy, vtcode_core::compaction::CompactionStrategy::Local) {
+        dedup_repeated_file_reads_for_local_compaction(&compaction_input)
+    } else {
+        compaction_input.clone()
+    };
     // Preserve the legacy small-segment short-circuit: auto/recovery/targeted
     // pass `always_summarize=false`, so skip compaction for tiny segments.
     if !config.always_summarize && compaction_history.len() <= config.keep_last_messages {
@@ -490,12 +464,10 @@ async fn apply_compacted_history(
         plan.envelope_mode.placement,
         None,
     )?;
-    let history_artifact_path =
-        envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
+    let history_artifact_path = envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     *history = compacted;
     session_stats.clear_previous_response_chain_for(provider.name(), model);
-    context_manager
-        .cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
+    context_manager.cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
     if let Some(ref envelope) = envelope {
         tracing::info!(
             provider = %provider.name(),
@@ -648,16 +620,7 @@ pub(crate) async fn compact_history_from_index_in_place(
     if start_index >= history.len() {
         return Ok(None);
     }
-    let context = CompactionContext::new(
-        provider,
-        model,
-        session_id,
-        session_id,
-        workspace_root,
-        vt_cfg,
-        None,
-        None,
-    );
+    let context = CompactionContext::new(provider, model, session_id, session_id, workspace_root, vt_cfg, None, None);
 
     if start_index == 0 {
         return compact_history_segment_in_place(
@@ -748,8 +711,7 @@ pub(crate) async fn maybe_auto_compact_history(
     // Binary-specific post-step: reset response-chain and token tracking, then
     // emit the canonical `thread.compact_boundary` event.
     session_stats.clear_previous_response_chain_for(provider.name(), model);
-    context_manager
-        .cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
+    context_manager.cap_token_usage_after_compaction(effective_compaction_threshold(vt_cfg, provider, model));
     if let Some(harness_emitter) = harness_emitter {
         let event = compact_boundary_event(
             thread_id.to_string(),

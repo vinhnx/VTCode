@@ -112,9 +112,7 @@ impl SafeCommandRegistry {
         rules.insert(
             "cargo".to_string(),
             CommandRule {
-                safe_subcommands: Some(
-                    vec!["check", "build", "clippy"].into_iter().map(|s| s.to_string()).collect(),
-                ),
+                safe_subcommands: Some(vec!["check", "build", "clippy"].into_iter().map(|s| s.to_string()).collect()),
                 forbidden_options: vec![],
                 custom_check: Some(Self::check_cargo),
             },
@@ -177,8 +175,8 @@ impl SafeCommandRegistry {
 
         // ──── Safe read-only tools ────
         for cmd in &[
-            "cat", "ls", "pwd", "echo", "grep", "head", "tail", "wc", "tr", "cut", "paste", "sort",
-            "uniq", "rev", "seq", "expr", "uname", "whoami", "id", "stat", "which",
+            "cat", "ls", "pwd", "echo", "grep", "head", "tail", "wc", "tr", "cut", "paste", "sort", "uniq", "rev",
+            "seq", "expr", "uname", "whoami", "id", "stat", "which",
         ] {
             rules.insert(
                 cmd.to_string(),
@@ -219,26 +217,19 @@ impl SafeCommandRegistry {
             }
             let subcommand = &command[1];
             if !safe_subs.contains(subcommand) {
-                return SafetyDecision::Deny(format!(
-                    "Subcommand {subcommand} not in safe list for {cmd_name}"
-                ));
+                return SafetyDecision::Deny(format!("Subcommand {subcommand} not in safe list for {cmd_name}"));
             }
         }
 
         // Check forbidden options
         if !rule.forbidden_options.is_empty() {
             // Pre-calculate forbidden prefixes to avoid allocations in the loop
-            let forbidden_with_eq: Vec<String> =
-                rule.forbidden_options.iter().map(|opt| format!("{opt}=")).collect();
+            let forbidden_with_eq: Vec<String> = rule.forbidden_options.iter().map(|opt| format!("{opt}=")).collect();
 
             for arg in command {
-                for (forbidden, forbidden_eq) in
-                    rule.forbidden_options.iter().zip(forbidden_with_eq.iter())
-                {
+                for (forbidden, forbidden_eq) in rule.forbidden_options.iter().zip(forbidden_with_eq.iter()) {
                     if arg == forbidden || arg.starts_with(forbidden_eq) {
-                        return SafetyDecision::Deny(format!(
-                            "Option {forbidden} is not allowed for {cmd_name}"
-                        ));
+                        return SafetyDecision::Deny(format!("Option {forbidden} is not allowed for {cmd_name}"));
                     }
                 }
             }
@@ -270,8 +261,7 @@ impl SafeCommandRegistry {
             .any(crate::command_safety::dangerous_commands::git_global_option_requires_prompt)
         {
             return SafetyDecision::Deny(
-                "git global options that redirect config, repository, or helper lookup are not allowed"
-                    .to_string(),
+                "git global options that redirect config, repository, or helper lookup are not allowed".to_string(),
             );
         }
 
@@ -337,16 +327,12 @@ impl SafeCommandRegistry {
                 });
 
                 if has_dangerous_flag {
-                    SafetyDecision::Deny(
-                        "git branch with modification flags is not allowed".to_string(),
-                    )
+                    SafetyDecision::Deny("git branch with modification flags is not allowed".to_string())
                 } else if is_read_only || branch_args.is_empty() {
                     SafetyDecision::Allow
                 } else {
                     // Unknown flags - be conservative
-                    SafetyDecision::Deny(
-                        "git branch with unknown flags requires approval".to_string(),
-                    )
+                    SafetyDecision::Deny("git branch with unknown flags requires approval".to_string())
                 }
             }
             _ => SafetyDecision::Unknown,
@@ -368,9 +354,7 @@ impl SafeCommandRegistry {
                     SafetyDecision::Deny("cargo fmt without --check is not allowed".to_string())
                 }
             }
-            _ => {
-                SafetyDecision::Deny(format!("cargo {} is not in safe subcommand list", command[1]))
-            }
+            _ => SafetyDecision::Deny(format!("cargo {} is not in safe subcommand list", command[1])),
         }
     }
 
@@ -380,14 +364,10 @@ impl SafeCommandRegistry {
 
         for arg in command.iter().skip(1) {
             if UNSAFE_OPTIONS.contains(&arg.as_str()) {
-                return SafetyDecision::Deny(format!(
-                    "base64 {arg} is not allowed (output redirection)"
-                ));
+                return SafetyDecision::Deny(format!("base64 {arg} is not allowed (output redirection)"));
             }
             if arg.starts_with("--output=") || (arg.starts_with("-o") && arg != "-o") {
-                return SafetyDecision::Deny(
-                    "base64 output redirection is not allowed".to_string(),
-                );
+                return SafetyDecision::Deny("base64 output redirection is not allowed".to_string());
             }
         }
         SafetyDecision::Unknown
@@ -539,11 +519,7 @@ mod tests {
     #[test]
     fn cargo_fmt_with_check_is_safe() {
         let registry = SafeCommandRegistry::new();
-        let cmd = vec![
-            "cargo".to_string(),
-            "fmt".to_string(),
-            "--check".to_string(),
-        ];
+        let cmd = vec!["cargo".to_string(), "fmt".to_string(), "--check".to_string()];
         assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 

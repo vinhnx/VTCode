@@ -8,8 +8,8 @@ pub(super) use ratatui::widgets::Clear;
 pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::tui::core_tui::app::types::{
-    DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, LocalAgentsTransientRequest,
-    SlashCommandItem, TaskPanelTransientRequest, TransientRequest,
+    DiffOverlayRequest, DiffPreviewState, InlineCommand, InlineEvent, LocalAgentsTransientRequest, SlashCommandItem,
+    TaskPanelTransientRequest, TransientRequest,
 };
 use crate::tui::core_tui::runner::TuiSessionDriver;
 use crate::tui::core_tui::session::Session as CoreSessionState;
@@ -44,9 +44,7 @@ use self::history_picker::HistoryPickerState;
 use self::local_agents::LocalAgentsState;
 use self::slash_palette::SlashPalette;
 use self::transcript_review::TranscriptReviewState;
-use self::transient::{
-    TransientFocusPolicy, TransientHost, TransientSurface, TransientVisibilityChange,
-};
+use self::transient::{TransientFocusPolicy, TransientHost, TransientSurface, TransientVisibilityChange};
 use crate::tui::options::FullscreenInteractionSettings;
 use agent_palette::AgentPalette;
 
@@ -84,14 +82,7 @@ impl AppSession {
         slash_commands: Vec<SlashCommandItem>,
         app_name: String,
     ) -> Self {
-        let core = CoreSessionState::new_with_logs(
-            theme,
-            placeholder,
-            view_rows,
-            show_logs,
-            appearance,
-            app_name,
-        );
+        let core = CoreSessionState::new_with_logs(theme, placeholder, view_rows, show_logs, appearance, app_name);
 
         Self {
             core,
@@ -156,20 +147,8 @@ impl AppSession {
         }
     }
 
-    pub fn new(
-        theme: crate::tui::core_tui::types::InlineTheme,
-        placeholder: Option<String>,
-        view_rows: u16,
-    ) -> Self {
-        Self::new_with_logs(
-            theme,
-            placeholder,
-            view_rows,
-            true,
-            None,
-            Vec::new(),
-            "Agent TUI".to_string(),
-        )
+    pub fn new(theme: crate::tui::core_tui::types::InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+        Self::new_with_logs(theme, placeholder, view_rows, true, None, Vec::new(), "Agent TUI".to_string())
     }
 
     pub fn core(&self) -> &CoreSessionState {
@@ -254,8 +233,7 @@ impl AppSession {
     }
 
     pub(crate) fn history_picker_visible(&self) -> bool {
-        self.history_picker_state.active
-            && self.transient_host.is_visible(TransientSurface::HistoryPicker)
+        self.history_picker_state.active && self.transient_host.is_visible(TransientSurface::HistoryPicker)
     }
 
     pub(crate) fn local_agents_visible(&self) -> bool {
@@ -280,37 +258,29 @@ impl AppSession {
     }
 
     pub(crate) fn slash_palette_visible(&self) -> bool {
-        !self.slash_palette.is_empty()
-            && self.transient_host.is_visible(TransientSurface::SlashPalette)
+        !self.slash_palette.is_empty() && self.transient_host.is_visible(TransientSurface::SlashPalette)
     }
 
     pub(crate) fn has_active_overlay(&self) -> bool {
-        self.core.has_active_overlay()
-            && self.transient_host.is_visible(TransientSurface::FloatingOverlay)
+        self.core.has_active_overlay() && self.transient_host.is_visible(TransientSurface::FloatingOverlay)
     }
 
     pub(crate) fn modal_state(&self) -> Option<&crate::tui::core_tui::session::modal::ModalState> {
         self.has_active_overlay().then(|| self.core.modal_state()).flatten()
     }
 
-    pub(crate) fn modal_state_mut(
-        &mut self,
-    ) -> Option<&mut crate::tui::core_tui::session::modal::ModalState> {
+    pub(crate) fn modal_state_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::ModalState> {
         if !self.has_active_overlay() {
             return None;
         }
         self.core.modal_state_mut()
     }
 
-    pub(crate) fn wizard_overlay(
-        &self,
-    ) -> Option<&crate::tui::core_tui::session::modal::WizardModalState> {
+    pub(crate) fn wizard_overlay(&self) -> Option<&crate::tui::core_tui::session::modal::WizardModalState> {
         self.has_active_overlay().then(|| self.core.wizard_overlay()).flatten()
     }
 
-    pub(crate) fn wizard_overlay_mut(
-        &mut self,
-    ) -> Option<&mut crate::tui::core_tui::session::modal::WizardModalState> {
+    pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::WizardModalState> {
         if !self.has_active_overlay() {
             return None;
         }
@@ -417,21 +387,18 @@ impl AppSession {
         self.core.clear_inline_prompt_suggestion();
         match request {
             TransientRequest::Modal(request) => {
-                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(
-                    request.into(),
-                ));
+                self.core
+                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::List(request) => {
-                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::List(
-                    request.into(),
-                ));
+                self.core
+                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::List(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Wizard(request) => {
-                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(
-                    request.into(),
-                ));
+                self.core
+                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(request.into()));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Diff(request) => {
@@ -499,13 +466,11 @@ impl AppSession {
 
     /// Show a help modal using the ratatui-cheese Help widget
     pub(crate) fn show_help_modal(&mut self) {
-        self.show_transient(TransientRequest::Modal(
-            crate::tui::core_tui::app::types::ModalOverlayRequest {
-                title: "Keyboard Shortcuts".to_string(),
-                lines: Vec::new(),
-                secure_prompt: None,
-            },
-        ));
+        self.show_transient(TransientRequest::Modal(crate::tui::core_tui::app::types::ModalOverlayRequest {
+            title: "Keyboard Shortcuts".to_string(),
+            lines: Vec::new(),
+            secure_prompt: None,
+        }));
         if let Some(state) = self.core.modal_state_mut() {
             state.is_help_modal = true;
         }
@@ -571,27 +536,22 @@ impl AppSession {
     }
 
     fn apply_transient_visibility_change(&mut self, change: TransientVisibilityChange) {
-        if matches!(
-            change.previous_visible,
-            Some(TransientSurface::FilePalette | TransientSurface::AgentPalette)
-        ) || matches!(
-            change.current_visible,
-            Some(TransientSurface::FilePalette | TransientSurface::AgentPalette)
-        ) {
+        if matches!(change.previous_visible, Some(TransientSurface::FilePalette | TransientSurface::AgentPalette))
+            || matches!(change.current_visible, Some(TransientSurface::FilePalette | TransientSurface::AgentPalette))
+        {
             self.core.needs_full_clear = true;
         }
-        self.core.set_local_agents_drawer_visible(
-            change.current_visible == Some(TransientSurface::LocalAgents),
-        );
+        self.core
+            .set_local_agents_drawer_visible(change.current_visible == Some(TransientSurface::LocalAgents));
         self.sync_transient_focus();
     }
 
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::SetLocalAgents { entries } => {
-                let has_delegated_entries = entries.iter().any(|entry| {
-                    entry.kind == crate::tui::core_tui::types::LocalAgentKind::Delegated
-                });
+                let has_delegated_entries = entries
+                    .iter()
+                    .any(|entry| entry.kind == crate::tui::core_tui::types::LocalAgentKind::Delegated);
                 let update = self.local_agents_state.set_entries(entries.clone());
                 self.core.set_local_agents(entries);
                 if update.has_new_delegated_entries && self.should_auto_open_local_agents() {
@@ -631,30 +591,26 @@ impl AppSession {
                 self.update_input_triggers();
             }
             InlineCommand::RestoreInputDraft(input) => {
-                self.core.handle_command(
-                    crate::tui::core_tui::types::InlineCommand::RestoreInputDraft(input),
-                );
+                self.core
+                    .handle_command(crate::tui::core_tui::types::InlineCommand::RestoreInputDraft(input));
                 self.update_input_triggers();
             }
             InlineCommand::ApplySuggestedPrompt(value) => {
-                self.core.handle_command(
-                    crate::tui::core_tui::types::InlineCommand::ApplySuggestedPrompt(value),
-                );
+                self.core
+                    .handle_command(crate::tui::core_tui::types::InlineCommand::ApplySuggestedPrompt(value));
                 self.update_input_triggers();
             }
             InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
-                self.core.handle_command(
-                    crate::tui::core_tui::types::InlineCommand::SetInlinePromptSuggestion {
+                self.core
+                    .handle_command(crate::tui::core_tui::types::InlineCommand::SetInlinePromptSuggestion {
                         suggestion,
                         llm_generated,
-                    },
-                );
+                    });
                 self.update_input_triggers();
             }
             InlineCommand::ClearInlinePromptSuggestion => {
-                self.core.handle_command(
-                    crate::tui::core_tui::types::InlineCommand::ClearInlinePromptSuggestion,
-                );
+                self.core
+                    .handle_command(crate::tui::core_tui::types::InlineCommand::ClearInlinePromptSuggestion);
                 self.update_input_triggers();
             }
             InlineCommand::ClearInput => {
@@ -698,24 +654,18 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::AppendLine { kind, segments } => {
             CoreCommand::AppendLine { kind: *kind, segments: segments.clone() }
         }
-        InlineCommand::AppendPastedMessage { kind, text, line_count } => {
-            CoreCommand::AppendPastedMessage {
-                kind: *kind,
-                text: text.clone(),
-                line_count: *line_count,
-            }
-        }
-        InlineCommand::Inline { kind, segment } => {
-            CoreCommand::Inline { kind: *kind, segment: segment.clone() }
-        }
-        InlineCommand::ReplaceLast { count, kind, lines, link_ranges } => {
-            CoreCommand::ReplaceLast {
-                count: *count,
-                kind: *kind,
-                lines: lines.clone(),
-                link_ranges: link_ranges.clone(),
-            }
-        }
+        InlineCommand::AppendPastedMessage { kind, text, line_count } => CoreCommand::AppendPastedMessage {
+            kind: *kind,
+            text: text.clone(),
+            line_count: *line_count,
+        },
+        InlineCommand::Inline { kind, segment } => CoreCommand::Inline { kind: *kind, segment: segment.clone() },
+        InlineCommand::ReplaceLast { count, kind, lines, link_ranges } => CoreCommand::ReplaceLast {
+            count: *count,
+            kind: *kind,
+            lines: lines.clone(),
+            link_ranges: link_ranges.clone(),
+        },
         InlineCommand::SetPrompt { prefix, style } => {
             CoreCommand::SetPrompt { prefix: prefix.clone(), style: style.clone() }
         }
@@ -725,15 +675,11 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::SetMessageLabels { agent, user } => {
             CoreCommand::SetMessageLabels { agent: agent.clone(), user: user.clone() }
         }
-        InlineCommand::SetHeaderContext { context } => {
-            CoreCommand::SetHeaderContext { context: context.clone() }
-        }
+        InlineCommand::SetHeaderContext { context } => CoreCommand::SetHeaderContext { context: context.clone() },
         InlineCommand::SetInputStatus { left, right } => {
             CoreCommand::SetInputStatus { left: left.clone(), right: right.clone() }
         }
-        InlineCommand::SetTerminalTitleItems { items } => {
-            CoreCommand::SetTerminalTitleItems { items: items.clone() }
-        }
+        InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems { items: items.clone() },
         InlineCommand::SetTerminalTitleThreadLabel { label } => {
             CoreCommand::SetTerminalTitleThreadLabel { label: label.clone() }
         }
@@ -741,19 +687,13 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
             CoreCommand::SetTerminalTitleGitBranch { branch: branch.clone() }
         }
         InlineCommand::SetTheme { theme } => CoreCommand::SetTheme { theme: theme.clone() },
-        InlineCommand::SetAppearance { appearance } => {
-            CoreCommand::SetAppearance { appearance: appearance.clone() }
-        }
+        InlineCommand::SetAppearance { appearance } => CoreCommand::SetAppearance { appearance: appearance.clone() },
         InlineCommand::SetVimModeEnabled(enabled) => CoreCommand::SetVimModeEnabled(*enabled),
-        InlineCommand::SetQueuedInputs { entries } => {
-            CoreCommand::SetQueuedInputs { entries: entries.clone() }
-        }
+        InlineCommand::SetQueuedInputs { entries } => CoreCommand::SetQueuedInputs { entries: entries.clone() },
         InlineCommand::SetSubprocessEntries { entries } => {
             CoreCommand::SetSubprocessEntries { entries: entries.clone() }
         }
-        InlineCommand::SetSubagentPreview { text } => {
-            CoreCommand::SetSubagentPreview { text: text.clone() }
-        }
+        InlineCommand::SetSubagentPreview { text } => CoreCommand::SetSubagentPreview { text: text.clone() },
         InlineCommand::SetLocalAgents { .. } => return None,
         InlineCommand::SetArchivedHistory { .. } => return None,
         InlineCommand::UpdateFilePaletteSearch { .. } => return None,
@@ -765,9 +705,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::SetImageInputEnabled(value) => CoreCommand::SetImageInputEnabled(*value),
         InlineCommand::SetInput(value) => CoreCommand::SetInput(value.clone()),
         InlineCommand::RestoreInputDraft(input) => CoreCommand::RestoreInputDraft(input.clone()),
-        InlineCommand::ApplySuggestedPrompt(value) => {
-            CoreCommand::ApplySuggestedPrompt(value.clone())
-        }
+        InlineCommand::ApplySuggestedPrompt(value) => CoreCommand::ApplySuggestedPrompt(value.clone()),
         InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
             CoreCommand::SetInlinePromptSuggestion {
                 suggestion: suggestion.clone(),
@@ -882,10 +820,7 @@ impl TuiSessionDriver for AppSession {
         self.core.show_logs = show;
     }
 
-    fn set_active_pty_sessions(
-        &mut self,
-        sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
-    ) {
+    fn set_active_pty_sessions(&mut self, sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>) {
         self.core.active_pty_sessions = sessions;
     }
 
@@ -893,10 +828,7 @@ impl TuiSessionDriver for AppSession {
         self.core.set_workspace_root(root);
     }
 
-    fn set_log_receiver(
-        &mut self,
-        receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>,
-    ) {
+    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>) {
         self.core.set_log_receiver(receiver);
     }
 
@@ -908,10 +840,7 @@ impl TuiSessionDriver for AppSession {
         self.core.set_fullscreen_interaction(config);
     }
 
-    fn set_preview_callback(
-        &mut self,
-        callback: Option<crate::tui::core_tui::types::PreviewCallback>,
-    ) {
+    fn set_preview_callback(&mut self, callback: Option<crate::tui::core_tui::types::PreviewCallback>) {
         self.preview_callback = callback;
     }
 }

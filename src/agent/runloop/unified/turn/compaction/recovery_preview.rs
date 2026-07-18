@@ -17,10 +17,7 @@ fn resolve_workspace_spool_path(workspace_root: &Path, raw_path: &str) -> Option
     normalized.starts_with(&normalized_workspace).then_some(normalized)
 }
 
-fn structured_tool_preview_from_spool(
-    obj: &serde_json::Map<String, Value>,
-    workspace_root: &Path,
-) -> Option<String> {
+fn structured_tool_preview_from_spool(obj: &serde_json::Map<String, Value>, workspace_root: &Path) -> Option<String> {
     let spool_path = obj.get("spool_path")?.as_str()?.trim();
     let resolved = resolve_workspace_spool_path(workspace_root, spool_path)?;
     let spool_content = String::from_utf8_lossy(&fs::read(&resolved).ok()?).into_owned();
@@ -132,23 +129,16 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         (!n.is_empty()).then_some(n)
     }
 
-    fn structured_tool_preview(
-        raw_text: &str,
-        workspace_root: Option<&Path>,
-    ) -> Option<(String, u8)> {
+    fn structured_tool_preview(raw_text: &str, workspace_root: Option<&Path>) -> Option<(String, u8)> {
         let obj = serde_json::from_str::<Value>(raw_text).ok()?.as_object()?.clone();
         let guidance = obj.get("error").and_then(Value::as_object).unwrap_or(&obj);
         let mut parts = Vec::new();
         let mut priority = 0u8;
-        let matches_array =
-            obj.get("matches").or_else(|| obj.get("results")).and_then(Value::as_array);
+        let matches_array = obj.get("matches").or_else(|| obj.get("results")).and_then(Value::as_array);
         if let Some(matches) = matches_array {
             let path = trimmed_json_str(&obj, "path");
             let summary = if matches.is_empty() {
-                path.map_or_else(
-                    || "No matches found".to_string(),
-                    |p| format!("No matches found in {p}"),
-                )
+                path.map_or_else(|| "No matches found".to_string(), |p| format!("No matches found in {p}"))
             } else {
                 let total = obj
                     .get("total_match_count")
@@ -156,10 +146,7 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
                     .or_else(|| obj.get("count"))
                     .and_then(Value::as_u64)
                     .unwrap_or(matches.len() as u64);
-                path.map_or_else(
-                    || format!("Found {total} matches"),
-                    |p| format!("Found {total} matches in {p}"),
-                )
+                path.map_or_else(|| format!("Found {total} matches"), |p| format!("Found {total} matches in {p}"))
             };
             push_unique(&mut parts, Some(summary));
             priority = priority.max(20);
@@ -178,16 +165,12 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         }
         push_unique(&mut parts, error_preview_text(&obj));
         for key in ["critical_note", "message", "hint"] {
-            push_unique(
-                &mut parts,
-                trimmed_json_str(&obj, key).or_else(|| trimmed_json_str(guidance, key)),
-            );
+            push_unique(&mut parts, trimmed_json_str(&obj, key).or_else(|| trimmed_json_str(guidance, key)));
         }
-        if parts.iter().any(|p| {
-            !(p.starts_with("Listed ")
-                || p.starts_with("Found ")
-                || p.starts_with("No matches found"))
-        }) {
+        if parts
+            .iter()
+            .any(|p| !(p.starts_with("Listed ") || p.starts_with("Found ") || p.starts_with("No matches found")))
+        {
             priority = priority.max(55);
         }
         push_unique(
@@ -199,8 +182,8 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         if parts.iter().any(|p| p.starts_with("Next action: ")) {
             priority = priority.max(60);
         }
-        if let Some(tool) = trimmed_json_str(&obj, "fallback_tool")
-            .or_else(|| trimmed_json_str(guidance, "fallback_tool"))
+        if let Some(tool) =
+            trimmed_json_str(&obj, "fallback_tool").or_else(|| trimmed_json_str(guidance, "fallback_tool"))
         {
             let fallback = obj
                 .get("fallback_tool_args")

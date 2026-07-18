@@ -2,9 +2,7 @@
 
 use serde_json::Value;
 
-use crate::tools::tool_intent::{
-    command_session_action, command_session_action_in, command_session_action_is,
-};
+use crate::tools::tool_intent::{command_session_action, command_session_action_in, command_session_action_is};
 
 const INDEXED_COMMAND_TYPE_ERROR: &str = "command array must contain only strings";
 const COMMAND_VALUE_TYPE_ERROR: &str = "command must be a string or array of strings";
@@ -92,10 +90,7 @@ pub fn normalize_indexed_command_args(args: &Value) -> Result<Option<Value>, &'s
     };
 
     let mut normalized = payload.clone();
-    normalized.insert(
-        "command".to_string(),
-        Value::String(shell_words::join(parts.iter().map(String::as_str))),
-    );
+    normalized.insert("command".to_string(), Value::String(shell_words::join(parts.iter().map(String::as_str))));
     Ok(Some(Value::Object(normalized)))
 }
 
@@ -108,8 +103,7 @@ pub fn normalized_command_value(args: &Value) -> Result<Option<Value>, &'static 
         return Ok(Some(command.clone()));
     }
 
-    Ok(normalize_indexed_command_args(args)?
-        .and_then(|normalized| normalized.get("command").cloned()))
+    Ok(normalize_indexed_command_args(args)?.and_then(|normalized| normalized.get("command").cloned()))
 }
 
 pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> {
@@ -118,9 +112,7 @@ pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> 
     };
 
     let mut parts = match command {
-        Value::String(command) => {
-            shell_words::split(&command).map_err(|_e| COMMAND_VALUE_TYPE_ERROR)?
-        }
+        Value::String(command) => shell_words::split(&command).map_err(|_e| COMMAND_VALUE_TYPE_ERROR)?,
         Value::Array(values) => values
             .iter()
             .map(|value| value.as_str().map(ToOwned::to_owned).ok_or(COMMAND_VALUE_TYPE_ERROR))
@@ -137,11 +129,7 @@ pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> 
         }
     }
 
-    if parts.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(parts))
-    }
+    if parts.is_empty() { Ok(None) } else { Ok(Some(parts)) }
 }
 
 pub fn command_text(args: &Value) -> Result<Option<String>, &'static str> {
@@ -207,8 +195,7 @@ pub fn command_session_missing_required_args(args: &Value) -> Vec<&'static str> 
             missing.push("session_id or spool_path");
         }
     } else if command_session_action_is(args, "code") {
-        let has_code =
-            has_nonempty_string_field(args, "code") || has_nonempty_string_field(args, "command");
+        let has_code = has_nonempty_string_field(args, "code") || has_nonempty_string_field(args, "command");
         if !has_code {
             missing.push("code or command");
         }
@@ -452,13 +439,11 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        WriteStdinDispatch, command_session_missing_required_args,
-        command_session_requires_command_safety, command_text, command_words,
-        has_indexed_command_parts, interactive_input_text, is_readonly_command_string,
-        normalize_indexed_command_args, normalize_shell_args, normalized_command_value,
-        parse_indexed_command_parts, raw_command_text, session_id_text,
-        session_id_text_from_payload, working_dir_text, working_dir_text_from_payload,
-        write_stdin_dispatch,
+        WriteStdinDispatch, command_session_missing_required_args, command_session_requires_command_safety,
+        command_text, command_words, has_indexed_command_parts, interactive_input_text, is_readonly_command_string,
+        normalize_indexed_command_args, normalize_shell_args, normalized_command_value, parse_indexed_command_parts,
+        raw_command_text, session_id_text, session_id_text_from_payload, working_dir_text,
+        working_dir_text_from_payload, write_stdin_dispatch,
     };
     use serde_json::{Value, json};
 
@@ -565,22 +550,13 @@ mod tests {
     #[test]
     fn write_stdin_dispatch_distinguishes_write_from_poll() {
         assert_eq!(write_stdin_dispatch(&json!({"chars": ""})), Ok(WriteStdinDispatch::Poll));
-        assert_eq!(
-            write_stdin_dispatch(&json!({"chars": "  status\n"})),
-            Ok(WriteStdinDispatch::Write)
-        );
+        assert_eq!(write_stdin_dispatch(&json!({"chars": "  status\n"})), Ok(WriteStdinDispatch::Write));
     }
 
     #[test]
     fn write_stdin_dispatch_requires_public_chars() {
-        assert_eq!(
-            write_stdin_dispatch(&json!({"input": "status\n"})),
-            Err("write_stdin requires string chars")
-        );
-        assert_eq!(
-            write_stdin_dispatch(&json!({"chars": 1})),
-            Err("write_stdin requires string chars")
-        );
+        assert_eq!(write_stdin_dispatch(&json!({"input": "status\n"})), Err("write_stdin requires string chars"));
+        assert_eq!(write_stdin_dispatch(&json!({"chars": 1})), Err("write_stdin requires string chars"));
     }
 
     #[test]
@@ -661,14 +637,9 @@ mod tests {
 
     #[test]
     fn command_session_missing_required_args_is_action_aware() {
+        assert_eq!(command_session_missing_required_args(&json!({"action": "run"})), vec!["command"]);
         assert_eq!(
-            command_session_missing_required_args(&json!({"action": "run"})),
-            vec!["command"]
-        );
-        assert_eq!(
-            command_session_missing_required_args(
-                &json!({"action": "write", "session_id": "run-1"})
-            ),
+            command_session_missing_required_args(&json!({"action": "write", "session_id": "run-1"})),
             vec!["input or chars or text"]
         );
         assert_eq!(
@@ -712,10 +683,7 @@ mod tests {
             "head -50 src/lib.rs",
             "sort src/words.txt | uniq",
         ] {
-            assert!(
-                is_readonly_command_string(&json!({"command": cmd})),
-                "expected '{cmd}' to be read-only"
-            );
+            assert!(is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be read-only");
         }
     }
 
@@ -738,10 +706,7 @@ mod tests {
             "cat >(echo hi)",
             "true && rm a.txt",
         ] {
-            assert!(
-                !is_readonly_command_string(&json!({"command": cmd})),
-                "expected '{cmd}' to be rejected"
-            );
+            assert!(!is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be rejected");
         }
     }
 
@@ -754,10 +719,7 @@ mod tests {
             "shred a.txt",
             "mv a.txt b.txt",
         ] {
-            assert!(
-                !is_readonly_command_string(&json!({"command": cmd})),
-                "expected '{cmd}' to be rejected"
-            );
+            assert!(!is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be rejected");
         }
     }
 }

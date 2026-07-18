@@ -32,11 +32,7 @@ pub(super) fn canonicalize_tool_name(raw: &str) -> Option<String> {
 ///
 /// When `validate` is true, the result is checked against the known-tool allowlist.
 /// When `validate` is false, only canonicalisation and exec_command defaults are applied.
-pub(super) fn canonicalize_tool_result(
-    name: String,
-    mut args: Value,
-    validate: bool,
-) -> Option<(String, Value)> {
+pub(super) fn canonicalize_tool_result(name: String, mut args: Value, validate: bool) -> Option<(String, Value)> {
     let normalized = canonicalize_normalized_name(&name)?;
     let canonical = canonicalize_tool_name(&name)?;
     if canonical == tools::EXEC_COMMAND
@@ -89,21 +85,14 @@ fn canonicalize_normalized_name(raw: &str) -> Option<String> {
         } else if ch == '_' {
             normalized.push('_');
             last_was_separator = false;
-        } else if matches!(ch, ' ' | '\t' | '\n' | '-' | ':' | '.')
-            && !last_was_separator
-            && !normalized.is_empty()
-        {
+        } else if matches!(ch, ' ' | '\t' | '\n' | '-' | ':' | '.') && !last_was_separator && !normalized.is_empty() {
             normalized.push('_');
             last_was_separator = true;
         }
     }
 
     let normalized = normalized.trim_matches('_').to_string();
-    if normalized.is_empty() {
-        None
-    } else {
-        Some(normalized)
-    }
+    if normalized.is_empty() { None } else { Some(normalized) }
 }
 
 pub(super) fn exec_command_defaults_for_name(raw: &str) -> Option<ExecCommandDefaults> {
@@ -111,10 +100,7 @@ pub(super) fn exec_command_defaults_for_name(raw: &str) -> Option<ExecCommandDef
         .and_then(|normalized| exec_command_defaults_from_normalized_name(normalized.as_str()))
 }
 
-pub(super) fn apply_exec_command_defaults(
-    payload: &mut serde_json::Map<String, Value>,
-    defaults: ExecCommandDefaults,
-) {
+pub(super) fn apply_exec_command_defaults(payload: &mut serde_json::Map<String, Value>, defaults: ExecCommandDefaults) {
     payload
         .entry("action".to_string())
         .or_insert_with(|| Value::String(defaults.action.to_string()));
@@ -125,13 +111,11 @@ pub(super) fn apply_exec_command_defaults(
 
 fn exec_command_defaults_from_normalized_name(normalized: &str) -> Option<ExecCommandDefaults> {
     match normalized {
-        "run" | "runcmd" | "runcommand" | "terminalrun" | "terminalcmd" | "terminalcommand"
-        | "command" | "shell" | "bash" | "container_exec" | "exec" | "exec_command" => {
+        "run" | "runcmd" | "runcommand" | "terminalrun" | "terminalcmd" | "terminalcommand" | "command" | "shell"
+        | "bash" | "container_exec" | "exec" | "exec_command" => {
             Some(ExecCommandDefaults { action: "run", force_tty: None })
         }
-        "run_pty_cmd" | "create_pty_session" => {
-            Some(ExecCommandDefaults { action: "run", force_tty: Some(true) })
-        }
+        "run_pty_cmd" | "create_pty_session" => Some(ExecCommandDefaults { action: "run", force_tty: Some(true) }),
         "send_pty_input" => Some(ExecCommandDefaults { action: "write", force_tty: None }),
         "read_pty_session" => Some(ExecCommandDefaults { action: "poll", force_tty: None }),
         "list_pty_sessions" => Some(ExecCommandDefaults { action: "list", force_tty: None }),

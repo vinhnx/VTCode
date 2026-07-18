@@ -94,10 +94,7 @@ fn default_timeout_secs() -> u64 {
 /// `DangerFullAccess` parents are downgraded to `WorkspaceWrite` around the
 /// server's writable root; `ReadOnly` parents are left unchanged.
 #[must_use]
-pub fn derive_mcp_sandbox_policy(
-    parent: &SandboxPolicy,
-    overrides: &McpSandboxOverrides,
-) -> SandboxPolicy {
+pub fn derive_mcp_sandbox_policy(parent: &SandboxPolicy, overrides: &McpSandboxOverrides) -> SandboxPolicy {
     let mut derived = parent.clone();
 
     if let Some(root) = &overrides.writable_root {
@@ -158,9 +155,7 @@ pub fn derive_mcp_sandbox_policy(
                     exclude_slash_tmp: false,
                 }
             }
-            SandboxPolicy::ExternalSandbox { description } => {
-                SandboxPolicy::ExternalSandbox { description }
-            }
+            SandboxPolicy::ExternalSandbox { description } => SandboxPolicy::ExternalSandbox { description },
         };
     } else if !overrides.allowed_endpoints.is_empty() {
         // No writable_root override but the network allow-list should still
@@ -299,10 +294,7 @@ fn policy_to_json(policy: &SandboxPolicy) -> String {
 /// redirect stdin/stdout/stderr should configure the returned command after
 /// this call.
 #[must_use]
-pub fn wrap_stdio_command(
-    command: std::process::Command,
-    sandbox_policy: &SandboxPolicy,
-) -> std::process::Command {
+pub fn wrap_stdio_command(command: std::process::Command, sandbox_policy: &SandboxPolicy) -> std::process::Command {
     let Some(wrapper) = McpSandboxWrapper::for_current_platform(sandbox_policy) else {
         return command;
     };

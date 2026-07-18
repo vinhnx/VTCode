@@ -10,12 +10,7 @@ pub(super) struct HarnessStreamingBridge {
 }
 
 impl HarnessStreamingBridge {
-    pub(super) fn new(
-        emitter: Option<&HarnessEventEmitter>,
-        turn_id: &str,
-        step: usize,
-        attempt: usize,
-    ) -> Self {
+    pub(super) fn new(emitter: Option<&HarnessEventEmitter>, turn_id: &str, step: usize, attempt: usize) -> Self {
         let event_sink = emitter.cloned().map(harness_event_sink);
         Self {
             inner: CoreStreamingLifecycleBridge::new(event_sink, turn_id, step, attempt),

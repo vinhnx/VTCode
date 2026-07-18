@@ -9,15 +9,15 @@
 //! Reference: <https://agentclientprotocol.com/llms.txt>
 
 use crate::capabilities::{
-    AgentCapabilities, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo,
-    InitializeParams, InitializeResult, SUPPORTED_VERSIONS,
+    AgentCapabilities, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo, InitializeParams,
+    InitializeResult, SUPPORTED_VERSIONS,
 };
 use crate::error::{AcpError, AcpResult};
 use crate::jsonrpc::{JSONRPC_VERSION, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::{
-    AcpSession, ServerRequestNotification, SessionCancelParams, SessionLoadParams,
-    SessionLoadResult, SessionNewParams, SessionNewResult, SessionPromptParams,
-    SessionPromptResult, SessionState, SessionUpdateNotification, ToolExecutionResult,
+    AcpSession, ServerRequestNotification, SessionCancelParams, SessionLoadParams, SessionLoadResult, SessionNewParams,
+    SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState, SessionUpdateNotification,
+    ToolExecutionResult,
 };
 
 use hashbrown::HashMap;
@@ -166,11 +166,7 @@ impl AcpClientV2 {
     // ========================================================================
 
     /// Send a JSON-RPC request and parse the response
-    async fn call<P: Serialize, R: DeserializeOwned>(
-        &self,
-        method: &str,
-        params: Option<P>,
-    ) -> AcpResult<R> {
+    async fn call<P: Serialize, R: DeserializeOwned>(&self, method: &str, params: Option<P>) -> AcpResult<R> {
         let id = self.next_request_id();
         let params_value = params
             .map(|p| serde_json::to_value(p))
@@ -204,8 +200,7 @@ impl AcpClientV2 {
 
         match status {
             StatusCode::OK => {
-                let body =
-                    response.text().await.map_err(|e| AcpError::NetworkError(e.to_string()))?;
+                let body = response.text().await.map_err(|e| AcpError::NetworkError(e.to_string()))?;
 
                 trace!(body_len = body.len(), "Received JSON-RPC response");
 
@@ -330,9 +325,7 @@ impl AcpClientV2 {
     /// Create a new session
     pub async fn session_new(&self, params: SessionNewParams) -> AcpResult<SessionNewResult> {
         if !self.is_initialized().await {
-            return Err(AcpError::InvalidRequest(
-                "Client not initialized. Call initialize() first.".to_string(),
-            ));
+            return Err(AcpError::InvalidRequest("Client not initialized. Call initialize() first.".to_string()));
         }
 
         let result: SessionNewResult = self.call("session/new", Some(params)).await?;
@@ -349,9 +342,7 @@ impl AcpClientV2 {
     /// Load an existing session
     pub async fn session_load(&self, session_id: &str) -> AcpResult<SessionLoadResult> {
         if !self.is_initialized().await {
-            return Err(AcpError::InvalidRequest(
-                "Client not initialized. Call initialize() first.".to_string(),
-            ));
+            return Err(AcpError::InvalidRequest("Client not initialized. Call initialize() first.".to_string()));
         }
 
         let params = SessionLoadParams { session_id: session_id.to_string() };
@@ -373,10 +364,7 @@ impl AcpClientV2 {
     ///
     /// Returns the turn result. For streaming responses, use `subscribe_updates()`
     /// before calling this method.
-    pub async fn session_prompt(
-        &self,
-        params: SessionPromptParams,
-    ) -> AcpResult<SessionPromptResult> {
+    pub async fn session_prompt(&self, params: SessionPromptParams) -> AcpResult<SessionPromptResult> {
         self.session_prompt_with_timeout(params, None).await
     }
 
@@ -387,9 +375,7 @@ impl AcpClientV2 {
         timeout: Option<Duration>,
     ) -> AcpResult<SessionPromptResult> {
         if !self.is_initialized().await {
-            return Err(AcpError::InvalidRequest(
-                "Client not initialized. Call initialize() first.".to_string(),
-            ));
+            return Err(AcpError::InvalidRequest("Client not initialized. Call initialize() first.".to_string()));
         }
 
         let session_id = params.session_id.clone();
@@ -402,12 +388,9 @@ impl AcpClientV2 {
 
         // Use custom timeout if provided
         let result: SessionPromptResult = if let Some(custom_timeout) = timeout {
-            tokio::time::timeout(
-                custom_timeout,
-                self.call::<_, SessionPromptResult>("session/prompt", Some(params)),
-            )
-            .await
-            .map_err(|_err| AcpError::Timeout("Prompt request timed out".to_string()))??
+            tokio::time::timeout(custom_timeout, self.call::<_, SessionPromptResult>("session/prompt", Some(params)))
+                .await
+                .map_err(|_err| AcpError::Timeout("Prompt request timed out".to_string()))??
         } else {
             self.call("session/prompt", Some(params)).await?
         };
@@ -477,11 +460,7 @@ impl AcpClientV2 {
     /// # Errors
     ///
     /// Returns an error if serialization or the network request fails.
-    pub async fn session_tool_response(
-        &self,
-        session_id: &str,
-        result: ToolExecutionResult,
-    ) -> AcpResult<()> {
+    pub async fn session_tool_response(&self, session_id: &str, result: ToolExecutionResult) -> AcpResult<()> {
         self.notify(
             "client/response",
             Some(serde_json::json!({
@@ -500,10 +479,7 @@ impl AcpClientV2 {
     ///
     /// Returns a receiver channel that will receive update notifications.
     /// The connection will remain open until the receiver is dropped.
-    pub async fn subscribe_updates(
-        &self,
-        session_id: &str,
-    ) -> AcpResult<mpsc::Receiver<SessionUpdateNotification>> {
+    pub async fn subscribe_updates(&self, session_id: &str) -> AcpResult<mpsc::Receiver<SessionUpdateNotification>> {
         let (tx, rx) = mpsc::channel(100);
 
         let url = format!("{}/sse/session/{}", self.base_url.trim_end_matches('/'), session_id);
@@ -541,10 +517,7 @@ impl AcpClientV2 {
             .map_err(|e| AcpError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(AcpError::NetworkError(format!(
-                "SSE connection failed: {}",
-                response.status()
-            )));
+            return Err(AcpError::NetworkError(format!("SSE connection failed: {}", response.status())));
         }
 
         let mut stream = response.bytes_stream();
@@ -575,12 +548,9 @@ impl AcpClientV2 {
                 }
 
                 // Process session/update events
-                if (event_type.is_none() || event_type == Some("session/update"))
-                    && !data_lines.is_empty()
-                {
+                if (event_type.is_none() || event_type == Some("session/update")) && !data_lines.is_empty() {
                     let data = data_lines.join("\n");
-                    if let Ok(notification) =
-                        serde_json::from_str::<SessionUpdateNotification>(&data)
+                    if let Ok(notification) = serde_json::from_str::<SessionUpdateNotification>(&data)
                         && tx.send(notification).await.is_err()
                     {
                         // Receiver dropped, exit
@@ -597,9 +567,7 @@ impl AcpClientV2 {
                             let notification = SessionUpdateNotification {
                                 session_id: server_req.session_id.clone(),
                                 turn_id: String::new(),
-                                update: crate::session::SessionUpdate::ServerRequest {
-                                    request: server_req.request,
-                                },
+                                update: crate::session::SessionUpdate::ServerRequest { request: server_req.request },
                             };
                             if tx.send(notification).await.is_err() {
                                 return Ok(());

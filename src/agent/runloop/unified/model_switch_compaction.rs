@@ -78,12 +78,7 @@ pub(crate) struct ModelSwitchCompactionRequest<'a> {
 ///
 /// Provider comparison is case-insensitive so a cosmetic case difference (e.g.
 /// `OpenAI` vs `openai`) is not treated as a switch.
-pub(crate) fn is_real_model_switch(
-    prev_provider: &str,
-    prev_model: &str,
-    new_provider: &str,
-    new_model: &str,
-) -> bool {
+pub(crate) fn is_real_model_switch(prev_provider: &str, prev_model: &str, new_provider: &str, new_model: &str) -> bool {
     !prev_provider.eq_ignore_ascii_case(new_provider) || prev_model != new_model
 }
 
@@ -98,8 +93,7 @@ pub(crate) async fn compact_on_model_switch(
         return Ok(ModelSwitchCompactionOutcome::Disabled);
     }
 
-    if !is_real_model_switch(&req.prev_provider, &req.prev_model, &req.new_provider, &req.new_model)
-    {
+    if !is_real_model_switch(&req.prev_provider, &req.prev_model, &req.new_provider, &req.new_model) {
         return Ok(ModelSwitchCompactionOutcome::Unchanged);
     }
 
@@ -128,11 +122,7 @@ pub(crate) async fn compact_on_model_switch(
             req.targets.lifecycle_hooks,
             req.targets.harness_emitter,
         ),
-        CompactionState::new(
-            req.targets.history,
-            req.targets.session_stats,
-            req.targets.context_manager,
-        ),
+        CompactionState::new(req.targets.history, req.targets.session_stats, req.targets.context_manager),
     )
     .await
     {
@@ -161,11 +151,7 @@ mod tests {
             Ok(LLMResponse::new("stub-model", "summary"))
         }
 
-        async fn compact_history(
-            &self,
-            _model: &str,
-            history: &[Message],
-        ) -> Result<Vec<Message>, LLMError> {
+        async fn compact_history(&self, _model: &str, history: &[Message]) -> Result<Vec<Message>, LLMError> {
             let mut compacted = vec![Message::system("Previous conversation summary".to_string())];
             compacted.extend(history.iter().rev().take(1).cloned());
             compacted.reverse();

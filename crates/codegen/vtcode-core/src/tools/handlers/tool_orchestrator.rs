@@ -5,9 +5,9 @@
 //! retry without sandbox on denial (no re-approval thanks to caching).
 
 use crate::tools::handlers::sandboxing::{
-    ApprovalCtx, AskForApproval, ExecApprovalRequirement, ReviewDecision, SandboxAttempt,
-    SandboxManager, SandboxOverride, SandboxType, ToolCtx, ToolError, ToolRuntime,
-    canonical_sandbox_policy, default_exec_approval_requirement,
+    ApprovalCtx, AskForApproval, ExecApprovalRequirement, ReviewDecision, SandboxAttempt, SandboxManager,
+    SandboxOverride, SandboxType, ToolCtx, ToolError, ToolRuntime, canonical_sandbox_policy,
+    default_exec_approval_requirement,
 };
 use crate::tools::handlers::tool_handler::TurnContext;
 
@@ -56,9 +56,9 @@ impl ToolOrchestrator {
         // 1) Determine approval requirement
         let mut already_approved = false;
 
-        let requirement = tool.exec_approval_requirement(req).unwrap_or_else(|| {
-            default_exec_approval_requirement(approval_policy, turn_ctx.sandbox_policy.get())
-        });
+        let requirement = tool
+            .exec_approval_requirement(req)
+            .unwrap_or_else(|| default_exec_approval_requirement(approval_policy, turn_ctx.sandbox_policy.get()));
 
         match &requirement {
             ExecApprovalRequirement::Skip { .. } => {
@@ -119,9 +119,7 @@ impl ToolOrchestrator {
 
                 // Under `Never` or `OnRequest`, do not retry without sandbox
                 if !tool.wants_no_sandbox_approval(approval_policy) {
-                    return Err(ToolError::SandboxDenied(build_denial_reason_from_output(Some(
-                        &output,
-                    ))));
+                    return Err(ToolError::SandboxDenied(build_denial_reason_from_output(Some(&output))));
                 }
 
                 // Ask for approval before retrying without sandbox
@@ -192,8 +190,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::tools::handlers::sandboxing::{
-        Approvable, BoxFuture, NetworkAccess, SandboxConfig, SandboxPolicy, Sandboxable,
-        SandboxablePreference,
+        Approvable, BoxFuture, NetworkAccess, SandboxConfig, SandboxPolicy, Sandboxable, SandboxablePreference,
     };
     use crate::tools::handlers::tool_handler::{
         ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolEvent, ToolSession,

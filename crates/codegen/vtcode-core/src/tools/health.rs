@@ -71,8 +71,7 @@ impl ToolHealthTracker {
             tool_stats.avg_latency_ms = latency_ms;
         } else {
             let n = tool_stats.total_count as f64;
-            tool_stats.avg_latency_ms =
-                tool_stats.avg_latency_ms * ((n - 1.0) / n) + latency_ms / n;
+            tool_stats.avg_latency_ms = tool_stats.avg_latency_ms * ((n - 1.0) / n) + latency_ms / n;
         }
 
         if success {
@@ -106,10 +105,7 @@ impl ToolHealthTracker {
         if let Some(stats) = stats_map.get(tool_name) {
             // Criterion 1: Consecutive failures (Circuit Breaker)
             if stats.consecutive_failures >= self.failure_threshold {
-                return (
-                    false,
-                    Some(format!("{} consecutive failures", stats.consecutive_failures)),
-                );
+                return (false, Some(format!("{} consecutive failures", stats.consecutive_failures)));
             }
 
             // Criterion 2: Recent error rate (Degradation).
@@ -118,10 +114,7 @@ impl ToolHealthTracker {
             if history_len >= 5 {
                 let failure_rate = stats.recent_failure_count as f64 / history_len as f64;
                 if failure_rate > 0.6 {
-                    return (
-                        false,
-                        Some(format!("High recent failure rate: {:.1}%", failure_rate * 100.0)),
-                    );
+                    return (false, Some(format!("High recent failure rate: {:.1}%", failure_rate * 100.0)));
                 }
             }
         }

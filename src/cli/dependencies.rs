@@ -104,19 +104,10 @@ async fn install_ast_grep() -> Result<()> {
             );
 
             let outcome = AstGrepStatus::install().await?;
-            println!(
-                "{} Installed {} at {}",
-                "✓".green(),
-                outcome.version.green(),
-                outcome.binary_path.display()
-            );
+            println!("{} Installed {} at {}", "✓".green(), outcome.version.green(), outcome.binary_path.display());
 
             if let Some(alias_path) = outcome.alias_path {
-                println!(
-                    "{} Installed compatibility alias at {}",
-                    "→".cyan(),
-                    alias_path.display()
-                );
+                println!("{} Installed compatibility alias at {}", "→".cyan(), alias_path.display());
             }
 
             if let Some(warning) = outcome.warning {

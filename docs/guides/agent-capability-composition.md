@@ -21,7 +21,7 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 | **Harness** | The runtime that makes reasoning useful: instruction memory, continuation, hooks, guard rails. | `crates/codegen/vtcode-core/src/core/agent/` + `src/agent/runloop/`; `crates/codegen/vtcode-core/src/prompts/`; `continuation.rs` (`ContinuationController`). |
 | **Context** | Finite attention budget, curated each turn. | `crates/codegen/vtcode-core/src/context/`; `crates/codegen/vtcode-core/src/compaction/` (`memory_envelope.rs`); `context.dynamic` spooling. |
 | **Tools** | External capability surface. | `crates/codegen/vtcode-core/src/tools/`; `vtcode-utility-tool-specs/`; `vtcode-mcp/`; `vtcode-skills/`. |
-| **Evals** | Closing the loop on quality. | `evals/` (Python `eval_engine.py`, `metrics.py`); `crates/codegen/vtcode-core/src/llm/rl/` (`signal`/`ledger`/`engine`/`eval`: reward → RL). |
+| **Evals** | Closing the loop on quality. | `scripts/evals/` (Python `eval_engine.py`, `metrics.py`); `crates/codegen/vtcode-core/src/llm/rl/` (`signal`/`ledger`/`engine`/`eval`: reward → RL). |
 | **Sandbox** | The controlled, changing environment. | `vtcode-bash-runner/`; `vtcode-safety/` (`command_safety`, `exec_policy`, `sandboxing`). |
 | **State management** | Durable, resumable, cross-session. | `vtcode-session-store/`; `vtcode-exec-events/` (`ThreadEvent`); `crates/codegen/vtcode-core/src/loop_state.rs`, `persistent_memory`. |
 

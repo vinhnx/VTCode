@@ -1,9 +1,7 @@
 use hashbrown::HashMap;
 
 use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
-use vtcode_commons::diff_paths::{
-    is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
-};
+use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line, is_diff_header_line};
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::diff_styles::{DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg};
@@ -44,9 +42,7 @@ impl GitStyles {
                     .bg_color(diff_line_bg_color(false))
                     .effects(remove_effects),
             ),
-            header: Some(
-                AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))).bg_color(None),
-            ),
+            header: Some(AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))).bg_color(None)),
         }
     }
 }
@@ -137,10 +133,7 @@ impl LsStyles {
     }
 
     #[cfg(test)]
-    pub(crate) fn from_components(
-        classes: HashMap<String, AnsiStyle>,
-        suffixes: Vec<(String, AnsiStyle)>,
-    ) -> Self {
+    pub(crate) fn from_components(classes: HashMap<String, AnsiStyle>, suffixes: Vec<(String, AnsiStyle)>) -> Self {
         Self { classes, suffixes }
     }
 }

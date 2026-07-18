@@ -70,11 +70,7 @@ impl ToolTimeoutPolicy {
                 anyhow::bail!("{} must be at least 1 second (got {}s)", name, ceiling.as_secs());
             }
             if ceiling > Duration::from_secs(3600) {
-                anyhow::bail!(
-                    "{} must not exceed 3600 seconds/1 hour (got {}s)",
-                    name,
-                    ceiling.as_secs()
-                );
+                anyhow::bail!("{} must not exceed 3600 seconds/1 hour (got {}s)", name, ceiling.as_secs());
             }
         }
         Ok(())
@@ -93,16 +89,10 @@ impl ToolTimeoutPolicy {
 
         // Validate warning fraction
         if self.warning_fraction <= 0.0 {
-            anyhow::bail!(
-                "warning_threshold_percent must be greater than 0 (got {})",
-                self.warning_fraction * 100.0
-            );
+            anyhow::bail!("warning_threshold_percent must be greater than 0 (got {})", self.warning_fraction * 100.0);
         }
         if self.warning_fraction >= 1.0 {
-            anyhow::bail!(
-                "warning_threshold_percent must be less than 100 (got {})",
-                self.warning_fraction * 100.0
-            );
+            anyhow::bail!("warning_threshold_percent must be less than 100 (got {})", self.warning_fraction * 100.0);
         }
 
         Ok(())
@@ -155,8 +145,7 @@ impl ToolLatencyStats {
         let mut sorted: Vec<Duration> = self.samples.iter().copied().collect();
         sorted.sort_unstable();
         #[allow(clippy::cast_sign_loss)]
-        let idx = (((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round())
-            .max(0.0) as usize;
+        let idx = (((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round()).max(0.0) as usize;
         sorted.get(idx).copied()
     }
 }

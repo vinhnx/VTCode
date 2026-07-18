@@ -144,9 +144,7 @@ mod tests {
     #[test]
     fn whole_file_read_is_not_bounded() {
         assert!(!args_have_bounded_extent(&json!({"action": "read", "path": "src/lib.rs"})));
-        assert!(!args_have_bounded_extent(
-            &json!({"action": "read", "path": "src/lib.rs", "encoding": "utf8"})
-        ));
+        assert!(!args_have_bounded_extent(&json!({"action": "read", "path": "src/lib.rs", "encoding": "utf8"})));
     }
 
     #[test]

@@ -102,11 +102,7 @@ pub struct ToolInvocation {
 
 impl ToolInvocation {
     /// Create a new tool invocation with generated ID.
-    pub fn new(
-        tool_name: impl Into<CompactStr>,
-        args: Value,
-        session_id: impl Into<CompactStr>,
-    ) -> Self {
+    pub fn new(tool_name: impl Into<CompactStr>, args: Value, session_id: impl Into<CompactStr>) -> Self {
         Self {
             id: ToolInvocationId::new(),
             tool_name: tool_name.into(),

@@ -49,15 +49,11 @@ impl Default for CustomProviderCommandAuthConfig {
 impl CustomProviderCommandAuthConfig {
     fn validate(&self, provider_name: &str) -> Result<(), String> {
         if self.command.trim().is_empty() {
-            return Err(format!(
-                "custom_providers[{provider_name}]: `auth.command` must not be empty"
-            ));
+            return Err(format!("custom_providers[{provider_name}]: `auth.command` must not be empty"));
         }
 
         if self.timeout_ms == 0 {
-            return Err(format!(
-                "custom_providers[{provider_name}]: `auth.timeout_ms` must be greater than 0"
-            ));
+            return Err(format!("custom_providers[{provider_name}]: `auth.timeout_ms` must be greater than 0"));
         }
 
         if self.refresh_interval_ms == 0 {
@@ -187,10 +183,7 @@ impl CustomProviderConfig {
         }
 
         if self.display_name.trim().is_empty() {
-            return Err(format!(
-                "custom_providers[{}]: `display_name` must not be empty",
-                self.name
-            ));
+            return Err(format!("custom_providers[{}]: `display_name` must not be empty", self.name));
         }
 
         if self.base_url.trim().is_empty() {
@@ -200,18 +193,12 @@ impl CustomProviderConfig {
         if let Some(auth) = &self.auth {
             auth.validate(&self.name)?;
             if !self.api_key_env.trim().is_empty() {
-                return Err(format!(
-                    "custom_providers[{}]: `auth` cannot be combined with `api_key_env`",
-                    self.name
-                ));
+                return Err(format!("custom_providers[{}]: `auth` cannot be combined with `api_key_env`", self.name));
             }
         }
 
         if self.models.iter().any(|m| m.trim().is_empty()) {
-            return Err(format!(
-                "custom_providers[{}]: `models` entries must not be empty",
-                self.name
-            ));
+            return Err(format!("custom_providers[{}]: `models` entries must not be empty", self.name));
         }
 
         let reserved = [
@@ -232,10 +219,7 @@ impl CustomProviderConfig {
         ];
         let lower = self.name.to_lowercase();
         if reserved.contains(&lower.as_str()) {
-            return Err(format!(
-                "custom_providers[{}]: name collides with built-in provider",
-                self.name
-            ));
+            return Err(format!("custom_providers[{}]: name collides with built-in provider", self.name));
         }
 
         Ok(())

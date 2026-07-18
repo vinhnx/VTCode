@@ -160,11 +160,7 @@ async fn python_function_anchor_preserves_indentation() {
     let source = temp_dir.path().join("greet.py");
     fs::write(
         &source,
-        concat!(
-            "async def greet(name: str) -> str:\n",
-            "    message = f\"hi {name}\"\n",
-            "    return message\n"
-        ),
+        concat!("async def greet(name: str) -> str:\n", "    message = f\"hi {name}\"\n", "    return message\n"),
     )
     .unwrap();
 
@@ -292,8 +288,7 @@ async fn semantic_anchor_fails_when_multiple_locations_match() {
 async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
     let temp_dir = TempDir::new().unwrap();
     let source = temp_dir.path().join("service.txt");
-    fs::write(&source, "class Service\n  def greet(name)\n    \"hi #{name}\"\n  end\nend\n")
-        .unwrap();
+    fs::write(&source, "class Service\n  def greet(name)\n    \"hi #{name}\"\n  end\nend\n").unwrap();
 
     let patch = r#"*** Begin Patch
 *** Update File: service.txt
@@ -317,12 +312,7 @@ async fn semantic_anchor_fails_when_ast_grep_is_unavailable() {
     let source = temp_dir.path().join("sample.rs");
     fs::write(
         &source,
-        concat!(
-            "pub(crate) fn second() -> usize {\n",
-            "    let value = 2;\n",
-            "    value\n",
-            "}\n"
-        ),
+        concat!("pub(crate) fn second() -> usize {\n", "    let value = 2;\n", "    value\n", "}\n"),
     )
     .unwrap();
 
@@ -352,12 +342,7 @@ async fn semantic_anchor_fails_when_candidate_region_is_not_safe() {
     let source = temp_dir.path().join("sample.rs");
     fs::write(
         &source,
-        concat!(
-            "pub(crate) fn second() -> usize {\n",
-            "    let value = 3;\n",
-            "    value\n",
-            "}\n"
-        ),
+        concat!("pub(crate) fn second() -> usize {\n", "    let value = 3;\n", "    value\n", "}\n"),
     )
     .unwrap();
 
@@ -392,12 +377,7 @@ async fn numeric_hunk_headers_do_not_trigger_semantic_fallback() {
     let source = temp_dir.path().join("sample.rs");
     fs::write(
         &source,
-        concat!(
-            "pub(crate) fn second() -> usize {\n",
-            "    let value = 3;\n",
-            "    value\n",
-            "}\n"
-        ),
+        concat!("pub(crate) fn second() -> usize {\n", "    let value = 3;\n", "    value\n", "}\n"),
     )
     .unwrap();
 

@@ -33,11 +33,7 @@ fn simulated_tool_outcome_clone(c: &mut Criterion) {
     }
 
     let big_string = "x".repeat(10000); // 10KB
-    let modified = vec![
-        "file1.rs".to_string(),
-        "file2.rs".to_string(),
-        "file3.rs".to_string(),
-    ];
+    let modified = vec!["file1.rs".to_string(), "file2.rs".to_string(), "file3.rs".to_string()];
 
     c.bench_function("outcome_double_clone", |b| {
         b.iter(|| {

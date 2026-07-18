@@ -28,22 +28,18 @@ pub async fn handle_auto_task_command(
         bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");
     }
 
-    require_full_auto_workspace_trust(&config.workspace, "autonomous runs", "--auto/--full-auto")
-        .await?;
+    require_full_auto_workspace_trust(&config.workspace, "autonomous runs", "--auto/--full-auto").await?;
 
     let automation_cfg = &vt_cfg.automation.full_auto;
     if !automation_cfg.enabled {
-        bail!(
-            "Automation is disabled in configuration. Enable [automation.full_auto] to continue."
-        );
+        bail!("Automation is disabled in configuration. Enable [automation.full_auto] to continue.");
     }
 
-    let primary_agent_runtime =
-        crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
-            &config.workspace,
-            vt_cfg,
-            primary_agent_explicitly_configured,
-        )?;
+    let primary_agent_runtime = crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
+        &config.workspace,
+        vt_cfg,
+        primary_agent_explicitly_configured,
+    )?;
     let run_vt_cfg = primary_agent_runtime.vt_cfg;
     let mut run_config = config.clone();
     run_config.model = run_vt_cfg.agent.default_model.clone();
@@ -144,9 +140,6 @@ pub async fn handle_auto_task_command(
     Ok(())
 }
 
-fn primary_agent_turn_instructions(
-    active_primary_agent: &vtcode_core::ActivePrimaryAgent,
-) -> Option<String> {
-    Some(active_primary_agent.instructions.trim().to_string())
-        .filter(|instructions| !instructions.is_empty())
+fn primary_agent_turn_instructions(active_primary_agent: &vtcode_core::ActivePrimaryAgent) -> Option<String> {
+    Some(active_primary_agent.instructions.trim().to_string()).filter(|instructions| !instructions.is_empty())
 }

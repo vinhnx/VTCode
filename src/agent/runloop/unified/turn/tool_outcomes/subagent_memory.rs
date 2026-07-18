@@ -2,9 +2,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::persistent_memory::GroundedFactRecord;
 
-use crate::agent::runloop::unified::turn::compaction::{
-    SessionMemoryEnvelopeUpdate, refresh_session_memory_envelope,
-};
+use crate::agent::runloop::unified::turn::compaction::{SessionMemoryEnvelopeUpdate, refresh_session_memory_envelope};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -29,8 +27,7 @@ pub(super) fn request_user_input_result_stats(output: &serde_json::Value) -> (us
     let answered_questions = answers
         .values()
         .filter(|answer| {
-            let selected_count =
-                answer.get("selected").and_then(serde_json::Value::as_array).map_or(0, Vec::len);
+            let selected_count = answer.get("selected").and_then(serde_json::Value::as_array).map_or(0, Vec::len);
             let has_other = answer
                 .get("other")
                 .and_then(serde_json::Value::as_str)
@@ -52,8 +49,7 @@ pub(super) fn record_request_user_input_interview_result(
         return;
     }
 
-    let (answered_questions, cancelled) =
-        output.map(request_user_input_result_stats).unwrap_or((0, true));
+    let (answered_questions, cancelled) = output.map(request_user_input_result_stats).unwrap_or((0, true));
     ctx.plan_session.record_interview_result(answered_questions, cancelled);
 }
 
@@ -164,9 +160,7 @@ fn extract_completed_subagent_entries(output: &serde_json::Value) -> Vec<&serde_
     entries
 }
 
-pub(super) fn build_subagent_memory_update(
-    output: &serde_json::Value,
-) -> Option<SessionMemoryEnvelopeUpdate> {
+pub(super) fn build_subagent_memory_update(output: &serde_json::Value) -> Option<SessionMemoryEnvelopeUpdate> {
     let entries = extract_completed_subagent_entries(output);
     if entries.is_empty() {
         return None;
@@ -190,10 +184,10 @@ pub(super) fn build_subagent_memory_update(
 
         if let Some(parsed) = parse_subagent_summary_markdown(summary) {
             update.grounded_facts.extend(
-                parsed.facts.into_iter().map(|fact| GroundedFactRecord {
-                    fact,
-                    source: format!("subagent:{agent_name}"),
-                }),
+                parsed
+                    .facts
+                    .into_iter()
+                    .map(|fact| GroundedFactRecord { fact, source: format!("subagent:{agent_name}") }),
             );
             update.touched_files.extend(parsed.touched_files);
             update.open_questions.extend(parsed.open_questions);

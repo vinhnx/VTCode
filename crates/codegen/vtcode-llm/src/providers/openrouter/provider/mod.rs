@@ -4,9 +4,7 @@ use tracing::warn;
 
 use crate::error_display;
 use crate::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
-use crate::providers::common::{
-    chat_completions_url, extract_prompt_cache_settings, override_base_url, resolve_model,
-};
+use crate::providers::common::{chat_completions_url, extract_prompt_cache_settings, override_base_url, resolve_model};
 use crate::providers::error_handling::format_network_error;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
@@ -14,9 +12,7 @@ use std::borrow::Cow;
 use std::str::FromStr;
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{
-    AnthropicConfig, ModelConfig, OpenRouterPromptCacheSettings, PromptCachingConfig,
-};
+use vtcode_config::core::{AnthropicConfig, ModelConfig, OpenRouterPromptCacheSettings, PromptCachingConfig};
 use vtcode_config::models::ModelId;
 
 const OPENROUTER_REFERER: &str = "https://github.com/vinhnx/vtcode";
@@ -113,11 +109,7 @@ impl OpenRouterProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::OPENROUTER_API_BASE,
-                base_url,
-                Some(env_vars::OPENROUTER_BASE_URL),
-            ),
+            base_url: override_base_url(urls::OPENROUTER_API_BASE, base_url, Some(env_vars::OPENROUTER_BASE_URL)),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
@@ -262,10 +254,7 @@ impl OpenRouterProvider {
         strip_feature: fn(&LLMRequest) -> LLMRequest,
         label: &str,
     ) -> Result<Option<Response>, LLMError> {
-        if has_feature(request)
-            && status == StatusCode::NOT_FOUND
-            && error_text.contains(error_match)
-        {
+        if has_feature(request) && status == StatusCode::NOT_FOUND && error_text.contains(error_match) {
             warn!("{}", warn_message);
             let fallback_request = strip_feature(request);
             return self

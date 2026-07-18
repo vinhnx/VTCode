@@ -39,8 +39,7 @@ impl FileConflictAuditLog {
     pub fn record(&mut self, event: &FileConflictAuditEvent) -> Result<()> {
         use std::io::Write;
 
-        let json = serde_json::to_string(event)
-            .context("Failed to serialize file conflict audit event")?;
+        let json = serde_json::to_string(event).context("Failed to serialize file conflict audit event")?;
         let writer = self.writer_mut()?;
         writeln!(writer, "{json}").context("Failed to write file conflict audit event")?;
         writer.flush().context("Failed to flush file conflict audit log")?;
@@ -53,10 +52,11 @@ impl FileConflictAuditLog {
 
     fn writer_mut(&mut self) -> Result<&mut BufWriter<std::fs::File>> {
         if self.writer.is_none() {
-            let file =
-                OpenOptions::new().create(true).append(true).open(&self.log_path).with_context(
-                    || format!("Failed to open file conflict audit log at {:?}", self.log_path),
-                )?;
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.log_path)
+                .with_context(|| format!("Failed to open file conflict audit log at {:?}", self.log_path))?;
             self.writer = Some(BufWriter::new(file));
         }
 

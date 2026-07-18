@@ -22,11 +22,7 @@ pub(crate) struct TableBuffer {
     pub(crate) in_head: bool,
 }
 
-pub(crate) fn render_table(
-    table: &TableBuffer,
-    base_style: Style,
-    max_width: Option<usize>,
-) -> Vec<MarkdownLine> {
+pub(crate) fn render_table(table: &TableBuffer, base_style: Style, max_width: Option<usize>) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
     if table.headers.is_empty() && table.rows.is_empty() {
         return lines;
@@ -35,9 +31,7 @@ pub(crate) fn render_table(
     let max_cols = table.headers.len().max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
     let mut col_widths: Vec<usize> = vec![0; max_cols];
 
-    for (col_width, width) in
-        col_widths.iter_mut().zip(table.headers.iter().map(MarkdownLine::width))
-    {
+    for (col_width, width) in col_widths.iter_mut().zip(table.headers.iter().map(MarkdownLine::width)) {
         *col_width = max(*col_width, width);
     }
 
@@ -54,13 +48,7 @@ pub(crate) fn render_table(
     let border_style = base_style.dimmed();
 
     if !table.headers.is_empty() {
-        lines.extend(render_table_rows(
-            &table.headers,
-            &col_widths,
-            border_style,
-            base_style,
-            true,
-        ));
+        lines.extend(render_table_rows(&table.headers, &col_widths, border_style, base_style, true));
 
         let mut sep = MarkdownLine::default();
         for (i, width) in col_widths.iter().enumerate() {
@@ -206,12 +194,11 @@ fn wrap_markdown_line(line: &MarkdownLine, max_width: usize) -> Vec<MarkdownLine
     let mut current = MarkdownLine::default();
     let mut current_width = 0usize;
 
-    let flush =
-        |current: &mut MarkdownLine, rows: &mut Vec<MarkdownLine>, current_width: &mut usize| {
-            trim_trailing_whitespace(current);
-            rows.push(std::mem::take(current));
-            *current_width = 0;
-        };
+    let flush = |current: &mut MarkdownLine, rows: &mut Vec<MarkdownLine>, current_width: &mut usize| {
+        trim_trailing_whitespace(current);
+        rows.push(std::mem::take(current));
+        *current_width = 0;
+    };
 
     for seg in &line.segments {
         let style = seg.style;
@@ -310,12 +297,7 @@ mod tests {
     fn test_scale_columns_respects_max_width() {
         let mut widths = vec![7, 7, 7, 7, 7];
         scale_columns_to_fit(&mut widths, 30);
-        assert!(
-            total_table_width(&widths) <= 30,
-            "total={} widths={:?}",
-            total_table_width(&widths),
-            widths
-        );
+        assert!(total_table_width(&widths) <= 30, "total={} widths={:?}", total_table_width(&widths), widths);
     }
 
     #[test]

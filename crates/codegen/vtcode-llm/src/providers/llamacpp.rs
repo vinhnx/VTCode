@@ -126,8 +126,7 @@ static MANAGED_LLAMACPP_SERVERS: LazyLock<Mutex<HashMap<String, Arc<ManagedLlama
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub async fn fetch_llamacpp_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
-    let resolved_base_url =
-        override_base_url(urls::LLAMACPP_API_BASE, base_url, Some(env_vars::LLAMACPP_BASE_URL));
+    let resolved_base_url = override_base_url(urls::LLAMACPP_API_BASE, base_url, Some(env_vars::LLAMACPP_BASE_URL));
     let models_url = format!("{}/models", resolved_base_url.trim_end_matches('/'));
     let client = vtcode_commons::http::create_client_with_timeout(Duration::from_secs(5));
     let response = client
@@ -204,8 +203,7 @@ impl LlamaCppProvider {
 
     fn managed_server_for(base_url: &str) -> Arc<ManagedLlamaCppServer> {
         let host_root = base_url_to_host_root(base_url);
-        let mut guard =
-            MANAGED_LLAMACPP_SERVERS.lock().expect("llama.cpp managed server map poisoned");
+        let mut guard = MANAGED_LLAMACPP_SERVERS.lock().expect("llama.cpp managed server map poisoned");
         guard
             .entry(host_root)
             .or_insert_with(|| Arc::new(ManagedLlamaCppServer::new()))
@@ -258,8 +256,8 @@ impl LlamaCppProvider {
 
     fn host_port(base_url: &str) -> Result<u16> {
         let host_root = base_url_to_host_root(base_url);
-        let parsed = Url::parse(&host_root)
-            .with_context(|| format!("Failed to parse llama.cpp base URL: {host_root}"))?;
+        let parsed =
+            Url::parse(&host_root).with_context(|| format!("Failed to parse llama.cpp base URL: {host_root}"))?;
         Ok(parsed.port().unwrap_or(8080))
     }
 
@@ -291,9 +289,10 @@ impl LlamaCppProvider {
         if let Ok(extra_args) = std::env::var(env_vars::LLAMACPP_EXTRA_ARGS)
             && !extra_args.trim().is_empty()
         {
-            args.extend(shell_words::split(&extra_args).with_context(|| {
-                format!("Failed to parse {}: {extra_args}", env_vars::LLAMACPP_EXTRA_ARGS)
-            })?);
+            args.extend(
+                shell_words::split(&extra_args)
+                    .with_context(|| format!("Failed to parse {}: {extra_args}", env_vars::LLAMACPP_EXTRA_ARGS))?,
+            );
         }
 
         Ok(args)
@@ -310,9 +309,9 @@ impl LlamaCppProvider {
             .stderr(Stdio::null())
             .kill_on_drop(true);
 
-        command.spawn().with_context(|| {
-            format!("Failed to start llama.cpp server with `{binary} {}`", args.join(" "))
-        })
+        command
+            .spawn()
+            .with_context(|| format!("Failed to start llama.cpp server with `{binary} {}`", args.join(" ")))
     }
 
     async fn probe_server(base_url: &str) -> ServerProbe {
@@ -332,8 +331,7 @@ impl LlamaCppProvider {
             return match fetch_llamacpp_models(Some(base_url.to_string())).await {
                 Ok(models) if !models.is_empty() => ServerProbe::Ready(models[0].clone()),
                 Ok(_) => ServerProbe::Unavailable(
-                    "llama.cpp is running but did not report any loaded models from /v1/models."
-                        .to_string(),
+                    "llama.cpp is running but did not report any loaded models from /v1/models.".to_string(),
                 ),
                 Err(error) => ServerProbe::Unavailable(error.to_string()),
             };
@@ -341,9 +339,7 @@ impl LlamaCppProvider {
 
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        if status == reqwest::StatusCode::SERVICE_UNAVAILABLE
-            && body.to_ascii_lowercase().contains("loading")
-        {
+        if status == reqwest::StatusCode::SERVICE_UNAVAILABLE && body.to_ascii_lowercase().contains("loading") {
             return ServerProbe::Loading;
         }
 
@@ -351,8 +347,7 @@ impl LlamaCppProvider {
             return match fetch_llamacpp_models(Some(base_url.to_string())).await {
                 Ok(models) if !models.is_empty() => ServerProbe::Ready(models[0].clone()),
                 Ok(_) => ServerProbe::Unavailable(
-                    "llama.cpp is running but did not report any loaded models from /v1/models."
-                        .to_string(),
+                    "llama.cpp is running but did not report any loaded models from /v1/models.".to_string(),
                 ),
                 Err(error) => ServerProbe::Unavailable(error.to_string()),
             };
@@ -401,8 +396,7 @@ impl LlamaCppProvider {
             ServerProbe::Ready(model_id) => {
                 let server = Self::managed_server_for(&self.base_url);
                 let mut state = server.state.lock().await;
-                state.status =
-                    ServerStatus::ready(model_id.clone(), state.status.model_path.clone());
+                state.status = ServerStatus::ready(model_id.clone(), state.status.model_path.clone());
                 let _ = server.status_tx.send(state.status.clone());
                 return Ok(model_id.clone());
             }
@@ -410,8 +404,7 @@ impl LlamaCppProvider {
             ServerProbe::Unavailable(_) => {}
         }
 
-        let startup_model_path =
-            Self::configured_startup_model_path(self.configured_model.as_deref());
+        let startup_model_path = Self::configured_startup_model_path(self.configured_model.as_deref());
         let server = Self::managed_server_for(&self.base_url);
         let mut rx = server.status_tx.subscribe();
 
@@ -426,9 +419,7 @@ impl LlamaCppProvider {
                             let model_path = state.status.model_path.clone();
                             state.child = None;
                             state.status = ServerStatus::failed(
-                                format!(
-                                    "Managed llama.cpp server exited with status {exit_status}"
-                                ),
+                                format!("Managed llama.cpp server exited with status {exit_status}"),
                                 model_path,
                             );
                             let _ = server.status_tx.send(state.status.clone());
@@ -471,8 +462,7 @@ impl LlamaCppProvider {
                                 let reason = match &initial_probe {
                                     ServerProbe::Unavailable(message) => message.clone(),
                                     ServerProbe::Loading => {
-                                        "llama.cpp is still loading but no managed model path is configured"
-                                            .to_string()
+                                        "llama.cpp is still loading but no managed model path is configured".to_string()
                                     }
                                     ServerProbe::Ready(model_id) => return Ok(model_id.clone()),
                                 };
@@ -532,9 +522,9 @@ impl LlamaCppProvider {
                 }
             }
 
-            rx.changed().await.map_err(|_e| {
-                Self::provider_error("llama.cpp managed server watcher unexpectedly closed")
-            })?;
+            rx.changed()
+                .await
+                .map_err(|_e| Self::provider_error("llama.cpp managed server watcher unexpectedly closed"))?;
 
             let status = rx.borrow().clone();
             match status.phase {
@@ -553,11 +543,7 @@ impl LlamaCppProvider {
         }
     }
 
-    fn should_replace_request_model(
-        &self,
-        request_model: &str,
-        discovered_models: &[String],
-    ) -> bool {
+    fn should_replace_request_model(&self, request_model: &str, discovered_models: &[String]) -> bool {
         let trimmed = request_model.trim();
         if trimmed.is_empty() || Self::looks_like_local_model_path(trimmed) {
             return true;
@@ -595,16 +581,11 @@ impl LlamaCppProvider {
         .0
     }
 
-    async fn prepare_request(
-        &self,
-        mut request: LLMRequest,
-    ) -> Result<(Box<dyn LLMProvider>, LLMRequest), LLMError> {
+    async fn prepare_request(&self, mut request: LLMRequest) -> Result<(Box<dyn LLMProvider>, LLMRequest), LLMError> {
         let discovered_model = self.ensure_server_ready().await?;
         let discovered_models = vec![discovered_model.clone()];
 
-        if self.should_replace_request_model(&request.model, &discovered_models)
-            || request.model.trim().is_empty()
-        {
+        if self.should_replace_request_model(&request.model, &discovered_models) || request.model.trim().is_empty() {
             request.model = discovered_model.clone();
         } else {
             request.model = self.request_model_or_default(&request.model);
@@ -691,8 +672,7 @@ impl LLMProvider for LlamaCppProvider {
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("llama.cpp", "Messages cannot be empty");
+            let formatted_error = error_display::format_llm_error("llama.cpp", "Messages cannot be empty");
             return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 

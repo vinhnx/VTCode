@@ -4,10 +4,7 @@ use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSes
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::config::constants::tools;
 
-fn tool_calls_result(
-    tool_calls: Vec<uni::ToolCall>,
-    assistant_text: impl Into<String>,
-) -> TurnProcessingResult {
+fn tool_calls_result(tool_calls: Vec<uni::ToolCall>, assistant_text: impl Into<String>) -> TurnProcessingResult {
     TurnProcessingResult::ToolCalls {
         tool_calls: prepare_tool_calls(tool_calls),
         assistant_text: assistant_text.into(),
@@ -173,8 +170,7 @@ fn maybe_force_planning_workflow_interview_marks_shown_when_plan_present() {
 }
 
 #[test]
-fn maybe_force_planning_workflow_interview_does_not_duplicate_existing_interview_when_plan_present()
-{
+fn maybe_force_planning_workflow_interview_does_not_duplicate_existing_interview_when_plan_present() {
     let mut stats = SessionStats::default();
     let mut plan_session = PlanningWorkflowSessionState::default();
     stats.record_tool(tools::READ_FILE);
@@ -249,8 +245,7 @@ fn planning_workflow_reminder_includes_manual_switch_fallback() {
 fn maybe_force_planning_workflow_interview_does_not_duplicate_reminder() {
     let mut stats = SessionStats::default();
     let mut plan_session = PlanningWorkflowSessionState::default();
-    let text =
-        format!("<proposed_plan>\nPlan content\n</proposed_plan>\n\n{PLANNING_WORKFLOW_REMINDER}");
+    let text = format!("<proposed_plan>\nPlan content\n</proposed_plan>\n\n{PLANNING_WORKFLOW_REMINDER}");
     let processing_result = TurnProcessingResult::TextResponse {
         text: text.clone(),
         reasoning: Vec::new(),
@@ -262,13 +257,8 @@ fn maybe_force_planning_workflow_interview_does_not_duplicate_reminder() {
     plan_session.increment_turns();
     plan_session.record_interview_result(2, false);
 
-    let result = maybe_force_planning_workflow_interview(
-        processing_result,
-        Some(&text),
-        &mut stats,
-        &mut plan_session,
-        3,
-    );
+    let result =
+        maybe_force_planning_workflow_interview(processing_result, Some(&text), &mut stats, &mut plan_session, 3);
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
             assert_eq!(text.matches(PLANNING_WORKFLOW_REMINDER).count(), 1);
@@ -345,11 +335,7 @@ fn maybe_force_planning_workflow_interview_strips_interview_from_mixed_tool_call
 
     let processing_result = tool_calls_result(
         vec![
-            uni::ToolCall::function(
-                "call_read".to_string(),
-                tools::READ_FILE.to_string(),
-                "{}".to_string(),
-            ),
+            uni::ToolCall::function("call_read".to_string(), tools::READ_FILE.to_string(), "{}".to_string()),
             uni::ToolCall::function(
                 "call_interview".to_string(),
                 tools::REQUEST_USER_INPUT.to_string(),

@@ -46,10 +46,7 @@ impl ToolExecutionRecord {
 #[serde(tag = "type")]
 pub enum ToolPattern {
     /// Same tool/pattern searched with multiple tools
-    RedundantSearch {
-        tools: Vec<CompactStr>,
-        pattern: String,
-    },
+    RedundantSearch { tools: Vec<CompactStr>, pattern: String },
 
     /// Results build on each other sequentially
     SequentialRefinement {
@@ -158,11 +155,7 @@ impl ToolExecutionContext {
 
         self.effectiveness_snapshot
             .values()
-            .filter(|eff| {
-                eff.success_rate > 0.7
-                    && !recent.contains(&eff.tool_name)
-                    && eff.tool_name != failed_tool
-            })
+            .filter(|eff| eff.success_rate > 0.7 && !recent.contains(&eff.tool_name) && eff.tool_name != failed_tool)
             .max_by(|a, b| {
                 a.effectiveness_score()
                     .partial_cmp(&b.effectiveness_score())
@@ -207,20 +200,16 @@ impl ToolExecutionContext {
             let mut tools: Vec<CompactStr> = same_pattern_tools.into_iter().cloned().collect();
             tools.sort();
             tools.dedup();
-            self.patterns.push(ToolPattern::RedundantSearch {
-                tools,
-                pattern: format!("{:?}", new_record.args),
-            });
+            self.patterns
+                .push(ToolPattern::RedundantSearch { tools, pattern: format!("{:?}", new_record.args) });
         }
 
         // Pattern 2: Low quality loop
-        let recent_same_tool: Vec<_> =
-            recent_records.iter().filter(|r| r.tool_name == new_record.tool_name).collect();
+        let recent_same_tool: Vec<_> = recent_records.iter().filter(|r| r.tool_name == new_record.tool_name).collect();
 
         if recent_same_tool.len() > 3 {
-            let avg_quality =
-                recent_same_tool.iter().map(|r| r.result.metadata.quality_score()).sum::<f32>()
-                    / recent_same_tool.len() as f32;
+            let avg_quality = recent_same_tool.iter().map(|r| r.result.metadata.quality_score()).sum::<f32>()
+                / recent_same_tool.len() as f32;
 
             if avg_quality < 0.4 {
                 self.patterns.push(ToolPattern::LowQualityLoop {
@@ -238,8 +227,7 @@ pub fn are_args_equivalent(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Object(a_map), Value::Object(b_map)) => {
             // Exact match of all keys and values
-            a_map.len() == b_map.len()
-                && a_map.iter().all(|(k, v)| b_map.get(k).is_some_and(|bv| bv == v))
+            a_map.len() == b_map.len() && a_map.iter().all(|(k, v)| b_map.get(k).is_some_and(|bv| bv == v))
         }
         (Value::Array(a_arr), Value::Array(b_arr)) => {
             a_arr.len() == b_arr.len() && a_arr.iter().zip(b_arr.iter()).all(|(av, bv)| av == bv)
@@ -261,11 +249,7 @@ mod tests {
         ToolExecutionRecord::new(
             tool.to_owned(),
             Value::Number(arg_val.into()),
-            EnhancedToolResult::new(
-                Value::Null,
-                ResultMetadata::success(0.8, 0.8),
-                tool.to_owned(),
-            ),
+            EnhancedToolResult::new(Value::Null, ResultMetadata::success(0.8, 0.8), tool.to_owned()),
             100,
         )
     }

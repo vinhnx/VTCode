@@ -12,18 +12,13 @@ fn command_matches_subcommands(command_words: &[String], subcommands: &[&str]) -
 fn shell_command_accesses_network(command_words: &[String]) -> bool {
     match command_words.first().map(String::as_str) {
         Some("curl" | "wget" | "gh") => true,
-        Some("cargo") => command_matches_subcommands(
-            command_words,
-            &["add", "install", "login", "publish", "search", "update"],
-        ),
-        Some("npm" | "pnpm" | "yarn") => command_matches_subcommands(
-            command_words,
-            &["add", "install", "login", "publish", "search", "update"],
-        ),
-        Some("pip") => command_matches_subcommands(
-            command_words,
-            &["download", "index", "install", "search", "wheel"],
-        ),
+        Some("cargo") => {
+            command_matches_subcommands(command_words, &["add", "install", "login", "publish", "search", "update"])
+        }
+        Some("npm" | "pnpm" | "yarn") => {
+            command_matches_subcommands(command_words, &["add", "install", "login", "publish", "search", "update"])
+        }
+        Some("pip") => command_matches_subcommands(command_words, &["download", "index", "install", "search", "wheel"]),
         _ => false,
     }
 }
@@ -32,30 +27,19 @@ fn tool_accesses_network(tool_name: &str, tool_args: Option<&Value>) -> bool {
     let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
     match canonical {
         "web_search" | "fetch_url" => true,
-        tools::EXEC_COMMAND => {
-            vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))
-                .ok()
-                .flatten()
-                .is_some_and(|words| shell_command_accesses_network(&words))
-        }
+        tools::EXEC_COMMAND => vtcode_core::tools::command_args::command_words(tool_args.unwrap_or(&Value::Null))
+            .ok()
+            .flatten()
+            .is_some_and(|words| shell_command_accesses_network(&words)),
         _ => false,
     }
 }
 
-pub(super) fn build_tool_risk_context(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> ToolRiskContext {
-    let mut risk_context = ToolRiskContext::new(
-        tool_name.to_string(),
-        ToolSource::Internal,
-        WorkspaceTrust::Untrusted,
-    );
+pub(super) fn build_tool_risk_context(tool_name: &str, tool_args: Option<&Value>) -> ToolRiskContext {
+    let mut risk_context = ToolRiskContext::new(tool_name.to_string(), ToolSource::Internal, WorkspaceTrust::Untrusted);
     let args = tool_args.unwrap_or(&Value::Null);
     let intent = vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args);
-    if let Some(command_words) =
-        vtcode_core::tools::command_args::command_words(args).ok().flatten()
-    {
+    if let Some(command_words) = vtcode_core::tools::command_args::command_words(args).ok().flatten() {
         risk_context.command_args = command_words;
     } else if !args.is_null() {
         risk_context.command_args = vec![args.to_string()];

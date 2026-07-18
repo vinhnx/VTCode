@@ -59,11 +59,8 @@ fn mixed_transcript_file_references_are_all_underlined() {
     let temp_file = quoted_transcript_temp_file_path();
     fs::write(&temp_file, "mixed-transcript-link").expect("write mixed transcript temp file");
 
-    let line = transcript_line(format!(
-        "Open {} and `{}`",
-        transcript_file_fixture_relative_path(),
-        temp_file.display()
-    ));
+    let line =
+        transcript_line(format!("Open {} and `{}`", transcript_file_fixture_relative_path(), temp_file.display()));
     let temp_file_display = temp_file.display().to_string();
     let decorated = session.decorate_visible_transcript_links(vec![line], Rect::new(0, 0, 200, 1));
 
@@ -73,8 +70,7 @@ fn mixed_transcript_file_references_are_all_underlined() {
             && span.style.add_modifier.contains(Modifier::UNDERLINED)
     }));
     assert!(decorated[0].spans.iter().any(|span| {
-        span.content.contains(&temp_file_display)
-            && span.style.add_modifier.contains(Modifier::UNDERLINED)
+        span.content.contains(&temp_file_display) && span.style.add_modifier.contains(Modifier::UNDERLINED)
     }));
 
     let _ = fs::remove_file(&temp_file);
@@ -125,9 +121,7 @@ fn repeated_plain_click_on_different_transcript_file_links_is_not_throttled() {
     let quoted_temp_path = format!("`{}`", temp_file.display());
     session.push_line(
         InlineMessageKind::Agent,
-        vec![make_segment(&format!(
-            "Open {absolute_path} and {quoted_temp_path}"
-        ))],
+        vec![make_segment(&format!("Open {absolute_path} and {quoted_temp_path}"))],
     );
 
     let _ = visible_transcript(&mut session);
@@ -155,20 +149,8 @@ fn repeated_plain_click_on_different_transcript_file_links_is_not_throttled() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_session(
-        &mut session,
-        &tx,
-        first_target.area.x,
-        first_target.area.y,
-        KeyModifiers::NONE,
-    );
-    left_click_session(
-        &mut session,
-        &tx,
-        second_target.area.x,
-        second_target.area.y,
-        KeyModifiers::NONE,
-    );
+    left_click_session(&mut session, &tx, first_target.area.x, first_target.area.y, KeyModifiers::NONE);
+    left_click_session(&mut session, &tx, second_target.area.x, second_target.area.y, KeyModifiers::NONE);
 
     assert!(matches!(
         rx.try_recv(),
@@ -281,13 +263,7 @@ fn modifier_click_emits_open_url_event_for_raw_transcript_url() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -305,8 +281,7 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
     session.push_line(InlineMessageKind::Agent, vec![make_segment(url.as_str())]);
 
     let transcript_lines = session.reflow_message_lines(0, 60, false);
-    let decorated =
-        session.decorate_visible_cached_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
+    let decorated = session.decorate_visible_cached_transcript_links(transcript_lines, Rect::new(0, 0, 60, 8));
     let targets = session
         .transcript_file_link_targets
         .iter()
@@ -328,13 +303,7 @@ fn wrapped_transcript_url_last_segment_is_underlined_and_clickable() {
     );
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -372,13 +341,7 @@ fn modifier_click_emits_open_url_event_for_modal_auth_link_in_app_session() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_app_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_app_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -485,8 +448,7 @@ fn plain_click_emits_open_url_event_for_standard_modal_auth_link() {
         "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
         "abcdefghijklmnopqrstuvwxyz".repeat(10)
     );
-    session
-        .handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
+    session.handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
 
     let _ = rendered_session_lines(&mut session, VIEW_ROWS);
     let targets = session
@@ -514,8 +476,7 @@ fn repeated_plain_click_on_same_modal_url_link_is_throttled() {
         "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
         "abcdefghijklmnopqrstuvwxyz".repeat(10)
     );
-    session
-        .handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
+    session.handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
 
     let _ = rendered_session_lines(&mut session, VIEW_ROWS);
     let target = session
@@ -549,8 +510,7 @@ fn double_click_emits_open_url_event_for_standard_modal_auth_link() {
         "https://auth.openai.com/oauth/authorize?client_id=test&state={}",
         "abcdefghijklmnopqrstuvwxyz".repeat(10)
     );
-    session
-        .handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
+    session.handle_command(InlineCommand::ShowOverlay { request: Box::new(list_auth_overlay(&url)) });
 
     let _ = rendered_session_lines(&mut session, VIEW_ROWS);
     let target = session
@@ -617,13 +577,7 @@ fn modifier_click_emits_open_file_event_for_standard_modal_file_link_with_locati
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -655,13 +609,7 @@ fn modifier_click_emits_open_file_event_for_explicit_transcript_file_link() {
         .clone();
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -693,10 +641,7 @@ fn explicit_transcript_file_link_uses_theme_accent_color() {
         .find(|span| span.content == "file")
         .expect("expected explicit linked span");
 
-    assert_eq!(
-        linked_span.style.fg,
-        themed_inline_colors().tool_accent.map(ratatui_color_from_ansi)
-    );
+    assert_eq!(linked_span.style.fg, themed_inline_colors().tool_accent.map(ratatui_color_from_ansi));
     assert!(linked_span.style.add_modifier.contains(Modifier::UNDERLINED));
 }
 
@@ -902,9 +847,8 @@ fn scroll_between_clicks_clears_double_click_history() {
         .iter()
         .position(|line| line.contains("hello world"))
         .expect("expected hello world to be rendered");
-    let column = rendered[row].find("hello").expect("expected hello word in rendered line") as u16
-        + transcript_area.x
-        + 1;
+    let column =
+        rendered[row].find("hello").expect("expected hello word in rendered line") as u16 + transcript_area.x + 1;
     let row = transcript_area.y + row as u16;
 
     let (tx, _rx) = mpsc::unbounded_channel();
@@ -941,10 +885,7 @@ fn path_with_line_col_suffix_resolves_correctly() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let absolute_path = transcript_file_fixture_absolute_path();
     let path_with_loc = format!("{absolute_path}:42:10");
-    session.push_line(
-        InlineMessageKind::Agent,
-        vec![make_segment(&format!("Error at {path_with_loc}"))],
-    );
+    session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("Error at {path_with_loc}"))]);
 
     let decorated = session.decorate_visible_transcript_links(
         vec![transcript_line(format!("Error at {path_with_loc}"))],
@@ -960,13 +901,7 @@ fn path_with_line_col_suffix_resolves_correctly() {
                 && path.location_suffix() == Some(":42:10")
     ));
     let (tx, mut rx) = mpsc::unbounded_channel();
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
     assert!(matches!(
         rx.try_recv(),
         Ok(InlineEvent::OpenFileInEditor(path)) if path == path_with_loc
@@ -1023,13 +958,7 @@ fn path_with_hash_location_resolves_and_opens_with_canonical_suffix() {
     ));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    left_click_session(
-        &mut session,
-        &tx,
-        target.area.x,
-        target.area.y,
-        open_file_click_modifiers(),
-    );
+    left_click_session(&mut session, &tx, target.area.x, target.area.y, open_file_click_modifiers());
 
     assert!(matches!(
         rx.try_recv(),
@@ -1041,10 +970,8 @@ fn path_with_hash_location_resolves_and_opens_with_canonical_suffix() {
 fn abbreviation_tokens_are_not_detected_as_paths() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    let _ = session.decorate_visible_transcript_links(
-        vec![transcript_line("e.g. this or i.e. that")],
-        Rect::new(0, 0, 200, 1),
-    );
+    let _ = session
+        .decorate_visible_transcript_links(vec![transcript_line("e.g. this or i.e. that")], Rect::new(0, 0, 200, 1));
 
     assert!(session.transcript_file_link_targets.is_empty());
 }
@@ -1179,11 +1106,7 @@ fn clicking_selected_slash_row_applies_command() {
 fn clicking_selected_file_palette_row_inserts_reference() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     let workspace = vtcode_tui_workspace_root();
-    load_app_file_palette(
-        &mut session,
-        vec![workspace.join("Cargo.toml").display().to_string()],
-        workspace.clone(),
-    );
+    load_app_file_palette(&mut session, vec![workspace.join("Cargo.toml").display().to_string()], workspace.clone());
     session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
 
     let lines = rendered_app_session_lines(&mut session, 20);

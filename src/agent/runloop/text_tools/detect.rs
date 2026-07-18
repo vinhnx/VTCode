@@ -5,9 +5,7 @@ use std::sync::OnceLock;
 use crate::agent::runloop::text_tools::canonical::{
     DIRECT_FUNCTION_ALIASES, TEXTUAL_TOOL_PREFIXES, canonicalize_tool_result,
 };
-use crate::agent::runloop::text_tools::parse_args::{
-    find_matching_delimiter, parse_textual_arguments,
-};
+use crate::agent::runloop::text_tools::parse_args::{find_matching_delimiter, parse_textual_arguments};
 use crate::agent::runloop::text_tools::parse_bracketed::BracketedToolParser;
 use crate::agent::runloop::text_tools::parse_channel::ChannelToolParser;
 use crate::agent::runloop::text_tools::parse_dsml::DsmlToolParser;
@@ -129,12 +127,7 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     stripped
 }
 
-fn collect_enclosed_regions(
-    text: &str,
-    open_marker: &str,
-    close_marker: &str,
-    regions: &mut Vec<(usize, usize)>,
-) {
+fn collect_enclosed_regions(text: &str, open_marker: &str, close_marker: &str, regions: &mut Vec<(usize, usize)>) {
     let mut search_start = 0usize;
     while let Some(relative_start) = text[search_start..].find(open_marker) {
         let start = search_start + relative_start;
@@ -199,9 +192,7 @@ fn collect_prefixed_function_regions(text: &str, prefix: &str, regions: &mut Vec
         };
         let paren_index = after_prefix + paren_relative;
         // Use shared delimiter matcher (pass paren index, not args_start)
-        let Some(args_end) =
-            find_matching_delimiter(text, paren_index, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
-        else {
+        let Some(args_end) = find_matching_delimiter(text, paren_index, '(', ')', MAX_TEXTUAL_NESTING_DEPTH) else {
             tracing::debug!(
                 prefix = %prefix,
                 "Rejected prefixed function call due to unmatched parentheses"
@@ -247,9 +238,7 @@ fn collect_direct_function_regions(text: &str, alias: &str, regions: &mut Vec<(u
             continue;
         };
         // Use shared delimiter matcher (pass paren index, not args_start)
-        let Some(args_end) =
-            find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
-        else {
+        let Some(args_end) = find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH) else {
             tracing::debug!(
                 alias = %alias,
                 "Rejected direct function call due to unmatched parentheses"
@@ -351,13 +340,9 @@ impl TextualToolParser for PrefixedToolParser {
 
                     let paren_index = start + name_len + paren_offset;
                     // Use shared delimiter matcher (pass paren index, not args_start)
-                    let Some(args_end) = find_matching_delimiter(
-                        text,
-                        paren_index,
-                        '(',
-                        ')',
-                        MAX_TEXTUAL_NESTING_DEPTH,
-                    ) else {
+                    let Some(args_end) =
+                        find_matching_delimiter(text, paren_index, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
+                    else {
                         tracing::debug!(
                             parser = "prefixed",
                             reason = "unmatched parentheses",
@@ -379,11 +364,7 @@ impl TextualToolParser for PrefixedToolParser {
                 }
             }
         }
-        tracing::debug!(
-            parser = "prefixed",
-            reason = "no matching prefix pattern found",
-            "Rejected textual tool call"
-        );
+        tracing::debug!(parser = "prefixed", reason = "no matching prefix pattern found", "Rejected textual tool call");
         ParseResult::Reject("no matching prefix pattern found")
     }
 
@@ -467,8 +448,7 @@ fn detect_direct_function_alias(text: &str) -> ParseResult {
                 };
 
                 // Use shared delimiter matcher (pass paren index, not args_start)
-                let Some(end_pos) =
-                    find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
+                let Some(end_pos) = find_matching_delimiter(text, paren_pos, '(', ')', MAX_TEXTUAL_NESTING_DEPTH)
                 else {
                     tracing::debug!(
                         parser = "direct_alias",
@@ -494,10 +474,6 @@ fn detect_direct_function_alias(text: &str) -> ParseResult {
         }
     }
 
-    tracing::debug!(
-        parser = "direct_alias",
-        reason = "no matching alias pattern found",
-        "Rejected textual tool call"
-    );
+    tracing::debug!(parser = "direct_alias", reason = "no matching alias pattern found", "Rejected textual tool call");
     ParseResult::Reject("no matching alias pattern found")
 }

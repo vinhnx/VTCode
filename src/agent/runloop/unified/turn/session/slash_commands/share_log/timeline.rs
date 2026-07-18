@@ -96,9 +96,7 @@ pub(super) fn build_timeline_export(
     thread_id: &str,
     event_records: &[ThreadEventRecord],
     messages: &[uni::Message],
-    prompt_cache_diagnostics: Option<
-        &crate::agent::runloop::unified::state::PromptCacheDiagnostics,
-    >,
+    prompt_cache_diagnostics: Option<&crate::agent::runloop::unified::state::PromptCacheDiagnostics>,
 ) -> TimelineExport {
     let (source, rows) = if event_records.is_empty() {
         (
@@ -108,14 +106,8 @@ pub(super) fn build_timeline_export(
     } else {
         (TIMELINE_SOURCE_THREAD_EVENTS.to_string(), timeline_rows_from_thread_events(event_records))
     };
-    let overview = build_session_overview(
-        provider,
-        model,
-        &source,
-        rows.len(),
-        event_records,
-        prompt_cache_diagnostics,
-    );
+    let overview =
+        build_session_overview(provider, model, &source, rows.len(), event_records, prompt_cache_diagnostics);
 
     TimelineExport {
         exported_at: exported_at.to_string(),
@@ -131,10 +123,7 @@ pub(super) fn build_timeline_export(
     }
 }
 
-pub(super) fn render_session_timeline_html(
-    export: &TimelineExport,
-    session_log_json: &Value,
-) -> Result<String> {
+pub(super) fn render_session_timeline_html(export: &TimelineExport, session_log_json: &Value) -> Result<String> {
     presentation::render_session_timeline_html(export, session_log_json)
 }
 
@@ -148,9 +137,7 @@ fn build_session_overview(
     source: &str,
     total_rows: usize,
     event_records: &[ThreadEventRecord],
-    prompt_cache_diagnostics: Option<
-        &crate::agent::runloop::unified::state::PromptCacheDiagnostics,
-    >,
+    prompt_cache_diagnostics: Option<&crate::agent::runloop::unified::state::PromptCacheDiagnostics>,
 ) -> SessionOverview {
     let mut api_calls = 0_u64;
     let mut turns = 0_u64;
@@ -242,9 +229,8 @@ mod tests {
     use super::*;
     use vtcode_core::core::threads::{ThreadEventRecord, ThreadId};
     use vtcode_core::exec::events::{
-        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent,
-        ItemStartedEvent, ThreadItem, ThreadStartedEvent, ToolCallStatus, ToolInvocationItem,
-        TurnCompletedEvent, Usage,
+        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent,
+        ThreadItem, ThreadStartedEvent, ToolCallStatus, ToolInvocationItem, TurnCompletedEvent, Usage,
     };
 
     fn sample_event_record(sequence: u64, event: ThreadEvent) -> ThreadEventRecord {
@@ -262,9 +248,7 @@ mod tests {
         let records = vec![
             sample_event_record(
                 1,
-                ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                    thread_id: "thread-1".to_string(),
-                }),
+                ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() }),
             ),
             sample_event_record(
                 2,
@@ -544,7 +528,8 @@ mod tests {
                 submission_id: None,
                 title: "Assistant message".to_string(),
                 summary: "This is VT Code.".to_string(),
-                body: "This is VT Code.\n\nKey features:\n- Safe shell execution\n- Thread timeline exports".to_string(),
+                body: "This is VT Code.\n\nKey features:\n- Safe shell execution\n- Thread timeline exports"
+                    .to_string(),
                 detail_json: Some("{\"role\":\"Assistant\"}".to_string()),
                 is_low_signal: false,
             }],
@@ -568,15 +553,13 @@ mod tests {
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: ThreadItem {
                         id: "cmd-1".to_string(),
-                        details: ThreadItemDetails::CommandExecution(Box::new(
-                            CommandExecutionItem {
-                                command: "cargo check".to_string(),
-                                arguments: Some(json!({"args": ["-p", "vtcode"]})),
-                                aggregated_output: "Finished dev [unoptimized]".to_string(),
-                                exit_code: Some(0),
-                                status: CommandExecutionStatus::Completed,
-                            },
-                        )),
+                        details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                            command: "cargo check".to_string(),
+                            arguments: Some(json!({"args": ["-p", "vtcode"]})),
+                            aggregated_output: "Finished dev [unoptimized]".to_string(),
+                            exit_code: Some(0),
+                            status: CommandExecutionStatus::Completed,
+                        })),
                     },
                 }),
             ),

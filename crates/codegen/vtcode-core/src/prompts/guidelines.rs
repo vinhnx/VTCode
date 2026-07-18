@@ -18,10 +18,7 @@ const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
 
 /// Generate compact cross-tool guidance based on the tools available in the session.
-pub fn generate_tool_guidelines(
-    available_tools: &[String],
-    capability_level: Option<CapabilityLevel>,
-) -> String {
+pub fn generate_tool_guidelines(available_tools: &[String], capability_level: Option<CapabilityLevel>) -> String {
     generate_tool_guidelines_for_profile(
         available_tools,
         capability_level,
@@ -52,9 +49,7 @@ pub fn generate_tool_guidelines_for_profile(
         lines.push(browse_guidance);
     }
     if has_apply_patch {
-        lines.push(
-            "- Use `apply_patch` for file edits after inspection; keep patches small.".to_string(),
-        );
+        lines.push("- Use `apply_patch` for file edits after inspection; keep patches small.".to_string());
     }
     if has_exec {
         lines.push(shell_task_guidance(shell_profile).to_string());
@@ -72,10 +67,7 @@ pub fn generate_tool_guidelines_for_profile(
         lines.push("- If calls repeat, re-plan instead of retrying.".to_string());
     }
     if has_search || has_exec {
-        lines.push(
-            "- Run independent tools in parallel when their inputs do not depend on each other."
-                .to_string(),
-        );
+        lines.push("- Run independent tools in parallel when their inputs do not depend on each other.".to_string());
     }
 
     if lines.is_empty() {
@@ -111,11 +103,8 @@ pub fn append_runtime_tool_prompt_sections_for_profile(
     }
 
     let available_tools = snapshot_tool_names(tool_snapshot);
-    let guidelines = generate_runtime_tool_guidelines_for_profile(
-        &available_tools,
-        tool_snapshot.planning_active,
-        shell_profile,
-    );
+    let guidelines =
+        generate_runtime_tool_guidelines_for_profile(&available_tools, tool_snapshot.planning_active, shell_profile);
     if !guidelines.is_empty() {
         append_prompt_block(prompt, guidelines.trim_start_matches('\n'));
     }
@@ -147,12 +136,7 @@ pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDe
         .into_iter()
         .filter(|group| group.deferred_count > 0)
         .map(|group| {
-            format!(
-                "- {} ({} tools): {}",
-                group.name,
-                group.deferred_count,
-                group.description.unwrap_or_default()
-            )
+            format!("- {} ({} tools): {}", group.name, group.deferred_count, group.description.unwrap_or_default())
         })
         .collect();
 
@@ -188,19 +172,13 @@ fn append_prompt_block(prompt: &mut String, block: &str) {
 }
 
 fn remove_prompt_section(prompt: &mut String, section_header: &str) {
-    while let Some((section_start, section_end)) =
-        find_prompt_section_bounds(prompt, section_header)
-    {
+    while let Some((section_start, section_end)) = find_prompt_section_bounds(prompt, section_header) {
         prompt.replace_range(section_start..section_end, "");
     }
 }
 
 fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usize, usize)> {
-    crate::prompts::sections::find_prompt_section_bounds(
-        prompt,
-        section_header,
-        SectionBoundaryMode::BracketOrMarkdown,
-    )
+    crate::prompts::sections::find_prompt_section_bounds(prompt, section_header, SectionBoundaryMode::BracketOrMarkdown)
 }
 
 fn generate_runtime_tool_guidelines_for_profile(
@@ -217,27 +195,20 @@ fn generate_runtime_tool_guidelines_for_profile(
     let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
     let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
     let has_request_user_input = available_tools.iter().any(|tool| tool == TOOL_REQUEST_USER_INPUT);
-    let has_task_tracker =
-        available_tools.iter().any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
+    let has_task_tracker = available_tools.iter().any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
 
-    let mut lines =
-        vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
+    let mut lines = vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
     if let Some(browse_guidance) =
         browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file, shell_profile)
     {
         lines.push(browse_guidance);
     }
     if has_exec {
-        lines.push(
-            "- In Planning workflow, use `exec_command` only for read-only verification."
-                .to_string(),
-        );
+        lines.push("- In Planning workflow, use `exec_command` only for read-only verification.".to_string());
     }
     if has_task_tracker {
         lines.push("- Keep `task_tracker` updated as you refine the plan.".to_string());
-        lines.push(
-            "- Keep blockers and verification open in `task_tracker` until resolved.".to_string(),
-        );
+        lines.push("- Keep blockers and verification open in `task_tracker` until resolved.".to_string());
     }
     if has_request_user_input {
         lines.push(
@@ -246,10 +217,7 @@ fn generate_runtime_tool_guidelines_for_profile(
         );
     }
     if has_search || has_exec {
-        lines.push(
-            "- If calls repeat without progress, tighten the plan instead of retrying identically."
-                .to_string(),
-        );
+        lines.push("- If calls repeat without progress, tighten the plan instead of retrying identically.".to_string());
     }
 
     format!("\n\n## Active Tools\n{}", lines.join("\n"))
@@ -280,9 +248,7 @@ fn browse_tool_guidance(
         return None;
     }
 
-    Some(
-        "- Use available read-only repository tools for browsing; do not modify files.".to_string(),
-    )
+    Some("- Use available read-only repository tools for browsing; do not modify files.".to_string())
 }
 
 pub fn render_shell_profile_guidance(shell_profile: ResolvedShellPromptProfile) -> String {
@@ -338,15 +304,15 @@ fn capability_mode_line(
     has_file: bool,
 ) -> Option<&'static str> {
     match capability_level {
-        Some(CapabilityLevel::Basic) => Some(
-            "- Capabilities: limited. Ask the user to enable more capabilities if file work is required.",
-        ),
-        Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => Some(
-            "- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.",
-        ),
-        _ if !has_exec && !has_file => Some(
-            "- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.",
-        ),
+        Some(CapabilityLevel::Basic) => {
+            Some("- Capabilities: limited. Ask the user to enable more capabilities if file work is required.")
+        }
+        Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => {
+            Some("- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.")
+        }
+        _ if !has_exec && !has_file => {
+            Some("- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.")
+        }
         _ => None,
     }
 }
@@ -389,11 +355,7 @@ mod tests {
     #[test]
     fn test_tool_preference_guidance() {
         let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
-        let guidelines = generate_tool_guidelines_for_profile(
-            &tools,
-            None,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
         assert!(guidelines.contains("Advanced `code_search` takes `query`"));
         assert!(guidelines.contains("literal smart-case"));
         assert!(guidelines.contains("exact syntactic usages"));
@@ -419,11 +381,7 @@ mod tests {
             TOOL_WRITE_STDIN.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(
-            &tools,
-            None,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
 
         assert!(guidelines.contains("exec_command.cmd"));
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
@@ -446,11 +404,7 @@ mod tests {
             TOOL_CODE_SEARCH.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(
-            &tools,
-            None,
-            ResolvedShellPromptProfile::PowerShell,
-        );
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::PowerShell);
 
         assert!(guidelines.contains("native PowerShell commands"));
         assert!(guidelines.contains("`Get-ChildItem`"));
@@ -547,11 +501,8 @@ mod tests {
             TOOL_TASK_TRACKER.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines_for_profile(
-            &tools,
-            true,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines =
+            generate_runtime_tool_guidelines_for_profile(&tools, true, ResolvedShellPromptProfile::UnixLike);
         assert!(guidelines.contains("Keep `task_tracker` updated"));
         assert!(guidelines.contains("blockers and verification open"));
     }
@@ -595,11 +546,7 @@ mod tests {
             TOOL_LIST_FILES.to_string(),
             "apply_patch".to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(
-            &tools,
-            None,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
         assert!(!guidelines.contains("read_file"));
         assert!(!guidelines.contains("list_files"));
         assert!(guidelines.contains("code_search"));
@@ -614,11 +561,7 @@ mod tests {
             TOOL_CODE_SEARCH.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(
-            &tools,
-            None,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
         assert!(guidelines.contains("parallel"), "Should include parallel tool call guidance");
         assert!(guidelines.contains("inputs do not depend"), "Should mention independent inputs");
     }
@@ -630,11 +573,8 @@ mod tests {
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines_for_profile(
-            &tools,
-            true,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines =
+            generate_runtime_tool_guidelines_for_profile(&tools, true, ResolvedShellPromptProfile::UnixLike);
 
         assert!(guidelines.contains("Planning workflow active"));
         assert!(guidelines.contains("`exec_command` only for read-only verification"));
@@ -648,11 +588,8 @@ mod tests {
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines_for_profile(
-            &tools,
-            false,
-            ResolvedShellPromptProfile::PowerShell,
-        );
+        let guidelines =
+            generate_runtime_tool_guidelines_for_profile(&tools, false, ResolvedShellPromptProfile::PowerShell);
 
         assert!(guidelines.contains("native PowerShell commands"));
         assert!(guidelines.contains("`Get-ChildItem`"));
@@ -668,11 +605,8 @@ mod tests {
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
         ];
-        let guidelines = generate_runtime_tool_guidelines_for_profile(
-            &tools,
-            false,
-            ResolvedShellPromptProfile::UnixLike,
-        );
+        let guidelines =
+            generate_runtime_tool_guidelines_for_profile(&tools, false, ResolvedShellPromptProfile::UnixLike);
 
         assert!(guidelines.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk`"));
         assert!(guidelines.contains("Advanced `code_search` takes `query`"));

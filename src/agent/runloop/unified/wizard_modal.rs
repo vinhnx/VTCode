@@ -4,8 +4,8 @@ use anyhow::Result;
 use tokio::sync::Notify;
 
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListSearchConfig, InlineListSelection, InlineSession, TransientRequest,
-    TransientSubmission, WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHandle, InlineListSearchConfig, InlineListSelection, InlineSession, TransientRequest, TransientSubmission,
+    WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use super::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};

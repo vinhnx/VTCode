@@ -15,8 +15,7 @@ fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     let blend = |c: u8, t: u8| -> u8 {
         let c = c as f32;
         let t = t as f32;
-        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
-            as u8
+        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX) as u8
     };
 
     RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
@@ -154,8 +153,7 @@ impl SessionStyles {
     /// info/error/warning block borders that should appear subtle.
     pub fn dimmed_border_style(&self, suppress_bold: bool) -> Style {
         let mut style =
-            ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
-                .add_modifier(Modifier::DIM);
+            ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground).add_modifier(Modifier::DIM);
         if suppress_bold {
             style = style.remove_modifier(Modifier::BOLD);
         }
@@ -195,12 +193,8 @@ impl SessionStyles {
             InlineMessageKind::Agent => self.theme.foreground.or(self.theme.primary),
             InlineMessageKind::Policy => self.theme.primary.or(self.theme.foreground),
             InlineMessageKind::User => self.theme.secondary.or(self.theme.foreground),
-            InlineMessageKind::Tool | InlineMessageKind::Error => {
-                self.theme.primary.or(self.theme.foreground)
-            }
-            InlineMessageKind::Pty => {
-                self.theme.pty_body.or(self.theme.tool_body).or(self.theme.foreground)
-            }
+            InlineMessageKind::Tool | InlineMessageKind::Error => self.theme.primary.or(self.theme.foreground),
+            InlineMessageKind::Pty => self.theme.pty_body.or(self.theme.tool_body).or(self.theme.foreground),
             InlineMessageKind::Info => self.theme.foreground,
             InlineMessageKind::Warning => Some(AnsiColor::Red.into()),
         }

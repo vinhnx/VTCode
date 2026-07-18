@@ -125,10 +125,9 @@ impl AppSession {
     }
 
     pub(crate) fn insert_agent_reference(&mut self, agent_name: &str) {
-        if let Some((start, end, _)) = extract_agent_reference(
-            self.core.input_manager.content(),
-            self.core.input_manager.cursor(),
-        ) {
+        if let Some((start, end, _)) =
+            extract_agent_reference(self.core.input_manager.content(), self.core.input_manager.cursor())
+        {
             let before = &self.core.input_manager.content()[..start];
             let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@agent-{agent_name}");
@@ -142,11 +141,7 @@ impl AppSession {
     }
 
     /// Load the file palette with files from the workspace
-    pub(super) fn load_file_palette(
-        &mut self,
-        dir_lister: super::file_palette::DirLister,
-        workspace: PathBuf,
-    ) {
+    pub(super) fn load_file_palette(&mut self, dir_lister: super::file_palette::DirLister, workspace: PathBuf) {
         let mut palette = FilePalette::new(workspace.clone());
         palette.configure(workspace, dir_lister);
         self.file_palette = Some(palette);
@@ -164,10 +159,9 @@ impl AppSession {
         }
 
         if let Some(palette) = self.file_palette.as_mut() {
-            if let Some((_start, _end, query)) = extract_file_reference(
-                self.core.input_manager.content(),
-                self.core.input_manager.cursor(),
-            ) {
+            if let Some((_start, _end, query)) =
+                extract_file_reference(self.core.input_manager.content(), self.core.input_manager.cursor())
+            {
                 palette.set_filter(query);
                 if !self.file_palette_active {
                     self.ensure_inline_lists_visible_for_trigger();
@@ -269,10 +263,9 @@ impl AppSession {
 
     /// Insert a file reference into the input at the current position
     pub(crate) fn insert_file_reference(&mut self, file_path: &str) {
-        if let Some((start, end, _)) = extract_file_reference(
-            self.core.input_manager.content(),
-            self.core.input_manager.cursor(),
-        ) {
+        if let Some((start, end, _)) =
+            extract_file_reference(self.core.input_manager.content(), self.core.input_manager.cursor())
+        {
             let before = &self.core.input_manager.content()[..start];
             let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@{file_path}");

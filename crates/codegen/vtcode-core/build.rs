@@ -5,8 +5,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const EMBEDDED_ASSETS: &[(&str, &str)] =
-    &[("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md")];
+const EMBEDDED_ASSETS: &[(&str, &str)] = &[("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md")];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let is_docsrs = env::var_os("DOCS_RS").is_some();

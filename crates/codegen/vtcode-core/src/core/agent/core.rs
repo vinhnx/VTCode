@@ -7,9 +7,7 @@ use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
 use crate::core::memory_pool::global_pool;
 use vtcode_config::OptimizationConfig;
 
-use crate::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use crate::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
 use crate::llm::AnyClient;
@@ -163,8 +161,7 @@ impl Agent {
 
     /// Check if optimizations are enabled in the tool registry
     pub fn has_optimizations_enabled(&self) -> bool {
-        self.optimization_config.memory_pool.enabled
-            || self.tool_registry.has_optimizations_enabled()
+        self.optimization_config.memory_pool.enabled || self.tool_registry.has_optimizations_enabled()
     }
 
     /// Get performance metrics
@@ -216,9 +213,8 @@ impl Agent {
     /// # Errors
     /// Returns an error if the Arc has outstanding references (another clone exists).
     pub fn tool_registry_mut(&mut self) -> Result<&mut ToolRegistry> {
-        Arc::get_mut(&mut self.tool_registry).ok_or_else(|| {
-            anyhow::anyhow!("ToolRegistry has outstanding references; cannot get mutable access")
-        })
+        Arc::get_mut(&mut self.tool_registry)
+            .ok_or_else(|| anyhow::anyhow!("ToolRegistry has outstanding references; cannot get mutable access"))
     }
 
     /// Get model-agnostic client reference
@@ -236,10 +232,7 @@ impl Agent {
     // Removed: Context compression check has been removed as part of complete context optimization feature removal
 
     /// Generate context preservation plan
-    pub fn generate_context_plan(
-        &self,
-        context_size: usize,
-    ) -> crate::core::error_recovery::ContextPreservationPlan {
+    pub fn generate_context_plan(&self, context_size: usize) -> crate::core::error_recovery::ContextPreservationPlan {
         self.error_recovery
             .generate_context_preservation_plan(context_size, self.session_info.error_count)
     }
@@ -295,16 +288,24 @@ impl Agent {
                     0
                 }
             );
-            println!(
-                "  {:.1} average recovery attempts per error",
-                style(error_stats.avg_recovery_attempts).cyan()
-            );
+            println!("  {:.1} average recovery attempts per error", style(error_stats.avg_recovery_attempts).cyan());
         } else {
             // Brief summary for non-verbose mode
-            println!("{}", style(format!("  ↳ Session complete: {} decisions, {} successful ({}% success rate), {} errors",
-                         report.total_decisions, report.successful_decisions,
-                         if report.total_decisions > 0 { (report.successful_decisions * 100) / report.total_decisions } else { 0 },
-                         error_stats.total_errors)).dim());
+            println!(
+                "{}",
+                style(format!(
+                    "  ↳ Session complete: {} decisions, {} successful ({}% success rate), {} errors",
+                    report.total_decisions,
+                    report.successful_decisions,
+                    if report.total_decisions > 0 {
+                        (report.successful_decisions * 100) / report.total_decisions
+                    } else {
+                        0
+                    },
+                    error_stats.total_errors
+                ))
+                .dim()
+            );
         }
     }
 
@@ -335,8 +336,7 @@ impl AgentBuilder {
                 api_key: String::new(),
                 provider: Provider::Gemini.to_string(),
                 api_key_env: Provider::Gemini.default_api_key_env().to_string(),
-                workspace: std::env::current_dir()
-                    .unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                workspace: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 verbose: false,
                 quiet: false,
                 theme: crate::config::constants::defaults::DEFAULT_THEME.to_string(),
@@ -349,8 +349,7 @@ impl AgentBuilder {
                 checkpointing_storage_dir: None,
                 checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
                 checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
-                max_conversation_turns:
-                    crate::config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS,
+                max_conversation_turns: crate::config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS,
                 model_behavior: None,
                 openai_chatgpt_auth: None,
             },

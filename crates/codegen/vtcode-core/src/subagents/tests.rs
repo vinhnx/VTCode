@@ -15,8 +15,8 @@ use tempfile::TempDir;
 use tokio::sync::Notify;
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
 use vtcode_config::{
-    HookCommandConfig, HookGroupConfig, HooksConfig, SubagentMcpServer, SubagentMemoryScope,
-    SubagentSource, SubagentSpec,
+    HookCommandConfig, HookGroupConfig, HooksConfig, SubagentMcpServer, SubagentMemoryScope, SubagentSource,
+    SubagentSpec,
 };
 
 fn readonly_agent_permissions() -> AgentPermissionsConfig {
@@ -25,10 +25,7 @@ fn readonly_agent_permissions() -> AgentPermissionsConfig {
     permissions
 }
 
-fn test_controller_config(
-    workspace_root: PathBuf,
-    vt_cfg: VTCodeConfig,
-) -> SubagentControllerConfig {
+fn test_controller_config(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> SubagentControllerConfig {
     let pty_sessions = PtySessionManager::new(workspace_root.clone(), vt_cfg.pty.clone());
     let exec_sessions = ExecSessionManager::new(workspace_root.clone(), pty_sessions.clone());
     SubagentControllerConfig {
@@ -164,39 +161,32 @@ fn delegated_task_requires_clarification_for_vague_prompt() {
 #[test]
 fn resolve_subagent_model_maps_aliases() {
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(
-        &cfg,
-        models::anthropic::CLAUDE_SONNET_4_6,
-        "anthropic",
-        Some("haiku"),
-        "explorer",
-    )
-    .expect("resolve model");
+    let resolved =
+        resolve_subagent_model(&cfg, models::anthropic::CLAUDE_SONNET_4_6, "anthropic", Some("haiku"), "explorer")
+            .expect("resolve model");
     assert_eq!(resolved.as_str(), models::anthropic::CLAUDE_HAIKU_4_5);
 }
 
 #[test]
 fn resolve_subagent_model_defaults_to_parent_when_omitted() {
     let cfg = VTCodeConfig::default();
-    let resolved =
-        resolve_subagent_model(&cfg, models::ollama::GPT_OSS_120B_CLOUD, "ollama", None, "worker")
-            .expect("resolve model");
+    let resolved = resolve_subagent_model(&cfg, models::ollama::GPT_OSS_120B_CLOUD, "ollama", None, "worker")
+        .expect("resolve model");
     assert_eq!(resolved.as_str(), models::ollama::GPT_OSS_120B_CLOUD);
 }
 
 #[test]
 fn resolve_subagent_model_accepts_dotted_claude_aliases_for_anthropic() {
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(&cfg, "claude-haiku-4.5", "anthropic", None, "worker")
-        .expect("resolve model");
+    let resolved =
+        resolve_subagent_model(&cfg, "claude-haiku-4.5", "anthropic", None, "worker").expect("resolve model");
     assert_eq!(resolved.as_str(), models::anthropic::CLAUDE_HAIKU_4_5);
 }
 
 #[test]
 fn resolve_subagent_model_falls_back_to_copilot_default_for_unsupported_inherit_model() {
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(&cfg, "claude-haiku-4.5", "copilot", None, "worker")
-        .expect("resolve model");
+    let resolved = resolve_subagent_model(&cfg, "claude-haiku-4.5", "copilot", None, "worker").expect("resolve model");
     assert_eq!(resolved, ModelId::default_orchestrator_for_provider(Provider::Copilot));
 }
 
@@ -237,14 +227,8 @@ fn resolve_subagent_model_inherits_local_custom_model() {
     // Local providers expose arbitrary model IDs not in the built-in catalog;
     // inheriting such a model must succeed as a custom identifier.
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(
-        &cfg,
-        "qwen3.5-9b-sushi-coder-rl",
-        "lmstudio",
-        None,
-        "wiki-assistant",
-    )
-    .expect("resolve local inherit model");
+    let resolved = resolve_subagent_model(&cfg, "qwen3.5-9b-sushi-coder-rl", "lmstudio", None, "wiki-assistant")
+        .expect("resolve local inherit model");
     assert_eq!(resolved.as_str(), "qwen3.5-9b-sushi-coder-rl");
     assert_eq!(resolved.provider(), Provider::LmStudio);
 }
@@ -252,14 +236,9 @@ fn resolve_subagent_model_inherits_local_custom_model() {
 #[test]
 fn resolve_subagent_model_honors_explicit_local_model() {
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(
-        &cfg,
-        "qwen3.5-9b-sushi-coder-rl",
-        "lmstudio",
-        Some("ornith-1.0-9b"),
-        "wiki-assistant",
-    )
-    .expect("resolve explicit local model");
+    let resolved =
+        resolve_subagent_model(&cfg, "qwen3.5-9b-sushi-coder-rl", "lmstudio", Some("ornith-1.0-9b"), "wiki-assistant")
+            .expect("resolve explicit local model");
     assert_eq!(resolved.as_str(), "ornith-1.0-9b");
     assert_eq!(resolved.provider(), Provider::LmStudio);
 }
@@ -276,14 +255,9 @@ fn resolve_subagent_model_honors_provider_override_model() {
             ..ProviderOverrideConfig::default()
         },
     );
-    let resolved = resolve_subagent_model(
-        &cfg,
-        models::openai::GPT_5_4,
-        "openai",
-        Some("my-fine-tuned-gpt"),
-        "reviewer",
-    )
-    .expect("resolve override model");
+    let resolved =
+        resolve_subagent_model(&cfg, models::openai::GPT_5_4, "openai", Some("my-fine-tuned-gpt"), "reviewer")
+            .expect("resolve override model");
     assert_eq!(resolved.as_str(), "my-fine-tuned-gpt");
 }
 
@@ -325,9 +299,8 @@ fn resolve_subagent_model_honors_custom_provider_model() {
         model: "mycorp-special-coder".to_string(),
         ..CustomProviderConfig::default()
     });
-    let resolved =
-        resolve_subagent_model(&cfg, "mycorp-special-coder", "mycorp", None, "wiki-assistant")
-            .expect("resolve custom provider model");
+    let resolved = resolve_subagent_model(&cfg, "mycorp-special-coder", "mycorp", None, "wiki-assistant")
+        .expect("resolve custom provider model");
     assert_eq!(resolved.as_str(), "mycorp-special-coder");
 }
 
@@ -336,9 +309,8 @@ fn resolve_subagent_small_model_rejects_cross_provider_configured_lightweight_mo
     let mut cfg = VTCodeConfig::default();
     cfg.agent.small_model.model = models::anthropic::CLAUDE_HAIKU_4_5.to_string();
 
-    let resolved =
-        resolve_subagent_model(&cfg, models::openai::GPT_5_4, "openai", Some("small"), "worker")
-            .expect("resolve model");
+    let resolved = resolve_subagent_model(&cfg, models::openai::GPT_5_4, "openai", Some("small"), "worker")
+        .expect("resolve model");
 
     assert_eq!(resolved, ModelId::GPT54Mini);
 }
@@ -361,10 +333,7 @@ fn resolve_effective_subagent_model_falls_back_to_spec_model_on_invalid_override
 #[test]
 fn background_record_ids_are_stable_and_sanitized() {
     assert_eq!(background_record_id("Rust Engineer"), "background-Rust-Engineer");
-    assert_eq!(
-        background_record_id("plugin:reviewer/default"),
-        "background-plugin-reviewer-default"
-    );
+    assert_eq!(background_record_id("plugin:reviewer/default"), "background-plugin-reviewer-default");
 }
 
 #[test]
@@ -509,10 +478,7 @@ fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
         name: "shell-demo".to_string(),
         description: "test".to_string(),
         prompt: String::new(),
-        tools: Some(vec![
-            tools::UNIFIED_EXEC.to_string(),
-            tools::CODE_SEARCH.to_string(),
-        ]),
+        tools: Some(vec![tools::UNIFIED_EXEC.to_string(), tools::CODE_SEARCH.to_string()]),
         disallowed_tools: Vec::new(),
         model: None,
         color: None,
@@ -563,10 +529,7 @@ fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
 
     let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
     assert_eq!(child.runtime_agent_permissions.as_ref(), Some(&spec.permissions));
-    assert_eq!(
-        child.permissions.allow,
-        vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()]
-    );
+    assert_eq!(child.permissions.allow, vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()]);
     assert!(child.permissions.deny.contains(&tools::UNIFIED_EXEC.to_string()));
     assert!(child.permissions.deny.contains(&tools::SPAWN_AGENT.to_string()));
 }
@@ -597,13 +560,7 @@ fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() 
 
     let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
 
-    assert_eq!(
-        child.permissions.allow,
-        vec![
-            tools::CODE_SEARCH.to_string(),
-            tools::UNIFIED_EXEC.to_string()
-        ]
-    );
+    assert_eq!(child.permissions.allow, vec![tools::CODE_SEARCH.to_string(), tools::UNIFIED_EXEC.to_string()]);
     assert!(child.permissions.deny.contains(&tools::SPAWN_AGENT.to_string()));
     assert_eq!(child.hooks.lifecycle.pre_tool_use.len(), 1);
     assert_eq!(child.hooks.lifecycle.pre_tool_use[0].hooks[0].command, "echo child");
@@ -769,30 +726,18 @@ fn build_child_config_merges_inline_mcp_provider() {
 #[test]
 fn explicit_delegation_request_detects_mentions_and_keywords() {
     let direct_mentions = extract_explicit_agent_mentions("@agent-worker fix the issue", &[]);
-    assert!(contains_explicit_delegation_request(
-        "@agent-worker fix the issue",
-        direct_mentions.as_slice()
-    ));
+    assert!(contains_explicit_delegation_request("@agent-worker fix the issue", direct_mentions.as_slice()));
     let no_mentions = extract_explicit_agent_mentions("delegate this in parallel", &[]);
-    assert!(contains_explicit_delegation_request(
-        "delegate this in parallel",
-        no_mentions.as_slice()
-    ));
+    assert!(contains_explicit_delegation_request("delegate this in parallel", no_mentions.as_slice()));
     let empty_mentions = extract_explicit_agent_mentions("review the repository", &[]);
-    assert!(!contains_explicit_delegation_request(
-        "review the repository",
-        empty_mentions.as_slice()
-    ));
+    assert!(!contains_explicit_delegation_request("review the repository", empty_mentions.as_slice()));
 }
 
 #[test]
 fn explicit_agent_mentions_detect_natural_language_selection() {
     let rust_engineer = read_only_test_spec("rust-engineer");
     assert_eq!(
-        extract_explicit_agent_mentions(
-            "use rust-engineer agent to review current code",
-            &[rust_engineer]
-        ),
+        extract_explicit_agent_mentions("use rust-engineer agent to review current code", &[rust_engineer]),
         vec!["rust-engineer".to_string()]
     );
 }
@@ -801,10 +746,7 @@ fn explicit_agent_mentions_detect_natural_language_selection() {
 fn explicit_agent_mentions_detect_looser_subagent_selection() {
     let background_demo = read_only_test_spec("background-demo");
     assert_eq!(
-        extract_explicit_agent_mentions(
-            "use background-demo and run the subagent",
-            &[background_demo]
-        ),
+        extract_explicit_agent_mentions("use background-demo and run the subagent", &[background_demo]),
         vec!["background-demo".to_string()]
     );
 }
@@ -813,10 +755,7 @@ fn explicit_agent_mentions_detect_looser_subagent_selection() {
 fn explicit_agent_mentions_detect_run_subagent_selection() {
     let rust_engineer = read_only_test_spec("rust-engineer");
     assert_eq!(
-        extract_explicit_agent_mentions(
-            "run rust-engineer subagent and review changes",
-            &[rust_engineer]
-        ),
+        extract_explicit_agent_mentions("run rust-engineer subagent and review changes", &[rust_engineer]),
         vec!["rust-engineer".to_string()]
     );
 }
@@ -847,19 +786,10 @@ fn explicit_model_request_detects_aliases_and_full_ids() {
 
 #[test]
 fn normalize_requested_model_override_drops_default_like_values() {
+    assert_eq!(normalize_requested_model_override(Some("default".to_string()), "delegate this task"), None);
+    assert_eq!(normalize_requested_model_override(Some(" inherit ".to_string()), "delegate this task"), None);
     assert_eq!(
-        normalize_requested_model_override(Some("default".to_string()), "delegate this task"),
-        None
-    );
-    assert_eq!(
-        normalize_requested_model_override(Some(" inherit ".to_string()), "delegate this task"),
-        None
-    );
-    assert_eq!(
-        normalize_requested_model_override(
-            Some(" inherit ".to_string()),
-            "delegate this task using inherit"
-        ),
+        normalize_requested_model_override(Some(" inherit ".to_string()), "delegate this task using inherit"),
         Some("inherit".to_string())
     );
 }
@@ -894,12 +824,10 @@ fn sanitize_subagent_input_items_drops_empty_fields() {
 #[tokio::test]
 async fn controller_exposes_builtin_specs() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
     let specs = controller.effective_specs().await;
     assert!(specs.iter().any(|spec| spec.name == "explorer"));
     assert!(specs.iter().any(|spec| spec.name == "worker"));
@@ -908,12 +836,10 @@ async fn controller_exposes_builtin_specs() {
 #[tokio::test]
 async fn spawn_defaults_to_single_explicit_mention() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("@agent-explorer inspect the codebase")
@@ -934,12 +860,10 @@ async fn spawn_defaults_to_single_explicit_mention() {
 #[tokio::test]
 async fn spawn_defaults_to_single_natural_language_selection() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let mentions = controller
         .set_turn_delegation_hints_from_input("use explorer agent to inspect the codebase")
@@ -961,12 +885,10 @@ async fn spawn_defaults_to_single_natural_language_selection() {
 #[tokio::test]
 async fn spawn_rejects_mismatched_explicit_mention() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("@agent-explorer inspect the codebase")
@@ -987,12 +909,10 @@ async fn spawn_rejects_mismatched_explicit_mention() {
 #[tokio::test]
 async fn spawn_rejects_write_capable_agent_without_explicit_request_or_agent_type() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let err = controller
         .spawn(SpawnAgentRequest {
@@ -1008,12 +928,10 @@ async fn spawn_rejects_write_capable_agent_without_explicit_request_or_agent_typ
 #[tokio::test]
 async fn spawn_allows_write_capable_agent_with_explicit_agent_type() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -1031,12 +949,10 @@ async fn spawn_allows_write_capable_agent_with_explicit_agent_type() {
 async fn spawn_rejects_primary_only_agent_as_child() {
     let temp = TempDir::new().expect("tempdir");
     write_test_primary_agent(temp.path());
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let mentions = controller
         .set_turn_delegation_hints_from_input("@agent-duck discuss the task")
@@ -1058,12 +974,10 @@ async fn spawn_rejects_primary_only_agent_as_child() {
 #[tokio::test]
 async fn spawn_accepts_background_flag_outside_managed_background_runtime() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
@@ -1085,12 +999,10 @@ async fn spawn_accepts_background_flag_outside_managed_background_runtime() {
 async fn spawn_allows_background_capable_spec_as_foreground_child() {
     let temp = TempDir::new().expect("tempdir");
     write_test_background_subagent(temp.path());
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("run background-demo subagent and demo")
@@ -1114,12 +1026,10 @@ async fn spawn_allows_background_capable_spec_as_foreground_child() {
 #[tokio::test]
 async fn spawn_rejects_vague_task_even_with_explicit_request() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("run worker subagent and report")
@@ -1140,12 +1050,10 @@ async fn spawn_rejects_vague_task_even_with_explicit_request() {
 #[tokio::test]
 async fn spawn_defaults_to_write_capable_run_subagent_selection() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let mentions = controller
         .set_turn_delegation_hints_from_input("run worker subagent and implement the change")
@@ -1170,10 +1078,9 @@ async fn spawn_rejects_read_only_agent_when_auto_delegate_is_disabled() {
     write_test_read_only_subagent(temp.path());
     let mut cfg = VTCodeConfig::default();
     cfg.subagents.auto_delegate_read_only = false;
-    let controller =
-        SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
-            .await
-            .expect("controller");
+    let controller = SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
+        .await
+        .expect("controller");
 
     let err = controller
         .spawn(SpawnAgentRequest {
@@ -1201,10 +1108,9 @@ fn load_memory_appendix_renders_compact_summary() {
         )
         .expect("write memory");
 
-    let appendix =
-        load_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
-            .expect("appendix")
-            .expect("memory appendix");
+    let appendix = load_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
+        .expect("appendix")
+        .expect("memory appendix");
 
     assert!(appendix.contains("Persistent memory file:"));
     assert!(appendix.contains("Key points:"));
@@ -1220,15 +1126,14 @@ fn load_primary_memory_appendix_reads_existing_memory_without_write_guidance() {
     let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
     std::fs::create_dir_all(&memory_dir).expect("memory dir");
     std::fs::write(
-            memory_dir.join("MEMORY.md"),
-            "# Reviewer Memory\n\n## Preferences\n- Keep diffs surgical.\n- Run focused tests before broad checks.\n",
-        )
-        .expect("write memory");
+        memory_dir.join("MEMORY.md"),
+        "# Reviewer Memory\n\n## Preferences\n- Keep diffs surgical.\n- Run focused tests before broad checks.\n",
+    )
+    .expect("write memory");
 
-    let appendix =
-        load_primary_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
-            .expect("appendix")
-            .expect("memory appendix");
+    let appendix = load_primary_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
+        .expect("appendix")
+        .expect("memory appendix");
 
     assert!(appendix.contains("Primary-agent memory file:"));
     assert!(appendix.contains("Loaded read-only for this request."));
@@ -1245,8 +1150,7 @@ fn load_primary_memory_appendix_missing_memory_is_noop_without_directory_creatio
     let memory_dir = temp.path().join(".vtcode/agent-memory/reviewer");
 
     let appendix =
-        load_primary_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project))
-            .expect("appendix");
+        load_primary_memory_appendix(temp.path(), "reviewer", Some(SubagentMemoryScope::Project)).expect("appendix");
 
     assert!(appendix.is_none());
     assert!(!memory_dir.exists());
@@ -1255,12 +1159,10 @@ fn load_primary_memory_appendix_missing_memory_is_noop_without_directory_creatio
 #[tokio::test]
 async fn spawn_honors_model_override_when_user_explicitly_requests_it() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("delegate this task using gpt-5.4-mini")
@@ -1288,10 +1190,9 @@ async fn spawn_background_subprocess_rejects_non_background_agent() {
     let temp = TempDir::new().expect("tempdir");
     let mut cfg = VTCodeConfig::default();
     cfg.subagents.background.enabled = true;
-    let controller =
-        SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
-            .await
-            .expect("controller");
+    let controller = SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
+        .await
+        .expect("controller");
 
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
@@ -1314,10 +1215,9 @@ async fn spawn_background_subprocess_returns_active_record_when_settings_match()
     write_test_background_subagent(temp.path());
     let mut cfg = VTCodeConfig::default();
     cfg.subagents.background.enabled = true;
-    let controller =
-        SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
-            .await
-            .expect("controller");
+    let controller = SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
+        .await
+        .expect("controller");
 
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
@@ -1376,10 +1276,9 @@ async fn spawn_background_subprocess_rejects_conflicting_active_record_settings(
     write_test_background_subagent(temp.path());
     let mut cfg = VTCodeConfig::default();
     cfg.subagents.background.enabled = true;
-    let controller =
-        SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
-            .await
-            .expect("controller");
+    let controller = SubagentController::new(test_controller_config(temp.path().to_path_buf(), cfg))
+        .await
+        .expect("controller");
 
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
@@ -1435,12 +1334,10 @@ async fn spawn_background_subprocess_rejects_conflicting_active_record_settings(
 #[tokio::test]
 async fn resume_preserves_captured_runtime_overrides() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller
         .set_turn_delegation_hints_from_input("delegate this task using gpt-5.4-mini")
@@ -1484,12 +1381,10 @@ async fn resume_preserves_captured_runtime_overrides() {
 #[tokio::test]
 async fn spawn_captures_runtime_config_before_first_child_turn() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
@@ -1513,12 +1408,10 @@ async fn spawn_captures_runtime_config_before_first_child_turn() {
 #[tokio::test]
 async fn spawn_custom_uses_explicit_spec_without_delegation_hints() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let mut spec = vtcode_config::builtin_subagents()
         .into_iter()
@@ -1532,9 +1425,7 @@ async fn spawn_custom_uses_explicit_spec_without_delegation_hints() {
         .spawn_custom(
             spec,
             SpawnAgentRequest {
-                message: Some(
-                    "Inspect the repository and report agent-facing findings.".to_string(),
-                ),
+                message: Some("Inspect the repository and report agent-facing findings.".to_string()),
                 max_turns: Some(2),
                 ..SpawnAgentRequest::default()
             },
@@ -1550,12 +1441,10 @@ async fn spawn_custom_uses_explicit_spec_without_delegation_hints() {
 #[tokio::test]
 async fn spawn_custom_rejects_write_capable_spec() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let spec = vtcode_config::builtin_subagents()
         .into_iter()
@@ -1580,12 +1469,10 @@ async fn spawn_custom_rejects_write_capable_spec() {
 async fn spawn_custom_rejects_primary_only_spec() {
     let temp = TempDir::new().expect("tempdir");
     write_test_primary_agent(temp.path());
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let spec = controller
         .effective_specs()
@@ -1614,12 +1501,10 @@ async fn spawn_custom_rejects_primary_only_spec() {
 #[tokio::test]
 async fn close_marks_child_closed() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -1636,12 +1521,10 @@ async fn close_marks_child_closed() {
 #[tokio::test]
 async fn close_is_idempotent_for_closed_agents() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -1663,12 +1546,10 @@ async fn close_is_idempotent_for_closed_agents() {
 #[tokio::test]
 async fn close_and_resume_cascade_through_spawn_tree() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
 
     let spec = vtcode_config::builtin_subagents()
         .into_iter()
@@ -1681,10 +1562,9 @@ async fn close_and_resume_cascade_through_spawn_tree() {
             "parent".to_string(),
             test_child_record("parent", "session-root", &spec, SubagentStatus::Running, 1),
         );
-        state.children.insert(
-            "child".to_string(),
-            test_child_record("child", "parent", &spec, SubagentStatus::Running, 2),
-        );
+        state
+            .children
+            .insert("child".to_string(), test_child_record("child", "parent", &spec, SubagentStatus::Running, 2));
         state.children.insert(
             "grandchild".to_string(),
             test_child_record("grandchild", "child", &spec, SubagentStatus::Running, 3),
@@ -1694,21 +1574,10 @@ async fn close_and_resume_cascade_through_spawn_tree() {
     let closed = controller.close("parent").await.expect("close");
     assert_eq!(closed.status, SubagentStatus::Closed);
     assert_eq!(controller.status_for("child").await.expect("child").status, SubagentStatus::Closed);
-    assert_eq!(
-        controller.status_for("grandchild").await.expect("grandchild").status,
-        SubagentStatus::Closed
-    );
+    assert_eq!(controller.status_for("grandchild").await.expect("grandchild").status, SubagentStatus::Closed);
 
-    let subtree_ids =
-        controller.collect_spawn_subtree_ids("parent").await.expect("collect subtree");
-    assert_eq!(
-        subtree_ids,
-        vec![
-            "parent".to_string(),
-            "child".to_string(),
-            "grandchild".to_string()
-        ]
-    );
+    let subtree_ids = controller.collect_spawn_subtree_ids("parent").await.expect("collect subtree");
+    assert_eq!(subtree_ids, vec!["parent".to_string(), "child".to_string(), "grandchild".to_string()]);
 
     let mut restart_ids = Vec::new();
     for node_id in subtree_ids {
@@ -1717,34 +1586,19 @@ async fn close_and_resume_cascade_through_spawn_tree() {
         }
     }
 
-    assert_eq!(
-        restart_ids,
-        vec![
-            "parent".to_string(),
-            "child".to_string(),
-            "grandchild".to_string()
-        ]
-    );
-    assert_eq!(
-        controller.status_for("parent").await.expect("parent").status,
-        SubagentStatus::Queued
-    );
+    assert_eq!(restart_ids, vec!["parent".to_string(), "child".to_string(), "grandchild".to_string()]);
+    assert_eq!(controller.status_for("parent").await.expect("parent").status, SubagentStatus::Queued);
     assert_eq!(controller.status_for("child").await.expect("child").status, SubagentStatus::Queued);
-    assert_eq!(
-        controller.status_for("grandchild").await.expect("grandchild").status,
-        SubagentStatus::Queued
-    );
+    assert_eq!(controller.status_for("grandchild").await.expect("grandchild").status, SubagentStatus::Queued);
 }
 
 #[tokio::test]
 async fn spawn_rejects_fourth_active_subagent() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
     controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
     let spec = vtcode_config::builtin_subagents()
@@ -1811,12 +1665,10 @@ async fn spawn_rejects_fourth_active_subagent() {
 #[tokio::test]
 async fn wait_returns_first_terminal_child() {
     let temp = TempDir::new().expect("tempdir");
-    let controller = SubagentController::new(test_controller_config(
-        temp.path().to_path_buf(),
-        VTCodeConfig::default(),
-    ))
-    .await
-    .expect("controller");
+    let controller =
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .expect("controller");
     let spec = vtcode_config::builtin_subagents()
         .into_iter()
         .find(|spec| spec.name == "default")

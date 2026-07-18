@@ -7,11 +7,7 @@ use vtcode_commons::paths::normalize_path;
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
 /// Returns error if any flag not in allowed_flags is found
-fn validate_allowed_flags(
-    args: &[String],
-    allowed_flags: &[&str],
-    command_name: &str,
-) -> Result<()> {
+fn validate_allowed_flags(args: &[String], allowed_flags: &[&str], command_name: &str) -> Result<()> {
     for arg in args {
         if arg.starts_with('-') && !allowed_flags.contains(&arg.as_str()) {
             return Err(anyhow!("unsupported {command_name} flag '{arg}'"));
@@ -77,10 +73,7 @@ pub async fn validate_command(
 }
 
 /// Normalize a working directory relative to the workspace root.
-pub async fn sanitize_working_dir(
-    workspace_root: &Path,
-    working_dir: Option<&str>,
-) -> Result<PathBuf> {
+pub async fn sanitize_working_dir(workspace_root: &Path, working_dir: Option<&str>) -> Result<PathBuf> {
     let normalized_root = normalize_workspace_root(workspace_root)?;
     if let Some(dir) = working_dir {
         if dir.trim().is_empty() {
@@ -198,8 +191,7 @@ async fn validate_head(args: &[String], workspace_root: &Path, working_dir: &Pat
                 let value = args
                     .get(index + 1)
                     .ok_or_else(|| anyhow!("option '{current}' requires a value"))?;
-                parse_positive_int(value)
-                    .with_context(|| format!("invalid value '{value}' for '{current}'"))?;
+                parse_positive_int(value).with_context(|| format!("invalid value '{value}' for '{current}'"))?;
                 index += 2;
             }
             value if value.starts_with('-') => {
@@ -265,8 +257,7 @@ async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path)
                 let value = args
                     .get(index + 1)
                     .ok_or_else(|| anyhow!("option '{current}' requires a value"))?;
-                parse_positive_int(value)
-                    .with_context(|| format!("invalid value '{value}' for '{current}'"))?;
+                parse_positive_int(value).with_context(|| format!("invalid value '{value}' for '{current}'"))?;
                 index += 2;
             }
             "-g" | "--glob" => {
@@ -279,10 +270,7 @@ async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path)
                 index += 2;
             }
             "-n" | "-i" | "-l" | "--files" | "--files-with-matches" | "--files-without-match" => {
-                if matches!(
-                    current.as_str(),
-                    "--files" | "--files-with-matches" | "--files-without-match"
-                ) {
+                if matches!(current.as_str(), "--files" | "--files-with-matches" | "--files-without-match") {
                     allow_no_pattern = true;
                 }
                 index += 1;
@@ -334,8 +322,7 @@ async fn validate_sed(args: &[String], workspace_root: &Path, working_dir: &Path
                 index += 1;
             }
             "-e" => {
-                let value =
-                    args.get(index + 1).ok_or_else(|| anyhow!("-e requires a sed command"))?;
+                let value = args.get(index + 1).ok_or_else(|| anyhow!("-e requires a sed command"))?;
                 ensure_safe_sed_command(value)?;
                 commands.push(value.clone());
                 index += 2;
@@ -381,10 +368,7 @@ fn validate_which(args: &[String]) -> Result<()> {
                 return Err(anyhow!("unsupported which flag '{value}'"));
             }
             value => {
-                if value.is_empty()
-                    || value.contains('/')
-                    || value.chars().any(|ch| ch.is_whitespace())
-                {
+                if value.is_empty() || value.contains('/') || value.chars().any(|ch| ch.is_whitespace()) {
                     return Err(anyhow!("program name '{value}' contains unsupported characters"));
                 }
             }
@@ -394,12 +378,7 @@ fn validate_which(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-async fn validate_git(
-    args: &[String],
-    workspace_root: &Path,
-    working_dir: &Path,
-    confirm: bool,
-) -> Result<()> {
+async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path, confirm: bool) -> Result<()> {
     if args.is_empty() {
         return Err(anyhow!("git requires a subcommand"));
     }
@@ -420,9 +399,7 @@ async fn validate_git(
         }
 
         // Tree and object inspection
-        "ls-tree" | "ls-files" | "cat-file" | "rev-parse" | "describe" => {
-            validate_git_read_only(subcommand, subargs)
-        }
+        "ls-tree" | "ls-files" | "cat-file" | "rev-parse" | "describe" => validate_git_read_only(subcommand, subargs),
 
         // Config inspection (read-only)
         "config" if subargs.is_empty() || subargs.iter().all(|a| !a.starts_with("--")) => {
@@ -430,17 +407,10 @@ async fn validate_git(
         }
 
         // Additional inspection commands
-        "blame" | "grep" | "shortlog" | "format-patch" => {
-            validate_git_read_only(subcommand, subargs)
-        }
+        "blame" | "grep" | "shortlog" | "format-patch" => validate_git_read_only(subcommand, subargs),
 
         // Stash operations (safe list/show)
-        "stash"
-            if matches!(
-                subargs.first().map(|s| s.as_str()),
-                Some("list" | "show" | "pop" | "apply" | "drop")
-            ) =>
-        {
+        "stash" if matches!(subargs.first().map(|s| s.as_str()), Some("list" | "show" | "pop" | "apply" | "drop")) => {
             validate_git_stash(subargs)
         }
 
@@ -448,9 +418,7 @@ async fn validate_git(
         "add" => validate_git_add(subargs, workspace_root, working_dir).await,
         "commit" => validate_git_commit(subargs),
         "reset" => validate_git_reset(subargs, confirm),
-        "checkout" | "switch" => {
-            validate_git_checkout(subargs, workspace_root, working_dir, confirm).await
-        }
+        "checkout" | "switch" => validate_git_checkout(subargs, workspace_root, working_dir, confirm).await,
         "restore" => validate_git_checkout(subargs, workspace_root, working_dir, confirm).await,
         "merge" => validate_git_merge(subargs),
 
@@ -458,9 +426,7 @@ async fn validate_git(
         "push" => {
             // Check for force flags
             if subargs.iter().any(|a| a.contains("force") || a == "-f" || a == "--no-verify") {
-                Err(anyhow!(
-                    "git push with force flags is not permitted. Use safe push operations only."
-                ))
+                Err(anyhow!("git push with force flags is not permitted. Use safe push operations only."))
             } else {
                 validate_git_read_only(subcommand, subargs)
             }
@@ -468,17 +434,17 @@ async fn validate_git(
 
         "force-push" => Err(anyhow!("git force-push is not permitted by the execution policy")),
 
-        "clean" => Err(anyhow!(
-            "git clean is not permitted by the execution policy. Use explicit rm commands instead."
-        )),
+        "clean" => {
+            Err(anyhow!("git clean is not permitted by the execution policy. Use explicit rm commands instead."))
+        }
 
         "gc" if subargs.iter().any(|a| a.contains("aggressive")) => {
             Err(anyhow!("git gc with aggressive flag is not permitted"))
         }
 
-        "filter-branch" | "rebase" | "cherry-pick" => Err(anyhow!(
-            "git {subcommand} is not permitted - complex history operations require confirmation"
-        )),
+        "filter-branch" | "rebase" | "cherry-pick" => {
+            Err(anyhow!("git {subcommand} is not permitted - complex history operations require confirmation"))
+        }
 
         other => Err(anyhow!("git subcommand '{other}' is not permitted by the execution policy")),
     }
@@ -566,11 +532,7 @@ fn validate_git_read_only(subcommand: &str, subargs: &[String]) -> Result<()> {
     Ok(())
 }
 
-async fn validate_git_add(
-    args: &[String],
-    workspace_root: &Path,
-    working_dir: &Path,
-) -> Result<()> {
+async fn validate_git_add(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     // Block dangerous flags
     if args.iter().any(|a| a == "-f" || a == "--force") {
         return Err(anyhow!("git add --force is not permitted. Use regular add operations only."));
@@ -690,9 +652,7 @@ async fn validate_git_checkout(
 
     // Block forced checkout unless explicit confirm
     if args.iter().any(|a| a == "-f" || a == "--force") && !confirm {
-        return Err(anyhow!(
-            "git checkout --force is potentially destructive; set `confirm=true` to proceed."
-        ));
+        return Err(anyhow!("git checkout --force is potentially destructive; set `confirm=true` to proceed."));
     }
 
     // Validate paths if provided
@@ -782,11 +742,7 @@ async fn resolve_path(workspace_root: &Path, working_dir: &Path, value: &str) ->
     Ok(base)
 }
 
-async fn resolve_path_allow_new(
-    workspace_root: &Path,
-    working_dir: &Path,
-    value: &str,
-) -> Result<PathBuf> {
+async fn resolve_path_allow_new(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
     let candidate = build_candidate_path(workspace_root, working_dir, value).await?;
     if !candidate.starts_with(workspace_root) {
         return Err(anyhow!("path '{value}' is outside the workspace root"));
@@ -794,11 +750,7 @@ async fn resolve_path_allow_new(
     Ok(candidate)
 }
 
-async fn resolve_path_allow_dir(
-    workspace_root: &Path,
-    working_dir: &Path,
-    value: &str,
-) -> Result<PathBuf> {
+async fn resolve_path_allow_dir(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
     let candidate = build_candidate_path(workspace_root, working_dir, value).await?;
     if !candidate.starts_with(workspace_root) {
         return Err(anyhow!("path '{value}' is outside the workspace root"));
@@ -806,11 +758,7 @@ async fn resolve_path_allow_dir(
     Ok(candidate)
 }
 
-async fn build_candidate_path(
-    workspace_root: &Path,
-    working_dir: &Path,
-    value: &str,
-) -> Result<PathBuf> {
+async fn build_candidate_path(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
     let normalized_root = normalize_workspace_root(workspace_root)?;
     let normalized_working = normalize_path(working_dir);
     let raw_path = Path::new(value);
@@ -875,8 +823,7 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
     if chars.next() != Some('s') {
         return Err(anyhow!("only sed substitution commands are supported"));
     }
-    let delimiter =
-        chars.next().ok_or_else(|| anyhow!("sed substitution is missing a delimiter"))?;
+    let delimiter = chars.next().ok_or_else(|| anyhow!("sed substitution is missing a delimiter"))?;
     if delimiter.is_ascii_alphanumeric() || delimiter.is_ascii_whitespace() {
         return Err(anyhow!("invalid sed delimiter"));
     }
@@ -902,11 +849,7 @@ async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Re
         .map(|_| ())
 }
 
-fn parse_sed_section(
-    chars: &mut std::str::Chars<'_>,
-    delimiter: char,
-    target: &mut String,
-) -> Result<()> {
+fn parse_sed_section(chars: &mut std::str::Chars<'_>, delimiter: char, target: &mut String) -> Result<()> {
     let mut escaped = false;
     for ch in chars.by_ref() {
         if escaped {
@@ -1008,12 +951,7 @@ async fn validate_wc(args: &[String], workspace_root: &Path, working_dir: &Path)
     Ok(())
 }
 
-async fn validate_cargo(
-    args: &[String],
-    workspace_root: &Path,
-    working_dir: &Path,
-    confirm: bool,
-) -> Result<()> {
+async fn validate_cargo(args: &[String], workspace_root: &Path, working_dir: &Path, confirm: bool) -> Result<()> {
     // Cargo commands - allow typical dev workflow operations
     if args.is_empty() {
         return Err(anyhow!("cargo requires a subcommand"));
@@ -1022,8 +960,8 @@ async fn validate_cargo(
     let subcommand = args[0].as_str();
     match subcommand {
         // Safe read-only, build, and development operations
-        "build" | "check" | "test" | "doc" | "clippy" | "fmt" | "run" | "bench" | "expand"
-        | "tree" | "metadata" | "search" | "cache" => {
+        "build" | "check" | "test" | "doc" | "clippy" | "fmt" | "run" | "bench" | "expand" | "tree" | "metadata"
+        | "search" | "cache" => {
             // These are generally safe - check working directory is in workspace
             ensure_within_workspace(workspace_root, working_dir).await?;
             Ok(())
@@ -1035,14 +973,10 @@ async fn validate_cargo(
                 ensure_within_workspace(workspace_root, working_dir).await?;
                 Ok(())
             } else {
-                Err(anyhow!(
-                    "cargo {subcommand} is potentially destructive; set `confirm=true` to proceed."
-                ))
+                Err(anyhow!("cargo {subcommand} is potentially destructive; set `confirm=true` to proceed."))
             }
         }
-        other => {
-            Err(anyhow!("cargo subcommand '{other}' is not permitted by the execution policy"))
-        }
+        other => Err(anyhow!("cargo subcommand '{other}' is not permitted by the execution policy")),
     }
 }
 
@@ -1065,9 +999,7 @@ async fn validate_python(args: &[String], workspace_root: &Path, working_dir: &P
 
     // Reject -e and -c variants that bypass file-based execution
     if first_arg == "-e" || first_arg == "-exec" {
-        return Err(anyhow!(
-            "python {first_arg} is not permitted: it enables arbitrary code execution"
-        ));
+        return Err(anyhow!("python {first_arg} is not permitted: it enables arbitrary code execution"));
     }
 
     if first_arg == "-m" || first_arg == "-W" {
@@ -1094,9 +1026,7 @@ async fn validate_npm(args: &[String], workspace_root: &Path, working_dir: &Path
     let subcommand = args[0].as_str();
     match subcommand {
         // Dangerous operations
-        "publish" | "unpublish" => {
-            Err(anyhow!("npm {subcommand} is not permitted by the execution policy"))
-        }
+        "publish" | "unpublish" => Err(anyhow!("npm {subcommand} is not permitted by the execution policy")),
         // Allow safe and other commands by default, as npm is generally safe in workspace
         _ => Ok(()),
     }
@@ -1166,9 +1096,7 @@ mod tests {
         validate_git_read_only("branch", &["-a".to_owned()]).unwrap();
 
         // Dangerous patterns blocked
-        assert!(
-            validate_git_read_only("log", &["--format".to_owned(), "test;cat".to_owned()]).is_err()
-        );
+        assert!(validate_git_read_only("log", &["--format".to_owned(), "test;cat".to_owned()]).is_err());
     }
 
     #[test]

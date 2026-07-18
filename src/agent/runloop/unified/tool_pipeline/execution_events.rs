@@ -1,8 +1,8 @@
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use serde_json::Value;
 use vtcode_core::core::agent::events::{
-    ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event,
-    tool_output_completed_event, tool_output_payload_from_value,
+    ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
+    tool_output_payload_from_value,
 };
 use vtcode_core::exec::events::ToolCallStatus;
 
@@ -45,10 +45,7 @@ pub(super) fn emit_tool_completion_status(
                 aggregated_output,
             ));
         } else if !aggregated_output.is_empty() {
-            let _ = emitter.emit(error_item_completed_event(
-                format!("{tool_item_id}:error"),
-                aggregated_output,
-            ));
+            let _ = emitter.emit(error_item_completed_event(format!("{tool_item_id}:error"), aggregated_output));
         }
     }
 }

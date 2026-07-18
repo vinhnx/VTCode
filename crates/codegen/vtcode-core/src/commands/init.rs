@@ -50,13 +50,7 @@ struct CandidateAccumulator {
 }
 
 impl CandidateAccumulator {
-    fn add(
-        &mut self,
-        value: impl Into<String>,
-        label: impl Into<String>,
-        description: impl Into<String>,
-        score: u32,
-    ) {
+    fn add(&mut self, value: impl Into<String>, label: impl Into<String>, description: impl Into<String>, score: u32) {
         let value = value.into();
         let normalized = value.trim();
         if normalized.is_empty() {
@@ -77,9 +71,7 @@ impl CandidateAccumulator {
 
     fn into_sorted(self) -> Vec<SignalCandidate> {
         let mut values: Vec<_> = self.values.into_values().collect();
-        values.sort_by(|left, right| {
-            right.score.cmp(&left.score).then_with(|| left.value.cmp(&right.value))
-        });
+        values.sort_by(|left, right| right.score.cmp(&left.score).then_with(|| left.value.cmp(&right.value)));
         values
     }
 }
@@ -234,11 +226,7 @@ pub struct GuidedInitAnswer {
 }
 
 impl GuidedInitAnswer {
-    pub fn from_input(
-        key: GuidedInitQuestionKey,
-        selected: Option<&str>,
-        custom: Option<&str>,
-    ) -> Option<Self> {
+    pub fn from_input(key: GuidedInitQuestionKey, selected: Option<&str>, custom: Option<&str>) -> Option<Self> {
         let custom_selected = custom.is_some();
         if let Some(custom) = custom.map(str::trim).filter(|value| !value.is_empty()) {
             return Some(Self {
@@ -318,11 +306,7 @@ pub async fn handle_init_command(_registry: &mut ToolRegistry, workspace: &Path)
     let content = render_agents_md(&plan, &GuidedInitAnswers::default())?;
     println!("{}", style("3. Writing AGENTS.md file...").dim());
     let report = write_agents_file(workspace, &content, true)?;
-    println!(
-        "{} {}",
-        style("[OK]").green().bold(),
-        style("AGENTS.md generated successfully!").green()
-    );
+    println!("{} {}", style("[OK]").green().bold(), style("AGENTS.md generated successfully!").green());
     println!("{} {}", style(" Location:").cyan(), report.path.display());
     Ok(())
 }
@@ -383,11 +367,7 @@ pub fn render_agents_md(plan: &GuidedInitPlan, answers: &GuidedInitAnswers) -> R
     Ok(content)
 }
 
-pub fn write_agents_file(
-    workspace: &Path,
-    content: &str,
-    overwrite: bool,
-) -> Result<GenerateAgentsFileReport> {
+pub fn write_agents_file(workspace: &Path, content: &str, overwrite: bool) -> Result<GenerateAgentsFileReport> {
     let path = workspace.join(AGENTS_FILENAME);
     let existed_before = path.exists();
 
@@ -398,8 +378,7 @@ pub fn write_agents_file(
         });
     }
 
-    fs::write(&path, content)
-        .with_context(|| format!("failed to write AGENTS.md to {}", path.display()))?;
+    fs::write(&path, content).with_context(|| format!("failed to write AGENTS.md to {}", path.display()))?;
 
     let status = if existed_before {
         GenerateAgentsFileStatus::Overwritten
@@ -456,20 +435,17 @@ fn analyze_project(workspace: &Path) -> Result<ProjectAnalysis> {
     analyze_project_characteristics(&mut analysis);
 
     let text_samples = load_text_samples(workspace, &root_files)?;
-    analysis.verification_candidates =
-        build_verification_candidates(workspace, &analysis, &text_samples);
+    analysis.verification_candidates = build_verification_candidates(workspace, &analysis, &text_samples);
     analysis.selected_verification_command =
-        choose_clear_candidate(&analysis.verification_candidates, 4)
-            .map(|candidate| candidate.value.clone());
+        choose_clear_candidate(&analysis.verification_candidates, 4).map(|candidate| candidate.value.clone());
 
     analysis.orientation_candidates = build_orientation_candidates(&analysis, &text_samples);
-    analysis.selected_orientation_doc = choose_clear_candidate(&analysis.orientation_candidates, 4)
-        .map(|candidate| candidate.value.clone());
+    analysis.selected_orientation_doc =
+        choose_clear_candidate(&analysis.orientation_candidates, 4).map(|candidate| candidate.value.clone());
 
     analysis.critical_instruction_candidates = build_critical_instruction_candidates(&text_samples);
     analysis.selected_critical_instruction =
-        choose_clear_candidate(&analysis.critical_instruction_candidates, 7)
-            .map(|candidate| candidate.value.clone());
+        choose_clear_candidate(&analysis.critical_instruction_candidates, 7).map(|candidate| candidate.value.clone());
 
     Ok(analysis)
 }
@@ -535,8 +511,8 @@ fn analyze_file(analysis: &mut ProjectAnalysis, path: &str) {
         | "docs/modules/vtcode_docs_map.md" => {
             analysis.documentation_files.push(path.to_owned());
         }
-        ".gitignore" | ".editorconfig" | ".prettierrc" | ".eslintrc" | ".eslintrc.js"
-        | ".eslintrc.json" | "vtcode.toml" | "sgconfig.yml" => {
+        ".gitignore" | ".editorconfig" | ".prettierrc" | ".eslintrc" | ".eslintrc.js" | ".eslintrc.json"
+        | "vtcode.toml" | "sgconfig.yml" => {
             analysis.config_files.push(path.to_owned());
         }
         "Dockerfile" | "docker-compose.yml" | "docker-compose.yaml" | ".dockerignore" => {
@@ -616,10 +592,7 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     }
 }
 
-fn lookup_toml_table<'a>(
-    value: &'a toml::Value,
-    dotted_key: &str,
-) -> Option<&'a toml::map::Map<String, toml::Value>> {
+fn lookup_toml_table<'a>(value: &'a toml::Value, dotted_key: &str) -> Option<&'a toml::map::Map<String, toml::Value>> {
     let mut current = value;
     for part in dotted_key.split('.') {
         current = current.get(part)?;
@@ -654,9 +627,7 @@ fn detect_package_manager(workspace: &Path) -> Option<PackageManager> {
         Some(PackageManager::Pnpm)
     } else if workspace.join("yarn.lock").exists() {
         Some(PackageManager::Yarn)
-    } else if workspace.join("package-lock.json").exists()
-        || workspace.join("package.json").exists()
-    {
+    } else if workspace.join("package-lock.json").exists() || workspace.join("package.json").exists() {
         Some(PackageManager::Npm)
     } else {
         None
@@ -687,17 +658,9 @@ fn analyze_git_history(workspace: &Path, analysis: &mut ProjectAnalysis) {
     for line in stdout.lines() {
         total += 1;
         let line = line.trim();
-        if [
-            "feat:",
-            "fix:",
-            "docs:",
-            "style:",
-            "refactor:",
-            "test:",
-            "chore:",
-        ]
-        .iter()
-        .any(|prefix| line.starts_with(prefix))
+        if ["feat:", "fix:", "docs:", "style:", "refactor:", "test:", "chore:"]
+            .iter()
+            .any(|prefix| line.starts_with(prefix))
         {
             conventional += 1;
         }
@@ -718,20 +681,17 @@ fn analyze_project_characteristics(analysis: &mut ProjectAnalysis) {
     analysis.config_files = unique_preserving_order(&analysis.config_files);
     analysis.documentation_files = unique_preserving_order(&analysis.documentation_files);
 
-    analysis.is_library = analysis.build_systems.iter().any(|system| {
-        matches!(system.as_str(), "Cargo" | "npm/yarn/pnpm" | "pip/poetry" | "Go Modules")
-    });
+    analysis.is_library = analysis
+        .build_systems
+        .iter()
+        .any(|system| matches!(system.as_str(), "Cargo" | "npm/yarn/pnpm" | "pip/poetry" | "Go Modules"));
     analysis.is_application = analysis
         .source_dirs
         .iter()
         .any(|dir| matches!(dir.as_str(), "src" | "app" | "cmd"));
-    analysis.has_ci_cd =
-        analysis.config_files.iter().any(|path| path.starts_with(".github/workflows/"));
+    analysis.has_ci_cd = analysis.config_files.iter().any(|path| path.starts_with(".github/workflows/"));
     analysis.has_docker = analysis.config_files.iter().any(|path| {
-        matches!(
-            path.as_str(),
-            "Dockerfile" | "docker-compose.yml" | "docker-compose.yaml" | ".dockerignore"
-        )
+        matches!(path.as_str(), "Dockerfile" | "docker-compose.yml" | "docker-compose.yaml" | ".dockerignore")
     });
 }
 
@@ -772,22 +732,12 @@ fn build_verification_candidates(
     let package_manager = analysis.package_manager.map(PackageManager::command);
 
     if workspace.join("scripts/check.sh").exists() {
-        candidates.add(
-            "./scripts/check.sh",
-            "./scripts/check.sh",
-            "Run the repository quality gate script.",
-            7,
-        );
+        candidates.add("./scripts/check.sh", "./scripts/check.sh", "Run the repository quality gate script.", 7);
     }
 
     if analysis.build_systems.iter().any(|system| system == "Cargo") {
         candidates.add("cargo check", "cargo check", "Run a fast Rust compile check.", 2);
-        candidates.add(
-            "cargo nextest run",
-            "cargo nextest run",
-            "Run the Rust test suite with nextest.",
-            1,
-        );
+        candidates.add("cargo nextest run", "cargo nextest run", "Run the Rust test suite with nextest.", 1);
     }
 
     if analysis.build_systems.iter().any(|system| system == "Go Modules") {
@@ -800,12 +750,7 @@ fn build_verification_candidates(
             .and_then(|content| parse_package_json_scripts(content.as_str()))
             .unwrap_or_default();
         if package_scripts.contains(&"test".to_owned()) {
-            candidates.add(
-                format!("{command} test"),
-                format!("{command} test"),
-                "Run the package test script.",
-                5,
-            );
+            candidates.add(format!("{command} test"), format!("{command} test"), "Run the package test script.", 5);
         }
         if package_scripts.contains(&"check".to_owned()) {
             candidates.add(
@@ -819,12 +764,7 @@ fn build_verification_candidates(
 
     for content in text_samples.values() {
         for (command, label, description, score) in [
-            (
-                "./scripts/check.sh",
-                "./scripts/check.sh",
-                "Run the repository quality gate script.",
-                3,
-            ),
+            ("./scripts/check.sh", "./scripts/check.sh", "Run the repository quality gate script.", 3),
             ("cargo nextest run", "cargo nextest run", "Run the Rust test suite with nextest.", 4),
             ("cargo check", "cargo check", "Run a fast Rust compile check.", 2),
             ("cargo test", "cargo test", "Run the Rust test suite.", 3),
@@ -885,11 +825,7 @@ fn build_orientation_candidates(
 
     for content in text_samples.values() {
         for (path, description, score) in [
-            (
-                "docs/modules/vtcode_docs_map.md",
-                "Use this to map VT Code modules and docs quickly.",
-                4,
-            ),
+            ("docs/modules/vtcode_docs_map.md", "Use this to map VT Code modules and docs quickly.", 4),
             ("docs/ARCHITECTURE.md", "Use this for system design and architecture context.", 2),
             ("README.md", "Start here for repository overview and local setup.", 1),
         ] {
@@ -902,9 +838,7 @@ fn build_orientation_candidates(
     candidates.into_sorted()
 }
 
-fn build_critical_instruction_candidates(
-    text_samples: &BTreeMap<String, String>,
-) -> Vec<SignalCandidate> {
+fn build_critical_instruction_candidates(text_samples: &BTreeMap<String, String>) -> Vec<SignalCandidate> {
     let mut candidates = CandidateAccumulator::default();
     for (path, content) in text_samples {
         let base_score = match path.as_str() {
@@ -930,9 +864,7 @@ fn build_critical_instruction_candidates(
                 );
             }
 
-            if lower.contains("no unsafe")
-                || lower.contains("do not use unsafe")
-                || lower.contains("never use unsafe")
+            if lower.contains("no unsafe") || lower.contains("do not use unsafe") || lower.contains("never use unsafe")
             {
                 candidates.add(
                     "Do not use `unsafe` code.",
@@ -942,10 +874,7 @@ fn build_critical_instruction_candidates(
                 );
             }
 
-            if lower.contains("cargo check")
-                && lower.contains("cargo nextest")
-                && lower.contains("cargo clippy")
-            {
+            if lower.contains("cargo check") && lower.contains("cargo nextest") && lower.contains("cargo clippy") {
                 candidates.add(
                     "Run `cargo check`, `cargo nextest`, and `cargo clippy` after changes.",
                     "Run `cargo check`, `cargo nextest`, and `cargo clippy` after changes.",
@@ -979,11 +908,7 @@ fn build_critical_instruction_candidates(
 
 fn normalized_instruction_line(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with('#')
-        || trimmed.starts_with("```")
-        || trimmed.starts_with('|')
-    {
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("```") || trimmed.starts_with('|') {
         return None;
     }
 
@@ -997,10 +922,7 @@ fn normalized_instruction_line(raw: &str) -> Option<String> {
     Some(trimmed.to_owned())
 }
 
-fn choose_clear_candidate(
-    candidates: &[SignalCandidate],
-    minimum_score: u32,
-) -> Option<&SignalCandidate> {
+fn choose_clear_candidate(candidates: &[SignalCandidate], minimum_score: u32) -> Option<&SignalCandidate> {
     let first = candidates.first()?;
     if first.score < minimum_score {
         return None;
@@ -1017,11 +939,9 @@ fn choose_clear_candidate(
 impl ProjectAnalysis {
     fn apply_grounding(&mut self, grounding: GuidedInitGrounding) {
         self.grounded_project_summary = normalize_grounding_value(grounding.project_summary);
-        self.grounded_verification_command =
-            normalize_grounding_value(grounding.verification_command);
+        self.grounded_verification_command = normalize_grounding_value(grounding.verification_command);
         self.grounded_orientation_doc = normalize_grounding_value(grounding.orientation_doc);
-        self.grounded_critical_instruction =
-            normalize_grounding_value(grounding.critical_instruction);
+        self.grounded_critical_instruction = normalize_grounding_value(grounding.critical_instruction);
     }
 }
 
@@ -1054,8 +974,7 @@ fn build_guided_questions(analysis: &ProjectAnalysis) -> Vec<GuidedInitQuestion>
         questions.push(GuidedInitQuestion {
             key: GuidedInitQuestionKey::VerificationCommand,
             header: GuidedInitQuestionKey::VerificationCommand.header().to_owned(),
-            prompt: "Which command should agents run by default before claiming the work is done?"
-                .to_owned(),
+            prompt: "Which command should agents run by default before claiming the work is done?".to_owned(),
             options,
             allow_custom: true,
         });
@@ -1075,24 +994,21 @@ fn build_guided_questions(analysis: &ProjectAnalysis) -> Vec<GuidedInitQuestion>
                 value: CONTROL_GENERIC.to_owned(),
                 label: "Keep generic orientation".to_owned(),
                 description: "Avoid pinning one doc as the first read.".to_owned(),
-                recommended: analysis.orientation_candidates.is_empty()
-                    && analysis.grounded_orientation_doc.is_none(),
+                recommended: analysis.orientation_candidates.is_empty() && analysis.grounded_orientation_doc.is_none(),
             }),
             3,
         );
         questions.push(GuidedInitQuestion {
             key: GuidedInitQuestionKey::OrientationDoc,
             header: GuidedInitQuestionKey::OrientationDoc.header().to_owned(),
-            prompt: "Which file should agents read first when they need repo orientation?"
-                .to_owned(),
+            prompt: "Which file should agents read first when they need repo orientation?".to_owned(),
             options,
             allow_custom: true,
         });
     }
 
     let critical_needs_question = (analysis.selected_critical_instruction.is_none()
-        && (!analysis.critical_instruction_candidates.is_empty()
-            || analysis.grounded_critical_instruction.is_some()))
+        && (!analysis.critical_instruction_candidates.is_empty() || analysis.grounded_critical_instruction.is_some()))
         || grounded_differs_from_selected(
             analysis.selected_critical_instruction.as_deref(),
             analysis.grounded_critical_instruction.as_deref(),
@@ -1180,10 +1096,7 @@ fn build_guided_options(
     options
 }
 
-fn resolve_verification_command(
-    analysis: &ProjectAnalysis,
-    answers: &GuidedInitAnswers,
-) -> Option<String> {
+fn resolve_verification_command(analysis: &ProjectAnalysis, answers: &GuidedInitAnswers) -> Option<String> {
     resolve_guided_answer(
         answers.answer(GuidedInitQuestionKey::VerificationCommand),
         analysis.grounded_verification_command.clone(),
@@ -1195,10 +1108,7 @@ fn resolve_verification_command(
     )
 }
 
-fn resolve_orientation_doc(
-    analysis: &ProjectAnalysis,
-    answers: &GuidedInitAnswers,
-) -> Option<String> {
+fn resolve_orientation_doc(analysis: &ProjectAnalysis, answers: &GuidedInitAnswers) -> Option<String> {
     resolve_guided_answer(
         answers.answer(GuidedInitQuestionKey::OrientationDoc),
         analysis.grounded_orientation_doc.clone(),
@@ -1207,10 +1117,7 @@ fn resolve_orientation_doc(
     )
 }
 
-fn resolve_critical_instruction(
-    analysis: &ProjectAnalysis,
-    answers: &GuidedInitAnswers,
-) -> Option<String> {
+fn resolve_critical_instruction(analysis: &ProjectAnalysis, answers: &GuidedInitAnswers) -> Option<String> {
     resolve_guided_answer(
         answers.answer(GuidedInitQuestionKey::CriticalInstruction),
         analysis.grounded_critical_instruction.clone(),
@@ -1264,26 +1171,17 @@ fn resolve_answered_value(answer: Option<&GuidedInitAnswer>) -> AnsweredValue {
     AnsweredValue::Value(selected.to_owned())
 }
 
-fn build_quick_start_section(
-    analysis: &ProjectAnalysis,
-    verification_command: Option<&str>,
-) -> String {
+fn build_quick_start_section(analysis: &ProjectAnalysis, verification_command: Option<&str>) -> String {
     let mut lines = Vec::new();
 
     if let Some(command) = verification_command {
-        lines.push(format!(
-            "Default verification command: `{command}` before calling work complete."
-        ));
+        lines.push(format!("Default verification command: `{command}` before calling work complete."));
     }
 
     if analysis.build_systems.iter().any(|system| system == "Cargo") {
         lines.push("Build with `cargo check` (preferred) or `cargo build --release`.".to_owned());
-        lines.push(
-            "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_owned(),
-        );
-        lines.push(
-            "Run tests with `cargo nextest run` or `cargo test <name> -- --nocapture`.".to_owned(),
-        );
+        lines.push("Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_owned());
+        lines.push("Run tests with `cargo nextest run` or `cargo test <name> -- --nocapture`.".to_owned());
     }
 
     if let Some(package_manager) = analysis.package_manager.map(PackageManager::command) {
@@ -1295,9 +1193,7 @@ fn build_quick_start_section(
     }
 
     if lines.is_empty() {
-        lines.push(
-            "Install dependencies and run the standard build before starting new work.".to_owned(),
-        );
+        lines.push("Install dependencies and run the standard build before starting new work.".to_owned());
     }
 
     render_section("Quick start", lines).unwrap_or_else(|| {
@@ -1313,9 +1209,7 @@ fn build_architecture_section(analysis: &ProjectAnalysis, orientation_doc: Optio
     }
 
     if let Some(path) = orientation_doc {
-        lines.push(format!(
-            "Start with `{path}` when you need repo orientation or architectural context."
-        ));
+        lines.push(format!("Start with `{path}` when you need repo orientation or architectural context."));
     }
 
     lines.push(format!("Repository: {}.", analysis.project_name));
@@ -1336,22 +1230,15 @@ fn build_architecture_section(analysis: &ProjectAnalysis, orientation_doc: Optio
     }
 
     if analysis.has_ci_cd {
-        lines.push(
-            "CI workflows detected under `.github/workflows/`; match those expectations locally."
-                .to_owned(),
-        );
+        lines.push("CI workflows detected under `.github/workflows/`; match those expectations locally.".to_owned());
     }
 
     if analysis.has_docker {
-        lines.push(
-            "Docker assets are present; some integration flows may depend on container setup."
-                .to_owned(),
-        );
+        lines.push("Docker assets are present; some integration flows may depend on container setup.".to_owned());
     }
 
-    render_section("Architecture & layout", lines).unwrap_or_else(|| {
-        "## Architecture & layout\n\n- Review the repository layout before editing.\n\n".to_owned()
-    })
+    render_section("Architecture & layout", lines)
+        .unwrap_or_else(|| "## Architecture & layout\n\n- Review the repository layout before editing.\n\n".to_owned())
 }
 
 fn build_important_instructions_section(instruction: Option<&str>) -> Option<String> {
@@ -1376,12 +1263,9 @@ fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
                     .to_owned(),
             ),
             "Python" => lines.push(
-                "Follow PEP 8, prefer Black-compatible formatting, and add type hints when practical."
-                    .to_owned(),
+                "Follow PEP 8, prefer Black-compatible formatting, and add type hints when practical.".to_owned(),
             ),
-            "Go" => lines.push(
-                "Use `gofmt`/`go vet` and keep exported APIs intentional.".to_owned(),
-            ),
+            "Go" => lines.push("Use `gofmt`/`go vet` and keep exported APIs intentional.".to_owned()),
             other => lines.push(format!(
                 "Match the surrounding {other} conventions and run the project formatter before pushing."
             )),
@@ -1389,9 +1273,7 @@ fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
     }
 
     if lines.is_empty() {
-        lines.push(
-            "Match the surrounding style and keep commits free of formatting noise.".to_owned(),
-        );
+        lines.push("Match the surrounding style and keep commits free of formatting noise.".to_owned());
     }
 
     render_section("Code style", lines).unwrap_or_else(|| {
@@ -1407,14 +1289,8 @@ fn build_testing_section(analysis: &ProjectAnalysis, verification_command: Optio
     }
 
     if analysis.build_systems.iter().any(|system| system == "Cargo") {
-        lines.push(
-            "Rust suite: `cargo nextest run` for speed, or `cargo test` for targeted fallback."
-                .to_owned(),
-        );
-        lines.push(
-            "Run `cargo clippy --workspace --all-targets -- -D warnings` for lint coverage."
-                .to_owned(),
-        );
+        lines.push("Rust suite: `cargo nextest run` for speed, or `cargo test` for targeted fallback.".to_owned());
+        lines.push("Run `cargo clippy --workspace --all-targets -- -D warnings` for lint coverage.".to_owned());
     }
 
     if let Some(package_manager) = analysis.package_manager.map(PackageManager::command) {
@@ -1436,8 +1312,7 @@ fn build_testing_section(analysis: &ProjectAnalysis, verification_command: Optio
     }
 
     render_section("Testing", lines).unwrap_or_else(|| {
-        "## Testing\n\n- Run the project's automated checks before submitting changes.\n\n"
-            .to_owned()
+        "## Testing\n\n- Run the project's automated checks before submitting changes.\n\n".to_owned()
     })
 }
 
@@ -1446,8 +1321,7 @@ fn build_performance_section() -> String {
         "Performance & simplicity",
         vec![
             "Do not guess at bottlenecks; measure before optimizing.".to_owned(),
-            "Prefer simple algorithms and data structures until workload data proves otherwise."
-                .to_owned(),
+            "Prefer simple algorithms and data structures until workload data proves otherwise.".to_owned(),
             "Keep performance changes surgical and behavior-preserving.".to_owned(),
         ],
     )
@@ -1458,26 +1332,18 @@ fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
     let mut lines = Vec::new();
 
     if analysis.commit_patterns.iter().any(|pattern| pattern == "Conventional Commits") {
-        lines.push(
-            "Use Conventional Commits (`type(scope): subject`) with short, descriptive summaries."
-                .to_owned(),
-        );
+        lines.push("Use Conventional Commits (`type(scope): subject`) with short, descriptive summaries.".to_owned());
     } else {
         lines.push("Write descriptive, imperative commit messages.".to_owned());
     }
 
     lines.push("Reference issues with `Fixes #123` or `Closes #123` when applicable.".to_owned());
-    lines.push(
-        "Keep pull requests focused and include test evidence for non-trivial changes.".to_owned(),
-    );
+    lines.push("Keep pull requests focused and include test evidence for non-trivial changes.".to_owned());
 
     render_section("PR guidelines", lines)
 }
 
-fn build_additional_guidance_section(
-    analysis: &ProjectAnalysis,
-    orientation_doc: Option<&str>,
-) -> Option<String> {
+fn build_additional_guidance_section(analysis: &ProjectAnalysis, orientation_doc: Option<&str>) -> Option<String> {
     let mut lines = Vec::new();
 
     if let Some(path) = orientation_doc {
@@ -1485,8 +1351,7 @@ fn build_additional_guidance_section(
     }
 
     if !analysis.documentation_files.is_empty() {
-        lines
-            .push(format!("Repository docs spotted: {}.", analysis.documentation_files.join(", ")));
+        lines.push(format!("Repository docs spotted: {}.", analysis.documentation_files.join(", ")));
     }
 
     if !analysis.dependencies.is_empty() {
@@ -1501,9 +1366,7 @@ fn build_additional_guidance_section(
     if analysis.scripts.iter().any(|script| script == "run.sh")
         && analysis.scripts.iter().any(|script| script == "run-debug.sh")
     {
-        lines.push(
-            "Use `./run.sh` for release runs and `./run-debug.sh` for debug sessions.".to_owned(),
-        );
+        lines.push("Use `./run.sh` for release runs and `./run-debug.sh` for debug sessions.".to_owned());
     }
 
     render_section("Additional guidance", lines)
@@ -1686,21 +1549,13 @@ mod tests {
 
     #[test]
     fn blank_custom_answers_normalize_to_control_values() {
-        let verification = GuidedInitAnswer::from_input(
-            GuidedInitQuestionKey::VerificationCommand,
-            None,
-            Some("   "),
-        )
-        .expect("verification");
+        let verification = GuidedInitAnswer::from_input(GuidedInitQuestionKey::VerificationCommand, None, Some("   "))
+            .expect("verification");
         assert_eq!(verification.selected, CONTROL_GENERIC);
         assert_eq!(verification.custom, None);
 
-        let critical = GuidedInitAnswer::from_input(
-            GuidedInitQuestionKey::CriticalInstruction,
-            None,
-            Some(""),
-        )
-        .expect("critical");
+        let critical =
+            GuidedInitAnswer::from_input(GuidedInitQuestionKey::CriticalInstruction, None, Some("")).expect("critical");
         assert_eq!(critical.selected, CONTROL_NONE);
         assert_eq!(critical.custom, None);
     }
@@ -1712,12 +1567,12 @@ mod tests {
         write_file(&workspace, "README.md", "# Demo\n");
         write_file(&workspace, "scripts/check.sh", "#!/bin/sh\ncargo check\n");
 
-        let plan = prepare_guided_init(workspace.path(), false).expect("plan").with_grounding(
-            GuidedInitGrounding {
+        let plan = prepare_guided_init(workspace.path(), false)
+            .expect("plan")
+            .with_grounding(GuidedInitGrounding {
                 verification_command: Some("cargo nextest run".to_owned()),
                 ..GuidedInitGrounding::default()
-            },
-        );
+            });
 
         assert!(
             plan.questions
@@ -1731,15 +1586,13 @@ mod tests {
         let workspace = TempDir::new().expect("workspace");
         write_file(&workspace, "README.md", "# Demo\n");
 
-        let plan = prepare_guided_init(workspace.path(), false).expect("plan").with_grounding(
-            GuidedInitGrounding {
-                project_summary: Some(
-                    "Terminal-first coding agent for repository work.".to_owned(),
-                ),
+        let plan = prepare_guided_init(workspace.path(), false)
+            .expect("plan")
+            .with_grounding(GuidedInitGrounding {
+                project_summary: Some("Terminal-first coding agent for repository work.".to_owned()),
                 verification_command: Some("cargo nextest run".to_owned()),
                 ..GuidedInitGrounding::default()
-            },
-        );
+            });
 
         let rendered = render_agents_md(&plan, &GuidedInitAnswers::default()).expect("rendered");
         assert!(rendered.contains("Terminal-first coding agent for repository work."));

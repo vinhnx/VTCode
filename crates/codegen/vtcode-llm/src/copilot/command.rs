@@ -15,13 +15,7 @@ const ACP_FLAGS: &[&str] = &[
     "--no-experimental",
     "--disable-builtin-mcps",
 ];
-const SERVER_FLAGS: &[&str] = &[
-    "--headless",
-    "--no-auto-update",
-    "--log-level",
-    "error",
-    "--stdio",
-];
+const SERVER_FLAGS: &[&str] = &["--headless", "--no-auto-update", "--log-level", "error", "--stdio"];
 const STRIPPED_RUNTIME_ENV_VARS: &[&str] = &[
     "COPILOT_ALLOW_ALL",
     "COPILOT_CUSTOM_INSTRUCTIONS_DIRS",
@@ -138,15 +132,12 @@ pub fn spawn_copilot_acp_process(
         command.env_remove(env_var);
     }
 
-    command.spawn().with_context(|| {
-        format!("failed to spawn GitHub Copilot ACP runtime using `{}`", resolved.display())
-    })
+    command
+        .spawn()
+        .with_context(|| format!("failed to spawn GitHub Copilot ACP runtime using `{}`", resolved.display()))
 }
 
-pub fn spawn_copilot_server_process(
-    resolved: &ResolvedCopilotCommand,
-    cwd: &Path,
-) -> Result<Child> {
+pub fn spawn_copilot_server_process(resolved: &ResolvedCopilotCommand, cwd: &Path) -> Result<Child> {
     let extra_args = SERVER_FLAGS.iter().map(|flag| (*flag).to_string()).collect::<Vec<_>>();
     let mut command = resolved.command(Some(cwd), &extra_args);
     command
@@ -160,9 +151,9 @@ pub fn spawn_copilot_server_process(
         command.env_remove(env_var);
     }
 
-    command.spawn().with_context(|| {
-        format!("failed to spawn GitHub Copilot CLI server using `{}`", resolved.display())
-    })
+    command
+        .spawn()
+        .with_context(|| format!("failed to spawn GitHub Copilot CLI server using `{}`", resolved.display()))
 }
 
 fn env_override_command() -> Result<Option<String>> {
@@ -170,11 +161,7 @@ fn env_override_command() -> Result<Option<String>> {
         return Ok(None);
     };
     let value = value.to_string_lossy().trim().to_string();
-    if value.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(value))
-    }
+    if value.is_empty() { Ok(None) } else { Ok(Some(value)) }
 }
 
 fn configured_command(config: &CopilotAuthConfig) -> Result<Option<(String, Vec<String>)>> {
@@ -190,8 +177,7 @@ fn configured_command(config: &CopilotAuthConfig) -> Result<Option<(String, Vec<
 }
 
 fn split_command(command: &str, source: &str) -> Result<(String, Vec<String>)> {
-    let mut parts =
-        shell_words::split(command).with_context(|| format!("invalid {source} command"))?;
+    let mut parts = shell_words::split(command).with_context(|| format!("invalid {source} command"))?;
     if parts.is_empty() {
         return Err(anyhow!("{source} command cannot be empty"));
     }

@@ -113,8 +113,7 @@ fn build_anthropic_context_management(
         )
     {
         let mut compact_edit = serde_json::Map::new();
-        compact_edit
-            .insert("type".to_string(), serde_json::Value::String("compact_20260112".to_string()));
+        compact_edit.insert("type".to_string(), serde_json::Value::String("compact_20260112".to_string()));
         compact_edit.insert(
             "trigger".to_string(),
             serde_json::json!({
@@ -124,15 +123,11 @@ fn build_anthropic_context_management(
         );
 
         if let Some(instructions) = &vt_cfg.agent.harness.auto_compaction_instructions {
-            compact_edit.insert(
-                "instructions".to_string(),
-                serde_json::Value::String(instructions.clone()),
-            );
+            compact_edit.insert("instructions".to_string(), serde_json::Value::String(instructions.clone()));
         }
 
         if vt_cfg.agent.harness.auto_compaction_pause_after {
-            compact_edit
-                .insert("pause_after_compaction".to_string(), serde_json::Value::Bool(true));
+            compact_edit.insert("pause_after_compaction".to_string(), serde_json::Value::Bool(true));
         }
 
         edits.push(serde_json::Value::Object(compact_edit));
@@ -158,10 +153,8 @@ mod tests {
         cfg.agent.harness.auto_compaction_enabled = true;
         cfg.agent.harness.auto_compaction_threshold_tokens = Some(512);
 
-        let payload = build_server_compaction_context_management(
-            cfg.agent.harness.auto_compaction_threshold_tokens,
-            2_000,
-        );
+        let payload =
+            build_server_compaction_context_management(cfg.agent.harness.auto_compaction_threshold_tokens, 2_000);
 
         assert_eq!(
             payload,

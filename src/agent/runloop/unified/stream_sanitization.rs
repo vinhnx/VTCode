@@ -34,11 +34,7 @@ fn incomplete_harmony_block_start(raw: &str) -> Option<usize> {
     let start_pos = raw.rfind("<|start|>")?;
     let tail = &raw[start_pos..];
     let has_terminator = HARMONY_END_TAGS.iter().any(|terminator| tail.contains(terminator));
-    if has_terminator {
-        None
-    } else {
-        Some(start_pos)
-    }
+    if has_terminator { None } else { Some(start_pos) }
 }
 
 fn sanitize_harmony_stream_text(raw: &str) -> String {
@@ -232,8 +228,7 @@ mod tests {
     #[test]
     fn harmony_block_stripped_from_stream() {
         let mut s = StreamSanitizer::new();
-        let result =
-            s.process_delta("<|start|>assistant<|channel|>commentary to=tool<|message|>{}<|call|>");
+        let result = s.process_delta("<|start|>assistant<|channel|>commentary to=tool<|message|>{}<|call|>");
         assert_eq!(result.visible_delta, "");
         // Harmony mode replaces aggregated entirely
         assert_eq!(result.aggregated_override.as_deref(), Some(""));
@@ -258,8 +253,7 @@ mod tests {
     #[test]
     fn finalize_strips_both_noise_types() {
         let s = StreamSanitizer::new();
-        let input =
-            "]<]minimax[>[<|start|>assistant<|channel|>commentary<|message|>hidden<|call|> visible";
+        let input = "]<]minimax[>[<|start|>assistant<|channel|>commentary<|message|>hidden<|call|> visible";
         let result = s.finalize(input);
         assert_eq!(result, "visible");
     }

@@ -37,8 +37,7 @@ pub fn extract_http_status(message: &str) -> Option<u16> {
         // The non-digit gap on the first branch is bounded at 64 chars
         // to keep the match cheap while still covering the longest
         // realistic reqwest format.
-        Regex::new(r"(?i)\bhttp[^0-9]{0,64}(\d{3})\b|\bstatus:\s*(\d{3})\b")
-            .expect("valid status regex")
+        Regex::new(r"(?i)\bhttp[^0-9]{0,64}(\d{3})\b|\bstatus:\s*(\d{3})\b").expect("valid status regex")
     });
     let caps = re.captures(message)?;
     // The matched number is in either capture group 1 or 2 depending
@@ -53,9 +52,7 @@ mod tests {
     #[test]
     fn extract_status_handles_common_shapes() {
         assert_eq!(
-            extract_http_status(
-                "HTTP status server error (503 Service Unavailable) for url (https://example.com/)"
-            ),
+            extract_http_status("HTTP status server error (503 Service Unavailable) for url (https://example.com/)"),
             Some(503)
         );
         assert_eq!(extract_http_status("error sending request: status: 403 Forbidden"), Some(403));

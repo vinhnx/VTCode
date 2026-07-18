@@ -261,8 +261,7 @@ impl MessageContent {
                 if !has_image {
                     return None;
                 }
-                let text_parts: Vec<ContentPart> =
-                    parts.iter().filter(|part| !part.is_image()).cloned().collect();
+                let text_parts: Vec<ContentPart> = parts.iter().filter(|part| !part.is_image()).cloned().collect();
                 if text_parts.is_empty() {
                     Some(MessageContent::Text(String::new()))
                 } else if text_parts.len() == 1 {
@@ -318,9 +317,7 @@ impl Message {
             MessageContent::Parts(parts) => {
                 for part in parts {
                     match part {
-                        ContentPart::Text { text } => {
-                            count += crate::utils::estimate_token_count(text)
-                        }
+                        ContentPart::Text { text } => count += crate::utils::estimate_token_count(text),
                         ContentPart::Image { .. } | ContentPart::File { .. } => count += 1000, // Rough estimate for images/files
                     }
                 }
@@ -406,10 +403,7 @@ impl Message {
 
     /// Create an assistant message with tool calls and multiple content parts
     #[inline]
-    pub fn assistant_with_tools_and_parts(
-        content_parts: Vec<ContentPart>,
-        tool_calls: Vec<ToolCall>,
-    ) -> Self {
+    pub fn assistant_with_tools_and_parts(content_parts: Vec<ContentPart>, tool_calls: Vec<ToolCall>) -> Self {
         Self {
             tool_calls: Some(tool_calls),
             ..Self::base(MessageRole::Assistant, MessageContent::Parts(content_parts))
@@ -457,11 +451,7 @@ impl Message {
     /// Create a tool response message with function name (for compatibility)
     /// Some providers might need the function name in addition to tool_call_id
     #[inline]
-    pub fn tool_response_with_name(
-        tool_call_id: String,
-        _function_name: String,
-        content: String,
-    ) -> Self {
+    pub fn tool_response_with_name(tool_call_id: String, _function_name: String, content: String) -> Self {
         // We can store the function name in the content metadata or handle it provider-specifically
         Self::tool_response(tool_call_id, content)
     }
@@ -469,11 +459,7 @@ impl Message {
     /// Create a tool response message with origin tool tracking
     /// The origin_tool field helps with tool-aware context retention
     #[inline]
-    pub fn tool_response_with_origin(
-        tool_call_id: String,
-        content: String,
-        origin_tool: String,
-    ) -> Self {
+    pub fn tool_response_with_origin(tool_call_id: String, content: String, origin_tool: String) -> Self {
         Self {
             tool_call_id: Some(tool_call_id),
             origin_tool: Some(origin_tool),
@@ -482,9 +468,7 @@ impl Message {
     }
 
     /// Create a user message with image from a local file
-    pub async fn user_with_local_image<P: AsRef<std::path::Path>>(
-        file_path: P,
-    ) -> Result<Self, anyhow::Error> {
+    pub async fn user_with_local_image<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, anyhow::Error> {
         let image_data = vtcode_commons::image::read_image_file(file_path).await?;
         let image_part = ContentPart::image(image_data.base64_data, image_data.mime_type);
         Ok(Self::user_with_parts(vec![image_part]))
@@ -526,10 +510,7 @@ impl Message {
     }
 
     /// Attach reasoning details for providers that support structured reasoning
-    pub fn with_reasoning_details(
-        mut self,
-        reasoning_details: Option<Vec<serde_json::Value>>,
-    ) -> Self {
+    pub fn with_reasoning_details(mut self, reasoning_details: Option<Vec<serde_json::Value>>) -> Self {
         self.reasoning_details = reasoning_details;
         self
     }
@@ -583,10 +564,7 @@ impl Message {
             }
             "gemini" => {
                 if self.role == MessageRole::Tool && self.tool_call_id.is_none() {
-                    return Err(
-                        "Gemini tool responses need tool_call_id for function name mapping"
-                            .to_owned(),
-                    );
+                    return Err("Gemini tool responses need tool_call_id for function name mapping".to_owned());
                 }
                 // Gemini has additional constraints on content structure
                 if self.role == MessageRole::System && !self.content.as_text().is_empty() {
@@ -665,7 +643,7 @@ impl MessageRole {
             MessageRole::System => "system", // Handled as systemInstruction, not in contents
             MessageRole::User => "user",
             MessageRole::Assistant => "model", // Gemini uses "model" instead of "assistant"
-            MessageRole::Tool => "user", // Tool responses are sent as user messages with functionResponse
+            MessageRole::Tool => "user",       // Tool responses are sent as user messages with functionResponse
         }
     }
 
@@ -720,15 +698,10 @@ impl MessageRole {
 
     /// Validate message role constraints for a given provider
     /// Based on official API documentation requirements
-    pub fn validate_for_provider(
-        &self,
-        provider: &str,
-        has_tool_call_id: bool,
-    ) -> Result<(), String> {
+    pub fn validate_for_provider(&self, provider: &str, has_tool_call_id: bool) -> Result<(), String> {
         match (self, provider) {
             (MessageRole::Tool, provider)
-                if matches!(provider, "openai" | "openrouter" | "deepseek" | "zai")
-                    && !has_tool_call_id =>
+                if matches!(provider, "openai" | "openrouter" | "deepseek" | "zai") && !has_tool_call_id =>
             {
                 Err(format!("{provider} tool messages must have tool_call_id"))
             }
@@ -767,10 +740,7 @@ mod tests {
 
     #[test]
     fn message_content_parts_without_text_stays_borrowed_empty() {
-        let content = MessageContent::Parts(vec![ContentPart::image(
-            "encoded".to_string(),
-            "image/png".to_string(),
-        )]);
+        let content = MessageContent::Parts(vec![ContentPart::image("encoded".to_string(), "image/png".to_string())]);
 
         assert!(matches!(content.as_text(), std::borrow::Cow::Borrowed("")));
     }
@@ -778,10 +748,7 @@ mod tests {
     #[test]
     fn assistant_phase_parses_wire_strings() {
         assert_eq!(AssistantPhase::from_wire_str("commentary"), Some(AssistantPhase::Commentary));
-        assert_eq!(
-            AssistantPhase::from_wire_str("final_answer"),
-            Some(AssistantPhase::FinalAnswer)
-        );
+        assert_eq!(AssistantPhase::from_wire_str("final_answer"), Some(AssistantPhase::FinalAnswer));
         assert_eq!(AssistantPhase::from_wire_str("other"), None);
     }
 

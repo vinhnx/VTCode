@@ -5,15 +5,13 @@ use anstyle::Style;
 // When TUI is enabled, use vtcode-ui's richer types (with internal methods).
 #[cfg(feature = "tui")]
 pub use vtcode_ui::tui::ui::markdown::{
-    HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions,
-    highlight_code_to_ansi, highlight_code_to_segments, highlight_line_for_diff,
+    HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions, highlight_code_to_ansi,
+    highlight_code_to_segments, highlight_line_for_diff,
 };
 
 // When headless, use the plain data types from commons.
 #[cfg(not(feature = "tui"))]
-pub use vtcode_commons::ui_protocol::{
-    HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions,
-};
+pub use vtcode_commons::ui_protocol::{HighlightedSegment, MarkdownLine, MarkdownSegment, RenderMarkdownOptions};
 
 /// Highlight a code block to an ANSI-escaped string (headless passthrough).
 #[cfg(not(feature = "tui"))]
@@ -23,20 +21,13 @@ pub fn highlight_code_to_ansi(code: &str, _language: Option<&str>, _theme: &str)
 
 /// Highlight a code block into styled segments (headless passthrough).
 #[cfg(not(feature = "tui"))]
-pub fn highlight_code_to_segments(
-    code: &str,
-    _language: Option<&str>,
-    _theme: &str,
-) -> Vec<HighlightedSegment> {
+pub fn highlight_code_to_segments(code: &str, _language: Option<&str>, _theme: &str) -> Vec<HighlightedSegment> {
     vec![HighlightedSegment { style: Style::default(), text: code.to_string() }]
 }
 
 /// Highlight a single line for diff display (headless passthrough).
 #[cfg(not(feature = "tui"))]
-pub fn highlight_line_for_diff(
-    line: &str,
-    _language: Option<&str>,
-) -> Option<Vec<(Style, String)>> {
+pub fn highlight_line_for_diff(line: &str, _language: Option<&str>) -> Option<Vec<(Style, String)>> {
     Some(vec![(Style::default(), line.to_string())])
 }
 
@@ -68,15 +59,14 @@ pub fn render_markdown_to_lines_with_options(
     render_options: RenderMarkdownOptions,
 ) -> Vec<MarkdownLine> {
     let tui_theme_styles = crate::ui::tui_compat::tui_theme_styles_from_core(theme_styles);
-    let tui_highlight_cfg =
-        highlight_config.map(|cfg| vtcode_ui::tui::TuiSyntaxHighlightingConfig {
-            enabled: cfg.enabled,
-            theme: cfg.theme.clone(),
-            cache_themes: cfg.cache_themes,
-            max_file_size_mb: cfg.max_file_size_mb,
-            enabled_languages: cfg.enabled_languages.clone(),
-            highlight_timeout_ms: cfg.highlight_timeout_ms,
-        });
+    let tui_highlight_cfg = highlight_config.map(|cfg| vtcode_ui::tui::TuiSyntaxHighlightingConfig {
+        enabled: cfg.enabled,
+        theme: cfg.theme.clone(),
+        cache_themes: cfg.cache_themes,
+        max_file_size_mb: cfg.max_file_size_mb,
+        enabled_languages: cfg.enabled_languages.clone(),
+        highlight_timeout_ms: cfg.highlight_timeout_ms,
+    });
     vtcode_ui::tui::ui::markdown::render_markdown_to_lines_with_options(
         source,
         base_style,

@@ -14,10 +14,7 @@ pub(super) struct ToolCatalogCacheMetrics<'a> {
     pub prefix_change_reason: &'a str,
 }
 
-pub(super) fn emit_tool_catalog_cache_metrics(
-    ctx: &TurnProcessingContext<'_>,
-    metrics: ToolCatalogCacheMetrics<'_>,
-) {
+pub(super) fn emit_tool_catalog_cache_metrics(ctx: &TurnProcessingContext<'_>, metrics: ToolCatalogCacheMetrics<'_>) {
     tracing::info!(
         target: "vtcode.turn.metrics",
         metric = "tool_catalog_cache",
@@ -172,10 +169,7 @@ pub(super) struct TokenBudgetBreakdown<'a> {
     pub tool_free_recovery: bool,
 }
 
-pub(super) fn emit_token_budget_breakdown(
-    ctx: &TurnProcessingContext<'_>,
-    breakdown: TokenBudgetBreakdown<'_>,
-) {
+pub(super) fn emit_token_budget_breakdown(ctx: &TurnProcessingContext<'_>, breakdown: TokenBudgetBreakdown<'_>) {
     tracing::info!(
         target: "vtcode.turn.metrics",
         metric = "token_budget_breakdown",

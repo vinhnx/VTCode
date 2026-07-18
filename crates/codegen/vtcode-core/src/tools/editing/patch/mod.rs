@@ -9,11 +9,11 @@ mod parser;
 mod path;
 mod semantic;
 
+#[doc(hidden)]
+pub(crate) use crate::tools::ast_grep_binary::is_binary_override_missing;
+pub use crate::tools::ast_grep_binary::{AstGrepBinaryOverrideGuard, set_ast_grep_binary_override_for_tests};
 pub use error::PatchError;
-#[doc(hidden)]
-pub use semantic::{AstGrepBinaryOverrideGuard, set_ast_grep_binary_override_for_tests};
-#[doc(hidden)]
-pub(crate) use semantic::{is_binary_override_missing, resolve_ast_grep_binary_path};
+pub(crate) use semantic::resolve_ast_grep_binary_path;
 
 /// Represents a single diff line inside a patch hunk.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -214,8 +214,7 @@ mod tests {
 
     #[test]
     fn parse_add_file() {
-        let patch = Patch::parse("*** Begin Patch\n*** Add File: hello.txt\n+hello\n*** End Patch")
-            .unwrap();
+        let patch = Patch::parse("*** Begin Patch\n*** Add File: hello.txt\n+hello\n*** End Patch").unwrap();
         assert_eq!(patch.operations().len(), 1);
         matches!(patch.operations()[0], PatchOperation::AddFile { .. });
     }
@@ -223,9 +222,7 @@ mod tests {
     #[tokio::test]
     async fn apply_add_file() {
         let temp_dir = TempDir::new().unwrap();
-        let patch =
-            Patch::parse("*** Begin Patch\n*** Add File: file.txt\n+content\n*** End Patch")
-                .unwrap();
+        let patch = Patch::parse("*** Begin Patch\n*** Add File: file.txt\n+content\n*** End Patch").unwrap();
 
         let result = patch.apply(temp_dir.path()).await.unwrap();
         assert_eq!(result, vec!["[1/1] Added file: file.txt (8 bytes)".to_string()]);
@@ -257,24 +254,18 @@ mod tests {
 
     #[test]
     fn looks_like_unified_diff_detects_git_diff_header() {
-        assert!(looks_like_unified_diff(
-            "diff --git a/src/main.rs b/src/main.rs\nindex abc..def 100644\n"
-        ));
+        assert!(looks_like_unified_diff("diff --git a/src/main.rs b/src/main.rs\nindex abc..def 100644\n"));
     }
 
     #[test]
     fn looks_like_unified_diff_detects_paired_file_headers() {
-        assert!(looks_like_unified_diff(
-            "--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,3 +1,3 @@\n-old\n+new\n"
-        ));
+        assert!(looks_like_unified_diff("--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,3 +1,3 @@\n-old\n+new\n"));
     }
 
     #[test]
     fn looks_like_unified_diff_rejects_vte_patch() {
         // A valid VTE patch must never be mistaken for a unified diff.
-        assert!(!looks_like_unified_diff(
-            "*** Begin Patch\n*** Update File: f.rs\n@@\n-old\n+new\n*** End Patch"
-        ));
+        assert!(!looks_like_unified_diff("*** Begin Patch\n*** Update File: f.rs\n@@\n-old\n+new\n*** End Patch"));
         assert!(!looks_like_unified_diff(""));
         assert!(!looks_like_unified_diff("fn main() {}"));
     }

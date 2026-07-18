@@ -10,12 +10,7 @@ use std::path::Path;
 impl AgentRunner {
     /// Record a tool call for loop detection and check if a hard limit has been exceeded.
     /// Returns true if execution should halt due to a loop.
-    pub(super) fn check_for_loop(
-        &self,
-        name: &str,
-        args: &Value,
-        session_state: &mut AgentSessionState,
-    ) -> bool {
+    pub(super) fn check_for_loop(&self, name: &str, args: &Value, session_state: &mut AgentSessionState) -> bool {
         let (warning, hard_limit) = {
             let mut detector = self.loop_detector.lock();
             let warning = detector.record_call(name, args);
@@ -49,20 +44,14 @@ impl AgentRunner {
         }
     }
 
-    pub(super) fn normalize_tool_args(
-        &self,
-        name: &str,
-        args: Value,
-        session_state: &mut AgentSessionState,
-    ) -> Value {
+    pub(super) fn normalize_tool_args(&self, name: &str, args: Value, session_state: &mut AgentSessionState) -> Value {
         let mut normalized = match args {
             Value::Object(map) => map,
             other => return other,
         };
 
         let workspace_path = self._workspace.to_string_lossy().into_owned();
-        let fallback_dir =
-            session_state.last_dir_path.clone().unwrap_or_else(|| workspace_path.clone());
+        let fallback_dir = session_state.last_dir_path.clone().unwrap_or_else(|| workspace_path.clone());
 
         if name == tools::LIST_FILES {
             normalized
@@ -70,10 +59,8 @@ impl AgentRunner {
                 .or_insert_with(|| Value::String(fallback_dir));
         }
 
-        if matches!(
-            name,
-            tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
-        ) && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
+        if matches!(name, tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE)
+            && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
             && let Some(last_file) = session_state.last_file_path.clone()
         {
             normalized.entry("path".to_string()).or_insert_with(|| Value::String(last_file));
@@ -86,12 +73,7 @@ impl AgentRunner {
         normalized
     }
 
-    pub(super) fn update_last_paths_from_args(
-        &self,
-        name: &str,
-        args: &Value,
-        session_state: &mut AgentSessionState,
-    ) {
+    pub(super) fn update_last_paths_from_args(&self, name: &str, args: &Value, session_state: &mut AgentSessionState) {
         let remember_file = |state: &mut AgentSessionState, path: &str| {
             state.last_file_path = Some(path.to_string());
             if let Some(parent) = Path::new(path).parent() {
@@ -107,10 +89,7 @@ impl AgentRunner {
         let Some(path) = args.get("path").and_then(|value| value.as_str()) else {
             return;
         };
-        if matches!(
-            name,
-            tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE
-        ) {
+        if matches!(name, tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE) {
             remember_file(session_state, path);
         } else {
             session_state.last_dir_path = Some(path.to_string());

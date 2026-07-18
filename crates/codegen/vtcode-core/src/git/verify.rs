@@ -109,10 +109,7 @@ fn looks_like_pipe_to_shell(line: &str) -> bool {
         return false;
     }
     let has_downloader = lower.contains("curl") || lower.contains("wget");
-    let has_shell = lower.contains("sh")
-        || lower.contains("bash")
-        || lower.contains("zsh")
-        || lower.contains("python");
+    let has_shell = lower.contains("sh") || lower.contains("bash") || lower.contains("zsh") || lower.contains("python");
     has_downloader && has_shell
 }
 

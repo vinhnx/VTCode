@@ -19,9 +19,7 @@ impl PluginValidator {
     pub fn validate_manifest(manifest: &PluginManifest) -> PluginResult<()> {
         // Validate required fields
         if manifest.name.is_empty() {
-            return Err(PluginError::ManifestValidationError(
-                "Plugin name is required".to_string(),
-            ));
+            return Err(PluginError::ManifestValidationError("Plugin name is required".to_string()));
         }
 
         // Validate name format (kebab-case)
@@ -123,14 +121,8 @@ impl PluginDebugger {
         let mut output = String::new();
 
         output.push_str(&format!("Plugin: {}\n", manifest.name));
-        output.push_str(&format!(
-            "  Version: {}\n",
-            manifest.version.as_deref().unwrap_or("not specified")
-        ));
-        output.push_str(&format!(
-            "  Description: {}\n",
-            manifest.description.as_deref().unwrap_or("not specified")
-        ));
+        output.push_str(&format!("  Version: {}\n", manifest.version.as_deref().unwrap_or("not specified")));
+        output.push_str(&format!("  Description: {}\n", manifest.description.as_deref().unwrap_or("not specified")));
 
         if let Some(author) = &manifest.author {
             output.push_str(&format!("  Author: {}\n", author.name));
@@ -167,30 +159,9 @@ impl PluginDebugger {
         output.push_str(&format!("    Commands: {commands_count}\n"));
         output.push_str(&format!("    Agents: {agents_count}\n"));
         output.push_str(&format!("    Skills: {skills_count}\n"));
-        output.push_str(&format!(
-            "    Hooks: {}\n",
-            if manifest.hooks.is_some() {
-                "yes"
-            } else {
-                "no"
-            }
-        ));
-        output.push_str(&format!(
-            "    MCP Servers: {}\n",
-            if manifest.mcp_servers.is_some() {
-                "yes"
-            } else {
-                "no"
-            }
-        ));
-        output.push_str(&format!(
-            "    LSP Servers: {}\n",
-            if manifest.lsp_servers.is_some() {
-                "yes"
-            } else {
-                "no"
-            }
-        ));
+        output.push_str(&format!("    Hooks: {}\n", if manifest.hooks.is_some() { "yes" } else { "no" }));
+        output.push_str(&format!("    MCP Servers: {}\n", if manifest.mcp_servers.is_some() { "yes" } else { "no" }));
+        output.push_str(&format!("    LSP Servers: {}\n", if manifest.lsp_servers.is_some() { "yes" } else { "no" }));
 
         output
     }

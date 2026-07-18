@@ -28,10 +28,7 @@ impl WorkspaceGuardPolicy {
         Self { workspace, allowed_commands: None }
     }
 
-    pub fn with_allowed_commands(
-        mut self,
-        commands: impl IntoIterator<Item = CommandCategory>,
-    ) -> Self {
+    pub fn with_allowed_commands(mut self, commands: impl IntoIterator<Item = CommandCategory>) -> Self {
         self.allowed_commands = Some(commands.into_iter().collect());
         self
     }
@@ -39,11 +36,7 @@ impl WorkspaceGuardPolicy {
     fn ensure_within_workspace(&self, path: &Path) -> Result<()> {
         let root = self.workspace.workspace_root();
         vtcode_commons::paths::ensure_path_within_workspace(path, root).map_err(|error| {
-            error.context(format!(
-                "path `{}` escapes the workspace root `{}`",
-                path.display(),
-                root.display()
-            ))
+            error.context(format!("path `{}` escapes the workspace root `{}`", path.display(), root.display()))
         })?;
         Ok(())
     }
@@ -88,9 +81,7 @@ mod tests {
     }
 
     fn policy() -> WorkspaceGuardPolicy {
-        WorkspaceGuardPolicy::new(Arc::new(StaticWorkspace {
-            root: PathBuf::from("/tmp/workspace"),
-        }))
+        WorkspaceGuardPolicy::new(Arc::new(StaticWorkspace { root: PathBuf::from("/tmp/workspace") }))
     }
 
     fn invocation(working_dir: &str, touched: &[&str]) -> CommandInvocation {

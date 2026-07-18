@@ -8,11 +8,7 @@ use vtcode_core::utils::file_utils::ensure_dir_exists;
 use vtcode_core::{ProjectData, SimpleProjectManager};
 
 /// Handle the init-project command
-pub async fn handle_init_project_command(
-    name: Option<String>,
-    force: bool,
-    migrate: bool,
-) -> Result<()> {
+pub async fn handle_init_project_command(name: Option<String>, force: bool, migrate: bool) -> Result<()> {
     println!("{}", style("Initialize project with dot-folder structure").cyan().bold());
 
     // Initialize project manager
@@ -37,22 +33,14 @@ pub async fn handle_init_project_command(
     // Check if project already exists
     let project_dir = project_manager.project_data_dir(&project_name);
     if project_dir.exists() && !force {
-        println!(
-            "{} Project directory already exists: {}",
-            style("Warning").red(),
-            project_dir.display()
-        );
+        println!("{} Project directory already exists: {}", style("Warning").red(), project_dir.display());
         println!("Use --force to overwrite existing project structure.");
         return Ok(());
     }
 
     // Create project structure
     project_manager.create_project(&project_name, Some("VT Code project"))?;
-    println!(
-        "{} Created project structure in: {}",
-        style("Success").green(),
-        project_dir.display()
-    );
+    println!("{} Created project structure in: {}", style("Success").green(), project_dir.display());
 
     // Create or update project metadata
     let current_dir = std::env::current_dir()?;
@@ -170,9 +158,9 @@ async fn migrate_existing_files(
                 }
             }
         } else {
-            tokio::fs::copy(&path, &destination).await.with_context(|| {
-                format!("failed to copy {} to {}", path.display(), destination.display())
-            })?;
+            tokio::fs::copy(&path, &destination)
+                .await
+                .with_context(|| format!("failed to copy {} to {}", path.display(), destination.display()))?;
         }
     }
 

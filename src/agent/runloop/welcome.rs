@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
 use tracing::warn;
 use vtcode_commons::terminal_detection::{TerminalFeature, TerminalType};
 use vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode;
-use vtcode_core::config::constants::{
-    prompt_budget as prompt_budget_constants, ui as ui_constants,
-};
+use vtcode_core::config::constants::{prompt_budget as prompt_budget_constants, ui as ui_constants};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -40,8 +38,7 @@ pub(crate) async fn prepare_session_bootstrap(
     let todo_planning_enabled = vt_cfg.map(|cfg| cfg.agent.todo_planning_mode).unwrap_or(true);
 
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
-    let extra_instruction_files =
-        vt_cfg.map(|cfg| cfg.agent.instruction_files.clone()).unwrap_or_default();
+    let extra_instruction_files = vt_cfg.map(|cfg| cfg.agent.instruction_files.clone()).unwrap_or_default();
     let instruction_budget = vt_cfg
         .map(|cfg| cfg.agent.instruction_max_bytes)
         .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
@@ -289,11 +286,7 @@ async fn extract_guideline_highlights(
     {
         Ok(Some(bundle)) => {
             let highlights = bundle.highlights(limit);
-            if highlights.is_empty() {
-                None
-            } else {
-                Some(highlights)
-            }
+            if highlights.is_empty() { None } else { Some(highlights) }
         }
         Ok(None) => None,
         Err(err) => {

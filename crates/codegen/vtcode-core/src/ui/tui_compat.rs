@@ -9,8 +9,8 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::ui::slash::SlashCommandInfo;
 use crate::ui::theme::ThemeStyles;
 use crate::ui::tui::{
-    InlineTheme, KeyboardProtocolSettings, LayoutModeOverride, ReasoningDisplayMode,
-    SessionSurface, SlashCommandItem, UiMode,
+    InlineTheme, KeyboardProtocolSettings, LayoutModeOverride, ReasoningDisplayMode, SessionSurface, SlashCommandItem,
+    UiMode,
 };
 #[cfg(feature = "tui")]
 use vtcode_ui::tui::ui::theme::ThemeStyles as TuiThemeStyles;
@@ -115,15 +115,12 @@ pub fn to_tui_slash_commands(commands: &[SlashCommandInfo]) -> Vec<SlashCommandI
 
 /// Build a [`SessionAppearanceConfig`] from the loaded [`VTCodeConfig`].
 pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
-    let reduce_motion_mode =
-        config.ui.reduce_motion_mode || matches!(config.tui.animations, Some(false));
+    let reduce_motion_mode = config.ui.reduce_motion_mode || matches!(config.tui.animations, Some(false));
     SessionAppearanceConfig {
         theme: config.agent.theme.clone(),
         ui_mode: match config.ui.display_mode {
             crate::config::UiDisplayMode::Full => UiMode::Full,
-            crate::config::UiDisplayMode::Minimal | crate::config::UiDisplayMode::Unknown => {
-                UiMode::Minimal
-            }
+            crate::config::UiDisplayMode::Minimal | crate::config::UiDisplayMode::Unknown => UiMode::Minimal,
             crate::config::UiDisplayMode::Focused => UiMode::Focused,
         },
         show_sidebar: config.ui.show_sidebar,
@@ -132,22 +129,20 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         navigation_width_percent: 25,
         transcript_bottom_padding: 0,
         dim_completed_todos: config.ui.dim_completed_todos,
-        message_block_spacing: if config.ui.message_block_spacing {
-            1
-        } else {
-            0
-        },
+        message_block_spacing: if config.ui.message_block_spacing { 1 } else { 0 },
         layout_mode: match config.ui.layout_mode {
-            crate::config::LayoutModeOverride::Auto
-            | crate::config::LayoutModeOverride::Unknown => LayoutModeOverride::Auto,
+            crate::config::LayoutModeOverride::Auto | crate::config::LayoutModeOverride::Unknown => {
+                LayoutModeOverride::Auto
+            }
             crate::config::LayoutModeOverride::Compact => LayoutModeOverride::Compact,
             crate::config::LayoutModeOverride::Standard => LayoutModeOverride::Standard,
             crate::config::LayoutModeOverride::Wide => LayoutModeOverride::Wide,
         },
         reasoning_display_mode: match config.ui.reasoning_display_mode {
             crate::config::ReasoningDisplayMode::Always => ReasoningDisplayMode::Always,
-            crate::config::ReasoningDisplayMode::Toggle
-            | crate::config::ReasoningDisplayMode::Unknown => ReasoningDisplayMode::Toggle,
+            crate::config::ReasoningDisplayMode::Toggle | crate::config::ReasoningDisplayMode::Unknown => {
+                ReasoningDisplayMode::Toggle
+            }
             crate::config::ReasoningDisplayMode::Hidden => ReasoningDisplayMode::Hidden,
         },
         reasoning_visible_default: config.ui.reasoning_visible_default,

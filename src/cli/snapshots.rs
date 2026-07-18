@@ -33,10 +33,7 @@ pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_cleanup_snapshots_command(
-    config: &CoreAgentConfig,
-    max: Option<usize>,
-) -> Result<()> {
+pub async fn handle_cleanup_snapshots_command(config: &CoreAgentConfig, max: Option<usize>) -> Result<()> {
     println!("{}\n", style("[CLEANUP]").cyan().bold());
     let mut cfg = snapshot_config(config);
     if let Some(m) = max {

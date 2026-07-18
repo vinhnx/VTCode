@@ -25,10 +25,7 @@ use vtcode_commons::{ErrorFormatter, ErrorReporter, PathResolver, TelemetrySink,
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegistryEvent {
     /// Records the resolved policy configuration file and the scope it belongs to.
-    PolicyPathResolved {
-        scope: PathScope,
-        config_path: PathBuf,
-    },
+    PolicyPathResolved { scope: PathScope, config_path: PathBuf },
     /// Raised when telemetry recording itself fails so callers can surface the
     /// fallback behaviour.
     TelemetryFailure { message: String },
@@ -56,8 +53,7 @@ where
 }
 
 #[cfg(feature = "policies")]
-impl<'a, Paths, Telemetry, Reporter, Formatter>
-    RegistryBuilder<'a, Paths, Telemetry, Reporter, Formatter>
+impl<'a, Paths, Telemetry, Reporter, Formatter> RegistryBuilder<'a, Paths, Telemetry, Reporter, Formatter>
 where
     Paths: WorkspacePaths + ?Sized,
     Telemetry: TelemetrySink<RegistryEvent> + ?Sized,
@@ -119,14 +115,10 @@ where
                     config_path: config_path.clone(),
                 });
 
-                match ToolPolicyManager::new_with_config_path(&config_path).await.with_context(
-                    || {
-                        format!(
-                            "failed to initialize tool policy manager at {}",
-                            config_path.display()
-                        )
-                    },
-                ) {
+                match ToolPolicyManager::new_with_config_path(&config_path)
+                    .await
+                    .with_context(|| format!("failed to initialize tool policy manager at {}", config_path.display()))
+                {
                     Ok(manager) => manager,
                     Err(err) => {
                         self.report_error(&err);
@@ -136,12 +128,7 @@ where
             }
         };
 
-        Ok(ToolRegistry::new_with_custom_policy_and_config(
-            workspace_root,
-            self.pty_config,
-            policy_manager,
-        )
-        .await)
+        Ok(ToolRegistry::new_with_custom_policy_and_config(workspace_root, self.pty_config, policy_manager).await)
     }
 
     fn record_event(&self, event: RegistryEvent) {
@@ -167,9 +154,7 @@ where
 mod tests {
     use super::*;
     use assert_fs::TempDir;
-    use vtcode_commons::{
-        DisplayErrorFormatter, MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths,
-    };
+    use vtcode_commons::{DisplayErrorFormatter, MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
 
     #[tokio::test]
     async fn builds_registry_with_workspace_paths() {
@@ -190,10 +175,7 @@ mod tests {
         assert!(registry.has_tool(crate::config::constants::tools::CODE_SEARCH).await);
 
         let events = telemetry.take();
-        assert!(matches!(
-            events.as_slice(),
-            [RegistryEvent::PolicyPathResolved { scope: PathScope::Config, .. }]
-        ));
+        assert!(matches!(events.as_slice(), [RegistryEvent::PolicyPathResolved { scope: PathScope::Config, .. }]));
 
         let policy_file = config_dir.join("tool-policy.json");
         assert!(policy_file.exists(), "policy file should be created");

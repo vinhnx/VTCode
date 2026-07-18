@@ -89,14 +89,8 @@ impl IncrementalSystemPrompt {
         drop(read_guard);
 
         // Rebuild the prompt
-        self.rebuild_prompt(
-            base_system_prompt,
-            base_prompt_hash,
-            context_hash,
-            context,
-            agent_config,
-        )
-        .await
+        self.rebuild_prompt(base_system_prompt, base_prompt_hash, context_hash, context, agent_config)
+            .await
     }
 
     /// Rebuild the prompt
@@ -119,8 +113,7 @@ impl IncrementalSystemPrompt {
         }
 
         // Build the new prompt
-        let new_content =
-            self.build_prompt_content(base_system_prompt, context, agent_config).await;
+        let new_content = self.build_prompt_content(base_system_prompt, context, agent_config).await;
 
         // Update cache
         write_guard.content = new_content.clone();
@@ -151,18 +144,13 @@ impl IncrementalSystemPrompt {
 
         if let Some(cfg) = agent_config {
             if let Some(active_dir) = context.active_instruction_directory.as_deref()
-                && let Some(unified) = build_instruction_appendix_with_context(
-                    cfg,
-                    active_dir,
-                    &context.instruction_context_paths,
-                )
-                .await
+                && let Some(unified) =
+                    build_instruction_appendix_with_context(cfg, active_dir, &context.instruction_context_paths).await
             {
                 let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{unified}");
             }
         } else if !context.discovered_skills.is_empty() {
-            let _ =
-                writeln!(prompt, "\n# SKILLS\nUse `list_skills` to see available capabilities.");
+            let _ = writeln!(prompt, "\n# SKILLS\nUse `list_skills` to see available capabilities.");
         }
 
         vtcode_core::prompts::append_runtime_mode_sections(

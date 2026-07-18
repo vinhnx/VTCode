@@ -14,8 +14,7 @@ use super::BenchmarkCommandOptions;
 use super::report::{BenchmarkReport, BenchmarkTaskReport};
 use super::spec::load_prepared_tasks;
 
-const ERROR_FULL_AUTO_REQUIRED: &str =
-    "Benchmark runs require --full-auto/--auto with [automation.full_auto] enabled.";
+const ERROR_FULL_AUTO_REQUIRED: &str = "Benchmark runs require --full-auto/--auto with [automation.full_auto] enabled.";
 const ERROR_SPEC_EMPTY: &str = "Benchmark specification is empty.";
 
 pub async fn handle_benchmark_command(
@@ -90,9 +89,7 @@ pub async fn handle_benchmark_command(
         let result = runner
             .execute_task_with_retry(&prepared.task, &prepared.contexts, max_retries)
             .await
-            .with_context(|| {
-                format!("Failed to execute task '{}' after retries", prepared.task.id)
-            })?;
+            .with_context(|| format!("Failed to execute task '{}' after retries", prepared.task.id))?;
         reports.push(BenchmarkTaskReport::from_task_result(&prepared.task, result));
     }
 
@@ -104,8 +101,7 @@ pub async fn handle_benchmark_command(
         tasks: reports,
     };
 
-    let serialized = serde_json::to_string_pretty(&report)
-        .context("Failed to serialize benchmark report to JSON")?;
+    let serialized = serde_json::to_string_pretty(&report).context("Failed to serialize benchmark report to JSON")?;
 
     if let Some(path) = &options.output {
         write_file_with_context_sync(path, &serialized, "benchmark report")?;

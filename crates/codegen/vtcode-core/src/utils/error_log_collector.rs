@@ -56,8 +56,7 @@ fn estimate_entry_bytes(entry: &ErrorLogEntry) -> usize {
 }
 
 fn push_entry_with_limit(buffer: &mut ErrorLogBuffer, entry: ErrorLogEntry, limit_bytes: usize) {
-    buffer.total_estimated_bytes =
-        buffer.total_estimated_bytes.saturating_add(estimate_entry_bytes(&entry));
+    buffer.total_estimated_bytes = buffer.total_estimated_bytes.saturating_add(estimate_entry_bytes(&entry));
     buffer.entries.push_back(entry);
     if buffer.total_estimated_bytes <= limit_bytes {
         return;
@@ -68,8 +67,7 @@ fn push_entry_with_limit(buffer: &mut ErrorLogBuffer, entry: ErrorLogEntry, limi
             buffer.total_estimated_bytes = 0;
             break;
         };
-        buffer.total_estimated_bytes =
-            buffer.total_estimated_bytes.saturating_sub(estimate_entry_bytes(&removed));
+        buffer.total_estimated_bytes = buffer.total_estimated_bytes.saturating_sub(estimate_entry_bytes(&removed));
     }
 }
 
@@ -163,8 +161,7 @@ mod tests {
         push_entry_with_limit(&mut buffer, second, limit);
         push_entry_with_limit(&mut buffer, third, limit);
 
-        let retained: Vec<&str> =
-            buffer.entries.iter().map(|entry| entry.message.as_str()).collect();
+        let retained: Vec<&str> = buffer.entries.iter().map(|entry| entry.message.as_str()).collect();
         assert_eq!(retained, vec!["bbbbb", "ccccc"]);
         assert!(buffer.total_estimated_bytes <= limit);
     }

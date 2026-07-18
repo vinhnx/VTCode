@@ -67,10 +67,7 @@ pub(super) fn current_platform_asset_spec() -> Result<PlatformAssetSpec> {
     }
 }
 
-pub(super) fn select_release_asset(
-    release: &ReleaseInfo,
-    platform: &PlatformAssetSpec,
-) -> Result<SelectedAsset> {
+pub(super) fn select_release_asset(release: &ReleaseInfo, platform: &PlatformAssetSpec) -> Result<SelectedAsset> {
     for triple in platform.candidate_triples {
         if let Some(asset) = release
             .assets
@@ -84,10 +81,7 @@ pub(super) fn select_release_asset(
         }
     }
 
-    bail!(
-        "No ast-grep release asset matched the current platform ({})",
-        platform.candidate_triples.join(", ")
-    )
+    bail!("No ast-grep release asset matched the current platform ({})", platform.candidate_triples.join(", "))
 }
 
 pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_exts: &[&str]) -> bool {
@@ -99,10 +93,7 @@ pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_exts:
         && !name.ends_with(".sig")
 }
 
-pub(super) async fn download_release_asset(
-    client: &reqwest::Client,
-    asset: &ReleaseAsset,
-) -> Result<Vec<u8>> {
+pub(super) async fn download_release_asset(client: &reqwest::Client, asset: &ReleaseAsset) -> Result<Vec<u8>> {
     client
         .get(&asset.browser_download_url)
         .send()
@@ -162,8 +153,7 @@ pub(super) async fn verify_checksum_if_available(
         }
     };
 
-    let Some(expected_checksum) =
-        parse_expected_checksum(&checksum_text, &checksum_asset.name, &selected.asset.name)
+    let Some(expected_checksum) = parse_expected_checksum(&checksum_text, &checksum_asset.name, &selected.asset.name)
     else {
         return Ok(Some(format!(
             "Checksum metadata for {} did not contain an entry for {}. Continuing without checksum verification.",
@@ -184,10 +174,7 @@ pub(super) async fn verify_checksum_if_available(
     Ok(None)
 }
 
-fn find_checksum_asset<'a>(
-    release: &'a ReleaseInfo,
-    archive_name: &str,
-) -> Option<&'a ReleaseAsset> {
+fn find_checksum_asset<'a>(release: &'a ReleaseInfo, archive_name: &str) -> Option<&'a ReleaseAsset> {
     let archive_sha_name = format!("{archive_name}.sha256").to_ascii_lowercase();
     release.assets.iter().find(|asset| {
         let name = asset.name.to_ascii_lowercase();
@@ -218,8 +205,8 @@ fn sha256_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlatformAssetSpec, ReleaseAsset, ReleaseInfo, asset_matches_target,
-        parse_expected_checksum, select_release_asset,
+        PlatformAssetSpec, ReleaseAsset, ReleaseInfo, asset_matches_target, parse_expected_checksum,
+        select_release_asset,
     };
 
     #[test]
@@ -271,37 +258,24 @@ mod tests {
             "aarch64-apple-darwin",
             &[".zip", ".tar.gz"]
         ));
-        assert!(asset_matches_target(
-            "app-aarch64-apple-darwin.zip",
-            "aarch64-apple-darwin",
-            &[".zip", ".tar.gz"]
-        ));
+        assert!(asset_matches_target("app-aarch64-apple-darwin.zip", "aarch64-apple-darwin", &[".zip", ".tar.gz"]));
         assert!(!asset_matches_target(
             "app-aarch64-apple-darwin.tar.gz.sha256",
             "aarch64-apple-darwin",
             &[".zip", ".tar.gz"]
         ));
-        assert!(!asset_matches_target(
-            "checksums.txt",
-            "aarch64-apple-darwin",
-            &[".zip", ".tar.gz"]
-        ));
+        assert!(!asset_matches_target("checksums.txt", "aarch64-apple-darwin", &[".zip", ".tar.gz"]));
     }
 
     #[test]
     fn checksum_parser_supports_sha256_sidecars() {
-        let parsed =
-            parse_expected_checksum("abc123  app.tar.gz", "app.tar.gz.sha256", "app.tar.gz");
+        let parsed = parse_expected_checksum("abc123  app.tar.gz", "app.tar.gz.sha256", "app.tar.gz");
         assert_eq!(parsed.as_deref(), Some("abc123"));
     }
 
     #[test]
     fn checksum_parser_supports_checksums_txt() {
-        let parsed = parse_expected_checksum(
-            "abc123  app.tar.gz\nfff999 other.tar.gz",
-            "checksums.txt",
-            "app.tar.gz",
-        );
+        let parsed = parse_expected_checksum("abc123  app.tar.gz\nfff999 other.tar.gz", "checksums.txt", "app.tar.gz");
         assert_eq!(parsed.as_deref(), Some("abc123"));
     }
 }

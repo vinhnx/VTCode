@@ -63,8 +63,7 @@ fn pasted_message_collapses_large_json_for_tool() {
     assert_eq!(session.collapsed_pastes.len(), 1);
     let collapsed_index = session.collapsed_pastes[0].line_index;
     let preview_line = session.lines.get(collapsed_index).expect("collapsed line exists");
-    let preview_text: String =
-        preview_line.segments.iter().map(|segment| segment.text.as_str()).collect();
+    let preview_text: String = preview_line.segments.iter().map(|segment| segment.text.as_str()).collect();
     assert!(preview_text.contains("showing last"));
     assert!(preview_text.contains("\"end\": true"));
 
@@ -72,8 +71,7 @@ fn pasted_message_collapses_large_json_for_tool() {
     assert!(session.collapsed_pastes.is_empty());
 
     let expanded_line = session.lines.get(collapsed_index).expect("expanded line exists");
-    let expanded_text: String =
-        expanded_line.segments.iter().map(|segment| segment.text.as_str()).collect();
+    let expanded_text: String = expanded_line.segments.iter().map(|segment| segment.text.as_str()).collect();
     assert!(expanded_text.contains("\"key0\": \"value0\""));
     assert!(expanded_text.contains("\"end\": true"));
 }
@@ -131,10 +129,7 @@ fn shift_enter_after_large_paste_inserts_newline() {
     let result = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
 
     assert!(result.is_none());
-    assert_eq!(
-        session.input_manager.content(),
-        format!("hello {pasted_text} and what are you talking about??\n")
-    );
+    assert_eq!(session.input_manager.content(), format!("hello {pasted_text} and what are you talking about??\n"));
     assert_eq!(session.input_manager.cursor(), session.input_manager.content().len());
 
     let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
@@ -292,10 +287,7 @@ fn app_session_shift_left_edits_latest_queued_input_in_tmux() {
     with_terminal_env(Some("/tmp/tmux-1000/default,123,0"), Some("tmux-256color"), || {
         let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
 
-        set_app_session_queued_inputs(
-            &mut session,
-            vec!["first".to_string(), "second".to_string()],
-        );
+        set_app_session_queued_inputs(&mut session, vec!["first".to_string(), "second".to_string()]);
 
         let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
         assert!(matches!(event, Some(app_types::InlineEvent::EditQueue)));
@@ -357,13 +349,7 @@ fn queued_inputs_overlay_bottom_rows() {
 fn queued_inputs_overlay_shows_shift_left_hint_in_tmux() {
     with_terminal_env(Some("/tmp/tmux-1000/default,123,0"), Some("tmux-256color"), || {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-        set_queued_inputs(
-            &mut session,
-            vec![
-                "first queued message".to_string(),
-                "second queued message".to_string(),
-            ],
-        );
+        set_queued_inputs(&mut session, vec!["first queued message".to_string(), "second queued message".to_string()]);
 
         assert_footer_contains(&mut session, 10, &tmux_queue_edit_hint());
     });
@@ -372,13 +358,7 @@ fn queued_inputs_overlay_shows_shift_left_hint_in_tmux() {
 #[test]
 fn running_activity_not_overlaid_above_queue_lines() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    set_queued_inputs(
-        &mut session,
-        vec![
-            "first queued message".to_string(),
-            "second queued message".to_string(),
-        ],
-    );
+    set_queued_inputs(&mut session, vec!["first queued message".to_string(), "second queued message".to_string()]);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running command: test".to_string()),
         right: None,
@@ -482,8 +462,7 @@ fn tab_accepts_visible_inline_prompt_suggestion() {
 fn tab_accepts_inline_prompt_suggestion_with_trailing_space_prefix() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_input("Review the current.diff ".to_string());
-    session
-        .set_inline_prompt_suggestion("Review the current.diff and summarize it".to_string(), true);
+    session.set_inline_prompt_suggestion("Review the current.diff and summarize it".to_string(), true);
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
@@ -536,9 +515,7 @@ fn busy_enter_queues_submission() {
     session.set_input("keep searching in docs/".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "keep searching in docs/")
-    );
+    assert!(matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "keep searching in docs/"));
 }
 
 #[test]

@@ -34,14 +34,13 @@ mod tests;
 mod types;
 use budget::record_tool_call_budget_usage;
 use fallbacks::{
-    build_validation_error_content_with_fallback, preflight_validation_fallback,
-    recovery_fallback_for_tool, try_recover_preflight_with_fallback,
+    build_validation_error_content_with_fallback, preflight_validation_fallback, recovery_fallback_for_tool,
+    try_recover_preflight_with_fallback,
 };
 pub(crate) use guards::max_consecutive_blocked_tool_calls_per_turn;
 use guards::{
-    enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard,
-    enforce_read_after_write_guard, enforce_repeated_read_only_call_guard,
-    enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
+    enforce_blocked_tool_call_guard, enforce_duplicate_task_tracker_create_guard, enforce_read_after_write_guard,
+    enforce_repeated_read_only_call_guard, enforce_repeated_shell_run_guard, enforce_spool_chunk_read_guard,
 };
 pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_batch_prepared};
 pub(crate) use looping::low_signal_family_key;
@@ -71,8 +70,7 @@ pub(super) fn flush_budget_synthesis_directives(ctx: &mut TurnProcessingContext<
         // after it, burning requests on rejected calls instead of
         // synthesizing (observed in checkpoints turn_637 and turn_647).
         if ctx.harness_state.recovery_reason.is_none() {
-            ctx.harness_state.recovery_reason =
-                Some("tool wall-clock budget exhausted".to_string());
+            ctx.harness_state.recovery_reason = Some("tool wall-clock budget exhausted".to_string());
         }
         ctx.harness_state.switch_to_tool_free_recovery();
     }
@@ -87,9 +85,7 @@ pub(super) fn flush_budget_synthesis_directives(ctx: &mut TurnProcessingContext<
     }
 }
 
-pub(super) fn apply_reused_read_only_loop_metadata(
-    obj: &mut serde_json::Map<String, serde_json::Value>,
-) {
+pub(super) fn apply_reused_read_only_loop_metadata(obj: &mut serde_json::Map<String, serde_json::Value>) {
     // Keep output/content/stdout/stderr intact — stripping them was causing
     // false loop detection to leave the model with no data (issue #680). The
     // cached result may have useful content the model needs.
@@ -207,10 +203,7 @@ async fn run_safety_validation_loop(
             ctx.push_tool_response(
                 tool_call_id,
                 Some(canonical_tool_name),
-                build_failure_error_content(
-                    format!("Safety validation failed: {err}"),
-                    "safety_validation",
-                ),
+                build_failure_error_content(format!("Safety validation failed: {err}"), "safety_validation"),
             );
             Ok(Some((ValidationResult::Blocked, None)))
         }
@@ -220,20 +213,14 @@ async fn run_safety_validation_loop(
 #[cfg(test)]
 fn build_tool_permissions_context<'ctx, 'a>(
     ctx: &'ctx mut TurnProcessingContext<'a>,
-) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
-    'ctx,
-    vtcode_ui::tui::app::InlineSession,
-> {
+) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<'ctx, vtcode_ui::tui::app::InlineSession> {
     build_tool_permissions_context_with_safety(ctx, None)
 }
 
 fn build_tool_permissions_context_with_safety<'ctx, 'a>(
     ctx: &'ctx mut TurnProcessingContext<'a>,
     safety_approval_justification: Option<&str>,
-) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
-    'ctx,
-    vtcode_ui::tui::app::InlineSession,
-> {
+) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<'ctx, vtcode_ui::tui::app::InlineSession> {
     crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
         tool_registry: ctx.tool_registry,
         renderer: ctx.renderer,
@@ -253,10 +240,7 @@ fn build_tool_permissions_context_with_safety<'ctx, 'a>(
             .vt_cfg
             .and_then(|cfg| cfg.runtime_agent_permissions.as_ref())
             .or(Some(&ctx.active_primary_agent.active().permissions)),
-        hitl_notification_bell: ctx
-            .vt_cfg
-            .map(|cfg| cfg.security.hitl_notification_bell)
-            .unwrap_or(true),
+        hitl_notification_bell: ctx.vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
         approval_policy: ctx
             .vt_cfg
             .map(|cfg| cfg.security.human_in_the_loop)
@@ -264,14 +248,12 @@ fn build_tool_permissions_context_with_safety<'ctx, 'a>(
             .unwrap_or(AskForApproval::OnRequest),
         skip_confirmations: ctx.skip_confirmations,
         permissions_config: ctx.vt_cfg.map(|cfg| &cfg.permissions),
-        auto_permission_runtime: Some(
-            crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
-                config: ctx.config,
-                vt_cfg: ctx.vt_cfg,
-                provider_client: ctx.provider_client.as_mut(),
-                working_history: ctx.working_history.as_slice(),
-            },
-        ),
+        auto_permission_runtime: Some(crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
+            config: ctx.config,
+            vt_cfg: ctx.vt_cfg,
+            provider_client: ctx.provider_client.as_mut(),
+            working_history: ctx.working_history.as_slice(),
+        }),
         session_stats: Some(ctx.session_stats),
         safety_approval_justification: safety_approval_justification.map(String::from),
     }
@@ -316,15 +298,8 @@ async fn handle_tool_call_inner<'a, 'b, 'tool>(
     t_ctx.ctx.set_phase(TurnPhase::ExecutingTools);
 
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
-    let validation_result =
-        validate_tool_call(t_ctx.ctx, tool_call_id, tool_name, args_val).await?;
-    let prepared = match finalize_validation_result(
-        t_ctx.ctx,
-        tool_call_id,
-        tool_name,
-        args_val,
-        validation_result,
-    ) {
+    let validation_result = validate_tool_call(t_ctx.ctx, tool_call_id, tool_name, args_val).await?;
+    let prepared = match finalize_validation_result(t_ctx.ctx, tool_call_id, tool_name, args_val, validation_result) {
         ValidationTransition::Proceed(prepared) => prepared,
         ValidationTransition::Return(outcome) => {
             flush_budget_synthesis_directives(t_ctx.ctx);
@@ -388,11 +363,7 @@ pub(crate) async fn validate_tool_call<'a>(
         } else {
             notice.exhaustion.skipped_call_message()
         };
-        ctx.push_tool_response(
-            tool_call_id,
-            Some(tool_name),
-            build_failure_error_content(error_msg, "policy"),
-        );
+        ctx.push_tool_response(tool_call_id, Some(tool_name), build_failure_error_content(error_msg, "policy"));
         return Ok(ValidationResult::Blocked);
     }
 
@@ -407,20 +378,14 @@ pub(crate) async fn validate_tool_call<'a>(
         } else {
             notice.exhaustion.skipped_call_message()
         };
-        ctx.push_tool_response(
-            tool_call_id,
-            Some(tool_name),
-            build_failure_error_content(error_msg, "policy"),
-        );
+        ctx.push_tool_response(tool_call_id, Some(tool_name), build_failure_error_content(error_msg, "policy"));
         return Ok(ValidationResult::Blocked);
     }
 
     let mut prepared = match ctx.tool_registry.admit_public_tool_call(tool_name, args_val) {
         Ok(prepared) => prepared,
         Err(err) => {
-            if let Some(recovered_prepared) =
-                try_recover_preflight_with_fallback(ctx, tool_name, args_val, &err)
-            {
+            if let Some(recovered_prepared) = try_recover_preflight_with_fallback(ctx, tool_name, args_val, &err) {
                 tracing::info!(
                     tool = tool_name,
                     recovered_tool = %recovered_prepared.canonical_name,
@@ -454,9 +419,7 @@ pub(crate) async fn validate_tool_call<'a>(
             serde_json::to_string(
                 &ToolExecutionError::policy_violation(
                     canonical_tool_name.clone(),
-                    format!(
-                        "Tool '{canonical_tool_name}' execution denied by active primary agent policy"
-                    ),
+                    format!("Tool '{canonical_tool_name}' execution denied by active primary agent policy"),
                 )
                 .to_json_value(),
             )
@@ -465,41 +428,27 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    prepared.effective_args = maybe_apply_spool_read_offset_hint(
-        ctx.tool_registry,
-        &canonical_tool_name,
-        &prepared.effective_args,
-    );
+    prepared.effective_args =
+        maybe_apply_spool_read_offset_hint(ctx.tool_registry, &canonical_tool_name, &prepared.effective_args);
     if !prepared.readonly_classification {
         ctx.harness_state.reset_file_read_family_streak();
     }
-    prepared.parallel_safe_after_preflight = vtcode_core::tools::tool_intent::is_parallel_safe_call(
-        &canonical_tool_name,
-        &prepared.effective_args,
-    );
+    prepared.parallel_safe_after_preflight =
+        vtcode_core::tools::tool_intent::is_parallel_safe_call(&canonical_tool_name, &prepared.effective_args);
     let fallback_recommendation =
-        recovery_fallback_for_tool(&canonical_tool_name, &prepared.effective_args).map(
-            |(tool_name, args)| vtcode_core::core::agent::harness_kernel::FallbackRecommendation {
-                tool_name,
-                args,
-                chain: Vec::new(),
-            },
-        );
+        recovery_fallback_for_tool(&canonical_tool_name, &prepared.effective_args).map(|(tool_name, args)| {
+            vtcode_core::core::agent::harness_kernel::FallbackRecommendation { tool_name, args, chain: Vec::new() }
+        });
     prepared = prepared.with_fallback_recommendation(fallback_recommendation);
     let effective_args = &prepared.effective_args;
 
-    if let Some(outcome) = enforce_duplicate_task_tracker_create_guard(
-        ctx,
-        tool_call_id,
-        &canonical_tool_name,
-        effective_args,
-    ) {
+    if let Some(outcome) =
+        enforce_duplicate_task_tracker_create_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
+    {
         return Ok(outcome);
     }
 
-    if let Some(outcome) =
-        enforce_read_after_write_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
-    {
+    if let Some(outcome) = enforce_read_after_write_guard(ctx, tool_call_id, &canonical_tool_name, effective_args) {
         return Ok(outcome);
     }
 
@@ -513,15 +462,11 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome);
     }
 
-    if let Some(outcome) =
-        enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
-    {
+    if let Some(outcome) = enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, effective_args) {
         return Ok(outcome);
     }
 
-    if let Some(outcome) =
-        enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, effective_args)
-    {
+    if let Some(outcome) = enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, effective_args) {
         return Ok(outcome);
     }
 
@@ -540,14 +485,9 @@ pub(crate) async fn validate_tool_call<'a>(
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
 
         // In interactive mode, attempt recovery prompt; None = user chose to proceed.
-        if let Some(result) = try_interactive_circuit_recovery(
-            ctx,
-            tool_call_id,
-            &canonical_tool_name,
-            fallback_tool,
-            fallback_tool_args,
-        )
-        .await?
+        if let Some(result) =
+            try_interactive_circuit_recovery(ctx, tool_call_id, &canonical_tool_name, fallback_tool, fallback_tool_args)
+                .await?
         {
             ctx.push_system_message(block_reason);
             return Ok(result);
@@ -555,9 +495,7 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Adaptive Rate Limiter
-    if let Some(outcome) =
-        acquire_adaptive_rate_limit_slot(ctx, tool_call_id, &canonical_tool_name).await?
-    {
+    if let Some(outcome) = acquire_adaptive_rate_limit_slot(ctx, tool_call_id, &canonical_tool_name).await? {
         return Ok(outcome);
     }
 
@@ -631,9 +569,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 reason: Some(reason),
             })))
         }
-        Ok(ToolPermissionFlow::Exit) => {
-            Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Exit)))
-        }
+        Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Exit))),
         Ok(ToolPermissionFlow::Interrupted) => {
             Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)))
         }

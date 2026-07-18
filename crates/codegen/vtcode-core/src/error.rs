@@ -226,9 +226,7 @@ impl ErrorCode {
             UnifiedErrorKind::Cancelled => ErrorCode::Cancelled,
             UnifiedErrorKind::PolicyViolation => ErrorCode::PolicyViolation,
             UnifiedErrorKind::PlanningPolicyViolation => ErrorCode::PlanningPolicyViolation,
-            UnifiedErrorKind::ExecutionFailed | UnifiedErrorKind::Unknown => {
-                ErrorCode::ToolExecutionFailed
-            }
+            UnifiedErrorKind::ExecutionFailed | UnifiedErrorKind::Unknown => ErrorCode::ToolExecutionFailed,
         }
     }
 
@@ -275,8 +273,7 @@ impl From<reqwest::Error> for VtCodeError {
 impl From<anyhow::Error> for VtCodeError {
     fn from(err: anyhow::Error) -> Self {
         let category = vtcode_commons::classify_anyhow_error(&err);
-        VtCodeError::new(category, ErrorCode::from_category(category), err.to_string())
-            .with_context(format!("{err:#}"))
+        VtCodeError::new(category, ErrorCode::from_category(category), err.to_string()).with_context(format!("{err:#}"))
     }
 }
 
@@ -338,10 +335,7 @@ impl From<UnifiedToolError> for VtCodeError {
         );
 
         if let Some(ctx) = &err.debug_context {
-            let mut metadata = vec![
-                format!("tool={}", ctx.tool_name),
-                format!("attempt={}", ctx.attempt),
-            ];
+            let mut metadata = vec![format!("tool={}", ctx.tool_name), format!("attempt={}", ctx.attempt)];
             if let Some(invocation_id) = &ctx.invocation_id {
                 metadata.push(format!("invocation_id={invocation_id}"));
             }
@@ -356,19 +350,15 @@ impl From<UnifiedToolError> for VtCodeError {
 impl From<ToolExecutionError> for VtCodeError {
     fn from(err: ToolExecutionError) -> Self {
         let category = ErrorCategory::from(err.error_type);
-        let mut error = VtCodeError::new(
-            category,
-            ErrorCode::from_tool_error_type(err.error_type),
-            err.message.clone(),
-        );
+        let mut error =
+            VtCodeError::new(category, ErrorCode::from_tool_error_type(err.error_type), err.message.clone());
 
         let mut context_parts = Vec::new();
         if let Some(original_error) = &err.original_error {
             context_parts.push(format!("original_error={original_error}"));
         }
         if !err.recovery_suggestions.is_empty() {
-            context_parts
-                .push(format!("recovery_suggestions={}", err.recovery_suggestions.join(" | ")));
+            context_parts.push(format!("recovery_suggestions={}", err.recovery_suggestions.join(" | ")));
         }
         if !context_parts.is_empty() {
             error = error.with_context(context_parts.join(", "));
@@ -419,16 +409,15 @@ mod tests {
 
     #[test]
     fn test_error_with_context() {
-        let err = VtCodeError::input(ErrorCode::InvalidArgument, "Invalid argument")
-            .with_context("While parsing user input");
+        let err =
+            VtCodeError::input(ErrorCode::InvalidArgument, "Invalid argument").with_context("While parsing user input");
         assert_eq!(err.context, Some("While parsing user input".to_string()));
     }
 
     #[test]
     fn test_error_with_source() {
         let io_err = std::io::Error::other("IO error");
-        let err =
-            VtCodeError::system(ErrorCode::IoError, "File operation failed").with_source(io_err);
+        let err = VtCodeError::system(ErrorCode::IoError, "File operation failed").with_source(io_err);
         assert!(err.source.is_some());
     }
 
@@ -519,14 +508,12 @@ mod tests {
 
     #[test]
     fn test_unified_tool_error_conversion_preserves_context() {
-        let err = UnifiedToolError::new(UnifiedErrorKind::Network, "network down").with_context(
-            DebugContext {
-                tool_name: "read_file".to_string(),
-                invocation_id: Some("inv-1".to_string()),
-                attempt: 2,
-                metadata: vec![("duration_ms".to_string(), "1500".to_string())],
-            },
-        );
+        let err = UnifiedToolError::new(UnifiedErrorKind::Network, "network down").with_context(DebugContext {
+            tool_name: "read_file".to_string(),
+            invocation_id: Some("inv-1".to_string()),
+            attempt: 2,
+            metadata: vec![("duration_ms".to_string(), "1500".to_string())],
+        });
 
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::Network);

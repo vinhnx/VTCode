@@ -128,7 +128,7 @@ This is handled transparently - you don't need to configure anything special unl
 
 ### Droid-style custom model example
 
-You can mirror Droid's custom model config using VT Code's dot-config (`~/.vtcode/config.toml`). Add a `minimax` provider entry with base URL and API key:
+You can mirror Droid's custom model config using VT Code's dot-config (`~/.vtcode/vtcode.toml`). Add a `minimax` provider entry with base URL and API key:
 
 ```toml
 [providers]

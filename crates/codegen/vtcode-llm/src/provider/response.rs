@@ -13,33 +13,17 @@ pub enum LLMStreamEvent {
 
 #[derive(Debug, Clone)]
 pub enum NormalizedStreamEvent {
-    TextDelta {
-        delta: String,
-    },
-    ReasoningDelta {
-        delta: String,
-    },
-    ToolCallStart {
-        call_id: String,
-        name: Option<String>,
-    },
-    ToolCallDelta {
-        call_id: String,
-        delta: String,
-    },
-    Usage {
-        usage: Usage,
-    },
-    Done {
-        response: Box<LLMResponse>,
-    },
+    TextDelta { delta: String },
+    ReasoningDelta { delta: String },
+    ToolCallStart { call_id: String, name: Option<String> },
+    ToolCallDelta { call_id: String, delta: String },
+    Usage { usage: Usage },
+    Done { response: Box<LLMResponse> },
 }
 
 pub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;
-pub type BorrowedLLMStream<'a> =
-    Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send + 'a>>;
-pub type LLMNormalizedStream =
-    Pin<Box<dyn futures::Stream<Item = Result<NormalizedStreamEvent, LLMError>> + Send>>;
+pub type BorrowedLLMStream<'a> = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send + 'a>>;
+pub type LLMNormalizedStream = Pin<Box<dyn futures::Stream<Item = Result<NormalizedStreamEvent, LLMError>> + Send>>;
 
 impl LLMStreamEvent {
     pub fn into_normalized(self) -> Vec<NormalizedStreamEvent> {

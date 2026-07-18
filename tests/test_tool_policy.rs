@@ -72,8 +72,7 @@ impl ToolPolicyManager {
     /// Load existing config or create new one with all tools as "prompt"
     fn load_or_create_config(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
         if config_path.exists() {
-            let content =
-                fs::read_to_string(config_path).context("Failed to read tool policy config")?;
+            let content = fs::read_to_string(config_path).context("Failed to read tool policy config")?;
 
             serde_json::from_str(&content).context("Failed to parse tool policy config")
         } else {
@@ -85,8 +84,7 @@ impl ToolPolicyManager {
 
     /// Update the tool list and save configuration
     pub fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
-        let current_tools: hashbrown::HashSet<String> =
-            self.config.available_tools.iter().cloned().collect();
+        let current_tools: hashbrown::HashSet<String> = self.config.available_tools.iter().cloned().collect();
         let new_tools: hashbrown::HashSet<String> = tools.iter().cloned().collect();
 
         // Add new tools as "prompt"
@@ -128,8 +126,7 @@ impl ToolPolicyManager {
 
     /// Save configuration to file
     fn save_config(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.config)
-            .context("Failed to serialize tool policy config")?;
+        let content = serde_json::to_string_pretty(&self.config).context("Failed to serialize tool policy config")?;
 
         fs::write(&self.config_path, content).context("Failed to write tool policy config")?;
 

@@ -9,9 +9,7 @@ use crate::config::constants::tools;
 use crate::tools::command_args;
 use crate::tools::mcp::{MCP_QUALIFIED_TOOL_PREFIX, parse_canonical_mcp_tool_name};
 use crate::tools::tool_intent;
-use vtcode_config::core::permissions::{
-    AgentPermissionsConfig, PermissionDefault, normalize_permission_rule,
-};
+use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault, normalize_permission_rule};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionRuleDecision {
@@ -137,9 +135,7 @@ pub fn build_advertised_permission_requests(
 
     representative_args
         .iter()
-        .map(|args| {
-            build_permission_request(workspace_root, current_dir, normalized_tool_name, Some(args))
-        })
+        .map(|args| build_permission_request(workspace_root, current_dir, normalized_tool_name, Some(args)))
         .collect()
 }
 
@@ -163,8 +159,7 @@ pub fn evaluate_agent_permissions(
     current_dir: &Path,
     request: &PermissionRequest,
 ) -> ResolvedPermissionDecision {
-    let evaluator =
-        PermissionRuleSet::from_agent_config(agent_permissions, workspace_root, current_dir);
+    let evaluator = PermissionRuleSet::from_agent_config(agent_permissions, workspace_root, current_dir);
     evaluator.resolve(request, agent_permissions.default)
 }
 
@@ -183,8 +178,7 @@ pub fn evaluate_effective_permissions(
         return ResolvedPermissionDecision::Deny;
     }
 
-    let agent_decision =
-        evaluate_agent_permissions(agent_permissions, workspace_root, current_dir, request);
+    let agent_decision = evaluate_agent_permissions(agent_permissions, workspace_root, current_dir, request);
     if global_matches.ask && agent_decision != ResolvedPermissionDecision::Deny {
         return ResolvedPermissionDecision::Ask;
     }
@@ -200,11 +194,7 @@ struct PermissionRuleSet {
 }
 
 impl PermissionRuleSet {
-    fn from_global_config(
-        config: &PermissionsConfig,
-        workspace_root: &Path,
-        current_dir: &Path,
-    ) -> Self {
+    fn from_global_config(config: &PermissionsConfig, workspace_root: &Path, current_dir: &Path) -> Self {
         Self {
             deny: compile_rules(&config.deny, workspace_root, current_dir),
             ask: compile_rules(&config.ask, workspace_root, current_dir),
@@ -213,11 +203,7 @@ impl PermissionRuleSet {
         }
     }
 
-    fn from_agent_config(
-        config: &AgentPermissionsConfig,
-        workspace_root: &Path,
-        current_dir: &Path,
-    ) -> Self {
+    fn from_agent_config(config: &AgentPermissionsConfig, workspace_root: &Path, current_dir: &Path) -> Self {
         Self {
             deny: compile_rules(&config.deny, workspace_root, current_dir),
             ask: compile_rules(&config.ask, workspace_root, current_dir),
@@ -235,11 +221,7 @@ impl PermissionRuleSet {
         }
     }
 
-    fn resolve(
-        &self,
-        request: &PermissionRequest,
-        default: PermissionDefault,
-    ) -> ResolvedPermissionDecision {
+    fn resolve(&self, request: &PermissionRequest, default: PermissionDefault) -> ResolvedPermissionDecision {
         let matches = self.evaluate_matches(request);
         if matches.deny {
             ResolvedPermissionDecision::Deny
@@ -266,11 +248,7 @@ impl From<PermissionDefault> for ResolvedPermissionDecision {
     }
 }
 
-fn compile_rules(
-    rules: &[String],
-    workspace_root: &Path,
-    current_dir: &Path,
-) -> Vec<CompiledPermissionRule> {
+fn compile_rules(rules: &[String], workspace_root: &Path, current_dir: &Path) -> Vec<CompiledPermissionRule> {
     rules
         .iter()
         .filter_map(|rule| CompiledPermissionRule::compile(rule, workspace_root, current_dir))
@@ -350,10 +328,7 @@ impl CompiledPermissionRule {
                     return Some(Self::McpWildcard(server.to_string()));
                 }
                 if !server.is_empty() && !tool.is_empty() {
-                    return Some(Self::McpTool {
-                        server: server.to_string(),
-                        tool: tool.to_string(),
-                    });
+                    return Some(Self::McpTool { server: server.to_string(), tool: tool.to_string() });
                 }
                 return None;
             }
@@ -576,11 +551,9 @@ fn file_request_kind(
         tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => {
             Some(PermissionRequestKind::Read { paths })
         }
-        tools::WRITE_FILE
-        | tools::CREATE_FILE
-        | tools::DELETE_FILE
-        | tools::MOVE_FILE
-        | tools::COPY_FILE => Some(PermissionRequestKind::Write { paths }),
+        tools::WRITE_FILE | tools::CREATE_FILE | tools::DELETE_FILE | tools::MOVE_FILE | tools::COPY_FILE => {
+            Some(PermissionRequestKind::Write { paths })
+        }
         tools::EDIT_FILE | tools::APPLY_PATCH | tools::SEARCH_REPLACE | tools::FILE_OP => {
             Some(PermissionRequestKind::Edit { paths })
         }
@@ -603,13 +576,7 @@ fn extract_candidate_paths(
     let mut paths = Vec::new();
 
     if let Some(obj) = args.as_object() {
-        for key in [
-            "path",
-            "file_path",
-            "filepath",
-            "target_path",
-            "destination",
-        ] {
+        for key in ["path", "file_path", "filepath", "target_path", "destination"] {
             if let Some(path) = obj.get(key).and_then(Value::as_str) {
                 push_resolved_path(&mut paths, workspace_root, current_dir, path);
             }
@@ -658,12 +625,7 @@ fn extract_patch_paths(args: &Value) -> Vec<String> {
         .collect()
 }
 
-fn push_resolved_path(
-    paths: &mut Vec<PathBuf>,
-    workspace_root: &Path,
-    current_dir: &Path,
-    raw: &str,
-) {
+fn push_resolved_path(paths: &mut Vec<PathBuf>, workspace_root: &Path, current_dir: &Path, raw: &str) {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return;
@@ -728,19 +690,17 @@ fn is_protected_write_path(workspace_root: &Path, path: &Path) -> bool {
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
     let normalized_domain = domain.trim_end_matches('.').to_ascii_lowercase();
-    let normalized_allowed =
-        allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
+    let normalized_allowed = allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
 
-    normalized_domain == normalized_allowed
-        || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
+    normalized_domain == normalized_allowed || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        PermissionRequest, PermissionRequestKind, PermissionRuleDecision,
-        ResolvedPermissionDecision, build_advertised_permission_requests, build_permission_request,
-        evaluate_agent_permissions, evaluate_effective_permissions, evaluate_permissions,
+        PermissionRequest, PermissionRequestKind, PermissionRuleDecision, ResolvedPermissionDecision,
+        build_advertised_permission_requests, build_permission_request, evaluate_agent_permissions,
+        evaluate_effective_permissions, evaluate_permissions,
     };
     use crate::config::{PermissionsConfig, constants::tools};
     use serde_json::json;
@@ -784,10 +744,7 @@ mod tests {
             protected_write_paths: Vec::new(),
         };
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Deny
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Deny);
     }
 
     #[test]
@@ -804,10 +761,7 @@ mod tests {
             protected_write_paths: Vec::new(),
         };
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Allow
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Allow);
     }
 
     #[test]
@@ -824,10 +778,7 @@ mod tests {
             protected_write_paths: Vec::new(),
         };
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Ask
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Ask);
     }
 
     #[test]
@@ -847,10 +798,7 @@ mod tests {
             protected_write_paths: Vec::new(),
         };
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Allow
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Allow);
     }
 
     #[test]
@@ -895,10 +843,7 @@ mod tests {
             })),
         );
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Ask
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Ask);
     }
 
     #[test]
@@ -908,17 +853,9 @@ mod tests {
             ask: vec!["Read(./nested-file.rs)".to_string()],
             ..PermissionsConfig::default()
         };
-        let request = build_permission_request(
-            &workspace,
-            &cwd,
-            "read_file",
-            Some(&json!({"path": "nested-file.rs"})),
-        );
+        let request = build_permission_request(&workspace, &cwd, "read_file", Some(&json!({"path": "nested-file.rs"})));
 
-        assert_eq!(
-            evaluate_permissions(&config, &workspace, &cwd, &request).decision(),
-            PermissionRuleDecision::Ask
-        );
+        assert_eq!(evaluate_permissions(&config, &workspace, &cwd, &request).decision(), PermissionRuleDecision::Ask);
     }
 
     #[test]
@@ -1051,18 +988,11 @@ mod tests {
             tools::CODE_SEARCH,
             Some(&json!({"query": "PermissionRequest"})),
         );
-        let exec_command = build_permission_request(
-            &workspace,
-            &cwd,
-            tools::EXEC_COMMAND,
-            Some(&json!({"cmd": "rg --files"})),
-        );
+        let exec_command =
+            build_permission_request(&workspace, &cwd, tools::EXEC_COMMAND, Some(&json!({"cmd": "rg --files"})));
 
         assert!(matches!(code_search.kind, PermissionRequestKind::Read { .. }));
-        assert_eq!(
-            exec_command.kind,
-            PermissionRequestKind::Bash { command: "rg --files".to_string() }
-        );
+        assert_eq!(exec_command.kind, PermissionRequestKind::Bash { command: "rg --files".to_string() });
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &code_search),
             ResolvedPermissionDecision::Allow
@@ -1085,10 +1015,7 @@ mod tests {
             Some(&json!({"cmd": "python mutate.py --dry-run"})),
         );
 
-        assert_eq!(
-            request.kind,
-            PermissionRequestKind::Bash { command: "python mutate.py --dry-run".to_string() }
-        );
+        assert_eq!(request.kind, PermissionRequestKind::Bash { command: "python mutate.py --dry-run".to_string() });
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
             ResolvedPermissionDecision::Deny
@@ -1101,10 +1028,7 @@ mod tests {
         let requests = build_advertised_permission_requests(&workspace, &cwd, tools::EXEC_COMMAND);
 
         assert_eq!(requests.len(), 1);
-        assert_eq!(
-            requests[0].kind,
-            PermissionRequestKind::Bash { command: "rg --files".to_string() }
-        );
+        assert_eq!(requests[0].kind, PermissionRequestKind::Bash { command: "rg --files".to_string() });
     }
 
     #[test]

@@ -158,8 +158,7 @@ where
             LookupState::Expired => {
                 if let Ok(mut inner) = self.inner.try_write() {
                     let ttl = inner.ttl;
-                    let should_remove =
-                        inner.entries.get(key).map(|entry| entry.is_expired(ttl)).unwrap_or(false);
+                    let should_remove = inner.entries.get(key).map(|entry| entry.is_expired(ttl)).unwrap_or(false);
                     if should_remove {
                         Self::remove_inner(&mut inner, key);
                     }
@@ -208,13 +207,7 @@ where
         let expired_keys: Vec<K> = inner
             .entries
             .iter()
-            .filter_map(|(k, v)| {
-                if v.is_expired(inner.ttl) {
-                    Some(k.clone())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(k, v)| if v.is_expired(inner.ttl) { Some(k.clone()) } else { None })
             .collect();
 
         for key in expired_keys {
@@ -250,20 +243,17 @@ where
 
         let keys_to_remove: Vec<K> = match inner.eviction_policy {
             EvictionPolicy::Lru => {
-                let mut entries: Vec<_> =
-                    inner.entries.iter().map(|(k, e)| (k.clone(), e.last_accessed)).collect();
+                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.last_accessed)).collect();
                 entries.sort_by_key(|(_, ts)| *ts);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
             EvictionPolicy::Lfu => {
-                let mut entries: Vec<_> =
-                    inner.entries.iter().map(|(k, e)| (k.clone(), e.access_count)).collect();
+                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.access_count)).collect();
                 entries.sort_by_key(|(_, c)| *c);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
             EvictionPolicy::Fifo | EvictionPolicy::TtlOnly => {
-                let mut entries: Vec<_> =
-                    inner.entries.iter().map(|(k, e)| (k.clone(), e.created_at)).collect();
+                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.created_at)).collect();
                 entries.sort_by_key(|(_, ts)| *ts);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
@@ -398,8 +388,7 @@ where
             return 0;
         };
 
-        let keys_to_remove: Vec<K> =
-            inner.entries.keys().filter(|key| predicate(key)).cloned().collect();
+        let keys_to_remove: Vec<K> = inner.entries.keys().filter(|key| predicate(key)).cloned().collect();
 
         let removed_count = keys_to_remove.len();
         for key in keys_to_remove {
@@ -501,8 +490,7 @@ where
             .iter()
             .map(|(k, entry)| {
                 // Score = access_count * recency_factor
-                let age_secs =
-                    now.duration_since(entry.last_accessed).unwrap_or_default().as_secs();
+                let age_secs = now.duration_since(entry.last_accessed).unwrap_or_default().as_secs();
 
                 // Recency factor: recent entries get higher score
                 let recency_factor = std::cmp::max(1_u64, 3600 / (age_secs + 1));
@@ -676,8 +664,7 @@ mod tests {
 
     #[test]
     fn test_pressure_aware_reduce_ttl() {
-        let cache: UnifiedCache<TestKey, String> =
-            UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
+        let cache: UnifiedCache<TestKey, String> = UnifiedCache::new(10, Duration::from_secs(300), EvictionPolicy::Lru);
 
         // Reduce by 40% (Warning pressure)
         let new_ttl = cache.reduce_ttl(0.4);

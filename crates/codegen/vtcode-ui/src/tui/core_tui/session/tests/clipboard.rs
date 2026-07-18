@@ -4,9 +4,7 @@ use super::helpers::*;
 
 #[test]
 fn double_click_selects_transcript_word_and_copies_it() {
-    use crate::tui::core_tui::session::mouse_selection::{
-        clipboard_command_override, set_clipboard_command_override,
-    };
+    use crate::tui::core_tui::session::mouse_selection::{clipboard_command_override, set_clipboard_command_override};
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
@@ -30,16 +28,11 @@ fn double_click_selects_transcript_word_and_copies_it() {
     let _temp_guard = TempDirGuard(temp_dir.clone());
 
     let clipboard_file = temp_dir.join("clipboard.txt");
-    let script_name = if cfg!(target_os = "macos") {
-        "pbcopy"
-    } else {
-        "xclip"
-    };
+    let script_name = if cfg!(target_os = "macos") { "pbcopy" } else { "xclip" };
     let script_path = temp_dir.join(script_name);
     fs::write(&script_path, format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()))
         .expect("write fake clipboard command");
-    let mut permissions =
-        fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
+    let mut permissions = fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
 
@@ -61,9 +54,8 @@ fn double_click_selects_transcript_word_and_copies_it() {
         .iter()
         .position(|line| line.contains("hello world"))
         .expect("expected hello world to be rendered");
-    let column = rendered[row].find("hello").expect("expected hello word in rendered line") as u16
-        + transcript_area.x
-        + 1;
+    let column =
+        rendered[row].find("hello").expect("expected hello word in rendered line") as u16 + transcript_area.x + 1;
     let row = transcript_area.y + row as u16;
 
     let (tx, _rx) = mpsc::unbounded_channel();
@@ -88,8 +80,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
     let mut buffer = Buffer::empty(Rect::new(0, 0, VIEW_WIDTH, VIEW_ROWS * 2));
     for (dy, line) in rendered.iter().enumerate() {
         for (dx, ch) in line.chars().enumerate() {
-            buffer[(transcript_area.x + dx as u16, transcript_area.y + dy as u16)]
-                .set_symbol(&ch.to_string());
+            buffer[(transcript_area.x + dx as u16, transcript_area.y + dy as u16)].set_symbol(&ch.to_string());
         }
     }
     let selected = session.mouse_selection.extract_text(&buffer, buffer.area);
@@ -101,8 +92,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
     session.mouse_selection.mark_copied();
     assert!(!session.mouse_selection.needs_copy());
 
-    let clipboard_contents =
-        fs::read_to_string(&clipboard_file).expect("read copied transcript text");
+    let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied transcript text");
     assert_eq!(clipboard_contents, "hello");
 
     let rendered_status = session
@@ -120,9 +110,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
 
 #[test]
 fn selecting_input_text_auto_copies_and_keeps_selection() {
-    use crate::tui::core_tui::session::mouse_selection::{
-        clipboard_command_override, set_clipboard_command_override,
-    };
+    use crate::tui::core_tui::session::mouse_selection::{clipboard_command_override, set_clipboard_command_override};
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
@@ -146,16 +134,11 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
     let _temp_guard = TempDirGuard(temp_dir.clone());
 
     let clipboard_file = temp_dir.join("clipboard.txt");
-    let script_name = if cfg!(target_os = "macos") {
-        "pbcopy"
-    } else {
-        "xclip"
-    };
+    let script_name = if cfg!(target_os = "macos") { "pbcopy" } else { "xclip" };
     let script_path = temp_dir.join(script_name);
     fs::write(&script_path, format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()))
         .expect("write fake clipboard command");
-    let mut permissions =
-        fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
+    let mut permissions = fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
 
@@ -175,10 +158,7 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
         assert!(result.is_none());
     }
 
-    assert_eq!(
-        session.core.input_manager.selection_range(),
-        Some(("hello world".len() - 5, "hello world".len()))
-    );
+    assert_eq!(session.core.input_manager.selection_range(), Some(("hello world".len() - 5, "hello world".len())));
 
     let rendered = rendered_app_session_lines(&mut session, VIEW_ROWS);
     assert!(
@@ -189,17 +169,11 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
     let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
     assert_eq!(clipboard_contents, "world");
 
-    assert_eq!(
-        session.core.input_manager.selection_range(),
-        Some(("hello world".len() - 5, "hello world".len()))
-    );
+    assert_eq!(session.core.input_manager.selection_range(), Some(("hello world".len() - 5, "hello world".len())));
 
     let result = session.process_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
     assert!(result.is_none());
-    assert_eq!(
-        session.core.input_manager.selection_range(),
-        Some(("hello world".len() - 5, "hello world".len()))
-    );
+    assert_eq!(session.core.input_manager.selection_range(), Some(("hello world".len() - 5, "hello world".len())));
 
     let clipboard_contents = fs::read_to_string(&clipboard_file).expect("read copied input text");
     assert_eq!(clipboard_contents, "world");

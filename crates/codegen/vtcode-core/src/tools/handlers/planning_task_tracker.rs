@@ -7,15 +7,12 @@ use super::planning_workflow::{PlanningWorkflowState, sync_tracker_into_plan_fil
 use crate::config::constants::tools;
 use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes,
-    append_notes_section, append_task_step_metadata, is_bulk_sync_update, metadata_from_input,
-    normalize_optional_text, normalize_string_items, parse_marked_status_prefix,
-    parse_status_prefix,
+    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, append_notes, append_notes_section,
+    append_task_step_metadata, is_bulk_sync_update, metadata_from_input, normalize_optional_text,
+    normalize_string_items, parse_marked_status_prefix, parse_status_prefix,
 };
 use crate::tools::traits::Tool;
-use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_with_context,
-};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -172,21 +169,12 @@ fn flatten_for_global_items(
     out: &mut Vec<(PlanTaskStatus, String, TaskStepMetadata)>,
 ) {
     for node in nodes {
-        out.push((
-            node.status,
-            format!("{}{}", "  ".repeat(level), node.description),
-            node.metadata.clone(),
-        ));
+        out.push((node.status, format!("{}{}", "  ".repeat(level), node.description), node.metadata.clone()));
         flatten_for_global_items(&node.children, level + 1, out);
     }
 }
 
-fn flatten_items_json_inner(
-    nodes: &[PlanTaskNode],
-    index_prefix: &str,
-    level: usize,
-    out: &mut Vec<Value>,
-) {
+fn flatten_items_json_inner(nodes: &[PlanTaskNode], index_prefix: &str, level: usize, out: &mut Vec<Value>) {
     for (idx, node) in nodes.iter().enumerate() {
         let index_path = if index_prefix.is_empty() {
             format!("{}", idx + 1)
@@ -206,12 +194,7 @@ fn flatten_items_json_inner(
     }
 }
 
-fn build_view_lines(
-    nodes: &[PlanTaskNode],
-    tree_prefix: &str,
-    index_prefix: &str,
-    out: &mut Vec<Value>,
-) {
+fn build_view_lines(nodes: &[PlanTaskNode], tree_prefix: &str, index_prefix: &str, out: &mut Vec<Value>) {
     for (idx, node) in nodes.iter().enumerate() {
         let is_last = idx + 1 == nodes.len();
         let branch = if is_last { "└" } else { "├" };
@@ -225,8 +208,7 @@ fn build_view_lines(
         } else {
             format!("{index_prefix}.{}", idx + 1)
         };
-        let display =
-            format!("{tree_prefix}{branch} {} {}", node.status.view_symbol(), node.description);
+        let display = format!("{tree_prefix}{branch} {} {}", node.status.view_symbol(), node.description);
 
         out.push(json!({
             "display": display,
@@ -293,11 +275,7 @@ fn parse_files_metadata(value: &str) -> Vec<String> {
         .collect()
 }
 
-fn apply_flat_line_metadata(
-    line: &mut FlatTaskLine,
-    raw: &str,
-    in_verify_block: &mut bool,
-) -> bool {
+fn apply_flat_line_metadata(line: &mut FlatTaskLine, raw: &str, in_verify_block: &mut bool) -> bool {
     let trimmed = raw.trim_start();
 
     if *in_verify_block {
@@ -383,10 +361,7 @@ fn build_tree_from_flat(lines: &[FlatTaskLine]) -> Vec<PlanTaskNode> {
     roots
 }
 
-fn get_node_mut_by_indices<'a>(
-    nodes: &'a mut [PlanTaskNode],
-    path: &[usize],
-) -> Option<&'a mut PlanTaskNode> {
+fn get_node_mut_by_indices<'a>(nodes: &'a mut [PlanTaskNode], path: &[usize]) -> Option<&'a mut PlanTaskNode> {
     let (&head, tail) = path.split_first()?;
     let node = nodes.get_mut(head)?;
     if tail.is_empty() {
@@ -396,10 +371,7 @@ fn get_node_mut_by_indices<'a>(
     }
 }
 
-fn get_node_mut_by_index_path<'a>(
-    nodes: &'a mut [PlanTaskNode],
-    path: &[usize],
-) -> Option<&'a mut PlanTaskNode> {
+fn get_node_mut_by_index_path<'a>(nodes: &'a mut [PlanTaskNode], path: &[usize]) -> Option<&'a mut PlanTaskNode> {
     let (&head, tail) = path.split_first()?;
     let idx = head.checked_sub(1)?;
     let node = nodes.get_mut(idx)?;
@@ -450,9 +422,8 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
 
         if let Some(header) = trimmed.strip_prefix("## ") {
             let lowered = header.trim().to_ascii_lowercase();
-            in_plan_section =
-                matches!(lowered.as_str(), "plan of work" | "concrete steps" | "updated plan")
-                    || lowered.starts_with("phase ");
+            in_plan_section = matches!(lowered.as_str(), "plan of work" | "concrete steps" | "updated plan")
+                || lowered.starts_with("phase ");
             in_notes = lowered == "notes";
             continue;
         }
@@ -472,9 +443,7 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
             if let Some(last) = task_lines.last_mut() {
                 let leading_spaces = raw.chars().take_while(|c| *c == ' ').count();
                 let min_indent = (last.level + 1) * 2;
-                if leading_spaces >= min_indent
-                    && apply_flat_line_metadata(last, raw, &mut in_verify_block)
-                {
+                if leading_spaces >= min_indent && apply_flat_line_metadata(last, raw, &mut in_verify_block) {
                     continue;
                 }
             }
@@ -590,15 +559,13 @@ impl PlanningTaskTrackerTool {
     async fn save_document(&self, document: &PlanTaskDocument) -> Result<PathBuf> {
         let tracker_file = self.tracker_file().await?;
         if let Some(parent) = tracker_file.parent() {
-            ensure_dir_exists(parent).await.with_context(|| {
-                format!("Failed to create plans directory: {}", parent.display())
-            })?;
+            ensure_dir_exists(parent)
+                .await
+                .with_context(|| format!("Failed to create plans directory: {}", parent.display()))?;
         }
         write_file_with_context(&tracker_file, &document.to_markdown(), "plan task tracker file")
             .await
-            .with_context(|| {
-                format!("Failed to write plan task tracker file: {}", tracker_file.display())
-            })?;
+            .with_context(|| format!("Failed to write plan task tracker file: {}", tracker_file.display()))?;
         Ok(tracker_file)
     }
 
@@ -614,9 +581,9 @@ impl PlanningTaskTrackerTool {
         };
 
         if let Some(parent) = task_file.parent() {
-            ensure_dir_exists(parent).await.with_context(|| {
-                format!("Failed to create tasks directory: {}", parent.display())
-            })?;
+            ensure_dir_exists(parent)
+                .await
+                .with_context(|| format!("Failed to create tasks directory: {}", parent.display()))?;
         }
 
         let mut lines = Vec::new();
@@ -631,18 +598,11 @@ impl PlanningTaskTrackerTool {
 
         write_file_with_context(&task_file, &markdown, "task checklist")
             .await
-            .with_context(|| {
-                format!("Failed to write mirrored task checklist file: {}", task_file.display())
-            })?;
+            .with_context(|| format!("Failed to write mirrored task checklist file: {}", task_file.display()))?;
         Ok(())
     }
 
-    fn success_payload(
-        status: &str,
-        message: String,
-        tracker_file: &Path,
-        document: &PlanTaskDocument,
-    ) -> Value {
+    fn success_payload(status: &str, message: String, tracker_file: &Path, document: &PlanTaskDocument) -> Value {
         json!({
             "status": status,
             "message": message,
@@ -671,9 +631,7 @@ impl PlanningTaskTrackerTool {
     async fn handle_create(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
         let items = args.items.as_deref().unwrap_or(&[]);
         if items.is_empty() {
-            bail!(
-                "At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]"
-            );
+            bail!("At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]");
         }
 
         let flat_lines = build_flat_create_lines(items)?;
@@ -688,12 +646,8 @@ impl PlanningTaskTrackerTool {
         };
         document.notes = append_notes(document.notes.take(), args.notes.as_deref());
 
-        self.persist_document_and_payload(
-            "created",
-            "Plan task tracker created successfully.".to_string(),
-            &document,
-        )
-        .await
+        self.persist_document_and_payload("created", "Plan task tracker created successfully.".to_string(), &document)
+            .await
     }
 
     async fn handle_update(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
@@ -702,12 +656,7 @@ impl PlanningTaskTrackerTool {
             .await?
             .context("No active plan tracker. Use action='create' first.")?;
 
-        if is_bulk_sync_update(
-            args.items.as_deref(),
-            args.index,
-            args.index_path.as_deref(),
-            args.status.as_deref(),
-        ) {
+        if is_bulk_sync_update(args.items.as_deref(), args.index, args.index_path.as_deref(), args.status.as_deref()) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
             let flat_lines = build_flat_create_lines(input_items)?;
             if flat_lines.is_empty() {
@@ -772,12 +721,9 @@ impl PlanningTaskTrackerTool {
     async fn handle_list(&self) -> Result<Value> {
         let tracker_file = self.tracker_file().await?;
         match self.load_document().await? {
-            Some(document) => Ok(Self::success_payload(
-                "ok",
-                "Plan task tracker loaded.".to_string(),
-                &tracker_file,
-                &document,
-            )),
+            Some(document) => {
+                Ok(Self::success_payload("ok", "Plan task tracker loaded.".to_string(), &tracker_file, &document))
+            }
             None => Ok(json!({
                 "status": "empty",
                 "message": "No active plan tracker. Use action='create' to start one.",
@@ -792,17 +738,12 @@ impl PlanningTaskTrackerTool {
             .await?
             .context("No active plan tracker. Use action='create' first.")?;
 
-        let description =
-            args.description.as_deref().context("'description' is required for 'add'")?;
+        let description = args.description.as_deref().context("'description' is required for 'add'")?;
         let (status, parsed_description) = parse_status_prefix(description);
         let node = PlanTaskNode {
             description: parsed_description.trim().to_string(),
             status,
-            metadata: metadata_from_input(
-                args.files.as_deref(),
-                args.outcome.as_deref(),
-                args.verify.as_deref(),
-            ),
+            metadata: metadata_from_input(args.files.as_deref(), args.outcome.as_deref(), args.verify.as_deref()),
             children: Vec::new(),
         };
         if node.description.is_empty() {
@@ -812,9 +753,7 @@ impl PlanningTaskTrackerTool {
         if let Some(parent_path_str) = args.parent_index_path.as_deref() {
             let parent_path = parse_index_path(parent_path_str)?;
             let parent = get_node_mut_by_index_path(document.items.as_mut_slice(), &parent_path)
-                .with_context(|| {
-                    format!("No parent item at parent_index_path '{parent_path_str}'")
-                })?;
+                .with_context(|| format!("No parent item at parent_index_path '{parent_path_str}'"))?;
             parent.children.push(node);
         } else {
             document.items.push(node);
@@ -822,12 +761,8 @@ impl PlanningTaskTrackerTool {
 
         document.notes = append_notes(document.notes.take(), args.notes.as_deref());
 
-        self.persist_document_and_payload(
-            "added",
-            "Plan task added successfully.".to_string(),
-            &document,
-        )
-        .await
+        self.persist_document_and_payload("added", "Plan task added successfully.".to_string(), &document)
+            .await
     }
 }
 
@@ -999,8 +934,7 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    async fn setup_planning_workflow() -> (TempDir, PlanningWorkflowState, PlanningTaskTrackerTool)
-    {
+    async fn setup_planning_workflow() -> (TempDir, PlanningWorkflowState, PlanningTaskTrackerTool) {
         let temp_dir = TempDir::new().expect("temp dir");
         let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         let plans_dir = state.plans_dir();
@@ -1071,10 +1005,7 @@ mod tests {
         assert_eq!(created["checklist"]["items"][0]["verify"], json!(["cargo check"]));
         assert_eq!(
             created["checklist"]["items"][1]["verify"],
-            json!([
-                "cargo test -p vtcode-core task_tracker",
-                "cargo check -p vtcode"
-            ])
+            json!(["cargo test -p vtcode-core task_tracker", "cargo check -p vtcode"])
         );
     }
 

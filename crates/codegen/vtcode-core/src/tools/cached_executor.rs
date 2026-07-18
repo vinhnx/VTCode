@@ -159,10 +159,7 @@ impl CachedToolExecutor {
     }
 
     /// Add middleware to the chain.
-    pub fn with_middleware(
-        mut self,
-        mw: Arc<dyn crate::tools::tool_middleware::Middleware>,
-    ) -> Self {
+    pub fn with_middleware(mut self, mw: Arc<dyn crate::tools::tool_middleware::Middleware>) -> Self {
         self.middleware = self.middleware.push(mw);
         self
     }
@@ -177,11 +174,7 @@ impl CachedToolExecutor {
     /// Execute a tool but return a shared (Arc) response to avoid clones.
     /// Accepts a shared `Arc<Value>` to avoid cloning arg contents when caller
     /// already holds a shared reference.
-    pub async fn execute_shared(
-        &self,
-        tool_name: &str,
-        args: Arc<Value>,
-    ) -> MiddlewareResult<Arc<Value>> {
+    pub async fn execute_shared(&self, tool_name: &str, args: Arc<Value>) -> MiddlewareResult<Arc<Value>> {
         let start = std::time::Instant::now();
         let cache_key = make_cache_key(tool_name, &args);
 
@@ -290,33 +283,19 @@ impl CachedToolExecutor {
     }
 
     /// Backwards-compatible wrapper for callers that still pass an owned Value.
-    pub async fn execute_shared_owned(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> MiddlewareResult<Arc<Value>> {
+    pub async fn execute_shared_owned(&self, tool_name: &str, args: Value) -> MiddlewareResult<Arc<Value>> {
         let arg = Arc::new(args);
         self.execute_shared(tool_name, arg).await
     }
 
     /// Execute tool (override this for real tool execution)
-    async fn execute_tool_internal(
-        &self,
-        _tool_name: &str,
-        _args: &Value,
-    ) -> MiddlewareResult<Value> {
+    async fn execute_tool_internal(&self, _tool_name: &str, _args: &Value) -> MiddlewareResult<Value> {
         // Default: return placeholder result
         // In real usage, this would call ToolRegistry
         Ok(serde_json::json!({"status": "ok"}))
     }
 
-    async fn record_error(
-        &self,
-        tool_name: &str,
-        elapsed: Duration,
-        req: &ToolRequest,
-        err: &UnifiedToolError,
-    ) {
+    async fn record_error(&self, tool_name: &str, elapsed: Duration, req: &ToolRequest, err: &UnifiedToolError) {
         self.stats.record_failure(elapsed.as_millis() as u64);
 
         let _ = self.middleware.on_error(req, err).await;
@@ -409,11 +388,7 @@ impl CachedToolExecutor {
         println!("\nWorkflow Patterns ({} detected):", patterns.len());
         for (i, pattern) in patterns.iter().take(5).enumerate() {
             println!("  {}. {:?}", i + 1, pattern.sequence);
-            println!(
-                "     Frequency: {}, Confidence: {:.1}%",
-                pattern.frequency,
-                pattern.confidence * 100.0
-            );
+            println!("     Frequency: {}, Confidence: {:.1}%", pattern.frequency, pattern.confidence * 100.0);
         }
 
         println!("\n");
@@ -458,10 +433,7 @@ mod tests {
     #[async_trait]
     impl crate::tools::tool_middleware::Middleware for FailingMiddleware {
         async fn before_execute(&self, _req: &ToolRequest) -> MiddlewareResult<()> {
-            Err(UnifiedToolError::new(
-                UnifiedErrorKind::ExecutionFailed,
-                "middleware rejected request",
-            ))
+            Err(UnifiedToolError::new(UnifiedErrorKind::ExecutionFailed, "middleware rejected request"))
         }
     }
 

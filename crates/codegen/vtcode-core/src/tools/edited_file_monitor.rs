@@ -35,10 +35,7 @@ impl FileSnapshot {
             .modified_millis
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_string());
-        format!(
-            "exists={};size={};modified={};sha256={}",
-            self.exists, self.size_bytes, modified, self.sha256
-        )
+        format!("exists={};size={};modified={};sha256={}", self.exists, self.size_bytes, modified, self.sha256)
     }
 
     fn to_json(&self) -> Value {
@@ -51,9 +48,7 @@ impl FileSnapshot {
     }
 
     fn same_contents(&self, other: &Self) -> bool {
-        self.exists == other.exists
-            && self.size_bytes == other.size_bytes
-            && self.sha256 == other.sha256
+        self.exists == other.exists && self.size_bytes == other.size_bytes && self.sha256 == other.sha256
     }
 
     fn same_identity(&self, other: &Self) -> bool {
@@ -125,8 +120,7 @@ pub struct TrackedPathFreshness {
 impl FileConflict {
     pub fn to_tool_output(&self, workspace_root: &Path) -> Value {
         let display_path = workspace_relative_display(workspace_root, &self.path);
-        let disk_content =
-            self.disk_snapshot.as_ref().and_then(|snapshot| snapshot.text_content.clone());
+        let disk_content = self.disk_snapshot.as_ref().and_then(|snapshot| snapshot.text_content.clone());
         let diff_preview = match (&disk_content, &self.intended_content) {
             (Some(before), Some(after)) => build_diff_preview(&display_path, Some(before), after),
             (None, Some(_)) => diff_preview_error_skip("binary_or_non_utf8_disk_content", None),
@@ -275,10 +269,7 @@ impl EditedFileMonitor {
                     return;
                 };
 
-                if !matches!(
-                    event.kind,
-                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
-                ) {
+                if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)) {
                     return;
                 }
 
@@ -336,8 +327,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry =
-                state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
             entry.last_read_snapshot = Some(snapshot.clone());
             entry.last_known_disk_snapshot = Some(snapshot);
             entry.stale_conflict = None;
@@ -354,8 +344,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry =
-                state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
             let snap_for_disk = snapshot.clone();
             entry.last_read_snapshot = Some(snap_for_disk);
             entry.last_known_disk_snapshot = Some(snapshot.clone());
@@ -408,16 +397,11 @@ impl EditedFileMonitor {
                     .last_read_snapshot
                     .as_ref()
                     .zip(entry.last_known_disk_snapshot.as_ref())
-                    .is_some_and(|(read_snapshot, disk_snapshot)| {
-                        !read_snapshot.same_contents(disk_snapshot)
-                    });
+                    .is_some_and(|(read_snapshot, disk_snapshot)| !read_snapshot.same_contents(disk_snapshot));
                 TrackedPathFreshness {
                     path: path.clone(),
                     is_stale,
-                    fingerprint: entry
-                        .last_known_disk_snapshot
-                        .as_ref()
-                        .map(FileSnapshot::fingerprint),
+                    fingerprint: entry.last_known_disk_snapshot.as_ref().map(FileSnapshot::fingerprint),
                 }
             })
             .collect::<Vec<_>>();
@@ -438,14 +422,12 @@ impl EditedFileMonitor {
     pub async fn acquire_mutation(&self, path: &Path) -> MutationLease {
         let path = normalize_event_path(path);
         let mutation_id = self.inner.next_mutation_id.fetch_add(1, Ordering::SeqCst);
-        let mut pending_guard =
-            PendingMutationGuard::new(Arc::clone(&self.inner), path.clone(), mutation_id);
+        let mut pending_guard = PendingMutationGuard::new(Arc::clone(&self.inner), path.clone(), mutation_id);
 
         loop {
             let notify = {
                 let mut state = self.inner.state.lock();
-                let entry =
-                    state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+                let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
 
                 if entry.active_mutation.is_none() {
                     if let Some(front) = entry.pending_mutations.front() {
@@ -495,8 +477,7 @@ impl EditedFileMonitor {
 
         let maybe_conflict = {
             let mut state = self.inner.state.lock();
-            let entry =
-                state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
             entry.last_known_disk_snapshot = Some(current_snapshot.clone());
 
             if entry
@@ -606,9 +587,8 @@ impl EditedFileMonitor {
 
     fn process_path_change(&self, path: PathBuf) -> Result<()> {
         let tracked_path = normalize_event_path(&path);
-        let snapshot = snapshot_path_sync(&tracked_path).with_context(|| {
-            format!("Failed to snapshot externally modified file {}", tracked_path.display())
-        })?;
+        let snapshot = snapshot_path_sync(&tracked_path)
+            .with_context(|| format!("Failed to snapshot externally modified file {}", tracked_path.display()))?;
 
         let mut should_audit = false;
 
@@ -657,19 +637,14 @@ impl EditedFileMonitor {
                 match entry.stale_conflict.as_mut() {
                     Some(_) => {}
                     None => {
-                        entry.stale_conflict =
-                            Some(StaleConflictState { notification_emitted: false });
+                        entry.stale_conflict = Some(StaleConflictState { notification_emitted: false });
                     }
                 }
             }
         }
 
         if should_audit {
-            self.record_conflict_audit(
-                &tracked_path,
-                &snapshot,
-                "watcher_detected_external_change",
-            );
+            self.record_conflict_audit(&tracked_path, &snapshot, "watcher_detected_external_change");
         }
 
         Ok(())
@@ -699,8 +674,7 @@ fn spawn_event_loop(inner: Arc<EditedFileMonitorInner>, event_rx: Receiver<PathB
             let ready = pending
                 .iter()
                 .filter_map(|(path, observed_at)| {
-                    (now.duration_since(*observed_at) >= inner.debounce_duration)
-                        .then_some(path.clone())
+                    (now.duration_since(*observed_at) >= inner.debounce_duration).then_some(path.clone())
                 })
                 .collect::<Vec<_>>();
 
@@ -743,8 +717,7 @@ fn snapshot_path_sync(path: &Path) -> Result<FileSnapshot> {
             });
         }
         Err(err) => {
-            return Err(err)
-                .with_context(|| format!("Failed to read metadata for {}", path.display()));
+            return Err(err).with_context(|| format!("Failed to read metadata for {}", path.display()));
         }
     };
 
@@ -758,8 +731,7 @@ fn snapshot_path_sync(path: &Path) -> Result<FileSnapshot> {
         });
     }
 
-    let bytes = std::fs::read(path)
-        .with_context(|| format!("Failed to read file bytes for {}", path.display()))?;
+    let bytes = std::fs::read(path).with_context(|| format!("Failed to read file bytes for {}", path.display()))?;
     let sha256 = calculate_sha256(&bytes);
 
     Ok(FileSnapshot {
@@ -792,9 +764,7 @@ pub fn conflict_override_snapshot(args: &Value) -> Option<FileSnapshot> {
 }
 
 fn remove_pending_mutation(entry: &mut TrackedFileState, mutation_id: u64) -> bool {
-    let Some(index) =
-        entry.pending_mutations.iter().position(|pending_id| *pending_id == mutation_id)
-    else {
+    let Some(index) = entry.pending_mutations.iter().position(|pending_id| *pending_id == mutation_id) else {
         return false;
     };
 

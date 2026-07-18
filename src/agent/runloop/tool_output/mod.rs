@@ -26,13 +26,9 @@ use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
 use commands::render_terminal_command_panel;
 use files::{
-    format_diff_content_lines_with_numbers, render_list_dir_output, render_read_file_output,
-    render_write_file_preview,
+    format_diff_content_lines_with_numbers, render_list_dir_output, render_read_file_output, render_write_file_preview,
 };
-use mcp::{
-    render_context7_output, render_generic_output, render_sequential_output,
-    resolve_renderer_profile,
-};
+use mcp::{render_context7_output, render_generic_output, render_sequential_output, resolve_renderer_profile};
 use streams::render_stream_section;
 use styles::{GitStyles, LsStyles};
 
@@ -147,15 +143,7 @@ async fn render_terminal_tool_output(
 ) -> Result<()> {
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
-    render_terminal_command_panel(
-        renderer,
-        val,
-        &git_styles,
-        &ls_styles,
-        vt_config,
-        allow_tool_ansi,
-    )
-    .await
+    render_terminal_command_panel(renderer, val, &git_styles, &ls_styles, vt_config, allow_tool_ansi).await
 }
 
 pub(crate) async fn render_tool_output(
@@ -181,11 +169,7 @@ pub(crate) async fn render_tool_output(
             }
             if val.get("content").is_some() {
                 render_read_file_output(renderer, val)?;
-                render_tool_follow_up_hints(
-                    renderer,
-                    val,
-                    val.get("content").and_then(Value::as_str),
-                )?;
+                render_tool_follow_up_hints(renderer, val, val.get("content").and_then(Value::as_str))?;
                 return Ok(());
             }
         }
@@ -200,9 +184,7 @@ pub(crate) async fn render_tool_output(
         | Some(tools::EXEC_PTY_CMD) => {
             return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
-        Some(tools::UNIFIED_EXEC)
-            if !is_git_diff_output && should_render_command_session_terminal_panel(val) =>
-        {
+        Some(tools::UNIFIED_EXEC) if !is_git_diff_output && should_render_command_session_terminal_panel(val) => {
             return render_terminal_tool_output(renderer, val, vt_config, allow_tool_ansi).await;
         }
         Some(tools::WEB_FETCH) => {
@@ -255,8 +237,7 @@ pub(crate) async fn render_tool_output(
         return Ok(());
     }
 
-    let output_mode =
-        vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
+    let output_mode = vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
@@ -405,9 +386,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
             .and_then(Value::as_u64)
             .unwrap_or_else(|| (completed * 100) / total.max(1));
         lines.push(format!("  Progress: {completed}/{total} complete ({progress_percent}%)"));
-        lines.push(format!(
-            "  Breakdown: {in_progress} in progress, {pending} pending, {blocked} blocked"
-        ));
+        lines.push(format!("  Breakdown: {in_progress} in progress, {pending} pending, {blocked} blocked"));
     }
 
     if let Some(items) = checklist.get("items").and_then(Value::as_array) {
@@ -420,8 +399,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
             })
             .map(|item| {
                 let index = item.get("index").and_then(Value::as_u64).unwrap_or(0);
-                let description =
-                    item.get("description").and_then(Value::as_str).unwrap_or("Unnamed task");
+                let description = item.get("description").and_then(Value::as_str).unwrap_or("Unnamed task");
                 if index > 0 {
                     format!("#{index} {description}")
                 } else {
@@ -450,11 +428,7 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
     lines
 }
 
-fn render_simple_tool_status(
-    renderer: &mut AnsiRenderer,
-    _tool_name: Option<&str>,
-    val: &Value,
-) -> Result<()> {
+fn render_simple_tool_status(renderer: &mut AnsiRenderer, _tool_name: Option<&str>, val: &Value) -> Result<()> {
     let has_error = val.get("error").is_some() || val.get("error_type").is_some();
 
     if has_error {
@@ -532,8 +506,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 
     if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
         if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
-            renderer
-                .line(MessageStyle::ToolDetail, &format!("Location: line {line}, column {col}"))?;
+            renderer.line(MessageStyle::ToolDetail, &format!("Location: line {line}, column {col}"))?;
         } else {
             renderer.line(MessageStyle::ToolDetail, &format!("Location: line {line}"))?;
         }
@@ -550,10 +523,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             }
         }
         if suggestions.len() > 5 {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!("    ... and {} more", suggestions.len() - 5),
-            )?;
+            renderer.line(MessageStyle::ToolDetail, &format!("    ... and {} more", suggestions.len() - 5))?;
         }
     }
 
@@ -572,9 +542,9 @@ pub(crate) fn collect_inline_output(
             }
             vtcode_core::ui::InlineCommand::ReplaceLast { lines: replacement_lines, .. } => {
                 lines.extend(
-                    replacement_lines.into_iter().map(|line| {
-                        line.into_iter().map(|segment| segment.text).collect::<String>()
-                    }),
+                    replacement_lines
+                        .into_iter()
+                        .map(|line| line.into_iter().map(|segment| segment.text).collect::<String>()),
                 );
             }
             _ => {}
@@ -653,8 +623,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_command_session_git_diff_renders_diff_not_command_preview() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "git diff -- src/main.rs",
             "output": "diff --git a/src/main.rs b/src/main.rs\n+added\n-removed\n",
@@ -663,28 +632,19 @@ mod tests {
             "exit_code": 0
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
-            &payload,
-            None,
-        )
-        .await
-        .expect("git diff payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::UNIFIED_EXEC), &payload, None)
+            .await
+            .expect("git diff payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("diff --git a/src/main.rs b/src/main.rs"));
-        assert!(
-            !inline_output.contains("└ "),
-            "run-command preview prefix should not appear for git diff payload"
-        );
+        assert!(!inline_output.contains("└ "), "run-command preview prefix should not appear for git diff payload");
     }
 
     #[tokio::test]
     async fn render_tool_output_command_session_git_diff_stdout_renders_diff_not_command_preview() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "git diff -- src/lib.rs",
             "stdout": "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1 +1 @@\n-old\n+new\n",
@@ -693,30 +653,21 @@ mod tests {
             "exit_code": 0
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
-            &payload,
-            None,
-        )
-        .await
-        .expect("git diff stdout payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::UNIFIED_EXEC), &payload, None)
+            .await
+            .expect("git diff stdout payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("diff --git a/src/lib.rs b/src/lib.rs"));
         assert!(inline_output.contains("@@ -1 +1 @@"));
         assert!(inline_output.contains("new"));
-        assert!(
-            !inline_output.contains("└ "),
-            "run-command preview prefix should not appear for git diff payload"
-        );
+        assert!(!inline_output.contains("└ "), "run-command preview prefix should not appear for git diff payload");
     }
 
     #[tokio::test]
     async fn render_tool_output_command_session_renders_structured_hints() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "cargo check",
             "output": "tail preview",
@@ -728,14 +679,9 @@ mod tests {
             "spool_path": ".vtcode/context/tool_outputs/run-123.txt"
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
-            &payload,
-            None,
-        )
-        .await
-        .expect("structured hint payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::UNIFIED_EXEC), &payload, None)
+            .await
+            .expect("structured hint payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
@@ -748,8 +694,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_exec_command_renders_terminal_panel_with_output() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "cargo check",
             "output": "Compiling vtcode v0.135.9",
@@ -759,14 +704,9 @@ mod tests {
             "exit_code": 0
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::EXEC_COMMAND),
-            &payload,
-            None,
-        )
-        .await
-        .expect("exec_command payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::EXEC_COMMAND), &payload, None)
+            .await
+            .expect("exec_command payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(
@@ -782,8 +722,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_exec_pty_cmd_renders_terminal_panel_with_output() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "ls -la",
             "output": "total 0",
@@ -792,14 +731,9 @@ mod tests {
             "exit_code": 0
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::EXEC_PTY_CMD),
-            &payload,
-            None,
-        )
-        .await
-        .expect("exec_pty_cmd payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::EXEC_PTY_CMD), &payload, None)
+            .await
+            .expect("exec_pty_cmd payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(
@@ -811,8 +745,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_run_pty_completed_spooled_output_is_reference_only() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "cargo check",
             "output": "preview text that should not render inline",
@@ -822,14 +755,9 @@ mod tests {
             "spool_path": ".vtcode/context/tool_outputs/run-123.txt"
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::RUN_PTY_CMD),
-            &payload,
-            None,
-        )
-        .await
-        .expect("spooled PTY payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::RUN_PTY_CMD), &payload, None)
+            .await
+            .expect("spooled PTY payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("✓ exit 0"));
@@ -841,22 +769,16 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_read_file_renders_spool_hint_on_early_return_path() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "path": "README.md",
             "content": "preview",
             "spool_path": ".vtcode/context/tool_outputs/readme.txt"
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::READ_FILE),
-            &payload,
-            None,
-        )
-        .await
-        .expect("read_file payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::READ_FILE), &payload, None)
+            .await
+            .expect("read_file payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
@@ -868,21 +790,15 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_web_fetch_content_fallback_renders_follow_up_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "content": "preview",
             "spool_path": ".vtcode/context/tool_outputs/web.txt"
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::WEB_FETCH),
-            &payload,
-            None,
-        )
-        .await
-        .expect("web_fetch payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::WEB_FETCH), &payload, None)
+            .await
+            .expect("web_fetch payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Large output was spooled to"));
@@ -894,8 +810,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_does_not_duplicate_spooled_output_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let spool_path = ".vtcode/context/tool_outputs/web.txt";
         let hint = spooled_output_hint(spool_path);
         let payload = json!({
@@ -916,23 +831,16 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_read_file_long_preview_keeps_preview_limits() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-        let content =
-            (1..=100).map(|idx| format!("{idx}: line {idx}")).collect::<Vec<_>>().join("\n");
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let content = (1..=100).map(|idx| format!("{idx}: line {idx}")).collect::<Vec<_>>().join("\n");
         let payload = json!({
             "path": "src/main.rs",
             "content": content
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::READ_FILE),
-            &payload,
-            None,
-        )
-        .await
-        .expect("read_file preview payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::READ_FILE), &payload, None)
+            .await
+            .expect("read_file preview payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         // read_file now shows a summary line instead of code preview
@@ -944,21 +852,15 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_renders_loop_recovery_hint_from_structured_fields() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "loop_detected": true,
             "fallback_tool": vtcode_core::config::constants::tools::CODE_SEARCH
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::CODE_SEARCH),
-            &payload,
-            None,
-        )
-        .await
-        .expect("loop recovery hint payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::CODE_SEARCH), &payload, None)
+            .await
+            .expect("loop recovery hint payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Loop detected; fallback is available."));
@@ -967,8 +869,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_renders_spooled_loop_recovery_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "loop_detected": true,
             "spool_path": ".vtcode/context/tool_outputs/readme.txt",
@@ -979,14 +880,9 @@ mod tests {
             }
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::READ_FILE),
-            &payload,
-            None,
-        )
-        .await
-        .expect("spooled loop recovery hint payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::READ_FILE), &payload, None)
+            .await
+            .expect("spooled loop recovery hint payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Loop detected; continue from spooled output."));
@@ -995,8 +891,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_does_not_duplicate_loop_recovery_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "loop_detected": true,
             "fallback_tool": vtcode_core::config::constants::tools::CODE_SEARCH,
@@ -1014,8 +909,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_command_session_keeps_exit_127_output_and_guidance() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "pip install pymupdf",
             "output": "bash: pip: command not found",
@@ -1026,28 +920,21 @@ mod tests {
             "next_action": "Check the command name or install the missing binary, then rerun the command."
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
-            &payload,
-            None,
-        )
-        .await
-        .expect("exit 127 payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::UNIFIED_EXEC), &payload, None)
+            .await
+            .expect("exit 127 payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("bash: pip: command not found"));
         assert!(inline_output.contains("not found in PATH."));
-        assert!(inline_output.contains(
-            "Check the command name or install the missing binary, then rerun the command."
-        ));
+        assert!(
+            inline_output.contains("Check the command name or install the missing binary, then rerun the command.")
+        );
         assert!(inline_output.contains("✓ exit 127"));
         assert!(!inline_output.contains("Solution:"));
         assert_eq!(
             inline_output
-                .matches(
-                    "Check the command name or install the missing binary, then rerun the command."
-                )
+                .matches("Check the command name or install the missing binary, then rerun the command.")
                 .count(),
             1
         );
@@ -1056,8 +943,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_renders_generic_recoverable_failure_guidance() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "error": "Tool preflight validation failed: x",
             "is_recoverable": true,
@@ -1079,8 +965,7 @@ mod tests {
     #[tokio::test]
     async fn render_tool_output_write_file_diff_truncation_uses_file_operation_hint() {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "diff_preview": {
                 "content": "@@ -1 +1 @@\n-old\n+new\n",
@@ -1089,14 +974,9 @@ mod tests {
             }
         });
 
-        render_tool_output(
-            &mut renderer,
-            Some(vtcode_core::config::constants::tools::WRITE_FILE),
-            &payload,
-            None,
-        )
-        .await
-        .expect("write file diff payload should render");
+        render_tool_output(&mut renderer, Some(vtcode_core::config::constants::tools::WRITE_FILE), &payload, None)
+            .await
+            .expect("write file diff payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("use exec_command with sed for full view"));

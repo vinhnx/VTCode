@@ -7,9 +7,7 @@ use vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO;
 
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::exec::events::CompactionMode;
-use crate::llm::provider::{
-    LLMProvider, LLMRequest, Message, MessageRole, ResponsesCompactionOptions,
-};
+use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole, ResponsesCompactionOptions};
 use crate::llm::utils::truncate_to_token_limit;
 
 pub mod auto;
@@ -259,10 +257,8 @@ async fn compact_history_native_inline(
 
     let mut compact_edit = serde_json::Map::new();
     compact_edit.insert("type".to_string(), json!("compact_20260112"));
-    compact_edit.insert(
-        "trigger".to_string(),
-        json!({ "type": "input_tokens", "value": ANTHROPIC_COMPACT_TRIGGER_FLOOR }),
-    );
+    compact_edit
+        .insert("trigger".to_string(), json!({ "type": "input_tokens", "value": ANTHROPIC_COMPACT_TRIGGER_FLOOR }));
     compact_edit.insert("pause_after_compaction".to_string(), json!(true));
     if let Some(instructions) = options
         .instructions
@@ -309,11 +305,8 @@ async fn compact_history_native_inline(
             .map(|summary| summary.trim())
             .filter(|summary| !summary.is_empty())
     {
-        let retained_users = collect_retained_user_messages(
-            history,
-            config.retained_user_message_tokens,
-            config.retained_user_messages,
-        );
+        let retained_users =
+            collect_retained_user_messages(history, config.retained_user_message_tokens, config.retained_user_messages);
         let mut compacted = Vec::with_capacity(retained_users.len().saturating_add(1));
         compacted.push(Message::system(format!("{SUMMARY_PREFIX}{summary}")));
         compacted.extend(retained_users);
@@ -440,11 +433,8 @@ async fn summarize_locally_hierarchical(
 
     // Band 3 (newest): retain verbatim via importance-weighted selection.
     let recent_band = &history[detail_end..];
-    let retained = collect_retained_user_messages(
-        recent_band,
-        config.retained_user_message_tokens,
-        config.retained_user_messages,
-    );
+    let retained =
+        collect_retained_user_messages(recent_band, config.retained_user_message_tokens, config.retained_user_messages);
 
     // Assemble: [abstract, detail, ...retained_recent, ...continuity_tail]
     let mut new_history = Vec::with_capacity(2 + retained.len());
@@ -453,9 +443,10 @@ async fn summarize_locally_hierarchical(
     new_history.extend(retained);
     // Live compaction: retain the most recent turn verbatim for continuity.
     for message in continuity_tail(history) {
-        if !new_history.iter().any(|existing| {
-            existing.role == message.role && existing.content.as_text() == message.content.as_text()
-        }) {
+        if !new_history
+            .iter()
+            .any(|existing| existing.role == message.role && existing.content.as_text() == message.content.as_text())
+        {
             new_history.push(message.clone());
         }
     }
@@ -465,13 +456,11 @@ async fn summarize_locally_hierarchical(
 fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
     // Pre-size for the header plus every (non-empty) message body, avoiding
     // repeated reallocations while the summary prompt is assembled.
-    let estimated_len = instructions.len()
-        + history.iter().map(|m| m.content.as_text().len()).sum::<usize>()
-        + history.len() * 16;
+    let estimated_len =
+        instructions.len() + history.iter().map(|m| m.content.as_text().len()).sum::<usize>() + history.len() * 16;
     let mut formatted = String::with_capacity(estimated_len);
     let now: DateTime<Utc> = Utc::now();
-    let _ =
-        writeln!(&mut formatted, "Summary requested at {}.\n{}", now.to_rfc3339(), instructions);
+    let _ = writeln!(&mut formatted, "Summary requested at {}.\n{}", now.to_rfc3339(), instructions);
 
     for message in history {
         let role = match message.role {
@@ -497,11 +486,7 @@ fn build_local_compacted_history(
     retained_user_messages: usize,
     include_continuity_tail: bool,
 ) -> Vec<Message> {
-    let retained_users = collect_retained_user_messages(
-        history,
-        retained_user_message_tokens,
-        retained_user_messages,
-    );
+    let retained_users = collect_retained_user_messages(history, retained_user_message_tokens, retained_user_messages);
     let mut new_history = Vec::with_capacity(retained_users.len().saturating_add(1));
     new_history.push(Message::system(format!("{SUMMARY_PREFIX}{}", summary.trim())));
     new_history.extend(retained_users);
@@ -513,8 +498,7 @@ fn build_local_compacted_history(
     if include_continuity_tail {
         for message in continuity_tail(history) {
             if !new_history.iter().any(|existing| {
-                existing.role == message.role
-                    && existing.content.as_text() == message.content.as_text()
+                existing.role == message.role && existing.content.as_text() == message.content.as_text()
             }) {
                 new_history.push(message.clone());
             }
@@ -541,9 +525,7 @@ fn continuity_tail(history: &[Message]) -> &[Message] {
     // because every tool call must be paired with a tool result. A complete turn
     // ends with a `Tool` message, which is *not* trimmed here.
     while let Some(last) = tail.last() {
-        if last.role == MessageRole::Assistant
-            && last.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
-        {
+        if last.role == MessageRole::Assistant && last.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
             tail = &tail[..tail.len() - 1];
         } else {
             break;
@@ -552,11 +534,7 @@ fn continuity_tail(history: &[Message]) -> &[Message] {
     tail
 }
 
-fn collect_retained_user_messages(
-    history: &[Message],
-    token_budget: usize,
-    max_messages: usize,
-) -> Vec<Message> {
+fn collect_retained_user_messages(history: &[Message], token_budget: usize, max_messages: usize) -> Vec<Message> {
     if token_budget == 0 || max_messages == 0 {
         return Vec::new();
     }
@@ -599,11 +577,7 @@ fn collect_retained_user_messages(
         let mut non_user_scored: Vec<(usize, f64, &Message)> = history
             .iter()
             .enumerate()
-            .filter(|(_, m)| {
-                m.role != MessageRole::User
-                    && m.role != MessageRole::System
-                    && is_retainable_message(m)
-            })
+            .filter(|(_, m)| m.role != MessageRole::User && m.role != MessageRole::System && is_retainable_message(m))
             .map(|(i, m)| {
                 let score = score_message(m, i, total);
                 (i, score, m)
@@ -650,16 +624,11 @@ fn collect_retained_user_messages(
 ///
 /// Tool results that follow a plain `Assistant` (no `tool_calls`) are ordinary
 /// turn output and are kept exactly as selected.
-fn coherence_tool_call_pairs(
-    history: &[Message],
-    selected: &[(usize, Message)],
-) -> Vec<(usize, Message)> {
+fn coherence_tool_call_pairs(history: &[Message], selected: &[(usize, Message)]) -> Vec<(usize, Message)> {
     let mut keep: std::collections::HashSet<usize> = selected.iter().map(|(i, _)| *i).collect();
 
     for (idx, msg) in selected {
-        if msg.role == MessageRole::Assistant
-            && msg.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
-        {
+        if msg.role == MessageRole::Assistant && msg.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
             let mut j = *idx + 1;
             while let Some(next) = history.get(j) {
                 if next.role == MessageRole::Tool {
@@ -747,11 +716,7 @@ fn score_message(message: &Message, index: usize, total: usize) -> f64 {
     };
 
     // Recency bonus: linear from 0.0 (oldest) to 1.0 (newest).
-    let recency = if total > 0 {
-        index as f64 / total as f64
-    } else {
-        0.0
-    };
+    let recency = if total > 0 { index as f64 / total as f64 } else { 0.0 };
 
     importance + recency
 }
@@ -797,8 +762,7 @@ fn truncate_user_message(message: &Message, token_budget: usize) -> Option<Messa
     }
 
     let available_content_tokens = token_budget.saturating_sub(4);
-    let truncated =
-        truncate_to_token_limit(message.content.as_text().as_ref(), available_content_tokens);
+    let truncated = truncate_to_token_limit(message.content.as_text().as_ref(), available_content_tokens);
     let trimmed = truncated.trim();
     if trimmed.is_empty() {
         return None;
@@ -810,14 +774,13 @@ fn truncate_user_message(message: &Message, token_budget: usize) -> Option<Messa
 #[cfg(test)]
 mod tests {
     use super::{
-        CompactionConfig, ManualCompactionOptions, compact_history, compact_history_manual,
-        continuity_tail, manual_compaction_strategy,
+        CompactionConfig, ManualCompactionOptions, compact_history, compact_history_manual, continuity_tail,
+        manual_compaction_strategy,
     };
     use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
     use crate::exec::events::CompactionMode;
     use crate::llm::provider::{
-        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
-        ResponsesCompactionOptions,
+        LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ResponsesCompactionOptions,
     };
     use async_trait::async_trait;
     use std::sync::Mutex;
@@ -901,11 +864,7 @@ mod tests {
             true
         }
 
-        async fn compact_history(
-            &self,
-            _model: &str,
-            _history: &[Message],
-        ) -> Result<Vec<Message>, LLMError> {
+        async fn compact_history(&self, _model: &str, _history: &[Message]) -> Result<Vec<Message>, LLMError> {
             Ok(vec![Message::system("provider compacted".to_string())])
         }
     }
@@ -938,8 +897,7 @@ mod tests {
             _history: &[Message],
             options: &ResponsesCompactionOptions,
         ) -> Result<Vec<Message>, LLMError> {
-            *self.last_options.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(options.clone());
+            *self.last_options.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(options.clone());
             Ok(vec![Message::system("provider standalone compacted".to_string())])
         }
     }
@@ -951,8 +909,7 @@ mod tests {
         }
 
         async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(request);
+            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request);
             let mut response = LLMResponse::new("stub-model", "compacted by provider");
             response.finish_reason = FinishReason::Pause;
             response.compaction = Some("provider compaction summary".to_string());
@@ -983,8 +940,7 @@ mod tests {
         }
 
         async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(request);
+            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request);
             Ok(LLMResponse::new("stub-model", "summary"))
         }
 
@@ -1114,36 +1070,24 @@ mod tests {
         let retained = super::collect_retained_user_messages(&history, 20_000, 3);
         assert!(retained.iter().any(|m| m.content.as_text().contains("u1")));
         assert!(retained.iter().any(|m| m.content.as_text().contains("u2")));
-        assert!(
-            !retained.iter().any(|m| m.content.as_text().contains("r1")),
-            "orphaned tool result must be dropped"
-        );
+        assert!(!retained.iter().any(|m| m.content.as_text().contains("r1")), "orphaned tool result must be dropped");
     }
 
     #[tokio::test]
     async fn manual_compaction_strategy_picks_local_for_plain_provider() {
-        assert_eq!(
-            manual_compaction_strategy(&StubProvider, "stub-model"),
-            super::CompactionStrategy::Local
-        );
+        assert_eq!(manual_compaction_strategy(&StubProvider, "stub-model"), super::CompactionStrategy::Local);
     }
 
     #[tokio::test]
     async fn manual_compaction_strategy_picks_native_standalone_for_manual_provider() {
         let provider = ManualStandaloneProvider { last_options: Mutex::new(None) };
-        assert_eq!(
-            manual_compaction_strategy(&provider, "stub-model"),
-            super::CompactionStrategy::NativeStandalone
-        );
+        assert_eq!(manual_compaction_strategy(&provider, "stub-model"), super::CompactionStrategy::NativeStandalone);
     }
 
     #[tokio::test]
     async fn manual_compaction_strategy_picks_native_inline_for_responses_capable_provider() {
         let provider = InlinePauseProvider { last_request: Mutex::new(None) };
-        assert_eq!(
-            manual_compaction_strategy(&provider, "stub-model"),
-            super::CompactionStrategy::NativeInline
-        );
+        assert_eq!(manual_compaction_strategy(&provider, "stub-model"), super::CompactionStrategy::NativeInline);
     }
 
     #[tokio::test]
@@ -1165,15 +1109,10 @@ mod tests {
             ..CompactionConfig::default()
         };
 
-        let (compacted, mode) = compact_history_manual(
-            &StubProvider,
-            "stub-model",
-            &history,
-            &config,
-            &ManualCompactionOptions::default(),
-        )
-        .await
-        .expect("manual compaction");
+        let (compacted, mode) =
+            compact_history_manual(&StubProvider, "stub-model", &history, &config, &ManualCompactionOptions::default())
+                .await
+                .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Local);
         assert_eq!(compacted.len(), 3);
@@ -1188,15 +1127,10 @@ mod tests {
         let config = CompactionConfig::default();
         let provider = ManualStandaloneProvider { last_options: Mutex::new(None) };
 
-        let (compacted, mode) = compact_history_manual(
-            &provider,
-            "stub-model",
-            &history,
-            &config,
-            &ManualCompactionOptions::default(),
-        )
-        .await
-        .expect("manual compaction");
+        let (compacted, mode) =
+            compact_history_manual(&provider, "stub-model", &history, &config, &ManualCompactionOptions::default())
+                .await
+                .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Provider);
         assert_eq!(compacted.len(), 1);
@@ -1215,10 +1149,9 @@ mod tests {
             verbosity: Some(VerbosityLevel::High),
         };
 
-        let (_compacted, mode) =
-            compact_history_manual(&provider, "stub-model", &history, &config, &options)
-                .await
-                .expect("manual compaction");
+        let (_compacted, mode) = compact_history_manual(&provider, "stub-model", &history, &config, &options)
+            .await
+            .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Provider);
         let captured = provider.last_options.lock().unwrap().clone().expect("captured options");
@@ -1234,29 +1167,20 @@ mod tests {
         let config = CompactionConfig::default();
         let provider = InlinePauseProvider { last_request: Mutex::new(None) };
 
-        let (compacted, mode) = compact_history_manual(
-            &provider,
-            "stub-model",
-            &history,
-            &config,
-            &ManualCompactionOptions::default(),
-        )
-        .await
-        .expect("manual compaction");
+        let (compacted, mode) =
+            compact_history_manual(&provider, "stub-model", &history, &config, &ManualCompactionOptions::default())
+                .await
+                .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Provider);
         assert_eq!(compacted.len(), 3);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nprovider compaction summary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nprovider compaction summary");
         assert_eq!(compacted[1].content.as_text(), "first request");
         assert_eq!(compacted[2].content.as_text(), "second request");
 
         // The inline request must carry the `compact_20260112` edit with a forced
         // pause so the provider actually performs compaction on demand.
-        let captured =
-            provider.last_request.lock().unwrap().clone().expect("captured inline request");
+        let captured = provider.last_request.lock().unwrap().clone().expect("captured inline request");
         let context_management = captured
             .context_management
             .as_ref()
@@ -1277,13 +1201,11 @@ mod tests {
             ..ManualCompactionOptions::default()
         };
 
-        let (_compacted, _mode) =
-            compact_history_manual(&provider, "stub-model", &history, &config, &options)
-                .await
-                .expect("manual compaction");
+        let (_compacted, _mode) = compact_history_manual(&provider, "stub-model", &history, &config, &options)
+            .await
+            .expect("manual compaction");
 
-        let captured =
-            provider.last_request.lock().unwrap().clone().expect("captured inline request");
+        let captured = provider.last_request.lock().unwrap().clone().expect("captured inline request");
         let edit = &captured.context_management.as_ref().expect("context_management")["edits"][0];
         assert_eq!(edit["instructions"].as_str(), Some("keep only decisions"));
     }
@@ -1350,14 +1272,12 @@ mod tests {
             verbosity: Some(VerbosityLevel::High),
         };
 
-        let (compacted, mode) =
-            compact_history_manual(&provider, "stub-model", &history, &config, &options)
-                .await
-                .expect("manual compaction");
+        let (compacted, mode) = compact_history_manual(&provider, "stub-model", &history, &config, &options)
+            .await
+            .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Local);
-        let captured =
-            provider.last_request.lock().unwrap().clone().expect("captured summary request");
+        let captured = provider.last_request.lock().unwrap().clone().expect("captured summary request");
         assert_eq!(captured.max_tokens, Some(128));
         assert_eq!(captured.reasoning_effort, Some(ReasoningEffortLevel::Minimal));
         assert_eq!(captured.verbosity, Some(VerbosityLevel::High));
@@ -1515,8 +1435,7 @@ mod tests {
             Message::user("do the thing".into()),
             {
                 let mut m = Message::assistant("calling".into());
-                m.tool_calls =
-                    Some(vec![ToolCall::function("c1".into(), "run".into(), "{}".into())]);
+                m.tool_calls = Some(vec![ToolCall::function("c1".into(), "run".into(), "{}".into())]);
                 m
             },
             Message::tool_response("c1".into(), "ran".into()),
@@ -1562,18 +1481,12 @@ mod tests {
 
         let prompt = build_summary_prompt(&history, instructions);
 
-        assert!(
-            prompt.contains("The answer is 4."),
-            "visible assistant text must appear in the summary prompt"
-        );
+        assert!(prompt.contains("The answer is 4."), "visible assistant text must appear in the summary prompt");
         assert!(
             !prompt.contains("SECRET_REASONING"),
             "Message.reasoning must NOT be included in the summary prompt -- \
              it would bloat every compaction pass with ephemeral chain-of-thought"
         );
-        assert!(
-            prompt.contains("Summarize the conversation."),
-            "instructions must appear in the summary prompt"
-        );
+        assert!(prompt.contains("Summarize the conversation."), "instructions must appear in the summary prompt");
     }
 }

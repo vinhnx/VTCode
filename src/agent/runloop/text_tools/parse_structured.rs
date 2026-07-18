@@ -192,8 +192,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value, Vec<Value>)>
             continue;
         }
 
-        if let Some((key_raw, value_raw)) = entry.split_once('=').or_else(|| entry.split_once(':'))
-        {
+        if let Some((key_raw, value_raw)) = entry.split_once('=').or_else(|| entry.split_once(':')) {
             let key = key_raw.trim().trim_matches('"').trim_matches('\'').to_string();
             let value = parse_scalar_value(value_raw.trim());
             object.insert(key, value);

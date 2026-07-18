@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
-use vtcode_commons::fs::{
-    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
-};
+use vtcode_commons::fs::{ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync};
 
 /// Skill template types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -171,11 +169,7 @@ impl TemplateEngine {
                 },
             ],
             file_structure: FileStructure {
-                directories: vec![
-                    "scripts".to_string(),
-                    "references".to_string(),
-                    "assets".to_string(),
-                ],
+                directories: vec!["scripts".to_string(), "references".to_string(), "assets".to_string()],
                 files: HashMap::from([(
                     "SKILL.md".to_string(),
                     include_str!("../templates/traditional/SKILL.md.template").to_string(),
@@ -186,12 +180,8 @@ impl TemplateEngine {
                 )]),
             },
             default_metadata: HashMap::new(),
-            instructions_template: include_str!(
-                "../templates/traditional/instructions.md.template"
-            )
-            .to_string(),
-            example_usage: include_str!("../templates/traditional/example_usage.md.template")
-                .to_string(),
+            instructions_template: include_str!("../templates/traditional/instructions.md.template").to_string(),
+            example_usage: include_str!("../templates/traditional/example_usage.md.template").to_string(),
         }
     }
 
@@ -239,14 +229,8 @@ impl TemplateEngine {
             file_structure: FileStructure {
                 directories: vec![],
                 files: HashMap::from([
-                    (
-                        "tool.json".to_string(),
-                        include_str!("../templates/cli-tool/tool.json.template").to_string(),
-                    ),
-                    (
-                        "README.md".to_string(),
-                        include_str!("../templates/cli-tool/README.md.template").to_string(),
-                    ),
+                    ("tool.json".to_string(), include_str!("../templates/cli-tool/tool.json.template").to_string()),
+                    ("README.md".to_string(), include_str!("../templates/cli-tool/README.md.template").to_string()),
                 ]),
                 executables: HashMap::from([(
                     "tool.sh".to_string(),
@@ -257,10 +241,8 @@ impl TemplateEngine {
                 ("category".to_string(), "cli-tool".to_string()),
                 ("tags".to_string(), "external,tool".to_string()),
             ]),
-            instructions_template: include_str!("../templates/cli-tool/instructions.md.template")
-                .to_string(),
-            example_usage: include_str!("../templates/cli-tool/example_usage.md.template")
-                .to_string(),
+            instructions_template: include_str!("../templates/cli-tool/instructions.md.template").to_string(),
+            example_usage: include_str!("../templates/cli-tool/example_usage.md.template").to_string(),
         }
     }
 
@@ -353,23 +335,27 @@ impl TemplateEngine {
                 },
             ],
             file_structure: FileStructure {
-                directories: vec![
-                    "processors".to_string(),
-                    "schemas".to_string(),
-                ],
+                directories: vec!["processors".to_string(), "schemas".to_string()],
                 files: HashMap::from([
-                    ("SKILL.md".to_string(), "# {{processor_name}}\n\nProcess {{input_format}} data and output {{output_format}}.".to_string()),
+                    (
+                        "SKILL.md".to_string(),
+                        "# {{processor_name}}\n\nProcess {{input_format}} data and output {{output_format}}."
+                            .to_string(),
+                    ),
                     ("processor.py".to_string(), "#!/usr/bin/env python3\n# Data processor implementation".to_string()),
                 ]),
-                executables: HashMap::from([
-                    ("process.sh".to_string(), "#!/bin/bash\necho 'Processing data...'".to_string()),
-                ]),
+                executables: HashMap::from([(
+                    "process.sh".to_string(),
+                    "#!/bin/bash\necho 'Processing data...'".to_string(),
+                )]),
             },
             default_metadata: HashMap::from([
                 ("category".to_string(), "processor".to_string()),
                 ("tags".to_string(), "data,processing,transformation".to_string()),
             ]),
-            instructions_template: "# {{processor_name}} Instructions\n\nProcess data from {{input_format}} to {{output_format}} format.".to_string(),
+            instructions_template:
+                "# {{processor_name}} Instructions\n\nProcess data from {{input_format}} to {{output_format}} format."
+                    .to_string(),
             example_usage: "## Example Usage\n\nProcess data using the {{processor_name}} skill.".to_string(),
         }
     }
@@ -408,24 +394,28 @@ impl TemplateEngine {
                 },
             ],
             file_structure: FileStructure {
-                directories: vec![
-                    "tests".to_string(),
-                    "configs".to_string(),
-                ],
+                directories: vec!["tests".to_string(), "configs".to_string()],
                 files: HashMap::from([
-                    ("SKILL.md".to_string(), "# {{tester_name}}\n\n{{test_framework}} testing utility for quality assurance.".to_string()),
+                    (
+                        "SKILL.md".to_string(),
+                        "# {{tester_name}}\n\n{{test_framework}} testing utility for quality assurance.".to_string(),
+                    ),
                     ("test_runner.py".to_string(), "#!/usr/bin/env python3\n# Test runner implementation".to_string()),
                 ]),
-                executables: HashMap::from([
-                    ("run_tests.sh".to_string(), "#!/bin/bash\necho 'Running tests...'".to_string()),
-                ]),
+                executables: HashMap::from([(
+                    "run_tests.sh".to_string(),
+                    "#!/bin/bash\necho 'Running tests...'".to_string(),
+                )]),
             },
             default_metadata: HashMap::from([
                 ("category".to_string(), "testing".to_string()),
                 ("tags".to_string(), "testing,quality,assurance".to_string()),
             ]),
-            instructions_template: "# {{tester_name}} Instructions\n\nRun tests using {{test_framework}} with {{coverage_tool}} coverage.".to_string(),
-            example_usage: "## Example Usage\n\nRun tests using the {{tester_name}} skill with {{test_framework}}.".to_string(),
+            instructions_template:
+                "# {{tester_name}} Instructions\n\nRun tests using {{test_framework}} with {{coverage_tool}} coverage."
+                    .to_string(),
+            example_usage: "## Example Usage\n\nRun tests using the {{tester_name}} skill with {{test_framework}}."
+                .to_string(),
         }
     }
 
@@ -465,12 +455,7 @@ impl TemplateEngine {
         let skill_dir = output_dir.join(skill_name);
         ensure_dir_exists_sync(&skill_dir)?;
 
-        info!(
-            "Generating skill '{}' from template '{}' in {}",
-            skill_name,
-            template_name,
-            skill_dir.display()
-        );
+        info!("Generating skill '{}' from template '{}' in {}", skill_name, template_name, skill_dir.display());
 
         // Create directory structure
         for dir in &template.file_structure.directories {
@@ -527,11 +512,7 @@ impl TemplateEngine {
     }
 
     /// Validate template variables
-    fn validate_variables(
-        &self,
-        template: &SkillTemplate,
-        variables: &HashMap<String, String>,
-    ) -> Result<()> {
+    fn validate_variables(&self, template: &SkillTemplate, variables: &HashMap<String, String>) -> Result<()> {
         let mut missing_required = vec![];
         let mut invalid_values = vec![];
 
@@ -539,9 +520,8 @@ impl TemplateEngine {
             if let Some(value) = variables.get(&variable.name) {
                 // Validate pattern if specified
                 if let Some(pattern) = &variable.validation_pattern {
-                    let regex = regex::Regex::new(pattern).with_context(|| {
-                        format!("Invalid validation pattern for variable '{}'", variable.name)
-                    })?;
+                    let regex = regex::Regex::new(pattern)
+                        .with_context(|| format!("Invalid validation pattern for variable '{}'", variable.name))?;
 
                     if !regex.is_match(value) {
                         invalid_values.push(format!(
@@ -567,11 +547,7 @@ impl TemplateEngine {
     }
 
     /// Render template with variables
-    fn render_template(
-        &self,
-        template: &str,
-        variables: &HashMap<String, String>,
-    ) -> Result<String> {
+    fn render_template(&self, template: &str, variables: &HashMap<String, String>) -> Result<String> {
         let mut rendered = template.to_string();
 
         // Simple variable substitution: {{variable_name}}
@@ -587,11 +563,7 @@ impl TemplateEngine {
     }
 
     /// Generate SKILL.md content
-    fn generate_skill_md(
-        &self,
-        template: &SkillTemplate,
-        variables: &HashMap<String, String>,
-    ) -> Result<String> {
+    fn generate_skill_md(&self, template: &SkillTemplate, variables: &HashMap<String, String>) -> Result<String> {
         let mut content = String::new();
 
         // YAML frontmatter
@@ -673,9 +645,7 @@ impl TemplateEngine {
                 TemplateType::CodeGenerator => stats.code_generator_templates += 1,
                 TemplateType::DataProcessor => stats.data_processor_templates += 1,
                 TemplateType::TestingUtility => stats.testing_utility_templates += 1,
-                TemplateType::DocumentationGenerator => {
-                    stats.documentation_generator_templates += 1
-                }
+                TemplateType::DocumentationGenerator => stats.documentation_generator_templates += 1,
                 TemplateType::BuildAutomation => stats.build_automation_templates += 1,
                 TemplateType::Custom(_) => stats.custom_templates += 1,
             }
@@ -819,17 +789,16 @@ mod tests {
 
     #[test]
     fn test_template_builder() {
-        let template =
-            SkillTemplateBuilder::new("test-template", TemplateType::Custom("test".to_string()))
-                .description("Test template")
-                .version("1.0.0")
-                .directory("scripts")
-                .file("README.md", "# Test README")
-                .executable("test.sh", "#!/bin/bash\necho 'test'")
-                .metadata("category", "test")
-                .instructions("Test instructions")
-                .example_usage("test example")
-                .build();
+        let template = SkillTemplateBuilder::new("test-template", TemplateType::Custom("test".to_string()))
+            .description("Test template")
+            .version("1.0.0")
+            .directory("scripts")
+            .file("README.md", "# Test README")
+            .executable("test.sh", "#!/bin/bash\necho 'test'")
+            .metadata("category", "test")
+            .instructions("Test instructions")
+            .example_usage("test example")
+            .build();
 
         assert_eq!(template.name, "test-template");
         assert_eq!(template.description, "Test template");
@@ -860,8 +829,7 @@ mod tests {
         let engine = TemplateEngine::new();
         let mut variables = HashMap::new();
         variables.insert("skill_name".to_string(), "test-skill".to_string());
-        variables
-            .insert("description".to_string(), "Handles repeatable report generation".to_string());
+        variables.insert("description".to_string(), "Handles repeatable report generation".to_string());
 
         let skill_dir = engine.generate_skill("traditional", variables, temp_dir.path()).unwrap();
         let skill_md = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();

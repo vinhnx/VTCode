@@ -17,28 +17,24 @@ mod prompts;
 
 use anyhow::{Context, Result, bail};
 use vtcode_core::persistent_memory::{
-    PersistentMemoryStatus, cleanup_persistent_memory, persistent_memory_status,
-    rebuild_persistent_memory_summary, scaffold_persistent_memory,
+    PersistentMemoryStatus, cleanup_persistent_memory, persistent_memory_status, rebuild_persistent_memory_summary,
+    scaffold_persistent_memory,
 };
 use vtcode_core::project_doc::load_instruction_appendix;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::InlineListSelection;
 
-use crate::agent::runloop::unified::ui_interaction::{
-    instruction_memory_map, start_loading_status,
-};
+use crate::agent::runloop::unified::ui_interaction::{instruction_memory_map, start_loading_status};
 
 use self::config_persistence::{
     parse_positive_usize, persist_user_directory_override, persist_workspace_config_change,
-    set_workspace_instruction_excludes, set_workspace_instruction_import_depth,
-    set_workspace_memory_auto_write, set_workspace_memory_byte_limit, set_workspace_memory_enabled,
-    set_workspace_memory_line_limit, set_workspace_small_model_for_memory,
-    set_workspace_small_model_model,
+    set_workspace_instruction_excludes, set_workspace_instruction_import_depth, set_workspace_memory_auto_write,
+    set_workspace_memory_byte_limit, set_workspace_memory_enabled, set_workspace_memory_line_limit,
+    set_workspace_small_model_for_memory, set_workspace_small_model_model,
 };
 use self::navigation::handle_memory_navigation_action;
 use self::presentation::{
-    format_path_list, memory_lightweight_route_info, render_common_memory_status,
-    show_memory_actions_modal,
+    format_path_list, memory_lightweight_route_info, render_common_memory_status, show_memory_actions_modal,
 };
 use self::prompts::{prompt_optional_text, prompt_required_text};
 use super::super::ui::wait_for_list_modal_selection;
@@ -63,10 +59,9 @@ pub(super) async fn run_memory_modal(
         let appendix = load_instruction_appendix(&agent_config, &active_dir, &match_paths).await;
         let cfg = agent_config.persistent_memory.clone();
         let ws = ctx.config.workspace.clone();
-        let memory_status =
-            tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
-                .await
-                .context("Persistent memory status task panicked")??;
+        let memory_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
+            .await
+            .context("Persistent memory status task panicked")??;
         let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
 
         show_memory_actions_modal(ctx, config_mode, &memory_status, &agents, &matched_rules);
@@ -83,9 +78,7 @@ pub(super) async fn run_memory_modal(
         let Some(action_key) = action.strip_prefix(MEMORY_ACTION_PREFIX) else {
             return Ok(SlashCommandControl::Continue);
         };
-        if let Some(control) =
-            handle_memory_action(ctx, action_key, &memory_status, config_mode).await?
-        {
+        if let Some(control) = handle_memory_action(ctx, action_key, &memory_status, config_mode).await? {
             return Ok(control);
         }
     }
@@ -111,14 +104,10 @@ pub(super) async fn render_memory_status_lines(
     let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
     ctx.renderer.line(MessageStyle::Info, "Instruction Memory")?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Loaded AGENTS.md sources: {}", format_path_list(&agents)),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Matched rules: {}", format_path_list(&matched_rules)),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Loaded AGENTS.md sources: {}", format_path_list(&agents)))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Matched rules: {}", format_path_list(&matched_rules)))?;
     render_common_memory_status(ctx, &memory_status)?;
     ctx.renderer.line(
         MessageStyle::Info,
@@ -131,10 +120,8 @@ pub(super) async fn render_memory_status_lines(
         ctx.renderer.line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
     if include_config_hint {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Focused controls: `/config memory` or `/config agent.persistent_memory`.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Focused controls: `/config memory` or `/config agent.persistent_memory`.")?;
     }
 
     Ok(())
@@ -155,8 +142,7 @@ pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>
         MessageStyle::Info,
         &format!(
             "Startup budgets: {} lines, {} bytes",
-            agent_config.persistent_memory.startup_line_limit,
-            agent_config.persistent_memory.startup_byte_limit
+            agent_config.persistent_memory.startup_line_limit, agent_config.persistent_memory.startup_byte_limit
         ),
     )?;
     ctx.renderer.line(
@@ -167,14 +153,10 @@ pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>
             agent_config.instruction_excludes.len()
         ),
     )?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Memory triage model: {}", lightweight_route.configured_label),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Effective route: {}", lightweight_route.effective_label),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Memory triage model: {}", lightweight_route.configured_label))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Effective route: {}", lightweight_route.effective_label))?;
     if let Some(warning) = lightweight_route.warning {
         ctx.renderer.line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
@@ -265,10 +247,7 @@ async fn handle_memory_action(
                 return Ok(None);
             };
             let parsed = parse_positive_usize(&value, "startup line limit")?;
-            persist_workspace_config_change(ctx, move |root| {
-                set_workspace_memory_line_limit(root, parsed)
-            })
-            .await?;
+            persist_workspace_config_change(ctx, move |root| set_workspace_memory_line_limit(root, parsed)).await?;
             ctx.renderer.line(MessageStyle::Info, "Updated startup line limit.")?;
         }
         "set_bytes" => {
@@ -290,10 +269,7 @@ async fn handle_memory_action(
                 return Ok(None);
             };
             let parsed = parse_positive_usize(&value, "startup byte limit")?;
-            persist_workspace_config_change(ctx, move |root| {
-                set_workspace_memory_byte_limit(root, parsed)
-            })
-            .await?;
+            persist_workspace_config_change(ctx, move |root| set_workspace_memory_byte_limit(root, parsed)).await?;
             ctx.renderer.line(MessageStyle::Info, "Updated startup byte limit.")?;
         }
         "set_import_depth" => {
@@ -315,10 +291,8 @@ async fn handle_memory_action(
                 return Ok(None);
             };
             let parsed = parse_positive_usize(&value, "instruction import depth")?;
-            persist_workspace_config_change(ctx, move |root| {
-                set_workspace_instruction_import_depth(root, parsed)
-            })
-            .await?;
+            persist_workspace_config_change(ctx, move |root| set_workspace_instruction_import_depth(root, parsed))
+                .await?;
             ctx.renderer.line(MessageStyle::Info, "Updated instruction import depth.")?;
         }
         "set_directory_override" => {
@@ -411,28 +385,17 @@ async fn handle_memory_action(
                 .unwrap_or_default();
             ctx.renderer
                 .line(MessageStyle::Info, "Scaffolding persistent memory files...")?;
-            let spinner = start_loading_status(
-                ctx.handle,
-                ctx.input_status_state,
-                "Scaffolding memory files...",
-            );
-            let status =
-                scaffold_persistent_memory(&persistent_memory_config, &ctx.config.workspace)
-                    .await?
-                    .context("Persistent memory is disabled.")?;
+            let spinner = start_loading_status(ctx.handle, ctx.input_status_state, "Scaffolding memory files...");
+            let status = scaffold_persistent_memory(&persistent_memory_config, &ctx.config.workspace)
+                .await?
+                .context("Persistent memory is disabled.")?;
             drop(spinner);
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Scaffolded memory files under {}.", status.directory.display()),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("Scaffolded memory files under {}.", status.directory.display()))?;
         }
         "cleanup" => {
             ctx.renderer.line(MessageStyle::Info, "Cleaning persistent memory...")?;
-            let spinner = start_loading_status(
-                ctx.handle,
-                ctx.input_status_state,
-                "Cleaning persistent memory...",
-            );
+            let spinner = start_loading_status(ctx.handle, ctx.input_status_state, "Cleaning persistent memory...");
             let report = cleanup_persistent_memory(ctx.config, ctx.vt_cfg.as_ref(), true)
                 .await?
                 .context("Persistent memory is disabled.")?;
@@ -450,11 +413,7 @@ async fn handle_memory_action(
         "rebuild" => {
             ctx.renderer
                 .line(MessageStyle::Info, "Rebuilding persistent memory summary...")?;
-            let spinner = start_loading_status(
-                ctx.handle,
-                ctx.input_status_state,
-                "Rebuilding memory summary...",
-            );
+            let spinner = start_loading_status(ctx.handle, ctx.input_status_state, "Rebuilding memory summary...");
             rebuild_persistent_memory_summary(ctx.config, ctx.vt_cfg.as_ref())
                 .await?
                 .context("Persistent memory is disabled.")?;

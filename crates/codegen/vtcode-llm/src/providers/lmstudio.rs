@@ -56,8 +56,7 @@ fn server_root_from_api_base(api_base: &str) -> String {
 /// Uses OpenAI-compatible `/v1/models` endpoint by default.
 /// Set `LMSTUDIO_USE_NATIVE_API=true` to use native REST API at `/api/v0/models`.
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
-    let resolved_base_url =
-        override_base_url(urls::LMSTUDIO_API_BASE, base_url, Some(env_vars::LMSTUDIO_BASE_URL));
+    let resolved_base_url = override_base_url(urls::LMSTUDIO_API_BASE, base_url, Some(env_vars::LMSTUDIO_BASE_URL));
 
     let use_native_api = std::env::var("LMSTUDIO_USE_NATIVE_API")
         .ok()
@@ -75,8 +74,7 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
     };
 
     // Create HTTP client with connection timeout
-    let client =
-        vtcode_commons::http::create_client_with_timeout(std::time::Duration::from_secs(5));
+    let client = vtcode_commons::http::create_client_with_timeout(std::time::Duration::from_secs(5));
 
     // Make GET request to fetch models
     let response = client
@@ -182,15 +180,8 @@ impl LmStudioProvider {
         anthropic: Option<AnthropicConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
-        let (inner, model_id) = Self::build_inner(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            model_behavior,
-        );
+        let (inner, model_id) =
+            Self::build_inner(api_key, model, base_url, prompt_cache, timeouts, anthropic, model_behavior);
         Self { inner, model_id }
     }
 
@@ -201,8 +192,7 @@ impl LmStudioProvider {
         prompt_cache: Option<PromptCachingConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
-        let (inner, model_id) =
-            Self::build_inner(api_key, model, base_url, prompt_cache, None, None, model_behavior);
+        let (inner, model_id) = Self::build_inner(api_key, model, base_url, prompt_cache, None, None, model_behavior);
         Self { inner, model_id }
     }
 
@@ -272,8 +262,7 @@ impl LLMProvider for LmStudioProvider {
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("LM Studio", "Messages cannot be empty");
+            let formatted_error = error_display::format_llm_error("LM Studio", "Messages cannot be empty");
             return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 

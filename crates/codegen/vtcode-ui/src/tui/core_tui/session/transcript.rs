@@ -242,8 +242,7 @@ impl Session {
         max_rows: usize,
     ) -> Arc<Vec<TranscriptLine>> {
         // Check if we have cached visible lines for this exact position and width
-        if let Some((cached_offset, cached_width, cached_rows, cached_lines)) =
-            &self.visible_lines_cache
+        if let Some((cached_offset, cached_width, cached_rows, cached_lines)) = &self.visible_lines_cache
             && *cached_offset == start_row
             && *cached_width == width
             && *cached_rows == max_rows
@@ -275,9 +274,7 @@ mod tests {
     use ratatui::text::Line;
     use std::sync::Arc;
 
-    use crate::tui::core_tui::types::{
-        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    };
+    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
 
     fn line(text: impl Into<Line<'static>>) -> TranscriptLine {
         TranscriptLine { line: text.into(), explicit_links: Vec::new() }
@@ -318,15 +315,7 @@ mod tests {
         // Add three messages: 2 lines, 1 line, 3 lines
         cache.update_message(0, 1, vec![line(Line::default()), line(Line::default())]);
         cache.update_message(1, 2, vec![line(Line::default())]);
-        cache.update_message(
-            2,
-            3,
-            vec![
-                line(Line::default()),
-                line(Line::default()),
-                line(Line::default()),
-            ],
-        );
+        cache.update_message(2, 3, vec![line(Line::default()), line(Line::default()), line(Line::default())]);
 
         cache.update_row_offsets_from(0);
 

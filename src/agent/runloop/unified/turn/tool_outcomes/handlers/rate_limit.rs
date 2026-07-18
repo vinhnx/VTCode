@@ -1,9 +1,7 @@
 use anyhow::Result;
 use std::time::Duration;
 
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
 
 use super::super::helpers::push_tool_response;
 use super::ValidationResult;
@@ -12,10 +10,7 @@ const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration =
     Duration::from_secs(vtcode_config::constants::execution::MAX_RATE_LIMIT_WAIT_SECS);
 
-fn ctrl_c_break_outcome(
-    ctx: &TurnProcessingContext<'_>,
-    prefer_exit: bool,
-) -> Option<ValidationResult> {
+fn ctrl_c_break_outcome(ctx: &TurnProcessingContext<'_>, prefer_exit: bool) -> Option<ValidationResult> {
     let (first_requested, first_outcome, second_requested, second_outcome) = if prefer_exit {
         (
             ctx.ctrl_c_state.is_exit_requested(),

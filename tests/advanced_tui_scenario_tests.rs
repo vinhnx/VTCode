@@ -10,8 +10,7 @@ use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::{
-    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment,
-    InlineTextStyle,
+    InlineCommand, InlineHandle, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 
 fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
@@ -124,7 +123,8 @@ fn test_real_ui_scenario_with_commands() {
     handle.append_line(
         InlineMessageKind::Agent,
         vec![InlineSegment {
-            text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string(),
+            text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?"
+                .to_string(),
             style: InlineTextStyle::default().into(),
         }],
     );
@@ -149,10 +149,7 @@ fn test_real_ui_scenario_with_commands() {
     while let Ok(command) = command_rx.try_recv() {
         match command {
             InlineCommand::AppendLine { kind, segments } => appended.push((kind, segments)),
-            unexpected => panic!(
-                "unexpected inline command variant: {}",
-                inline_command_variant_name(&unexpected)
-            ),
+            unexpected => panic!("unexpected inline command variant: {}", inline_command_variant_name(&unexpected)),
         }
     }
 
@@ -240,10 +237,7 @@ fn test_ui_message_combinations() {
             vec![
                 (InlineMessageKind::User, "Run this command"),
                 (InlineMessageKind::Error, "Command failed with error: Permission denied"),
-                (
-                    InlineMessageKind::Agent,
-                    "I encountered an error. Would you like me to try again with sudo?",
-                ),
+                (InlineMessageKind::Agent, "I encountered an error. Would you like me to try again with sudo?"),
             ],
         ),
         (
@@ -252,17 +246,13 @@ fn test_ui_message_combinations() {
                 (InlineMessageKind::User, "Show me files in current directory"),
                 (InlineMessageKind::Tool, "run_pty_cmd([\"ls\", \"-la\"])"),
                 (InlineMessageKind::Pty, "file1.txt  file2.rs  src/"),
-                (
-                    InlineMessageKind::Agent,
-                    "I've listed the files in the current directory for you.",
-                ),
+                (InlineMessageKind::Agent, "I've listed the files in the current directory for you."),
             ],
         ),
     ];
 
     for (name, messages) in test_cases {
-        let message_repr: Vec<String> =
-            messages.iter().map(|(kind, text)| format!("{kind:?}: {text}")).collect();
+        let message_repr: Vec<String> = messages.iter().map(|(kind, text)| format!("{kind:?}: {text}")).collect();
         let expected = match name {
             "user_agent_exchange" => r#"["User: Hello!", "Agent: Hi there! How can I help you?"]"#,
             "error_scenario" => {

@@ -72,11 +72,7 @@ impl JsonRpcRequest {
     }
 
     /// Create a request with a string ID
-    pub fn with_string_id(
-        method: impl Into<String>,
-        params: Option<Value>,
-        id: impl Into<String>,
-    ) -> Self {
+    pub fn with_string_id(method: impl Into<String>, params: Option<Value>, id: impl Into<String>) -> Self {
         Self::new(method, params, Value::String(id.into()))
     }
 
@@ -183,10 +179,7 @@ impl JsonRpcError {
 
     /// Create a method not found error
     pub fn method_not_found(method: impl Into<String>) -> Self {
-        Self::from_code(
-            A2aErrorCode::MethodNotFound,
-            format!("Method not found: {}", method.into()),
-        )
+        Self::from_code(A2aErrorCode::MethodNotFound, format!("Method not found: {}", method.into()))
     }
 
     /// Create an invalid params error
@@ -478,11 +471,8 @@ mod tests {
 
     #[test]
     fn test_json_rpc_request_creation() {
-        let request = JsonRpcRequest::with_string_id(
-            METHOD_MESSAGE_SEND,
-            Some(serde_json::json!({"message": {}})),
-            "req-1",
-        );
+        let request =
+            JsonRpcRequest::with_string_id(METHOD_MESSAGE_SEND, Some(serde_json::json!({"message": {}})), "req-1");
         assert_eq!(request.jsonrpc, "2.0");
         assert_eq!(request.method, "message/send");
         assert_eq!(request.id, Value::String("req-1".to_string()));
@@ -490,10 +480,8 @@ mod tests {
 
     #[test]
     fn test_json_rpc_response_success() {
-        let response = JsonRpcResponse::success(
-            serde_json::json!({"status": "ok"}),
-            Value::String("req-1".to_string()),
-        );
+        let response =
+            JsonRpcResponse::success(serde_json::json!({"status": "ok"}), Value::String("req-1".to_string()));
         assert!(response.is_success());
         assert!(!response.is_error());
     }
@@ -567,8 +555,7 @@ mod tests {
         assert!(json.contains("streaming-response"));
         assert!(json.contains("message"));
 
-        let deserialized: SendStreamingMessageResponse =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: SendStreamingMessageResponse = serde_json::from_str(&json).expect("deserialize");
         match deserialized.event {
             StreamingEvent::Message { ref kind, .. } => {
                 assert_eq!(kind, "streaming-response");
@@ -586,8 +573,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&config).expect("serialize");
-        let deserialized: TaskPushNotificationConfig =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: TaskPushNotificationConfig = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(deserialized.task_id, "task-1");
         assert_eq!(deserialized.url, "https://example.com/webhook");

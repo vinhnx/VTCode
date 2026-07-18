@@ -5,8 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use vtcode_core::cli::args::SessionStoreCommand;
 use vtcode_session_store::{
-    DEFAULT_MAX_EVENTS, RetentionPolicy, apply_retention, migrate_legacy, open, query_facts,
-    recent_sessions,
+    DEFAULT_MAX_EVENTS, RetentionPolicy, apply_retention, migrate_legacy, open, query_facts, recent_sessions,
 };
 
 /// Handle the `session-store` CLI subcommand.
@@ -15,23 +14,19 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
 
     match command {
         SessionStoreCommand::Migrate { remove_legacy } => {
-            let report = migrate_legacy(&workspace, remove_legacy)
-                .context("failed to migrate legacy session stores")?;
+            let report =
+                migrate_legacy(&workspace, remove_legacy).context("failed to migrate legacy session stores")?;
             println!(
                 "Migrated {} sessions ({} memory envelopes, {} trajectories, {} bytes).",
-                report.sessions_created,
-                report.memory_imported,
-                report.trajectory_imported,
-                report.bytes_migrated
+                report.sessions_created, report.memory_imported, report.trajectory_imported, report.bytes_migrated
             );
             if remove_legacy {
                 println!("Removed legacy history/ and logs/ directories.");
             }
         }
         SessionStoreCommand::Gc { max_sessions, max_age_days } => {
-            let removed =
-                apply_retention(&workspace, RetentionPolicy { max_sessions, max_age_days })
-                    .context("failed to apply retention")?;
+            let removed = apply_retention(&workspace, RetentionPolicy { max_sessions, max_age_days })
+                .context("failed to apply retention")?;
             println!("Garbage-collected {removed} session(s).");
         }
         SessionStoreCommand::List { limit } => {
@@ -49,8 +44,7 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
             println!("{} session(s).", sessions.len());
         }
         SessionStoreCommand::Inspect { session } => {
-            let log =
-                open(&workspace, &session, DEFAULT_MAX_EVENTS).context("failed to open session")?;
+            let log = open(&workspace, &session, DEFAULT_MAX_EVENTS).context("failed to open session")?;
             let manifest = log.manifest();
             println!("session_id:   {}", manifest.session_id);
             println!("status:       {}", manifest.status);

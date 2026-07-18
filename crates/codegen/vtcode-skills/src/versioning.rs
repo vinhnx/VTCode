@@ -11,9 +11,7 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
-use vtcode_commons::fs::{
-    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
-};
+use vtcode_commons::fs::{ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync};
 
 use crate::container::SkillVersion;
 use crate::types::SkillManifest;
@@ -63,8 +61,7 @@ impl SkillLockfile {
         }
         let content = read_file_with_context_sync(&path, "skills lockfile")
             .with_context(|| format!("Failed to read lockfile at {}", path.display()))?;
-        serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse lockfile at {}", path.display()))
+        serde_json::from_str(&content).with_context(|| format!("Failed to parse lockfile at {}", path.display()))
     }
 
     /// Save lockfile to a directory
@@ -116,10 +113,7 @@ pub fn resolve_version(
             if let Some(lock) = lockfile
                 && let Some(locked) = lock.get_locked(&manifest.name)
             {
-                debug!(
-                    "Using locked version '{}' for '{}' (Latest requested)",
-                    locked, manifest.name
-                );
+                debug!("Using locked version '{}' for '{}' (Latest requested)", locked, manifest.name);
                 return Ok(locked.to_string());
             }
 
@@ -140,10 +134,7 @@ pub fn resolve_version(
 }
 
 /// Resolve version using default_version semantics (no version specified by user)
-pub fn resolve_default_version(
-    manifest: &SkillManifest,
-    lockfile: Option<&SkillLockfile>,
-) -> String {
+pub fn resolve_default_version(manifest: &SkillManifest, lockfile: Option<&SkillLockfile>) -> String {
     if let Some(lock) = lockfile
         && let Some(locked) = lock.get_locked(&manifest.name)
     {

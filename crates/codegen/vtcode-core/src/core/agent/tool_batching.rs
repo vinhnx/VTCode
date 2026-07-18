@@ -75,10 +75,7 @@ impl PreparedToolCall {
         }
     }
 
-    pub fn with_fallback_recommendation(
-        mut self,
-        fallback_recommendation: Option<FallbackRecommendation>,
-    ) -> Self {
+    pub fn with_fallback_recommendation(mut self, fallback_recommendation: Option<FallbackRecommendation>) -> Self {
         self.fallback_recommendation = fallback_recommendation;
         self
     }
@@ -162,10 +159,7 @@ impl PreparedToolBatch {
         layout
     }
 
-    pub fn plan(
-        calls: impl IntoIterator<Item = PreparedToolCall>,
-        allow_parallel: bool,
-    ) -> Vec<Self> {
+    pub fn plan(calls: impl IntoIterator<Item = PreparedToolCall>, allow_parallel: bool) -> Vec<Self> {
         let calls: Vec<_> = calls.into_iter().collect();
         let layout = Self::plan_layout_with_names(
             calls.iter().map(|call| (call.can_parallelize(), call.canonical_name.as_str())),
@@ -180,10 +174,7 @@ impl PreparedToolBatch {
     }
 }
 
-fn push_parallel_batch_layout(
-    layout: &mut Vec<(PreparedToolBatchKind, usize)>,
-    parallel_batch_len: &mut usize,
-) {
+fn push_parallel_batch_layout(layout: &mut Vec<(PreparedToolBatchKind, usize)>, parallel_batch_len: &mut usize) {
     match *parallel_batch_len {
         0 => {}
         1 => layout.push((PreparedToolBatchKind::Sequential, 1)),

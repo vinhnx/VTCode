@@ -126,10 +126,7 @@ impl Session {
             TerminalTitleStatus::Undoing
         } else if left.contains("waiting") || left.contains("queued") || left.contains("paused") {
             TerminalTitleStatus::Waiting
-        } else if self.thinking_spinner.is_active
-            || left.contains("thinking")
-            || left.contains("processing")
-        {
+        } else if self.thinking_spinner.is_active || left.contains("thinking") || left.contains("processing") {
             TerminalTitleStatus::Thinking
         } else if self.is_running_activity() {
             TerminalTitleStatus::Working
@@ -160,9 +157,7 @@ impl Session {
             TerminalTitleItem::Status => Some(status.label().to_string()),
             TerminalTitleItem::Thread => self.terminal_title_thread_label.clone(),
             TerminalTitleItem::GitBranch => self.terminal_title_git_branch.clone(),
-            TerminalTitleItem::Model => {
-                strip_header_value(&self.header_context.model, ui::HEADER_MODEL_PREFIX)
-            }
+            TerminalTitleItem::Model => strip_header_value(&self.header_context.model, ui::HEADER_MODEL_PREFIX),
             TerminalTitleItem::TaskProgress => self.terminal_title_task_progress.clone(),
         }?;
 
@@ -173,12 +168,10 @@ impl Session {
         match status {
             TerminalTitleStatus::Ready => None,
             TerminalTitleStatus::ActionRequired => Some("!".to_string()),
-            TerminalTitleStatus::Thinking => {
-                Some(self.thinking_spinner.current_frame().to_string())
+            TerminalTitleStatus::Thinking => Some(self.thinking_spinner.current_frame().to_string()),
+            TerminalTitleStatus::Working | TerminalTitleStatus::Waiting | TerminalTitleStatus::Undoing => {
+                Some("...".to_string())
             }
-            TerminalTitleStatus::Working
-            | TerminalTitleStatus::Waiting
-            | TerminalTitleStatus::Undoing => Some("...".to_string()),
         }
     }
 
@@ -205,11 +198,7 @@ impl Session {
         for (index, part) in parts.iter().enumerate() {
             if index > 0 {
                 let previous_spinner = parts[index - 1].spinner;
-                title.push_str(if previous_spinner || part.spinner {
-                    " "
-                } else {
-                    " | "
-                });
+                title.push_str(if previous_spinner || part.spinner { " " } else { " | " });
             }
             title.push_str(&part.text);
         }
@@ -322,8 +311,8 @@ fn normalize_title_part(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        Session, TerminalTitleStatus, is_stripped_terminal_title_char, normalize_title_part,
-        sanitize_terminal_title, truncate_title,
+        Session, TerminalTitleStatus, is_stripped_terminal_title_char, normalize_title_part, sanitize_terminal_title,
+        truncate_title,
     };
 
     fn session_for_title_tests() -> Session {
@@ -345,11 +334,8 @@ mod tests {
     #[test]
     fn unavailable_items_are_omitted() {
         let mut session = session_for_title_tests();
-        session.terminal_title_items = Some(vec![
-            "thread".to_string(),
-            "project".to_string(),
-            "git-branch".to_string(),
-        ]);
+        session.terminal_title_items =
+            Some(vec!["thread".to_string(), "project".to_string(), "git-branch".to_string()]);
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
 
         assert_eq!(session.render_terminal_title().as_deref(), Some("demo-project"));
@@ -358,11 +344,7 @@ mod tests {
     #[test]
     fn spinner_uses_plain_space_separator() {
         let mut session = session_for_title_tests();
-        session.terminal_title_items = Some(vec![
-            "project".to_string(),
-            "spinner".to_string(),
-            "status".to_string(),
-        ]);
+        session.terminal_title_items = Some(vec!["project".to_string(), "spinner".to_string(), "status".to_string()]);
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
         session.input_status_left = Some("Thinking".to_string());
         session.thinking_spinner.start();
@@ -424,8 +406,7 @@ mod tests {
     #[test]
     fn task_progress_item_uses_parsed_summary() {
         let mut session = session_for_title_tests();
-        session.terminal_title_items =
-            Some(vec!["task-progress".to_string(), "project".to_string()]);
+        session.terminal_title_items = Some(vec!["task-progress".to_string(), "project".to_string()]);
         session.terminal_title_task_progress = Some("2/5".to_string());
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
 
@@ -444,11 +425,7 @@ mod tests {
     #[test]
     fn duplicate_title_items_are_deduplicated() {
         let mut session = session_for_title_tests();
-        session.terminal_title_items = Some(vec![
-            "thread".to_string(),
-            "git-branch".to_string(),
-            "status".to_string(),
-        ]);
+        session.terminal_title_items = Some(vec!["thread".to_string(), "git-branch".to_string(), "status".to_string()]);
         session.terminal_title_thread_label = Some("main".to_string());
         session.terminal_title_git_branch = Some("main".to_string());
         session.input_status_left = Some("Ready".to_string());

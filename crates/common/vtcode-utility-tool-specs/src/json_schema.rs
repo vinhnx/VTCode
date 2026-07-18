@@ -73,10 +73,7 @@ fn sanitize_schema_object(map: &mut Map<String, Value>) {
     }
 
     if schema_types.is_empty() {
-        if map.contains_key("properties")
-            || map.contains_key("required")
-            || map.contains_key("additionalProperties")
-        {
+        if map.contains_key("properties") || map.contains_key("required") || map.contains_key("additionalProperties") {
             schema_types.push("object");
         } else if map.contains_key("items") || map.contains_key("prefixItems") {
             schema_types.push("array");
@@ -231,10 +228,7 @@ mod tests {
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0]["type"], "array");
         assert_eq!(variants[0]["items"]["type"], "object");
-        assert_eq!(
-            variants[0]["items"]["properties"]["lineno"]["type"],
-            json!(["integer", "null"])
-        );
+        assert_eq!(variants[0]["items"]["properties"]["lineno"]["type"], json!(["integer", "null"]));
         assert_eq!(schema["properties"]["message"]["type"], json!(["string", "null"]));
     }
 
@@ -256,10 +250,7 @@ mod tests {
         }));
 
         assert_eq!(schema["properties"]["page"]["type"], "integer");
-        assert_eq!(
-            schema["properties"]["response_length"]["enum"],
-            json!(["short", "medium", "long"])
-        );
+        assert_eq!(schema["properties"]["response_length"]["enum"], json!(["short", "medium", "long"]));
         assert_eq!(schema["properties"]["kind"]["type"], "string");
         assert_eq!(schema["properties"]["kind"]["enum"], json!(["tagged"]));
     }

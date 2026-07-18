@@ -20,16 +20,13 @@ pub(crate) fn render_memory_index(
     notes: &[MemoryNoteSummary],
     pending_rollouts: usize,
 ) -> String {
-    let mut highlights: Vec<_> =
-        preferences.iter().chain(repository_facts.iter()).cloned().collect();
+    let mut highlights: Vec<_> = preferences.iter().chain(repository_facts.iter()).cloned().collect();
     let skip = highlights.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     highlights = highlights.into_iter().skip(skip).collect();
     let mut out = String::from("# VT Code Memory Registry\n\n## Files\n");
     out.push_str("- `memory_summary.md`: Startup-injected summary for future sessions.\n");
     out.push_str("- `preferences.md`: Durable user preferences and workflow notes.\n");
-    out.push_str(
-        "- `repository-facts.md`: Grounded repository facts and recurring tooling notes.\n",
-    );
+    out.push_str("- `repository-facts.md`: Grounded repository facts and recurring tooling notes.\n");
     out.push_str("- `notes/`: User-authored durable notes available to the native memory tool.\n");
     out.push_str("- `rollout_summaries/`: Per-session evidence summaries.\n");
     let _ = write!(out, "\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n");
@@ -65,9 +62,11 @@ pub(crate) fn render_memory_summary(
         .chain(repository_facts.iter())
         .map(|f| f.fact.clone())
         .collect();
-    bullets.extend(notes.iter().filter_map(|n| {
-        n.highlights.first().map(|h| format!("Note ({}): {}", n.relative_path, h))
-    }));
+    bullets.extend(
+        notes
+            .iter()
+            .filter_map(|n| n.highlights.first().map(|h| format!("Note ({}): {}", n.relative_path, h))),
+    );
     let skip = bullets.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     bullets = bullets.into_iter().skip(skip).collect();
     if bullets.is_empty() {
@@ -85,8 +84,7 @@ pub(crate) fn render_memory_summary_bullets(bullets: &[String]) -> String {
 }
 
 pub(crate) fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
-    let mut out =
-        format!("# Rollout Summary\n\n- Generated: {}\n", chrono::Utc::now().to_rfc3339());
+    let mut out = format!("# Rollout Summary\n\n- Generated: {}\n", chrono::Utc::now().to_rfc3339());
     if classified.total() == 0 {
         out.push_str("\n- No durable facts captured.\n");
     } else {

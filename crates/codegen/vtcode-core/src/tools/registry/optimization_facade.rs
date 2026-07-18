@@ -9,8 +9,7 @@ use super::ToolRegistry;
 impl ToolRegistry {
     /// Check if optimizations are enabled.
     pub fn has_optimizations_enabled(&self) -> bool {
-        self.optimization_config.tool_registry.use_optimized_registry
-            || self.optimization_config.memory_pool.enabled
+        self.optimization_config.tool_registry.use_optimized_registry || self.optimization_config.memory_pool.enabled
     }
 
     /// Borrow the memory pool for optimized allocations.

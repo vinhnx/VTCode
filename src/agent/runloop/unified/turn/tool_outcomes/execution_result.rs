@@ -26,31 +26,26 @@ use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPip
 
 use self::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 use self::failure_path::{
-    finalize_failed_tool_response, log_structured_failure, notify_structured_failure,
-    record_recovery_tool_error,
+    finalize_failed_tool_response, log_structured_failure, notify_structured_failure, record_recovery_tool_error,
 };
 pub(crate) use super::error_handling::build_error_content;
 use super::error_handling::{format_structured_tool_error_for_user, is_blocked_or_denied_failure};
 use super::helpers::{check_is_argument_error, serialize_output, signature_key_for};
 pub(crate) use super::response_content::compact_model_tool_payload;
 use super::response_content::prepare_tool_response_content;
-use super::subagent_memory::{
-    merge_subagent_completion_into_memory, record_request_user_input_interview_result,
-};
+use super::subagent_memory::{merge_subagent_completion_into_memory, record_request_user_input_interview_result};
 
 #[cfg(test)]
 use super::error_handling::{build_structured_error_content, fallback_from_error};
 
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
 
 #[cfg(test)]
 use super::error_handling::serialize_json_for_model;
 #[cfg(test)]
 use super::response_content::{
-    maybe_inline_spooled, maybe_inline_spooled_with_preview,
-    tool_output_summary_input_or_serialized, truncate_stderr_preview,
+    maybe_inline_spooled, maybe_inline_spooled_with_preview, tool_output_summary_input_or_serialized,
+    truncate_stderr_preview,
 };
 #[cfg(test)]
 use super::subagent_memory::{build_subagent_memory_update, parse_subagent_summary_markdown};
@@ -111,9 +106,7 @@ fn extract_written_path(tool_name: &str, args: &serde_json::Value) -> Option<Str
                 _ => None,
             }
         }
-        tools::APPLY_PATCH => {
-            args.get("path").and_then(serde_json::Value::as_str).map(|s| s.to_string())
-        }
+        tools::APPLY_PATCH => args.get("path").and_then(serde_json::Value::as_str).map(|s| s.to_string()),
         _ => None,
     }
 }
@@ -136,8 +129,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 ) -> Result<Option<TurnHandlerOutcome>> {
     // 1. Record metrics and outcome
     let is_success = matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. });
-    let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status
-    {
+    let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status {
         check_is_argument_error(&error.message)
     } else {
         false
@@ -147,13 +139,10 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            handle_success(t_ctx, tool_call_id, tool_name, args_val, pipeline_outcome, output)
-                .await?;
+            handle_success(t_ctx, tool_call_id, tool_name, args_val, pipeline_outcome, output).await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            if let Some(outcome) =
-                handle_failure(t_ctx, tool_call_id, tool_name, args_val, error).await?
-            {
+            if let Some(outcome) = handle_failure(t_ctx, tool_call_id, tool_name, args_val, error).await? {
                 return Ok(Some(outcome));
             }
         }
@@ -202,25 +191,15 @@ async fn handle_success<'a>(
 
     // Update blocked-streak and record tool response in grouped context form.
     t_ctx.ctx.reset_blocked_tool_call_streak();
-    let content_for_model =
-        prepare_tool_response_content(t_ctx.ctx, tool_name, args_val, output).await;
-    push_tool_response_with_auto_permission_probe(
-        t_ctx,
-        tool_call_id.clone(),
-        tool_name,
-        content_for_model,
-    )
-    .await?;
+    let content_for_model = prepare_tool_response_content(t_ctx.ctx, tool_name, args_val, output).await;
+    push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id.clone(), tool_name, content_for_model).await?;
     // Skip signature recording for loop-detected stubs: a loop-detected result is
     // a cached/short-circuited response, not a genuine successful execution.
     // Recording its signature would cause the turn-local guard
     // (`has_successful_readonly_signature`) to treat future identical calls as
     // duplicates and return the stale loop-detected stub instead of re-executing.
-    let is_loop_detected_stub =
-        output.get("loop_detected").and_then(|v| v.as_bool()).unwrap_or(false);
-    if !is_loop_detected_stub
-        && !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating
-    {
+    let is_loop_detected_stub = output.get("loop_detected").and_then(|v| v.as_bool()).unwrap_or(false);
+    if !is_loop_detected_stub && !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating {
         let signature = signature_key_for(tool_name, args_val);
         t_ctx.ctx.harness_state.record_successful_readonly_signature(signature);
     } else {
@@ -233,21 +212,16 @@ async fn handle_success<'a>(
     let vt_cfg = turn_loop_ctx.vt_cfg;
 
     // Handle UI output and file modifications
-    let (mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
-        &mut turn_loop_ctx,
-        tool_name,
-        args_val,
-        pipeline_outcome,
-        vt_cfg,
-    )
-    .await?;
+    let (mod_files, _last_stdout) =
+        handle_pipeline_output_from_turn_ctx(&mut turn_loop_ctx, tool_name, args_val, pipeline_outcome, vt_cfg).await?;
 
     for f in mod_files {
         t_ctx.turn_modified_files.insert(f);
     }
-    t_ctx.ctx.session_stats.record_touched_files(
-        t_ctx.turn_modified_files.iter().map(|path| path.display().to_string()),
-    );
+    t_ctx
+        .ctx
+        .session_stats
+        .record_touched_files(t_ctx.turn_modified_files.iter().map(|path| path.display().to_string()));
     merge_subagent_completion_into_memory(t_ctx.ctx, tool_name, output)?;
 
     // Run post-tool hooks
@@ -269,9 +243,8 @@ async fn handle_failure<'a>(
     let (user_msg, hint) = format_structured_tool_error_for_user(tool_name, error);
     notify_structured_failure(tool_name, &user_msg, None).await;
 
-    let is_planning_active_denial =
-        matches!(error.category, ErrorCategory::PlanningPolicyViolation)
-            || agent_execution::is_planning_active_denial(error_str);
+    let is_planning_active_denial = matches!(error.category, ErrorCategory::PlanningPolicyViolation)
+        || agent_execution::is_planning_active_denial(error_str);
     let blocked_or_denied_failure = matches!(
         error.category,
         ErrorCategory::InvalidParameters
@@ -293,12 +266,9 @@ async fn handle_failure<'a>(
     // would permanently disable interviews due to a single malformed call.
     let is_permanent_request_user_input_denial = matches!(
         error.category,
-        ErrorCategory::PermissionDenied
-            | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanningPolicyViolation
+        ErrorCategory::PermissionDenied | ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation
     );
-    if tool_name == vtcode_core::config::constants::tools::REQUEST_USER_INPUT
-        && is_permanent_request_user_input_denial
+    if tool_name == vtcode_core::config::constants::tools::REQUEST_USER_INPUT && is_permanent_request_user_input_denial
     {
         t_ctx.ctx.plan_session.mark_interview_denied();
     }
@@ -316,12 +286,10 @@ async fn handle_failure<'a>(
 
     // Record genuine tool errors for recovery diagnostics (skip policy denials)
     if !is_planning_active_denial && !blocked_or_denied_failure {
-        record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::ToolExecution)
-            .await;
+        record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::ToolExecution).await;
     }
 
-    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "execution")
-        .await;
+    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "execution").await;
 
     if blocked_or_denied_failure {
         let streak = t_ctx.ctx.record_blocked_tool_call();
@@ -333,9 +301,7 @@ async fn handle_failure<'a>(
                 "Consecutive blocked/denied tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
             );
             t_ctx.ctx.push_system_message(block_reason.clone());
-            return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-                reason: Some(block_reason),
-            })));
+            return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(block_reason) })));
         }
     } else {
         t_ctx.ctx.reset_blocked_tool_call_streak();
@@ -373,13 +339,7 @@ async fn handle_cancelled(
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
-    push_tool_response_with_auto_permission_probe(
-        t_ctx,
-        tool_call_id,
-        tool_name,
-        error_content.to_string(),
-    )
-    .await?;
+    push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, error_content.to_string()).await?;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 
@@ -401,10 +361,7 @@ async fn run_post_tool_hooks<'a>(
             .await
         {
             Ok(outcome) => {
-                crate::agent::runloop::unified::turn::utils::render_hook_messages(
-                    ctx.renderer,
-                    &outcome.messages,
-                )?;
+                crate::agent::runloop::unified::turn::utils::render_hook_messages(ctx.renderer, &outcome.messages)?;
                 for context in outcome.additional_context {
                     if !context.trim().is_empty() {
                         ctx.push_system_message(context);
@@ -444,13 +401,10 @@ pub(super) fn record_mcp_event_to_panel(
         ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => {
             Some(error.to_json_value().to_string())
         }
-        ToolExecutionStatus::Cancelled => {
-            Some(serde_json::json!({"error": "Cancelled"}).to_string())
-        }
+        ToolExecutionStatus::Cancelled => Some(serde_json::json!({"error": "Cancelled"}).to_string()),
     };
 
-    let mut mcp_event =
-        mcp_events::McpEvent::new("mcp".to_string(), tool_name.to_string(), data_preview);
+    let mut mcp_event = mcp_events::McpEvent::new("mcp".to_string(), tool_name.to_string(), data_preview);
 
     match status {
         ToolExecutionStatus::Success { .. } => {

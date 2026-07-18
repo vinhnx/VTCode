@@ -13,20 +13,18 @@ use super::selection::SelectionDetail;
 
 mod prompts;
 pub(super) use prompts::{
-    prompt_api_key_plain, prompt_custom_model_entry, prompt_mimo_auth_method_plain,
-    prompt_reasoning_plain, prompt_service_tier_plain, render_mimo_auth_method_inline,
-    render_reasoning_inline, render_service_tier_inline, show_secure_api_modal,
+    prompt_api_key_plain, prompt_custom_model_entry, prompt_mimo_auth_method_plain, prompt_reasoning_plain,
+    prompt_service_tier_plain, render_mimo_auth_method_inline, render_reasoning_inline, render_service_tier_inline,
+    show_secure_api_modal,
 };
 
-pub(super) const CLOSE_THEME_MESSAGE: &str =
-    "Close the active model picker before selecting a theme.";
+pub(super) const CLOSE_THEME_MESSAGE: &str = "Close the active model picker before selecting a theme.";
 const STEP_ONE_TITLE: &str = "Model";
 const STEP_TWO_TITLE: &str = "Reasoning";
 const STEP_THREE_TITLE: &str = "Service Tier";
 
 pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
-pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
-    "Provide the provider name and model identifier manually.";
+pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str = "Provide the provider name and model identifier manually.";
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
@@ -49,9 +47,8 @@ pub(super) fn model_search_value(
     let provider_key = provider.to_string();
     let provider_model_name = format!("{provider_key} {model_display}");
     let provider_model_id = format!("{provider_key}/{model_id}");
-    let mut value = format!(
-        "{provider_label} {provider_key} {model_display} {model_id} {provider_model_name} {provider_model_id}"
-    );
+    let mut value =
+        format!("{provider_label} {provider_key} {model_display} {model_id} {provider_model_name} {provider_model_id}");
     if let Some(description_text) = description {
         value.push(' ');
         value.push_str(description_text);
@@ -65,12 +62,7 @@ pub(super) fn model_search_value(
     value
 }
 
-fn is_current_model(
-    provider: Provider,
-    model_id: &str,
-    current_provider: &str,
-    current_model: &str,
-) -> bool {
+fn is_current_model(provider: Provider, model_id: &str, current_provider: &str, current_model: &str) -> bool {
     provider.to_string().eq_ignore_ascii_case(current_provider.trim())
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
@@ -98,9 +90,7 @@ fn context_window_segment(provider: &str, model_id: &str) -> Option<String> {
         .ok()
         .flatten()
         .filter(|context_window_size| *context_window_size > 0)
-        .map(|context_window_size| {
-            format!("{}: {}", CONTEXT_LABEL, compact_context_window_label(context_window_size))
-        })
+        .map(|context_window_size| format!("{}: {}", CONTEXT_LABEL, compact_context_window_label(context_window_size)))
 }
 
 fn static_model_capability_segments(option: &ModelOption) -> Vec<String> {
@@ -163,11 +153,7 @@ fn subtitle_from_segments(model_id: &str, current: bool, segments: Vec<String>) 
     subtitle.join(" • ")
 }
 
-pub(super) fn static_model_subtitle(
-    option: &ModelOption,
-    current_provider: &str,
-    current_model: &str,
-) -> String {
+pub(super) fn static_model_subtitle(option: &ModelOption, current_provider: &str, current_model: &str) -> String {
     subtitle_from_segments(
         &option.id,
         is_current_model(option.provider, &option.id, current_provider, current_model),
@@ -194,28 +180,15 @@ pub(super) fn dynamic_model_subtitle(
         segments.push("Reasoning".to_string());
     }
 
-    subtitle_from_segments(
-        model_id,
-        is_current_model(provider, model_id, current_provider, current_model),
-        segments,
-    )
+    subtitle_from_segments(model_id, is_current_model(provider, model_id, current_provider, current_model), segments)
 }
 
-fn is_current_custom_provider(
-    provider_key: &str,
-    model_id: &str,
-    current_provider: &str,
-    current_model: &str,
-) -> bool {
+fn is_current_custom_provider(provider_key: &str, model_id: &str, current_provider: &str, current_model: &str) -> bool {
     provider_key.trim().eq_ignore_ascii_case(current_provider.trim())
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
-fn custom_provider_subtitle(
-    selection: &SelectionDetail,
-    current_provider: &str,
-    current_model: &str,
-) -> String {
+fn custom_provider_subtitle(selection: &SelectionDetail, current_provider: &str, current_model: &str) -> String {
     let mut segments = Vec::new();
     if let Some(context_window) = context_window_segment("openai", &selection.model_id) {
         segments.push(context_window);
@@ -226,12 +199,7 @@ fn custom_provider_subtitle(
 
     subtitle_from_segments(
         &selection.model_id,
-        is_current_custom_provider(
-            &selection.provider_key,
-            &selection.model_id,
-            current_provider,
-            current_model,
-        ),
+        is_current_custom_provider(&selection.provider_key, &selection.model_id, current_provider, current_model),
         segments,
     )
 }
@@ -239,10 +207,7 @@ fn custom_provider_subtitle(
 fn custom_provider_search_value(selection: &SelectionDetail) -> String {
     let mut value = format!(
         "{} {} {} {} custom provider openai compatible",
-        selection.provider_label,
-        selection.provider_key,
-        selection.model_display,
-        selection.model_id
+        selection.provider_label, selection.provider_key, selection.model_display, selection.model_id
     );
     if !selection.env_key.trim().is_empty() {
         value.push(' ');
@@ -296,11 +261,7 @@ pub(super) fn render_step_one_inline(
         let has_error = dynamic_models.error_for(provider).is_some();
         let has_warning = dynamic_models.warning_for(provider).is_some();
 
-        if provider_model_indexes.is_empty()
-            && dynamic_indexes.is_empty()
-            && !has_error
-            && !has_warning
-        {
+        if provider_model_indexes.is_empty() && dynamic_indexes.is_empty() && !has_error && !has_warning {
             continue;
         }
 
@@ -386,9 +347,7 @@ pub(super) fn render_step_one_inline(
         } else if provider == Provider::HuggingFace && provider_model_indexes.is_empty() {
             items.push(InlineListItem {
                 title: "Custom Hugging Face model".to_string(),
-                subtitle: Some(
-                    "Enter any HF model id (e.g., huggingface <org>/<model>)".to_string(),
-                ),
+                subtitle: Some("Enter any HF model id (e.g., huggingface <org>/<model>)".to_string()),
                 badge: Some("Custom".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::CustomModel),
@@ -401,11 +360,7 @@ pub(super) fn render_step_one_inline(
         for (index, selection) in custom_providers.iter().enumerate() {
             items.push(InlineListItem {
                 title: selection.provider_label.clone(),
-                subtitle: Some(custom_provider_subtitle(
-                    selection,
-                    current_provider,
-                    current_model,
-                )),
+                subtitle: Some(custom_provider_subtitle(selection, current_provider, current_model)),
                 badge: Some("Custom".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::CustomProvider(index)),
@@ -455,8 +410,7 @@ pub(super) fn render_step_one_plain(
     renderer.line(MessageStyle::Info, "Model picker: select the model you want to use.")?;
     renderer.line(MessageStyle::Info, "Type '<provider> <model-id>' to select a model.")?;
     renderer.line(MessageStyle::Info, "Type 'cancel' to exit the picker at any time.")?;
-    renderer
-        .line(MessageStyle::Info, "Type 'refresh' to re-query LM Studio and Ollama servers.")?;
+    renderer.line(MessageStyle::Info, "Type 'refresh' to re-query LM Studio and Ollama servers.")?;
     if should_show_codex_runtime_note(current_provider) {
         renderer.line(MessageStyle::Info, CODEX_RUNTIME_NOTE)?;
     }
@@ -475,10 +429,7 @@ pub(super) fn render_step_one_plain(
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("      {}", static_model_subtitle(option, "", "")),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
 
@@ -491,9 +442,7 @@ pub(super) fn render_step_one_plain(
                 if let Some(error) = dynamic_models.error_for(provider) {
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "{provider_label} server not reachable ({error}) • Setup instructions:"
-                        ),
+                        &format!("{provider_label} server not reachable ({error}) • Setup instructions:"),
                     )?;
                     for line in provider.local_install_instructions().unwrap_or("").lines() {
                         renderer.line(MessageStyle::Info, &format!("      {line}"))?;
@@ -502,25 +451,16 @@ pub(super) fn render_step_one_plain(
             } else {
                 for entry_index in dynamic_indexes {
                     if let Some(detail) = dynamic_models.detail(*entry_index) {
-                        renderer
-                            .line(MessageStyle::Info, &format!("  {}", detail.model_display))?;
+                        renderer.line(MessageStyle::Info, &format!("  {}", detail.model_display))?;
                         renderer.line(
                             MessageStyle::Info,
                             &format!(
                                 "      {}",
-                                dynamic_model_subtitle(
-                                    provider,
-                                    &detail.model_id,
-                                    detail.reasoning_supported,
-                                    "",
-                                    "",
-                                )
+                                dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", "",)
                             ),
                         )?;
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("      Locally available {provider_label} model"),
-                        )?;
+                        renderer
+                            .line(MessageStyle::Info, &format!("      Locally available {provider_label} model"))?;
                     }
                 }
             }
@@ -530,19 +470,13 @@ pub(super) fn render_step_one_plain(
             }
             first_section = false;
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-            renderer.line(
-                MessageStyle::Info,
-                "      Docs: https://huggingface.co/docs/inference-providers",
-            )?;
+            renderer.line(MessageStyle::Info, "      Docs: https://huggingface.co/docs/inference-providers")?;
             for option_index in provider_model_indexes {
                 let Some(option) = options.get(*option_index) else {
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("      {}", static_model_subtitle(option, "", "")),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
         } else {
@@ -559,10 +493,7 @@ pub(super) fn render_step_one_plain(
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("      {}", static_model_subtitle(option, "", "")),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
         }
@@ -575,10 +506,7 @@ pub(super) fn render_step_one_plain(
         renderer.line(MessageStyle::Info, "[Custom providers]")?;
         for selection in custom_providers {
             renderer.line(MessageStyle::Info, &format!("  {}", selection.provider_label))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("      {}", custom_provider_subtitle(selection, "", "")),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("      {}", custom_provider_subtitle(selection, "", "")))?;
             renderer.line(MessageStyle::Info, &format!("      env: {}", selection.env_key))?;
         }
     }

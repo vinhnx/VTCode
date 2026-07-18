@@ -56,21 +56,17 @@ pub fn build_runtime_agent_config(
 ) -> AgentConfig {
     let workspace = canonicalize_workspace(&workspace);
     let cli_api_key_env = args.api_key_env.trim();
-    let api_key_env_override = if cli_api_key_env.is_empty()
-        || cli_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
-    {
-        None
-    } else {
-        Some(cli_api_key_env.to_owned())
-    };
+    let api_key_env_override =
+        if cli_api_key_env.is_empty() || cli_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV) {
+            None
+        } else {
+            Some(cli_api_key_env.to_owned())
+        };
 
-    let checkpointing_storage_dir = resolve_checkpointing_storage_dir(
-        &workspace,
-        config.agent.checkpointing.storage_dir.as_deref(),
-    );
+    let checkpointing_storage_dir =
+        resolve_checkpointing_storage_dir(&workspace, config.agent.checkpointing.storage_dir.as_deref());
     let RuntimeModelSelection { model, provider, model_source } = selection;
-    let api_key_env = api_key_env_override
-        .unwrap_or_else(|| resolve_api_key_env(&provider, &config.agent.api_key_env));
+    let api_key_env = api_key_env_override.unwrap_or_else(|| resolve_api_key_env(&provider, &config.agent.api_key_env));
 
     AgentConfig {
         model,
@@ -98,10 +94,7 @@ pub fn build_runtime_agent_config(
 
 /// Resolve the checkpointing storage directory, joining relative paths against
 /// the workspace root. Returns `None` if no storage directory is configured.
-pub fn resolve_checkpointing_storage_dir(
-    workspace: &Path,
-    storage_dir: Option<&str>,
-) -> Option<PathBuf> {
+pub fn resolve_checkpointing_storage_dir(workspace: &Path, storage_dir: Option<&str>) -> Option<PathBuf> {
     storage_dir.map(PathBuf::from).map(|candidate| {
         if candidate.is_absolute() {
             candidate
@@ -170,8 +163,7 @@ mod tests {
     fn provider_resolution_prefers_configured_provider_for_config_model() {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "zai".to_owned();
-        config.agent.default_model =
-            crate::config::constants::models::ollama::MINIMAX_M27_CLOUD.to_owned();
+        config.agent.default_model = crate::config::constants::models::ollama::MINIMAX_M27_CLOUD.to_owned();
 
         let args = Cli::parse_from(["vtcode"]);
         let selection = resolve_runtime_model_selection(&args, &config);
@@ -240,13 +232,7 @@ mod tests {
     #[test]
     fn build_runtime_agent_config_respects_cli_api_key_env_override() {
         let config = VTCodeConfig::default();
-        let args = Cli::parse_from([
-            "vtcode",
-            "--provider",
-            "openai",
-            "--api-key-env",
-            "CUSTOM_OPENAI_KEY",
-        ]);
+        let args = Cli::parse_from(["vtcode", "--provider", "openai", "--api-key-env", "CUSTOM_OPENAI_KEY"]);
         let selection = RuntimeModelSelection {
             model: crate::config::constants::models::openai::GPT_5.to_owned(),
             provider: "openai".to_owned(),
@@ -283,10 +269,7 @@ mod tests {
 
     #[test]
     fn resolve_checkpointing_storage_dir_preserves_absolute_path() {
-        let resolved = resolve_checkpointing_storage_dir(
-            Path::new("/workspace"),
-            Some("/tmp/vtcode-checkpoints"),
-        );
+        let resolved = resolve_checkpointing_storage_dir(Path::new("/workspace"), Some("/tmp/vtcode-checkpoints"));
 
         assert_eq!(resolved, Some(PathBuf::from("/tmp/vtcode-checkpoints")));
     }

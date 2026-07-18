@@ -98,8 +98,7 @@ impl PatternEngine {
 
         // We only need the tool names for prediction.
         let mut recent_tools = SmallVec::<[&str; 32]>::new();
-        recent_tools
-            .extend(events.iter().rev().take(self.sequence_window).map(|e| e.tool_name.as_str()));
+        recent_tools.extend(events.iter().rev().take(self.sequence_window).map(|e| e.tool_name.as_str()));
 
         if recent_tools.is_empty() {
             return None;
@@ -136,8 +135,7 @@ impl PatternEngine {
         let mut quality_sum = 0.0f32;
         let mut duration_sum = 0u64;
         // `HashSet` capacity = total is an upper bound; most runs use ≤ a handful of tools.
-        let mut unique_tools: hashbrown::HashSet<&str> =
-            hashbrown::HashSet::with_capacity(total.min(16));
+        let mut unique_tools: hashbrown::HashSet<&str> = hashbrown::HashSet::with_capacity(total.min(16));
 
         for e in events.iter() {
             if e.success {

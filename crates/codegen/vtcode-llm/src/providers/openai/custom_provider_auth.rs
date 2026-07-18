@@ -96,36 +96,20 @@ impl CustomProviderAuthHandle {
 
         let output = timeout(self.timeout(), command.output())
             .await
-            .with_context(|| {
-                format!("provider auth command timed out after {}ms", self.config.timeout_ms)
-            })?
-            .with_context(|| {
-                format!("failed to execute provider auth command `{}`", self.config.command)
-            })?;
+            .with_context(|| format!("provider auth command timed out after {}ms", self.config.timeout_ms))?
+            .with_context(|| format!("failed to execute provider auth command `{}`", self.config.command))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stderr = stderr.trim();
             if stderr.is_empty() {
-                bail!(
-                    "provider auth command `{}` exited with status {}",
-                    self.config.command,
-                    output.status
-                );
+                bail!("provider auth command `{}` exited with status {}", self.config.command, output.status);
             }
-            bail!(
-                "provider auth command `{}` exited with status {}: {}",
-                self.config.command,
-                output.status,
-                stderr
-            );
+            bail!("provider auth command `{}` exited with status {}: {}", self.config.command, output.status, stderr);
         }
 
         let stdout = String::from_utf8(output.stdout).map_err(|err| {
-            anyhow!(
-                "provider auth command `{}` returned non-utf8 stdout: {err}",
-                self.config.command
-            )
+            anyhow!("provider auth command `{}` returned non-utf8 stdout: {err}", self.config.command)
         })?;
         let token = stdout.trim();
         if token.is_empty() {
@@ -163,8 +147,7 @@ mv tokens.next tokens.txt
 "#,
         )
         .expect("write script");
-        let mut permissions =
-            std::fs::metadata(&script_path).expect("script metadata").permissions();
+        let mut permissions = std::fs::metadata(&script_path).expect("script metadata").permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("set permissions");
 

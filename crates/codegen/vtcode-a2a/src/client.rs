@@ -14,10 +14,9 @@ use serde_json::Value;
 use crate::agent_card::AgentCard;
 use crate::errors::{A2aError, A2aErrorCode, A2aResult};
 use crate::rpc::{
-    JsonRpcRequest, ListTasksParams, METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM,
-    METHOD_TASKS_CANCEL, METHOD_TASKS_GET, METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET,
-    METHOD_TASKS_PUSH_CONFIG_SET, MessageSendParams, SendStreamingMessageResponse, StreamingEvent,
-    TaskIdParams, TaskPushNotificationConfig, TaskQueryParams,
+    JsonRpcRequest, ListTasksParams, METHOD_MESSAGE_SEND, METHOD_MESSAGE_STREAM, METHOD_TASKS_CANCEL, METHOD_TASKS_GET,
+    METHOD_TASKS_LIST, METHOD_TASKS_PUSH_CONFIG_GET, METHOD_TASKS_PUSH_CONFIG_SET, MessageSendParams,
+    SendStreamingMessageResponse, StreamingEvent, TaskIdParams, TaskPushNotificationConfig, TaskQueryParams,
 };
 use crate::types::Task;
 
@@ -89,8 +88,7 @@ impl A2aClient {
 
     /// Send a message/send RPC
     pub async fn send_message(&self, params: MessageSendParams) -> A2aResult<Task> {
-        let result_value =
-            self.call_rpc(METHOD_MESSAGE_SEND, Some(serde_json::to_value(&params)?)).await?;
+        let result_value = self.call_rpc(METHOD_MESSAGE_SEND, Some(serde_json::to_value(&params)?)).await?;
         let task: Task = serde_json::from_value(result_value)
             .context("Failed to deserialize task")
             .map_err(|e| A2aError::Internal(e.to_string()))?;
@@ -102,11 +100,8 @@ impl A2aClient {
         &self,
         params: MessageSendParams,
     ) -> A2aResult<impl Stream<Item = A2aResult<StreamingEvent>>> {
-        let req = JsonRpcRequest::with_string_id(
-            METHOD_MESSAGE_STREAM,
-            Some(serde_json::to_value(&params)?),
-            self.next_id(),
-        );
+        let req =
+            JsonRpcRequest::with_string_id(METHOD_MESSAGE_STREAM, Some(serde_json::to_value(&params)?), self.next_id());
 
         let response = self
             .http
@@ -195,10 +190,7 @@ impl A2aClient {
     }
 
     /// Get push notification config
-    pub async fn get_push_config(
-        &self,
-        task_id: String,
-    ) -> A2aResult<Option<TaskPushNotificationConfig>> {
+    pub async fn get_push_config(&self, task_id: String) -> A2aResult<Option<TaskPushNotificationConfig>> {
         let params = serde_json::to_value(TaskIdParams { id: task_id })?;
         let value = self.call_rpc(METHOD_TASKS_PUSH_CONFIG_GET, Some(params)).await?;
         if value.is_null() {

@@ -179,16 +179,11 @@ impl ToolOutputSpooler {
     }
 
     /// Spool a tool output to a file and return a reference
-    pub async fn spool_output(
-        &self,
-        tool_name: &str,
-        value: &Value,
-        is_mcp: bool,
-    ) -> Result<SpoolResult> {
+    pub async fn spool_output(&self, tool_name: &str, value: &Value, is_mcp: bool) -> Result<SpoolResult> {
         // Ensure output directory exists
-        fs::create_dir_all(&self.output_dir).await.with_context(|| {
-            format!("Failed to create tool output directory: {}", self.output_dir.display())
-        })?;
+        fs::create_dir_all(&self.output_dir)
+            .await
+            .with_context(|| format!("Failed to create tool output directory: {}", self.output_dir.display()))?;
 
         // Generate unique filename
         let timestamp = std::time::SystemTime::now()
@@ -200,9 +195,7 @@ impl ToolOutputSpooler {
 
         // For file and command-session tools, extract raw content so the spooled file is directly usable.
         // This allows grep_file to work on the spooled output and makes reading more intuitive
-        let content = if (tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE)
-            && !is_mcp
-        {
+        let content = if (tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE) && !is_mcp {
             if let Some(raw_content) = value.get("content").and_then(|v| v.as_str()) {
                 raw_content.to_string()
             } else if let Some(json_str) = value.as_str() {
@@ -245,20 +238,11 @@ impl ToolOutputSpooler {
                 // Edge case: value might be a JSON string that needs parsing
                 // This can happen if the value was serialized somewhere in the pipeline
                 if let Ok(parsed) = serde_json::from_str::<Value>(json_str) {
-                    if let Some(output_content) = parsed.get("raw_output").and_then(|v| v.as_str())
-                    {
-                        debug!(
-                            tool = tool_name,
-                            "PTY spool: recovered raw_output from double-serialized JSON string"
-                        );
+                    if let Some(output_content) = parsed.get("raw_output").and_then(|v| v.as_str()) {
+                        debug!(tool = tool_name, "PTY spool: recovered raw_output from double-serialized JSON string");
                         output_content.to_string()
-                    } else if let Some(output_content) =
-                        parsed.get("output").and_then(|v| v.as_str())
-                    {
-                        debug!(
-                            tool = tool_name,
-                            "PTY spool: recovered output from double-serialized JSON string"
-                        );
+                    } else if let Some(output_content) = parsed.get("output").and_then(|v| v.as_str()) {
+                        debug!(tool = tool_name, "PTY spool: recovered output from double-serialized JSON string");
                         output_content.to_string()
                     } else {
                         // Parsed but no output field - use the parsed value's stdout if available
@@ -313,8 +297,7 @@ impl ToolOutputSpooler {
             }
         }
 
-        let relative_path =
-            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
+        let relative_path = file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             tool = tool_name,
@@ -336,12 +319,7 @@ impl ToolOutputSpooler {
     /// Returns the original value if below threshold, or a condensed
     /// head+tail payload with a `spool_path` reference if spooled.
     /// Triggers periodic age-based cleanup of old spooled files.
-    pub async fn process_output(
-        &self,
-        tool_name: &str,
-        value: Value,
-        is_mcp: bool,
-    ) -> Result<Value> {
+    pub async fn process_output(&self, tool_name: &str, value: Value, is_mcp: bool) -> Result<Value> {
         self.process_output_with_force(tool_name, value, is_mcp, false).await
     }
 
@@ -378,11 +356,7 @@ impl ToolOutputSpooler {
             }
         }
         let condensed = if is_command_session_tool_name(tool_name) {
-            tail_preview_content(
-                &spool_result.content,
-                PTY_PREVIEW_TAIL_BYTES,
-                PTY_PREVIEW_MAX_LINES,
-            )
+            tail_preview_content(&spool_result.content, PTY_PREVIEW_TAIL_BYTES, PTY_PREVIEW_MAX_LINES)
         } else {
             condense_content(&spool_result.content)
         };
@@ -393,8 +367,8 @@ impl ToolOutputSpooler {
             _ => json!({}),
         };
         let is_pty_tool = is_command_session_tool_name(tool_name);
-        let use_output_field = is_pty_tool
-            || response.get("output").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
+        let use_output_field =
+            is_pty_tool || response.get("output").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
         let source_path = if tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE {
             response.get("path").and_then(|v| v.as_str()).map(String::from)
         } else {
@@ -508,13 +482,7 @@ impl ToolOutputSpooler {
 /// Sanitize tool name for use in filename
 fn sanitize_tool_name(name: &str) -> String {
     name.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect()
 }
 
@@ -790,8 +758,7 @@ mod tests {
         let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
-        let command_output =
-            "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
+        let command_output = "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
 
         let exec_command_response = json!({
             "output": command_output,
@@ -854,8 +821,7 @@ mod tests {
         let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
-        let command_output =
-            "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
+        let command_output = "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
 
         let inner_json = json!({
             "output": command_output,

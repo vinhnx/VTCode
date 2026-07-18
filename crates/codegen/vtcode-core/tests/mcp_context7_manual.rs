@@ -1,9 +1,7 @@
 #![allow(missing_docs)]
 use hashbrown::HashMap;
 
-use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
-};
+use vtcode_core::config::mcp::{McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig};
 use vtcode_core::mcp::McpClient;
 
 #[tokio::test]

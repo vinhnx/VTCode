@@ -55,11 +55,7 @@ impl PlanningWorkflowState {
     /// (the read-only research specialist).  When inactive, returns `None` to signal
     /// the caller should use its own default agent type.
     pub fn effective_agent_type(&self) -> Option<AgentType> {
-        if self.is_active() {
-            Some(AgentType::Plan)
-        } else {
-            None
-        }
+        if self.is_active() { Some(AgentType::Plan) } else { None }
     }
 
     /// Get the workspace root path

@@ -99,11 +99,7 @@ pub fn format_hidden_lines_summary(hidden: usize) -> String {
     }
 }
 
-pub fn split_head_tail_preview<'a, T>(
-    items: &'a [T],
-    head: usize,
-    tail: usize,
-) -> HeadTailPreview<'a, T> {
+pub fn split_head_tail_preview<'a, T>(items: &'a [T], head: usize, tail: usize) -> HeadTailPreview<'a, T> {
     let total = items.len();
     if total <= head.saturating_add(tail) {
         return HeadTailPreview {
@@ -187,11 +183,7 @@ pub fn excerpt_text_lines<'a>(text: &'a str, head: usize, tail: usize) -> TextLi
     }
 }
 
-pub fn excerpt_text_lines_with_limit<'a>(
-    text: &'a str,
-    limit: usize,
-    preferred_head: usize,
-) -> TextLineExcerpt<'a> {
+pub fn excerpt_text_lines_with_limit<'a>(text: &'a str, limit: usize, preferred_head: usize) -> TextLineExcerpt<'a> {
     let lines: Vec<&str> = text.lines().collect();
     let preview = split_head_tail_preview_with_limit(lines.as_slice(), limit, preferred_head);
 
@@ -220,12 +212,7 @@ pub fn condense_text_bytes(content: &str, head_bytes: usize, tail_bytes: usize) 
 
     let omitted = byte_len.saturating_sub(head_end).saturating_sub(byte_len - tail_start);
 
-    format!(
-        "{}\n\n{}\n\n{}",
-        &content[..head_end],
-        format_hidden_bytes_summary(omitted),
-        &content[tail_start..]
-    )
+    format!("{}\n\n{}\n\n{}", &content[..head_end], format_hidden_bytes_summary(omitted), &content[tail_start..])
 }
 
 pub fn tail_preview_text(content: &str, tail_bytes: usize, max_lines: usize) -> String {

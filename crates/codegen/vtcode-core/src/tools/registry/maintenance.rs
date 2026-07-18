@@ -25,16 +25,12 @@ impl ToolRegistry {
                 .registrations_snapshot()
                 .into_iter()
                 .filter(|registration| {
-                    matches!(
-                        registration.catalog_source(),
-                        super::registration::ToolCatalogSource::Dynamic
-                    )
+                    matches!(registration.catalog_source(), super::registration::ToolCatalogSource::Dynamic)
                 })
                 .map(|registration| registration.name().to_string()),
         );
         let mcp_keys = self.mcp_policy_keys().await;
-        let full_auto_catalogue_config =
-            self.policy_gateway.lock().await.full_auto_catalogue_config();
+        let full_auto_catalogue_config = self.policy_gateway.lock().await.full_auto_catalogue_config();
         let full_auto_visible_policy_names = if let Some(config) = &full_auto_catalogue_config {
             Some(self.visible_policy_names(config.clone()).await)
         } else {
@@ -57,8 +53,7 @@ impl ToolRegistry {
 
         // Seed default permissions from tool metadata when policy manager is present
         let policy_seeds = {
-            let assembly =
-                self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
             assembly
                 .policy_seed_metadata()
                 .iter()
@@ -72,9 +67,7 @@ impl ToolRegistry {
                 if let Some(default_policy) = metadata.default_permission() {
                     let current = policy.get_policy(&name);
                     if matches!(current, ToolPolicy::Prompt) {
-                        if let Err(err) =
-                            policy.seed_default_policy(&name, default_policy.clone()).await
-                        {
+                        if let Err(err) = policy.seed_default_policy(&name, default_policy.clone()).await {
                             tracing::warn!(
                                 tool = %name,
                                 error = %err,

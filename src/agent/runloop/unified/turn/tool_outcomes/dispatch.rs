@@ -1,6 +1,4 @@
-use crate::agent::runloop::unified::turn::context::{
-    PreparedAssistantToolCall, TurnHandlerOutcome,
-};
+use crate::agent::runloop::unified::turn::context::{PreparedAssistantToolCall, TurnHandlerOutcome};
 use anyhow::Result;
 use call::{handle_prepared_tool_call_dispatch, push_invalid_tool_args_response};
 use std::time::Instant;
@@ -53,7 +51,10 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
     );
 
     if batch_candidate {
-        let outcome = crate::agent::runloop::unified::turn::tool_outcomes::handlers::handle_tool_call_batch_prepared(t_ctx, tool_calls).await?;
+        let outcome = crate::agent::runloop::unified::turn::tool_outcomes::handlers::handle_tool_call_batch_prepared(
+            t_ctx, tool_calls,
+        )
+        .await?;
         if let Some(o) = outcome {
             return Ok(Some(o));
         }

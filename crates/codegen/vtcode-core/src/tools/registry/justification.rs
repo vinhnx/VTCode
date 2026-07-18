@@ -3,9 +3,7 @@
 /// Captures agent reasoning before high-risk tool execution to improve approval UX
 /// and enable learning of approval patterns.
 use crate::tools::registry::risk_scorer::RiskLevel;
-use crate::utils::file_utils::{
-    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
-};
+use crate::utils::file_utils::{ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync};
 use anyhow::Result;
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -28,11 +26,7 @@ pub struct ToolJustification {
 
 impl ToolJustification {
     /// Create a new tool justification
-    pub fn new(
-        tool_name: impl Into<String>,
-        reason: impl Into<String>,
-        risk_level: &RiskLevel,
-    ) -> Self {
+    pub fn new(tool_name: impl Into<String>, reason: impl Into<String>, risk_level: &RiskLevel) -> Self {
         Self {
             tool_name: tool_name.into(),
             reason: reason.into(),
@@ -211,15 +205,14 @@ impl JustificationManager {
         reason: Option<String>,
     ) {
         let should_persist = if let Ok(mut patterns) = self.patterns.lock() {
-            let pattern =
-                patterns.entry(approval_key.to_owned()).or_insert_with(|| ApprovalPattern {
-                    tool_name: approval_key.to_owned(),
-                    display_name: display_name.map(str::to_owned),
-                    approve_count: 0,
-                    deny_count: 0,
-                    last_decision: None,
-                    recent_reason: None,
-                });
+            let pattern = patterns.entry(approval_key.to_owned()).or_insert_with(|| ApprovalPattern {
+                tool_name: approval_key.to_owned(),
+                display_name: display_name.map(str::to_owned),
+                approve_count: 0,
+                deny_count: 0,
+                last_decision: None,
+                recent_reason: None,
+            });
 
             if let Some(display_name) = display_name {
                 pattern.display_name = Some(display_name.to_owned());
@@ -290,12 +283,8 @@ mod tests {
 
     #[test]
     fn test_tool_justification_creation() {
-        let just = ToolJustification::new(
-            "read_file",
-            "Need to understand code structure",
-            &RiskLevel::Low,
-        )
-        .with_outcome("Will analyze the AST to provide better context");
+        let just = ToolJustification::new("read_file", "Need to understand code structure", &RiskLevel::Low)
+            .with_outcome("Will analyze the AST to provide better context");
 
         assert_eq!(just.tool_name, "read_file");
         assert!(just.reason.contains("understand"));
@@ -304,12 +293,9 @@ mod tests {
 
     #[test]
     fn test_justification_formatting() {
-        let just = ToolJustification::new(
-            "run_command",
-            "Execute build to check for compilation errors",
-            &RiskLevel::High,
-        )
-        .with_outcome("Will produce build output for analysis");
+        let just =
+            ToolJustification::new("run_command", "Execute build to check for compilation errors", &RiskLevel::High)
+                .with_outcome("Will produce build output for analysis");
 
         let formatted = just.format_for_dialog();
         assert!(formatted.iter().any(|l| l.contains("Agent Reasoning")));

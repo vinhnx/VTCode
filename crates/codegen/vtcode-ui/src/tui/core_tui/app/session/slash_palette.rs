@@ -318,9 +318,7 @@ impl SlashPalette {
                     name_match: name_score.is_some(),
                     name_prefix: name_lower.starts_with(normalized_query.as_str()),
                     name_pos: name_lower.find(normalized_query.as_str()).unwrap_or(usize::MAX),
-                    description_pos: description_lower
-                        .find(normalized_query.as_str())
-                        .unwrap_or(usize::MAX),
+                    description_pos: description_lower.find(normalized_query.as_str()).unwrap_or(usize::MAX),
                     name_score: name_score.unwrap_or(0),
                     description_score: description_score.unwrap_or(0),
                 })
@@ -446,10 +444,7 @@ mod tests {
         let mut palette = SlashPalette::with_commands(test_commands());
 
         let update = palette.update(Some("co"));
-        assert!(matches!(
-            update,
-            SlashPaletteUpdate::Changed { suggestions_changed: true, selection_changed: true }
-        ));
+        assert!(matches!(update, SlashPaletteUpdate::Changed { suggestions_changed: true, selection_changed: true }));
 
         let items = palette.items();
         assert!(!items.is_empty());
@@ -573,12 +568,7 @@ mod tests {
     #[test]
     fn update_keeps_all_filtered_matches_scrollable() {
         let commands = (0..60)
-            .map(|index| {
-                SlashCommandItem::new(
-                    format!("command-{index:02}"),
-                    "Run a terminal command".to_string(),
-                )
-            })
+            .map(|index| SlashCommandItem::new(format!("command-{index:02}"), "Run a terminal command".to_string()))
             .collect();
         let mut palette = SlashPalette::with_commands(commands);
 
@@ -592,10 +582,7 @@ mod tests {
         }
 
         assert_eq!(palette.selected_index(), Some(50));
-        assert_eq!(
-            palette.selected_command().map(|command| command.name.as_str()),
-            Some("command-50")
-        );
+        assert_eq!(palette.selected_command().map(|command| command.name.as_str()), Some("command-50"));
     }
 
     #[test]

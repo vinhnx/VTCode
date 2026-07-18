@@ -5,11 +5,7 @@ use vtcode_core::utils::colors::style;
 
 use super::checkpoints::{snapshot_config, snapshot_manager};
 
-pub async fn handle_revert_command(
-    config: &CoreAgentConfig,
-    turn: usize,
-    partial: Option<String>,
-) -> Result<()> {
+pub async fn handle_revert_command(config: &CoreAgentConfig, turn: usize, partial: Option<String>) -> Result<()> {
     println!("{}\n", style("[REVERT]").cyan().bold());
     let scope = partial
         .as_deref()

@@ -108,8 +108,8 @@ impl PluginRuntime {
             .await
             .with_context(|| format!("{ERR_READ_FILE}: {}", path.display()))?;
 
-        let manifest: PluginManifest = toml::from_str(&data)
-            .with_context(|| format!("{ERR_DESERIALIZE}: {}", path.display()))?;
+        let manifest: PluginManifest =
+            toml::from_str(&data).with_context(|| format!("{ERR_DESERIALIZE}: {}", path.display()))?;
 
         Ok(manifest.normalized(self.config.default_trust))
     }
@@ -178,10 +178,7 @@ impl PluginRuntime {
 
         let trust = manifest.trust_level.unwrap_or(self.config.default_trust);
         ensure!(
-            matches!(
-                trust,
-                PluginTrustLevel::Sandbox | PluginTrustLevel::Trusted | PluginTrustLevel::Untrusted
-            ),
+            matches!(trust, PluginTrustLevel::Sandbox | PluginTrustLevel::Trusted | PluginTrustLevel::Untrusted),
             "invalid trust level for plugin {}",
             manifest.id
         );

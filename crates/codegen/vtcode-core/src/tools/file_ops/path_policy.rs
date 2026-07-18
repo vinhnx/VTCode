@@ -107,9 +107,7 @@ impl FileOpsTool {
             || canonical.starts_with(self.canonical_workspace_root());
 
         if !within_workspace {
-            return Err(anyhow!(
-                "Error: Path '{original_display}' resolves outside the workspace."
-            ));
+            return Err(anyhow!("Error: Path '{original_display}' resolves outside the workspace."));
         }
 
         Ok(canonical)
@@ -187,11 +185,7 @@ impl FileOpsTool {
         }
     }
 
-    pub(super) async fn suggest_workspace_paths(
-        &self,
-        requested_path: &str,
-        kind: PathSuggestionKind,
-    ) -> Vec<String> {
+    pub(super) async fn suggest_workspace_paths(&self, requested_path: &str, kind: PathSuggestionKind) -> Vec<String> {
         let requested_path = normalize_path_for_suggestion(requested_path);
         if requested_path.is_empty() || requested_path == "." {
             return Vec::new();
@@ -250,10 +244,7 @@ impl FileOpsTool {
     /// Public helper to normalize and validate a user-provided path against the workspace root.
     /// Inline-delegating wrapper that returns the inner future directly to
     /// avoid an extra coroutine state machine (audit section 16).
-    pub fn normalize_user_path<'a>(
-        &'a self,
-        path: &'a str,
-    ) -> impl Future<Output = Result<PathBuf>> + 'a {
+    pub fn normalize_user_path<'a>(&'a self, path: &'a str) -> impl Future<Output = Result<PathBuf>> + 'a {
         self.normalize_and_validate_user_path(path)
     }
 }

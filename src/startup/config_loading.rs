@@ -20,14 +20,12 @@ pub(super) struct LoadedStartupConfig {
 pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfig> {
     let workspace_override = args.workspace_path.clone().or_else(|| args.workspace.clone());
 
-    let workspace = resolve_workspace_path(workspace_override)
-        .context("Failed to resolve workspace directory")?;
+    let workspace = resolve_workspace_path(workspace_override).context("Failed to resolve workspace directory")?;
     if args.workspace_path.is_some() {
         validate_path_exists(&workspace, "Workspace")?;
     }
 
-    let (cli_config_path_override, inline_config_overrides) =
-        parse_cli_config_entries(&args.config);
+    let (cli_config_path_override, inline_config_overrides) = parse_cli_config_entries(&args.config);
     let env_config_path_override = std::env::var("VTCODE_CONFIG_PATH").ok().and_then(|value| {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -49,17 +47,14 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     }
 
     if let Some(ref model) = args.model {
-        builder = builder
-            .cli_override("agent.default_model".to_owned(), toml::Value::String(model.clone()));
+        builder = builder.cli_override("agent.default_model".to_owned(), toml::Value::String(model.clone()));
     }
     if let Some(ref provider) = args.provider {
-        builder = builder
-            .cli_override("agent.provider".to_owned(), toml::Value::String(provider.clone()));
+        builder = builder.cli_override("agent.provider".to_owned(), toml::Value::String(provider.clone()));
     }
 
     let manager = builder.build().context("Failed to load configuration")?;
-    let primary_agent_explicitly_configured =
-        has_explicit_default_primary_agent(&manager.effective_config());
+    let primary_agent_explicitly_configured = has_explicit_default_primary_agent(&manager.effective_config());
     let mut config = manager.config().clone();
 
     let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
@@ -71,9 +66,7 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     let first_run_occurred = maybe_run_first_run_setup(args, &workspace, &mut config).await?;
 
     if automation_prompt.is_some() && args.command.is_some() {
-        bail!(
-            "--auto/--full-auto with a prompt cannot be combined with other commands. Provide only the prompt."
-        );
+        bail!("--auto/--full-auto with a prompt cannot be combined with other commands. Provide only the prompt.");
     }
 
     Ok(LoadedStartupConfig {
@@ -133,8 +126,7 @@ enable_tracing = true
 
     #[test]
     fn detects_explicit_default_primary_agent_key() {
-        let with_key =
-            toml::Value::Table(r#"default_primary_agent = "duck""#.parse().expect("toml"));
+        let with_key = toml::Value::Table(r#"default_primary_agent = "duck""#.parse().expect("toml"));
         let without_key = toml::Value::Table(
             r#"[agent]
 provider = "openai""#

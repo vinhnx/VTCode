@@ -11,14 +11,11 @@
 
 use crate::client::LLMClient;
 use crate::provider::{
-    ContentPart, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message,
-    MessageContent, ToolDefinition,
+    ContentPart, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message, MessageContent, ToolDefinition,
 };
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
-use vtcode_config::core::{
-    AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig,
-};
+use vtcode_config::core::{AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig};
 
 use super::capabilities;
 use super::headers;
@@ -28,9 +25,7 @@ use super::stream_decoder;
 use super::validation;
 
 use crate::providers::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
-use crate::providers::error_handling::{
-    format_network_error, format_parse_error, handle_anthropic_http_error,
-};
+use crate::providers::error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error};
 
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -140,11 +135,7 @@ impl AnthropicProvider {
         let base_url_value = if models::minimax::SUPPORTED_MODELS.contains(&model.as_str()) {
             Self::resolve_minimax_base_url(base_url)
         } else {
-            override_base_url(
-                urls::ANTHROPIC_API_BASE,
-                base_url,
-                Some(env_vars::ANTHROPIC_BASE_URL),
-            )
+            override_base_url(urls::ANTHROPIC_API_BASE, base_url, Some(env_vars::ANTHROPIC_BASE_URL))
         };
 
         Self {
@@ -183,9 +174,7 @@ impl AnthropicProvider {
 
         let resolved = base_url
             .and_then(|value| sanitize(&value))
-            .or_else(|| {
-                env::var(env_vars::MINIMAX_BASE_URL).ok().and_then(|value| sanitize(&value))
-            })
+            .or_else(|| env::var(env_vars::MINIMAX_BASE_URL).ok().and_then(|value| sanitize(&value)))
             .or_else(|| sanitize(urls::MINIMAX_API_BASE))
             .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
 
@@ -204,9 +193,7 @@ impl AnthropicProvider {
             without_v1 = without_v1.trim_end_matches("/v1").trim_end_matches('/').to_string();
         }
 
-        if is_official_minimax_host(&without_v1)
-            && !without_v1.to_ascii_lowercase().contains("/anthropic")
-        {
+        if is_official_minimax_host(&without_v1) && !without_v1.to_ascii_lowercase().contains("/anthropic") {
             without_v1 = format!("{}/anthropic", without_v1.trim_end_matches('/'));
         }
 
@@ -261,9 +248,7 @@ impl AnthropicProvider {
                 betas.push(ANTHROPIC_COMPACT_BETA);
             }
 
-            if uses_anthropic_context_edits(context_management)
-                && !betas.contains(&ANTHROPIC_CONTEXT_MANAGEMENT_BETA)
-            {
+            if uses_anthropic_context_edits(context_management) && !betas.contains(&ANTHROPIC_CONTEXT_MANAGEMENT_BETA) {
                 betas.push(ANTHROPIC_CONTEXT_MANAGEMENT_BETA);
             }
         }
@@ -289,11 +274,7 @@ impl AnthropicProvider {
         request_builder::resolve_advisor_tool(executor, &self.anthropic_config.advisor).is_some()
     }
 
-    pub fn with_leak_protection(
-        &self,
-        mut request: LLMRequest,
-        secret_description: &str,
-    ) -> LLMRequest {
+    pub fn with_leak_protection(&self, mut request: LLMRequest, secret_description: &str) -> LLMRequest {
         let reminder = format!("[Never mention or reveal {secret_description}]");
         let resolved_model = capabilities::resolve_model_name(&request.model, &self.model);
 
@@ -386,15 +367,11 @@ impl AnthropicProvider {
                 betas.push(beta);
             }
         }
-        if self.requires_files_api_beta(request)
-            && !betas.iter().any(|beta| beta == "files-api-2025-04-14")
-        {
+        if self.requires_files_api_beta(request) && !betas.iter().any(|beta| beta == "files-api-2025-04-14") {
             betas.push("files-api-2025-04-14".to_string());
         }
 
-        if self.advisor_enabled_for_request(request)
-            && !betas.iter().any(|beta| beta == ANTHROPIC_ADVISOR_BETA)
-        {
+        if self.advisor_enabled_for_request(request) && !betas.iter().any(|beta| beta == ANTHROPIC_ADVISOR_BETA) {
             betas.push(ANTHROPIC_ADVISOR_BETA.to_string());
         }
 
@@ -433,11 +410,7 @@ impl AnthropicProvider {
             include_fallback_credit: request.fallback_credit_token.is_some(),
         };
 
-        headers::combined_beta_header_value(
-            self.prompt_cache_enabled,
-            &self.prompt_cache_settings,
-            &beta_config,
-        )
+        headers::combined_beta_header_value(self.prompt_cache_enabled, &self.prompt_cache_settings, &beta_config)
     }
 
     async fn send_request(
@@ -455,12 +428,9 @@ impl AnthropicProvider {
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
-        if let Some(beta_header) = self.beta_header_for_request(
-            request,
-            anthropic_request,
-            include_advanced_tool_use,
-            betas.as_deref(),
-        ) {
+        if let Some(beta_header) =
+            self.beta_header_for_request(request, anthropic_request, include_advanced_tool_use, betas.as_deref())
+        {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 
@@ -528,9 +498,9 @@ fn uses_anthropic_context_edits(context_management: &Value) -> bool {
 }
 
 fn is_context_edit_item(item: &Value) -> bool {
-    item.get("type").and_then(Value::as_str).is_some_and(|edit_type| {
-        edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_")
-    })
+    item.get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|edit_type| edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_"))
 }
 
 struct AnthropicHttpResponse {
@@ -610,8 +580,7 @@ impl LLMProvider for AnthropicProvider {
         let AnthropicHttpResponse { response, request_id, organization_id } =
             self.send_request(&request, &anthropic_request).await?;
 
-        let anthropic_response: Value =
-            response.json().await.map_err(|e| format_parse_error("Anthropic", &e))?;
+        let anthropic_response: Value = response.json().await.map_err(|e| format_parse_error("Anthropic", &e))?;
 
         let mut llm_response = response_parser::parse_response(anthropic_response, resolved_model)?;
         llm_response.request_id = request_id;
@@ -678,10 +647,7 @@ mod tests {
 
     #[test]
     fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
-        assert_eq!(
-            AnthropicProvider::resolve_minimax_base_url(None),
-            "https://api.minimax.io/anthropic/v1"
-        );
+        assert_eq!(AnthropicProvider::resolve_minimax_base_url(None), "https://api.minimax.io/anthropic/v1");
     }
 
     #[test]
@@ -691,9 +657,7 @@ mod tests {
             "https://api.minimax.io/anthropic/v1"
         );
         assert_eq!(
-            AnthropicProvider::resolve_minimax_base_url(Some(
-                "https://api.minimax.io/v1".to_string()
-            )),
+            AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io/v1".to_string())),
             "https://api.minimax.io/anthropic/v1"
         );
     }
@@ -701,9 +665,7 @@ mod tests {
     #[test]
     fn resolve_minimax_base_url_keeps_explicit_anthropic_path() {
         assert_eq!(
-            AnthropicProvider::resolve_minimax_base_url(Some(
-                "https://api.minimax.io/anthropic".to_string()
-            )),
+            AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io/anthropic".to_string())),
             "https://api.minimax.io/anthropic/v1"
         );
         assert_eq!(
@@ -717,19 +679,14 @@ mod tests {
     #[test]
     fn resolve_minimax_base_url_respects_custom_proxy_path() {
         assert_eq!(
-            AnthropicProvider::resolve_minimax_base_url(Some(
-                "https://proxy.example.com/minimax/v1".to_string()
-            )),
+            AnthropicProvider::resolve_minimax_base_url(Some("https://proxy.example.com/minimax/v1".to_string())),
             "https://proxy.example.com/minimax/v1"
         );
     }
 
     #[test]
     fn native_structured_outputs_do_not_require_structured_output_beta() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("hello".to_string())].into(),
@@ -755,10 +712,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_code_execution_and_files_api_when_needed() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message {
@@ -794,10 +748,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_context_management_beta_for_memory_tools() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("remember this preference".to_string())].into(),
@@ -824,10 +775,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_context_management_beta_for_context_edits() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())].into(),
@@ -846,10 +794,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_compact_beta_for_compaction_requests() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())].into(),
@@ -868,10 +813,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_compact_beta_for_compaction_edits() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())].into(),
@@ -896,10 +838,7 @@ mod tests {
 
     #[test]
     fn effective_betas_include_both_headers_for_mixed_context_edits() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("continue".to_string())].into(),
@@ -925,10 +864,7 @@ mod tests {
 
     #[test]
     fn beta_header_includes_advanced_tool_use_for_programmatic_tools() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("find warmest city".to_string())].into(),
@@ -977,10 +913,7 @@ mod tests {
 
     #[test]
     fn beta_header_uses_request_model_instead_of_provider_default() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("hello".to_string())].into(),
@@ -998,10 +931,7 @@ mod tests {
 
     #[test]
     fn beta_header_includes_interleaved_thinking_for_sonnet_4_6_manual_mode() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("hello".to_string())].into(),
@@ -1021,10 +951,7 @@ mod tests {
 
     #[test]
     fn convert_to_anthropic_format_falls_back_to_provider_default_model() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
@@ -1037,10 +964,7 @@ mod tests {
 
     #[test]
     fn beta_header_includes_advanced_tool_use_for_tool_search_requests() {
-        let provider = AnthropicProvider::with_model(
-            "test-key".to_string(),
-            models::CLAUDE_SONNET_4_6.to_string(),
-        );
+        let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_4_6.to_string());
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("find the deployment tool".to_string())].into(),
@@ -1060,14 +984,8 @@ mod tests {
 
     #[test]
     fn code_execution_beta_name_uses_tool_revision() {
-        assert_eq!(
-            code_execution_beta_name("code_execution_20250825").as_deref(),
-            Some("code-execution-2025-08-25")
-        );
-        assert_eq!(
-            code_execution_beta_name("code_execution_20250522").as_deref(),
-            Some("code-execution-2025-05-22")
-        );
+        assert_eq!(code_execution_beta_name("code_execution_20250825").as_deref(), Some("code-execution-2025-08-25"));
+        assert_eq!(code_execution_beta_name("code_execution_20250522").as_deref(), Some("code-execution-2025-05-22"));
         assert!(code_execution_beta_name("code_execution_latest").is_none());
     }
 }

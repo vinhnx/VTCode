@@ -8,8 +8,8 @@ use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
-    InlineEvent, InlineHandle, InlineHeaderContext, TransientEvent, TransientHotkeyAction,
-    TransientSelectionChange, TransientSubmission,
+    InlineEvent, InlineHandle, InlineHeaderContext, TransientEvent, TransientHotkeyAction, TransientSelectionChange,
+    TransientSubmission,
 };
 
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -129,9 +129,7 @@ impl<'a> InlineEventContext<'a> {
                 TransientEvent::SelectionChanged(TransientSelectionChange::List(selection)) => {
                     self.modal.handle_preview(self.state.renderer(), selection)?
                 }
-                TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
-                    ..
-                }) => {
+                TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode { .. }) => {
                     self.state.reset_interrupt_state();
                     self.input_processor().passive()
                 }
@@ -152,9 +150,7 @@ impl<'a> InlineEventContext<'a> {
                     InlineLoopAction::DiffRejected
                 }
                 TransientEvent::Submitted(
-                    TransientSubmission::DiffProceed
-                    | TransientSubmission::DiffReload
-                    | TransientSubmission::DiffAbort,
+                    TransientSubmission::DiffProceed | TransientSubmission::DiffReload | TransientSubmission::DiffAbort,
                 ) => {
                     self.state.reset_interrupt_state();
                     self.input_processor().passive()
@@ -162,18 +158,14 @@ impl<'a> InlineEventContext<'a> {
                 TransientEvent::Submitted(TransientSubmission::Hotkey(action)) => {
                     self.state.reset_interrupt_state();
                     match action {
-                        TransientHotkeyAction::LaunchEditor => {
-                            self.input_processor().submit("/edit".into())
-                        }
+                        TransientHotkeyAction::LaunchEditor => self.input_processor().submit("/edit".into()),
                         TransientHotkeyAction::ReloadSubagentInspector
                         | TransientHotkeyAction::GracefulStopSubagent
                         | TransientHotkeyAction::ForceCancelSubagent
                         | TransientHotkeyAction::OpenSourceThread
                         | TransientHotkeyAction::FocusJobOutput
                         | TransientHotkeyAction::InterruptJob
-                        | TransientHotkeyAction::PreviewJobSnapshot => {
-                            self.input_processor().passive()
-                        }
+                        | TransientHotkeyAction::PreviewJobSnapshot => self.input_processor().passive(),
                     }
                 }
                 TransientEvent::Cancelled => {
@@ -182,14 +174,10 @@ impl<'a> InlineEventContext<'a> {
                 }
             },
             InlineEvent::Cancel => self.control_processor().cancel()?,
-            InlineEvent::ForceCancelPtySession => {
-                self.control_processor().force_cancel_pty_session()?
-            }
+            InlineEvent::ForceCancelPtySession => self.control_processor().force_cancel_pty_session()?,
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
-            InlineEvent::BackgroundOperation => {
-                self.input_processor().submit("/subprocesses toggle".into())
-            }
+            InlineEvent::BackgroundOperation => self.input_processor().submit("/subprocesses toggle".into()),
             InlineEvent::LaunchEditor { draft } => {
                 if draft.is_empty() {
                     self.input_processor().submit("/edit".into())
@@ -221,9 +209,7 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::OpenTranscriptReviewScrollback(text)
             }
-            InlineEvent::OpenFileInEditor(path) => {
-                self.input_processor().submit(format!("/edit {path}").into())
-            }
+            InlineEvent::OpenFileInEditor(path) => self.input_processor().submit(format!("/edit {path}").into()),
             InlineEvent::OpenUrl(url) => {
                 self.state.reset_interrupt_state();
                 self.modal.request_url_guard(self.state.renderer(), url)?
@@ -253,10 +239,7 @@ impl<'a> InlineEventContext<'a> {
         //
         // `register_signal()` applies a 200ms debounce so an accidental
         // double-tap cannot escalate past CancelRequested.
-        crate::agent::runloop::unified::stop_requests::request_local_stop(
-            self.ctrl_c_state,
-            self.ctrl_c_notify,
-        );
+        crate::agent::runloop::unified::stop_requests::request_local_stop(self.ctrl_c_state, self.ctrl_c_notify);
         if self.ctrl_c_state.is_exit_requested() {
             return InlineLoopAction::Exit(vtcode_core::hooks::SessionEndReason::Exit);
         }

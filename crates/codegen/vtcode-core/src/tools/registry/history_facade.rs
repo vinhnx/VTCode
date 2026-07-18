@@ -27,22 +27,12 @@ impl ToolRegistry {
     }
 
     /// Find a recent spooled output for a tool call with identical args.
-    pub fn find_recent_spooled_output(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        max_age: Duration,
-    ) -> Option<Value> {
+    pub fn find_recent_spooled_output(&self, tool_name: &str, args: &Value, max_age: Duration) -> Option<Value> {
         self.execution_history.find_recent_spooled_result(tool_name, args, max_age)
     }
 
     /// Find a recent successful output for a tool call with identical args.
-    pub fn find_recent_successful_output(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        max_age: Duration,
-    ) -> Option<Value> {
+    pub fn find_recent_successful_output(&self, tool_name: &str, args: &Value, max_age: Duration) -> Option<Value> {
         self.execution_history.find_recent_successful_result(tool_name, args, max_age)
     }
 
@@ -62,11 +52,7 @@ impl ToolRegistry {
     /// Find continuation metadata from a recent chunked file-read result for the same path.
     ///
     /// Supports both `read_file` and `file_operation` (read action) history records.
-    pub fn find_recent_read_file_spool_progress(
-        &self,
-        path: &str,
-        max_age: Duration,
-    ) -> Option<(usize, usize)> {
+    pub fn find_recent_read_file_spool_progress(&self, path: &str, max_age: Duration) -> Option<(usize, usize)> {
         self.execution_history.find_recent_read_file_spool_progress(path, max_age)
     }
 

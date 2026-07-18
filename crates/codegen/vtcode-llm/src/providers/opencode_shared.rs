@@ -17,8 +17,7 @@ impl OpenAiCompatSpec for OpenCodeGoInnerSpec {
     const DEFAULT_BASE_URL: &'static str = urls::OPENCODE_GO_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::OPENCODE_GO_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::opencode_go::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::opencode_go::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::opencode_go::SUPPORTED_MODELS);
 
     const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
     const INCLUDE_TOP_P: bool = false;
@@ -36,8 +35,7 @@ impl OpenAiCompatSpec for OpenCodeZenInnerSpec {
     const DEFAULT_BASE_URL: &'static str = urls::OPENCODE_ZEN_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::OPENCODE_ZEN_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::opencode_zen::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::opencode_zen::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::opencode_zen::SUPPORTED_MODELS);
 
     const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
     const INCLUDE_TOP_P: bool = false;
@@ -52,12 +50,7 @@ pub(crate) struct OpenCodeCompatibleProvider<S: OpenAiCompatSpec> {
 }
 
 impl<S: OpenAiCompatSpec> OpenCodeCompatibleProvider<S> {
-    pub(crate) fn new(
-        api_key: String,
-        http_client: reqwest::Client,
-        base_url: String,
-        model: String,
-    ) -> Self {
+    pub(crate) fn new(api_key: String, http_client: reqwest::Client, base_url: String, model: String) -> Self {
         Self {
             core: OpenAiCompatCore::from_parts(api_key, model, http_client, base_url),
         }
@@ -133,8 +126,7 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
         let response = self.core.dispatch(&request).await?;
 
         let bytes_stream = response.bytes_stream();
-        let (event_tx, event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
         let tx = event_tx.clone();
 
         let model_clone = model.clone();
@@ -143,45 +135,34 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
         // Prevents indefinite hangs when upstream server stops responding.
         let stream_timeout = std::time::Duration::from_secs(300);
         tokio::spawn(async move {
-            let mut aggregator =
-                crate::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator = crate::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let result = tokio::time::timeout(
                 stream_timeout,
-                crate::providers::shared::process_openai_stream(
-                    bytes_stream,
-                    provider_name,
-                    model_clone,
-                    |value| {
-                        if let Some(choices) =
-                            value.get("choices").and_then(|candidate| candidate.as_array())
-                            && let Some(choice) = choices.first()
+                crate::providers::shared::process_openai_stream(bytes_stream, provider_name, model_clone, |value| {
+                    if let Some(choices) = value.get("choices").and_then(|candidate| candidate.as_array())
+                        && let Some(choice) = choices.first()
+                    {
+                        if let Some(delta) = choice.get("delta")
+                            && let Some(content) = delta.get("content").and_then(|candidate| candidate.as_str())
                         {
-                            if let Some(delta) = choice.get("delta")
-                                && let Some(content) =
-                                    delta.get("content").and_then(|candidate| candidate.as_str())
-                            {
-                                for event in aggregator.handle_content(content) {
-                                    let _ = tx.send(Ok(event));
-                                }
-                            }
-
-                            if let Some(reason) =
-                                choice.get("finish_reason").and_then(|candidate| candidate.as_str())
-                            {
-                                aggregator.set_finish_reason(map_finish_reason_common(reason));
+                            for event in aggregator.handle_content(content) {
+                                let _ = tx.send(Ok(event));
                             }
                         }
 
-                        if value.get("usage").is_some()
-                            && let Some(usage) =
-                                crate::providers::common::parse_usage_openai_format(&value, false)
-                        {
-                            aggregator.set_usage(usage);
+                        if let Some(reason) = choice.get("finish_reason").and_then(|candidate| candidate.as_str()) {
+                            aggregator.set_finish_reason(map_finish_reason_common(reason));
                         }
-                        Ok(())
-                    },
-                ),
+                    }
+
+                    if value.get("usage").is_some()
+                        && let Some(usage) = crate::providers::common::parse_usage_openai_format(&value, false)
+                    {
+                        aggregator.set_usage(usage);
+                    }
+                    Ok(())
+                }),
             )
             .await;
 

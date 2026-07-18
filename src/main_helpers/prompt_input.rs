@@ -25,9 +25,7 @@ pub(crate) fn build_print_prompt(print_value: String) -> Result<String> {
         }
         (Some(piped), None) => Ok(piped),
         (None, Some(prompt)) => Ok(prompt),
-        (None, None) => Err(anyhow::anyhow!(
-            "No prompt provided. Pass text to -p/--print or pipe input via stdin."
-        )),
+        (None, None) => Err(anyhow::anyhow!("No prompt provided. Pass text to -p/--print or pipe input via stdin.")),
     }
 }
 

@@ -96,9 +96,7 @@ fn tool_catalog_projection_benchmark(c: &mut Criterion) {
         b.iter(|| {
             let state = Arc::clone(&state);
             let tools = Arc::clone(&tools);
-            runtime.block_on(async move {
-                black_box(state.filtered_snapshot_with_stats(&tools, true, false).await)
-            })
+            runtime.block_on(async move { black_box(state.filtered_snapshot_with_stats(&tools, true, false).await) })
         })
     });
 

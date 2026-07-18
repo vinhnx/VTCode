@@ -1,12 +1,12 @@
 // Claude 4.x/5.x series - Latest Anthropic models
 pub const DEFAULT_MODEL: &str = "claude-sonnet-5";
 pub const SUPPORTED_MODELS: &[&str] = &[
-    "claude-sonnet-5", // Latest balanced flagship with adaptive thinking on by default
-    "claude-fable-5",  // Most capable widely released model
-    "claude-mythos-5", // Fable 5-class model without safety classifiers (limited)
-    "claude-opus-4-8", // Opus-tier premium flagship with adaptive thinking
-    "claude-sonnet-4-6", // Previous balanced flagship
-    "claude-haiku-4-5", // Fastest model with near-frontier intelligence
+    "claude-sonnet-5",           // Latest balanced flagship with adaptive thinking on by default
+    "claude-fable-5",            // Most capable widely released model
+    "claude-mythos-5",           // Fable 5-class model without safety classifiers (limited)
+    "claude-opus-4-8",           // Opus-tier premium flagship with adaptive thinking
+    "claude-sonnet-4-6",         // Previous balanced flagship
+    "claude-haiku-4-5",          // Fastest model with near-frontier intelligence
     "claude-haiku-4-5-20251001", // Haiku 4.5 versioned
 ];
 
@@ -97,9 +97,7 @@ pub fn validate_advisor_pair(executor: &str, advisor: &str) -> Result<(), String
     }
 
     if chosen_advisor_tier < executor_tier {
-        return Err(format!(
-            "advisor model {advisor} must be at least as capable as the executor model {executor}"
-        ));
+        return Err(format!("advisor model {advisor} must be at least as capable as the executor model {executor}"));
     }
 
     Ok(())

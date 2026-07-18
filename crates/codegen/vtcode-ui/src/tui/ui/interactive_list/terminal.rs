@@ -3,9 +3,7 @@ use std::io::{self, Write};
 use anyhow::{Context, Result};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::cursor::{
-    MoveToColumn, RestorePosition, SavePosition, SetCursorStyle, Show,
-};
+use ratatui::crossterm::cursor::{MoveToColumn, RestorePosition, SavePosition, SetCursorStyle, Show};
 use ratatui::crossterm::event;
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
@@ -43,24 +41,19 @@ impl TerminalModeGuard {
     }
 
     pub(super) fn enable_raw_mode(&mut self) -> Result<()> {
-        enable_raw_mode()
-            .with_context(|| format!("Failed to enable raw mode for {} selector", self.label))?;
+        enable_raw_mode().with_context(|| format!("Failed to enable raw mode for {} selector", self.label))?;
         self.raw_mode_enabled = true;
         Ok(())
     }
 
     pub(super) fn enter_alternate_screen(&mut self, stderr: &mut io::Stderr) -> Result<()> {
-        execute!(stderr, EnterAlternateScreen).with_context(|| {
-            format!("Failed to enter alternate screen for {} selector", self.label)
-        })?;
+        execute!(stderr, EnterAlternateScreen)
+            .with_context(|| format!("Failed to enter alternate screen for {} selector", self.label))?;
         self.alternate_screen = true;
         Ok(())
     }
 
-    pub(super) fn hide_cursor(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stderr>>,
-    ) -> Result<()> {
+    pub(super) fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stderr>>) -> Result<()> {
         terminal
             .hide_cursor()
             .with_context(|| format!("Failed to hide cursor for {} selector", self.label))?;
@@ -79,16 +72,13 @@ impl TerminalModeGuard {
         let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
         if self.alternate_screen {
-            execute!(terminal.backend_mut(), LeaveAlternateScreen).with_context(|| {
-                format!("Failed to leave alternate screen after {} selector", self.label)
-            })?;
+            execute!(terminal.backend_mut(), LeaveAlternateScreen)
+                .with_context(|| format!("Failed to leave alternate screen after {} selector", self.label))?;
             self.alternate_screen = false;
         }
 
         if self.raw_mode_enabled {
-            disable_raw_mode().with_context(|| {
-                format!("Failed to disable raw mode after {} selector", self.label)
-            })?;
+            disable_raw_mode().with_context(|| format!("Failed to disable raw mode after {} selector", self.label))?;
             self.raw_mode_enabled = false;
         }
 

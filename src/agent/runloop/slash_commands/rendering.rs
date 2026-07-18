@@ -19,48 +19,23 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(MessageStyle::Info, "  tools   – Show tools exposed by active providers")?;
     renderer.line(MessageStyle::Info, "  refresh – Reindex MCP tools without restarting")?;
     renderer.line(MessageStyle::Info, "  config  – Summarize MCP settings from vtcode.toml")?;
-    renderer.line(
-        MessageStyle::Info,
-        "  config edit – Show the config file path and editing guidance",
-    )?;
-    renderer
-        .line(MessageStyle::Info, "  repair  – Restart MCP connections and refresh tool indices")?;
+    renderer.line(MessageStyle::Info, "  config edit – Show the config file path and editing guidance")?;
+    renderer.line(MessageStyle::Info, "  repair  – Restart MCP connections and refresh tool indices")?;
     renderer.line(MessageStyle::Info, "  diagnose – Validate config and run MCP health checks")?;
-    renderer.line(
-        MessageStyle::Info,
-        "  login/logout <name> – Manage provider authentication (if supported)",
-    )?;
+    renderer.line(MessageStyle::Info, "  login/logout <name> – Manage provider authentication (if supported)")?;
     renderer.line(MessageStyle::Info, "Examples: /mcp list, /mcp tools, /mcp login github")?;
     Ok(())
 }
 
 pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        "Usage: /local                          (open interactive manager)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local status                   (check all local servers)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local status <provider>        (check specific server)",
-    )?;
+    renderer.line(MessageStyle::Info, "Usage: /local                          (open interactive manager)")?;
+    renderer.line(MessageStyle::Info, "       /local status                   (check all local servers)")?;
+    renderer.line(MessageStyle::Info, "       /local status <provider>        (check specific server)")?;
     renderer.line(MessageStyle::Info, "       /local start <provider>         (start a server)")?;
     renderer.line(MessageStyle::Info, "       /local stop <provider>          (stop a server)")?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local configure <provider>     (show config and env vars)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local troubleshoot <provider>  (diagnose and fix issues)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local <provider>               (open provider actions)",
-    )?;
+    renderer.line(MessageStyle::Info, "       /local configure <provider>     (show config and env vars)")?;
+    renderer.line(MessageStyle::Info, "       /local troubleshoot <provider>  (diagnose and fix issues)")?;
+    renderer.line(MessageStyle::Info, "       /local <provider>               (open provider actions)")?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, "Providers: ollama, lmstudio, llama.cpp")?;
     renderer.line(MessageStyle::Info, "Aliases: lm-studio -> lmstudio, llama.cpp -> llamacpp")?;
@@ -84,8 +59,7 @@ pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     }
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer
-        .line(MessageStyle::Info, &format!("Current theme: {}", theme::active_theme_label()))?;
+    renderer.line(MessageStyle::Info, &format!("Current theme: {}", theme::active_theme_label()))?;
     Ok(())
 }
 
@@ -103,18 +77,13 @@ pub(super) async fn render_help(
             }
         } else if let Some(template) = find_prompt_template(workspace, cmd_name).await {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", template.name))?;
+            renderer.line(MessageStyle::Info, &format!("  Description: {}", template.description))?;
             renderer
-                .line(MessageStyle::Info, &format!("  Description: {}", template.description))?;
-            renderer.line(
-                MessageStyle::Info,
-                "  Type `/name [args...]` to expand this prompt template into the editor.",
-            )?;
+                .line(MessageStyle::Info, "  Type `/name [args...]` to expand this prompt template into the editor.")?;
         } else {
             renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Unknown command '{cmd_name}'. Use /help without arguments to see all commands."
-                ),
+                &format!("Unknown command '{cmd_name}'. Use /help without arguments to see all commands."),
             )?;
         }
     } else {
@@ -132,10 +101,7 @@ pub(super) async fn render_help(
             renderer.line(MessageStyle::Info, "")?;
             renderer.line(MessageStyle::Info, "Prompt templates:")?;
             for template in prompt_templates {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("  /{} – {}", template.name, template.description),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("  /{} – {}", template.name, template.description))?;
             }
         }
 
@@ -153,18 +119,13 @@ pub(super) async fn render_help(
         )?;
         renderer.line(MessageStyle::Info, "  Up/Down arrows – Navigate command history")?;
         renderer.line(MessageStyle::Info, "  Enter – Submit now (or queue if a turn is active)")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Tab – Accept suggestion, cycle primary agent when empty, or queue input",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "  Tab – Accept suggestion, cycle primary agent when empty, or queue input")?;
         renderer.line(MessageStyle::Info, "  Ctrl+Enter – Run now / steer the active turn")?;
         renderer.line(MessageStyle::Info, "  Shift+Tab – Cycle primary agent")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  \\ + Enter – Quick escape (insert newline without submitting)",
-        )?;
+        renderer.line(MessageStyle::Info, "  \\ + Enter – Quick escape (insert newline without submitting)")?;
         renderer.line(MessageStyle::Info, "  Shift+Enter – Multiline input (if configured)")?;
         match TerminalType::detect().unwrap_or(TerminalType::Unknown) {
             TerminalType::Ghostty
@@ -193,8 +154,7 @@ pub(super) async fn render_help(
         renderer.line(MessageStyle::Info, "  Ctrl+J – Line feed character for multiline")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Shell mode:")?;
-        renderer
-            .line(MessageStyle::Info, "  !command – Run shell commands directly (e.g., !ls -la)")?;
+        renderer.line(MessageStyle::Info, "  !command – Run shell commands directly (e.g., !ls -la)")?;
     }
     Ok(())
 }

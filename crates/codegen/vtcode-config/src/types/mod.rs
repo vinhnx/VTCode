@@ -215,16 +215,11 @@ impl ShellPromptProfile {
     }
 
     /// Resolve this configured value against an explicit platform.
-    pub fn resolve_for_platform(
-        self,
-        platform: ShellProfilePlatform,
-    ) -> ResolvedShellPromptProfile {
+    pub fn resolve_for_platform(self, platform: ShellProfilePlatform) -> ResolvedShellPromptProfile {
         match self {
             Self::Auto => match platform {
                 ShellProfilePlatform::NativeWindows => ResolvedShellPromptProfile::PowerShell,
-                ShellProfilePlatform::UnixLike | ShellProfilePlatform::Wsl => {
-                    ResolvedShellPromptProfile::UnixLike
-                }
+                ShellProfilePlatform::UnixLike | ShellProfilePlatform::Wsl => ResolvedShellPromptProfile::UnixLike,
             },
             Self::UnixLike => ResolvedShellPromptProfile::UnixLike,
             Self::PowerShell => ResolvedShellPromptProfile::PowerShell,
@@ -403,9 +398,7 @@ impl UiSurfacePreference {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("auto") {
             Some(Self::Auto)
-        } else if normalized.eq_ignore_ascii_case("alternate")
-            || normalized.eq_ignore_ascii_case("alt")
-        {
+        } else if normalized.eq_ignore_ascii_case("alternate") || normalized.eq_ignore_ascii_case("alt") {
             Some(Self::Alternate)
         } else if normalized.eq_ignore_ascii_case("inline") {
             Some(Self::Inline)
@@ -564,14 +557,8 @@ mod tests {
     fn auto_shell_prompt_profile_selects_platform_defaults() {
         let profile = ShellPromptProfile::Auto;
 
-        assert_eq!(
-            profile.resolve_for_platform(ShellProfilePlatform::UnixLike),
-            ResolvedShellPromptProfile::UnixLike
-        );
-        assert_eq!(
-            profile.resolve_for_platform(ShellProfilePlatform::Wsl),
-            ResolvedShellPromptProfile::UnixLike
-        );
+        assert_eq!(profile.resolve_for_platform(ShellProfilePlatform::UnixLike), ResolvedShellPromptProfile::UnixLike);
+        assert_eq!(profile.resolve_for_platform(ShellProfilePlatform::Wsl), ResolvedShellPromptProfile::UnixLike);
         assert_eq!(
             profile.resolve_for_platform(ShellProfilePlatform::NativeWindows),
             ResolvedShellPromptProfile::PowerShell

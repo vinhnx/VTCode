@@ -12,13 +12,11 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::compaction::memory_envelope::{
-    MemoryEnvelopePersistence, MemoryEnvelopePlacement,
-    dedup_repeated_file_reads_for_local_compaction, effective_compaction_threshold,
-    persist_memory_envelope, strip_existing_memory_envelope,
+    MemoryEnvelopePersistence, MemoryEnvelopePlacement, dedup_repeated_file_reads_for_local_compaction,
+    effective_compaction_threshold, persist_memory_envelope, strip_existing_memory_envelope,
 };
 use crate::compaction::{
-    CompactionConfig, CompactionStrategy, ManualCompactionOptions, compact_history_manual,
-    manual_compaction_strategy,
+    CompactionConfig, CompactionStrategy, ManualCompactionOptions, compact_history_manual, manual_compaction_strategy,
 };
 use crate::exec::events::CompactionMode;
 use crate::llm::provider::{LLMProvider, Message};
@@ -112,8 +110,7 @@ pub async fn auto_compact_messages(
     }
 
     let (mut compacted, mode) =
-        compact_history_manual(provider, model, &compaction_history, &engine_cfg, &manual_options)
-            .await?;
+        compact_history_manual(provider, model, &compaction_history, &engine_cfg, &manual_options).await?;
 
     if compacted == compaction_history {
         return Ok(None);
@@ -131,8 +128,7 @@ pub async fn auto_compact_messages(
         placement,
         None,
     )?;
-    let history_artifact_path =
-        envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
+    let history_artifact_path = envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     let compacted_len = compacted.len();
     *history = compacted;
     Ok(Some(AutoCompactionOutcome {

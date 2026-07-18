@@ -93,11 +93,7 @@ impl Session {
         })
     }
 
-    pub(crate) fn overlay_queue_lines(
-        &mut self,
-        visible_lines: &mut [TranscriptLine],
-        content_width: u16,
-    ) {
+    pub(crate) fn overlay_queue_lines(&mut self, visible_lines: &mut [TranscriptLine], content_width: u16) {
         if visible_lines.is_empty() || content_width == 0 {
             return;
         }

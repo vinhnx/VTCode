@@ -2,9 +2,7 @@ use shell_words::split as shell_split;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 
 pub(super) fn looks_like_natural_language_request(command_part: &str) -> bool {
-    let natural_language_indicators = [
-        "the ", "all ", "some ", "this ", "that ", "my ", "our ", "a ", "an ",
-    ];
+    let natural_language_indicators = ["the ", "all ", "some ", "this ", "that ", "my ", "our ", "a ", "an "];
     let command_lower = command_part.to_ascii_lowercase();
     natural_language_indicators
         .iter()
@@ -14,9 +12,7 @@ pub(super) fn looks_like_natural_language_request(command_part: &str) -> bool {
 pub(super) fn looks_like_shell_command(command_part: &str) -> bool {
     parse_shell_commands_tree_sitter(command_part)
         .map(|commands| !commands.is_empty())
-        .unwrap_or_else(|_| {
-            shell_split(command_part).map(|tokens| !tokens.is_empty()).unwrap_or(false)
-        })
+        .unwrap_or_else(|_| shell_split(command_part).map(|tokens| !tokens.is_empty()).unwrap_or(false))
 }
 
 pub(super) fn extract_inline_backtick_command(command_part: &str) -> Option<&str> {

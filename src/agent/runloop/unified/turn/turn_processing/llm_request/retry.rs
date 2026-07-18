@@ -134,10 +134,7 @@ pub(super) fn compact_error_message(message: &str, max_chars: usize) -> String {
     preview
 }
 
-pub(super) fn switch_to_non_streaming_retry_mode(
-    use_streaming: &mut bool,
-    stream_fallback_used: &mut bool,
-) {
+pub(super) fn switch_to_non_streaming_retry_mode(use_streaming: &mut bool, stream_fallback_used: &mut bool) {
     *use_streaming = false;
     *stream_fallback_used = true;
 }

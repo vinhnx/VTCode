@@ -52,15 +52,7 @@ pub(crate) async fn validate_tool_call_with_limit_prompt<S: UiSession + ?Sized>(
                     );
                     return Err(SafetyValidationFailure::SessionLimitNotIncreased);
                 }
-                match prompt_session_limit_increase(
-                    handle,
-                    session,
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                    max,
-                )
-                .await
-                {
+                match prompt_session_limit_increase(handle, session, ctrl_c_state, ctrl_c_notify, max).await {
                     Ok(Some(increment)) => safety_validator.increase_session_limit(increment),
                     Ok(None) => {
                         return Err(SafetyValidationFailure::SessionLimitNotIncreased);

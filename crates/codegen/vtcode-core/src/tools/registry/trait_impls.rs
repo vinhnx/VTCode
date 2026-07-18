@@ -18,14 +18,10 @@ use crate::mcp::{McpClient, McpToolInfo};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::exec_session::ExecSessionManager;
 use crate::tools::handlers::{SessionSurface, SessionToolsConfig, ToolCallError, ToolSchemaEntry};
-use crate::tools::registry::{
-    ToolExecutionRecord, ToolPermissionDecision, ToolRegistration, ToolTimeoutCategory,
-};
+use crate::tools::registry::{ToolExecutionRecord, ToolPermissionDecision, ToolRegistration, ToolTimeoutCategory};
 
 use super::ToolRegistry;
-use super::interfaces::{
-    McpBridge, PtySessionControl, ToolCatalog, ToolMetrics, ToolResilience, ToolSecurity,
-};
+use super::interfaces::{McpBridge, PtySessionControl, ToolCatalog, ToolMetrics, ToolResilience, ToolSecurity};
 
 // ============================================================================
 // ToolSecurity
@@ -192,11 +188,7 @@ impl ToolCatalog for ToolRegistry {
         self.workspace_root_owned()
     }
 
-    async fn public_tool_names(
-        &self,
-        surface: SessionSurface,
-        capability_level: CapabilityLevel,
-    ) -> Vec<String> {
+    async fn public_tool_names(&self, surface: SessionSurface, capability_level: CapabilityLevel) -> Vec<String> {
         self.public_tool_names(surface, capability_level).await
     }
 

@@ -1,12 +1,9 @@
 use crate::error_display;
 use crate::provider::{
-    AssistantPhase, ContentPart, LLMError, LLMResponse, LLMStreamEvent, Message, MessageContent,
-    MessageRole, ToolCall,
+    AssistantPhase, ContentPart, LLMError, LLMResponse, LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall,
 };
 pub use crate::providers::ReasoningBuffer;
-use crate::providers::common::{
-    extract_reasoning_text_from_serialized_details, map_finish_reason_common,
-};
+use crate::providers::common::{extract_reasoning_text_from_serialized_details, map_finish_reason_common};
 mod responses_adapter;
 mod responses_stream;
 mod tag_sanitizer;
@@ -256,18 +253,14 @@ impl FunctionOutputContentItem {
     }
 }
 
-fn parse_function_output_content_items_array(
-    items: &[Value],
-) -> Option<Vec<FunctionOutputContentItem>> {
+fn parse_function_output_content_items_array(items: &[Value]) -> Option<Vec<FunctionOutputContentItem>> {
     items
         .iter()
         .map(FunctionOutputContentItem::from_value)
         .collect::<Option<Vec<_>>>()
 }
 
-pub(crate) fn parse_function_output_content_items_value(
-    value: &Value,
-) -> Option<Vec<FunctionOutputContentItem>> {
+pub(crate) fn parse_function_output_content_items_value(value: &Value) -> Option<Vec<FunctionOutputContentItem>> {
     match value {
         Value::Array(items) => parse_function_output_content_items_array(items),
         Value::Object(obj) => ["content_items", "content", "output", "body"]
@@ -279,9 +272,7 @@ pub(crate) fn parse_function_output_content_items_value(
     }
 }
 
-pub(crate) fn parse_function_output_content_items_text(
-    text: &str,
-) -> Option<Vec<FunctionOutputContentItem>> {
+pub(crate) fn parse_function_output_content_items_text(text: &str) -> Option<Vec<FunctionOutputContentItem>> {
     let trimmed = text.trim();
     if !(trimmed.starts_with('[') || trimmed.starts_with('{')) {
         return None;
@@ -340,9 +331,7 @@ fn function_output_value_from_items(items: Vec<FunctionOutputContentItem>) -> Va
         .iter()
         .any(|item| matches!(item, FunctionOutputContentItem::InputImage { .. }));
     if has_image {
-        return Value::Array(
-            items.iter().map(FunctionOutputContentItem::to_function_output_json).collect(),
-        );
+        return Value::Array(items.iter().map(FunctionOutputContentItem::to_function_output_json).collect());
     }
     Value::String(text_from_function_output_items(&items).unwrap_or_default())
 }
@@ -441,8 +430,7 @@ fn parse_function_call_item(item: &Value) -> Option<ToolCall> {
         .unwrap_or("tool_call_compacted")
         .to_string();
 
-    let arguments_value =
-        function_obj.and_then(|f| f.get("arguments")).or_else(|| item.get("arguments"));
+    let arguments_value = function_obj.and_then(|f| f.get("arguments")).or_else(|| item.get("arguments"));
     let arguments = arguments_value.map_or_else(
         || "{}".to_string(),
         |value| value.as_str().map(ToOwned::to_owned).unwrap_or_else(|| value.to_string()),
@@ -483,8 +471,7 @@ fn parse_message_item(item: &Value) -> Option<Message> {
             .or_else(|| item.get("call_id").and_then(Value::as_str))
             .map(ToOwned::to_owned)?;
 
-        let tool_output =
-            output_item_text(part.get("content").unwrap_or(&Value::Null)).trim().to_string();
+        let tool_output = output_item_text(part.get("content").unwrap_or(&Value::Null)).trim().to_string();
         Some((tool_call_id, tool_output))
     });
 
@@ -665,8 +652,7 @@ pub fn handle_openai_compatible_chunk(
     }
 
     if let Some(_usage_value) = value.get("usage")
-        && let Some(usage) =
-            crate::providers::common::parse_usage_openai_format(value, include_cache_metrics)
+        && let Some(usage) = crate::providers::common::parse_usage_openai_format(value, include_cache_metrics)
     {
         aggregator.set_usage(usage);
     }
@@ -711,9 +697,7 @@ impl StreamAggregator {
 
         self.reasoning_details = details
             .iter()
-            .map(|detail| {
-                detail.as_str().map(ToOwned::to_owned).unwrap_or_else(|| detail.to_string())
-            })
+            .map(|detail| detail.as_str().map(ToOwned::to_owned).unwrap_or_else(|| detail.to_string()))
             .collect();
     }
 
@@ -861,8 +845,7 @@ where
     let mut last_response_value = None;
 
     while let Some(chunk_result) = byte_stream.next().await {
-        let chunk_bytes =
-            chunk_result.map_err(|e| format_network_error(provider_name, &e.to_string()))?;
+        let chunk_bytes = chunk_result.map_err(|e| format_network_error(provider_name, &e.to_string()))?;
         buffer.push_str(&decoder.push(&chunk_bytes));
 
         while let Some((boundary_idx, boundary_len)) = find_sse_boundary(&buffer) {
@@ -936,12 +919,7 @@ pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
                     }
                 },
             );
-            Some(ToolCall::function_with_namespace(
-                id.to_string(),
-                namespace,
-                name.to_string(),
-                serialized,
-            ))
+            Some(ToolCall::function_with_namespace(id.to_string(), namespace, name.to_string(), serialized))
         })
         .collect()
 }
@@ -952,10 +930,7 @@ fn push_unique_tool_reference(tool_references: &mut Vec<String>, tool_name: &str
     }
 }
 
-pub(crate) fn collect_tool_references_from_tool_search_output(
-    value: &Value,
-    tool_references: &mut Vec<String>,
-) {
+pub(crate) fn collect_tool_references_from_tool_search_output(value: &Value, tool_references: &mut Vec<String>) {
     match value {
         Value::Array(items) => {
             for item in items {
@@ -1101,13 +1076,7 @@ fn apply_tool_call_delta_with_index(
     let current_id = extract_tool_call_id(container).or_else(|| fallback_id.clone());
 
     if let Some(nested) = container.get("delta").and_then(|value| value.as_object()) {
-        apply_tool_call_delta_with_index(
-            builders,
-            nested,
-            telemetry,
-            Some(index),
-            current_id.clone(),
-        );
+        apply_tool_call_delta_with_index(builders, nested, telemetry, Some(index), current_id.clone());
     }
 
     let delta_source = container
@@ -1121,8 +1090,7 @@ fn apply_tool_call_delta_with_index(
         delta_map.insert("id".to_string(), id_value);
     }
 
-    if let Some(function_value) = delta_source.get("function").or_else(|| container.get("function"))
-    {
+    if let Some(function_value) = delta_source.get("function").or_else(|| container.get("function")) {
         delta_map.insert("function".to_string(), function_value.clone());
     }
 
@@ -1159,13 +1127,10 @@ mod tests {
             builder
         };
 
-        let first =
-            finalize_tool_calls(vec![idless_builder(), idless_builder()]).expect("calls expected");
-        let second =
-            finalize_tool_calls(vec![idless_builder(), idless_builder()]).expect("calls expected");
+        let first = finalize_tool_calls(vec![idless_builder(), idless_builder()]).expect("calls expected");
+        let second = finalize_tool_calls(vec![idless_builder(), idless_builder()]).expect("calls expected");
 
-        let ids: Vec<&str> =
-            first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
+        let ids: Vec<&str> = first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
         let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
         assert_eq!(unique.len(), ids.len(), "fabricated ids must be unique across responses");
 
@@ -1190,13 +1155,7 @@ mod tests {
         let mut aggregated = String::new();
         let mut reasoning = ReasoningBuffer::default();
         let mut delta = StreamDelta::default();
-        append_text_with_reasoning(
-            "Hello",
-            &mut aggregated,
-            &mut reasoning,
-            &mut delta,
-            &telemetry,
-        );
+        append_text_with_reasoning("Hello", &mut aggregated, &mut reasoning, &mut delta, &telemetry);
         assert_eq!(aggregated, "Hello");
         assert_eq!(delta.into_fragments(), vec![StreamFragment::Content("Hello".into())]);
     }
@@ -1422,14 +1381,7 @@ mod tests {
             "choices": [{"delta": {"content": "hello"}}]
         });
 
-        handle_openai_compatible_chunk(
-            &chunk,
-            &mut aggregator,
-            &tx,
-            &[],
-            OpenAiDeltaOrder::ContentFirst,
-            false,
-        );
+        handle_openai_compatible_chunk(&chunk, &mut aggregator, &tx, &[], OpenAiDeltaOrder::ContentFirst, false);
 
         let event = rx.try_recv().expect("event expected");
         match event.unwrap() {
@@ -1482,14 +1434,7 @@ mod tests {
             }]
         });
 
-        handle_openai_compatible_chunk(
-            &chunk,
-            &mut aggregator,
-            &tx,
-            &[],
-            OpenAiDeltaOrder::ContentFirst,
-            false,
-        );
+        handle_openai_compatible_chunk(&chunk, &mut aggregator, &tx, &[], OpenAiDeltaOrder::ContentFirst, false);
 
         let response = aggregator.finalize();
         let calls = response.tool_calls.expect("tool calls expected");
@@ -1543,14 +1488,7 @@ mod tests {
         });
 
         // With include_cache_metrics = false (Evolink/Moonshot/StepFun/ZAI behavior)
-        handle_openai_compatible_chunk(
-            &chunk,
-            &mut aggregator,
-            &tx,
-            &[],
-            OpenAiDeltaOrder::ContentFirst,
-            false,
-        );
+        handle_openai_compatible_chunk(&chunk, &mut aggregator, &tx, &[], OpenAiDeltaOrder::ContentFirst, false);
 
         let response = aggregator.finalize();
         let usage = response.usage.expect("usage expected");
@@ -1560,14 +1498,7 @@ mod tests {
 
         // With include_cache_metrics = true (DeepSeek behavior)
         let mut aggregator2 = StreamAggregator::new("test-model".to_string());
-        handle_openai_compatible_chunk(
-            &chunk,
-            &mut aggregator2,
-            &tx,
-            &[],
-            OpenAiDeltaOrder::ContentFirst,
-            true,
-        );
+        handle_openai_compatible_chunk(&chunk, &mut aggregator2, &tx, &[], OpenAiDeltaOrder::ContentFirst, true);
 
         let response2 = aggregator2.finalize();
         let usage2 = response2.usage.expect("usage expected");

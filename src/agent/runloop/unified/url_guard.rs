@@ -2,9 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use anyhow::{Result, anyhow};
 use url::Url;
-use vtcode_ui::tui::app::{
-    InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest,
-};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest};
 
 pub(crate) const URL_GUARD_TITLE: &str = "Open External Link";
 pub(crate) const URL_GUARD_APPROVE_ACTION: &str = "url_guard:approve";
@@ -58,10 +56,8 @@ impl UrlGuardPrompt {
     }
 
     pub(crate) fn lines(&self) -> Vec<String> {
-        let mut lines = vec![
-            "This link may be unsafe. VT Code requires approval before opening external URLs."
-                .to_string(),
-        ];
+        let mut lines =
+            vec!["This link may be unsafe. VT Code requires approval before opening external URLs.".to_string()];
 
         if self.insecure_transport {
             lines.push(
@@ -124,21 +120,15 @@ impl UrlGuardPrompt {
                 subtitle: Some("Do not open this link.".to_string()),
                 badge: Some("Default".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    URL_GUARD_DENY_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(URL_GUARD_DENY_ACTION.to_string())),
                 search_value: None,
             },
             InlineListItem {
                 title: "Open in browser".to_string(),
-                subtitle: Some(
-                    "Launch the exact URL in your default browser after approval.".to_string(),
-                ),
+                subtitle: Some("Launch the exact URL in your default browser after approval.".to_string()),
                 badge,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    URL_GUARD_APPROVE_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(URL_GUARD_APPROVE_ACTION.to_string())),
                 search_value: None,
             },
         ]
@@ -166,9 +156,7 @@ pub(crate) fn url_guard_decision(selection: &InlineListSelection) -> Option<UrlG
         InlineListSelection::ConfigAction(action) if action == URL_GUARD_APPROVE_ACTION => {
             Some(UrlGuardDecision::Approve)
         }
-        InlineListSelection::ConfigAction(action) if action == URL_GUARD_DENY_ACTION => {
-            Some(UrlGuardDecision::Deny)
-        }
+        InlineListSelection::ConfigAction(action) if action == URL_GUARD_DENY_ACTION => Some(UrlGuardDecision::Deny),
         _ => None,
     }
 }
@@ -187,10 +175,7 @@ fn host_matches_domain(host: &str, domain: &str) -> bool {
 }
 
 fn is_local_or_private_host(host: &str) -> bool {
-    if matches!(host, "localhost" | "0.0.0.0")
-        || host.ends_with(".local")
-        || host.ends_with(".internal")
-    {
+    if matches!(host, "localhost" | "0.0.0.0") || host.ends_with(".local") || host.ends_with(".internal") {
         return true;
     }
 
@@ -214,24 +199,20 @@ fn is_local_or_private_ipv4(addr: Ipv4Addr) -> bool {
 }
 
 fn is_local_or_private_ipv6(addr: Ipv6Addr) -> bool {
-    addr.is_loopback()
-        || addr.is_unspecified()
-        || addr.is_unique_local()
-        || addr.is_unicast_link_local()
+    addr.is_loopback() || addr.is_unspecified() || addr.is_unique_local() || addr.is_unicast_link_local()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        URL_GUARD_APPROVE_ACTION, URL_GUARD_DENY_ACTION, URL_GUARD_TITLE, UrlGuardDecision,
-        UrlGuardPrompt, url_guard_decision,
+        URL_GUARD_APPROVE_ACTION, URL_GUARD_DENY_ACTION, URL_GUARD_TITLE, UrlGuardDecision, UrlGuardPrompt,
+        url_guard_decision,
     };
     use vtcode_ui::tui::app::{InlineListSelection, TransientRequest};
 
     #[test]
     fn parse_http_url_marks_insecure_transport() {
-        let prompt =
-            UrlGuardPrompt::parse("http://example.com/docs".to_string()).expect("http prompt");
+        let prompt = UrlGuardPrompt::parse("http://example.com/docs".to_string()).expect("http prompt");
 
         let lines = prompt.lines();
         assert!(lines.iter().any(|line| line.contains("Plain HTTP is insecure")));
@@ -239,8 +220,8 @@ mod tests {
 
     #[test]
     fn parse_https_known_host_marks_trusted() {
-        let prompt = UrlGuardPrompt::parse("https://auth.openai.com/oauth/authorize".to_string())
-            .expect("trusted host");
+        let prompt =
+            UrlGuardPrompt::parse("https://auth.openai.com/oauth/authorize".to_string()).expect("trusted host");
 
         let lines = prompt.lines();
         assert!(lines.iter().any(|line| line.contains("built-in trusted host list")));
@@ -248,8 +229,8 @@ mod tests {
 
     #[test]
     fn parse_localhost_url_marks_local_private() {
-        let prompt = UrlGuardPrompt::parse("https://localhost:1455/auth/callback".to_string())
-            .expect("localhost prompt");
+        let prompt =
+            UrlGuardPrompt::parse("https://localhost:1455/auth/callback".to_string()).expect("localhost prompt");
 
         let lines = prompt.lines();
         assert!(lines.iter().any(|line| line.contains("local or private address")));
@@ -257,8 +238,7 @@ mod tests {
 
     #[test]
     fn cli_lines_omit_url_and_inline_modal_instruction() {
-        let prompt =
-            UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
+        let prompt = UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
 
         let lines = prompt.cli_lines();
         assert!(!lines.iter().any(|line| line.starts_with("URL: ")));
@@ -267,8 +247,7 @@ mod tests {
 
     #[test]
     fn request_defaults_to_deny_selection() {
-        let prompt =
-            UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
+        let prompt = UrlGuardPrompt::parse("https://example.com/docs".to_string()).expect("https prompt");
 
         match prompt.request() {
             TransientRequest::List(request) => {
@@ -282,15 +261,11 @@ mod tests {
     #[test]
     fn decision_mapping_accepts_approve_and_deny_actions() {
         assert_eq!(
-            url_guard_decision(&InlineListSelection::ConfigAction(
-                URL_GUARD_APPROVE_ACTION.to_string(),
-            )),
+            url_guard_decision(&InlineListSelection::ConfigAction(URL_GUARD_APPROVE_ACTION.to_string(),)),
             Some(UrlGuardDecision::Approve)
         );
         assert_eq!(
-            url_guard_decision(&InlineListSelection::ConfigAction(
-                URL_GUARD_DENY_ACTION.to_string(),
-            )),
+            url_guard_decision(&InlineListSelection::ConfigAction(URL_GUARD_DENY_ACTION.to_string(),)),
             Some(UrlGuardDecision::Deny)
         );
     }

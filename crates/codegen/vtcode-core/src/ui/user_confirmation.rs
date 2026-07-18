@@ -42,10 +42,7 @@ impl UserConfirmation {
         use crate::config::constants::models;
         println!("{}", style("Model Upgrade Required").red().bold());
         println!("Current model: {}", style(current_model).cyan());
-        println!(
-            "Requested model: {}",
-            style(models::google::GEMINI_3_1_PRO_PREVIEW).cyan().bold()
-        );
+        println!("Requested model: {}", style(models::google::GEMINI_3_1_PRO_PREVIEW).cyan().bold());
         println!();
         println!("The Gemini 3 Pro model is the most capable but also:");
         println!("• More expensive per token");
@@ -71,10 +68,7 @@ impl UserConfirmation {
                 Ok(ProModelConfirmationResult::Yes)
             }
             1 => {
-                println!(
-                    "{}",
-                    style("✓ Using Gemini 3 Pro model (will auto-accept in future)").green()
-                );
+                println!("{}", style("✓ Using Gemini 3 Pro model (will auto-accept in future)").green());
                 Ok(ProModelConfirmationResult::YesAutoAccept)
             }
             2 => {
@@ -88,9 +82,7 @@ impl UserConfirmation {
     /// Present agent mode selection options to the user
     pub fn select_agent_mode() -> Result<AgentMode> {
         println!("{}", style("Agent Mode Selection").cyan().bold());
-        println!(
-            "VT Code now uses single-agent mode with Decision Ledger for reliable task execution."
-        );
+        println!("VT Code now uses single-agent mode with Decision Ledger for reliable task execution.");
 
         Ok(AgentMode::SingleCoder)
     }
@@ -128,10 +120,7 @@ impl UserConfirmation {
                 println!("{}", style("Moderate task - Single agent usually sufficient").cyan());
             }
             TaskComplexity::Complex => {
-                println!(
-                    "{}",
-                    style("Complex task detected - proceeding with single-agent mode").cyan()
-                );
+                println!("{}", style("Complex task detected - proceeding with single-agent mode").cyan());
             }
         }
 
@@ -164,10 +153,7 @@ impl UserConfirmation {
     }
 
     /// Ask for detailed confirmation for tool usage
-    pub fn confirm_tool_usage(
-        tool_name: &str,
-        tool_args: Option<&str>,
-    ) -> Result<ToolConfirmationResult> {
+    pub fn confirm_tool_usage(tool_name: &str, tool_args: Option<&str>) -> Result<ToolConfirmationResult> {
         println!("{}", style("Tool Execution Confirmation").cyan().bold());
         println!("Tool: {}", style(tool_name).cyan().bold());
         if let Some(args) = tool_args {

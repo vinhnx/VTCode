@@ -10,8 +10,7 @@ fn write_input_supports_alias_fields() {
         "write_mode": "append"
     });
 
-    let parsed: WriteInput =
-        serde_json::from_value(payload).expect("write_input should parse aliases");
+    let parsed: WriteInput = serde_json::from_value(payload).expect("write_input should parse aliases");
     assert_eq!(parsed.path, "src/main.rs");
     assert_eq!(parsed.content, "fn main() {}\n");
     assert_eq!(parsed.mode, "append");
@@ -25,8 +24,7 @@ fn edit_input_supports_alias_fields() {
         "new_text": "new"
     });
 
-    let parsed: EditInput =
-        serde_json::from_value(payload).expect("edit_input should parse aliases");
+    let parsed: EditInput = serde_json::from_value(payload).expect("edit_input should parse aliases");
     assert_eq!(parsed.path, "lib.rs");
     assert_eq!(parsed.old_str, "old");
     assert_eq!(parsed.new_str, "new");
@@ -40,8 +38,7 @@ fn create_input_supports_alias_fields() {
         "encoding": "utf-8"
     });
 
-    let parsed: CreateInput =
-        serde_json::from_value(payload).expect("create_input should parse aliases");
+    let parsed: CreateInput = serde_json::from_value(payload).expect("create_input should parse aliases");
     assert_eq!(parsed.path, "src/new.rs");
     assert_eq!(parsed.content, "fn created() {}");
     assert_eq!(parsed.encoding.as_deref(), Some("utf-8"));
@@ -55,8 +52,7 @@ fn delete_input_supports_alias_fields() {
         "force": true
     });
 
-    let parsed: DeleteInput =
-        serde_json::from_value(payload).expect("delete_input should parse aliases");
+    let parsed: DeleteInput = serde_json::from_value(payload).expect("delete_input should parse aliases");
     assert_eq!(parsed.path, "src/old.rs");
     assert!(parsed.recursive);
     assert!(parsed.force);

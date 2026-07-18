@@ -133,30 +133,18 @@ pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
 
 fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
     match tool {
-        tools::CODE_SEARCH => {
-            Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false))
+        tools::CODE_SEARCH => Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false)),
+        tools::UNIFIED_EXEC => {
+            Some(ToolBehavior::function(ToolMutationModel::ByArgs(command_session_intent), false, true))
         }
-        tools::UNIFIED_EXEC => Some(ToolBehavior::function(
-            ToolMutationModel::ByArgs(command_session_intent),
-            false,
-            true,
-        )),
-        tools::EXEC_COMMAND => Some(ToolBehavior::function(
-            ToolMutationModel::ByArgs(exec_command_intent),
-            false,
-            true,
-        )),
-        tools::WRITE_STDIN => {
-            Some(ToolBehavior::function(ToolMutationModel::ByArgs(write_stdin_intent), false, true))
+        tools::EXEC_COMMAND => {
+            Some(ToolBehavior::function(ToolMutationModel::ByArgs(exec_command_intent), false, true))
         }
-        tools::UNIFIED_FILE => Some(ToolBehavior::function(
-            ToolMutationModel::ByArgs(file_operation_intent),
-            false,
-            false,
-        )),
-        tools::APPLY_PATCH => {
-            Some(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true))
+        tools::WRITE_STDIN => Some(ToolBehavior::function(ToolMutationModel::ByArgs(write_stdin_intent), false, true)),
+        tools::UNIFIED_FILE => {
+            Some(ToolBehavior::function(ToolMutationModel::ByArgs(file_operation_intent), false, false))
         }
+        tools::APPLY_PATCH => Some(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true)),
         tools::REQUEST_USER_INPUT
         | tools::MEMORY
         | tools::START_PLANNING
@@ -284,16 +272,18 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
         return true;
     }
 
-    [
-        "command",
-        "id",
-        "session_id",
-        "process_id",
-        "is_exited",
-        "exit_code",
-    ]
-    .iter()
-    .any(|key| obj.contains_key(*key))
+    if tool_name.is_some_and(|name| {
+        name == tools::CODE_SEARCH
+            || name == tools::UNIFIED_SEARCH
+            || name == "code_search"
+            || name == "search_dispatch_internal"
+    }) {
+        return true;
+    }
+
+    ["command", "id", "session_id", "process_id", "is_exited", "exit_code"]
+        .iter()
+        .any(|key| obj.contains_key(*key))
 }
 
 /// Returns `true` if `tool_name` refers to a command/PTY execution tool.
@@ -322,12 +312,8 @@ pub fn is_command_run_tool(tool_name: &str) -> bool {
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
-        tools::EXEC_COMMAND => {
-            crate::tools::command_args::command_text(args).ok().flatten().is_some()
-        }
-        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" | "container.exec" => {
-            command_session_action_is(args, "run")
-        }
+        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args).ok().flatten().is_some(),
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" | "container.exec" => command_session_action_is(args, "run"),
         _ => false,
     }
 }
@@ -410,9 +396,7 @@ fn exec_command_intent(args: &Value) -> ToolIntent {
 fn write_stdin_intent(args: &Value) -> ToolIntent {
     match crate::tools::command_args::write_stdin_dispatch(args) {
         Ok(crate::tools::command_args::WriteStdinDispatch::Poll) => ToolIntent::read_only(),
-        Ok(crate::tools::command_args::WriteStdinDispatch::Write) | Err(_) => {
-            ToolIntent::mutating()
-        }
+        Ok(crate::tools::command_args::WriteStdinDispatch::Write) | Err(_) => ToolIntent::mutating(),
     }
 }
 
@@ -429,8 +413,8 @@ fn memory_tool_intent(args: &Value) -> ToolIntent {
 /// `command_session`. Any command that could write, move, or delete must be
 /// rejected so it is not cached or parallelized as read-only.
 const READONLY_UNIFIED_EXEC_COMMANDS: &[&str] = &[
-    "rg", "ls", "cat", "diff", "find", "wc", "grep", "egrep", "fgrep", "head", "tail", "sort",
-    "uniq", "awk", "sed", "cut", "tr", "ast-grep", "sg",
+    "rg", "ls", "cat", "diff", "find", "wc", "grep", "egrep", "fgrep", "head", "tail", "sort", "uniq", "awk", "sed",
+    "cut", "tr", "ast-grep", "sg",
 ];
 
 fn is_readonly_base_command(command: &str) -> bool {
@@ -542,10 +526,7 @@ pub fn command_session_action(args: &Value) -> Option<&str> {
             Some("run")
         } else if args.get("code").is_some() {
             Some("code")
-        } else if args.get("input").is_some()
-            || args.get("chars").is_some()
-            || args.get("text").is_some()
-        {
+        } else if args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some() {
             Some("write")
         } else if args.get("spool_path").is_some()
             || args.get("query").is_some()
@@ -625,8 +606,8 @@ fn command_session_has_input(args: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_command_session_tool_name, classify_tool_intent, file_operation_action,
-        is_command_run_tool_call, is_edited_file_conflict_guarded_call, is_parallel_safe_call,
+        canonical_command_session_tool_name, classify_tool_intent, file_operation_action, is_command_run_tool_call,
+        is_edited_file_conflict_guarded_call, is_parallel_safe_call,
         remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
     };
     use crate::config::constants::tools;
@@ -634,10 +615,7 @@ mod tests {
 
     #[test]
     fn file_operation_read_is_retry_safe() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_FILE,
-            &json!({"action": "read", "path": "README.md"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_FILE, &json!({"action": "read", "path": "README.md"}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -645,8 +623,7 @@ mod tests {
 
     #[test]
     fn command_session_poll_is_retry_safe() {
-        let intent =
-            classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": 1}));
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": 1}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -665,10 +642,7 @@ mod tests {
 
     #[test]
     fn command_session_continue_without_input_is_retry_safe() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "continue", "session_id": "run-1"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "continue", "session_id": "run-1"}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -699,10 +673,7 @@ mod tests {
 
     #[test]
     fn command_session_run_is_mutating_and_destructive() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "echo hi"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
@@ -710,10 +681,7 @@ mod tests {
 
     #[test]
     fn command_session_run_diff_is_read_only() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "diff a.rs b.rs"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "diff a.rs b.rs"}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -740,15 +708,9 @@ mod tests {
             "sort src/words.txt | uniq",
             "ast-grep -p 'foo($A)' -l rs",
         ] {
-            let intent = classify_tool_intent(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "run", "command": cmd}),
-            );
+            let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
             assert!(!intent.mutating, "expected '{cmd}' to be read-only");
-            assert!(
-                intent.readonly_unified_action,
-                "expected '{cmd}' to be readonly_unified_action"
-            );
+            assert!(intent.readonly_unified_action, "expected '{cmd}' to be readonly_unified_action");
         }
     }
 
@@ -760,14 +722,8 @@ mod tests {
             "diff a b | wc -l > count.txt",
             "echo $(date) > log.txt",
         ] {
-            let intent = classify_tool_intent(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "run", "command": cmd}),
-            );
-            assert!(
-                intent.mutating,
-                "expected '{cmd}' to be mutating because it contains redirection/substitution"
-            );
+            let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
+            assert!(intent.mutating, "expected '{cmd}' to be mutating because it contains redirection/substitution");
         }
     }
 
@@ -778,41 +734,23 @@ mod tests {
             "find . -name '*.tmp' -exec rm {} \\;",
             "find . -name '*.tmp' -exec chmod 600 {} \\;",
         ] {
-            let intent = classify_tool_intent(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "run", "command": cmd}),
-            );
-            assert!(
-                intent.mutating,
-                "expected '{cmd}' to be mutating because it has destructive find flags"
-            );
+            let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
+            assert!(intent.mutating, "expected '{cmd}' to be mutating because it has destructive find flags");
         }
     }
 
     #[test]
     fn command_session_run_pipelines_with_unsafe_segments_are_mutating() {
-        for cmd in [
-            "cat a.txt | tee b.txt",
-            "echo hi | cat",
-            "grep x src | rm -rf",
-        ] {
-            let intent = classify_tool_intent(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "run", "command": cmd}),
-            );
-            assert!(
-                intent.mutating,
-                "expected '{cmd}' to be mutating because a pipeline segment is unsafe"
-            );
+        for cmd in ["cat a.txt | tee b.txt", "echo hi | cat", "grep x src | rm -rf"] {
+            let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
+            assert!(intent.mutating, "expected '{cmd}' to be mutating because a pipeline segment is unsafe");
         }
     }
 
     #[test]
     fn command_session_run_allowlisted_is_read_only() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "rg planning_active src"}),
-        );
+        let intent =
+            classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "rg planning_active src"}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -820,10 +758,8 @@ mod tests {
 
     #[test]
     fn command_session_run_dry_run_is_read_only() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "npm install --dry-run"}),
-        );
+        let intent =
+            classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "npm install --dry-run"}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -834,10 +770,7 @@ mod tests {
         assert!(is_parallel_safe_call(tools::READ_FILE, &json!({"path": "README.md"})));
         assert!(!is_parallel_safe_call(tools::LIST_PTY_SESSIONS, &json!({})));
         assert!(!is_parallel_safe_call(tools::REQUEST_USER_INPUT, &json!({"questions": []})));
-        assert!(!is_parallel_safe_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "inspect", "session_id": "run-1"})
-        ));
+        assert!(!is_parallel_safe_call(tools::UNIFIED_EXEC, &json!({"action": "inspect", "session_id": "run-1"})));
     }
 
     #[test]
@@ -850,10 +783,7 @@ mod tests {
 
     #[test]
     fn command_session_chars_alias_infers_write() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"session_id": "abc123", "chars": "status\n"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"session_id": "abc123", "chars": "status\n"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
@@ -861,8 +791,7 @@ mod tests {
 
     #[test]
     fn write_stdin_empty_chars_is_read_only_and_retry_safe() {
-        let intent =
-            classify_tool_intent(tools::WRITE_STDIN, &json!({"session_id": "abc123", "chars": ""}));
+        let intent = classify_tool_intent(tools::WRITE_STDIN, &json!({"session_id": "abc123", "chars": ""}));
 
         assert!(!intent.mutating);
         assert!(!intent.destructive);
@@ -872,10 +801,7 @@ mod tests {
 
     #[test]
     fn write_stdin_non_empty_chars_is_mutating() {
-        let intent = classify_tool_intent(
-            tools::WRITE_STDIN,
-            &json!({"session_id": "abc123", "chars": "  status\n"}),
-        );
+        let intent = classify_tool_intent(tools::WRITE_STDIN, &json!({"session_id": "abc123", "chars": "  status\n"}));
 
         assert!(intent.mutating);
         assert!(intent.destructive);
@@ -885,10 +811,7 @@ mod tests {
 
     #[test]
     fn command_session_text_alias_infers_write() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"session_id": "abc123", "text": "status\n"}),
-        );
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"session_id": "abc123", "text": "status\n"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
@@ -896,10 +819,8 @@ mod tests {
 
     #[test]
     fn command_session_spool_path_alias_infers_inspect() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"spool_path": ".vtcode/context/tool_outputs/run-1.txt"}),
-        );
+        let intent =
+            classify_tool_intent(tools::UNIFIED_EXEC, &json!({"spool_path": ".vtcode/context/tool_outputs/run-1.txt"}));
         assert!(!intent.mutating);
         assert!(!intent.destructive);
         assert!(intent.readonly_unified_action);
@@ -998,14 +919,8 @@ mod tests {
 
     #[test]
     fn edited_file_conflict_guard_rejects_non_guarded_calls() {
-        assert!(!is_edited_file_conflict_guarded_call(
-            tools::READ_FILE,
-            &json!({"path": "README.md"})
-        ));
-        assert!(!is_edited_file_conflict_guarded_call(
-            tools::GREP_FILE,
-            &json!({"pattern": "needle", "path": "."})
-        ));
+        assert!(!is_edited_file_conflict_guarded_call(tools::READ_FILE, &json!({"path": "README.md"})));
+        assert!(!is_edited_file_conflict_guarded_call(tools::GREP_FILE, &json!({"pattern": "needle", "path": "."})));
         assert!(!is_edited_file_conflict_guarded_call(tools::LIST_FILES, &json!({"path": "."})));
         assert!(!is_edited_file_conflict_guarded_call(
             tools::UNIFIED_FILE,
@@ -1078,18 +993,9 @@ mod tests {
     #[test]
     fn is_command_run_tool_call_only_accepts_run_actions() {
         assert!(is_command_run_tool_call(tools::RUN_PTY_CMD, &json!({"command": "cargo check"})));
-        assert!(is_command_run_tool_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "run", "command": "cargo check"})
-        ));
+        assert!(is_command_run_tool_call(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "cargo check"})));
         assert!(is_command_run_tool_call(tools::EXEC_COMMAND, &json!({"cmd": "cargo check"})));
-        assert!(!is_command_run_tool_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "poll", "session_id": "run-1"})
-        ));
-        assert!(!is_command_run_tool_call(
-            tools::WRITE_STDIN,
-            &json!({"session_id": "run-1", "chars": "q"})
-        ));
+        assert!(!is_command_run_tool_call(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": "run-1"})));
+        assert!(!is_command_run_tool_call(tools::WRITE_STDIN, &json!({"session_id": "run-1", "chars": "q"})));
     }
 }

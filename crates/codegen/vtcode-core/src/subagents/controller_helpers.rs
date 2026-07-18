@@ -53,18 +53,14 @@ pub(super) async fn load_session_listing(
     let raw = tokio::fs::read_to_string(path)
         .await
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
-    let snapshot: crate::utils::session_archive::SessionSnapshot = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
+    let snapshot: crate::utils::session_archive::SessionSnapshot =
+        serde_json::from_str(&raw).with_context(|| format!("Failed to parse session archive {}", path.display()))?;
     Ok(crate::utils::session_archive::SessionListing { path: path.to_path_buf(), snapshot })
 }
 
-pub(super) async fn checkpoint_subagent_archive_start(
-    archive: &SessionArchive,
-    messages: &[Message],
-) -> Result<()> {
+pub(super) async fn checkpoint_subagent_archive_start(archive: &SessionArchive, messages: &[Message]) -> Result<()> {
     use crate::utils::session_archive::SessionMessage;
-    let recent_messages: Vec<SessionMessage> =
-        messages.iter().map(SessionMessage::from).collect::<Vec<_>>();
+    let recent_messages: Vec<SessionMessage> = messages.iter().map(SessionMessage::from).collect::<Vec<_>>();
     archive
         .persist_progress_async(crate::utils::session_archive::SessionProgressArgs {
             total_messages: recent_messages.len(),
@@ -92,12 +88,7 @@ pub(super) async fn persist_child_archive(
         .take(SUBAGENT_TRANSCRIPT_LINE_LIMIT)
         .collect::<Vec<_>>();
     let stored_messages = messages.iter().map(SessionMessage::from).collect::<Vec<_>>();
-    let path = archive.finalize(
-        transcript,
-        stored_messages.len(),
-        vec![agent_name.to_string()],
-        stored_messages,
-    )?;
+    let path = archive.finalize(transcript, stored_messages.len(), vec![agent_name.to_string()], stored_messages)?;
     Ok(Some(path))
 }
 
@@ -129,9 +120,7 @@ pub(super) fn extract_issues_from_summary(summary: &str) -> Vec<String> {
         {
             // Strip leading list markers ("- ", "1. ", "* ", etc.)
             let cleaned = trimmed
-                .trim_start_matches(|c: char| {
-                    c.is_ascii_digit() || c == '.' || c == '-' || c == '*' || c == ' '
-                })
+                .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '-' || c == '*' || c == ' ')
                 .trim();
             if !cleaned.is_empty() {
                 issues.push(cleaned.to_string());

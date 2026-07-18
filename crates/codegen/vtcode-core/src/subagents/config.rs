@@ -5,13 +5,11 @@ use std::path::PathBuf;
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::core::tools::ToolPolicy;
 use vtcode_config::{
-    HooksConfig, McpProviderConfig, SubagentMcpServer, SubagentMemoryScope, SubagentSource,
-    SubagentSpec,
+    HooksConfig, McpProviderConfig, SubagentMcpServer, SubagentMemoryScope, SubagentSource, SubagentSpec,
 };
 
 use super::constants::{
-    NON_MUTATING_TOOL_PREFIXES, SUBAGENT_MIN_BACKGROUND_MAX_TURNS, SUBAGENT_MIN_MAX_TURNS,
-    SUBAGENT_TOOL_NAMES,
+    NON_MUTATING_TOOL_PREFIXES, SUBAGENT_MIN_BACKGROUND_MAX_TURNS, SUBAGENT_MIN_MAX_TURNS, SUBAGENT_TOOL_NAMES,
 };
 use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
@@ -80,12 +78,7 @@ pub fn build_child_config(
     model: &str,
     max_turns: Option<usize>,
 ) -> VTCodeConfig {
-    build_child_config_from_runtime(
-        parent,
-        &ResolvedAgentRuntimeView::from_spec(spec),
-        model,
-        max_turns,
-    )
+    build_child_config_from_runtime(parent, &ResolvedAgentRuntimeView::from_spec(spec), model, max_turns)
 }
 
 fn build_child_config_from_runtime(
@@ -128,10 +121,7 @@ fn apply_subagent_lightweight_profile(child: &mut VTCodeConfig) {
 /// allow-list is the intersection of the parent allow-list and the declared
 /// tools (with subagent-internal tools removed). When the spec declares
 /// nothing, the parent allow-list is inherited unchanged.
-fn resolve_child_allowed_tools(
-    parent: &VTCodeConfig,
-    runtime: &ResolvedAgentRuntimeView,
-) -> Vec<String> {
+fn resolve_child_allowed_tools(parent: &VTCodeConfig, runtime: &ResolvedAgentRuntimeView) -> Vec<String> {
     let allowed_tools = runtime.tools.clone().unwrap_or_default();
     if allowed_tools.is_empty() {
         return parent.permissions.allow.clone();
@@ -145,10 +135,7 @@ fn resolve_child_allowed_tools(
 
 /// Resolves the child's deny-list: the parent deny-list, extended with the
 /// spec's disallowed tools and the always-blocked subagent-internal tools.
-fn resolve_child_denied_tools(
-    parent: &VTCodeConfig,
-    runtime: &ResolvedAgentRuntimeView,
-) -> Vec<String> {
+fn resolve_child_denied_tools(parent: &VTCodeConfig, runtime: &ResolvedAgentRuntimeView) -> Vec<String> {
     let mut denied = parent.permissions.deny.clone();
     denied.extend(runtime.disallowed_tools.clone());
     for tool in SUBAGENT_TOOL_NAMES {
@@ -162,10 +149,7 @@ fn resolve_child_denied_tools(
 /// Resolves the child's MCP providers. Parent providers are NOT inherited;
 /// only servers named or inlined by the spec are attached. This keeps the
 /// child bootstrap lean and avoids replaying the parent's MCP schema tax.
-fn resolve_child_mcp_providers(
-    parent: &VTCodeConfig,
-    runtime: &ResolvedAgentRuntimeView,
-) -> Vec<McpProviderConfig> {
+fn resolve_child_mcp_providers(parent: &VTCodeConfig, runtime: &ResolvedAgentRuntimeView) -> Vec<McpProviderConfig> {
     let mut providers = Vec::new();
     merge_child_mcp_servers(&mut providers, &parent.mcp.providers, runtime.mcp_servers.as_slice());
     providers
@@ -181,10 +165,7 @@ pub fn normalize_child_max_turns(max_turns: Option<usize>) -> Option<usize> {
     max_turns.map(|value| value.max(SUBAGENT_MIN_MAX_TURNS))
 }
 
-pub fn normalize_background_child_max_turns(
-    max_turns: Option<usize>,
-    background: bool,
-) -> Option<usize> {
+pub fn normalize_background_child_max_turns(max_turns: Option<usize>, background: bool) -> Option<usize> {
     let normalized = normalize_child_max_turns(max_turns);
     if background {
         normalized.map(|value| value.max(SUBAGENT_MIN_BACKGROUND_MAX_TURNS))
@@ -202,14 +183,7 @@ pub fn prepare_child_runtime_config(
     max_turns: Option<usize>,
     model_override: Option<&str>,
     reasoning_override: Option<&str>,
-    resolve_model: impl FnOnce(
-        &VTCodeConfig,
-        &str,
-        &str,
-        Option<&str>,
-        Option<&str>,
-        &str,
-    ) -> Result<ModelId>,
+    resolve_model: impl FnOnce(&VTCodeConfig, &str, &str, Option<&str>, Option<&str>, &str) -> Result<ModelId>,
 ) -> Result<(ModelId, ReasoningEffortLevel, VTCodeConfig)> {
     let runtime = ResolvedAgentRuntimeView::from_spec(spec);
     let resolved_model = resolve_model(
@@ -220,8 +194,7 @@ pub fn prepare_child_runtime_config(
         runtime.model.as_deref(),
         runtime.canonical_name.as_str(),
     )?;
-    let mut child_cfg =
-        build_child_config_from_runtime(parent, &runtime, &resolved_model.as_str(), max_turns);
+    let mut child_cfg = build_child_config_from_runtime(parent, &runtime, &resolved_model.as_str(), max_turns);
     let child_reasoning_effort = reasoning_override
         .and_then(ReasoningEffortLevel::parse)
         .or(runtime.reasoning_effort)
@@ -281,11 +254,7 @@ fn tool_supports_read_permission(tool: &str) -> bool {
 fn tool_supports_edit_permission(tool: &str) -> bool {
     matches!(
         tool.trim(),
-        tools::EDIT_FILE
-            | tools::APPLY_PATCH
-            | tools::SEARCH_REPLACE
-            | tools::FILE_OP
-            | tools::UNIFIED_FILE
+        tools::EDIT_FILE | tools::APPLY_PATCH | tools::SEARCH_REPLACE | tools::FILE_OP | tools::UNIFIED_FILE
     )
 }
 
@@ -398,9 +367,7 @@ fn merge_child_mcp_servers(
                 if providers.iter().any(|provider| provider.name == *name) {
                     continue;
                 }
-                if let Some(parent_provider) =
-                    parent_providers.iter().find(|provider| provider.name == *name)
-                {
+                if let Some(parent_provider) = parent_providers.iter().find(|provider| provider.name == *name) {
                     providers.push(parent_provider.clone());
                 }
             }
@@ -467,14 +434,8 @@ your findings and begin implementation. Do not continue reading additional files
 read-only budget -- exceeding it terminates your session with no output. \
 If you catch yourself reading the same file with different offsets, STOP immediately and write what you have.";
 
-pub fn compose_subagent_instructions(
-    spec: &SubagentSpec,
-    memory_appendix: Option<String>,
-) -> String {
-    compose_subagent_runtime_instructions(
-        &ResolvedAgentRuntimeView::from_spec(spec),
-        memory_appendix,
-    )
+pub fn compose_subagent_instructions(spec: &SubagentSpec, memory_appendix: Option<String>) -> String {
+    compose_subagent_runtime_instructions(&ResolvedAgentRuntimeView::from_spec(spec), memory_appendix)
 }
 
 fn compose_subagent_runtime_instructions(
@@ -572,19 +533,13 @@ pub fn filter_child_tools(
 }
 #[cfg(test)]
 mod slice4_tests {
-    use super::{
-        READ_ONLY_TOOL_REMINDER, WRITE_TOOL_REMINDER, build_child_config, filter_child_tools,
-    };
+    use super::{READ_ONLY_TOOL_REMINDER, WRITE_TOOL_REMINDER, build_child_config, filter_child_tools};
     use crate::config::VTCodeConfig;
     use crate::config::constants::tools;
     use crate::llm::provider::ToolDefinition;
 
     fn definition(name: &str) -> ToolDefinition {
-        ToolDefinition::function(
-            name.to_string(),
-            name.to_string(),
-            serde_json::json!({"type": "object"}),
-        )
+        ToolDefinition::function(name.to_string(), name.to_string(), serde_json::json!({"type": "object"}))
     }
 
     #[test]
@@ -616,12 +571,7 @@ mod slice4_tests {
 
     #[test]
     fn read_only_tool_reminder_names_only_exposed_read_only_tools() {
-        for tool in [
-            "code_search",
-            "list_skills",
-            "load_skill",
-            "load_skill_resource",
-        ] {
+        for tool in ["code_search", "list_skills", "load_skill", "load_skill_resource"] {
             assert!(READ_ONLY_TOOL_REMINDER.contains(&format!("`{tool}`")));
         }
         assert!(!READ_ONLY_TOOL_REMINDER.contains("`exec_command`"));
@@ -645,10 +595,7 @@ mod tests {
     use super::*;
     use crate::config::constants::models;
     use vtcode_config::core::permissions::PermissionDefault;
-    use vtcode_config::{
-        AgentMode, IsolationMode, McpProviderConfig, SubagentMcpServer, SubagentSource,
-        SubagentSpec,
-    };
+    use vtcode_config::{AgentMode, IsolationMode, McpProviderConfig, SubagentMcpServer, SubagentSource, SubagentSpec};
 
     fn test_subagent_spec() -> SubagentSpec {
         SubagentSpec {
@@ -731,10 +678,7 @@ mod tests {
         let runtime = ResolvedAgentRuntimeView::from_spec(&spec);
 
         let providers = resolve_child_mcp_providers(&parent, &runtime);
-        assert!(
-            providers.is_empty(),
-            "parent MCP providers must not leak into the child unless explicitly named"
-        );
+        assert!(providers.is_empty(), "parent MCP providers must not leak into the child unless explicitly named");
     }
 
     #[test]
@@ -794,8 +738,7 @@ mod tests {
         ctx.set_current_directory(PathBuf::from("/workspace"));
 
         let (_parent_text, parent_report) =
-            compose_system_instruction_with_report(workspace.path(), Some(&parent), Some(&ctx))
-                .await;
+            compose_system_instruction_with_report(workspace.path(), Some(&parent), Some(&ctx)).await;
 
         let spec = test_subagent_spec();
         let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
@@ -809,8 +752,7 @@ mod tests {
         assert_eq!(child.agent.instruction_max_bytes, 0);
 
         let (_child_text, child_report) =
-            compose_system_instruction_with_report(workspace.path(), Some(&child), Some(&ctx))
-                .await;
+            compose_system_instruction_with_report(workspace.path(), Some(&child), Some(&ctx)).await;
 
         let parent_tokens = parent_report.token_estimate;
         let child_tokens = child_report.token_estimate;

@@ -15,11 +15,7 @@ pub(super) fn render_resume_state_if_present(
     };
 
     let ended_local = session.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
-    let action = if session.is_fork() {
-        "Forking"
-    } else {
-        "Resuming"
-    };
+    let action = if session.is_fork() { "Forking" } else { "Resuming" };
     renderer.line(
         MessageStyle::Info,
         &format!(
@@ -30,8 +26,7 @@ pub(super) fn render_resume_state_if_present(
             session.message_count()
         ),
     )?;
-    renderer
-        .line(MessageStyle::Info, &format!("Previous archive: {}", session.path().display()))?;
+    renderer.line(MessageStyle::Info, &format!("Previous archive: {}", session.path().display()))?;
     if session.is_fork() {
         renderer.line(MessageStyle::Info, "Starting independent forked session")?;
     }
@@ -61,10 +56,7 @@ impl ResumeRenderLine {
     }
 }
 
-pub(crate) fn render_resume_lines(
-    renderer: &mut AnsiRenderer,
-    lines: &[ResumeRenderLine],
-) -> Result<()> {
+pub(crate) fn render_resume_lines(renderer: &mut AnsiRenderer, lines: &[ResumeRenderLine]) -> Result<()> {
     for line in lines {
         renderer.line(line.style, &line.text)?;
     }
@@ -109,18 +101,12 @@ pub(crate) fn build_structured_resume_lines(
                         if let Some(function) = &tool_call.function {
                             let args_block = format_tool_arguments_for_resume(&function.arguments);
                             if !args_block.is_empty() {
-                                lines.push(ResumeRenderLine::new(
-                                    MessageStyle::ToolDetail,
-                                    args_block,
-                                ));
+                                lines.push(ResumeRenderLine::new(MessageStyle::ToolDetail, args_block));
                             }
                         } else if let Some(text) = tool_call.text.as_deref()
                             && !text.trim().is_empty()
                         {
-                            lines.push(ResumeRenderLine::new(
-                                MessageStyle::ToolDetail,
-                                text.trim().to_string(),
-                            ));
+                            lines.push(ResumeRenderLine::new(MessageStyle::ToolDetail, text.trim().to_string()));
                         }
                     }
                 }
@@ -133,12 +119,9 @@ pub(crate) fn build_structured_resume_lines(
                         .filter(|text| !text.is_empty())
                         .map(str::to_string)
                         .or_else(|| {
-                            message
-                                .reasoning_details
-                                .as_deref()
-                                .and_then(
-                                    vtcode_core::llm::providers::common::extract_reasoning_text_from_detail_values,
-                                )
+                            message.reasoning_details.as_deref().and_then(
+                                vtcode_core::llm::providers::common::extract_reasoning_text_from_detail_values,
+                            )
                         })
                 } else {
                     None
@@ -149,11 +132,7 @@ pub(crate) fn build_structured_resume_lines(
                     let compact = vtcode_commons::formatting::compact_reasoning_text(&reasoning);
                     lines.push(ResumeRenderLine::new(
                         MessageStyle::Reasoning,
-                        if compact.trim().is_empty() {
-                            reasoning
-                        } else {
-                            compact
-                        },
+                        if compact.trim().is_empty() { reasoning } else { compact },
                     ));
                 }
 
@@ -163,10 +142,7 @@ pub(crate) fn build_structured_resume_lines(
                 }
 
                 if !rendered_any {
-                    lines.push(ResumeRenderLine::new(
-                        MessageStyle::Response,
-                        "Assistant: [no content]",
-                    ));
+                    lines.push(ResumeRenderLine::new(MessageStyle::Response, "Assistant: [no content]"));
                 }
             }
             uni::MessageRole::Tool => {
@@ -176,10 +152,7 @@ pub(crate) fn build_structured_resume_lines(
                     .cloned()
                     .or_else(|| message.origin_tool.clone())
                     .unwrap_or_else(|| "tool".to_string());
-                lines.push(ResumeRenderLine::new(
-                    MessageStyle::Tool,
-                    format_resume_tool_header(&tool_name, call_id),
-                ));
+                lines.push(ResumeRenderLine::new(MessageStyle::Tool, format_resume_tool_header(&tool_name, call_id)));
                 if let Some(formatted) = format_tool_output_for_resume(&message.content) {
                     lines.push(ResumeRenderLine::new(MessageStyle::ToolOutput, formatted));
                 } else {
@@ -335,11 +308,7 @@ fn push_resume_spacing(lines: &mut Vec<ResumeRenderLine>) {
     }
 }
 
-fn push_content_lines(
-    lines: &mut Vec<ResumeRenderLine>,
-    style: MessageStyle,
-    content: &uni::MessageContent,
-) {
+fn push_content_lines(lines: &mut Vec<ResumeRenderLine>, style: MessageStyle, content: &uni::MessageContent) {
     if let Some(projected) = project_content_text(content) {
         lines.push(ResumeRenderLine::new(style, projected));
     } else {
@@ -403,10 +372,7 @@ pub(super) fn infer_legacy_line_style(line: &str) -> MessageStyle {
     if trimmed.contains("System:") {
         return MessageStyle::Info;
     }
-    if trimmed.contains("Tool ")
-        || trimmed.contains("[tool_call_id:")
-        || trimmed.contains("\"tool_call_id\"")
-    {
+    if trimmed.contains("Tool ") || trimmed.contains("[tool_call_id:") || trimmed.contains("\"tool_call_id\"") {
         return MessageStyle::ToolOutput;
     }
     MessageStyle::Info

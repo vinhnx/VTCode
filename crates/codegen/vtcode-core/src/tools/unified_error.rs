@@ -268,12 +268,8 @@ impl From<crate::tools::handlers::ToolCallError> for UnifiedToolError {
     fn from(err: crate::tools::handlers::ToolCallError) -> Self {
         use crate::tools::handlers::ToolCallError;
         match err {
-            ToolCallError::Rejected(msg) => {
-                UnifiedToolError::new(UnifiedErrorKind::PermissionDenied, msg)
-            }
-            ToolCallError::RespondToModel(msg) => {
-                UnifiedToolError::new(UnifiedErrorKind::InternalError, msg)
-            }
+            ToolCallError::Rejected(msg) => UnifiedToolError::new(UnifiedErrorKind::PermissionDenied, msg),
+            ToolCallError::RespondToModel(msg) => UnifiedToolError::new(UnifiedErrorKind::InternalError, msg),
             ToolCallError::Internal(e) => {
                 let kind = UnifiedErrorKind::from(vtcode_commons::classify_anyhow_error(&e));
                 UnifiedToolError::new(kind, e.to_string()).with_source(e)
@@ -290,19 +286,13 @@ impl From<crate::tools::handlers::sandboxing::ToolError> for UnifiedToolError {
     fn from(err: crate::tools::handlers::sandboxing::ToolError) -> Self {
         use crate::tools::handlers::sandboxing::ToolError;
         match err {
-            ToolError::Rejected(msg) => {
-                UnifiedToolError::new(UnifiedErrorKind::PermissionDenied, msg)
-            }
+            ToolError::Rejected(msg) => UnifiedToolError::new(UnifiedErrorKind::PermissionDenied, msg),
             ToolError::Codex(e) => {
                 let kind = UnifiedErrorKind::from(vtcode_commons::classify_anyhow_error(&e));
                 UnifiedToolError::new(kind, e.to_string()).with_source(e)
             }
-            ToolError::SandboxDenied(msg) => {
-                UnifiedToolError::new(UnifiedErrorKind::SandboxFailure, msg)
-            }
-            ToolError::Timeout(ms) => {
-                UnifiedToolError::new(UnifiedErrorKind::Timeout, format!("Timeout after {ms}ms"))
-            }
+            ToolError::SandboxDenied(msg) => UnifiedToolError::new(UnifiedErrorKind::SandboxFailure, msg),
+            ToolError::Timeout(ms) => UnifiedToolError::new(UnifiedErrorKind::Timeout, format!("Timeout after {ms}ms")),
         }
     }
 }
@@ -319,14 +309,8 @@ mod tests {
     fn test_error_classification() {
         assert_eq!(classify(&anyhow::anyhow!("Connection timeout")), UnifiedErrorKind::Timeout);
         assert_eq!(classify(&anyhow::anyhow!("Rate limit exceeded")), UnifiedErrorKind::RateLimit);
-        assert_eq!(
-            classify(&anyhow::anyhow!("Permission denied")),
-            UnifiedErrorKind::PermissionDenied
-        );
-        assert_eq!(
-            classify(&anyhow::anyhow!("Invalid argument: missing path")),
-            UnifiedErrorKind::ArgumentValidation
-        );
+        assert_eq!(classify(&anyhow::anyhow!("Permission denied")), UnifiedErrorKind::PermissionDenied);
+        assert_eq!(classify(&anyhow::anyhow!("Invalid argument: missing path")), UnifiedErrorKind::ArgumentValidation);
     }
 
     #[test]

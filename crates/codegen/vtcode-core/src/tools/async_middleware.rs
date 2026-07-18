@@ -12,17 +12,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 /// Type alias for the async continuation function
-type AsyncContinuation<'a> = Box<
-    dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = MiddlewareToolResult> + Send>>
-        + Send
-        + Sync
-        + 'a,
->;
+type AsyncContinuation<'a> =
+    Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = MiddlewareToolResult> + Send>> + Send + Sync + 'a>;
 
 /// Type alias for the owned async continuation function
-type AsyncContinuationOwned = Box<
-    dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = MiddlewareToolResult> + Send>> + Send + Sync,
->;
+type AsyncContinuationOwned =
+    Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = MiddlewareToolResult> + Send>> + Send + Sync>;
 
 /// Async middleware trait
 #[async_trait::async_trait]
@@ -31,11 +26,7 @@ pub trait AsyncMiddleware: Send + Sync {
     fn name(&self) -> &str;
 
     /// Execute middleware
-    async fn execute<'a>(
-        &'a self,
-        request: ToolRequest,
-        next: AsyncContinuation<'a>,
-    ) -> MiddlewareToolResult;
+    async fn execute<'a>(&'a self, request: ToolRequest, next: AsyncContinuation<'a>) -> MiddlewareToolResult;
 }
 
 /// Tool request
@@ -157,8 +148,7 @@ fn normalize_context(context: &str) -> String {
         }
     }
 
-    if let Some(phase) = parsed.get("plan_phase").and_then(|v| v.as_str()).filter(|p| !p.is_empty())
-    {
+    if let Some(phase) = parsed.get("plan_phase").and_then(|v| v.as_str()).filter(|p| !p.is_empty()) {
         normalized.insert("plan_phase".into(), Value::String(phase.to_string()));
     }
 
@@ -186,10 +176,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
         &'a self,
         request: ToolRequest,
         next: Box<
-            dyn Fn(
-                    ToolRequest,
-                )
-                    -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
+            dyn Fn(ToolRequest) -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,
@@ -304,11 +291,7 @@ impl crate::cache::CacheKey for AsyncCacheKey {
 }
 
 impl AsyncCachingMiddleware {
-    pub fn new(
-        max_entries: usize,
-        ttl_seconds: u64,
-        obs_context: Arc<ObservabilityContext>,
-    ) -> Self {
+    pub fn new(max_entries: usize, ttl_seconds: u64, obs_context: Arc<ObservabilityContext>) -> Self {
         let cache = crate::cache::UnifiedCache::new(
             max_entries,
             std::time::Duration::from_secs(ttl_seconds),
@@ -342,29 +325,18 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         &'a self,
         request: ToolRequest,
         next: Box<
-            dyn Fn(
-                    ToolRequest,
-                )
-                    -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
+            dyn Fn(ToolRequest) -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,
         >,
     ) -> MiddlewareToolResult {
-        let key = AsyncCacheKey(Self::cache_key(
-            &request.tool_name,
-            &request.arguments,
-            &request.context,
-        ));
+        let key = AsyncCacheKey(Self::cache_key(&request.tool_name, &request.arguments, &request.context));
 
         // Check cache (migrated to UnifiedCache)
         if let Some(cached) = self.cache.get_owned(&key) {
-            self.obs_context.event(
-                crate::tools::EventType::CacheHit,
-                "cache",
-                "returning cached result",
-                Some(1.0),
-            );
+            self.obs_context
+                .event(crate::tools::EventType::CacheHit, "cache", "returning cached result", Some(1.0));
 
             return MiddlewareToolResult {
                 success: true,
@@ -429,10 +401,7 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
         &'a self,
         request: ToolRequest,
         next: Box<
-            dyn Fn(
-                    ToolRequest,
-                )
-                    -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
+            dyn Fn(ToolRequest) -> Pin<Box<dyn std::future::Future<Output = MiddlewareToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,
@@ -441,11 +410,7 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
         for attempt in 0..self.max_attempts {
             if attempt > 0 {
                 let backoff = self.backoff_duration(attempt - 1);
-                tracing::debug!(
-                    attempt = attempt,
-                    backoff_ms = backoff.as_millis(),
-                    "retrying after backoff"
-                );
+                tracing::debug!(attempt = attempt, backoff_ms = backoff.as_millis(), "retrying after backoff");
                 tokio::time::sleep(backoff).await;
             }
 

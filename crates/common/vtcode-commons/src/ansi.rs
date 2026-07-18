@@ -91,11 +91,7 @@ fn parse_csi(bytes: &[u8], start: usize) -> Option<usize> {
 }
 
 #[inline]
-fn parse_string_sequence(
-    bytes: &[u8],
-    start: usize,
-    terminator: StringSequenceTerminator,
-) -> Option<usize> {
+fn parse_string_sequence(bytes: &[u8], start: usize, terminator: StringSequenceTerminator) -> Option<usize> {
     let mut consumed = 0usize;
     for index in start..bytes.len() {
         if bytes[index] == ESC && !(index + 1 < bytes.len() && bytes[index + 1] == b'\\') {
@@ -144,9 +140,7 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
         return match c1 {
             C1_CSI => parse_csi(bytes, c1_len),
             C1_OSC => parse_string_sequence(bytes, c1_len, StringSequenceTerminator::BelOrSt),
-            C1_DCS | C1_SOS | C1_PM | C1_APC => {
-                parse_string_sequence(bytes, c1_len, StringSequenceTerminator::StOnly)
-            }
+            C1_DCS | C1_SOS | C1_PM | C1_APC => parse_string_sequence(bytes, c1_len, StringSequenceTerminator::StOnly),
             _ => Some(c1_len),
         };
     }
@@ -160,9 +154,7 @@ fn parse_ansi_sequence_bytes(bytes: &[u8]) -> Option<usize> {
             match bytes[1] {
                 b'[' => parse_csi(bytes, 2),
                 b']' => parse_string_sequence(bytes, 2, StringSequenceTerminator::BelOrSt),
-                b'P' | b'^' | b'_' | b'X' => {
-                    parse_string_sequence(bytes, 2, StringSequenceTerminator::StOnly)
-                }
+                b'P' | b'^' | b'_' | b'X' => parse_string_sequence(bytes, 2, StringSequenceTerminator::StOnly),
                 // Three-byte sequences: ESC + intermediate + final
                 // ESC SP {F,G,L,M,N} — 7/8-bit controls, ANSI conformance
                 // ESC # {3,4,5,6,8} — DEC line attributes / screen alignment
@@ -364,9 +356,7 @@ mod tests {
 
     #[test]
     fn strip_ansi_bytes_supports_raw_c1_csi() {
-        let input = [
-            b'a', 0x9b, b'3', b'1', b'm', b'r', b'e', b'd', 0x9b, b'0', b'm', b'z',
-        ];
+        let input = [b'a', 0x9b, b'3', b'1', b'm', b'r', b'e', b'd', 0x9b, b'0', b'm', b'z'];
         let out = super::strip_ansi_bytes(&input);
         assert_eq!(out, b"aredz");
     }

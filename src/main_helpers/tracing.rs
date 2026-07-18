@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use vtcode_core::utils::error_log_collector::ErrorLogCollectorLayer;
 use vtcode_core::utils::session_debug::{
-    DEFAULT_MAX_DEBUG_LOG_AGE_DAYS, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, current_debug_session_id,
-    prepare_debug_log_file, set_runtime_debug_log_path,
+    DEFAULT_MAX_DEBUG_LOG_AGE_DAYS, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, current_debug_session_id, prepare_debug_log_file,
+    set_runtime_debug_log_path,
 };
 use vtcode_core::utils::trace_writer::FlushableWriter;
 use vtcode_ui::tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
@@ -23,8 +23,8 @@ fn install_tracing_stack(log_file: &Path, env_filter: tracing_subscriber::EnvFil
     use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
     set_runtime_debug_log_path(log_file);
-    let writer = FlushableWriter::open(log_file)
-        .with_context(|| format!("Failed to open trace log: {}", log_file.display()))?;
+    let writer =
+        FlushableWriter::open(log_file).with_context(|| format!("Failed to open trace log: {}", log_file.display()))?;
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(move || writer.clone())
@@ -44,12 +44,8 @@ pub(crate) async fn initialize_tracing() -> Result<bool> {
     if std::env::var("RUST_LOG").is_ok() {
         let env_filter = tracing_subscriber::EnvFilter::from_default_env();
         let session_id = current_debug_session_id();
-        let log_file = prepare_debug_log_file(
-            None,
-            &session_id,
-            DEFAULT_MAX_DEBUG_LOG_SIZE_MB,
-            DEFAULT_MAX_DEBUG_LOG_AGE_DAYS,
-        )?;
+        let log_file =
+            prepare_debug_log_file(None, &session_id, DEFAULT_MAX_DEBUG_LOG_SIZE_MB, DEFAULT_MAX_DEBUG_LOG_AGE_DAYS)?;
 
         if let Err(err) = install_tracing_stack(&log_file, env_filter) {
             tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
@@ -78,9 +74,7 @@ pub(crate) fn initialize_default_error_tracing() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn initialize_tracing_from_config(
-    config: &vtcode_core::config::loader::VTCodeConfig,
-) -> Result<()> {
+pub(crate) fn initialize_tracing_from_config(config: &vtcode_core::config::loader::VTCodeConfig) -> Result<()> {
     let debug_cfg = &config.debug;
     let targets = if debug_cfg.trace_targets.is_empty() {
         "vtcode_core,vtcode".to_string()

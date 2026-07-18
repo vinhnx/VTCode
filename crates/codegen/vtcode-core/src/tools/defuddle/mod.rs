@@ -134,12 +134,7 @@ impl DefuddleTool {
     }
 }
 
-fn defuddle_fetch_error_response(
-    url: &str,
-    max_bytes: usize,
-    timeout_secs: u64,
-    err: &anyhow::Error,
-) -> Value {
+fn defuddle_fetch_error_response(url: &str, max_bytes: usize, timeout_secs: u64, err: &anyhow::Error) -> Value {
     let message = err.to_string();
     let lower = message.to_lowercase();
     // Timeout / network-class failures take priority over HTTP status:
@@ -164,12 +159,8 @@ fn defuddle_fetch_error_response(
             404 => {
                 "defuddle.md returned 404. The upstream service path may have changed; use web_fetch directly instead."
             }
-            500..=599 => {
-                "defuddle.md is having a server issue. Use web_fetch on a known URL as a fallback."
-            }
-            _ => {
-                "defuddle.md returned an unexpected status. Use web_fetch on a known URL as a fallback."
-            }
+            500..=599 => "defuddle.md is having a server issue. Use web_fetch on a known URL as a fallback.",
+            _ => "defuddle.md returned an unexpected status. Use web_fetch on a known URL as a fallback.",
         };
         ("http_error", action)
     } else {
@@ -205,9 +196,7 @@ fn validate_target_url(url: &str) -> Result<()> {
     match parsed.scheme() {
         "http" | "https" => {}
         other => {
-            return Err(anyhow!(
-                "defuddle_fetch: refusing to fetch {other}:// URL (only http/https are allowed)"
-            ));
+            return Err(anyhow!("defuddle_fetch: refusing to fetch {other}:// URL (only http/https are allowed)"));
         }
     }
     let host = parsed
@@ -350,11 +339,7 @@ mod tests {
     #[test]
     fn non_http_scheme_is_rejected() {
         let tool = DefuddleTool::new();
-        for bad in [
-            "javascript:alert(1)",
-            "file:///etc/passwd",
-            "data:text/html,hi",
-        ] {
+        for bad in ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,hi"] {
             let result = tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(tool.run(json!({ "url": bad })));
@@ -472,10 +457,7 @@ mod tests {
         // don't compare exact bytes (the URL parser may normalize `//`) —
         // we just assert the target host is referenced somewhere in the path.
         let path = parsed.path();
-        assert!(
-            path.contains("example.com"),
-            "defuddle.md URL should reference the user host in its path: {path}"
-        );
+        assert!(path.contains("example.com"), "defuddle.md URL should reference the user host in its path: {path}");
     }
 
     /// Regression test for turn_578: when defuddle.md rate-limits the
@@ -485,12 +467,7 @@ mod tests {
     #[test]
     fn error_response_classifies_403_and_suggests_web_fetch() {
         let err = anyhow::anyhow!("defuddle.md returned HTTP 403");
-        let response = defuddle_fetch_error_response(
-            "https://example.com",
-            MAX_BYTES,
-            DEFAULT_TIMEOUT_SECS,
-            &err,
-        );
+        let response = defuddle_fetch_error_response("https://example.com", MAX_BYTES, DEFAULT_TIMEOUT_SECS, &err);
         assert_eq!(response["error_type"], "http_error");
         assert!(
             response["next_action"].as_str().unwrap_or("").contains("web_fetch"),
@@ -504,12 +481,7 @@ mod tests {
     #[test]
     fn error_response_classifies_timeout_as_network_error() {
         let err = anyhow::anyhow!("request timed out after 30s");
-        let response = defuddle_fetch_error_response(
-            "https://example.com",
-            MAX_BYTES,
-            DEFAULT_TIMEOUT_SECS,
-            &err,
-        );
+        let response = defuddle_fetch_error_response("https://example.com", MAX_BYTES, DEFAULT_TIMEOUT_SECS, &err);
         assert_eq!(response["error_type"], "network_error");
     }
 }

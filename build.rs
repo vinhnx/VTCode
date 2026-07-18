@@ -1,8 +1,7 @@
 #![allow(missing_docs)]
 
 fn main() {
-    let git_output =
-        std::process::Command::new("git").args(["rev-parse", "--git-dir"]).output().ok();
+    let git_output = std::process::Command::new("git").args(["rev-parse", "--git-dir"]).output().ok();
     let git_dir = git_output.as_ref().and_then(|output| {
         std::str::from_utf8(&output.stdout)
             .ok()

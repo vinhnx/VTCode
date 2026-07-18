@@ -266,10 +266,7 @@ mod tests {
         assert!(matches!(cfg.zed.transport, AgentClientProtocolTransport::Stdio));
         assert!(cfg.zed.tools.read_file);
         assert!(cfg.zed.tools.list_files);
-        assert!(matches!(
-            cfg.zed.workspace_trust,
-            AgentClientProtocolZedWorkspaceTrustMode::FullAuto
-        ));
+        assert!(matches!(cfg.zed.workspace_trust, AgentClientProtocolZedWorkspaceTrustMode::FullAuto));
     }
 
     #[test]

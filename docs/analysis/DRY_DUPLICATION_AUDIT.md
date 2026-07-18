@@ -236,4 +236,4 @@ Post-change verification:
 - `advanced_tui_scenario_tests__tui_with_conversation_history`
 - `advanced_tui_scenario_tests__styled_segment_plain_text`
 
-Those failures produced `.snap.new` files only; no accepted `.snap` baseline exists for those cases in `tests/snapshots/`. The generated `.snap.new` files were removed after verification to keep the worktree clean.
+Those failures produced `.snap.new` files only; no accepted `.snap` baseline exists for those cases in `scripts/tests/snapshots/`. The generated `.snap.new` files were removed after verification to keep the worktree clean.

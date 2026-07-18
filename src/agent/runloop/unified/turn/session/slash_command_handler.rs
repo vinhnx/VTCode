@@ -9,9 +9,7 @@ use crate::agent::runloop::slash_commands::handle_slash_command as process_slash
 use crate::agent::runloop::unified::turn::session::interaction_loop::{
     InteractionLoopContext, InteractionOutcome, InteractionState,
 };
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    self, SlashCommandContext, SlashCommandControl,
-};
+use crate::agent::runloop::unified::turn::session::slash_commands::{self, SlashCommandContext, SlashCommandControl};
 use vtcode_commons::fs::{is_windows_absolute_path, trim_trailing_image_path, unescape_whitespace};
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::scheduler::{ScheduleSpec, SessionLanguageCommand, scheduled_tasks_enabled};
@@ -39,9 +37,7 @@ pub(crate) async fn handle_input_commands(
         // always be able to exit the program without being trapped.
         "exit" | "quit" => {
             ctx.renderer.line(MessageStyle::Info, "✓")?;
-            return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
-                reason: SessionEndReason::Exit,
-            }));
+            return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit { reason: SessionEndReason::Exit }));
         }
         "help" => {
             ctx.renderer.line(MessageStyle::Info, "Commands: exit, help")?;
@@ -49,20 +45,15 @@ pub(crate) async fn handle_input_commands(
         }
         input if input.starts_with('/') && !is_absolute_image_path_input(input) => {
             if let Some(command_input) = input.strip_prefix('/') {
-                let outcome =
-                    match process_slash_command(command_input, ctx.renderer, &ctx.config.workspace)
-                        .await
-                    {
-                        Ok(outcome) => outcome,
-                        Err(err) => {
-                            tracing::error!("slash command parse/dispatch failed: {err:#}");
-                            ctx.renderer.line(
-                                MessageStyle::Error,
-                                &format!("Slash command failed: {err}"),
-                            )?;
-                            return Ok(CommandProcessingResult::ContinueLoop);
-                        }
-                    };
+                let outcome = match process_slash_command(command_input, ctx.renderer, &ctx.config.workspace).await {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        tracing::error!("slash command parse/dispatch failed: {err:#}");
+                        ctx.renderer
+                            .line(MessageStyle::Error, &format!("Slash command failed: {err}"))?;
+                        return Ok(CommandProcessingResult::ContinueLoop);
+                    }
+                };
 
                 let command_result = match slash_commands::handle_outcome(
                     outcome,
@@ -126,17 +117,10 @@ pub(crate) async fn handle_input_commands(
                         return Ok(CommandProcessingResult::ContinueLoop);
                     }
                     SlashCommandControl::BreakWithReason(reason) => {
-                        return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit {
-                            reason,
-                        }));
+                        return Ok(CommandProcessingResult::Outcome(InteractionOutcome::Exit { reason }));
                     }
                     SlashCommandControl::SelectAgent(name) => {
-                        super::interaction_loop_runner::handle_select_primary_agent(
-                            ctx,
-                            state,
-                            Some(name),
-                        )
-                        .await?;
+                        super::interaction_loop_runner::handle_select_primary_agent(ctx, state, Some(name)).await?;
                         return Ok(CommandProcessingResult::ContinueLoop);
                     }
                     SlashCommandControl::ResumeLatest { show_all } => {
@@ -170,21 +154,14 @@ async fn handle_session_language_command(
     input: &str,
     ctx: &mut InteractionLoopContext<'_>,
 ) -> Result<Option<CommandProcessingResult>> {
-    let Some(command) =
-        vtcode_core::scheduler::parse_session_language_command(input, chrono::Local::now())
-    else {
+    let Some(command) = vtcode_core::scheduler::parse_session_language_command(input, chrono::Local::now()) else {
         return Ok(None);
     };
     match command? {
         SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at } => {
             let summary = ctx
                 .tool_registry
-                .create_session_prompt_task(
-                    None,
-                    prompt,
-                    ScheduleSpec::one_shot(run_at),
-                    Utc::now(),
-                )
+                .create_session_prompt_task(None, prompt, ScheduleSpec::one_shot(run_at), Utc::now())
                 .await?;
             ctx.renderer.line(
                 MessageStyle::Info,
@@ -206,17 +183,12 @@ async fn handle_session_language_command(
             for task in tasks {
                 let next_run = task
                     .next_run_at
-                    .map(|value| {
-                        value.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
-                    })
+                    .map(|value| value.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|| "none".to_string());
                 let status = task.last_status.unwrap_or_else(|| "never_run".to_string());
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!(
-                        "{}  {}  {}  next={}  status={}",
-                        task.id, task.name, task.schedule, next_run, status
-                    ),
+                    &format!("{}  {}  {}  next={}  status={}", task.id, task.name, task.schedule, next_run, status),
                 )?;
             }
             Ok(Some(CommandProcessingResult::ContinueLoop))
@@ -225,10 +197,8 @@ async fn handle_session_language_command(
             let Some(task) = ctx.tool_registry.delete_session_task(&query).await else {
                 return Ok(None);
             };
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("Cancelled session scheduled task {} ({}).", task.id, task.name),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("Cancelled session scheduled task {} ({}).", task.id, task.name))?;
             Ok(Some(CommandProcessingResult::ContinueLoop))
         }
     }
@@ -322,8 +292,8 @@ fn leading_path_token(input: &str) -> Option<String> {
         }
     }
 
-    let token = input[start..end]
-        .trim_matches(|ch: char| matches!(ch, ',' | '.' | ';' | ':' | ')' | ']' | '}' | '!' | '?'));
+    let token =
+        input[start..end].trim_matches(|ch: char| matches!(ch, ',' | '.' | ';' | ':' | ')' | ']' | '}' | '!' | '?'));
     if token.is_empty() {
         None
     } else {
@@ -430,10 +400,7 @@ mod tests {
         let captures: Vec<_> = super::ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
         assert_eq!(captures.len(), 1, "Should match exactly one image path");
         let matched = captures[0].get(1).unwrap().as_str();
-        assert!(
-            !matched.contains("can you"),
-            "Match should not include trailing text, got: {matched}"
-        );
+        assert!(!matched.contains("can you"), "Match should not include trailing text, got: {matched}");
         assert!(matched.ends_with(".png"));
     }
 }

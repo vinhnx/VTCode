@@ -176,8 +176,7 @@ fn bump_version(args: BumpVersionArgs) -> Result<(), Box<dyn std::error::Error>>
     let cargo_toml_path = workspace_root.join("Cargo.toml");
 
     let content = fs::read_to_string(&cargo_toml_path)?;
-    let mut doc: toml_edit::DocumentMut =
-        content.parse().map_err(|e| format!("Failed to parse Cargo.toml: {e}"))?;
+    let mut doc: toml_edit::DocumentMut = content.parse().map_err(|e| format!("Failed to parse Cargo.toml: {e}"))?;
 
     let current_str = doc["workspace"]["package"]["version"]
         .as_str()
@@ -329,18 +328,14 @@ fn check_file_deps(
             // cannot drift. In TOML this appears as a subtable { workspace = true }
             // rather than a plain string value.
             if let Some(item) = version_item
-                && item.as_table_like().and_then(|t| t.get("workspace")).and_then(|v| v.as_bool())
-                    == Some(true)
+                && item.as_table_like().and_then(|t| t.get("workspace")).and_then(|v| v.as_bool()) == Some(true)
             {
                 continue;
             }
 
             if let Some(ver_str) = version_item.and_then(|v| v.as_str()) {
                 let req = semver::VersionReq::parse(ver_str).map_err(|e| {
-                    format!(
-                        "Invalid version req '{ver_str}' for {dep_name} in {}: {e}",
-                        path.display()
-                    )
+                    format!("Invalid version req '{ver_str}' for {dep_name} in {}: {e}", path.display())
                 })?;
                 if !req.matches(workspace_version) {
                     mismatches.push(format!(

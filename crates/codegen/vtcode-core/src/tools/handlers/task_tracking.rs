@@ -121,8 +121,7 @@ pub fn parse_marked_status_prefix(value: &str) -> Option<(TaskTrackingStatus, St
 }
 
 pub fn parse_status_prefix(value: &str) -> (TaskTrackingStatus, String) {
-    parse_marked_status_prefix(value)
-        .unwrap_or((TaskTrackingStatus::Pending, value.trim_start().to_string()))
+    parse_marked_status_prefix(value).unwrap_or((TaskTrackingStatus::Pending, value.trim_start().to_string()))
 }
 
 pub fn append_notes(existing: Option<String>, append: Option<&str>) -> Option<String> {
@@ -179,9 +178,7 @@ pub fn is_bulk_sync_update<T>(
     items.is_some() && ((index.is_none() && index_path.is_none()) || status.is_none())
 }
 
-pub fn deserialize_optional_string_list<'de, D>(
-    deserializer: D,
-) -> std::result::Result<Option<Vec<String>>, D::Error>
+pub fn deserialize_optional_string_list<'de, D>(deserializer: D) -> std::result::Result<Option<Vec<String>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -280,8 +277,7 @@ impl TaskCounts {
     pub fn progress_percent(&self) -> usize {
         if self.total > 0 {
             #[allow(clippy::cast_sign_loss, clippy::let_and_return)]
-            let progress =
-                ((self.completed as f64 / self.total as f64 * 100.0).round()).max(0.0) as usize;
+            let progress = ((self.completed as f64 / self.total as f64 * 100.0).round()).max(0.0) as usize;
             progress
         } else {
             0

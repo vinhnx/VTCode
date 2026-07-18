@@ -172,11 +172,7 @@ pub struct CodeExecutor {
 
 impl CodeExecutor {
     /// Create a new code executor.
-    pub fn new(
-        language: Language,
-        mcp_client: Arc<dyn McpToolExecutor>,
-        workspace_root: PathBuf,
-    ) -> Self {
+    pub fn new(language: Language, mcp_client: Arc<dyn McpToolExecutor>, workspace_root: PathBuf) -> Self {
         Self {
             language,
             mcp_client,
@@ -221,11 +217,7 @@ impl CodeExecutor {
     /// The code can access MCP tools as library functions. Any `result = {...}`
     /// assignment at the module level will be captured as JSON output.
     pub async fn execute(&self, code: &str) -> Result<ExecutionResult> {
-        info!(
-            language = self.language.as_str(),
-            timeout_secs = self.config.timeout_secs,
-            "Executing code snippet"
-        );
+        info!(language = self.language.as_str(), timeout_secs = self.config.timeout_secs, "Executing code snippet");
 
         let start = Instant::now();
 
@@ -280,9 +272,10 @@ impl CodeExecutor {
         let mcp_client = self.mcp_client.clone();
         let builtin_executor = self.builtin_executor.clone();
         let builtin_names = match &builtin_executor {
-            Some(exec) => exec.list_builtin_tools().ok().map(|tools| {
-                tools.iter().map(|t| t.name.clone()).collect::<std::collections::HashSet<_>>()
-            }),
+            Some(exec) => exec
+                .list_builtin_tools()
+                .ok()
+                .map(|tools| tools.iter().map(|t| t.name.clone()).collect::<std::collections::HashSet<_>>()),
             None => None,
         };
         let execution_timeout = Duration::from_secs(self.config.timeout_secs);
@@ -291,13 +284,11 @@ impl CodeExecutor {
             let ipc_start = Instant::now();
 
             loop {
-                let Some(remaining_timeout) = execution_timeout.checked_sub(ipc_start.elapsed())
-                else {
+                let Some(remaining_timeout) = execution_timeout.checked_sub(ipc_start.elapsed()) else {
                     break;
                 };
 
-                let Some(mut request) = ipc_handler.wait_for_request(remaining_timeout).await?
-                else {
+                let Some(mut request) = ipc_handler.wait_for_request(remaining_timeout).await? else {
                     break;
                 };
 
@@ -413,10 +404,9 @@ impl CodeExecutor {
                     (interpreter, vec![code_file.to_string_lossy().into_owned()])
                 }
             }
-            Language::JavaScript => (
-                self.language.interpreter().to_string(),
-                vec![code_file.to_string_lossy().into_owned()],
-            ),
+            Language::JavaScript => {
+                (self.language.interpreter().to_string(), vec![code_file.to_string_lossy().into_owned()])
+            }
         };
 
         let options = ProcessOptions {
@@ -436,8 +426,7 @@ impl CodeExecutor {
             },
         };
 
-        let process_output =
-            AsyncProcessRunner::run(options).await.context("failed to execute code")?;
+        let process_output = AsyncProcessRunner::run(options).await.context("failed to execute code")?;
 
         let duration_ms = start.elapsed().as_millis();
 
@@ -453,8 +442,7 @@ impl CodeExecutor {
         let _ = tokio::fs::remove_dir_all(&ipc_dir).await;
 
         // Wait for IPC task to complete (with timeout)
-        let ipc_result =
-            async_utils::with_timeout(ipc_task, Duration::from_secs(1), "IPC handler task").await;
+        let ipc_result = async_utils::with_timeout(ipc_task, Duration::from_secs(1), "IPC handler task").await;
 
         if let Err(e) = ipc_result {
             debug!(error = %e, "IPC handler did not complete in time");
@@ -608,7 +596,9 @@ mcp = MCPTools()
         for tool in tools {
             sdk.push_str(&format!(
                 "\ndef {}(**kwargs):\n    \"\"\"{}.\"\"\"\n    return mcp._call_tool('{}', kwargs)\n\n",
-                sanitize_function_name(&tool.name), tool.description, tool.name
+                sanitize_function_name(&tool.name),
+                tool.description,
+                tool.name
             ));
         }
 
@@ -618,7 +608,9 @@ mcp = MCPTools()
                 for tool in builtin_tools {
                     sdk.push_str(&format!(
                         "\ndef {}(**kwargs):\n    \"\"\"{}.\"\"\"\n    return mcp._call_tool('{}', kwargs)\n\n",
-                        sanitize_function_name(&tool.name), tool.description, tool.name
+                        sanitize_function_name(&tool.name),
+                        tool.description,
+                        tool.name
                     ));
                 }
             }
@@ -707,7 +699,9 @@ const mcp = new MCPTools();
         for tool in tools {
             sdk.push_str(&format!(
                 "async function {}(args = {{}}) {{\n  // {}\n  return await mcp.callTool('{}', args);\n}}\n\n",
-                sanitize_function_name(&tool.name), tool.description, tool.name
+                sanitize_function_name(&tool.name),
+                tool.description,
+                tool.name
             ));
         }
 
@@ -745,13 +739,7 @@ const mcp = new MCPTools();
 /// Sanitize tool name to valid function name.
 fn sanitize_function_name(name: &str) -> String {
     name.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
         .collect()
 }
 
@@ -817,8 +805,7 @@ mod tests {
 
     #[tokio::test]
     async fn generate_sdk_includes_builtin_wrappers() {
-        let executor = test_executor(Language::Python3)
-            .with_builtin_executor(Some(Arc::new(MockBuiltinExecutor)));
+        let executor = test_executor(Language::Python3).with_builtin_executor(Some(Arc::new(MockBuiltinExecutor)));
         let sdk = executor.generate_python_sdk().await.unwrap();
         assert!(sdk.contains("def unified_file("));
         assert!(sdk.contains("mcp._call_tool('unified_file'"));

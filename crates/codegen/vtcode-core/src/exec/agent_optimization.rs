@@ -200,9 +200,7 @@ impl AgentBehaviorAnalyzer {
 
     /// Record skill reuse
     pub fn record_skill_reuse(&mut self, skill_name: &str) {
-        if let Some(pos) =
-            self.skill_stats.most_effective_skills.iter().position(|s| s == skill_name)
-        {
+        if let Some(pos) = self.skill_stats.most_effective_skills.iter().position(|s| s == skill_name) {
             // Move to front
             let skill = self.skill_stats.most_effective_skills.remove(pos);
             self.skill_stats.most_effective_skills.insert(0, skill);
@@ -215,9 +213,7 @@ impl AgentBehaviorAnalyzer {
     /// Record tool failure
     pub fn record_tool_failure(&mut self, tool_name: &str, error_msg: &str) {
         // Add to common errors
-        if let Some(pos) =
-            self.failure_patterns.common_errors.iter().position(|(msg, _)| msg == error_msg)
-        {
+        if let Some(pos) = self.failure_patterns.common_errors.iter().position(|(msg, _)| msg == error_msg) {
             self.failure_patterns.common_errors[pos].1 += 1;
         } else {
             self.failure_patterns.common_errors.push((error_msg.into(), 1));
@@ -233,18 +229,13 @@ impl AgentBehaviorAnalyzer {
             .unwrap_or(1);
         let failure_rate = count as f64 / (count + 1) as f64; // Approximation
 
-        if let Some(pos) =
-            self.failure_patterns.high_failure_tools.iter().position(|t| t.0 == tool_name)
-        {
+        if let Some(pos) = self.failure_patterns.high_failure_tools.iter().position(|t| t.0 == tool_name) {
             self.failure_patterns.high_failure_tools[pos].1 = failure_rate;
         } else {
             self.failure_patterns.high_failure_tools.push((tool_name.into(), failure_rate));
         }
 
-        debug!(
-            "Recorded failure for {}: {} (failure_rate: {})",
-            tool_name, error_msg, failure_rate
-        );
+        debug!("Recorded failure for {}: {} (failure_rate: {})", tool_name, error_msg, failure_rate);
     }
 
     /// Check if a tool should trigger a warning due to high failure rate
@@ -267,9 +258,7 @@ impl AgentBehaviorAnalyzer {
             .recovery_patterns
             .iter()
             .find(|p| p.error_type == error_type)
-            .map(|p| {
-                format!("{} (success rate: {:.1}%)", p.recovery_action, p.success_rate * 100.0)
-            })
+            .map(|p| format!("{} (success rate: {:.1}%)", p.recovery_action, p.success_rate * 100.0))
     }
 
     /// Export metrics for monitoring integration
@@ -277,30 +266,19 @@ impl AgentBehaviorAnalyzer {
         let mut metrics = HashMap::new();
 
         // Skill metrics
-        metrics
-            .insert("total_skills".to_string(), serde_json::json!(self.skill_stats.total_skills));
-        metrics
-            .insert("reused_skills".to_string(), serde_json::json!(self.skill_stats.reused_skills));
+        metrics.insert("total_skills".to_string(), serde_json::json!(self.skill_stats.total_skills));
+        metrics.insert("reused_skills".to_string(), serde_json::json!(self.skill_stats.reused_skills));
 
         // Tool metrics
-        metrics.insert(
-            "discovery_success_rate".to_string(),
-            serde_json::json!(self.tool_stats.discovery_success_rate),
-        );
-        metrics.insert(
-            "total_tools_used".to_string(),
-            serde_json::json!(self.tool_stats.usage_frequency.len()),
-        );
+        metrics.insert("discovery_success_rate".to_string(), serde_json::json!(self.tool_stats.discovery_success_rate));
+        metrics.insert("total_tools_used".to_string(), serde_json::json!(self.tool_stats.usage_frequency.len()));
 
         // Failure metrics
         metrics.insert(
             "high_failure_tools_count".to_string(),
             serde_json::json!(self.failure_patterns.high_failure_tools.len()),
         );
-        metrics.insert(
-            "common_errors_count".to_string(),
-            serde_json::json!(self.failure_patterns.common_errors.len()),
-        );
+        metrics.insert("common_errors_count".to_string(), serde_json::json!(self.failure_patterns.common_errors.len()));
         metrics.insert(
             "recovery_patterns_count".to_string(),
             serde_json::json!(self.failure_patterns.recovery_patterns.len()),
@@ -309,8 +287,7 @@ impl AgentBehaviorAnalyzer {
         // Tool usage frequency
         let mut tool_usage: Vec<_> = self.tool_stats.usage_frequency.iter().collect();
         tool_usage.sort_by(|a, b| b.1.cmp(a.1));
-        let top_tools: HashMap<String, u64> =
-            tool_usage.into_iter().take(10).map(|(k, v)| (k.clone(), *v)).collect();
+        let top_tools: HashMap<String, u64> = tool_usage.into_iter().take(10).map(|(k, v)| (k.clone(), *v)).collect();
         metrics.insert("top_tools".to_string(), serde_json::json!(top_tools));
 
         metrics
@@ -399,12 +376,7 @@ impl AgentBehaviorAnalyzer {
     }
 
     /// Add or update a recovery pattern
-    pub fn add_recovery_pattern(
-        &mut self,
-        error_type: String,
-        recovery_action: String,
-        initial_success_rate: f64,
-    ) {
+    pub fn add_recovery_pattern(&mut self, error_type: String, recovery_action: String, initial_success_rate: f64) {
         // Check if pattern already exists
         if let Some(pattern) = self
             .failure_patterns
@@ -439,11 +411,7 @@ impl AgentBehaviorAnalyzer {
         }
 
         output.push_str("\n## Tool Statistics\n");
-        let _ = writeln!(
-            output,
-            "Tool discovery success rate: {:.1}%",
-            self.tool_stats.discovery_success_rate * 100.0
-        );
+        let _ = writeln!(output, "Tool discovery success rate: {:.1}%", self.tool_stats.discovery_success_rate * 100.0);
         let _ = writeln!(output, "Total tools used: {}", self.tool_stats.usage_frequency.len());
 
         if !self.failure_patterns.high_failure_tools.is_empty() {
@@ -652,11 +620,7 @@ mod tests {
     fn test_add_recovery_pattern_new() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
 
-        analyzer.add_recovery_pattern(
-            "new_error".to_owned(),
-            "new recovery action".to_owned(),
-            0.75,
-        );
+        analyzer.add_recovery_pattern("new_error".to_owned(), "new recovery action".to_owned(), 0.75);
 
         assert_eq!(analyzer.failure_patterns.recovery_patterns.len(), 1);
         let pattern = &analyzer.failure_patterns.recovery_patterns[0];
@@ -676,11 +640,7 @@ mod tests {
             attempts: 10,
         });
 
-        analyzer.add_recovery_pattern(
-            "existing_error".to_owned(),
-            "updated action".to_owned(),
-            0.9,
-        );
+        analyzer.add_recovery_pattern("existing_error".to_owned(), "updated action".to_owned(), 0.9);
 
         assert_eq!(analyzer.failure_patterns.recovery_patterns.len(), 1);
         let pattern = &analyzer.failure_patterns.recovery_patterns[0];

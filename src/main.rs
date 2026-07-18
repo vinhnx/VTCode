@@ -32,11 +32,9 @@ mod startup;
 mod updater;
 
 use main_helpers::{
-    build_augmented_cli_command, configure_debug_session_routing,
-    configure_runtime_relaunch_context, debug_runtime_flag_enabled,
-    initialize_default_error_tracing, initialize_tracing, initialize_tracing_from_config,
-    perform_queued_runtime_relaunch, resolve_runtime_color_policy, resolve_startup_context,
-    try_enhance_clap_error,
+    build_augmented_cli_command, configure_debug_session_routing, configure_runtime_relaunch_context,
+    debug_runtime_flag_enabled, initialize_default_error_tracing, initialize_tracing, initialize_tracing_from_config,
+    perform_queued_runtime_relaunch, resolve_runtime_color_policy, resolve_startup_context, try_enhance_clap_error,
 };
 
 struct PreparedRun {
@@ -186,9 +184,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     {}
 
     if args.print.is_some() && args.command.is_some() {
-        anyhow::bail!(
-            "The --print/-p flag cannot be combined with subcommands. Use print mode without a subcommand."
-        );
+        anyhow::bail!("The --print/-p flag cannot be combined with subcommands. Use print mode without a subcommand.");
     }
 
     let print_mode = args.print.clone();

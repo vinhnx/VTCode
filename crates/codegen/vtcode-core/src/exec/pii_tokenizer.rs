@@ -60,10 +60,7 @@ static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy:
             PiiType::IpAddress,
             r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
         ),
-        (
-            PiiType::ApiKey,
-            r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#,
-        ),
+        (PiiType::ApiKey, r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#),
         (PiiType::AuthToken, r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+"),
     ];
 
@@ -138,8 +135,7 @@ impl PiiTokenizer {
                 let value = text[mat.start()..mat.end()].to_string();
                 let context_start = mat.start().saturating_sub(20);
                 let context_end = (mat.end() + 20).min(text.len());
-                let context =
-                    text[context_start..context_end].replace('\n', "\\n").replace('\r', "\\r");
+                let context = text[context_start..context_end].replace('\n', "\\n").replace('\r', "\\r");
 
                 debug!(
                     pii_type = pii_type.as_str(),

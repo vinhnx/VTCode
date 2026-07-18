@@ -43,8 +43,7 @@ pub(crate) struct TurnOutcomeContext<'a> {
     pub show_turn_timer: bool,
     pub workspace: &'a std::path::Path,
     pub session_id: &'a str,
-    pub harness_emitter:
-        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub harness_emitter: Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
 }
 
 pub(crate) struct ToolContext<'a> {
@@ -55,15 +54,13 @@ pub(crate) struct ToolContext<'a> {
     pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
-    pub safety_validator:
-        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
+    pub safety_validator: &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
-    pub error_recovery:
-        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub error_recovery: &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 pub(crate) struct LLMContext<'a> {
@@ -99,8 +96,7 @@ pub(crate) struct TurnProcessingState<'a> {
     pub skip_confirmations: bool,
     pub full_auto: bool,
     pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
-    pub harness_emitter:
-        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub harness_emitter: Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     pub runtime_steering: &'a mut RuntimeSteering,
 }
 
@@ -139,8 +135,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub permissions_state: &'a Arc<RwLock<vtcode_core::config::PermissionsConfig>>,
-    pub safety_validator:
-        &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
+    pub safety_validator: &'a Arc<crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator>,
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
@@ -153,11 +148,9 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
-    pub error_recovery:
-        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub error_recovery: &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
-    pub harness_emitter:
-        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub harness_emitter: Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     pub runtime_steering: &'a mut RuntimeSteering,
 }
 
@@ -271,8 +264,7 @@ impl<'a> TurnProcessingContext<'a> {
     pub(crate) fn as_turn_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
-        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } =
-            self.parts_mut();
+        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } = self.parts_mut();
 
         crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext::new(
             ui_ctx.renderer,
@@ -321,16 +313,14 @@ impl<'a> TurnProcessingContext<'a> {
     /// Creates a RunLoopContext directly from this TurnProcessingContext,
     /// skipping the intermediate TurnLoopContext conversion.
     pub(crate) fn as_run_loop_context(&mut self) -> RunLoopContext<'_> {
-        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } =
-            self.parts_mut();
+        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } = self.parts_mut();
 
-        let auto_permission =
-            Some(crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
-                config: llm_ctx.config,
-                vt_cfg: llm_ctx.vt_cfg,
-                provider_client: llm_ctx.provider_client.as_mut(),
-                working_history: state.working_history.as_slice(),
-            });
+        let auto_permission = Some(crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
+            config: llm_ctx.config,
+            vt_cfg: llm_ctx.vt_cfg,
+            provider_client: llm_ctx.provider_client.as_mut(),
+            working_history: state.working_history.as_slice(),
+        });
 
         let mut ctx = RunLoopContext::new_with_auto_permission_context(
             ui_ctx.renderer,

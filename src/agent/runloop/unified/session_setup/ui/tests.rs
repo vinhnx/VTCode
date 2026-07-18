@@ -38,9 +38,9 @@ fn structured_resume_lines_preserve_tool_context() {
         "{\"cmd\":\"cargo fmt\"}".to_string(),
     )]);
 
-    let tool_output = r#"{"output":" Finished dev profile [unoptimized + debuginfo]\n","exit_code":0,"backend":"pipe"}"#;
-    let mut tool_response =
-        uni::Message::tool_response("call_123".to_string(), tool_output.to_string());
+    let tool_output =
+        r#"{"output":" Finished dev profile [unoptimized + debuginfo]\n","exit_code":0,"backend":"pipe"}"#;
+    let mut tool_response = uni::Message::tool_response("call_123".to_string(), tool_output.to_string());
     tool_response.origin_tool = Some("exec_command".to_string());
 
     let history = vec![
@@ -52,24 +52,27 @@ fn structured_resume_lines_preserve_tool_context() {
     let lines = build_structured_resume_lines(&history, true);
 
     assert!(
-        lines.iter().any(|line| {
-            line.style == MessageStyle::User && line.text.contains("run cargo fmt")
-        })
+        lines
+            .iter()
+            .any(|line| { line.style == MessageStyle::User && line.text.contains("run cargo fmt") })
     );
     assert!(!lines.iter().any(|line| line.text == "You:"));
     assert!(!lines.iter().any(|line| line.text == "Assistant:"));
     assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::Tool
-            && line.text.contains("Tool exec_command [tool_call_id: call_123]:")
+        line.style == MessageStyle::Tool && line.text.contains("Tool exec_command [tool_call_id: call_123]:")
     }));
     // Tool arguments should show a concise summary instead of raw JSON
-    assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::ToolDetail && line.text.contains("command: cargo fmt")
-    }));
+    assert!(
+        lines
+            .iter()
+            .any(|line| { line.style == MessageStyle::ToolDetail && line.text.contains("command: cargo fmt") })
+    );
     // Tool output should show extracted output text, not raw JSON
-    assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::ToolOutput && line.text.contains("Finished dev profile")
-    }));
+    assert!(
+        lines
+            .iter()
+            .any(|line| { line.style == MessageStyle::ToolOutput && line.text.contains("Finished dev profile") })
+    );
 }
 
 #[test]
@@ -82,13 +85,14 @@ fn legacy_style_inference_maps_common_prefixes() {
 
 #[test]
 fn structured_resume_lines_fallback_to_reasoning_details() {
-    let assistant = uni::Message::assistant("done".to_string()).with_reasoning_details(Some(vec![
-        serde_json::json!(r#"{"type":"reasoning.text","text":"detail trace"}"#),
-    ]));
+    let assistant = uni::Message::assistant("done".to_string())
+        .with_reasoning_details(Some(vec![serde_json::json!(r#"{"type":"reasoning.text","text":"detail trace"}"#)]));
     let lines = build_structured_resume_lines(&[assistant], true);
-    assert!(lines.iter().any(|line| {
-        line.style == MessageStyle::Reasoning && line.text.contains("detail trace")
-    }));
+    assert!(
+        lines
+            .iter()
+            .any(|line| { line.style == MessageStyle::Reasoning && line.text.contains("detail trace") })
+    );
 }
 
 #[test]
@@ -143,10 +147,7 @@ fn apply_persistent_memory_header_guide_sets_badge_and_highlight() {
 
     apply_persistent_memory_header_guide(&mut header_context, &sample_memory_status());
 
-    assert_eq!(
-        header_context.persistent_memory.as_ref().map(|badge| badge.text.as_str()),
-        Some("Memory: On")
-    );
+    assert_eq!(header_context.persistent_memory.as_ref().map(|badge| badge.text.as_str()), Some("Memory: On"));
     assert!(header_context.highlights.iter().any(|highlight| highlight.title == "Memory"));
 }
 
@@ -283,21 +284,14 @@ fn background_local_agent_preview_uses_status_placeholder() {
         transcript_path: None,
     };
 
-    assert_eq!(
-        background_local_agent_preview_placeholder(&entry),
-        "Waiting for the subprocess to emit output..."
-    );
+    assert_eq!(background_local_agent_preview_placeholder(&entry), "Waiting for the subprocess to emit output...");
 }
 
 #[test]
 fn ide_context_status_label_respects_session_override() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
-    let mut context_manager = context_manager::ContextManager::new(
-        "sys".into(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
+    let mut context_manager =
+        context_manager::ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     context_manager.set_workspace_root(workspace.path());
 
     let snapshot = EditorContextSnapshot {
@@ -312,20 +306,14 @@ fn ide_context_status_label_respects_session_override() {
         }),
         ..EditorContextSnapshot::default()
     };
-    context_manager.set_editor_context_snapshot(
-        Some(snapshot.clone()),
-        Some(&vtcode_config::IdeContextConfig::default()),
-    );
+    context_manager
+        .set_editor_context_snapshot(Some(snapshot.clone()), Some(&vtcode_config::IdeContextConfig::default()));
 
     assert_eq!(
-        ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None)
-            .as_deref(),
+        ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None).as_deref(),
         Some("IDE Context (IDE): src/main.rs")
     );
 
     assert!(!context_manager.toggle_session_ide_context());
-    assert_eq!(
-        ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None),
-        None
-    );
+    assert_eq!(ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None), None);
 }

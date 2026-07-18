@@ -8,16 +8,9 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub type ToolExecutorFn =
-    for<'a> fn(&'a ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
+pub type ToolExecutorFn = for<'a> fn(&'a ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
 pub type NativeCgpToolFactory = Arc<
-    dyn for<'a> Fn(
-            &'a ToolRegistration,
-            PathBuf,
-            super::cgp_facade::CgpRuntimeMode,
-        ) -> Arc<dyn Tool>
-        + Send
-        + Sync,
+    dyn for<'a> Fn(&'a ToolRegistration, PathBuf, super::cgp_facade::CgpRuntimeMode) -> Arc<dyn Tool> + Send + Sync,
 >;
 
 use std::fmt;
@@ -216,11 +209,7 @@ impl ToolRegistration {
         }
     }
 
-    pub fn from_tool(
-        name: impl Into<Arc<str>>,
-        capability: CapabilityLevel,
-        tool: Arc<dyn Tool>,
-    ) -> Self {
+    pub fn from_tool(name: impl Into<Arc<str>>, capability: CapabilityLevel, tool: Arc<dyn Tool>) -> Self {
         let mut metadata = ToolRegistrationSpec::default().with_description(tool.description());
         if let Some(schema) = tool.parameter_schema() {
             metadata = metadata.with_parameter_schema(schema);
@@ -266,11 +255,7 @@ impl ToolRegistration {
         }
     }
 
-    pub fn from_tool_instance<T>(
-        name: impl Into<Arc<str>>,
-        capability: CapabilityLevel,
-        tool: T,
-    ) -> Self
+    pub fn from_tool_instance<T>(name: impl Into<Arc<str>>, capability: CapabilityLevel, tool: T) -> Self
     where
         T: Tool + 'static,
     {

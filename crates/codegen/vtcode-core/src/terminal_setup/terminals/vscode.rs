@@ -7,9 +7,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate VS Code setup instructions
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut instructions = vec![
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
         "  VS Code Terminal Manual Configuration".to_string(),
@@ -46,17 +44,14 @@ pub fn generate_config(
                 instructions.push("VS Code has built-in shell integration.".to_string());
                 instructions.push("To enable:".to_string());
                 instructions.push("1. Open Settings (Cmd+, or Ctrl+,)".to_string());
-                instructions.push(
-                    "2. Search for 'terminal.integrated.shellIntegration.enabled'".to_string(),
-                );
+                instructions.push("2. Search for 'terminal.integrated.shellIntegration.enabled'".to_string());
                 instructions.push("3. Check the box to enable".to_string());
                 instructions.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 instructions.push(format!("{}. THEME SYNCHRONIZATION", i + 1));
                 instructions.push(String::new());
-                instructions
-                    .push("VS Code terminal automatically matches your editor theme.".to_string());
+                instructions.push("VS Code terminal automatically matches your editor theme.".to_string());
                 instructions.push("To customize:".to_string());
                 instructions.push("1. Open Settings (Cmd+, or Ctrl+,)".to_string());
                 instructions.push("2. Search for 'workbench.colorCustomizations'".to_string());
@@ -67,22 +62,19 @@ pub fn generate_config(
                 instructions.push(format!("{}. SYSTEM NOTIFICATIONS", i + 1));
                 instructions.push(String::new());
                 instructions.push("VS Code terminal supports notifications through:".to_string());
-                instructions
-                    .push("1. Settings → Terminal → Integrated → Bell Duration".to_string());
+                instructions.push("1. Settings → Terminal → Integrated → Bell Duration".to_string());
                 instructions.push("2. Enable 'Terminal > Integrated: Enable Bell'".to_string());
-                instructions.push("3. For external notifications, consider using extensions like 'Notification Test'".to_string());
                 instructions.push(
-                    "4. Shell integration can trigger notifications via terminal bell '\\a'"
-                        .to_string(),
+                    "3. For external notifications, consider using extensions like 'Notification Test'".to_string(),
                 );
+                instructions.push("4. Shell integration can trigger notifications via terminal bell '\\a'".to_string());
                 instructions.push(String::new());
             }
         }
     }
 
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions
-        .push("After configuration, reload VS Code for changes to take effect.".to_string());
+    instructions.push("After configuration, reload VS Code for changes to take effect.".to_string());
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
 
     Ok(instructions.join("\n"))
@@ -95,10 +87,7 @@ mod tests {
 
     #[test]
     fn test_generate_instructions() {
-        let features = vec![
-            TerminalFeature::Multiline,
-            TerminalFeature::ShellIntegration,
-        ];
+        let features = vec![TerminalFeature::Multiline, TerminalFeature::ShellIntegration];
         let instructions = generate_config(&features).unwrap();
         assert!(instructions.contains("VS Code"));
         assert!(instructions.contains("keybindings.json") || instructions.contains("Settings"));

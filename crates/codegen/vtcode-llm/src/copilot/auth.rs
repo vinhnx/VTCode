@@ -26,19 +26,14 @@ use super::types::{COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus};
 const DEFAULT_HOST_URL: &str = "https://github.com";
 const ENV_AUTH_VARS: &[&str] = &["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
 static DEVICE_FLOW_LINE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)visit\s+(https?://\S+)\s+and\s+enter code\s+([A-Z0-9-]+)")
-        .expect("device flow regex must compile")
+    Regex::new(r"(?i)visit\s+(https?://\S+)\s+and\s+enter code\s+([A-Z0-9-]+)").expect("device flow regex must compile")
 });
 
 pub async fn login(config: &CopilotAuthConfig, workspace_root: &Path) -> Result<()> {
     login_with_events(config, workspace_root, |_| Ok(())).await
 }
 
-pub async fn login_with_events<F>(
-    config: &CopilotAuthConfig,
-    workspace_root: &Path,
-    mut on_event: F,
-) -> Result<()>
+pub async fn login_with_events<F>(config: &CopilotAuthConfig, workspace_root: &Path, mut on_event: F) -> Result<()>
 where
     F: FnMut(CopilotAuthEvent) -> Result<()>,
 {
@@ -52,15 +47,7 @@ where
     let host = resolve_copilot_host(config)?;
     let args = login_command_args(&host);
 
-    run_captured_command(
-        &resolved,
-        workspace_root,
-        &args,
-        "copilot login",
-        CommandKind::Login,
-        &mut on_event,
-    )
-    .await?;
+    run_captured_command(&resolved, workspace_root, &args, "copilot login", CommandKind::Login, &mut on_event).await?;
 
     let account = probe_auth_status(config, Some(workspace_root))
         .await
@@ -76,11 +63,7 @@ pub async fn logout(config: &CopilotAuthConfig, workspace_root: &Path) -> Result
     logout_with_events(config, workspace_root, |_| Ok(())).await
 }
 
-pub async fn logout_with_events<F>(
-    config: &CopilotAuthConfig,
-    workspace_root: &Path,
-    mut on_event: F,
-) -> Result<()>
+pub async fn logout_with_events<F>(config: &CopilotAuthConfig, workspace_root: &Path, mut on_event: F) -> Result<()>
 where
     F: FnMut(CopilotAuthEvent) -> Result<()>,
 {
@@ -114,9 +97,7 @@ where
                 return Err(interactive_err);
             }
             Err(err) => {
-                return Err(err).with_context(|| {
-                    format!("interactive copilot logout failed: {interactive_err}")
-                });
+                return Err(err).with_context(|| format!("interactive copilot logout failed: {interactive_err}"));
             }
         }
     }
@@ -125,10 +106,7 @@ where
     Ok(())
 }
 
-pub async fn probe_auth_status(
-    config: &CopilotAuthConfig,
-    workspace_root: Option<&Path>,
-) -> CopilotAuthStatus {
+pub async fn probe_auth_status(config: &CopilotAuthConfig, workspace_root: Option<&Path>) -> CopilotAuthStatus {
     let host = match resolve_copilot_host(config) {
         Ok(host) => host,
         Err(err) => return CopilotAuthStatus::auth_flow_failed(err.to_string()),
@@ -230,10 +208,7 @@ where
         Ok(status) => status?,
         Err(_) => {
             let _ = child.start_kill();
-            let message = format!(
-                "{action_name} timed out after {} seconds",
-                resolved.auth_timeout.as_secs()
-            );
+            let message = format!("{action_name} timed out after {} seconds", resolved.auth_timeout.as_secs());
             on_event(CopilotAuthEvent::Failure { message: message.clone() })?;
             return Err(anyhow!(message));
         }
@@ -260,12 +235,7 @@ struct CapturedCommandState {
 }
 
 impl CapturedCommandState {
-    fn handle_line<F>(
-        &mut self,
-        kind: CommandKind,
-        line: CapturedLine,
-        on_event: &mut F,
-    ) -> Result<()>
+    fn handle_line<F>(&mut self, kind: CommandKind, line: CapturedLine, on_event: &mut F) -> Result<()>
     where
         F: FnMut(CopilotAuthEvent) -> Result<()>,
     {
@@ -294,14 +264,11 @@ impl CapturedCommandState {
                     self.emitted_verification_code = true;
                 }
                 CopilotAuthEvent::Progress { message }
-                    if message.eq_ignore_ascii_case("Waiting for authorization")
-                        && self.emitted_waiting_message =>
+                    if message.eq_ignore_ascii_case("Waiting for authorization") && self.emitted_waiting_message =>
                 {
                     return Ok(());
                 }
-                CopilotAuthEvent::Progress { message }
-                    if message.eq_ignore_ascii_case("Waiting for authorization") =>
-                {
+                CopilotAuthEvent::Progress { message } if message.eq_ignore_ascii_case("Waiting for authorization") => {
                     self.emitted_waiting_message = true;
                 }
                 _ => {}
@@ -334,11 +301,8 @@ impl CapturedCommandState {
     }
 }
 
-fn spawn_line_reader<R>(
-    reader: R,
-    stream: CapturedStream,
-    line_tx: mpsc::UnboundedSender<CapturedLine>,
-) where
+fn spawn_line_reader<R>(reader: R, stream: CapturedStream, line_tx: mpsc::UnboundedSender<CapturedLine>)
+where
     R: AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(async move {
@@ -401,9 +365,7 @@ fn parse_login_event(line: &str) -> Option<CopilotAuthEvent> {
 
     let lower = line.to_ascii_lowercase();
     if lower.contains("waiting for authorization") {
-        return Some(CopilotAuthEvent::Progress {
-            message: "Waiting for authorization".to_string(),
-        });
+        return Some(CopilotAuthEvent::Progress { message: "Waiting for authorization".to_string() });
     }
     if lower.contains("opening browser") || lower.contains("opened browser") {
         return Some(CopilotAuthEvent::Progress {
@@ -460,15 +422,10 @@ fn sanitize_cli_line(line: &str, stream: CapturedStream) -> Option<String> {
         || lower.contains("github_token")
         || lower.contains("auth-token-env")
     {
-        return Some(
-            "GitHub Copilot CLI reported an authentication configuration issue.".to_string(),
-        );
+        return Some("GitHub Copilot CLI reported an authentication configuration issue.".to_string());
     }
     if lower.contains("secitemcopymatching failed") {
-        return Some(
-            "GitHub Copilot CLI failed to access the macOS Keychain while clearing credentials."
-                .to_string(),
-        );
+        return Some("GitHub Copilot CLI failed to access the macOS Keychain while clearing credentials.".to_string());
     }
 
     match stream {
@@ -501,11 +458,9 @@ async fn run_interactive_logout_command(
     let resolved = resolved.clone();
     let workspace_root = workspace_root.to_path_buf();
     let host = host.clone();
-    tokio::task::spawn_blocking(move || {
-        blocking_interactive_logout_command(&resolved, &workspace_root, &host)
-    })
-    .await
-    .context("failed to join interactive copilot logout task")?
+    tokio::task::spawn_blocking(move || blocking_interactive_logout_command(&resolved, &workspace_root, &host))
+        .await
+        .context("failed to join interactive copilot logout task")?
 }
 
 fn blocking_interactive_logout_command(
@@ -627,10 +582,7 @@ fn blocking_interactive_logout_command(
             let _ = writer_thread.join();
             let _ = reader_thread.join();
             let _ = wait_thread.join();
-            return Err(anyhow!(
-                "copilot logout timed out after {} seconds",
-                resolved.auth_timeout.as_secs()
-            ));
+            return Err(anyhow!("copilot logout timed out after {} seconds", resolved.auth_timeout.as_secs()));
         }
 
         thread::sleep(wait_granularity);
@@ -657,11 +609,8 @@ fn blocking_interactive_logout_command(
     reader_result.context("failed to read interactive copilot logout output")?;
 
     while let Ok(text) = line_rx.try_recv() {
-        state.handle_line(
-            CommandKind::Logout,
-            CapturedLine { stream: CapturedStream::Stderr, text },
-            &mut |_| Ok(()),
-        )?;
+        state
+            .handle_line(CommandKind::Logout, CapturedLine { stream: CapturedStream::Stderr, text }, &mut |_| Ok(()))?;
     }
 
     if stored_auth_source(host)?.is_none() {
@@ -753,10 +702,7 @@ fn missing_copilot_command_help_lines_with(
     Some(lines)
 }
 
-async fn detect_auth_source(
-    host: &CopilotHost,
-    workspace_root: Option<&Path>,
-) -> Result<Option<CopilotAuthSource>> {
+async fn detect_auth_source(host: &CopilotHost, workspace_root: Option<&Path>) -> Result<Option<CopilotAuthSource>> {
     if let Some(source) = env_auth_source_with(|name| std::env::var(name).ok()) {
         return Ok(Some(source));
     }
@@ -793,10 +739,10 @@ fn stored_auth_source(host: &CopilotHost) -> Result<Option<CopilotAuthSource>> {
         return Ok(None);
     }
 
-    let config_text = std::fs::read_to_string(&config_path)
-        .with_context(|| format!("failed to read {}", config_path.display()))?;
-    let config: CopilotCliConfig = serde_json::from_str(&config_text)
-        .with_context(|| format!("failed to parse {}", config_path.display()))?;
+    let config_text =
+        std::fs::read_to_string(&config_path).with_context(|| format!("failed to read {}", config_path.display()))?;
+    let config: CopilotCliConfig =
+        serde_json::from_str(&config_text).with_context(|| format!("failed to parse {}", config_path.display()))?;
 
     if let Some(user) = config
         .logged_in_users
@@ -826,10 +772,7 @@ fn stored_auth_source(host: &CopilotHost) -> Result<Option<CopilotAuthSource>> {
     Ok(None)
 }
 
-async fn github_cli_auth_available(
-    host: &CopilotHost,
-    workspace_root: Option<&Path>,
-) -> Result<bool> {
+async fn github_cli_auth_available(host: &CopilotHost, workspace_root: Option<&Path>) -> Result<bool> {
     if which::which("gh").is_err() {
         return Ok(false);
     }
@@ -848,9 +791,9 @@ async fn github_cli_auth_available(
         command.current_dir(cwd);
     }
 
-    let mut child = command.spawn().with_context(|| {
-        format!("failed to spawn `gh auth status --hostname {}`", host.gh_hostname)
-    })?;
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("failed to spawn `gh auth status --hostname {}`", host.gh_hostname))?;
 
     let status = match timeout(Duration::from_secs(5), child.wait()).await {
         Ok(status) => status.context("`gh auth status` failed")?,
@@ -912,8 +855,7 @@ impl CopilotHost {
             format!("https://{trimmed}")
         };
 
-        let parsed = Url::parse(&normalized)
-            .with_context(|| format!("invalid GitHub Copilot host `{trimmed}`"))?;
+        let parsed = Url::parse(&normalized).with_context(|| format!("invalid GitHub Copilot host `{trimmed}`"))?;
         let hostname = parsed
             .host_str()
             .ok_or_else(|| anyhow!("GitHub Copilot host `{trimmed}` is missing a hostname"))?;
@@ -980,9 +922,7 @@ impl CopilotAuthSource {
     fn short_label(&self) -> String {
         match self {
             Self::Environment(name) => format!("Authentication source detected via {name}"),
-            Self::StoredCredentials { .. } => {
-                "Stored Copilot CLI credentials were detected".to_string()
-            }
+            Self::StoredCredentials { .. } => "Stored Copilot CLI credentials were detected".to_string(),
             Self::GitHubCli => "GitHub CLI authentication was detected".to_string(),
         }
     }
@@ -1033,11 +973,10 @@ impl CopilotCliUser {
 #[cfg(test)]
 mod tests {
     use super::{
-        CapturedCommandState, CapturedLine, CapturedStream, CommandKind, CopilotAuthSource,
-        CopilotCliConfig, CopilotCliUser, CopilotHost, copilot_token_login_for_host,
-        drain_complete_lines, env_auth_source_with, extract_account_from_status_message,
-        login_command_args, logout_command_args, missing_copilot_command_help_lines_with,
-        normalize_captured_line, parse_device_flow_code,
+        CapturedCommandState, CapturedLine, CapturedStream, CommandKind, CopilotAuthSource, CopilotCliConfig,
+        CopilotCliUser, CopilotHost, copilot_token_login_for_host, drain_complete_lines, env_auth_source_with,
+        extract_account_from_status_message, login_command_args, logout_command_args,
+        missing_copilot_command_help_lines_with, normalize_captured_line, parse_device_flow_code,
     };
 
     #[test]
@@ -1100,14 +1039,10 @@ mod tests {
 
     #[test]
     fn device_flow_code_parser_extracts_url_and_code() {
-        let parsed = parse_device_flow_code(
-            "To authenticate, visit https://github.com/login/device and enter code D8E1-101D.",
-        );
+        let parsed =
+            parse_device_flow_code("To authenticate, visit https://github.com/login/device and enter code D8E1-101D.");
 
-        assert_eq!(
-            parsed,
-            Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string()))
-        );
+        assert_eq!(parsed, Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string())));
     }
 
     #[test]
@@ -1118,10 +1053,7 @@ mod tests {
 
         let parsed = parse_device_flow_code(&normalized);
 
-        assert_eq!(
-            parsed,
-            Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string()))
-        );
+        assert_eq!(parsed, Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string())));
     }
 
     #[test]
@@ -1133,8 +1065,7 @@ mod tests {
         assert_eq!(
             lines,
             vec![
-                "To authenticate, visit https://github.com/login/device and enter code D8E1-101D."
-                    .to_string(),
+                "To authenticate, visit https://github.com/login/device and enter code D8E1-101D.".to_string(),
                 "Waiting for authorization...".to_string(),
             ]
         );
@@ -1184,17 +1115,14 @@ mod tests {
 
         assert_eq!(
             state.last_safe_message.as_deref(),
-            Some(
-                "GitHub Copilot CLI failed to access the macOS Keychain while clearing credentials."
-            )
+            Some("GitHub Copilot CLI failed to access the macOS Keychain while clearing credentials.")
         );
     }
 
     #[test]
     fn account_extraction_reads_stored_credential_message() {
-        let login = extract_account_from_status_message(
-            "Using Copilot CLI stored credentials for vinhnx on github.com.",
-        );
+        let login =
+            extract_account_from_status_message("Using Copilot CLI stored credentials for vinhnx on github.com.");
 
         assert_eq!(login, Some("vinhnx"));
     }

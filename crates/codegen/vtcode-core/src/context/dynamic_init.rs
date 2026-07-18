@@ -93,10 +93,7 @@ pub async fn initialize_dynamic_context(
 }
 
 /// Ensure MCP dynamic-context directories exist once MCP is activated.
-pub async fn ensure_mcp_dynamic_context(
-    workspace: &Path,
-    config: &vtcode_config::DynamicContextConfig,
-) -> Result<()> {
+pub async fn ensure_mcp_dynamic_context(workspace: &Path, config: &vtcode_config::DynamicContextConfig) -> Result<()> {
     if !config.enabled || !config.sync_mcp_tools {
         return Ok(());
     }

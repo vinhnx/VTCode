@@ -104,10 +104,7 @@ impl McpOAuthToken {
 /// Status for an MCP provider's stored OAuth token.
 #[derive(Debug, Clone)]
 pub enum McpOAuthStatus {
-    Authenticated {
-        age_seconds: u64,
-        expires_in: Option<u64>,
-    },
+    Authenticated { age_seconds: u64, expires_in: Option<u64> },
     NotAuthenticated,
 }
 
@@ -146,11 +143,7 @@ impl McpOAuthService {
         Self
     }
 
-    pub fn prepare_login(
-        &self,
-        provider_name: &str,
-        config: &McpOAuthConfig,
-    ) -> Result<McpOAuthPreparedLogin> {
+    pub fn prepare_login(&self, provider_name: &str, config: &McpOAuthConfig) -> Result<McpOAuthPreparedLogin> {
         config.validate(provider_name)?;
         let pkce = generate_pkce_challenge()?;
         let state = generate_state()?;
@@ -181,11 +174,7 @@ impl McpOAuthService {
         })
     }
 
-    pub fn status(
-        &self,
-        provider_name: &str,
-        storage_mode: AuthCredentialsStoreMode,
-    ) -> Result<McpOAuthStatus> {
+    pub fn status(&self, provider_name: &str, storage_mode: AuthCredentialsStoreMode) -> Result<McpOAuthStatus> {
         let Some(token) = load_token(provider_name, storage_mode)? else {
             return Ok(McpOAuthStatus::NotAuthenticated);
         };
@@ -204,11 +193,7 @@ impl McpOAuthService {
         load_token(provider_name, storage_mode)
     }
 
-    pub async fn resolve_access_token(
-        &self,
-        provider_name: &str,
-        config: &McpOAuthConfig,
-    ) -> Result<Option<String>> {
+    pub async fn resolve_access_token(&self, provider_name: &str, config: &McpOAuthConfig) -> Result<Option<String>> {
         let Some(mut token) = load_token(provider_name, config.credentials_store_mode)? else {
             return Ok(None);
         };
@@ -241,13 +226,8 @@ impl McpOAuthService {
     }
 }
 
-fn build_auth_url(
-    config: &McpOAuthConfig,
-    challenge: &PkceChallenge,
-    state: &str,
-) -> Result<String> {
-    let mut url =
-        Url::parse(&config.authorization_url).context("invalid oauth.authorization_url")?;
+fn build_auth_url(config: &McpOAuthConfig, challenge: &PkceChallenge, state: &str) -> Result<String> {
+    let mut url = Url::parse(&config.authorization_url).context("invalid oauth.authorization_url")?;
     {
         let mut query = url.query_pairs_mut();
         query.append_pair("response_type", "code");
@@ -300,12 +280,11 @@ async fn exchange_code_for_token(
 }
 
 async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Result<McpOAuthToken> {
-    let refresh_token =
-        current
-            .refresh_token
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow!("Stored MCP OAuth token does not include a refresh token"))?;
+    let refresh_token = current
+        .refresh_token
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow!("Stored MCP OAuth token does not include a refresh token"))?;
     let mut form = vec![
         ("grant_type".to_string(), "refresh_token".to_string()),
         ("client_id".to_string(), config.client_id.clone()),
@@ -345,8 +324,7 @@ async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Resul
         bail!("MCP OAuth request failed (HTTP {status}): {body}");
     }
 
-    let payload: TokenResponse =
-        serde_json::from_str(&body).context("failed to parse MCP OAuth token response")?;
+    let payload: TokenResponse = serde_json::from_str(&body).context("failed to parse MCP OAuth token response")?;
     let now = now_secs();
     Ok(McpOAuthToken {
         access_token: payload.access_token,
@@ -379,19 +357,12 @@ fn generate_state() -> Result<String> {
     Ok(URL_SAFE_NO_PAD.encode(state_bytes))
 }
 
-fn save_token(
-    provider_name: &str,
-    token: &McpOAuthToken,
-    storage_mode: AuthCredentialsStoreMode,
-) -> Result<()> {
+fn save_token(provider_name: &str, token: &McpOAuthToken, storage_mode: AuthCredentialsStoreMode) -> Result<()> {
     let serialized = serde_json::to_string(token).context("failed to serialize MCP OAuth token")?;
     token_storage(provider_name).store_with_mode(&serialized, storage_mode)
 }
 
-fn load_token(
-    provider_name: &str,
-    storage_mode: AuthCredentialsStoreMode,
-) -> Result<Option<McpOAuthToken>> {
+fn load_token(provider_name: &str, storage_mode: AuthCredentialsStoreMode) -> Result<Option<McpOAuthToken>> {
     let Some(serialized) = token_storage(provider_name).load_with_mode(storage_mode)? else {
         return Ok(None);
     };
@@ -440,12 +411,10 @@ mod tests {
     impl TestAuthDirGuard {
         fn new() -> Self {
             let temp_dir = TempDir::new().expect("temp dir");
-            let previous = crate::storage_paths::auth_storage_dir_override_for_tests()
-                .expect("read previous auth dir override");
-            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(
-                temp_dir.path().to_path_buf(),
-            ))
-            .expect("set auth dir override");
+            let previous =
+                crate::storage_paths::auth_storage_dir_override_for_tests().expect("read previous auth dir override");
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(temp_dir.path().to_path_buf()))
+                .expect("set auth dir override");
             Self { previous, temp_dir: Some(temp_dir) }
         }
     }
@@ -497,10 +466,7 @@ mod tests {
         let _guard = TestAuthDirGuard::new();
         let service = McpOAuthService::new();
         let storage_mode = AuthCredentialsStoreMode::File;
-        assert!(matches!(
-            service.status("demo", storage_mode).expect("status"),
-            McpOAuthStatus::NotAuthenticated
-        ));
+        assert!(matches!(service.status("demo", storage_mode).expect("status"), McpOAuthStatus::NotAuthenticated));
 
         save_token(
             "demo",

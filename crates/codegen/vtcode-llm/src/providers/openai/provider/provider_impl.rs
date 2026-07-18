@@ -77,10 +77,7 @@ impl provider::LLMProvider for OpenAIProvider {
         } else {
             model
         };
-        !matches!(
-            self.responses_api_state(requested),
-            super::super::types::ResponsesApiState::Disabled
-        )
+        !matches!(self.responses_api_state(requested), super::super::types::ResponsesApiState::Disabled)
     }
 
     fn supports_native_allowed_tools(&self, model: &str) -> bool {
@@ -100,10 +97,7 @@ impl provider::LLMProvider for OpenAIProvider {
         self.manual_openai_compaction_unavailable_message_for_model(model)
     }
 
-    async fn stream(
-        &self,
-        request: provider::LLMRequest,
-    ) -> Result<provider::LLMStream, provider::LLMError> {
+    async fn stream(&self, request: provider::LLMRequest) -> Result<provider::LLMStream, provider::LLMError> {
         self.stream_request(request).await
     }
 
@@ -114,10 +108,7 @@ impl provider::LLMProvider for OpenAIProvider {
         self.stream_normalized_request(request).await
     }
 
-    async fn generate(
-        &self,
-        request: provider::LLMRequest,
-    ) -> Result<provider::LLMResponse, provider::LLMError> {
+    async fn generate(&self, request: provider::LLMRequest) -> Result<provider::LLMResponse, provider::LLMError> {
         self.generate_request(request).await
     }
 
@@ -128,8 +119,7 @@ impl provider::LLMProvider for OpenAIProvider {
     ) -> Result<Vec<provider::Message>, provider::LLMError> {
         if !self.supports_responses_compaction(model) {
             return Err(provider::LLMError::Provider {
-                message: "OpenAI Responses compaction is not supported for this endpoint/model"
-                    .to_string(),
+                message: "OpenAI Responses compaction is not supported for this endpoint/model".to_string(),
                 metadata: None,
             });
         }
@@ -173,21 +163,13 @@ impl provider::LLMProvider for OpenAIProvider {
 
         let display_name = self.provider_display_override.as_deref().unwrap_or("OpenAI");
         let key = self.provider_key_override.as_deref().unwrap_or("openai");
-        super::super::super::common::validate_request_common(
-            request,
-            display_name,
-            key,
-            supported_models.as_deref(),
-        )
+        super::super::super::common::validate_request_common(request, display_name, key, supported_models.as_deref())
     }
 }
 
 #[async_trait]
 impl LLMClient for OpenAIProvider {
-    async fn generate(
-        &mut self,
-        prompt: &str,
-    ) -> Result<llm_types::LLMResponse, provider::LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, provider::LLMError> {
         let request = super::super::super::common::make_default_request(prompt, &self.model);
         let request_model = request.model.to_string();
         let response = provider::LLMProvider::generate(self, request).await?;

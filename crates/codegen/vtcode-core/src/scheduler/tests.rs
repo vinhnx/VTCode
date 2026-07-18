@@ -32,10 +32,9 @@ fn cron5_finds_next_matching_minute() {
 #[test]
 fn reminder_language_detects_at_time() {
     let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
-    let command =
-        parse_session_language_command("remind me at 3pm to push the release branch", now)
-            .expect("command")
-            .expect("parsed");
+    let command = parse_session_language_command("remind me at 3pm to push the release branch", now)
+        .expect("command")
+        .expect("parsed");
     match command {
         SessionLanguageCommand::CreateOneShotPrompt { prompt, .. } => {
             assert_eq!(prompt, "push the release branch");
@@ -47,12 +46,9 @@ fn reminder_language_detects_at_time() {
 #[test]
 fn reminder_language_detects_relative_time() {
     let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
-    let command = parse_session_language_command(
-        "in 45 minutes, check whether the integration tests passed",
-        now,
-    )
-    .expect("command")
-    .expect("parsed");
+    let command = parse_session_language_command("in 45 minutes, check whether the integration tests passed", now)
+        .expect("command")
+        .expect("parsed");
     match command {
         SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at } => {
             assert_eq!(prompt, "check whether the integration tests passed");
@@ -215,10 +211,7 @@ async fn scheduler_daemon_executes_due_prompt_task() {
     let record = store.load_record(&summary.id).expect("load").expect("record");
     assert!(record.runtime.last_run_at.is_some());
     assert!(record.runtime.next_run_at.is_none());
-    assert_eq!(
-        record.runtime.last_status.as_ref().map(ToString::to_string),
-        Some("success".to_string())
-    );
+    assert_eq!(record.runtime.last_status.as_ref().map(ToString::to_string), Some("success".to_string()));
     assert!(record.runtime.last_artifact_dir.is_some());
 }
 
@@ -283,10 +276,9 @@ fn service_rendering_mentions_schedule_serve() {
 
 #[test]
 fn schedule_create_arg_parser_supports_workspace() {
-    let parsed = parse_schedule_create_args(
-        r#"--prompt "check build" --every 15m --workspace /tmp/demo --name "Build watch""#,
-    )
-    .expect("parse");
+    let parsed =
+        parse_schedule_create_args(r#"--prompt "check build" --every 15m --workspace /tmp/demo --name "Build watch""#)
+            .expect("parse");
     assert_eq!(parsed.name.as_deref(), Some("Build watch"));
     assert_eq!(parsed.prompt.as_deref(), Some("check build"));
     assert_eq!(parsed.every.as_deref(), Some("15m"));

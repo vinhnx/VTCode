@@ -22,10 +22,9 @@ async fn test_pre_tool_use_hook_allows_by_default() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
@@ -33,17 +32,11 @@ async fn test_pre_tool_use_hook_allows_by_default() {
         .expect("Failed to run pre-tool use hook");
 
     assert!(matches!(outcome.decision, PreToolHookDecision::Continue | PreToolHookDecision::Allow));
-    assert!(
-        outcome.messages.is_empty()
-            || outcome.messages.iter().all(|m| m.text.contains("Pre-tool processing"))
-    );
+    assert!(outcome.messages.is_empty() || outcome.messages.iter().all(|m| m.text.contains("Pre-tool processing")));
 }
 
 #[tokio::test]
-#[cfg_attr(
-    not(target_os = "macos"),
-    ignore = "Lifecycle hooks are for local development only"
-)]
+#[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
 async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
     let temp_dir = create_test_workspace();
     let workspace = temp_dir.path();
@@ -62,10 +55,9 @@ async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
@@ -95,10 +87,9 @@ async fn test_pre_tool_use_hook_exit_code_2_requires_feedback() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
@@ -124,7 +115,9 @@ async fn test_pre_tool_use_hook_allows_with_json_response() {
             matcher: Some("TestTool".into()),
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.into(),
+                command:
+                    r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#
+                        .into(),
                 timeout_seconds: None,
             }],
         }],
@@ -133,10 +126,9 @@ async fn test_pre_tool_use_hook_allows_with_json_response() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})), None)
@@ -165,18 +157,12 @@ async fn test_post_tool_use_hook_execution() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
-        .run_post_tool_use(
-            "TestTool",
-            Some(&json!({"param": "value"})),
-            &json!({"result": "success"}),
-            None,
-        )
+        .run_post_tool_use("TestTool", Some(&json!({"param": "value"})), &json!({"result": "success"}), None)
         .await
         .expect("Failed to run post-tool use hook");
 
@@ -209,18 +195,12 @@ async fn test_post_tool_use_json_like_stdout_failure_is_reported() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
-        .run_post_tool_use(
-            "TestTool",
-            Some(&json!({"param": "value"})),
-            &json!({"result": "success"}),
-            None,
-        )
+        .run_post_tool_use("TestTool", Some(&json!({"param": "value"})), &json!({"result": "success"}), None)
         .await
         .expect("Failed to run post-tool use hook");
 
@@ -252,18 +232,12 @@ async fn test_post_tool_use_block_requires_reason() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
-        .run_post_tool_use(
-            "TestTool",
-            Some(&json!({"param": "value"})),
-            &json!({"result": "success"}),
-            None,
-        )
+        .run_post_tool_use("TestTool", Some(&json!({"param": "value"})), &json!({"result": "success"}), None)
         .await
         .expect("Failed to run post-tool use hook");
 
@@ -296,18 +270,12 @@ async fn test_quiet_success_output_suppresses_plain_stdout() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
-        .run_post_tool_use(
-            "TestTool",
-            Some(&json!({"param": "value"})),
-            &json!({"result": "success"}),
-            None,
-        )
+        .run_post_tool_use("TestTool", Some(&json!({"param": "value"})), &json!({"result": "success"}), None)
         .await
         .expect("Failed to run post-tool use hook");
 
@@ -334,10 +302,9 @@ async fn test_quiet_success_output_keeps_structured_context() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Test prompt")
@@ -367,10 +334,9 @@ async fn test_hook_with_timeout() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
 
@@ -406,10 +372,9 @@ async fn test_hook_matcher_functionality() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_pre_tool_use("Write", Some(&json!({"path": "/test"})), None)
@@ -445,10 +410,9 @@ async fn test_regex_matcher_functionality() {
 
     let config = HooksConfig { lifecycle: hooks_config };
 
-    let engine =
-        LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
-            .expect("Failed to create hook engine")
-            .unwrap();
+    let engine = LifecycleHookEngine::new(workspace.to_path_buf(), &config, SessionStartTrigger::Startup)
+        .expect("Failed to create hook engine")
+        .unwrap();
 
     let outcome = engine
         .run_user_prompt_submit("turn-1", "Please add security validation")

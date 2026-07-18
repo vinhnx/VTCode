@@ -10,8 +10,8 @@ use super::common::{prompt_with_placeholder, run_selection};
 
 pub(crate) fn resolve_initial_provider(config: &VTCodeConfig) -> Provider {
     let configured = config.agent.provider.trim();
-    let fallback = Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER)
-        .unwrap_or(Provider::OpenAI);
+    let fallback =
+        Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::OpenAI);
 
     if configured.is_empty() {
         fallback
@@ -27,8 +27,7 @@ pub(crate) fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) ->
     match select_provider_with_ratatui(&providers, default) {
         Ok(provider) => Ok(provider),
         Err(error) => {
-            renderer
-                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_provider_text(renderer, &providers, default)
         }
     }
@@ -41,11 +40,7 @@ fn provider_entries(providers: &[Provider]) -> Vec<SelectionEntry> {
         .collect()
 }
 
-fn prompt_provider_text(
-    renderer: &mut AnsiRenderer,
-    providers: &[Provider],
-    default: Provider,
-) -> Result<Provider> {
+fn prompt_provider_text(renderer: &mut AnsiRenderer, providers: &[Provider], default: Provider) -> Result<Provider> {
     for (index, provider) in providers.iter().enumerate() {
         renderer.line(MessageStyle::Info, &format!("  {}) {}", index + 1, provider.label()))?;
     }
@@ -68,10 +63,7 @@ fn prompt_provider_text(
         match Provider::from_str(trimmed) {
             Ok(provider) => return Ok(provider),
             Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("{err}. Please choose a valid provider."),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("{err}. Please choose a valid provider."))?;
             }
         }
     }
@@ -82,10 +74,8 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
 
     let default_index = providers.iter().position(|provider| *provider == default).unwrap_or(0);
 
-    let instructions = format!(
-        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
-        default.label()
-    );
+    let instructions =
+        format!("Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.", default.label());
     let selected_index = run_selection("Providers", &instructions, &entries, default_index)?;
     Ok(providers[selected_index])
 }

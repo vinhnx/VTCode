@@ -34,32 +34,28 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
         name if name == tool_names::SEND_PTY_INPUT => Cow::Borrowed("Send command input"),
         name if name == tool_names::CLOSE_PTY_SESSION => Cow::Borrowed("Close command session"),
         name if name == tool_names::RESIZE_PTY_SESSION => Cow::Borrowed("Resize command session"),
-        name if name == tool_names::UNIFIED_EXEC => {
-            match tool_intent::command_session_action(args).unwrap_or("run") {
-                "run" => Cow::Borrowed("Run command"),
-                "write" => Cow::Borrowed("Send command input"),
-                "poll" => Cow::Borrowed("Read command session"),
-                "continue" => Cow::Borrowed("Continue command session"),
-                "inspect" => Cow::Borrowed("Inspect command output"),
-                "list" => Cow::Borrowed("List command sessions"),
-                "close" => Cow::Borrowed("Close command session"),
-                "code" => Cow::Borrowed("Run code"),
-                _ => Cow::Borrowed("Exec action"),
-            }
-        }
+        name if name == tool_names::UNIFIED_EXEC => match tool_intent::command_session_action(args).unwrap_or("run") {
+            "run" => Cow::Borrowed("Run command"),
+            "write" => Cow::Borrowed("Send command input"),
+            "poll" => Cow::Borrowed("Read command session"),
+            "continue" => Cow::Borrowed("Continue command session"),
+            "inspect" => Cow::Borrowed("Inspect command output"),
+            "list" => Cow::Borrowed("List command sessions"),
+            "close" => Cow::Borrowed("Close command session"),
+            "code" => Cow::Borrowed("Run code"),
+            _ => Cow::Borrowed("Exec action"),
+        },
         name if name == tool_names::CODE_SEARCH => Cow::Borrowed("Search code"),
-        name if name == tool_names::UNIFIED_FILE => {
-            match tool_intent::file_operation_action(args).unwrap_or("read") {
-                "read" => Cow::Borrowed("Read file"),
-                "write" => Cow::Borrowed("Write file"),
-                "edit" => Cow::Borrowed("Edit file"),
-                "patch" | tool_names::APPLY_PATCH => Cow::Borrowed("Apply patch"),
-                "delete" => Cow::Borrowed("Delete file"),
-                "move" => Cow::Borrowed("Move file"),
-                "copy" => Cow::Borrowed("Copy file"),
-                _ => Cow::Borrowed("File operation"),
-            }
-        }
+        name if name == tool_names::UNIFIED_FILE => match tool_intent::file_operation_action(args).unwrap_or("read") {
+            "read" => Cow::Borrowed("Read file"),
+            "write" => Cow::Borrowed("Write file"),
+            "edit" => Cow::Borrowed("Edit file"),
+            "patch" | tool_names::APPLY_PATCH => Cow::Borrowed("Apply patch"),
+            "delete" => Cow::Borrowed("Delete file"),
+            "move" => Cow::Borrowed("Move file"),
+            "copy" => Cow::Borrowed("Copy file"),
+            _ => Cow::Borrowed("File operation"),
+        },
         "fetch" => Cow::Borrowed("Fetch"),
         _ => Cow::Owned(humanize_tool_name(actual_tool_name)),
     }
@@ -100,9 +96,6 @@ mod tests {
 
     #[test]
     fn code_search_uses_stable_label() {
-        assert_eq!(
-            tool_action_label(tools::CODE_SEARCH, &json!({"query": "Widget"})),
-            "Search code"
-        );
+        assert_eq!(tool_action_label(tools::CODE_SEARCH, &json!({"query": "Widget"})), "Search code");
     }
 }

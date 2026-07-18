@@ -124,8 +124,7 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
                 } => {
                     let stats = summary.prompt_cache.entry(model).or_default();
                     stats.prompt_tokens += prompt_tokens as u64;
-                    stats.cache_read_tokens +=
-                        cache_read_tokens.unwrap_or(cached_prompt_tokens) as u64;
+                    stats.cache_read_tokens += cache_read_tokens.unwrap_or(cached_prompt_tokens) as u64;
                     stats.cache_creation_tokens += cache_creation_tokens.unwrap_or(0) as u64;
                     stats.records += 1;
                     summary.total_prompt_cache_records += 1;
@@ -151,15 +150,10 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
     Ok(summary)
 }
 
-pub async fn handle_trajectory_command(
-    _cfg: &CoreAgentConfig,
-    file: Option<PathBuf>,
-    top: usize,
-) -> Result<()> {
+pub async fn handle_trajectory_command(_cfg: &CoreAgentConfig, file: Option<PathBuf>, top: usize) -> Result<()> {
     let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let log_path = file.unwrap_or_else(|| workspace.join(".vtcode/logs/trajectory.jsonl"));
-    let f =
-        File::open(&log_path).with_context(|| format!("Failed to open {}", log_path.display()))?;
+    let f = File::open(&log_path).with_context(|| format!("Failed to open {}", log_path.display()))?;
     let reader = BufReader::new(f);
     let mut summary = summarize_trajectory(reader)?;
 
@@ -174,9 +168,7 @@ pub async fn handle_trajectory_command(
     // Show time range if we have timestamps
     if !summary.recent_timestamps.is_empty() {
         summary.recent_timestamps.sort();
-        if let (Some(oldest), Some(newest)) =
-            (summary.recent_timestamps.first(), summary.recent_timestamps.last())
-        {
+        if let (Some(oldest), Some(newest)) = (summary.recent_timestamps.first(), summary.recent_timestamps.last()) {
             let oldest_time = format_timestamp(*oldest);
             let newest_time = format_timestamp(*newest);
             println!("Time range: {} to {}", style(oldest_time).dim(), style(newest_time).dim());
@@ -224,11 +216,7 @@ pub async fn handle_trajectory_command(
             .map(|(k, ok)| {
                 let err = summary.tool_err.get(k).copied().unwrap_or(0);
                 let total = ok + err;
-                let rate = if total > 0 {
-                    (*ok as f64) / (total as f64)
-                } else {
-                    0.0
-                };
+                let rate = if total > 0 { (*ok as f64) / (total as f64) } else { 0.0 };
                 (k.clone(), *ok, err, rate)
             })
             .collect();
@@ -256,9 +244,7 @@ pub async fn handle_trajectory_command(
     if !summary.prompt_cache.is_empty() {
         println!("\n{}", style("Prompt Cache").bold());
         let mut cache_models: Vec<_> = summary.prompt_cache.into_iter().collect();
-        cache_models.sort_by_key(|(_, stats)| {
-            Reverse(stats.cache_read_tokens + stats.cache_creation_tokens)
-        });
+        cache_models.sort_by_key(|(_, stats)| Reverse(stats.cache_read_tokens + stats.cache_creation_tokens));
         for (i, (model, stats)) in cache_models.into_iter().take(top).enumerate() {
             let total_cache = stats.cache_read_tokens + stats.cache_creation_tokens;
             let hit_ratio = if total_cache > 0 {
@@ -284,9 +270,7 @@ pub async fn handle_trajectory_command(
         println!("\n{}", style("Cache Churn").bold());
         let mut churn_models: Vec<_> = summary.prompt_cache_churn.into_iter().collect();
         churn_models.sort_by_key(|(_, stats)| {
-            Reverse(
-                stats.stable_prefix_changes + stats.tool_catalog_changes + stats.combined_changes,
-            )
+            Reverse(stats.stable_prefix_changes + stats.tool_catalog_changes + stats.combined_changes)
         });
         for (i, (model, stats)) in churn_models.into_iter().take(top).enumerate() {
             println!(

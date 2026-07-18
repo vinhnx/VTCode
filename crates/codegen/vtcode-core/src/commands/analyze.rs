@@ -8,11 +8,7 @@ use anyhow::Result;
 use serde_json::json;
 
 /// Handle the analyze command - comprehensive workspace analysis
-pub async fn handle_analyze_command(
-    config: AgentConfig,
-    depth: String,
-    format: String,
-) -> Result<()> {
+pub async fn handle_analyze_command(config: AgentConfig, depth: String, format: String) -> Result<()> {
     println!("{}", style("Analyzing workspace...").cyan().bold());
 
     let depth = match depth.to_lowercase().as_str() {
@@ -47,10 +43,7 @@ pub async fn handle_analyze_command(
         Ok(result) => {
             println!("{}", style("Root directory structure obtained").green());
             if let Some(files_array) = result.get("files") {
-                println!(
-                    "   Found {} files/directories in root",
-                    files_array.as_array().unwrap_or(&vec![]).len()
-                );
+                println!("   Found {} files/directories in root", files_array.as_array().unwrap_or(&vec![]).len());
             }
         }
         Err(e) => println!("{} {}", style("Failed to list root directory:").red(), e),
@@ -69,10 +62,7 @@ pub async fn handle_analyze_command(
 
     for file in important_files {
         let check_file = registry
-            .execute_tool(
-                tools::LIST_FILES,
-                json!({"mode": "list", "path": ".", "include_hidden": false}),
-            )
+            .execute_tool(tools::LIST_FILES, json!({"mode": "list", "path": ".", "include_hidden": false}))
             .await;
         if let Ok(result) = check_file
             && let Some(files) = result.get("files")
@@ -117,10 +107,7 @@ pub async fn handle_analyze_command(
     let src_dirs = vec!["src", "lib", "pkg", "internal", "cmd"];
     for dir in src_dirs {
         let check_dir = registry
-            .execute_tool(
-                tools::LIST_FILES,
-                json!({"mode": "list", "path": ".", "include_hidden": false}),
-            )
+            .execute_tool(tools::LIST_FILES, json!({"mode": "list", "path": ".", "include_hidden": false}))
             .await;
         if let Ok(result) = check_dir
             && let Some(files) = result.get("files")
@@ -138,10 +125,7 @@ pub async fn handle_analyze_command(
     }
 
     if matches!(depth, AnalysisDepth::Deep) {
-        println!(
-            "{}",
-            style("Deep analysis: use grep/search tools for detailed code inspection.").dim()
-        );
+        println!("{}", style("Deep analysis: use grep/search tools for detailed code inspection.").dim());
     }
 
     println!("{}", style("Workspace analysis complete!").green().bold());

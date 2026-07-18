@@ -216,34 +216,29 @@ pub mod utils;
 // Re-export main types for backward compatibility
 pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, ProviderClientAdapter, make_client};
-pub use factory::{
-    create_provider_with_config, get_factory, get_models_manager, infer_provider_from_model,
-};
+pub use factory::{create_provider_with_config, get_factory, get_models_manager, infer_provider_from_model};
 pub use lightweight_routing::{
-    LightweightFeature, LightweightRouteResolution, LightweightRouteSource, ModelRoute,
-    auto_lightweight_model, create_provider_for_model_route, lightweight_model_choices,
-    main_model_route, resolve_api_key_for_model_route, resolve_lightweight_route,
+    LightweightFeature, LightweightRouteResolution, LightweightRouteSource, ModelRoute, auto_lightweight_model,
+    create_provider_for_model_route, lightweight_model_choices, main_model_route, resolve_api_key_for_model_route,
+    resolve_lightweight_route,
 };
-pub use model_resolver::{
-    DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel,
-};
+pub use model_resolver::{DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel};
 pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
-    AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider,
-    ZAIProvider,
+    AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider, ZAIProvider,
 };
 pub use single_response::collect_single_response;
 pub use tool_bridge::{
-    CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,
-    ToolExecution, ToolIntent, ToolIntentExtractor,
+    CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation, ToolExecution, ToolIntent,
+    ToolIntentExtractor,
 };
 
 pub use types::{BackendKind, LLMError, LLMResponse};
 
 pub use config_adapter::{
-    AdapterEvent, AdapterHooks, AdapterHooksProvider, OwnedProviderConfig, ProviderConfig,
-    as_factory_config, as_factory_config_with_hooks,
+    AdapterEvent, AdapterHooks, AdapterHooksProvider, OwnedProviderConfig, ProviderConfig, as_factory_config,
+    as_factory_config_with_hooks,
 };
 #[cfg(feature = "mock")]
 pub use mock_client::StaticResponseClient;

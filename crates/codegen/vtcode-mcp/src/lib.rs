@@ -31,26 +31,23 @@ pub mod utils;
 
 pub use client::McpClient;
 
-pub use connection_pool::{
-    ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats,
-};
+pub use connection_pool::{ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats};
 pub use errors::{
-    ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,
-    provider_unavailable, schema_invalid, tool_invocation_failed, tool_not_found,
+    ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found, provider_unavailable,
+    schema_invalid, tool_invocation_failed, tool_not_found,
 };
 pub use provider::McpProvider;
 pub(crate) use rmcp_client::RmcpClient;
 pub use rmcp_transport::{
-    HttpTransport, create_http_transport, create_stdio_transport,
-    create_stdio_transport_with_stderr,
+    HttpTransport, create_http_transport, create_stdio_transport, create_stdio_transport_with_stderr,
 };
 pub use schema::{validate_against_schema, validate_tool_input};
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use traits::{McpElicitationHandler, McpToolExecutor};
 pub use types::{
-    FileParamSchemaEntry, FileUploadResult, McpClientStatus, McpElicitationRequest,
-    McpElicitationResponse, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo,
-    McpToolInfo, OPENAI_FILE_PARAMS_META_KEY, OPENAI_FILE_PARAMS_VALUE, ProvidedFilePayload,
+    FileParamSchemaEntry, FileUploadResult, McpClientStatus, McpElicitationRequest, McpElicitationResponse,
+    McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo, OPENAI_FILE_PARAMS_META_KEY,
+    OPENAI_FILE_PARAMS_VALUE, ProvidedFilePayload,
 };
 pub use utils::{
     LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, TZ_ENV_VAR, build_headers, detect_local_timezone,
@@ -77,9 +74,7 @@ where
     serde_json::from_value(json).map_err(|err| anyhow!(err))
 }
 
-pub(crate) fn create_env_for_mcp_server(
-    extra_env: Option<HashMap<OsString, OsString>>,
-) -> HashMap<OsString, OsString> {
+pub(crate) fn create_env_for_mcp_server(extra_env: Option<HashMap<OsString, OsString>>) -> HashMap<OsString, OsString> {
     DEFAULT_ENV_VARS
         .iter()
         .filter_map(|var| std::env::var_os(var).map(|value| (OsString::from(*var), value)))
@@ -103,9 +98,7 @@ pub fn validate_mcp_config(config: &vtcode_config::mcp::McpClientConfig) -> Resu
 
         // Validate security settings if auth is enabled
         if config.security.auth_enabled && config.security.api_key_env.is_none() {
-            return Err(anyhow::anyhow!(
-                "API key environment variable must be set when auth is enabled"
-            ));
+            return Err(anyhow::anyhow!("API key environment variable must be set when auth is enabled"));
         }
     }
 
@@ -214,10 +207,8 @@ pub(crate) fn format_tool_markdown(tool: &McpToolInfo) -> String {
 
     content.push_str("## Input Schema\n\n");
     content.push_str("```json\n");
-    content.push_str(
-        &serde_json::to_string_pretty(&tool.input_schema)
-            .unwrap_or_else(|_| tool.input_schema.to_string()),
-    );
+    content
+        .push_str(&serde_json::to_string_pretty(&tool.input_schema).unwrap_or_else(|_| tool.input_schema.to_string()));
     content.push_str("\n```\n\n");
 
     // Extract required fields if present
@@ -241,8 +232,7 @@ pub(crate) fn format_tool_markdown(tool: &McpToolInfo) -> String {
             content.push_str("## Parameters\n\n");
             for (param_name, param_schema) in props {
                 let param_type = param_schema.get("type").and_then(|t| t.as_str()).unwrap_or("any");
-                let param_desc =
-                    param_schema.get("description").and_then(|d| d.as_str()).unwrap_or("");
+                let param_desc = param_schema.get("description").and_then(|d| d.as_str()).unwrap_or("");
                 let _ = write!(content, "### `{param_name}`\n\n");
                 let _ = writeln!(content, "- **Type**: {param_type}");
                 if !param_desc.is_empty() {
@@ -262,9 +252,7 @@ pub(crate) fn format_tool_markdown(tool: &McpToolInfo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{
-        LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, clear_test_env_override, set_test_env_override,
-    };
+    use crate::utils::{LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, clear_test_env_override, set_test_env_override};
     use hashbrown::HashMap;
     use rmcp::model::ElicitationAction;
     use serde_json::{Map, Value, json};
@@ -319,15 +307,11 @@ mod tests {
     #[test]
     fn ensure_timezone_does_not_override_existing_value() {
         let mut arguments = Map::new();
-        arguments
-            .insert(TIMEZONE_ARGUMENT.to_string(), Value::String("America/New_York".to_owned()));
+        arguments.insert(TIMEZONE_ARGUMENT.to_string(), Value::String("America/New_York".to_owned()));
 
         ensure_timezone_argument(&mut arguments, true).unwrap();
 
-        assert_eq!(
-            arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str),
-            Some("America/New_York")
-        );
+        assert_eq!(arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str), Some("America/New_York"));
     }
 
     #[test]
@@ -361,17 +345,14 @@ mod tests {
 
     #[tokio::test]
     async fn convert_to_rmcp_round_trip() {
-        use rmcp::model::{
-            ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
-        };
+        use rmcp::model::{ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities};
 
         let mut capabilities = ClientCapabilities::default();
         let mut roots = RootsCapabilities::default();
         roots.list_changed = Some(true);
         capabilities.roots = Some(roots);
-        let params =
-            InitializeRequestParams::new(capabilities, Implementation::new("vtcode", "1.0"))
-                .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
+        let params = InitializeRequestParams::new(capabilities, Implementation::new("vtcode", "1.0"))
+            .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
 
         let converted: InitializeRequestParams = convert_to_rmcp(params.clone()).unwrap();
         // Verify the conversion succeeded by checking the name
@@ -390,8 +371,7 @@ mod tests {
             },
             "required": ["name"]
         });
-        let validator =
-            build_elicitation_validator("test", &schema).expect("schema should compile");
+        let validator = build_elicitation_validator("test", &schema).expect("schema should compile");
 
         let result = validate_elicitation_payload(
             "test",
@@ -414,8 +394,7 @@ mod tests {
             },
             "required": ["email"]
         });
-        let validator =
-            build_elicitation_validator("test", &schema).expect("schema should compile");
+        let validator = build_elicitation_validator("test", &schema).expect("schema should compile");
 
         let result = validate_elicitation_payload(
             "test",
@@ -454,8 +433,7 @@ mod tests {
         use crate::rmcp_client::directory_to_file_uri;
 
         let temp_dir = std::env::temp_dir();
-        let uri = directory_to_file_uri(temp_dir.as_path())
-            .expect("should create file uri for temp directory");
+        let uri = directory_to_file_uri(temp_dir.as_path()).expect("should create file uri for temp directory");
         assert!(uri.starts_with("file://"));
     }
 }

@@ -12,9 +12,9 @@ pub struct TerminalTitleConfig {
 impl TerminalTitleConfig {
     #[must_use]
     pub fn effective_items(&self) -> Vec<String> {
-        self.items.clone().unwrap_or_else(|| {
-            DEFAULT_TERMINAL_TITLE_ITEMS.iter().map(|item| (*item).to_string()).collect()
-        })
+        self.items
+            .clone()
+            .unwrap_or_else(|| DEFAULT_TERMINAL_TITLE_ITEMS.iter().map(|item| (*item).to_string()).collect())
     }
 
     #[must_use]
@@ -36,8 +36,7 @@ mod tests {
 
     #[test]
     fn serde_preserves_explicit_empty_items() {
-        let config: TerminalTitleConfig =
-            toml::from_str("items = []").expect("config should parse");
+        let config: TerminalTitleConfig = toml::from_str("items = []").expect("config should parse");
 
         assert_eq!(config.items, Some(Vec::new()));
     }
@@ -45,17 +44,9 @@ mod tests {
     #[test]
     fn serde_preserves_valid_item_list() {
         let config: TerminalTitleConfig =
-            toml::from_str("items = [\"spinner\", \"project\", \"model\"]")
-                .expect("config should parse");
+            toml::from_str("items = [\"spinner\", \"project\", \"model\"]").expect("config should parse");
 
-        assert_eq!(
-            config.items,
-            Some(vec![
-                "spinner".to_string(),
-                "project".to_string(),
-                "model".to_string()
-            ])
-        );
+        assert_eq!(config.items, Some(vec!["spinner".to_string(), "project".to_string(), "model".to_string()]));
     }
 
     #[test]

@@ -175,21 +175,15 @@ pub(crate) async fn search_literal_bounded(
 
     loop {
         line_buf.clear();
-        let read = match read_bounded_record(
-            &mut reader,
-            &mut line_buf,
-            &mut bytes_read,
-            CODE_SEARCH_STREAM_BYTE_CAP,
-        )
-        .await
-        {
-            Ok(read) => read,
-            Err(error) => {
-                drop(reader);
-                kill_and_reap_literal_child(&mut child).await;
-                return Err(error).context("failed to read ripgrep JSON stream");
-            }
-        };
+        let read =
+            match read_bounded_record(&mut reader, &mut line_buf, &mut bytes_read, CODE_SEARCH_STREAM_BYTE_CAP).await {
+                Ok(read) => read,
+                Err(error) => {
+                    drop(reader);
+                    kill_and_reap_literal_child(&mut child).await;
+                    return Err(error).context("failed to read ripgrep JSON stream");
+                }
+            };
         match read {
             BoundedRecordRead::Record => {}
             BoundedRecordRead::Eof => break,
@@ -212,13 +206,10 @@ pub(crate) async fn search_literal_bounded(
         let Some(data) = event.get("data") else {
             continue;
         };
-        let Some(path) = data.get("path").and_then(|path| path.get("text")).and_then(Value::as_str)
-        else {
+        let Some(path) = data.get("path").and_then(|path| path.get("text")).and_then(Value::as_str) else {
             continue;
         };
-        let Some(snippet) =
-            data.get("lines").and_then(|lines| lines.get("text")).and_then(Value::as_str)
-        else {
+        let Some(snippet) = data.get("lines").and_then(|lines| lines.get("text")).and_then(Value::as_str) else {
             continue;
         };
         let line = data
@@ -303,15 +294,15 @@ pub struct GrepSearchInput {
     pub search_hidden: Option<bool>,        // Whether to search hidden files/directories
     pub search_binary: Option<bool>,        // Whether to search binary files
     pub files_with_matches: Option<bool>,   // Only print filenames with matches
-    pub type_pattern: Option<String>, // Search files of a specific type (e.g., "rust", "python")
-    pub invert_match: Option<bool>,   // Invert the matching
-    pub word_boundaries: Option<bool>, // Match only word boundaries (regexp \b)
-    pub line_number: Option<bool>,    // Show line numbers
-    pub column: Option<bool>,         // Show column numbers
-    pub only_matching: Option<bool>,  // Show only matching parts
-    pub trim: Option<bool>,           // Trim whitespace from matches
-    pub max_result_bytes: Option<usize>, // Optional truncation threshold (bytes)
-    pub timeout: Option<Duration>,    // Optional timeout for blocking grep
+    pub type_pattern: Option<String>,       // Search files of a specific type (e.g., "rust", "python")
+    pub invert_match: Option<bool>,         // Invert the matching
+    pub word_boundaries: Option<bool>,      // Match only word boundaries (regexp \b)
+    pub line_number: Option<bool>,          // Show line numbers
+    pub column: Option<bool>,               // Show column numbers
+    pub only_matching: Option<bool>,        // Show only matching parts
+    pub trim: Option<bool>,                 // Trim whitespace from matches
+    pub max_result_bytes: Option<usize>,    // Optional truncation threshold (bytes)
+    pub timeout: Option<Duration>,          // Optional timeout for blocking grep
     pub extra_ignore_globs: Option<Vec<String>>, // Additional ignore globs
 }
 
@@ -491,9 +482,7 @@ impl GrepSearchManager {
                 let active_is_none = match state.lock() {
                     Ok(st) => st.active_search.is_none(),
                     Err(err) => {
-                        warn!(
-                            "grep search state lock poisoned while waiting for active search: {err}"
-                        );
+                        warn!("grep search state lock poisoned while waiting for active search: {err}");
                         return;
                     }
                 };
@@ -511,26 +500,17 @@ impl GrepSearchManager {
                 let mut st = match state.lock() {
                     Ok(state) => state,
                     Err(err) => {
-                        warn!(
-                            "grep search state lock poisoned while preparing debounced search: {err}"
-                        );
+                        warn!("grep search state lock poisoned while preparing debounced search: {err}");
                         return;
                     }
                 };
                 let query = st.latest_query.clone();
                 st.is_search_scheduled = false;
-                st.active_search =
-                    Some(ActiveSearch { query: query.clone(), cancellation_token: token });
+                st.active_search = Some(ActiveSearch { query: query.clone(), cancellation_token: token });
                 query
             };
 
-            GrepSearchManager::spawn_grep_file(
-                query,
-                search_dir,
-                cancellation_token,
-                state,
-                Some(cache),
-            );
+            GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state, Some(cache));
         });
     }
 
@@ -669,9 +649,9 @@ impl GrepSearchManager {
         cmd.arg(&input.pattern);
         cmd.arg(&input.path);
 
-        let output = cmd.output().with_context(|| {
-            format!("failed to execute ripgrep for pattern '{}'", input.pattern)
-        })?;
+        let output = cmd
+            .output()
+            .with_context(|| format!("failed to execute ripgrep for pattern '{}'", input.pattern))?;
 
         let output_str = String::from_utf8_lossy(&output.stdout);
         let matches: Vec<Value> = output_str
@@ -682,10 +662,7 @@ impl GrepSearchManager {
         Ok(Self::finalize_matches(matches, input))
     }
 
-    fn finalize_matches(
-        mut matches: Vec<Value>,
-        input: &GrepSearchInput,
-    ) -> (Vec<Value>, bool, usize) {
+    fn finalize_matches(mut matches: Vec<Value>, input: &GrepSearchInput) -> (Vec<Value>, bool, usize) {
         let mut truncated = false;
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
 
@@ -782,10 +759,7 @@ impl GrepSearchManager {
                 return;
             }
 
-            let input = GrepSearchInput::with_defaults(
-                query.clone(),
-                search_dir.to_string_lossy().into_owned(),
-            );
+            let input = GrepSearchInput::with_defaults(query.clone(), search_dir.to_string_lossy().into_owned());
 
             // Check cache first if available
             if let Some(ref cache) = cache
@@ -813,11 +787,7 @@ impl GrepSearchManager {
                     query,
                     matches,
                     truncated,
-                    total_matches: if truncated {
-                        Some(total_match_count)
-                    } else {
-                        None
-                    },
+                    total_matches: if truncated { Some(total_match_count) } else { None },
                 };
 
                 // Cache the result if cache is available
@@ -842,9 +812,7 @@ impl GrepSearchManager {
                 let mut st = match search_state.lock() {
                     Ok(state) => state,
                     Err(err) => {
-                        warn!(
-                            "grep search state lock poisoned while clearing active search: {err}"
-                        );
+                        warn!("grep search state lock poisoned while clearing active search: {err}");
                         return;
                     }
                 };
@@ -872,8 +840,7 @@ impl GrepSearchManager {
         // on timeout. The previous implementation used `tokio::time::timeout`
         // which returns `Err(Elapsed)` but leaves the blocking task running
         // — repeated timeouts would leak threads holding the state lock.
-        let mut join =
-            spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone));
+        let mut join = spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone));
         let outcome = tokio::time::timeout(timeout, &mut join).await;
         let (matches, truncated, total_match_count) = match outcome {
             Ok(Ok(Ok(result))) => result,
@@ -900,11 +867,7 @@ impl GrepSearchManager {
             query,
             matches,
             truncated,
-            total_matches: if truncated {
-                Some(total_match_count)
-            } else {
-                None
-            },
+            total_matches: if truncated { Some(total_match_count) } else { None },
         };
 
         // Cache the result if it's worth caching (non-empty, successful)
@@ -964,11 +927,7 @@ impl GrepSearchManager {
     /// # Returns
     ///
     /// A vector of file paths
-    pub fn list_all_files(
-        &self,
-        max_results: usize,
-        exclude_patterns: Vec<String>,
-    ) -> Result<Vec<String>> {
+    pub fn list_all_files(&self, max_results: usize, exclude_patterns: Vec<String>) -> Result<Vec<String>> {
         let mut config = FileSearchConfig::new("".to_string(), self.search_dir.clone())
             .with_limit(max_results)
             .respect_gitignore(true);
@@ -995,8 +954,7 @@ mod tests {
     #[tokio::test]
     async fn code_search_literal_stream_reaps_at_candidate_cap() {
         let workspace = TempDir::new().expect("workspace");
-        std::fs::write(workspace.path().join("matches.txt"), "Widget\nWidget\nWidget\n")
-            .expect("fixture");
+        std::fs::write(workspace.path().join("matches.txt"), "Widget\nWidget\nWidget\n").expect("fixture");
 
         let outcome = search_literal_bounded("Widget", workspace.path(), &[], 2)
             .await
@@ -1068,14 +1026,9 @@ mod tests {
         let mut oversized_record = Vec::with_capacity(3);
         let mut oversized_bytes_read = 0;
         assert_eq!(
-            read_bounded_record(
-                &mut oversized_reader,
-                &mut oversized_record,
-                &mut oversized_bytes_read,
-                3,
-            )
-            .await
-            .expect("oversized record"),
+            read_bounded_record(&mut oversized_reader, &mut oversized_record, &mut oversized_bytes_read, 3,)
+                .await
+                .expect("oversized record"),
             BoundedRecordRead::Exhausted
         );
         assert_eq!(oversized_record.len(), 3);
@@ -1085,8 +1038,7 @@ mod tests {
     async fn code_search_literal_language_prefilters_are_case_insensitive() {
         let workspace = TempDir::new().expect("workspace");
         std::fs::write(workspace.path().join("UPPER.RS"), "Widget\n").expect("Rust fixture");
-        std::fs::write(workspace.path().join("DOCKERFILE"), "Widget\n")
-            .expect("Dockerfile fixture");
+        std::fs::write(workspace.path().join("DOCKERFILE"), "Widget\n").expect("Dockerfile fixture");
 
         let rust = search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Rust], 20)
             .await
@@ -1096,10 +1048,9 @@ mod tests {
                 && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Rust)
         }));
 
-        let dockerfile =
-            search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Dockerfile], 20)
-                .await
-                .expect("uppercase Dockerfile name");
+        let dockerfile = search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Dockerfile], 20)
+            .await
+            .expect("uppercase Dockerfile name");
         assert!(dockerfile.candidates.iter().any(|candidate| {
             candidate.path.ends_with("DOCKERFILE")
                 && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Dockerfile)

@@ -210,18 +210,12 @@ mod tests {
         write_spec(temp.path(), "# Spec\n\nBuild a stronger exec harness.\n\nKeep it resumable.\n")
             .await
             .expect("write spec");
-        write_contract(
-            temp.path(),
-            "# Contract\n\n- Deliver the requested change.\n- Verify with cargo check.\n",
-        )
-        .await
-        .expect("write contract");
-        write_evaluation(
-            temp.path(),
-            "# Evaluation\n\nVerdict: fail\n\nNeed another revision round.\n",
-        )
-        .await
-        .expect("write evaluation");
+        write_contract(temp.path(), "# Contract\n\n- Deliver the requested change.\n- Verify with cargo check.\n")
+            .await
+            .expect("write contract");
+        write_evaluation(temp.path(), "# Evaluation\n\nVerdict: fail\n\nNeed another revision round.\n")
+            .await
+            .expect("write evaluation");
 
         let paths = existing_harness_artifact_paths(temp.path());
         assert_eq!(paths.len(), 3);
@@ -231,10 +225,7 @@ mod tests {
         );
         assert_eq!(
             read_contract_summary(temp.path()),
-            Some(
-                "Contract: - Deliver the requested change. | - Verify with cargo check."
-                    .to_string()
-            )
+            Some("Contract: - Deliver the requested change. | - Verify with cargo check.".to_string())
         );
         assert_eq!(
             read_evaluation_summary(temp.path()),
@@ -257,10 +248,7 @@ mod tests {
         assert_eq!(paths.len(), 1);
         assert_eq!(
             read_sprint_contract_summary(temp.path()),
-            Some(
-                "SprintContract: Scope: implement login endpoint. | Acceptance: POST /login returns JWT."
-                    .to_string()
-            )
+            Some("SprintContract: Scope: implement login endpoint. | Acceptance: POST /login returns JWT.".to_string())
         );
     }
 
@@ -301,10 +289,7 @@ mod tests {
         assert_eq!(paths.len(), 1);
         assert_eq!(
             read_feature_list_summary(temp.path()),
-            Some(
-                "FeatureList: - [ ] Auth: login endpoint returns JWT | - [x] API: health check endpoint"
-                    .to_string()
-            )
+            Some("FeatureList: - [ ] Auth: login endpoint returns JWT | - [x] API: health check endpoint".to_string())
         );
     }
 

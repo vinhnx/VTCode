@@ -21,8 +21,7 @@ impl Drop for PtySessionGuard {
 }
 
 fn decrement_active_sessions(active_sessions: &AtomicUsize) {
-    let _ = active_sessions
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_sub(1));
+    let _ = active_sessions.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_sub(1));
 }
 
 #[derive(Clone)]
@@ -107,9 +106,7 @@ impl PtySessionManager {
         let session_manager = self.clone();
         tokio::task::spawn_blocking(move || session_manager.terminate_all())
             .await
-            .map_err(|join_err| {
-                anyhow!("terminate_all_pty_sessions task failed to join: {join_err}")
-            })?;
+            .map_err(|join_err| anyhow!("terminate_all_pty_sessions task failed to join: {join_err}"))?;
         Ok(())
     }
 }

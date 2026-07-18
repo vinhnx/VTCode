@@ -5,9 +5,7 @@
 
 use crate::provider::LLMError;
 use crate::provider::{LLMStreamEvent, Usage};
-use crate::providers::anthropic_types::{
-    AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent,
-};
+use crate::providers::anthropic_types::{AnthropicContentBlock, AnthropicStreamDelta, AnthropicStreamEvent};
 use crate::providers::error_handling::format_network_error;
 use crate::providers::shared;
 

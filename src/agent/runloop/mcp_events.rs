@@ -102,8 +102,7 @@ impl McpEvent {
     /// Get the detailed title for this event
     #[cfg(test)]
     pub fn detailed_title(&self) -> String {
-        let duration =
-            self.duration_ms.map(|ms| format!(" (duration: {ms}ms)")).unwrap_or_default();
+        let duration = self.duration_ms.map(|ms| format!(" (duration: {ms}ms)")).unwrap_or_default();
 
         format!(
             "[{}] MCP {} `{}` - {}{}",
@@ -152,11 +151,11 @@ impl McpPanelState {
         }
 
         // If we have a pending event with the same provider/method, update it
-        if let Some(pending_event) = self.events.iter_mut().find(|e| {
-            e.provider == event.provider
-                && e.method == event.method
-                && e.status == McpEventStatus::Pending
-        }) {
+        if let Some(pending_event) = self
+            .events
+            .iter_mut()
+            .find(|e| e.provider == event.provider && e.method == event.method && e.status == McpEventStatus::Pending)
+        {
             pending_event.status = event.status;
             pending_event.args_preview = event.args_preview;
             pending_event.full_data = event.full_data;
@@ -200,12 +199,10 @@ impl McpPanelState {
             return None;
         }
 
-        let pending_count =
-            self.events.iter().filter(|e| e.status == McpEventStatus::Pending).count();
+        let pending_count = self.events.iter().filter(|e| e.status == McpEventStatus::Pending).count();
 
         if pending_count > 0 {
-            let latest_pending =
-                self.events.iter().find(|e| e.status == McpEventStatus::Pending)?;
+            let latest_pending = self.events.iter().find(|e| e.status == McpEventStatus::Pending)?;
             Some(format!("[~] MCP {} `{}`", latest_pending.provider, latest_pending.method))
         } else {
             None
@@ -235,11 +232,8 @@ mod tests {
 
     #[test]
     fn test_mcp_event_creation() {
-        let event = McpEvent::new(
-            "test_provider".to_string(),
-            "test_method".to_string(),
-            Some("test args".to_string()),
-        );
+        let event =
+            McpEvent::new("test_provider".to_string(), "test_method".to_string(), Some("test args".to_string()));
 
         assert_eq!(event.provider, "test_provider");
         assert_eq!(event.method, "test_method");

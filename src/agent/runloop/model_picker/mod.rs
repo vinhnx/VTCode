@@ -7,40 +7,32 @@ use tokio::task;
 use vtcode_config::{MiMoAuthMethod, OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{
-    InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string,
-};
+use vtcode_core::ui::{InlineListSelection, OpenAIServiceTierChoice, reasoning_from_selection_string};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSearchConfig, InlineSession, TransientSubmission,
-    WizardModalMode, WizardStep,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineSession, TransientSubmission, WizardModalMode,
+    WizardStep,
 };
 use vtcode_ui::tui::ui::interactive_list::SelectionInterrupted;
 
-use crate::agent::runloop::unified::overlay_prompt::{
-    OverlayWaitOutcome, wait_for_overlay_submission,
-};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, wait_for_overlay_submission};
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 use interaction::{
     ModelSelectionListOutcome, select_model_with_ratatui_list, select_reasoning_with_ratatui,
     select_service_tier_with_ratatui,
 };
 use options::{MODEL_OPTIONS, ModelOption, build_model_options_with_overrides, find_option_index};
 use rendering::{
-    CLOSE_THEME_MESSAGE, dynamic_model_subtitle, model_search_value, prompt_api_key_plain,
-    prompt_custom_model_entry, prompt_mimo_auth_method_plain, prompt_reasoning_plain,
-    prompt_service_tier_plain, render_mimo_auth_method_inline, render_reasoning_inline,
-    render_service_tier_inline, render_step_one_inline, render_step_one_plain,
+    CLOSE_THEME_MESSAGE, dynamic_model_subtitle, model_search_value, prompt_api_key_plain, prompt_custom_model_entry,
+    prompt_mimo_auth_method_plain, prompt_reasoning_plain, prompt_service_tier_plain, render_mimo_auth_method_inline,
+    render_reasoning_inline, render_service_tier_inline, render_step_one_inline, render_step_one_plain,
     show_secure_api_modal, static_model_search_terms, static_model_subtitle,
 };
 use selection::{
-    ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command,
-    parse_model_selection, reasoning_level_description, reasoning_level_label,
-    selection_from_option, selections_from_custom_provider, supports_max_reasoning,
-    supports_xhigh_reasoning,
+    ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command, parse_model_selection,
+    reasoning_level_description, reasoning_level_label, selection_from_option, selections_from_custom_provider,
+    supports_max_reasoning, supports_xhigh_reasoning,
 };
 
 mod config_persistence;
@@ -56,9 +48,7 @@ pub(crate) use self::config_persistence::persist_lightweight_selection;
 pub(crate) use self::dynamic_models::DynamicModelRegistry;
 #[cfg(test)]
 pub(crate) use self::lightweight_palette::build_lightweight_model_palette_view;
-pub(crate) use self::lightweight_palette::{
-    LightweightModelPaletteView, prepare_lightweight_model_palette_view,
-};
+pub(crate) use self::lightweight_palette::{LightweightModelPaletteView, prepare_lightweight_model_palette_view};
 pub(crate) use selection::ModelSelectionResult;
 pub(super) use vtcode_config::read_workspace_env_value as read_workspace_env;
 
@@ -163,13 +153,10 @@ impl ModelPickerState {
             std::borrow::Cow::Borrowed(MODEL_OPTIONS.as_slice())
         };
         let inline_enabled = renderer.supports_inline_ui();
-        let dynamic_models =
-            DynamicModelRegistry::load(&options, workspace.as_deref(), vt_cfg.as_ref()).await;
+        let dynamic_models = DynamicModelRegistry::load(&options, workspace.as_deref(), vt_cfg.as_ref()).await;
         let custom_providers = vt_cfg
             .as_ref()
-            .map(|cfg| {
-                cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect()
-            })
+            .map(|cfg| cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect())
             .unwrap_or_default();
 
         let mut state = Self {
@@ -218,10 +205,7 @@ impl ModelPickerState {
                     Ok(ModelSelectionListOutcome::Predefined(detail)) => {
                         match state.process_model_selection(renderer, detail)? {
                             ModelPickerProgress::Completed(result) => {
-                                return Ok(ModelPickerStart::Completed {
-                                    state,
-                                    selection: result,
-                                });
+                                return Ok(ModelPickerStart::Completed { state, selection: result });
                             }
                             ModelPickerProgress::InProgress => {
                                 return Ok(ModelPickerStart::InProgress(state));
@@ -280,9 +264,7 @@ impl ModelPickerState {
                         }
                         renderer.line(
                             MessageStyle::Info,
-                            &format!(
-                                "Interactive model picker unavailable ({err}). Falling back to manual input."
-                            ),
+                            &format!("Interactive model picker unavailable ({err}). Falling back to manual input."),
                         )?;
                         state.plain_mode_active = true;
                         render_step_one_plain(
@@ -304,18 +286,12 @@ impl ModelPickerState {
 
     pub async fn refresh_dynamic_models(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
         renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
-        self.dynamic_models = DynamicModelRegistry::load(
-            &self.options,
-            self.workspace.as_deref(),
-            self.vt_cfg.as_ref(),
-        )
-        .await;
+        self.dynamic_models =
+            DynamicModelRegistry::load(&self.options, self.workspace.as_deref(), self.vt_cfg.as_ref()).await;
         self.custom_providers = self
             .vt_cfg
             .as_ref()
-            .map(|cfg| {
-                cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect()
-            })
+            .map(|cfg| cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect())
             .unwrap_or_default();
         self.selection = None;
         self.selected_reasoning = None;
@@ -379,11 +355,7 @@ impl ModelPickerState {
         }
     }
 
-    pub async fn persist_selection(
-        &self,
-        workspace: &Path,
-        selection: &ModelSelectionResult,
-    ) -> Result<VTCodeConfig> {
+    pub async fn persist_selection(&self, workspace: &Path, selection: &ModelSelectionResult) -> Result<VTCodeConfig> {
         config_persistence::persist_selection(workspace, selection).await
     }
 
@@ -396,10 +368,7 @@ impl ModelPickerState {
             PickerStep::AwaitModel => match choice {
                 InlineListSelection::Model(index) => {
                     let Some(option) = self.options.get(index) else {
-                        renderer.line(
-                            MessageStyle::Error,
-                            "Unable to locate the selected model option.",
-                        )?;
+                        renderer.line(MessageStyle::Error, "Unable to locate the selected model option.")?;
                         return Ok(ModelPickerProgress::InProgress);
                     };
                     let detail = selection_from_option(option);
@@ -407,20 +376,14 @@ impl ModelPickerState {
                 }
                 InlineListSelection::DynamicModel(entry_index) => {
                     let Some(detail) = self.dynamic_models.dynamic_detail(entry_index) else {
-                        renderer.line(
-                            MessageStyle::Error,
-                            "Unable to locate the selected dynamic model.",
-                        )?;
+                        renderer.line(MessageStyle::Error, "Unable to locate the selected dynamic model.")?;
                         return Ok(ModelPickerProgress::InProgress);
                     };
                     self.process_model_selection(renderer, detail)
                 }
                 InlineListSelection::CustomProvider(entry_index) => {
                     let Some(detail) = self.custom_providers.get(entry_index).cloned() else {
-                        renderer.line(
-                            MessageStyle::Error,
-                            "Unable to locate the selected custom provider.",
-                        )?;
+                        renderer.line(MessageStyle::Error, "Unable to locate the selected custom provider.")?;
                         return Ok(ModelPickerProgress::InProgress);
                     };
                     self.process_model_selection(renderer, detail)
@@ -431,22 +394,15 @@ impl ModelPickerState {
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::Reasoning(_) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Select a model before configuring reasoning effort.",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Select a model before configuring reasoning effort.")?;
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::DisableReasoning => {
-                    renderer
-                        .line(MessageStyle::Error, "Select a model before disabling reasoning.")?;
+                    renderer.line(MessageStyle::Error, "Select a model before disabling reasoning.")?;
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::OpenAIServiceTier(_) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Select a model before choosing a service tier.",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Select a model before choosing a service tier.")?;
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::Theme(_) => {
@@ -495,10 +451,7 @@ impl ModelPickerState {
                             "token-plan" => MiMoAuthMethod::TokenPlan,
                             "pay-as-you-go" => MiMoAuthMethod::PayAsYouGo,
                             _ => {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    "Unknown MiMo auth method selection.",
-                                )?;
+                                renderer.line(MessageStyle::Error, "Unknown MiMo auth method selection.")?;
                                 return Ok(ModelPickerProgress::InProgress);
                             }
                         };
@@ -509,18 +462,12 @@ impl ModelPickerState {
                         }
                         self.finish_after_mimo_auth_method(renderer)
                     } else {
-                        renderer.line(
-                            MessageStyle::Error,
-                            "Choose an auth method for MiMo or press Esc to cancel.",
-                        )?;
+                        renderer.line(MessageStyle::Error, "Choose an auth method for MiMo or press Esc to cancel.")?;
                         Ok(ModelPickerProgress::InProgress)
                     }
                 }
                 _ => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Choose an auth method for MiMo or press Esc to cancel.",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Choose an auth method for MiMo or press Esc to cancel.")?;
                     Ok(ModelPickerProgress::InProgress)
                 }
             },
@@ -557,20 +504,13 @@ impl ModelPickerState {
                 _ => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitApiKey => {
-                renderer.line(
-                    MessageStyle::Info,
-                    "Enter the API key in the input field or type 'skip'.",
-                )?;
+                renderer.line(MessageStyle::Info, "Enter the API key in the input field or type 'skip'.")?;
                 Ok(ModelPickerProgress::InProgress)
             }
         }
     }
 
-    fn handle_model_selection(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        input: &str,
-    ) -> Result<ModelPickerProgress> {
+    fn handle_model_selection(&mut self, renderer: &mut AnsiRenderer, input: &str) -> Result<ModelPickerProgress> {
         let selection = match parse_model_selection(&self.options, input, self.vt_cfg.as_ref()) {
             Ok(detail) => detail,
             Err(err) => {
@@ -627,8 +567,7 @@ pub(crate) async fn pick_subagent_model(
     current_reasoning_effort: Option<&str>,
 ) -> Result<Option<SubagentModelSelection>> {
     if !renderer.supports_inline_ui() {
-        renderer
-            .line(MessageStyle::Info, "Interactive subagent model selection requires inline UI.")?;
+        renderer.line(MessageStyle::Info, "Interactive subagent model selection requires inline UI.")?;
         return Ok(None);
     }
 
@@ -667,15 +606,8 @@ pub(crate) async fn pick_subagent_model(
                 continue;
             }
             SubagentModelChoice::Manual => {
-                let Some(target) = prompt_subagent_model_id(
-                    renderer,
-                    handle,
-                    session,
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                    &options,
-                )
-                .await?
+                let Some(target) =
+                    prompt_subagent_model_id(renderer, handle, session, ctrl_c_state, ctrl_c_notify, &options).await?
                 else {
                     return Ok(None);
                 };
@@ -683,15 +615,9 @@ pub(crate) async fn pick_subagent_model(
             }
         };
 
-        let Some(selection) = select_subagent_reasoning(
-            handle,
-            session,
-            ctrl_c_state,
-            ctrl_c_notify,
-            target,
-            current_reasoning_effort,
-        )
-        .await?
+        let Some(selection) =
+            select_subagent_reasoning(handle, session, ctrl_c_state, ctrl_c_notify, target, current_reasoning_effort)
+                .await?
         else {
             return Ok(None);
         };
@@ -796,9 +722,7 @@ async fn select_subagent_model_target(
 
     items.push(InlineListItem {
         title: "Refresh local models".to_string(),
-        subtitle: Some(
-            "Re-query dynamic model inventories without changing workspace config.".to_string(),
-        ),
+        subtitle: Some("Re-query dynamic model inventories without changing workspace config.".to_string()),
         badge: Some("Refresh".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::RefreshDynamicModels),
@@ -806,10 +730,7 @@ async fn select_subagent_model_target(
     });
     items.push(InlineListItem {
         title: "Enter exact model id".to_string(),
-        subtitle: Some(
-            "Provide a concrete VT Code model id such as `gpt-5.4` or `claude-sonnet-4-6`."
-                .to_string(),
-        ),
+        subtitle: Some("Provide a concrete VT Code model id such as `gpt-5.4` or `claude-sonnet-4-6`.".to_string()),
         badge: Some("Manual".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::CustomModel),
@@ -822,7 +743,8 @@ async fn select_subagent_model_target(
         "Subagent model".to_string(),
         vec![
             "Choose a shortcut alias or a concrete VT Code model id for this subagent.".to_string(),
-            "This picker only stores `model` and `reasoning_effort`; it never prompts for API keys or service tier.".to_string(),
+            "This picker only stores `model` and `reasoning_effort`; it never prompts for API keys or service tier."
+                .to_string(),
         ],
         items,
         selected,
@@ -832,20 +754,14 @@ async fn select_subagent_model_target(
         }),
     );
 
-    let Some(selection) =
-        wait_for_inline_list_selection(handle, session, ctrl_c_state, ctrl_c_notify).await?
-    else {
+    let Some(selection) = wait_for_inline_list_selection(handle, session, ctrl_c_state, ctrl_c_notify).await? else {
         return Ok(None);
     };
 
     let choice = match selection {
         InlineListSelection::ConfigAction(action) => {
-            if let Some(shortcut) =
-                action.strip_prefix(&format!("{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:"))
-            {
-                SubagentModelChoice::Target(SubagentModelTarget::Shortcut {
-                    model: shortcut.to_string(),
-                })
+            if let Some(shortcut) = action.strip_prefix(&format!("{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:")) {
+                SubagentModelChoice::Target(SubagentModelTarget::Shortcut { model: shortcut.to_string() })
             } else {
                 return Ok(None);
             }
@@ -854,9 +770,7 @@ async fn select_subagent_model_target(
             let option = options
                 .get(index)
                 .ok_or_else(|| anyhow!("Unable to locate the selected model option"))?;
-            SubagentModelChoice::Target(SubagentModelTarget::Concrete(selection_from_option(
-                option,
-            )))
+            SubagentModelChoice::Target(SubagentModelTarget::Concrete(selection_from_option(option)))
         }
         InlineListSelection::DynamicModel(index) => {
             let detail = dynamic_models
@@ -897,21 +811,15 @@ async fn select_subagent_reasoning(
             subtitle: Some("Retain the current reasoning override for this subagent.".to_string()),
             badge: Some("Current".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBAGENT_REASONING_ACTION_PREFIX}keep"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep"))),
             search_value: Some("keep current reasoning".to_string()),
         },
         InlineListItem {
             title: "Unset reasoning override".to_string(),
-            subtitle: Some(
-                "Do not store a `reasoning_effort` override for this subagent.".to_string(),
-            ),
+            subtitle: Some("Do not store a `reasoning_effort` override for this subagent.".to_string()),
             badge: Some("Unset".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBAGENT_REASONING_ACTION_PREFIX}unset"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}unset"))),
             search_value: Some("unset clear reasoning".to_string()),
         },
     ];
@@ -944,21 +852,15 @@ async fn select_subagent_reasoning(
         }),
     );
 
-    let Some(selection) =
-        wait_for_inline_list_selection(handle, session, ctrl_c_state, ctrl_c_notify).await?
-    else {
+    let Some(selection) = wait_for_inline_list_selection(handle, session, ctrl_c_state, ctrl_c_notify).await? else {
         return Ok(None);
     };
 
     let reasoning_choice = match selection {
-        InlineListSelection::ConfigAction(action)
-            if action == format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep") =>
-        {
+        InlineListSelection::ConfigAction(action) if action == format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep") => {
             SubagentReasoningChoice::KeepCurrent
         }
-        InlineListSelection::ConfigAction(action)
-            if action == format!("{SUBAGENT_REASONING_ACTION_PREFIX}unset") =>
-        {
+        InlineListSelection::ConfigAction(action) if action == format!("{SUBAGENT_REASONING_ACTION_PREFIX}unset") => {
             SubagentReasoningChoice::Unset
         }
         InlineListSelection::ConfigAction(action) => {
@@ -1046,18 +948,11 @@ async fn prompt_subagent_model_id(
         let model_id = match trimmed.parse::<ModelId>() {
             Ok(model_id) => model_id,
             Err(_) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("`{trimmed}` is not a recognized VT Code model id."),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("`{trimmed}` is not a recognized VT Code model id."))?;
                 continue;
             }
         };
-        let detail = parse_model_selection(
-            options,
-            &format!("{} {}", model_id.provider(), model_id.as_str()),
-            None,
-        )?;
+        let detail = parse_model_selection(options, &format!("{} {}", model_id.provider(), model_id.as_str()), None)?;
         return Ok(Some(SubagentModelTarget::Concrete(detail)));
     }
 }
@@ -1071,9 +966,7 @@ fn preferred_subagent_model_selection(
         return None;
     }
     if let Some(shortcut) = canonical_subagent_shortcut(current_trimmed) {
-        return Some(InlineListSelection::ConfigAction(format!(
-            "{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}"
-        )));
+        return Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}")));
     }
     if let Ok(model_id) = current_trimmed.parse::<ModelId>()
         && let Some(index) = find_option_index(model_id.provider(), &model_id.as_str())
@@ -1113,9 +1006,7 @@ fn subagent_model_shortcuts() -> &'static [(&'static str, &'static str)] {
     &SUBAGENT_SHORTCUTS
 }
 
-fn parse_subagent_reasoning_effort(
-    current_reasoning_effort: Option<&str>,
-) -> Option<ReasoningEffortLevel> {
+fn parse_subagent_reasoning_effort(current_reasoning_effort: Option<&str>) -> Option<ReasoningEffortLevel> {
     current_reasoning_effort
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -1152,10 +1043,7 @@ fn subagent_reasoning_levels(model: &str, supports_reasoning: bool) -> Vec<Reaso
     levels
 }
 
-fn subagent_supports_reasoning_level(
-    target: &SubagentModelTarget,
-    level: ReasoningEffortLevel,
-) -> bool {
+fn subagent_supports_reasoning_level(target: &SubagentModelTarget, level: ReasoningEffortLevel) -> bool {
     if !target.supports_reasoning() {
         return false;
     }
@@ -1170,9 +1058,7 @@ fn subagent_supports_reasoning_level(
         ReasoningEffortLevel::XHigh => {
             !is_subagent_shortcut(target.model()) && supports_xhigh_reasoning(target.model())
         }
-        ReasoningEffortLevel::Max => {
-            !is_subagent_shortcut(target.model()) && supports_max_reasoning(target.model())
-        }
+        ReasoningEffortLevel::Max => !is_subagent_shortcut(target.model()) && supports_max_reasoning(target.model()),
     }
 }
 
@@ -1183,11 +1069,9 @@ async fn wait_for_inline_list_selection(
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<Option<InlineListSelection>> {
     let outcome =
-        wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| {
-            match submission {
-                TransientSubmission::Selection(selection) => Some(selection),
-                _ => None,
-            }
+        wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| match submission {
+            TransientSubmission::Selection(selection) => Some(selection),
+            _ => None,
         })
         .await?;
 
@@ -1197,9 +1081,7 @@ async fn wait_for_inline_list_selection(
 
     Ok(match outcome {
         OverlayWaitOutcome::Submitted(selection) => Some(selection),
-        OverlayWaitOutcome::Cancelled
-        | OverlayWaitOutcome::Interrupted
-        | OverlayWaitOutcome::Exit => None,
+        OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted | OverlayWaitOutcome::Exit => None,
     })
 }
 

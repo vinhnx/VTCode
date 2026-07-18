@@ -97,8 +97,7 @@ fn append_markdown_entry(path: &Path, content: &str, header: &str) -> Result<()>
     }
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create directory {}", parent.display()))?;
     }
 
     let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
@@ -115,8 +114,7 @@ fn append_markdown_entry(path: &Path, content: &str, header: &str) -> Result<()>
 
     // Check if the file is empty (needs a header) using the same handle.
     let needs_header = {
-        let metadata =
-            file.metadata().with_context(|| format!("Failed to stat {}", path.display()))?;
+        let metadata = file.metadata().with_context(|| format!("Failed to stat {}", path.display()))?;
         metadata.len() == 0
     };
 

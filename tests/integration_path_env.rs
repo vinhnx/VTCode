@@ -53,11 +53,7 @@ mod path_environment_tests {
     fn test_language_tools_accessible() {
         // Test that we can at least check for language runtimes
         // (they might not all be installed, but the mechanism should work)
-        let tools = vec![
-            ("python3", "--version"),
-            ("node", "--version"),
-            ("npm", "--version"),
-        ];
+        let tools = vec![("python3", "--version"), ("node", "--version"), ("npm", "--version")];
 
         for (tool, flag) in tools {
             match Command::new(tool).arg(flag).output() {
@@ -150,11 +146,7 @@ mod path_environment_tests {
         let path_entries: Vec<&str> = path.split(':').collect();
 
         // A healthy PATH should have multiple entries
-        assert!(
-            path_entries.len() >= 3,
-            "PATH should have multiple entries, found: {}",
-            path_entries.len()
-        );
+        assert!(path_entries.len() >= 3, "PATH should have multiple entries, found: {}", path_entries.len());
 
         println!("✓ PATH has {} entries", path_entries.len());
         for (i, entry) in path_entries.iter().enumerate().take(5) {

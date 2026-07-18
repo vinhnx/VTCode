@@ -51,11 +51,9 @@ Configure profile behavior in Terminal → Settings.
 "#
         .to_string(),
 
-        TerminalType::Xterm => {
-            r#"xterm copy/paste behavior is controlled via X resources and selection settings.
+        TerminalType::Xterm => r#"xterm copy/paste behavior is controlled via X resources and selection settings.
 "#
-            .to_string()
-        }
+        .to_string(),
 
         TerminalType::Zed => r#"// Copy/paste is built into Zed
 // No additional configuration needed
@@ -63,8 +61,7 @@ Configure profile behavior in Terminal → Settings.
         .to_string(),
 
         TerminalType::Warp => {
-            "# Warp has built-in copy/paste support\n# No additional configuration needed\n"
-                .to_string()
+            "# Warp has built-in copy/paste support\n# No additional configuration needed\n".to_string()
         }
 
         TerminalType::WindowsTerminal => r#"{

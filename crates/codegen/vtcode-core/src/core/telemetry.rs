@@ -92,12 +92,7 @@ impl TelemetryManager {
     }
 
     /// Record an LLM API request with its duration and optional token usage.
-    pub fn record_llm_request(
-        &self,
-        model: &str,
-        duration: Duration,
-        usage: Option<&crate::llm::provider::Usage>,
-    ) {
+    pub fn record_llm_request(&self, model: &str, duration: Duration, usage: Option<&crate::llm::provider::Usage>) {
         self.with_stats_mut_non_blocking(|stats| {
             stats.api_time_spent = stats.api_time_spent.saturating_add(duration);
             let model_stats = if let Some(existing) = stats.model_usage.get_mut(model) {
@@ -108,8 +103,7 @@ impl TelemetryManager {
             model_stats.api_time = model_stats.api_time.saturating_add(duration);
 
             if let Some(usage) = usage {
-                model_stats.prompt_tokens =
-                    model_stats.prompt_tokens.saturating_add(usage.prompt_tokens as u64);
+                model_stats.prompt_tokens = model_stats.prompt_tokens.saturating_add(usage.prompt_tokens as u64);
                 model_stats.completion_tokens =
                     model_stats.completion_tokens.saturating_add(usage.completion_tokens as u64);
                 model_stats.cached_prompt_tokens = model_stats

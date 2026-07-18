@@ -229,12 +229,7 @@ mod tests {
     fn boxed_details_are_smaller_than_inline_options() {
         use std::mem::size_of;
 
-        assert!(
-            size_of::<Option<Box<InputTokensDetails>>>() < size_of::<Option<InputTokensDetails>>()
-        );
-        assert!(
-            size_of::<Option<Box<OutputTokensDetails>>>()
-                < size_of::<Option<OutputTokensDetails>>()
-        );
+        assert!(size_of::<Option<Box<InputTokensDetails>>>() < size_of::<Option<InputTokensDetails>>());
+        assert!(size_of::<Option<Box<OutputTokensDetails>>>() < size_of::<Option<OutputTokensDetails>>());
     }
 }

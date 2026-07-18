@@ -69,27 +69,18 @@ impl SandboxManager {
         // Transform based on sandbox type
         match sandbox_type {
             SandboxType::MacosSeatbelt => self.transform_seatbelt(spec, policy, sandbox_cwd),
-            SandboxType::LinuxLandlock => {
-                self.transform_landlock(spec, policy, sandbox_cwd, sandbox_executable)
+            SandboxType::LinuxLandlock => self.transform_landlock(spec, policy, sandbox_cwd, sandbox_executable),
+            SandboxType::WindowsRestrictedToken => self.transform_windows(spec, policy, sandbox_cwd),
+            SandboxType::None => {
+                Err(SandboxTransformError::InvalidPolicy("Cannot transform with SandboxType::None".into()))
             }
-            SandboxType::WindowsRestrictedToken => {
-                self.transform_windows(spec, policy, sandbox_cwd)
-            }
-            SandboxType::None => Err(SandboxTransformError::InvalidPolicy(
-                "Cannot transform with SandboxType::None".into(),
-            )),
         }
     }
 
     /// Determine the appropriate sandbox type for the given policy.
-    fn determine_sandbox_type(
-        &self,
-        policy: &SandboxPolicy,
-    ) -> Result<SandboxType, SandboxTransformError> {
+    fn determine_sandbox_type(&self, policy: &SandboxPolicy) -> Result<SandboxType, SandboxTransformError> {
         match policy {
-            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. } => {
-                Ok(SandboxType::None)
-            }
+            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. } => Ok(SandboxType::None),
             SandboxPolicy::ReadOnly { .. } | SandboxPolicy::WorkspaceWrite { .. } => {
                 Ok(SandboxType::platform_default())
             }
@@ -109,11 +100,7 @@ impl SandboxManager {
         // Build the seatbelt profile
         let profile = self.build_seatbelt_profile(policy, sandbox_cwd);
 
-        let mut args = vec![
-            "-p".to_string(),
-            profile,
-            os_string_to_arg(spec.program.clone()),
-        ];
+        let mut args = vec!["-p".to_string(), profile, os_string_to_arg(spec.program.clone())];
         args.extend(spec.args);
 
         Ok(ExecEnv {
@@ -174,8 +161,7 @@ impl SandboxManager {
         profile.push_str("(allow process-fork)\n");
         profile.push_str("(allow sysctl-read)\n");
         profile.push_str("(allow mach-lookup)\n");
-        profile
-            .push_str("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))\n");
+        profile.push_str("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))\n");
         profile.push_str("(allow mach-lookup (global-name \"com.apple.cfprefsd.daemon\") (global-name \"com.apple.cfprefsd.agent\") (local-name \"com.apple.cfprefsd.agent\"))\n");
         profile.push_str("(allow user-preference-read)\n");
 
@@ -227,31 +213,22 @@ impl SandboxManager {
         sandbox_cwd: &Path,
         sandbox_executable: Option<&Path>,
     ) -> Result<ExecEnv, SandboxTransformError> {
-        let sandbox_exe =
-            sandbox_executable.ok_or(SandboxTransformError::MissingSandboxExecutable)?;
+        let sandbox_exe = sandbox_executable.ok_or(SandboxTransformError::MissingSandboxExecutable)?;
 
         // Serialize the policy for the sandbox helper (includes Landlock rules)
-        let policy_json = serde_json::to_string(policy).map_err(|e| {
-            SandboxTransformError::CreationFailed(format!(
-                "failed to serialize sandbox policy: {e}"
-            ))
-        })?;
+        let policy_json = serde_json::to_string(policy)
+            .map_err(|e| SandboxTransformError::CreationFailed(format!("failed to serialize sandbox policy: {e}")))?;
 
         // Serialize seccomp profile separately for explicit syscall filtering
         let seccomp_profile = policy.seccomp_profile();
-        let seccomp_json = seccomp_profile.to_json().map_err(|e| {
-            SandboxTransformError::CreationFailed(format!(
-                "failed to serialize seccomp profile: {e}"
-            ))
-        })?;
+        let seccomp_json = seccomp_profile
+            .to_json()
+            .map_err(|e| SandboxTransformError::CreationFailed(format!("failed to serialize seccomp profile: {e}")))?;
 
         // Serialize resource limits for cgroup/rlimit enforcement
         let resource_limits = policy.resource_limits();
-        let limits_json = serde_json::to_string(&resource_limits).map_err(|e| {
-            SandboxTransformError::CreationFailed(format!(
-                "failed to serialize resource limits: {e}"
-            ))
-        })?;
+        let limits_json = serde_json::to_string(&resource_limits)
+            .map_err(|e| SandboxTransformError::CreationFailed(format!("failed to serialize resource limits: {e}")))?;
 
         let sandbox_cwd_str = sandbox_cwd.to_string_lossy().to_string();
 
@@ -338,13 +315,9 @@ mod tests {
     #[test]
     fn seatbelt_profile_includes_default_preferences_policy() {
         let manager = SandboxManager::new();
-        let profile =
-            manager.build_seatbelt_profile(&SandboxPolicy::read_only(), Path::new("/tmp"));
+        let profile = manager.build_seatbelt_profile(&SandboxPolicy::read_only(), Path::new("/tmp"));
 
-        assert!(
-            profile
-                .contains("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))")
-        );
+        assert!(profile.contains("(allow ipc-posix-shm-read* (ipc-posix-name-prefix \"apple.cfprefs.\"))"));
         assert!(profile.contains("(global-name \"com.apple.cfprefsd.daemon\")"));
         assert!(profile.contains("(global-name \"com.apple.cfprefsd.agent\")"));
         assert!(profile.contains("(local-name \"com.apple.cfprefsd.agent\")"));

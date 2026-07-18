@@ -123,12 +123,11 @@ impl Rgb {
             return Err(anyhow!("Invalid hex color '{hex}': expected #RRGGBB"));
         }
 
-        let r = u8::from_str_radix(&trimmed[0..2], 16)
-            .map_err(|e| anyhow!("Invalid red component in '{hex}': {e}"))?;
-        let g = u8::from_str_radix(&trimmed[2..4], 16)
-            .map_err(|e| anyhow!("Invalid green component in '{hex}': {e}"))?;
-        let b = u8::from_str_radix(&trimmed[4..6], 16)
-            .map_err(|e| anyhow!("Invalid blue component in '{hex}': {e}"))?;
+        let r = u8::from_str_radix(&trimmed[0..2], 16).map_err(|e| anyhow!("Invalid red component in '{hex}': {e}"))?;
+        let g =
+            u8::from_str_radix(&trimmed[2..4], 16).map_err(|e| anyhow!("Invalid green component in '{hex}': {e}"))?;
+        let b =
+            u8::from_str_radix(&trimmed[4..6], 16).map_err(|e| anyhow!("Invalid blue component in '{hex}': {e}"))?;
 
         Ok(Self { r, g, b })
     }
@@ -429,18 +428,14 @@ return {{
             )
         }
 
-        TerminalType::TerminalApp => {
-            r#"Terminal.app theme sync requires profile color configuration.
+        TerminalType::TerminalApp => r#"Terminal.app theme sync requires profile color configuration.
 Configure profile colors in Terminal → Settings → Profiles.
 "#
-            .to_string()
-        }
+        .to_string(),
 
-        TerminalType::Xterm => {
-            r#"xterm theme sync is configured via X resources (e.g. ~/.Xresources).
+        TerminalType::Xterm => r#"xterm theme sync is configured via X resources (e.g. ~/.Xresources).
 "#
-            .to_string()
-        }
+        .to_string(),
 
         TerminalType::Zed => {
             format!(

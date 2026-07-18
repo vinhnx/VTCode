@@ -15,14 +15,10 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 
 use super::super::build_failure_error_content;
 use super::common::push_guard_failure_messages;
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
 
 /// Get the max consecutive blocked tool calls per turn from config.
-pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(
-    ctx: &TurnProcessingContext<'_>,
-) -> usize {
+pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
     ctx.vt_cfg
         .map(|cfg| cfg.tools.max_consecutive_blocked_tool_calls_per_turn)
         .filter(|value| *value > 0)

@@ -19,11 +19,7 @@ use super::first_run_prompts::{
 };
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
-pub(crate) async fn maybe_run_first_run_setup(
-    args: &Cli,
-    workspace: &Path,
-    config: &mut VTCodeConfig,
-) -> Result<bool> {
+pub(crate) async fn maybe_run_first_run_setup(args: &Cli, workspace: &Path, config: &mut VTCodeConfig) -> Result<bool> {
     if !is_fresh_workspace(workspace) {
         return Ok(false);
     }
@@ -62,11 +58,7 @@ fn is_fresh_workspace(workspace: &Path) -> bool {
     !config_path.exists() && !dot_dir.exists()
 }
 
-async fn run_first_run_setup(
-    workspace: &Path,
-    config: &mut VTCodeConfig,
-    mode: SetupMode,
-) -> Result<()> {
+async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupMode) -> Result<()> {
     initialize_dot_folder().await.ok();
 
     if !workspace.exists() {
@@ -74,9 +66,8 @@ async fn run_first_run_setup(
     }
 
     let workspace_dot_dir = workspace.join(".vtcode");
-    ensure_dir_exists_sync(&workspace_dot_dir).with_context(|| {
-        format!("Failed to create workspace .vtcode directory at {}", workspace_dot_dir.display())
-    })?;
+    ensure_dir_exists_sync(&workspace_dot_dir)
+        .with_context(|| format!("Failed to create workspace .vtcode directory at {}", workspace_dot_dir.display()))?;
 
     let mut renderer = AnsiRenderer::stdout();
     renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
@@ -88,10 +79,7 @@ async fn run_first_run_setup(
                     MessageStyle::Status,
                     "Let's configure your default provider, model, lightweight model route, reasoning effort, persistent memory, and workspace trust.",
                 )?;
-            renderer.line(
-                MessageStyle::Status,
-                "Press Enter to accept the suggested value in brackets.",
-            )?;
+            renderer.line(MessageStyle::Status, "Press Enter to accept the suggested value in brackets.")?;
             renderer.line(MessageStyle::Info, "")?;
 
             let provider = resolve_initial_provider(config);
@@ -112,10 +100,8 @@ async fn run_first_run_setup(
             let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            let persistent_memory = prompt_persistent_memory(
-                &mut renderer,
-                resolve_initial_persistent_memory_enabled(config),
-            )?;
+            let persistent_memory =
+                prompt_persistent_memory(&mut renderer, resolve_initial_persistent_memory_enabled(config))?;
             renderer.line(MessageStyle::Info, "")?;
 
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
@@ -144,19 +130,14 @@ async fn run_first_run_setup(
 
             renderer.line(MessageStyle::Info, &format!("Provider: {}", provider.label()))?;
             renderer.line(MessageStyle::Info, &format!("Model: {model}"))?;
-            renderer.line(
-                MessageStyle::Info,
-                "Lightweight model: Automatic (same-provider lightweight route)",
-            )?;
-            renderer
-                .line(MessageStyle::Info, &format!("Reasoning effort: {}", reasoning.as_str()))?;
+            renderer.line(MessageStyle::Info, "Lightweight model: Automatic (same-provider lightweight route)")?;
+            renderer.line(MessageStyle::Info, &format!("Reasoning effort: {}", reasoning.as_str()))?;
             renderer.line(
                 MessageStyle::Info,
                 &format!("Persistent memory: {}", persistent_memory_label(persistent_memory)),
             )?;
             renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
-            renderer
-                .line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
+            renderer.line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
             renderer.line(MessageStyle::Info, "")?;
 
             (provider, model, lightweight_model, reasoning, persistent_memory, trust)
@@ -169,36 +150,20 @@ async fn run_first_run_setup(
     let provider_key = provider.to_string();
     // Set API key environment name from provider defaults; do this once to avoid recomputing.
     config.agent.api_key_env = provider.default_api_key_env().to_owned();
-    apply_selection(
-        config,
-        &provider_key,
-        &model,
-        &lightweight_model,
-        reasoning,
-        persistent_memory,
-    );
+    apply_selection(config, &provider_key, &model, &lightweight_model, reasoning, persistent_memory);
 
     let config_path = workspace.join("vtcode.toml");
-    ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
-        format!("Failed to write initial configuration to {}", config_path.display())
-    })?;
+    ConfigManager::save_config_to_path(&config_path, config)
+        .with_context(|| format!("Failed to write initial configuration to {}", config_path.display()))?;
 
     update_model_preference(&provider_key, &model).await.ok();
 
-    update_workspace_trust(workspace, trust).await.with_context(|| {
-        format!("Failed to persist workspace trust level for {}", workspace.display())
-    })?;
+    update_workspace_trust(workspace, trust)
+        .await
+        .with_context(|| format!("Failed to persist workspace trust level for {}", workspace.display()))?;
 
     renderer.line(MessageStyle::Info, "")?;
-    render_setup_summary(
-        &mut renderer,
-        provider,
-        &model,
-        &lightweight_model,
-        reasoning,
-        persistent_memory,
-        trust,
-    )?;
+    render_setup_summary(&mut renderer, provider, &model, &lightweight_model, reasoning, persistent_memory, trust)?;
     render_optional_search_tools_notice(&mut renderer).await?;
     renderer.line(
         MessageStyle::Status,
@@ -238,14 +203,9 @@ fn render_setup_summary(
     persistent_memory_enabled: bool,
     trust: WorkspaceTrustLevel,
 ) -> Result<()> {
-    for (style, line) in setup_summary_lines(
-        provider,
-        model,
-        lightweight_model,
-        reasoning,
-        persistent_memory_enabled,
-        trust,
-    ) {
+    for (style, line) in
+        setup_summary_lines(provider, model, lightweight_model, reasoning, persistent_memory_enabled, trust)
+    {
         renderer.line(style, &line)?;
     }
     renderer.line(MessageStyle::Info, "")?;

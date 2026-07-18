@@ -13,12 +13,8 @@ use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, 
 
 use crate::agent::runloop::slash_commands::StatuslineTargetMode;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 
 use super::super::config_toml::{
     ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value,
@@ -96,14 +92,13 @@ pub(crate) async fn handle_start_statusline_setup(
         return Ok(SlashCommandControl::Continue);
     };
 
-    let manager = ConfigManager::load_from_workspace(&ctx.config.workspace)
-        .context("Failed to load VT Code configuration")?;
+    let manager =
+        ConfigManager::load_from_workspace(&ctx.config.workspace).context("Failed to load VT Code configuration")?;
     let config_path = match target {
-        StatuslineTargetMode::User => preferred_user_config_path(&manager)
-            .context("Could not resolve user config path for status line setup")?,
-        StatuslineTargetMode::Workspace => {
-            preferred_workspace_config_path(&manager, &ctx.config.workspace)
+        StatuslineTargetMode::User => {
+            preferred_user_config_path(&manager).context("Could not resolve user config path for status line setup")?
         }
+        StatuslineTargetMode::Workspace => preferred_workspace_config_path(&manager, &ctx.config.workspace),
     };
     let script_path = statusline_script_path(target, &ctx.config.workspace, &config_path);
     let script_command = default_script_command(target, &script_path);
@@ -167,14 +162,7 @@ pub(crate) async fn handle_start_statusline_setup(
         match apply_statusline_action(&action, &mut draft)? {
             StatuslineSetupAction::Continue => {}
             StatuslineSetupAction::Save => {
-                persist_statusline_config(
-                    &mut ctx,
-                    &config_path,
-                    draft.clone(),
-                    target,
-                    script_path.as_path(),
-                )
-                .await?;
+                persist_statusline_config(&mut ctx, &config_path, draft.clone(), target, script_path.as_path()).await?;
                 ctx.renderer.line(
                     MessageStyle::Info,
                     &format!("Saved status line configuration to {}.", config_path.display()),
@@ -281,9 +269,7 @@ pub(crate) async fn handle_start_statusline_setup(
     }
 }
 
-async fn select_statusline_target(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<Option<StatuslineTargetMode>> {
+async fn select_statusline_target(ctx: &mut SlashCommandContext<'_>) -> Result<Option<StatuslineTargetMode>> {
     ctx.handle.show_list_modal(
         "Status line setup".to_string(),
         vec![
@@ -305,9 +291,7 @@ async fn select_statusline_target(
                 subtitle: Some("Repo-local setup in the current workspace".to_string()),
                 badge: Some("Workspace".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "statusline:workspace".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("statusline:workspace".to_string())),
                 search_value: Some("statusline workspace repo local".to_string()),
             },
         ],
@@ -319,9 +303,7 @@ async fn select_statusline_target(
         return Ok(None);
     };
     let target = match selection {
-        InlineListSelection::ConfigAction(action) if action == "statusline:user" => {
-            StatuslineTargetMode::User
-        }
+        InlineListSelection::ConfigAction(action) if action == "statusline:user" => StatuslineTargetMode::User,
         InlineListSelection::ConfigAction(action) if action == "statusline:workspace" => {
             StatuslineTargetMode::Workspace
         }
@@ -334,23 +316,12 @@ async fn select_statusline_target(
     Ok(Some(target))
 }
 
-fn build_statusline_setup_items(
-    draft: &StatusLineConfig,
-    script_exists: bool,
-) -> Vec<InlineListItem> {
+fn build_statusline_setup_items(draft: &StatusLineConfig, script_exists: bool) -> Vec<InlineListItem> {
     let mut items = Vec::new();
 
     for (mode, label, subtitle) in [
-        (
-            StatusLineMode::Auto,
-            "Use auto permission review",
-            "Show VT Code-built status components.",
-        ),
-        (
-            StatusLineMode::Command,
-            "Use command mode",
-            "Run a shell command and render its first output line.",
-        ),
+        (StatusLineMode::Auto, "Use auto permission review", "Show VT Code-built status components."),
+        (StatusLineMode::Command, "Use command mode", "Run a shell command and render its first output line."),
         (StatusLineMode::Hidden, "Hide status line", "Disable the bottom status line."),
     ] {
         let active = draft.mode == mode;
@@ -447,10 +418,7 @@ fn build_statusline_setup_items(
     items
 }
 
-fn apply_statusline_action(
-    action: &str,
-    draft: &mut StatusLineConfig,
-) -> Result<StatuslineSetupAction> {
+fn apply_statusline_action(action: &str, draft: &mut StatusLineConfig) -> Result<StatuslineSetupAction> {
     match action {
         "statusline:save" => return Ok(StatuslineSetupAction::Save),
         "statusline:cancel" => return Ok(StatuslineSetupAction::Cancel),
@@ -534,11 +502,7 @@ fn build_statusline_preview(
             if right_parts.is_empty() {
                 return format!("auto permission review: {}", left_parts.join(" | "));
             }
-            format!(
-                "auto permission review: {} | {}",
-                left_parts.join(" | "),
-                right_parts.join(" | ")
-            )
+            format!("auto permission review: {} | {}", left_parts.join(" | "), right_parts.join(" | "))
         }
     }
 }
@@ -577,16 +541,14 @@ async fn prompt_statusline_input(
     .await?;
 
     let value = match outcome {
-        WizardModalOutcome::Submitted(selections) => {
-            selections.into_iter().find_map(|selection| match selection {
-                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
-                    if question_id == STATUSLINE_INPUT_ID =>
-                {
-                    other.or_else(|| selected.first().cloned())
-                }
-                _ => None,
-            })
-        }
+        WizardModalOutcome::Submitted(selections) => selections.into_iter().find_map(|selection| match selection {
+            InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                if question_id == STATUSLINE_INPUT_ID =>
+            {
+                other.or_else(|| selected.first().cloned())
+            }
+            _ => None,
+        }),
         WizardModalOutcome::Cancelled { .. } => None,
     };
     let Some(value) = value else {
@@ -615,9 +577,7 @@ fn build_statusline_prompt_step(
         question: question.to_string(),
         items: vec![InlineListItem {
             title: "Submit".to_string(),
-            subtitle: Some(
-                "Press Enter to accept the default, or Tab to type a custom value.".to_string(),
-            ),
+            subtitle: Some("Press Enter to accept the default, or Tab to type a custom value.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::RequestUserInputAnswer {
@@ -681,10 +641,8 @@ fn write_statusline_config(config_path: &Path, draft: &StatusLineConfig) -> Resu
     let ui_table = ensure_child_table(root_table, "ui");
     let status_table = ensure_child_table(ui_table, "status_line");
 
-    status_table
-        .insert("mode".to_string(), TomlValue::String(statusline_mode_id(&draft.mode).to_string()));
-    if let Some(command) = draft.command.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
+    status_table.insert("mode".to_string(), TomlValue::String(statusline_mode_id(&draft.mode).to_string()));
+    if let Some(command) = draft.command.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
         status_table.insert("command".to_string(), TomlValue::String(command.to_string()));
     } else {
         status_table.remove("command");
@@ -705,15 +663,9 @@ fn u64_to_toml_integer(value: u64, label: &str) -> Result<i64> {
     i64::try_from(value).with_context(|| format!("{label} is too large to persist"))
 }
 
-fn statusline_script_path(
-    target: StatuslineTargetMode,
-    workspace: &Path,
-    config_path: &Path,
-) -> PathBuf {
+fn statusline_script_path(target: StatuslineTargetMode, workspace: &Path, config_path: &Path) -> PathBuf {
     match target {
-        StatuslineTargetMode::Workspace => {
-            workspace.join(".vtcode").join(STATUSLINE_SCRIPT_FILE_NAME)
-        }
+        StatuslineTargetMode::Workspace => workspace.join(".vtcode").join(STATUSLINE_SCRIPT_FILE_NAME),
         StatuslineTargetMode::User => config_path
             .parent()
             .map(Path::to_path_buf)
@@ -757,8 +709,7 @@ fn scaffold_statusline_script(path: &Path, replace_existing: bool) -> Result<Scr
     }
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
 
     let result = if path.exists() {
@@ -766,8 +717,7 @@ fn scaffold_statusline_script(path: &Path, replace_existing: bool) -> Result<Scr
     } else {
         ScriptScaffoldResult::Created
     };
-    fs::write(path, STATUSLINE_SCRIPT_TEMPLATE)
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    fs::write(path, STATUSLINE_SCRIPT_TEMPLATE).with_context(|| format!("Failed to write {}", path.display()))?;
     set_executable(path)?;
     Ok(result)
 }
@@ -796,8 +746,8 @@ mod tests {
     use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 
     use super::{
-        StatuslineSetupAction, apply_statusline_action, build_statusline_preview,
-        build_statusline_setup_items, default_script_command,
+        StatuslineSetupAction, apply_statusline_action, build_statusline_preview, build_statusline_setup_items,
+        default_script_command,
     };
     use crate::agent::runloop::slash_commands::StatuslineTargetMode;
 
@@ -805,8 +755,7 @@ mod tests {
     fn statusline_action_switches_mode() {
         let mut draft = StatusLineConfig::default();
 
-        let action =
-            apply_statusline_action("statusline:mode:hidden", &mut draft).expect("mode action");
+        let action = apply_statusline_action("statusline:mode:hidden", &mut draft).expect("mode action");
 
         assert_eq!(action, StatuslineSetupAction::Continue);
         assert_eq!(draft.mode, StatusLineMode::Hidden);
@@ -820,13 +769,7 @@ mod tests {
             ..StatusLineConfig::default()
         };
 
-        let preview = build_statusline_preview(
-            &draft,
-            Some(("main", false)),
-            Some("thread-1"),
-            None,
-            "gpt-5.4",
-        );
+        let preview = build_statusline_preview(&draft, Some(("main", false)), Some("thread-1"), None, "gpt-5.4");
 
         assert_eq!(preview, "command mode (setup does not execute command): .vtcode/statusline.sh");
     }
@@ -842,10 +785,7 @@ mod tests {
 
     #[test]
     fn user_script_command_is_shell_quoted() {
-        let command = default_script_command(
-            StatuslineTargetMode::User,
-            Path::new("/tmp/status line's/script.sh"),
-        );
+        let command = default_script_command(StatuslineTargetMode::User, Path::new("/tmp/status line's/script.sh"));
 
         assert_eq!(command, "'/tmp/status line'\\''s/script.sh'");
     }

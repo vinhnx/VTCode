@@ -11,9 +11,7 @@ use crate::agent::runloop::slash_commands::CompactConversationCommand;
 use crate::agent::runloop::unified::palettes::refresh_runtime_config_from_manager;
 
 use super::apps::run_with_event_loop_suspended;
-use super::config_toml::{
-    ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value,
-};
+use super::config_toml::{ensure_child_table, load_toml_value, preferred_workspace_config_path, save_toml_value};
 use super::{SlashCommandContext, SlashCommandControl};
 
 pub(crate) async fn handle_compact_conversation(
@@ -45,10 +43,8 @@ async fn edit_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         .map(|config| config.tools.editor.clone())
         .unwrap_or_default();
     if !editor_config.enabled {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "External editor is disabled (`tools.editor.enabled = false`).",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "External editor is disabled (`tools.editor.enabled = false`).")?;
         return Ok(());
     }
 
@@ -77,8 +73,7 @@ async fn edit_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
     .await
     .context("Failed to launch editor")?;
 
-    let edited =
-        fs::read_to_string(temp_file.path()).context("Failed to read edited compaction prompt")?;
+    let edited = fs::read_to_string(temp_file.path()).context("Failed to read edited compaction prompt")?;
     persist_default_prompt(ctx, trimmed_optional(edited)).await?;
     ctx.renderer
         .line(MessageStyle::Info, "Saved workspace default manual compaction prompt.")?;
@@ -92,12 +87,9 @@ async fn reset_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
     Ok(())
 }
 
-async fn persist_default_prompt(
-    ctx: &mut SlashCommandContext<'_>,
-    value: Option<String>,
-) -> Result<()> {
-    let manager = ConfigManager::load_from_workspace(&ctx.config.workspace)
-        .context("Failed to load VT Code configuration")?;
+async fn persist_default_prompt(ctx: &mut SlashCommandContext<'_>, value: Option<String>) -> Result<()> {
+    let manager =
+        ConfigManager::load_from_workspace(&ctx.config.workspace).context("Failed to load VT Code configuration")?;
     let workspace_config_path = preferred_workspace_config_path(&manager, &ctx.config.workspace);
     let mut root = load_toml_value(&workspace_config_path)?;
     let root_table = root.as_table_mut().context("Workspace config root is not a TOML table")?;
@@ -127,27 +119,26 @@ async fn execute_manual_compaction(
 
     let resolved_options = resolve_manual_compaction_options(ctx, options);
     let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
-    let outcome =
-        crate::agent::runloop::unified::turn::compaction::manual_compact_history_in_place(
-            crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
-                ctx.provider_client.as_ref(),
-                &ctx.config.model,
-                &harness_snapshot.session_id,
-                ctx.thread_id,
-                &ctx.config.workspace,
-                ctx.vt_cfg.as_ref(),
-                ctx.lifecycle_hooks,
-                ctx.harness_emitter,
-            ),
-            crate::agent::runloop::unified::turn::compaction::CompactionState::new(
-                ctx.conversation_history,
-                ctx.session_stats,
-                ctx.context_manager,
-            ),
-            &resolved_options,
-            native_only,
-        )
-        .await;
+    let outcome = crate::agent::runloop::unified::turn::compaction::manual_compact_history_in_place(
+        crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
+            ctx.provider_client.as_ref(),
+            &ctx.config.model,
+            &harness_snapshot.session_id,
+            ctx.thread_id,
+            &ctx.config.workspace,
+            ctx.vt_cfg.as_ref(),
+            ctx.lifecycle_hooks,
+            ctx.harness_emitter,
+        ),
+        crate::agent::runloop::unified::turn::compaction::CompactionState::new(
+            ctx.conversation_history,
+            ctx.session_stats,
+            ctx.context_manager,
+        ),
+        &resolved_options,
+        native_only,
+    )
+    .await;
 
     let outcome = match outcome {
         Ok(outcome) => outcome,
@@ -211,10 +202,7 @@ fn trimmed_optional(value: String) -> Option<String> {
     (!trimmed.is_empty()).then_some(trimmed)
 }
 
-fn set_manual_compaction_prompt(
-    root_table: &mut toml::map::Map<String, TomlValue>,
-    value: Option<String>,
-) {
+fn set_manual_compaction_prompt(root_table: &mut toml::map::Map<String, TomlValue>, value: Option<String>) {
     match value {
         Some(value) => {
             let provider_table = ensure_child_table(root_table, "provider");

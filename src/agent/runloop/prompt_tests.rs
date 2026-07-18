@@ -4,9 +4,7 @@ use vtcode_commons::env_lock;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 
 #[tokio::test]
 async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
@@ -61,8 +59,7 @@ fn test_should_accept_refinement_rejects_role_play() {
     assert!(!should_accept_refinement(raw, refined));
 
     let technical_raw = "describe vtcode streaming parser";
-    let technical_refined =
-        "Provide a detailed description of the vtcode streaming parser implementation.";
+    let technical_refined = "Provide a detailed description of the vtcode streaming parser implementation.";
     assert!(should_accept_refinement(technical_raw, technical_refined));
 }
 
@@ -464,11 +461,7 @@ async fn test_value_inference_multiple_patterns() {
 
     // Test with JSON config value
     enricher
-        .record_workspace_change_for_test(
-            PathBuf::from("config.json"),
-            None,
-            r#"  "timeout": 5000,"#.to_string(),
-        )
+        .record_workspace_change_for_test(PathBuf::from("config.json"), None, r#"  "timeout": 5000,"#.to_string())
         .await;
 
     let prompt = "double the timeout";

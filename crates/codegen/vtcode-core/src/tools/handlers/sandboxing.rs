@@ -17,15 +17,11 @@ use serde::Serialize;
 use tokio::sync::RwLock;
 
 use crate::exec_policy::default_exec_approval_requirement as canonical_default_exec_approval_requirement;
-pub use crate::exec_policy::{
-    AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig,
-};
+pub use crate::exec_policy::{AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig};
 use crate::sandboxing::{
-    CommandSpec as CanonicalCommandSpec, ExecEnv as CanonicalExecEnv,
-    ExecExpiration as CanonicalExecExpiration, ResourceLimits,
-    SandboxManager as CanonicalSandboxManager, SandboxPolicy as CanonicalSandboxPolicy,
-    SandboxTransformError as CanonicalSandboxTransformError, SandboxType as CanonicalSandboxType,
-    SeccompProfile,
+    CommandSpec as CanonicalCommandSpec, ExecEnv as CanonicalExecEnv, ExecExpiration as CanonicalExecExpiration,
+    ResourceLimits, SandboxManager as CanonicalSandboxManager, SandboxPolicy as CanonicalSandboxPolicy,
+    SandboxTransformError as CanonicalSandboxTransformError, SandboxType as CanonicalSandboxType, SeccompProfile,
 };
 
 use super::tool_handler::{ToolSession, TurnContext};
@@ -87,11 +83,7 @@ impl ApprovalStore {
 }
 
 /// Helper function to cache approval decisions (from Codex)
-pub async fn with_cached_approval<K, F, Fut>(
-    store: &ApprovalStore,
-    key: K,
-    fetch: F,
-) -> ReviewDecision
+pub async fn with_cached_approval<K, F, Fut>(store: &ApprovalStore, key: K, fetch: F) -> ReviewDecision
 where
     K: Serialize + Clone,
     F: FnOnce() -> Fut,
@@ -214,11 +206,7 @@ pub trait Approvable<Req>: Send + Sync {
     }
 
     /// Start the approval process asynchronously (from Codex)
-    fn start_approval_async<'a>(
-        &'a mut self,
-        req: &'a Req,
-        ctx: ApprovalCtx<'a>,
-    ) -> BoxFuture<'a, ReviewDecision>;
+    fn start_approval_async<'a>(&'a mut self, req: &'a Req, ctx: ApprovalCtx<'a>) -> BoxFuture<'a, ReviewDecision>;
 }
 
 // ============================================================================
@@ -277,21 +265,17 @@ impl SandboxConfig {
             (SandboxPolicy::ReadOnly, NetworkAccess::Restricted | NetworkAccess::Limited) => {
                 CanonicalSandboxPolicy::read_only()
             }
-            (SandboxPolicy::ReadOnly, NetworkAccess::Full) => {
-                CanonicalSandboxPolicy::read_only_with_full_network()
-            }
+            (SandboxPolicy::ReadOnly, NetworkAccess::Full) => CanonicalSandboxPolicy::read_only_with_full_network(),
             (SandboxPolicy::WorkspaceWrite, NetworkAccess::Restricted | NetworkAccess::Limited) => {
                 CanonicalSandboxPolicy::workspace_write(vec![sandbox_cwd.to_path_buf()])
             }
-            (SandboxPolicy::WorkspaceWrite, NetworkAccess::Full) => {
-                CanonicalSandboxPolicy::workspace_write_full(
-                    vec![sandbox_cwd.to_path_buf()],
-                    Vec::new(),
-                    None,
-                    ResourceLimits::default(),
-                    SeccompProfile::strict().with_network(),
-                )
-            }
+            (SandboxPolicy::WorkspaceWrite, NetworkAccess::Full) => CanonicalSandboxPolicy::workspace_write_full(
+                vec![sandbox_cwd.to_path_buf()],
+                Vec::new(),
+                None,
+                ResourceLimits::default(),
+                SeccompProfile::strict().with_network(),
+            ),
             (SandboxPolicy::DangerFullAccess, _) => CanonicalSandboxPolicy::full_access(),
             (SandboxPolicy::ExternalSandbox, _) => CanonicalSandboxPolicy::ExternalSandbox {
                 description: LEGACY_EXTERNAL_SANDBOX_DESCRIPTION.to_string(),
@@ -315,10 +299,7 @@ pub fn default_exec_approval_requirement(
     policy: AskForApproval,
     sandbox_policy: &SandboxConfig,
 ) -> ExecApprovalRequirement {
-    canonical_default_exec_approval_requirement(
-        policy,
-        sandbox_requires_approval_prompt(sandbox_policy),
-    )
+    canonical_default_exec_approval_requirement(policy, sandbox_requires_approval_prompt(sandbox_policy))
 }
 
 fn sandbox_requires_approval_prompt(sandbox_policy: &SandboxConfig) -> bool {
@@ -467,9 +448,7 @@ pub enum SandboxTransformError {
 impl From<CanonicalSandboxTransformError> for SandboxTransformError {
     fn from(value: CanonicalSandboxTransformError) -> Self {
         match value {
-            CanonicalSandboxTransformError::MissingSandboxExecutable => {
-                Self::MissingSandboxExecutable
-            }
+            CanonicalSandboxTransformError::MissingSandboxExecutable => Self::MissingSandboxExecutable,
             CanonicalSandboxTransformError::UnavailableSandboxType(_) => Self::SandboxUnavailable,
             CanonicalSandboxTransformError::CreationFailed(message)
             | CanonicalSandboxTransformError::InvalidPolicy(message) => Self::ConfigError(message),
@@ -492,12 +471,7 @@ where
     Out: Send + Sync,
 {
     /// Execute the tool request
-    async fn run(
-        &mut self,
-        req: &Req,
-        attempt: &SandboxAttempt<'_>,
-        ctx: &ToolCtx,
-    ) -> Result<Out, ToolError>;
+    async fn run(&mut self, req: &Req, attempt: &SandboxAttempt<'_>, ctx: &ToolCtx) -> Result<Out, ToolError>;
 }
 
 // ============================================================================
@@ -514,11 +488,7 @@ impl SandboxManager {
     }
 
     /// Select the initial sandbox type based on policy and preference
-    pub fn select_initial(
-        &self,
-        policy: &SandboxConfig,
-        preference: SandboxablePreference,
-    ) -> SandboxType {
+    pub fn select_initial(&self, policy: &SandboxConfig, preference: SandboxablePreference) -> SandboxType {
         match preference {
             SandboxablePreference::Forbid => SandboxType::None,
             SandboxablePreference::Require => self.platform_sandbox(),
@@ -543,8 +513,7 @@ impl SandboxManager {
             SandboxablePreference::Auto => {
                 if matches!(
                     policy,
-                    CanonicalSandboxPolicy::DangerFullAccess
-                        | CanonicalSandboxPolicy::ExternalSandbox { .. }
+                    CanonicalSandboxPolicy::DangerFullAccess | CanonicalSandboxPolicy::ExternalSandbox { .. }
                 ) {
                     SandboxType::None
                 } else {
@@ -600,10 +569,7 @@ impl ExecToolCallOutput {
 }
 
 /// Execute command with environment (from Codex)
-pub async fn execute_env(
-    env: ExecEnv,
-    _policy: &SandboxConfig,
-) -> Result<ExecToolCallOutput, anyhow::Error> {
+pub async fn execute_env(env: ExecEnv, _policy: &SandboxConfig) -> Result<ExecToolCallOutput, anyhow::Error> {
     use tokio::process::Command;
 
     let mut cmd = Command::new(&env.program);
@@ -670,10 +636,7 @@ mod tests {
 
         assert_eq!(
             result,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
+            ExecApprovalRequirement::NeedsApproval { reason: None, proposed_execpolicy_amendment: None }
         );
     }
 
@@ -709,10 +672,7 @@ mod tests {
             network_access: NetworkAccess::Restricted,
         };
 
-        assert_eq!(
-            policy.to_canonical_policy(Path::new("/workspace")),
-            CanonicalSandboxPolicy::read_only()
-        );
+        assert_eq!(policy.to_canonical_policy(Path::new("/workspace")), CanonicalSandboxPolicy::read_only());
     }
 
     #[test]
@@ -736,10 +696,7 @@ mod tests {
             network_access: NetworkAccess::Restricted,
         };
 
-        assert_eq!(
-            policy.to_canonical_policy(&root),
-            CanonicalSandboxPolicy::workspace_write(vec![root])
-        );
+        assert_eq!(policy.to_canonical_policy(&root), CanonicalSandboxPolicy::workspace_write(vec![root]));
     }
 
     #[test]
@@ -769,10 +726,7 @@ mod tests {
             network_access: NetworkAccess::Restricted,
         };
 
-        assert_eq!(
-            policy.to_canonical_policy(Path::new("/workspace")),
-            CanonicalSandboxPolicy::full_access()
-        );
+        assert_eq!(policy.to_canonical_policy(Path::new("/workspace")), CanonicalSandboxPolicy::full_access());
     }
 
     #[test]
@@ -829,8 +783,7 @@ mod tests {
         assert_eq!(sandbox, SandboxType::None);
 
         // Forbid always returns None
-        let sandbox =
-            manager.select_initial(&SandboxConfig::default(), SandboxablePreference::Forbid);
+        let sandbox = manager.select_initial(&SandboxConfig::default(), SandboxablePreference::Forbid);
         assert_eq!(sandbox, SandboxType::None);
     }
 

@@ -41,11 +41,7 @@ impl AgentRunner {
     /// Prepare everything needed before entering the turn loop.
     ///
     /// This extracts the setup phase from `execute_task` into a testable unit.
-    pub(super) async fn prepare_task_execution(
-        &mut self,
-        task: &Task,
-        contexts: &[ContextItem],
-    ) -> Result<TaskSetup> {
+    pub(super) async fn prepare_task_execution(&mut self, task: &Task, contexts: &[ContextItem]) -> Result<TaskSetup> {
         // Align harness context with runner session/task for structured telemetry
         self.tool_registry.set_harness_session(self.session_id.clone());
         self.tool_registry.set_harness_task(Some(task.id.clone()));
@@ -55,19 +51,12 @@ impl AgentRunner {
         let agent_prefix = format!("[{}]", self.agent_type);
         // Persist every recorded event to the unified per-session store so it
         // becomes the single source of truth for session state/history.
-        let session_sink =
-            crate::core::agent::events::session_store_sink(self.workspace(), &self.session_id);
-        let event_sink =
-            crate::core::agent::events::combine_event_sinks(self.event_sink.clone(), session_sink);
-        let mut event_recorder = ExecEventRecorder::new(
-            self.session_id.clone(),
-            event_sink,
-            Some(self.thread_handle.clone()),
-        );
+        let session_sink = crate::core::agent::events::session_store_sink(self.workspace(), &self.session_id);
+        let event_sink = crate::core::agent::events::combine_event_sinks(self.event_sink.clone(), session_sink);
+        let mut event_recorder =
+            ExecEventRecorder::new(self.session_id.clone(), event_sink, Some(self.thread_handle.clone()));
         event_recorder.turn_started();
-        self.runner_println(format_args!(
-            "{agent_prefix} Analyzing request and planning approach..."
-        ));
+        self.runner_println(format_args!("{agent_prefix} Analyzing request and planning approach..."));
 
         self.runner_println(format_args!(
             "{} Executing {} task: {}",
@@ -83,23 +72,17 @@ impl AgentRunner {
         let review_like = super::continuation::is_review_like_task(task);
         let full_auto_active = self.tool_registry.current_full_auto_allowlist().await.is_some();
 
-        let mut conversation =
-            crate::core::agent::conversation::conversation_from_messages(&self.bootstrap_messages);
+        let mut conversation = crate::core::agent::conversation::conversation_from_messages(&self.bootstrap_messages);
         conversation.extend(crate::core::agent::conversation::build_conversation(task, contexts));
 
-        let conversation_messages =
-            crate::core::agent::conversation::build_messages_from_conversation(&conversation);
+        let conversation_messages = crate::core::agent::conversation::build_messages_from_conversation(&conversation);
 
         let max_tool_loops = self.config().tools.max_tool_loops;
         let preserve_recent_turns = self.config().context.preserve_recent_turns;
         let max_context_tokens = self.config().context.max_context_tokens;
 
-        let mut session_state = AgentSessionState::new(
-            self.session_id.clone(),
-            self.max_turns,
-            max_tool_loops,
-            max_context_tokens,
-        );
+        let mut session_state =
+            AgentSessionState::new(self.session_id.clone(), self.max_turns, max_tool_loops, max_context_tokens);
         session_state.conversation = conversation;
         session_state.messages = std::sync::Arc::new(conversation_messages);
         session_state.reconcile_token_count();
@@ -114,9 +97,7 @@ impl AgentRunner {
 
         let mut runtime = AgentRuntime::new(session_state, None, steering_receiver);
 
-        if prompt_bundle.system_prompt_report.over_budget
-            && self.config().agent.system_prompt_budget_warning
-        {
+        if prompt_bundle.system_prompt_report.over_budget && self.config().agent.system_prompt_budget_warning {
             runtime.state.warnings.push(format!(
                 "Base system prompt is ~{} tokens (budget {}); later appendices (session context, runtime line, subagents roster) add more. Consider a leaner system prompt mode or enable agent.trim_system_prompt.",
                 prompt_bundle.system_prompt_report.token_estimate,
@@ -132,8 +113,7 @@ impl AgentRunner {
             runtime.state.warnings.push(format!("Tool registry init failed: {err}"));
         }
 
-        let orchestration_enabled =
-            self.harness_plan_build_evaluate_enabled(full_auto_active, review_like);
+        let orchestration_enabled = self.harness_plan_build_evaluate_enabled(full_auto_active, review_like);
 
         let planner_artifacts = if orchestration_enabled {
             Some(self.run_planner_phase(task, &mut event_recorder).await?)
@@ -200,9 +180,7 @@ impl AgentRunner {
             return;
         }
 
-        tracing::info!(
-            "Context reset manifest detected — clearing conversation history for fresh start"
-        );
+        tracing::info!("Context reset manifest detected — clearing conversation history for fresh start");
         session_state.clear_conversation_history();
 
         // Consume the manifest so it only triggers once.

@@ -13,18 +13,16 @@ use super::factory::ProviderConfig as FactoryProviderConfig;
 use super::provider::LLMProvider;
 use super::provider_config::{
     AnthropicProviderConfig, CopilotProviderConfig, DeepSeekProviderConfig, EvolinkProviderConfig,
-    GeminiProviderConfig, HuggingFaceProviderConfig, LlamaCppProviderConfig,
-    LmStudioProviderConfig, MiMoProviderConfig, MinimaxProviderConfig, MistralProviderConfig,
-    MoonshotProviderConfig, OllamaProviderConfig, OpenAIProviderConfig, OpenCodeGoProviderConfig,
-    OpenCodeZenProviderConfig, OpenResponsesProviderConfig, OpenRouterProviderConfig,
-    PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
+    GeminiProviderConfig, HuggingFaceProviderConfig, LlamaCppProviderConfig, LmStudioProviderConfig,
+    MiMoProviderConfig, MinimaxProviderConfig, MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig,
+    OpenAIProviderConfig, OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
+    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
 };
 use super::providers::{
-    AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider,
-    HuggingFaceProvider, LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider,
-    MistralProvider, MoonshotProvider, OllamaProvider, OpenCodeGoProvider, OpenCodeZenProvider,
-    OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider, StepFunProvider,
-    ZAIProvider,
+    AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider, HuggingFaceProvider,
+    LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
+    OllamaProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
+    PoolsideProvider, QwenProvider, StepFunProvider, ZAIProvider,
 };
 use vtcode_commons::cgp::{ComponentProvider, HasComponent};
 use vtcode_config::TimeoutsConfig;
@@ -76,25 +74,15 @@ where
     ComponentProvider<Ctx, ProviderMetadataComponent>: ProviderMetadataProvider<Ctx>,
 {
     const PROVIDER_KEY: &'static str =
-        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
-            Ctx,
-        >>::PROVIDER_KEY;
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<Ctx>>::PROVIDER_KEY;
     const DISPLAY_NAME: &'static str =
-        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
-            Ctx,
-        >>::DISPLAY_NAME;
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<Ctx>>::DISPLAY_NAME;
     const DEFAULT_MODEL: &'static str =
-        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
-            Ctx,
-        >>::DEFAULT_MODEL;
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<Ctx>>::DEFAULT_MODEL;
     const API_BASE_URL: &'static str =
-        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<
-            Ctx,
-        >>::API_BASE_URL;
-    const BASE_URL_ENV_VAR: Option<&'static str> = <ComponentProvider<
-        Ctx,
-        ProviderMetadataComponent,
-    > as ProviderMetadataProvider<Ctx>>::BASE_URL_ENV_VAR;
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<Ctx>>::API_BASE_URL;
+    const BASE_URL_ENV_VAR: Option<&'static str> =
+        <ComponentProvider<Ctx, ProviderMetadataComponent> as ProviderMetadataProvider<Ctx>>::BASE_URL_ENV_VAR;
 }
 
 /// Ergonomic blanket consumer over the provider build component.
@@ -109,9 +97,7 @@ where
     ComponentProvider<Ctx, ProviderBuildComponent>: ProviderBuildProvider<Ctx>,
 {
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
-        <ComponentProvider<Ctx, ProviderBuildComponent> as ProviderBuildProvider<Ctx>>::build_provider(
-            config,
-        )
+        <ComponentProvider<Ctx, ProviderBuildComponent> as ProviderBuildProvider<Ctx>>::build_provider(config)
     }
 }
 
@@ -149,15 +135,7 @@ where
             ..
         } = config;
 
-        Box::new(P::from_standard_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            model_behavior,
-        ))
+        Box::new(P::from_standard_config(api_key, model, base_url, prompt_cache, timeouts, anthropic, model_behavior))
     }
 }
 
@@ -416,65 +394,60 @@ mod tests {
 
     #[test]
     fn standard_build_consumer_builds_provider() {
-        let provider =
-            <GeminiProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
-                api_key: Some("test-key".to_string()),
-                openai_chatgpt_auth: None,
-                copilot_auth: None,
-                base_url: None,
-                model: Some(
-                    vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
-                ),
-                prompt_cache: None,
-                timeouts: None,
-                openai: None,
-                anthropic: None,
-                model_behavior: None,
-                workspace_root: None,
-            });
+        let provider = <GeminiProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some(vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: None,
+            anthropic: None,
+            model_behavior: None,
+            workspace_root: None,
+        });
 
         assert_eq!(provider.name(), "gemini");
     }
 
     #[test]
     fn openai_build_consumer_accepts_provider_specific_config() {
-        let provider =
-            <OpenAIProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
-                api_key: Some("test-key".to_string()),
-                openai_chatgpt_auth: None,
-                copilot_auth: None,
-                base_url: None,
-                model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
-                prompt_cache: None,
-                timeouts: None,
-                openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
-                anthropic: Some(AnthropicConfig::default()),
-                model_behavior: None,
-                workspace_root: None,
-            });
+        let provider = <OpenAIProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
+            anthropic: Some(AnthropicConfig::default()),
+            model_behavior: None,
+            workspace_root: None,
+        });
 
         assert_eq!(provider.name(), "openai");
     }
 
     #[test]
     fn anthropic_build_consumer_accepts_provider_specific_config() {
-        let provider =
-            <AnthropicProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
-                api_key: Some("test-key".to_string()),
-                openai_chatgpt_auth: None,
-                copilot_auth: None,
-                base_url: None,
-                model: Some(vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
-                prompt_cache: None,
-                timeouts: None,
-                openai: None,
-                anthropic: Some(AnthropicConfig {
-                    count_tokens_enabled: true,
-                    ..AnthropicConfig::default()
-                }),
-                model_behavior: None,
-                workspace_root: None,
-            });
+        let provider = <AnthropicProviderConfig as CanBuildProvider>::build_provider(FactoryProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some(vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: None,
+            anthropic: Some(AnthropicConfig {
+                count_tokens_enabled: true,
+                ..AnthropicConfig::default()
+            }),
+            model_behavior: None,
+            workspace_root: None,
+        });
 
         assert_eq!(provider.name(), "anthropic");
     }

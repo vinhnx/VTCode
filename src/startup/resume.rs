@@ -10,16 +10,12 @@ fn validate_session_id_suffix(suffix: &str) -> Result<()> {
         bail!("Custom session ID suffix too long (maximum 64 characters)");
     }
     if !suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        bail!(
-            "Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores"
-        );
+        bail!("Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores");
     }
     Ok(())
 }
 
-pub(super) fn resolve_session_resume(
-    args: &Cli,
-) -> Result<(Option<String>, Option<SessionResumeMode>)> {
+pub(super) fn resolve_session_resume(args: &Cli) -> Result<(Option<String>, Option<SessionResumeMode>)> {
     let custom_session_id = args.session_id.clone();
     if let Some(ref suffix) = custom_session_id {
         validate_session_id_suffix(suffix)?;
@@ -48,17 +44,11 @@ pub(super) fn resolve_session_resume(
     Ok((custom_session_id, session_resume))
 }
 
-pub(super) fn validate_resume_all_usage(
-    args: &Cli,
-    session_resume: Option<&SessionResumeMode>,
-) -> Result<()> {
+pub(super) fn validate_resume_all_usage(args: &Cli, session_resume: Option<&SessionResumeMode>) -> Result<()> {
     if args.all
         && session_resume.is_none()
         && !matches!(args.command, Some(Commands::Continue))
-        && !matches!(
-            args.command,
-            Some(Commands::Exec { command: Some(ExecSubcommand::Resume(_)), .. })
-        )
+        && !matches!(args.command, Some(Commands::Exec { command: Some(ExecSubcommand::Resume(_)), .. }))
     {
         bail!("--all can only be used with resume, continue, fork-session, or exec resume");
     }
@@ -66,8 +56,7 @@ pub(super) fn validate_resume_all_usage(
     if args.summarize {
         // The `continue` subcommand becomes a fork of the latest session when a
         // custom session id is supplied, so `--summarize` is valid there too.
-        let is_continue_fork =
-            matches!(args.command, Some(Commands::Continue)) && args.session_id.is_some();
+        let is_continue_fork = matches!(args.command, Some(Commands::Continue)) && args.session_id.is_some();
         let is_fork_operation = matches!(session_resume, Some(SessionResumeMode::Fork(_)))
             || (args.session_id.is_some() && session_resume.is_some())
             || is_continue_fork;

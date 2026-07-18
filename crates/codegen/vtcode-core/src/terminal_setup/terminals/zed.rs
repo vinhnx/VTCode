@@ -8,9 +8,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate complete Zed configuration with all features
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut config_sections = Vec::new();
 
     // Add header comment
@@ -27,8 +25,7 @@ pub fn generate_config(
             }
             crate::terminal_setup::detector::TerminalFeature::CopyPaste => {
                 // Zed doesn't support custom copy/paste config for terminal
-                config_sections
-                    .push("// Copy/paste: Built-in to Zed, no custom config needed".to_string());
+                config_sections.push("// Copy/paste: Built-in to Zed, no custom config needed".to_string());
                 config_sections.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
@@ -41,8 +38,7 @@ pub fn generate_config(
                 config_sections.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
-                config_sections
-                    .push("// System notifications: Not supported in Zed terminal".to_string());
+                config_sections.push("// System notifications: Not supported in Zed terminal".to_string());
                 config_sections.push("// Use Zed's notification system instead".to_string());
                 config_sections.push(String::new());
             }

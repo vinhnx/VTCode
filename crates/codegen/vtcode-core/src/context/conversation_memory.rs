@@ -189,8 +189,8 @@ impl ConversationMemory {
             }
 
             // camelCase or PascalCase (likely identifiers)
-            let has_mixed_case = candidate.chars().any(|c| c.is_uppercase())
-                && candidate.chars().any(|c| c.is_lowercase());
+            let has_mixed_case =
+                candidate.chars().any(|c| c.is_uppercase()) && candidate.chars().any(|c| c.is_lowercase());
 
             if has_mixed_case {
                 entities.push(candidate.to_string());

@@ -31,9 +31,7 @@ pub(crate) enum ResponsesStreamEventPolicy {
     Unsupported,
 }
 
-pub(crate) fn response_stream_event_policy(
-    payload: &Value,
-) -> Result<ResponsesStreamEventPolicy, &'static str> {
+pub(crate) fn response_stream_event_policy(payload: &Value) -> Result<ResponsesStreamEventPolicy, &'static str> {
     let Some(event_type) = payload.get("type") else {
         return Err("missing Responses stream event type");
     };
@@ -86,9 +84,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.mcp_list_tools.completed"
         | "response.code_interpreter_call.in_progress"
         | "response.code_interpreter_call.interpreting"
-        | "response.code_interpreter_call.completed" => {
-            ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop
-        }
+        | "response.code_interpreter_call.completed" => ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop,
         "response.code_interpreter_call_code.delta"
         | "response.code_interpreter_call_code.done"
         | "response.mcp_call_arguments.delta"
@@ -96,9 +92,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.image_generation_call.partial_image"
         | "response.custom_tool_call_input.delta"
         | "response.custom_tool_call_input.done"
-        | "response.output_text.annotation.added" => {
-            ResponsesStreamEventPolicy::DocumentedValueBearingRigGap
-        }
+        | "response.output_text.annotation.added" => ResponsesStreamEventPolicy::DocumentedValueBearingRigGap,
         _ => ResponsesStreamEventPolicy::Unsupported,
     }
 }
@@ -144,9 +138,7 @@ where
     /// several builders, and index-based ids collide across responses.
     fn fabricated_call_id(&mut self, output_index: Option<usize>) -> String {
         match output_index {
-            Some(index) => {
-                self.fabricated_ids.entry(index).or_insert_with(generate_tool_call_id).clone()
-            }
+            Some(index) => self.fabricated_ids.entry(index).or_insert_with(generate_tool_call_id).clone(),
             None => self.fabricated_fallback_id.get_or_insert_with(generate_tool_call_id).clone(),
         }
     }
@@ -156,17 +148,11 @@ where
     }
 
     fn handle_payload(&mut self, payload: Value) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
-        let event = ResponsesStreamAdapter::parse_payload_for_provider(
-            self.options.provider_name,
-            payload,
-        )?;
+        let event = ResponsesStreamAdapter::parse_payload_for_provider(self.options.provider_name, payload)?;
         self.handle_event(event)
     }
 
-    fn handle_event(
-        &mut self,
-        event: ResponsesStreamEvent,
-    ) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
+    fn handle_event(&mut self, event: ResponsesStreamEvent) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
         let mut events = Vec::new();
 
         match event {
@@ -176,9 +162,7 @@ where
                         crate::provider::LLMStreamEvent::Token { delta } => {
                             events.push(NormalizedStreamEvent::TextDelta { delta });
                         }
-                        crate::provider::LLMStreamEvent::Reasoning { delta }
-                            if self.options.emit_reasoning =>
-                        {
+                        crate::provider::LLMStreamEvent::Reasoning { delta } if self.options.emit_reasoning => {
                             events.push(NormalizedStreamEvent::ReasoningDelta { delta });
                         }
                         _ => {}
@@ -198,22 +182,12 @@ where
                     events.push(NormalizedStreamEvent::ReasoningDelta { delta });
                 }
             }
-            ResponsesStreamEvent::FunctionCallNameDelta {
-                call_id,
-                item_id,
-                name,
-                output_index,
-            } => {
+            ResponsesStreamEvent::FunctionCallNameDelta { call_id, item_id, name, output_index } => {
                 self.record_tool_call_item_id(item_id.as_deref(), &call_id);
                 self.record_tool_call_name(&call_id, &name, output_index);
                 self.push_tool_call_start(&mut events, call_id, Some(name));
             }
-            ResponsesStreamEvent::FunctionCallArgumentsDelta {
-                call_id,
-                item_id,
-                delta,
-                output_index,
-            } => {
+            ResponsesStreamEvent::FunctionCallArgumentsDelta { call_id, item_id, delta, output_index } => {
                 let call_id = self.provider_tool_call_id(item_id.as_deref(), call_id);
                 let call_id = if call_id.is_empty() {
                     self.fabricated_call_id(output_index)
@@ -236,13 +210,7 @@ where
                     events.push(NormalizedStreamEvent::ToolCallDelta { call_id, delta });
                 }
             }
-            ResponsesStreamEvent::CompletedToolCall {
-                call_id,
-                item_id,
-                name,
-                arguments,
-                output_index,
-            } => {
+            ResponsesStreamEvent::CompletedToolCall { call_id, item_id, name, arguments, output_index } => {
                 self.record_tool_call_item_id(item_id.as_deref(), &call_id);
                 let index = self.record_tool_call_name(&call_id, &name, output_index);
                 self.push_tool_call_start(&mut events, call_id.clone(), Some(name));
@@ -269,12 +237,7 @@ where
         Ok(events)
     }
 
-    fn record_tool_call_name(
-        &mut self,
-        call_id: &str,
-        name: &str,
-        output_index: Option<usize>,
-    ) -> usize {
+    fn record_tool_call_name(&mut self, call_id: &str, name: &str, output_index: Option<usize>) -> usize {
         self.tool_call_names
             .entry(call_id.to_string())
             .or_insert_with(|| name.to_string());
@@ -294,10 +257,7 @@ where
         let mut response = if let Some(final_response) = self.final_response {
             match (self.parse_final_response)(final_response.clone()) {
                 Ok(response) => response,
-                Err(_)
-                    if final_response_output_is_empty(&final_response)
-                        && streamed_response_is_usable(&streamed) =>
-                {
+                Err(_) if final_response_output_is_empty(&final_response) && streamed_response_is_usable(&streamed) => {
                     let mut response = streamed.clone();
                     merge_final_response_metadata(
                         &mut response,
@@ -340,12 +300,7 @@ where
             .unwrap_or(call_id)
     }
 
-    fn push_tool_call_start(
-        &mut self,
-        events: &mut Vec<NormalizedStreamEvent>,
-        call_id: String,
-        name: Option<String>,
-    ) {
+    fn push_tool_call_start(&mut self, events: &mut Vec<NormalizedStreamEvent>, call_id: String, name: Option<String>) {
         if self.seen_tool_calls.insert(call_id.clone()) {
             events.push(NormalizedStreamEvent::ToolCallStart { call_id, name });
         }
@@ -445,8 +400,7 @@ fn final_response_output_is_empty(final_response: &Value) -> bool {
 fn merge_streamed_response(response: &mut LLMResponse, streamed: LLMResponse) {
     if response.content.as_deref().unwrap_or_default().is_empty() {
         response.content = streamed.content;
-    } else if let (Some(content), Some(streamed_content)) =
-        (&mut response.content, streamed.content)
+    } else if let (Some(content), Some(streamed_content)) = (&mut response.content, streamed.content)
         && !streamed_content.is_empty()
         && !content.contains(&streamed_content)
     {
@@ -505,8 +459,7 @@ fn parse_responses_usage(
     include_cached_prompt_metrics: bool,
 ) -> Option<crate::provider::Usage> {
     let usage_value = final_response.get("usage")?;
-    let cached_prompt_tokens =
-        parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
+    let cached_prompt_tokens = parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
     Some(crate::provider::Usage {
         prompt_tokens: usage_value
             .get("input_tokens")
@@ -539,9 +492,7 @@ fn provider_error(provider_name: &str, message: impl Into<String>) -> LLMError {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ResponsesNormalizedStreamOptions, ResponsesNormalizedStreamProcessor, provider_error,
-    };
+    use super::{ResponsesNormalizedStreamOptions, ResponsesNormalizedStreamProcessor, provider_error};
     use crate::provider::{FinishReason, LLMResponse, NormalizedStreamEvent, ToolCall};
     use serde_json::{Value, json};
 
@@ -945,11 +896,7 @@ mod tests {
                         .unwrap_or_default()
                         .to_string(),
                     custom_call.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
-                    custom_call
-                        .get("input")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
+                    custom_call.get("input").and_then(Value::as_str).unwrap_or_default().to_string(),
                 )]),
                 ..Default::default()
             })
@@ -980,10 +927,7 @@ mod tests {
                 "input": "*** Begin Patch\n*** End Patch\n"
             }))
             .expect("custom tool input done should parse");
-        assert!(
-            done_events.is_empty(),
-            "custom tool dispatch remains owned by response.completed replay"
-        );
+        assert!(done_events.is_empty(), "custom tool dispatch remains owned by response.completed replay");
 
         let completed_events = processor
             .handle_payload(json!({

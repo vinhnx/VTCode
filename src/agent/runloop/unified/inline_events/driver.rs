@@ -20,9 +20,7 @@ use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::updater::{StartupUpdateNotice, display_update_notice};
 
-use super::{
-    InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
-};
+use super::{InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput};
 
 struct InlineEventLoop<'a> {
     renderer: &'a mut AnsiRenderer,
@@ -40,8 +38,7 @@ struct InlineEventLoop<'a> {
     ctrl_c_notify: &'a Arc<Notify>,
     session_bootstrap: &'a SessionBootstrap,
     full_auto: bool,
-    startup_update_notice_rx:
-        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    startup_update_notice_rx: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     header_context: &'a mut InlineHeaderContext,
     use_unicode: bool,
     conversation_history: &'a mut Vec<uni::Message>,
@@ -121,11 +118,7 @@ impl<'a> InlineEventLoop<'a> {
         }
     }
 
-    async fn poll(
-        mut self,
-        session: &mut InlineSession,
-        ctrl_c_notify: &Arc<Notify>,
-    ) -> Result<InlineLoopAction> {
+    async fn poll(mut self, session: &mut InlineSession, ctrl_c_notify: &Arc<Notify>) -> Result<InlineLoopAction> {
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
         }
@@ -279,8 +272,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub session_bootstrap: &'a SessionBootstrap,
     pub full_auto: bool,
-    pub startup_update_notice_rx:
-        &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
+    pub startup_update_notice_rx: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<StartupUpdateNotice>>,
     pub header_context: &'a mut InlineHeaderContext,
     pub use_unicode: bool,
     pub conversation_history: &'a mut Vec<uni::Message>,
@@ -326,8 +318,7 @@ mod tests {
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
-        UiSurfacePreference,
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
@@ -371,8 +362,7 @@ mod tests {
 
     fn runtime_config() -> CoreAgentConfig {
         CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
-                .to_string(),
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-key".to_string(),
             provider: "gemini".to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),

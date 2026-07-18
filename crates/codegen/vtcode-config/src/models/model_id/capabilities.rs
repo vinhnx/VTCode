@@ -48,9 +48,7 @@ fn catalog_provider_key(provider: &str) -> &str {
         "ollama"
     } else if provider.eq_ignore_ascii_case("lmstudio") {
         "lmstudio"
-    } else if provider.eq_ignore_ascii_case("llamacpp")
-        || provider.eq_ignore_ascii_case("llama.cpp")
-    {
+    } else if provider.eq_ignore_ascii_case("llamacpp") || provider.eq_ignore_ascii_case("llama.cpp") {
         "llamacpp"
     } else if provider.eq_ignore_ascii_case("moonshot") {
         "moonshot"
@@ -98,27 +96,25 @@ fn capability_provider_key(provider: Provider) -> &'static str {
 }
 
 fn generated_catalog_entry(provider: &str, id: &str) -> Option<ModelCatalogEntry> {
-    capability_generated::metadata_for(catalog_provider_key(provider), id).map(|entry| {
-        ModelCatalogEntry {
-            provider: entry.provider,
-            id: entry.id,
-            display_name: entry.display_name,
-            description: entry.description,
-            context_window: entry.context_window,
-            max_output_tokens: entry.max_output_tokens,
-            reasoning: entry.reasoning,
-            tool_call: entry.tool_call,
-            vision: entry.vision,
-            input_modalities: entry.input_modalities,
-            caching: entry.caching,
-            structured_output: entry.structured_output,
-            pricing: ModelPricing {
-                input: entry.pricing.input,
-                output: entry.pricing.output,
-                cache_read: entry.pricing.cache_read,
-                cache_write: entry.pricing.cache_write,
-            },
-        }
+    capability_generated::metadata_for(catalog_provider_key(provider), id).map(|entry| ModelCatalogEntry {
+        provider: entry.provider,
+        id: entry.id,
+        display_name: entry.display_name,
+        description: entry.description,
+        context_window: entry.context_window,
+        max_output_tokens: entry.max_output_tokens,
+        reasoning: entry.reasoning,
+        tool_call: entry.tool_call,
+        vision: entry.vision,
+        input_modalities: entry.input_modalities,
+        caching: entry.caching,
+        structured_output: entry.structured_output,
+        pricing: ModelPricing {
+            input: entry.pricing.input,
+            output: entry.pricing.output,
+            cache_read: entry.pricing.cache_read,
+            cache_write: entry.pricing.cache_write,
+        },
     })
 }
 
@@ -142,12 +138,8 @@ impl ModelId {
     /// Preferred built-in lightweight sibling or lower-tier fallback for this model.
     pub fn preferred_lightweight_variant(&self) -> Option<Self> {
         match self {
-            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
-                Some(ModelId::Gemini35Flash)
-            }
-            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT53Codex => {
-                Some(ModelId::GPT54Mini)
-            }
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => Some(ModelId::Gemini35Flash),
+            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT53Codex => Some(ModelId::GPT54Mini),
             ModelId::GPT56Sol => Some(ModelId::GPT56Terra),
             ModelId::GPT56Terra => Some(ModelId::GPT56Luna),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
@@ -157,9 +149,7 @@ impl ModelId {
             | ModelId::ClaudeOpus48
             | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
-            ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => {
-                Some(ModelId::CopilotGPT54Mini)
-            }
+            ModelId::CopilotGPT52Codex | ModelId::CopilotGPT51CodexMax => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
             ModelId::OpenCodeGoDeepseekV4Pro => Some(ModelId::OpenCodeGoDeepseekV4Flash),
             ModelId::OpenCodeGoGlm52 => Some(ModelId::OpenCodeGoGlm51),
@@ -167,12 +157,8 @@ impl ModelId {
             ModelId::OpenCodeGoMimoV25Pro => Some(ModelId::OpenCodeGoMimoV25),
             ModelId::OpenCodeGoQwen37Max => Some(ModelId::OpenCodeGoQwen37Plus),
             ModelId::OpenCodeGoKimiK27Code => Some(ModelId::OpenCodeGoKimiK26),
-            ModelId::HuggingFaceDeepseekV4ProTogether => {
-                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
-            }
-            ModelId::HuggingFaceDeepseekV4ProNovita => {
-                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
-            }
+            ModelId::HuggingFaceDeepseekV4ProTogether => Some(ModelId::HuggingFaceDeepseekV4FlashNovita),
+            ModelId::HuggingFaceDeepseekV4ProNovita => Some(ModelId::HuggingFaceDeepseekV4FlashNovita),
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::StepFun37Flash => None,
             ModelId::EvolinkGpt52
@@ -207,10 +193,7 @@ impl ModelId {
                         .iter()
                         .filter(|&candidate| candidate != self)
                         .filter(|&candidate| {
-                            candidate
-                                .openrouter_metadata()
-                                .map(|other| !other.reasoning)
-                                .unwrap_or(false)
+                            candidate.openrouter_metadata().map(|other| !other.reasoning).unwrap_or(false)
                         })
                         .cloned()
                         .collect()
@@ -232,24 +215,16 @@ impl ModelId {
         }
 
         let direct = match self {
-            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
-                Some(ModelId::Gemini35Flash)
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => Some(ModelId::Gemini35Flash),
+            ModelId::GPT55 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => {
+                Some(ModelId::GPT54Mini)
             }
-            ModelId::GPT55
-            | ModelId::GPT54
-            | ModelId::GPT54Pro
-            | ModelId::GPT54Nano
-            | ModelId::GPT54Mini => Some(ModelId::GPT54Mini),
             ModelId::OpenCodeZenGPT54 => Some(ModelId::OpenCodeZenGPT54Mini),
             ModelId::CopilotGPT52Codex | ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
             ModelId::DeepSeekV4Pro => Some(ModelId::DeepSeekV4Flash),
             ModelId::EvolinkDeepseekV4Pro => Some(ModelId::EvolinkDeepseekV4Flash),
-            ModelId::HuggingFaceDeepseekV4ProTogether => {
-                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
-            }
-            ModelId::HuggingFaceDeepseekV4ProNovita => {
-                Some(ModelId::HuggingFaceDeepseekV4FlashNovita)
-            }
+            ModelId::HuggingFaceDeepseekV4ProTogether => Some(ModelId::HuggingFaceDeepseekV4FlashNovita),
+            ModelId::HuggingFaceDeepseekV4ProNovita => Some(ModelId::HuggingFaceDeepseekV4FlashNovita),
             ModelId::OllamaDeepseekV4ProCloud => Some(ModelId::OllamaDeepseekV4FlashCloud),
             ModelId::ClaudeSonnet5
             | ModelId::ClaudeFable5

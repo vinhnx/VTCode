@@ -60,11 +60,7 @@ impl BottomStatusLayout {
     }
 }
 
-pub(crate) fn update_context_budget(
-    state: &mut InputStatusState,
-    used_tokens: usize,
-    limit_tokens: usize,
-) {
+pub(crate) fn update_context_budget(state: &mut InputStatusState, used_tokens: usize, limit_tokens: usize) {
     if limit_tokens == 0 {
         state.context_utilization = None;
         state.context_tokens = None;
@@ -360,18 +356,11 @@ pub(crate) fn update_ide_context_source(state: &mut InputStatusState, source: Op
     state.ide_context_source = source;
 }
 
-pub(crate) fn update_thread_context(
-    state: &mut InputStatusState,
-    thread_label: &str,
-    local_agent_count: usize,
-) {
+pub(crate) fn update_thread_context(state: &mut InputStatusState, thread_label: &str, local_agent_count: usize) {
     let mut value = thread_label.trim().to_string();
     if local_agent_count > 0 {
-        let suffix = format!(
-            "{} local agent{} · ↓ explore",
-            local_agent_count,
-            if local_agent_count == 1 { "" } else { "s" }
-        );
+        let suffix =
+            format!("{} local agent{} · ↓ explore", local_agent_count, if local_agent_count == 1 { "" } else { "s" });
         if value.is_empty() {
             value = suffix;
         } else {
@@ -410,15 +399,8 @@ pub(crate) async fn refresh_balance_info(
         Ok(Ok(Some(bal))) => {
             let warn = if bal.is_available { "" } else { " !" };
             state.balance = Some(format!("{}{}", bal.display, warn));
-            if let Err(e) = update_input_status_if_changed(
-                handle,
-                workspace,
-                model,
-                reasoning_effort,
-                status_config,
-                state,
-            )
-            .await
+            if let Err(e) =
+                update_input_status_if_changed(handle, workspace, model, reasoning_effort, status_config, state).await
             {
                 tracing::debug!("Failed to refresh status after balance fetch: {e}");
             }
@@ -437,9 +419,7 @@ pub(crate) async fn refresh_balance_info(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        InputStatusState, build_model_status_with_context_and_spooled, update_thread_context,
-    };
+    use super::{InputStatusState, build_model_status_with_context_and_spooled, update_thread_context};
 
     #[test]
     fn status_line_shows_thread_context() {
@@ -457,10 +437,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(
-            status.as_deref(),
-            Some("IDE Context (VS Code): crates/codegen/vtcode-config/src/core/agent.rs")
-        );
+        assert_eq!(status.as_deref(), Some("IDE Context (VS Code): crates/codegen/vtcode-config/src/core/agent.rs"));
     }
 
     #[test]

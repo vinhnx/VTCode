@@ -19,12 +19,8 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
             if !report.incompatible_skills.is_empty() {
                 println!("\n Next Steps:");
                 println!("  1. Use skills marked with  for guaranteed compatibility");
-                println!(
-                    "  2. Skills marked with   work but require following fallback instructions"
-                );
-                println!(
-                    "  3. For incompatible skills, use the suggested Python libraries through `exec_command`"
-                );
+                println!("  2. Skills marked with   work but require following fallback instructions");
+                println!("  3. For incompatible skills, use the suggested Python libraries through `exec_command`");
                 println!("  4. Check 'vtcode skills info <name>' for detailed compatibility info");
             }
         }

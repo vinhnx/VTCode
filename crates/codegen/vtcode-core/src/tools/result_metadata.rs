@@ -42,12 +42,11 @@ impl ResultScorer for CodeSearchScorer {
                     };
 
                     metadata.relevance = 0.75;
-                    metadata.completeness =
-                        if map.get("truncated").and_then(Value::as_bool).unwrap_or(false) {
-                            ResultCompleteness::Partial
-                        } else {
-                            ResultCompleteness::Complete
-                        };
+                    metadata.completeness = if map.get("truncated").and_then(Value::as_bool).unwrap_or(false) {
+                        ResultCompleteness::Partial
+                    } else {
+                        ResultCompleteness::Complete
+                    };
                     metadata.false_positive_likelihood = 0.05;
                 }
             }
@@ -158,15 +157,9 @@ pub struct ScorerRegistry {
 impl ScorerRegistry {
     pub fn new() -> Self {
         let mut scorers: HashMap<CompactStr, Box<dyn ResultScorer>> = HashMap::new();
-        scorers.insert(
-            CompactStr::from(tools::CODE_SEARCH),
-            Box::new(CodeSearchScorer) as Box<dyn ResultScorer>,
-        );
+        scorers.insert(CompactStr::from(tools::CODE_SEARCH), Box::new(CodeSearchScorer) as Box<dyn ResultScorer>);
         scorers.insert(CompactStr::from("find"), Box::new(FindScorer) as Box<dyn ResultScorer>);
-        scorers.insert(
-            CompactStr::from(tools::UNIFIED_EXEC),
-            Box::new(ShellScorer) as Box<dyn ResultScorer>,
-        );
+        scorers.insert(CompactStr::from(tools::UNIFIED_EXEC), Box::new(ShellScorer) as Box<dyn ResultScorer>);
 
         Self { scorers }
     }
@@ -178,8 +171,7 @@ impl ScorerRegistry {
 
     /// Score a tool result
     pub fn score(&self, tool_name: &str, result: &Value) -> ResultMetadata {
-        let canonical_tool_name =
-            tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
+        let canonical_tool_name = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
         if let Some(scorer) = self.scorers.get(canonical_tool_name) {
             scorer.score(result)
         } else {

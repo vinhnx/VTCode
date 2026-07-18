@@ -52,15 +52,7 @@ impl Session {
         app_name: String,
         bindings: BindingStore,
     ) -> Self {
-        Self::new_with_options(
-            theme,
-            placeholder,
-            view_rows,
-            show_logs,
-            appearance,
-            app_name,
-            Some(bindings),
-        )
+        Self::new_with_options(theme, placeholder, view_rows, show_logs, appearance, app_name, Some(bindings))
     }
 
     fn new_with_options(
@@ -219,10 +211,7 @@ impl Session {
         // Clear spinner when any substantive agent output arrives
         if matches!(
             kind,
-            InlineMessageKind::Agent
-                | InlineMessageKind::Policy
-                | InlineMessageKind::Tool
-                | InlineMessageKind::Error
+            InlineMessageKind::Agent | InlineMessageKind::Policy | InlineMessageKind::Tool | InlineMessageKind::Error
         ) && self.thinking_spinner.is_active
         {
             self.thinking_spinner.stop();

@@ -210,10 +210,7 @@ pub fn kill_process_group(_process_group_id: u32) -> io::Result<()> {
 
 /// No-op on non-Unix platforms.
 #[cfg(not(unix))]
-pub fn kill_process_group_with_signal(
-    _process_group_id: u32,
-    _signal: KillSignal,
-) -> io::Result<()> {
+pub fn kill_process_group_with_signal(_process_group_id: u32, _signal: KillSignal) -> io::Result<()> {
     Ok(())
 }
 
@@ -225,10 +222,7 @@ pub fn kill_child_process_group(child: &mut Child) -> io::Result<()> {
 
 /// Kill the process group for a tokio child with a specific signal.
 #[cfg(unix)]
-pub fn kill_child_process_group_with_signal(
-    child: &mut Child,
-    signal: KillSignal,
-) -> io::Result<()> {
+pub fn kill_child_process_group_with_signal(child: &mut Child, signal: KillSignal) -> io::Result<()> {
     if let Some(pid) = child.id() {
         return kill_process_group_by_pid_with_signal(pid, signal);
     }
@@ -244,10 +238,7 @@ pub fn kill_child_process_group(_child: &mut tokio::process::Child) -> io::Resul
 
 /// No-op on non-Unix platforms.
 #[cfg(not(unix))]
-pub fn kill_child_process_group_with_signal(
-    _child: &mut tokio::process::Child,
-    _signal: KillSignal,
-) -> io::Result<()> {
+pub fn kill_child_process_group_with_signal(_child: &mut tokio::process::Child, _signal: KillSignal) -> io::Result<()> {
     Ok(())
 }
 
@@ -409,11 +400,7 @@ pub fn graceful_kill_process_group(
 ///
 /// Uses SIGTERM and the default grace period (500ms).
 pub fn graceful_kill_process_group_default(pid: u32) -> GracefulTerminationResult {
-    graceful_kill_process_group(
-        pid,
-        KillSignal::Term,
-        std::time::Duration::from_millis(DEFAULT_GRACEFUL_TIMEOUT_MS),
-    )
+    graceful_kill_process_group(pid, KillSignal::Term, std::time::Duration::from_millis(DEFAULT_GRACEFUL_TIMEOUT_MS))
 }
 
 /// Async-safe wrapper for graceful process-group termination.

@@ -79,12 +79,7 @@ impl SkillValidationReport {
         }
     }
 
-    pub fn add_error(
-        &mut self,
-        field: Option<String>,
-        message: String,
-        suggestion: Option<String>,
-    ) {
+    pub fn add_error(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
         self.errors.push(ValidationIssue {
             level: ValidationLevel::Error,
             field,
@@ -94,12 +89,7 @@ impl SkillValidationReport {
         self.is_valid = false;
     }
 
-    pub fn add_warning(
-        &mut self,
-        field: Option<String>,
-        message: String,
-        suggestion: Option<String>,
-    ) {
+    pub fn add_warning(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
         self.warnings.push(ValidationIssue {
             level: ValidationLevel::Warning,
             field,
@@ -121,8 +111,7 @@ impl SkillValidationReport {
         self.stats.error_count = self.errors.len();
         self.stats.warning_count = self.warnings.len();
         self.stats.suggestion_count = self.suggestions.len();
-        self.stats.total_issues =
-            self.stats.error_count + self.stats.warning_count + self.stats.suggestion_count;
+        self.stats.total_issues = self.stats.error_count + self.stats.warning_count + self.stats.suggestion_count;
     }
 
     pub fn generate_summary(&self) -> String {
@@ -130,14 +119,7 @@ impl SkillValidationReport {
 
         summary.push_str(&format!("Skill: {}\n", self.skill_name));
         summary.push_str(&format!("Path: {}\n", self.skill_path.display()));
-        summary.push_str(&format!(
-            "Status: {}\n",
-            if self.is_valid {
-                "v Valid"
-            } else {
-                "x Invalid"
-            }
-        ));
+        summary.push_str(&format!("Status: {}\n", if self.is_valid { "v Valid" } else { "x Invalid" }));
         summary.push_str("\nIssues found:\n");
         summary.push_str(&format!("  Errors: {}\n", self.stats.error_count));
         summary.push_str(&format!("  Warnings: {}\n", self.stats.warning_count));
@@ -194,8 +176,7 @@ mod tests {
 
     #[test]
     fn test_validation_report() {
-        let mut report =
-            SkillValidationReport::new("test-skill".to_string(), PathBuf::from("/tmp/test-skill"));
+        let mut report = SkillValidationReport::new("test-skill".to_string(), PathBuf::from("/tmp/test-skill"));
 
         report.add_error(
             Some("name".to_string()),

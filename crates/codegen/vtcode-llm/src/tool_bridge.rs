@@ -140,9 +140,7 @@ impl MessageToolCorrelation {
 
         self.intent_fulfillment = match (contributing, avg_quality) {
             (n, q) if n == self.tool_executions.len() && q > 0.75 => IntentFulfillment::Fulfilled,
-            (n, q) if n > self.tool_executions.len() / 2 && q > 0.6 => {
-                IntentFulfillment::PartiallyFulfilled
-            }
+            (n, q) if n > self.tool_executions.len() / 2 && q > 0.6 => IntentFulfillment::PartiallyFulfilled,
             (0, _) => IntentFulfillment::Failed,
             _ => IntentFulfillment::Attempted,
         };
@@ -221,9 +219,7 @@ fn extract_search_intent(text: &str) -> Option<ToolIntent> {
 
 /// Extract execute intent
 fn extract_execute_intent(text: &str) -> Option<ToolIntent> {
-    let execute_keywords = [
-        "run", "execute", "command", "cargo", "npm", "python", "bash", "sh",
-    ];
+    let execute_keywords = ["run", "execute", "command", "cargo", "npm", "python", "bash", "sh"];
 
     for keyword in &execute_keywords {
         if text.contains(keyword) {
@@ -440,11 +436,8 @@ mod tests {
     fn test_correlation_tracker() {
         let mut tracker = MessageCorrelationTracker::new();
 
-        let corr = MessageToolCorrelation::new(
-            "msg-1".to_owned(),
-            "test".to_owned(),
-            ToolIntent::Search("test".to_owned()),
-        );
+        let corr =
+            MessageToolCorrelation::new("msg-1".to_owned(), "test".to_owned(), ToolIntent::Search("test".to_owned()));
 
         tracker.add(corr);
 
@@ -454,10 +447,7 @@ mod tests {
 
     #[test]
     fn test_extract_quoted_string() {
-        assert_eq!(
-            extract_quoted_string("grep for \"error pattern\""),
-            Some("error pattern".to_owned())
-        );
+        assert_eq!(extract_quoted_string("grep for \"error pattern\""), Some("error pattern".to_owned()));
         assert_eq!(extract_quoted_string("find 'test.rs'"), Some("test.rs".to_owned()));
     }
 }

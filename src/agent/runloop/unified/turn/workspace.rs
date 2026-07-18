@@ -19,10 +19,7 @@ where
 }
 
 pub(crate) async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
-    blocking_task("configuration bootstrap", move || {
-        VTCodeConfig::bootstrap_project(&workspace, force)
-    })
-    .await
+    blocking_task("configuration bootstrap", move || VTCodeConfig::bootstrap_project(&workspace, force)).await
 }
 
 pub(crate) async fn build_workspace_index(workspace: PathBuf) -> Result<()> {

@@ -11,7 +11,8 @@ pub mod agent_execution {
     /// Prefix for loop detection failures.
     pub const LOOP_DETECTION_PREFIX: &str = "LOOP DETECTION";
     /// Canonical action-required line for loop detection blocks.
-    pub const LOOP_RETRY_BLOCKED_LINE: &str = "ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.";
+    pub const LOOP_RETRY_BLOCKED_LINE: &str =
+        "ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.";
 
     /// Build the canonical Planning workflow denial message.
     pub fn planning_workflow_denial_message(tool_name: &str) -> String {
@@ -32,11 +33,7 @@ pub mod agent_execution {
     }
 
     /// Build the canonical loop-detection block message.
-    pub fn loop_detection_block_message(
-        tool_name: &str,
-        repeat_count: u64,
-        original_error: Option<&str>,
-    ) -> String {
+    pub fn loop_detection_block_message(tool_name: &str, repeat_count: u64, original_error: Option<&str>) -> String {
         let mut message = format!(
             "{LOOP_DETECTION_PREFIX}: Tool '{tool_name}' has been called {repeat_count} times with identical parameters and is now blocked.\n\n\
              {LOOP_RETRY_BLOCKED_LINE}\n\n\
@@ -96,8 +93,7 @@ mod tests {
         assert!(!planning_msg.contains(&format!("/{}", "mode")));
         assert!(!planning_msg.contains("DO NOT retry this tool or use /plan off"));
 
-        let loop_msg =
-            agent_execution::loop_detection_block_message("read_file", 3, Some("base error"));
+        let loop_msg = agent_execution::loop_detection_block_message("read_file", 3, Some("base error"));
         assert!(loop_msg.contains("LOOP DETECTION"));
         assert!(loop_msg.contains("DO NOT retry"));
         assert!(loop_msg.contains("Original error: base error"));

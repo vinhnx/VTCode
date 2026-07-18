@@ -10,17 +10,14 @@ pub use crate::tui::core_tui::session::mouse_selection::MouseSelectionState;
 pub use crate::tui::core_tui::style::{convert_style, theme_from_styles};
 pub use crate::tui::core_tui::theme_parser::ThemeConfigParser;
 pub use crate::tui::core_tui::types::{
-    ContentPart, FocusChangeCallback, InlineEventCallback, InlineHeaderContext,
-    InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
-    InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, ListOverlayRequest,
-    ModalOverlayRequest, OpenAIServiceTierChoice, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
-    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction,
-    SecurePromptConfig, SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
+    ContentPart, FocusChangeCallback, InlineEventCallback, InlineHeaderContext, InlineHeaderHighlight,
+    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    ListOverlayRequest, ModalOverlayRequest, OpenAIServiceTierChoice, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
+    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, RewindAction, SecurePromptConfig,
+    SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
-pub use crate::tui::options::{
-    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
-};
+pub use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 pub type CoreCommand = core_tui::types::InlineCommand;
 pub type CoreEvent = core_tui::types::InlineEvent;
@@ -68,10 +65,7 @@ impl Default for CoreSessionOptions {
 }
 
 /// Spawn a core session using standalone options.
-pub fn spawn_core_session(
-    theme: InlineTheme,
-    options: CoreSessionOptions,
-) -> anyhow::Result<CoreSession> {
+pub fn spawn_core_session(theme: InlineTheme, options: CoreSessionOptions) -> anyhow::Result<CoreSession> {
     core_tui::spawn_session_with_prompts_and_options(
         theme,
         options.placeholder,
@@ -94,13 +88,12 @@ pub fn spawn_core_session(
 /// Commonly used core TUI API items.
 pub mod prelude {
     pub use super::{
-        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions,
-        FullscreenInteractionSettings, InlineHeaderContext, InlineHeaderHighlight,
-        InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineMessageKind, InlineSegment,
-        InlineTextStyle, InlineTheme, KeyboardProtocolSettings, LayoutModeOverride,
-        ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
-        OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission,
-        ReasoningDisplayMode, SessionAppearanceConfig, SessionSurface, UiMode, WizardModalMode,
-        WizardOverlayRequest, WizardStep, convert_style, spawn_core_session, theme_from_styles,
+        CoreCommand, CoreEvent, CoreHandle, CoreSession, CoreSessionOptions, FullscreenInteractionSettings,
+        InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineMessageKind,
+        InlineSegment, InlineTextStyle, InlineTheme, KeyboardProtocolSettings, LayoutModeOverride, ListOverlayRequest,
+        ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+        OverlaySelectionChange, OverlaySubmission, ReasoningDisplayMode, SessionAppearanceConfig, SessionSurface,
+        UiMode, WizardModalMode, WizardOverlayRequest, WizardStep, convert_style, spawn_core_session,
+        theme_from_styles,
     };
 }

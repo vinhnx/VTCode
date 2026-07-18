@@ -20,14 +20,10 @@ use vtcode_config::loader::VTCodeConfig;
 use crate::compaction::CompactionConfig;
 use crate::config::constants::tools as tool_names;
 use crate::context::history_files::{HistoryFileManager, messages_to_history_messages};
-use crate::core::agent::harness_artifacts::{
-    current_task_path, read_evaluation_summary, read_spec_summary,
-};
+use crate::core::agent::harness_artifacts::{current_task_path, read_evaluation_summary, read_spec_summary};
 use crate::llm::provider::{LLMProvider, Message, MessageRole};
 use crate::llm::utils::truncate_to_token_limit;
-use crate::persistent_memory::{
-    GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact,
-};
+use crate::persistent_memory::{GroundedFactRecord, dedup_latest_facts, normalize_whitespace, truncate_for_fact};
 
 pub const MEMORY_ENVELOPE_HEADER: &str = "[Session Memory Envelope]";
 pub const MEMORY_ENVELOPE_SUFFIX: &str = ".memory.json";
@@ -116,12 +112,7 @@ pub struct TaskTrackerSnapshot {
     verification_todo: Vec<String>,
 }
 
-fn merge_dedup_push<T, K, F>(
-    prior: &[T],
-    updates: impl IntoIterator<Item = T>,
-    limit: usize,
-    key_fn: F,
-) -> Vec<T>
+fn merge_dedup_push<T, K, F>(prior: &[T], updates: impl IntoIterator<Item = T>, limit: usize, key_fn: F) -> Vec<T>
 where
     K: PartialEq,
     F: Fn(&T) -> K,
@@ -138,10 +129,7 @@ where
     merged.into_iter().skip(keep_from).collect()
 }
 
-fn merge_touched_files(
-    prior_envelope: Option<&SessionMemoryEnvelope>,
-    touched_files: &[String],
-) -> Vec<String> {
+fn merge_touched_files(prior_envelope: Option<&SessionMemoryEnvelope>, touched_files: &[String]) -> Vec<String> {
     let prior = prior_envelope.map(|e| e.touched_files.as_slice()).unwrap_or(&[]);
     merge_dedup_push(prior, touched_files.iter().cloned(), usize::MAX, |s| s.clone())
 }
@@ -189,13 +177,10 @@ pub fn derive_continuity_summary(
     let latest = history
         .iter()
         .rev()
-        .filter(|message| {
-            message.role == MessageRole::User || message.role == MessageRole::Assistant
-        })
+        .filter(|message| message.role == MessageRole::User || message.role == MessageRole::Assistant)
         .find_map(|message| {
             let trimmed = normalize_whitespace(message.content.as_text().as_ref());
-            (!trimmed.is_empty())
-                .then_some((message.role.as_generic_str(), truncate_for_fact(&trimmed, 140)))
+            (!trimmed.is_empty()).then_some((message.role.as_generic_str(), truncate_for_fact(&trimmed, 140)))
         });
 
     match (objective, latest) {
@@ -260,28 +245,24 @@ pub fn build_session_memory_envelope(
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
 ) -> SessionMemoryEnvelope {
     let pe = prior_envelope;
-    let spec_summary =
-        read_spec_summary(workspace_root).or_else(|| pe.and_then(|e| e.spec_summary.clone()));
-    let evaluation_summary = read_evaluation_summary(workspace_root)
-        .or_else(|| pe.and_then(|e| e.evaluation_summary.clone()));
-    let merge = |prior: &[String], updates: &[String]| {
-        merge_recent_strings(prior, updates, MEMORY_LIST_LIMIT)
-    };
+    let spec_summary = read_spec_summary(workspace_root).or_else(|| pe.and_then(|e| e.spec_summary.clone()));
+    let evaluation_summary =
+        read_evaluation_summary(workspace_root).or_else(|| pe.and_then(|e| e.evaluation_summary.clone()));
+    let merge = |prior: &[String], updates: &[String]| merge_recent_strings(prior, updates, MEMORY_LIST_LIMIT);
     let constraints = merge(
         pe.map(|e| e.constraints.as_slice()).unwrap_or(&[]),
         &extract_constraints_from_summary(spec_summary.as_deref()),
     );
-    let constraints =
-        merge(&constraints, &extract_constraints_from_summary(evaluation_summary.as_deref()));
+    let constraints = merge(&constraints, &extract_constraints_from_summary(evaluation_summary.as_deref()));
     let update = envelope_update.cloned().unwrap_or_default();
 
     SessionMemoryEnvelope {
         session_id: session_id.to_string(),
         schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary,
-        objective: update.objective.or_else(|| {
-            pe.and_then(|e| e.objective.clone()).or_else(|| task_snapshot.objective.clone())
-        }),
+        objective: update
+            .objective
+            .or_else(|| pe.and_then(|e| e.objective.clone()).or_else(|| task_snapshot.objective.clone())),
         task_summary: pe
             .and_then(|e| e.task_summary.clone())
             .or_else(|| task_snapshot.summary.clone()),
@@ -297,10 +278,7 @@ pub fn build_session_memory_envelope(
             pe,
             &touched_files.iter().cloned().chain(update.touched_files).collect::<Vec<_>>(),
         ),
-        open_questions: merge(
-            pe.map(|e| e.open_questions.as_slice()).unwrap_or(&[]),
-            &update.open_questions,
-        ),
+        open_questions: merge(pe.map(|e| e.open_questions.as_slice()).unwrap_or(&[]), &update.open_questions),
         verification_todo: merge(
             pe.map(|e| e.verification_todo.as_slice()).unwrap_or(&[]),
             &task_snapshot
@@ -310,10 +288,7 @@ pub fn build_session_memory_envelope(
                 .chain(update.verification_todo)
                 .collect::<Vec<_>>(),
         ),
-        delegation_notes: merge(
-            pe.map(|e| e.delegation_notes.as_slice()).unwrap_or(&[]),
-            &update.delegation_notes,
-        ),
+        delegation_notes: merge(pe.map(|e| e.delegation_notes.as_slice()).unwrap_or(&[]), &update.delegation_notes),
         history_artifact_path: history_artifact_path
             .map(|p| p.display().to_string())
             .or_else(|| pe.and_then(|e| e.history_artifact_path.clone())),
@@ -336,24 +311,21 @@ pub fn persist_memory_envelope(
     seed_envelope: Option<&SessionMemoryEnvelope>,
 ) -> anyhow::Result<Option<SessionMemoryEnvelope>> {
     let should_persist = should_persist_memory_envelope(vt_cfg);
-    if original_history.is_empty()
-        || (!should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk)
-    {
+    if original_history.is_empty() || (!should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk) {
         return Ok(None);
     }
 
     let task_snapshot = read_task_tracker_snapshot(workspace_root);
-    let history_artifact_path =
-        if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
-            let mut hm = HistoryFileManager::new(workspace_root, session_id);
-            let hm2 = messages_to_history_messages(original_history, 0);
-            let hr = hm
-                .write_history_sync(&hm2, original_history.len(), "compaction", touched_files, &[])
-                .context("write compaction history artifact")?;
-            Some(hr.file_path)
-        } else {
-            None
-        };
+    let history_artifact_path = if should_persist && persistence == MemoryEnvelopePersistence::PersistToDisk {
+        let mut hm = HistoryFileManager::new(workspace_root, session_id);
+        let hm2 = messages_to_history_messages(original_history, 0);
+        let hr = hm
+            .write_history_sync(&hm2, original_history.len(), "compaction", touched_files, &[])
+            .context("write compaction history artifact")?;
+        Some(hr.file_path)
+    } else {
+        None
+    };
     let loaded = if seed_envelope.is_none() {
         load_latest_memory_envelope(workspace_root, session_id)
     } else {
@@ -373,10 +345,7 @@ pub fn persist_memory_envelope(
     );
 
     if let Some(hap) = history_artifact_path.as_ref() {
-        write_memory_envelope_to_path(
-            &memory_envelope_path_from_history_path(workspace_root, hap),
-            &envelope,
-        )?;
+        write_memory_envelope_to_path(&memory_envelope_path_from_history_path(workspace_root, hap), &envelope)?;
     }
     apply_memory_envelope(compacted, &envelope, placement);
     Ok(Some(envelope))
@@ -413,8 +382,7 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     if let Some(s) = maybe_section("Evaluation Summary", envelope.evaluation_summary.as_deref()) {
         sections.push(s);
     }
-    if let Some(s) = maybe_section("Verification Status", envelope.verification_summary.as_deref())
-    {
+    if let Some(s) = maybe_section("Verification Status", envelope.verification_summary.as_deref()) {
         sections.push(s);
     }
     if let Some(s) = list_section("Constraints", &envelope.constraints) {
@@ -449,14 +417,12 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
 }
 
 fn is_compaction_summary_message(message: &Message) -> bool {
-    message.role == MessageRole::System
-        && message.content.as_text().starts_with("Previous conversation summary:\n")
+    message.role == MessageRole::System && message.content.as_text().starts_with("Previous conversation summary:\n")
 }
 
 pub fn strip_existing_memory_envelope(history: &mut Vec<Message>) {
     history.retain(|message| {
-        !(message.role == MessageRole::System
-            && message.content.as_text().starts_with(MEMORY_ENVELOPE_HEADER))
+        !(message.role == MessageRole::System && message.content.as_text().starts_with(MEMORY_ENVELOPE_HEADER))
     });
 }
 
@@ -496,10 +462,7 @@ fn extract_compaction_summary(compacted: &[Message], original_history: &[Message
     if recent.is_empty() {
         "Compacted earlier conversation state and preserved continuity facts.".to_string()
     } else {
-        format!(
-            "Compacted earlier conversation state. Recent preserved context: {}",
-            recent.join(" | ")
-        )
+        format!("Compacted earlier conversation state. Recent preserved context: {}", recent.join(" | "))
     }
 }
 
@@ -520,8 +483,7 @@ fn sanitize_session_id(session_id: &str) -> String {
 fn memory_envelope_file_matches_session(name: &str, session_id: &str) -> bool {
     let session_prefix = sanitize_session_id(session_id);
     name == format!("{session_prefix}{MEMORY_ENVELOPE_SUFFIX}")
-        || (name.starts_with(&format!("{session_prefix}_"))
-            && name.ends_with(MEMORY_ENVELOPE_SUFFIX))
+        || (name.starts_with(&format!("{session_prefix}_")) && name.ends_with(MEMORY_ENVELOPE_SUFFIX))
 }
 
 pub fn read_task_tracker_snapshot(workspace_root: &Path) -> TaskTrackerSnapshot {
@@ -657,10 +619,7 @@ fn memory_envelope_path_from_history_path(workspace_root: &Path, history_path: &
     parent.join(file_name)
 }
 
-pub fn default_memory_envelope_path_for_session(
-    workspace_root: &Path,
-    session_id: &str,
-) -> PathBuf {
+pub fn default_memory_envelope_path_for_session(workspace_root: &Path, session_id: &str) -> PathBuf {
     workspace_root
         .join(".vtcode")
         .join("history")
@@ -684,10 +643,7 @@ fn memory_envelope_paths_for_session(workspace_root: &Path, session_id: &str) ->
     candidates
 }
 
-pub fn latest_memory_envelope_path_for_session(
-    workspace_root: &Path,
-    session_id: &str,
-) -> Option<PathBuf> {
+pub fn latest_memory_envelope_path_for_session(workspace_root: &Path, session_id: &str) -> Option<PathBuf> {
     memory_envelope_paths_for_session(workspace_root, session_id)
         .into_iter()
         .rev()
@@ -695,16 +651,11 @@ pub fn latest_memory_envelope_path_for_session(
             fs::read_to_string(path)
                 .ok()
                 .and_then(|content| serde_json::from_str::<SessionMemoryEnvelope>(&content).ok())
-                .is_some_and(|envelope| {
-                    envelope.session_id.is_empty() || envelope.session_id == session_id
-                })
+                .is_some_and(|envelope| envelope.session_id.is_empty() || envelope.session_id == session_id)
         })
 }
 
-pub fn load_latest_memory_envelope(
-    workspace_root: &Path,
-    session_id: &str,
-) -> Option<SessionMemoryEnvelope> {
+pub fn load_latest_memory_envelope(workspace_root: &Path, session_id: &str) -> Option<SessionMemoryEnvelope> {
     let path = latest_memory_envelope_path_for_session(workspace_root, session_id)?;
     let content = fs::read_to_string(path).ok()?;
     let envelope: SessionMemoryEnvelope = serde_json::from_str(&content).ok()?;
@@ -725,9 +676,7 @@ pub fn insert_memory_envelope_message(
         MemoryEnvelopePlacement::BeforeLastUserOrSummary => {
             let insert_at = history
                 .iter()
-                .rposition(|item| {
-                    item.role == MessageRole::User || is_compaction_summary_message(item)
-                })
+                .rposition(|item| item.role == MessageRole::User || is_compaction_summary_message(item))
                 .unwrap_or(0);
             history.insert(insert_at, message);
         }
@@ -743,11 +692,7 @@ fn apply_memory_envelope(
     insert_memory_envelope_message(compacted, envelope, placement);
 }
 
-pub fn inject_latest_memory_envelope(
-    workspace_root: &Path,
-    session_id: &str,
-    history: &mut Vec<Message>,
-) -> bool {
+pub fn inject_latest_memory_envelope(workspace_root: &Path, session_id: &str, history: &mut Vec<Message>) -> bool {
     let Some(envelope) = load_latest_memory_envelope(workspace_root, session_id) else {
         return false;
     };
@@ -757,17 +702,12 @@ pub fn inject_latest_memory_envelope(
     true
 }
 
-pub fn write_memory_envelope_to_path(
-    path: &Path,
-    envelope: &SessionMemoryEnvelope,
-) -> anyhow::Result<()> {
+pub fn write_memory_envelope_to_path(path: &Path, envelope: &SessionMemoryEnvelope) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create memory envelope directory {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("create memory envelope directory {}", parent.display()))?;
     }
     let serialized = serde_json::to_string_pretty(envelope)?;
-    fs::write(path, serialized)
-        .with_context(|| format!("write memory envelope {}", path.display()))?;
+    fs::write(path, serialized).with_context(|| format!("write memory envelope {}", path.display()))?;
     Ok(())
 }
 
@@ -783,10 +723,7 @@ pub fn configured_retained_user_messages(vt_cfg: Option<&VTCodeConfig>) -> usize
     vt_cfg.map(|cfg| cfg.context.dynamic.retained_user_messages).unwrap_or(4)
 }
 
-pub fn local_compaction_config(
-    vt_cfg: Option<&VTCodeConfig>,
-    always_summarize: bool,
-) -> CompactionConfig {
+pub fn local_compaction_config(vt_cfg: Option<&VTCodeConfig>, always_summarize: bool) -> CompactionConfig {
     CompactionConfig {
         always_summarize,
         retained_user_messages: configured_retained_user_messages(vt_cfg),
@@ -822,10 +759,7 @@ fn collect_zero_cost_retained_user_messages(
         }
 
         if remaining > 4 {
-            let truncated = truncate_to_token_limit(
-                message.content.as_text().as_ref(),
-                remaining.saturating_sub(4),
-            );
+            let truncated = truncate_to_token_limit(message.content.as_text().as_ref(), remaining.saturating_sub(4));
             let trimmed = truncated.trim();
             if !trimmed.is_empty() {
                 kept.push(Message::user(trimmed.to_string()));
@@ -846,13 +780,7 @@ pub fn build_zero_cost_summarized_fork_history(
     let summary = source_envelope
         .map(|envelope| normalize_whitespace(&envelope.summary))
         .filter(|summary| !summary.is_empty())
-        .unwrap_or_else(|| {
-            derive_continuity_summary(
-                source_history,
-                source_envelope,
-                &TaskTrackerSnapshot::default(),
-            )
-        });
+        .unwrap_or_else(|| derive_continuity_summary(source_history, source_envelope, &TaskTrackerSnapshot::default()));
 
     let retained_users = collect_zero_cost_retained_user_messages(
         source_history,
@@ -997,9 +925,10 @@ fn file_read_dedup_candidate(
         .as_deref()
         .and_then(|tool_call_id| tool_kinds.get(tool_call_id).copied())
         .or_else(|| {
-            message.origin_tool.as_deref().and_then(|tool_name| {
-                is_read_file_tool_name(tool_name).then_some(FileReadToolKind::ReadFile)
-            })
+            message
+                .origin_tool
+                .as_deref()
+                .and_then(|tool_name| is_read_file_tool_name(tool_name).then_some(FileReadToolKind::ReadFile))
         })?;
 
     if !matches!(kind, FileReadToolKind::ReadFile | FileReadToolKind::UnifiedFileRead) {
@@ -1045,10 +974,7 @@ pub fn dedup_repeated_file_reads_for_local_compaction(history: &[Message]) -> Ve
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::cast_sign_loss)] // context_size is usize (non-negative), ratio is positive
-pub fn resolve_compaction_threshold(
-    configured_threshold: Option<u64>,
-    context_size: usize,
-) -> Option<u64> {
+pub fn resolve_compaction_threshold(configured_threshold: Option<u64>, context_size: usize) -> Option<u64> {
     let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
     let derived_threshold = if context_size > 0 {
         Some(((context_size as f64) * DEFAULT_COMPACTION_TRIGGER_RATIO).round().max(0.0) as u64)
@@ -1071,8 +997,7 @@ pub fn effective_compaction_threshold(
     model: &str,
 ) -> Option<usize> {
     let context_size = provider.effective_context_size(model);
-    let configured_threshold =
-        vt_cfg.and_then(|cfg| cfg.agent.harness.auto_compaction_threshold_tokens);
+    let configured_threshold = vt_cfg.and_then(|cfg| cfg.agent.harness.auto_compaction_threshold_tokens);
 
     resolve_compaction_threshold(configured_threshold, context_size)
         .and_then(|threshold| usize::try_from(threshold).ok())

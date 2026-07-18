@@ -67,16 +67,7 @@ pub const ERROR_DETECTION_PATTERNS: &[&str] = &[
 ];
 
 /// Network-related error patterns for more specific error detection
-pub const NETWORK_ERROR_PATTERNS: &[&str] = &[
-    "connection",
-    "timeout",
-    "network",
-    "http",
-    "ssl",
-    "tls",
-    "dns",
-    "proxy",
-];
+pub const NETWORK_ERROR_PATTERNS: &[&str] = &["connection", "timeout", "network", "http", "ssl", "tls", "dns", "proxy"];
 
 /// Default capacity hints for common collections
 pub const DEFAULT_VEC_CAPACITY: usize = 32;
@@ -198,9 +189,7 @@ impl ResultMetadata {
     /// Overall quality score (0.0-1.0)
     #[inline]
     pub fn quality_score(&self) -> f32 {
-        let weighted = (self.confidence * 0.4)
-            + (self.relevance * 0.4)
-            + (self.false_positive_likelihood * -0.2);
+        let weighted = (self.confidence * 0.4) + (self.relevance * 0.4) + (self.false_positive_likelihood * -0.2);
         weighted.clamp(0.0, 1.0)
     }
 
@@ -290,11 +279,7 @@ impl EnhancedToolResult {
         }
     }
 
-    pub fn from_cache(
-        value: Value,
-        metadata: ResultMetadata,
-        tool_name: impl Into<CompactStr>,
-    ) -> Self {
+    pub fn from_cache(value: Value, metadata: ResultMetadata, tool_name: impl Into<CompactStr>) -> Self {
         Self {
             value,
             metadata,
@@ -325,10 +310,7 @@ impl EnhancedToolResult {
         let quality = ((self.metadata.quality_score() * 100.0).round().max(0.0) as u32).min(100);
         match self.metadata.completeness {
             ResultCompleteness::Complete => {
-                format!(
-                    "{} found {} results (confidence: {}%)",
-                    self.tool_name, self.metadata.result_count, quality
-                )
+                format!("{} found {} results (confidence: {}%)", self.tool_name, self.metadata.result_count, quality)
             }
             ResultCompleteness::Partial => {
                 format!(
@@ -340,10 +322,7 @@ impl EnhancedToolResult {
                 format!("{} found no results", self.tool_name)
             }
             ResultCompleteness::Truncated => {
-                format!(
-                    "{} found results (truncated due to size, confidence: {}%)",
-                    self.tool_name, quality
-                )
+                format!("{} found results (truncated due to size, confidence: {}%)", self.tool_name, quality)
             }
         }
     }

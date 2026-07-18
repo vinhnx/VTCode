@@ -2,9 +2,7 @@
 
 use crate::core::agent::task::{ContextItem, Task};
 use crate::llm::provider::{ContentPart, Message, MessageContent, MessageRole, ToolCall};
-use crate::llm::providers::gemini::wire::{
-    Content, FunctionCall, FunctionResponse, InlineData, Part,
-};
+use crate::llm::providers::gemini::wire::{Content, FunctionCall, FunctionResponse, InlineData, Part};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -55,10 +53,7 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
                     }
                 }
                 Part::InlineData { inline_data } => {
-                    content_parts.push(ContentPart::image(
-                        inline_data.data.clone(),
-                        inline_data.mime_type.clone(),
-                    ));
+                    content_parts.push(ContentPart::image(inline_data.data.clone(), inline_data.mime_type.clone()));
                 }
                 Part::FunctionCall { function_call, thought_signature } => {
                     let mut tool_call = ToolCall::function(
@@ -143,16 +138,12 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                 match part {
                     ContentPart::Text { text } => {
                         if !text.is_empty() {
-                            converted
-                                .push(Part::Text { text: text.clone(), thought_signature: None });
+                            converted.push(Part::Text { text: text.clone(), thought_signature: None });
                         }
                     }
                     ContentPart::Image { data, mime_type, .. } => {
                         converted.push(Part::InlineData {
-                            inline_data: InlineData {
-                                mime_type: mime_type.clone(),
-                                data: data.clone(),
-                            },
+                            inline_data: InlineData { mime_type: mime_type.clone(), data: data.clone() },
                         });
                     }
                     ContentPart::File { filename, file_id, file_url, .. } => {
@@ -209,8 +200,7 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
 
                             let id = (!tool_call.id.is_empty()).then(|| tool_call.id.clone());
                             if let Some(call_id) = id.as_ref() {
-                                tool_names_by_call_id
-                                    .insert(call_id.clone(), function.name.clone());
+                                tool_names_by_call_id.insert(call_id.clone(), function.name.clone());
                             }
 
                             rebuilt_parts.push(Part::FunctionCall {
@@ -239,9 +229,7 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
                 }
             }
             MessageRole::Tool => {
-                let Some(call_id) =
-                    message.tool_call_id.as_ref().filter(|value| !value.is_empty()).cloned()
-                else {
+                let Some(call_id) = message.tool_call_id.as_ref().filter(|value| !value.is_empty()).cloned() else {
                     let parts = parts_from_message_content(&message.content);
                     if !parts.is_empty() {
                         conversation.push(Content { role: "user".to_string(), parts });
@@ -361,10 +349,7 @@ mod tests {
                     thought_signature: None,
                 }],
             ),
-            Message::tool_response(
-                "call-1".to_string(),
-                "{\"content\":\"fn main() {}\"}".to_string(),
-            ),
+            Message::tool_response("call-1".to_string(), "{\"content\":\"fn main() {}\"}".to_string()),
             Message::assistant("Done".to_string()),
         ];
 

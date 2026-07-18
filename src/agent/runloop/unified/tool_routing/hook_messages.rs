@@ -3,10 +3,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use vtcode_core::hooks::{HookMessage, HookMessageLevel};
 
-pub(super) fn render_hook_messages(
-    renderer: &mut AnsiRenderer,
-    messages: &[HookMessage],
-) -> Result<()> {
+pub(super) fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
     for message in messages {
         let text = message.text.trim();
         if text.is_empty() {

@@ -37,15 +37,9 @@ impl PtyStreamRuntime {
 
         let task = tokio::spawn(async move {
             let mut state = PtyStreamState::new(command_prompt, pty_config, owned_root.as_deref());
-            let (replace_count, segments, link_ranges, _) =
-                state.render_segments("", effective_tail_limit);
+            let (replace_count, segments, link_ranges, _) = state.render_segments("", effective_tail_limit);
             if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
-                handle.replace_last_with_links(
-                    replace_count,
-                    InlineMessageKind::Pty,
-                    segments,
-                    link_ranges,
-                );
+                handle.replace_last_with_links(replace_count, InlineMessageKind::Pty, segments, link_ranges);
             }
 
             while let Some(output) = rx.recv().await {
@@ -65,12 +59,7 @@ impl PtyStreamRuntime {
                 let (replace_count, segments, link_ranges, last_line) =
                     state.render_current_segments(effective_tail_limit);
                 if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
-                    handle.replace_last_with_links(
-                        replace_count,
-                        InlineMessageKind::Pty,
-                        segments,
-                        link_ranges,
-                    );
+                    handle.replace_last_with_links(replace_count, InlineMessageKind::Pty, segments, link_ranges);
                 }
 
                 if let Some(last_line) = last_line {

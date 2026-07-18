@@ -1,20 +1,16 @@
 use anyhow::Result;
 use std::sync::Arc;
 use vtcode_core::subagents::{
-    BackgroundSubprocessEntry, BackgroundSubprocessSnapshot, BackgroundSubprocessStatus,
-    SubagentController, SubagentStatus, SubagentStatusEntry, SubagentThreadSnapshot,
+    BackgroundSubprocessEntry, BackgroundSubprocessSnapshot, BackgroundSubprocessStatus, SubagentController,
+    SubagentStatus, SubagentStatusEntry, SubagentThreadSnapshot,
 };
 use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use vtcode_ui::tui::app::{InlineHandle, LocalAgentEntry, LocalAgentKind};
 
-pub(crate) async fn refresh_local_agents(
-    handle: &InlineHandle,
-    controller: &Arc<SubagentController>,
-) -> Result<()> {
+pub(crate) async fn refresh_local_agents(handle: &InlineHandle, controller: &Arc<SubagentController>) -> Result<()> {
     let background_entries = controller.refresh_background_processes().await?;
     let delegated_entries = controller.status_entries().await;
-    let local_agents =
-        build_local_agent_entries(controller, delegated_entries, background_entries).await;
+    let local_agents = build_local_agent_entries(controller, delegated_entries, background_entries).await;
     handle.set_local_agents(local_agents);
     Ok(())
 }
@@ -97,9 +93,7 @@ async fn build_local_agent_entries(
     entries.into_iter().map(|(_, entry)| entry).collect()
 }
 
-pub(super) fn visible_delegated_local_agents(
-    entries: Vec<SubagentStatusEntry>,
-) -> Vec<SubagentStatusEntry> {
+pub(super) fn visible_delegated_local_agents(entries: Vec<SubagentStatusEntry>) -> Vec<SubagentStatusEntry> {
     let mut entries = entries
         .into_iter()
         .filter(|entry| !matches!(entry.status, SubagentStatus::Completed | SubagentStatus::Closed))
@@ -114,21 +108,15 @@ pub(super) fn visible_background_local_agents(
     let mut entries = entries
         .into_iter()
         .filter(|entry| {
-            matches!(
-                entry.status,
-                BackgroundSubprocessStatus::Starting | BackgroundSubprocessStatus::Running
-            ) || (entry.desired_enabled
-                && matches!(entry.status, BackgroundSubprocessStatus::Error))
+            matches!(entry.status, BackgroundSubprocessStatus::Starting | BackgroundSubprocessStatus::Running)
+                || (entry.desired_enabled && matches!(entry.status, BackgroundSubprocessStatus::Error))
         })
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     entries
 }
 
-fn delegated_local_agent_summary(
-    entry: &SubagentStatusEntry,
-    snapshot: &SubagentThreadSnapshot,
-) -> String {
+fn delegated_local_agent_summary(entry: &SubagentStatusEntry, snapshot: &SubagentThreadSnapshot) -> String {
     entry
         .summary
         .as_deref()
@@ -145,9 +133,7 @@ fn delegated_local_agent_summary(
                     .map(str::trim)
                     .filter(|error| !error.is_empty())
                     .map(ToOwned::to_owned)
-                    .unwrap_or_else(|| {
-                        "Delegated agent failed before producing a summary.".to_string()
-                    })
+                    .unwrap_or_else(|| "Delegated agent failed before producing a summary.".to_string())
             } else if matches!(entry.status, SubagentStatus::Queued) {
                 "Queued and waiting to start.".to_string()
             } else {
@@ -156,10 +142,7 @@ fn delegated_local_agent_summary(
         })
 }
 
-fn delegated_local_agent_preview(
-    entry: &SubagentStatusEntry,
-    snapshot: &SubagentThreadSnapshot,
-) -> String {
+fn delegated_local_agent_preview(entry: &SubagentStatusEntry, snapshot: &SubagentThreadSnapshot) -> String {
     let preview = summarize_subagent_sidebar_preview(snapshot);
     if preview.trim().is_empty() {
         delegated_local_agent_preview_placeholder(entry)
@@ -192,12 +175,8 @@ fn background_local_agent_summary(entry: &BackgroundSubprocessEntry) -> String {
         .filter(|summary| !summary.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| match entry.status {
-            BackgroundSubprocessStatus::Starting => {
-                "Starting; waiting for subprocess output.".to_string()
-            }
-            BackgroundSubprocessStatus::Running => {
-                "Running; waiting for transcript output.".to_string()
-            }
+            BackgroundSubprocessStatus::Starting => "Starting; waiting for subprocess output.".to_string(),
+            BackgroundSubprocessStatus::Running => "Running; waiting for transcript output.".to_string(),
             BackgroundSubprocessStatus::Stopped => "Stopped.".to_string(),
             BackgroundSubprocessStatus::Error => "Exited with an error.".to_string(),
         })
@@ -211,13 +190,9 @@ fn background_local_agent_preview(snapshot: &BackgroundSubprocessSnapshot) -> St
     }
 }
 
-pub(super) fn background_local_agent_preview_placeholder(
-    entry: &BackgroundSubprocessEntry,
-) -> String {
+pub(super) fn background_local_agent_preview_placeholder(entry: &BackgroundSubprocessEntry) -> String {
     match entry.status {
-        BackgroundSubprocessStatus::Starting => {
-            "Waiting for the subprocess to emit output...".to_string()
-        }
+        BackgroundSubprocessStatus::Starting => "Waiting for the subprocess to emit output...".to_string(),
         BackgroundSubprocessStatus::Running => {
             "Subprocess is running; waiting for the next transcript update.".to_string()
         }
@@ -295,20 +270,12 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
         }
         ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
             .map(|text| format!("tool output: {text}"))
+            .unwrap_or_else(|| format!("tool output: {}", tool_status_label(output.status.clone()))),
+        ThreadItemDetails::CommandExecution(command) => summarize_preview_text(&command.aggregated_output)
+            .map(|text| format!("command {}: {}", command.command, text))
             .unwrap_or_else(|| {
-                format!("tool output: {}", tool_status_label(output.status.clone()))
+                format!("command {}: {}", command.command, command_status_label(command.status.clone()))
             }),
-        ThreadItemDetails::CommandExecution(command) => {
-            summarize_preview_text(&command.aggregated_output)
-                .map(|text| format!("command {}: {}", command.command, text))
-                .unwrap_or_else(|| {
-                    format!(
-                        "command {}: {}",
-                        command.command,
-                        command_status_label(command.status.clone())
-                    )
-                })
-        }
         _ => return None,
     };
 

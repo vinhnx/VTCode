@@ -12,14 +12,12 @@ impl FileOpsTool {
     /// Execute recursive file search
     pub(crate) async fn execute_recursive_search(&self, input: &ListInput) -> Result<Value> {
         let list_glob = compile_list_glob(input)?;
-        let pattern =
-            input.glob_pattern.as_deref().or(input.name_pattern.as_deref()).unwrap_or("*");
+        let pattern = input.glob_pattern.as_deref().or(input.name_pattern.as_deref()).unwrap_or("*");
         let search_path = self.workspace_root.join(&input.path);
 
         // Check if path exists before walking
         if !search_path.exists() {
-            let suggestion =
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+            let suggestion = self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
             return Err(anyhow!(
                 "Path '{}' does not exist. Workspace root: {}{}",
                 input.path,
@@ -82,10 +80,7 @@ impl FileOpsTool {
         if matched_total > input.max_items
             && let Some(obj) = result.as_object_mut()
         {
-            obj.insert(
-                "overflow".to_string(),
-                json!(format!("[+{} more items]", matched_total - input.max_items)),
-            );
+            obj.insert("overflow".to_string(), json!(format!("[+{} more items]", matched_total - input.max_items)));
         }
         Ok(result)
     }
@@ -223,12 +218,6 @@ impl FileOpsTool {
         }
 
         let total_count = items.len();
-        Ok(self.paginate_and_format(
-            items,
-            total_count,
-            input,
-            "find_content",
-            Some(content_pattern),
-        ))
+        Ok(self.paginate_and_format(items, total_count, input, "find_content", Some(content_pattern)))
     }
 }

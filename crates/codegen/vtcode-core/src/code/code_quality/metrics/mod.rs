@@ -32,8 +32,7 @@ impl QualityMetrics {
             (25.0 * (1.0 - (self.lint_errors as f64 / 10.0).min(1.0))).max(0.0)
         };
 
-        let complexity_score =
-            (25.0 * (1.0 - (self.cyclomatic_complexity / 20.0).min(1.0))).max(0.0);
+        let complexity_score = (25.0 * (1.0 - (self.cyclomatic_complexity / 20.0).min(1.0))).max(0.0);
         let coverage_score = self.test_coverage * 0.25;
 
         format_score + lint_score + complexity_score + coverage_score

@@ -67,8 +67,7 @@ impl SkillAuthor {
         self.validate_skill_name(skill_name)?;
 
         // Determine output directory
-        let skills_dir =
-            output_dir.unwrap_or_else(|| self.workspace_root.join(".agents").join("skills"));
+        let skills_dir = output_dir.unwrap_or_else(|| self.workspace_root.join(".agents").join("skills"));
         let skill_dir = skills_dir.join(skill_name);
 
         // Check if exists
@@ -77,9 +76,8 @@ impl SkillAuthor {
         }
 
         // Create skill directory
-        fs::create_dir_all(&skill_dir).with_context(|| {
-            format!("failed to create skill directory at {}", skill_dir.display())
-        })?;
+        fs::create_dir_all(&skill_dir)
+            .with_context(|| format!("failed to create skill directory at {}", skill_dir.display()))?;
         info!("Created skill directory: {}", skill_dir.display());
 
         // Create SKILL.md
@@ -125,8 +123,8 @@ impl SkillAuthor {
         }
 
         // Read and parse content
-        let content = fs::read_to_string(&skill_md)
-            .with_context(|| format!("failed to read {}", skill_md.display()))?;
+        let content =
+            fs::read_to_string(&skill_md).with_context(|| format!("failed to read {}", skill_md.display()))?;
 
         // Extract frontmatter
         if !content.starts_with("---") {
@@ -221,10 +219,9 @@ impl SkillAuthor {
         }
 
         if body.len() > 50000 {
-            report.warnings.push(
-                "SKILL.md body is very long (>50k chars). Consider splitting into reference files."
-                    .to_string(),
-            );
+            report
+                .warnings
+                .push("SKILL.md body is very long (>50k chars). Consider splitting into reference files.".to_string());
         }
 
         // Validate directory structure
@@ -254,9 +251,8 @@ impl SkillAuthor {
         // Create zip file
         use zip::ZipWriter;
 
-        let file = fs::File::create(&output_file).with_context(|| {
-            format!("failed to create output file at {}", output_file.display())
-        })?;
+        let file = fs::File::create(&output_file)
+            .with_context(|| format!("failed to create output file at {}", output_file.display()))?;
         let mut zip = ZipWriter::new(file);
 
         // Add all files from skill_dir
@@ -272,9 +268,7 @@ impl SkillAuthor {
 
     fn validate_skill_name(&self, name: &str) -> Result<()> {
         if !self.is_valid_skill_name(name) {
-            return Err(anyhow!(
-                "Invalid skill name '{name}'. Must be lowercase alphanumeric with hyphens only"
-            ));
+            return Err(anyhow!("Invalid skill name '{name}'. Must be lowercase alphanumeric with hyphens only"));
         }
         Ok(())
     }
@@ -293,14 +287,12 @@ impl SkillAuthor {
 
     fn create_scripts_dir(&self, skill_dir: &Path, skill_name: &str) -> Result<()> {
         let scripts_dir = skill_dir.join("scripts");
-        fs::create_dir(&scripts_dir).with_context(|| {
-            format!("failed to create scripts dir at {}", scripts_dir.display())
-        })?;
+        fs::create_dir(&scripts_dir)
+            .with_context(|| format!("failed to create scripts dir at {}", scripts_dir.display()))?;
 
         let example_script = scripts_dir.join("example.py");
         let content = EXAMPLE_SCRIPT.replace("{skill_name}", skill_name);
-        fs::write(&example_script, content)
-            .with_context(|| format!("failed to write {}", example_script.display()))?;
+        fs::write(&example_script, content).with_context(|| format!("failed to write {}", example_script.display()))?;
 
         #[cfg(unix)]
         {
@@ -309,9 +301,8 @@ impl SkillAuthor {
                 .with_context(|| format!("failed to stat {}", example_script.display()))?
                 .permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&example_script, perms).with_context(|| {
-                format!("failed to set permissions on {}", example_script.display())
-            })?;
+            fs::set_permissions(&example_script, perms)
+                .with_context(|| format!("failed to set permissions on {}", example_script.display()))?;
         }
 
         info!("Created scripts/example.py");
@@ -320,14 +311,12 @@ impl SkillAuthor {
 
     fn create_references_dir(&self, skill_dir: &Path, skill_title: &str) -> Result<()> {
         let references_dir = skill_dir.join("references");
-        fs::create_dir(&references_dir).with_context(|| {
-            format!("failed to create references dir at {}", references_dir.display())
-        })?;
+        fs::create_dir(&references_dir)
+            .with_context(|| format!("failed to create references dir at {}", references_dir.display()))?;
 
         let reference_file = references_dir.join("api_reference.md");
         let content = EXAMPLE_REFERENCE.replace("{skill_title}", skill_title);
-        fs::write(&reference_file, content)
-            .with_context(|| format!("failed to write {}", reference_file.display()))?;
+        fs::write(&reference_file, content).with_context(|| format!("failed to write {}", reference_file.display()))?;
 
         info!("Created references/api_reference.md");
         Ok(())
@@ -354,9 +343,9 @@ impl SkillAuthor {
         }
 
         if skill_dir.join("INSTALLATION_GUIDE.md").exists() {
-            report.warnings.push(
-                "INSTALLATION_GUIDE.md found - installation info should be in SKILL.md".to_string(),
-            );
+            report
+                .warnings
+                .push("INSTALLATION_GUIDE.md found - installation info should be in SKILL.md".to_string());
         }
 
         // Warn about Windows-style paths
@@ -371,11 +360,7 @@ impl SkillAuthor {
     }
 }
 
-fn add_directory_to_zip<W: Write + std::io::Seek>(
-    zip: &mut zip::ZipWriter<W>,
-    dir: &Path,
-    base: &Path,
-) -> Result<()> {
+fn add_directory_to_zip<W: Write + std::io::Seek>(zip: &mut zip::ZipWriter<W>, dir: &Path, base: &Path) -> Result<()> {
     use std::io::Read;
     use zip::write::SimpleFileOptions;
 
@@ -386,8 +371,7 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(
 
         if path.is_file() {
             debug!("Adding file: {}", name.display());
-            let options =
-                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
             zip.start_file(name.to_string_lossy().to_string(), options)?;
             let mut file = fs::File::open(&path)?;
             let mut buffer = Vec::new();
@@ -422,14 +406,7 @@ impl ValidationReport {
 
     pub fn format(&self) -> String {
         let mut output = format!("Validation Report for: {}\n", self.skill_dir.display());
-        output.push_str(&format!(
-            "Status: {}\n\n",
-            if self.valid {
-                "✓ VALID"
-            } else {
-                "✗ INVALID"
-            }
-        ));
+        output.push_str(&format!("Status: {}\n\n", if self.valid { "✓ VALID" } else { "✗ INVALID" }));
 
         if !self.errors.is_empty() {
             output.push_str("Errors:\n");
@@ -474,13 +451,7 @@ pub fn render_skills_lean(skills: &[crate::types::Skill]) -> Option<String> {
             crate::types::SkillScope::System => "system",
             crate::types::SkillScope::Admin => "admin",
         };
-        lines.push(format!(
-            "- {}: {} (file: {}, scope: {})",
-            skill.name(),
-            skill.description(),
-            path_str,
-            scope
-        ));
+        lines.push(format!("- {}: {} (file: {}, scope: {})", skill.name(), skill.description(), path_str, scope));
     }
 
     lines.push(r###"- Discovery: Available skills are listed above (name + description + file path). Skill bodies live on disk at the listed paths.
@@ -560,11 +531,10 @@ mod tests {
         })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
-        let skill_dir =
-            author.create_skill("test-skill", Some(tmp.path().to_path_buf())).map_err(|e| {
-                eprintln!("Failed to write skill file: {e}");
-                e
-            })?;
+        let skill_dir = author.create_skill("test-skill", Some(tmp.path().to_path_buf())).map_err(|e| {
+            eprintln!("Failed to write skill file: {e}");
+            e
+        })?;
 
         assert!(skill_dir.exists());
         assert!(skill_dir.join("SKILL.md").exists());
@@ -610,11 +580,7 @@ Use bundled resources when needed.
         let report = author.validate_skill(&skill_dir).unwrap();
 
         assert!(!report.valid, "{}", report.format());
-        assert!(
-            report.errors.iter().any(|error| error.contains("Unexpected property")),
-            "{}",
-            report.format()
-        );
+        assert!(report.errors.iter().any(|error| error.contains("Unexpected property")), "{}", report.format());
     }
 
     #[test]
@@ -657,8 +623,7 @@ Use bundled resources when needed.
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         // Create test skills
-        let skill1_dir =
-            author.create_skill("pdf-analyzer", Some(tmp.path().to_path_buf())).unwrap();
+        let skill1_dir = author.create_skill("pdf-analyzer", Some(tmp.path().to_path_buf())).unwrap();
         let skill2_dir = author
             .create_skill("spreadsheet-generator", Some(tmp.path().to_path_buf()))
             .unwrap();

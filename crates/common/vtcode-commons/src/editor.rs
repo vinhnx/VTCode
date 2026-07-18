@@ -98,8 +98,7 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
         }
         let decoded_path = decode_bare_local_path(path_str);
         return Some(EditorTarget::new(
-            expand_home_relative_path(decoded_path.as_ref())
-                .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
+            expand_home_relative_path(decoded_path.as_ref()).unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
             Some(location_suffix),
         ));
     }
@@ -113,8 +112,7 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
         let decoded_path = decode_bare_local_path(path_str);
 
         return Some(EditorTarget::new(
-            expand_home_relative_path(decoded_path.as_ref())
-                .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
+            expand_home_relative_path(decoded_path.as_ref()).unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
             Some(location_suffix),
         ));
     }
@@ -130,8 +128,7 @@ pub fn parse_editor_target(raw: &str) -> Option<EditorTarget> {
     let decoded_path = decode_bare_local_path(path_str);
 
     Some(EditorTarget::new(
-        expand_home_relative_path(decoded_path.as_ref())
-            .unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
+        expand_home_relative_path(decoded_path.as_ref()).unwrap_or_else(|| PathBuf::from(decoded_path.as_ref())),
         location_suffix,
     ))
 }
@@ -320,8 +317,7 @@ mod tests {
 
     #[test]
     fn bare_percent_encoded_paths_are_decoded() {
-        let target =
-            parse_editor_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12").expect("target");
+        let target = parse_editor_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/Example Folder/Résumé.md"));
         assert_eq!(target.location_suffix(), Some(":12"));
     }
@@ -333,8 +329,7 @@ mod tests {
 
     #[test]
     fn resolves_relative_paths_against_base() {
-        let target =
-            resolve_editor_target("src/lib.rs:12", Path::new("/workspace")).expect("target");
+        let target = resolve_editor_target("src/lib.rs:12", Path::new("/workspace")).expect("target");
         assert_eq!(target.path(), Path::new("/workspace/src/lib.rs"));
         assert_eq!(target.location_suffix(), Some(":12"));
         assert_eq!(target.canonical_string(), "/workspace/src/lib.rs:12");

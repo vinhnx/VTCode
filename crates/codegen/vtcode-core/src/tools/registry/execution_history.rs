@@ -207,8 +207,7 @@ impl ToolExecutionRecord {
 
     #[inline]
     pub fn with_retry_after(mut self, retry_after: Option<Duration>) -> Self {
-        self.retry_after_ms =
-            retry_after.map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64);
+        self.retry_after_ms = retry_after.map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64);
         self
     }
 
@@ -433,10 +432,7 @@ pub struct ToolExecutionHistory {
 impl ToolExecutionHistory {
     /// Create a new execution history with a maximum record count.
     pub fn new(max_records: usize) -> Self {
-        Self::with_workspace_root(
-            max_records,
-            env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        )
+        Self::with_workspace_root(max_records, env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
     }
 
     pub(crate) fn with_workspace_root(max_records: usize, workspace_root: PathBuf) -> Self {
@@ -444,12 +440,8 @@ impl ToolExecutionHistory {
             records: Arc::new(RwLock::new(VecDeque::with_capacity(max_records))),
             workspace_root: Arc::new(workspace_root),
             max_records,
-            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(
-                DEFAULT_LOOP_DETECT_WINDOW,
-            )),
-            identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(
-                defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            )),
+            detect_window: Arc::new(std::sync::atomic::AtomicUsize::new(DEFAULT_LOOP_DETECT_WINDOW)),
+            identical_limit: Arc::new(std::sync::atomic::AtomicUsize::new(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS)),
             rate_limit_per_minute: Arc::new(std::sync::atomic::AtomicUsize::new(
                 crate::tools::rate_limit_config::tool_calls_per_minute_from_env().unwrap_or(0),
             )),
@@ -512,8 +504,7 @@ impl ToolExecutionHistory {
         task_completed_successfully: Option<bool>,
     ) -> ToolTaskTelemetrySnapshot {
         let snapshot_task_id = task_id.map(str::to_string);
-        let mut snapshot =
-            ToolTaskTelemetrySnapshot::empty(snapshot_task_id, task_completed_successfully);
+        let mut snapshot = ToolTaskTelemetrySnapshot::empty(snapshot_task_id, task_completed_successfully);
         let Ok(records) = self.records.read() else {
             return snapshot;
         };
@@ -521,9 +512,10 @@ impl ToolExecutionHistory {
         let mut equivalent_calls_by_key: HashMap<String, usize> = HashMap::new();
         let mut seen_spool_paths: HashMap<String, usize> = HashMap::new();
 
-        for record in records.iter().filter(|record| {
-            task_id.is_none_or(|expected| record.context.task_id.as_deref() == Some(expected))
-        }) {
+        for record in records
+            .iter()
+            .filter(|record| task_id.is_none_or(|expected| record.context.task_id.as_deref() == Some(expected)))
+        {
             snapshot.total_tool_calls += 1;
             let label = public_tool_telemetry_label(&record.tool_name);
             *snapshot.calls_by_tool.entry(label).or_default() += 1;
@@ -568,22 +560,12 @@ impl ToolExecutionHistory {
     }
 
     /// Find the most recent spooled output for a tool call with identical args.
-    pub fn find_recent_spooled_result(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        max_age: Duration,
-    ) -> Option<Value> {
+    pub fn find_recent_spooled_result(&self, tool_name: &str, args: &Value, max_age: Duration) -> Option<Value> {
         self.find_recent_matching(tool_name, args, max_age, ReplayMode::RequireSpool)
     }
 
     /// Find the most recent successful output for a tool call with identical args.
-    pub fn find_recent_successful_result(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        max_age: Duration,
-    ) -> Option<Value> {
+    pub fn find_recent_successful_result(&self, tool_name: &str, args: &Value, max_age: Duration) -> Option<Value> {
         self.find_recent_matching(tool_name, args, max_age, ReplayMode::Any)
     }
 
@@ -646,11 +628,8 @@ impl ToolExecutionHistory {
         let mut later_pathless_mutation = false;
 
         for record in records.iter().rev() {
-            if record.success
-                && tool_intent::classify_tool_intent(&record.tool_name, &record.args).mutating
-            {
-                let mutation_paths =
-                    crate::tools::mutation_target_paths(&record.tool_name, &record.args);
+            if record.success && tool_intent::classify_tool_intent(&record.tool_name, &record.args).mutating {
+                let mutation_paths = crate::tools::mutation_target_paths(&record.tool_name, &record.args);
                 later_pathless_mutation |= mutation_paths.is_empty();
                 later_mutated_paths.extend(mutation_paths);
             }
@@ -715,9 +694,7 @@ impl ToolExecutionHistory {
         };
         records.retain(|record| {
             if record.tool_name == tools::READ_FILE || record.tool_name == tools::UNIFIED_FILE {
-                if let Some(record_path) =
-                    Self::extract_read_target(&record.tool_name, &record.args)
-                {
+                if let Some(record_path) = Self::extract_read_target(&record.tool_name, &record.args) {
                     if record_path == target_path {
                         return false;
                     }
@@ -800,11 +777,7 @@ impl ToolExecutionHistory {
     ///
     /// Returns `(next_offset, chunk_limit)` when the recent call indicates more chunks are
     /// available (`spool_chunked=true`, `has_more=true`).
-    pub fn find_recent_read_file_spool_progress(
-        &self,
-        path: &str,
-        max_age: Duration,
-    ) -> Option<(usize, usize)> {
+    pub fn find_recent_read_file_spool_progress(&self, path: &str, max_age: Duration) -> Option<(usize, usize)> {
         let records = self.records.read().ok()?;
         let now = SystemTime::now();
         let expected_path = path.trim();
@@ -880,9 +853,7 @@ impl ToolExecutionHistory {
 
     fn effective_identical_limit_for_call(&self, tool_name: &str, args: &Value) -> usize {
         let base_limit = self.identical_limit.load(std::sync::atomic::Ordering::Relaxed);
-        if is_read_style_tool_call(tool_name, args)
-            || tool_name_matches(tool_name, tools::CODE_SEARCH)
-        {
+        if is_read_style_tool_call(tool_name, args) || tool_name_matches(tool_name, tools::CODE_SEARCH) {
             base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
         } else {
             base_limit
@@ -1003,8 +974,7 @@ mod tests {
             false,
         ));
 
-        let found =
-            history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
+        let found = history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert_eq!(found, Some(result));
     }
 
@@ -1159,8 +1129,7 @@ mod tests {
             false,
         ));
 
-        let found =
-            history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
+        let found = history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert!(found.is_none());
     }
 
@@ -1189,8 +1158,7 @@ mod tests {
             false,
         ));
 
-        let found =
-            history.find_recent_successful_result("run_pty_cmd", &args, Duration::from_secs(60));
+        let found = history.find_recent_successful_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert!(found.is_none());
     }
 
@@ -1596,22 +1564,14 @@ mod tests {
         let in_scope = history_with_mutation("src/widget.rs");
         assert!(
             in_scope
-                .find_recent_successful_by_read_target(
-                    tools::CODE_SEARCH,
-                    &search_args,
-                    Duration::from_secs(60),
-                )
+                .find_recent_successful_by_read_target(tools::CODE_SEARCH, &search_args, Duration::from_secs(60),)
                 .is_none(),
             "searching src, then editing src/widget.rs, must execute fresh"
         );
 
         let unrelated = history_with_mutation("tests/widget.rs");
         assert_eq!(
-            unrelated.find_recent_successful_by_read_target(
-                tools::CODE_SEARCH,
-                &search_args,
-                Duration::from_secs(60),
-            ),
+            unrelated.find_recent_successful_by_read_target(tools::CODE_SEARCH, &search_args, Duration::from_secs(60),),
             Some(cached_result),
             "an unrelated edit may reuse the prior scoped search"
         );
@@ -1652,11 +1612,7 @@ mod tests {
 
         assert!(
             history
-                .find_recent_successful_by_read_target(
-                    tools::CODE_SEARCH,
-                    &search_args,
-                    Duration::from_secs(60),
-                )
+                .find_recent_successful_by_read_target(tools::CODE_SEARCH, &search_args, Duration::from_secs(60),)
                 .is_none(),
             "a successful command mutation without explicit target metadata must invalidate search replay"
         );
@@ -1697,11 +1653,7 @@ mod tests {
 
         assert!(
             history
-                .find_recent_successful_by_read_target(
-                    tools::CODE_SEARCH,
-                    &search_args,
-                    Duration::from_secs(60),
-                )
+                .find_recent_successful_by_read_target(tools::CODE_SEARCH, &search_args, Duration::from_secs(60),)
                 .is_none(),
             "moving a file into the searched scope must invalidate search replay"
         );
@@ -1750,11 +1702,7 @@ mod tests {
         for args in [&old_search, &new_search] {
             assert!(
                 history
-                    .find_recent_successful_by_read_target(
-                        tools::CODE_SEARCH,
-                        args,
-                        Duration::from_secs(60),
-                    )
+                    .find_recent_successful_by_read_target(tools::CODE_SEARCH, args, Duration::from_secs(60),)
                     .is_none(),
                 "both old and new move paths must invalidate replay: {args}"
             );

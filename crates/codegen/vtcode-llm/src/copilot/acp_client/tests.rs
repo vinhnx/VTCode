@@ -34,8 +34,7 @@ fn formats_unsupported_capability_message() {
 
 #[test]
 fn permission_render_denies_without_prompt() {
-    let result = PermissionResponseFormat::CopilotCli
-        .render(CopilotPermissionDecision::DeniedNoApprovalRule);
+    let result = PermissionResponseFormat::CopilotCli.render(CopilotPermissionDecision::DeniedNoApprovalRule);
 
     assert_eq!(result["result"]["kind"], "denied-no-approval-rule-and-could-not-request-from-user");
 }
@@ -212,8 +211,7 @@ fn parses_observed_tool_call_raw_output_detailed_content_fallback() {
 async fn handle_terminal_create_request_dispatches_runtime_request() {
     let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
-    let (runtime_requests, mut runtime_requests_rx) =
-        mpsc::unbounded_channel::<CopilotRuntimeRequest>();
+    let (runtime_requests, mut runtime_requests_rx) = mpsc::unbounded_channel::<CopilotRuntimeRequest>();
 
     let inner = Arc::new(CopilotAcpClientInner {
         transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
@@ -275,8 +273,7 @@ async fn handle_terminal_create_request_dispatches_runtime_request() {
 fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
     let (write_tx, _write_rx) = mpsc::channel(64);
     let (updates, updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
-    let (runtime_requests, runtime_requests_rx) =
-        mpsc::unbounded_channel::<CopilotRuntimeRequest>();
+    let (runtime_requests, runtime_requests_rx) = mpsc::unbounded_channel::<CopilotRuntimeRequest>();
     drop(updates_rx);
     drop(runtime_requests_rx);
 
@@ -304,8 +301,7 @@ fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
 fn handle_permission_request_falls_back_when_runtime_receiver_is_gone() {
     let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
-    let (runtime_requests, runtime_requests_rx) =
-        mpsc::unbounded_channel::<CopilotRuntimeRequest>();
+    let (runtime_requests, runtime_requests_rx) = mpsc::unbounded_channel::<CopilotRuntimeRequest>();
     drop(runtime_requests_rx);
 
     let inner = Arc::new(CopilotAcpClientInner {
@@ -336,18 +332,14 @@ fn handle_permission_request_falls_back_when_runtime_receiver_is_gone() {
     let payload: Value = serde_json::from_str(&payload).expect("valid json payload");
     assert_eq!(payload["jsonrpc"], "2.0");
     assert_eq!(payload["id"], 9);
-    assert_eq!(
-        payload["result"]["result"]["kind"],
-        "denied-no-approval-rule-and-could-not-request-from-user"
-    );
+    assert_eq!(payload["result"]["result"]["kind"], "denied-no-approval-rule-and-could-not-request-from-user");
 }
 
 #[tokio::test]
 async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completion() {
     let (write_tx, mut write_rx) = mpsc::channel(64);
     let (updates, _updates_rx) = mpsc::unbounded_channel::<PromptUpdate>();
-    let (runtime_requests, _runtime_requests_rx) =
-        mpsc::unbounded_channel::<CopilotRuntimeRequest>();
+    let (runtime_requests, _runtime_requests_rx) = mpsc::unbounded_channel::<CopilotRuntimeRequest>();
 
     let client = CopilotAcpClient {
         inner: Arc::new(CopilotAcpClientInner {
@@ -360,9 +352,7 @@ async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completio
 
     let completion = tokio::spawn(async {
         std::future::pending::<()>().await;
-        Ok::<PromptCompletion, anyhow::Error>(PromptCompletion {
-            stop_reason: "cancelled".to_string(),
-        })
+        Ok::<PromptCompletion, anyhow::Error>(PromptCompletion { stop_reason: "cancelled".to_string() })
     });
     let abort_handle = completion.abort_handle();
 

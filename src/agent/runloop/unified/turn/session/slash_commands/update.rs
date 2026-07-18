@@ -4,9 +4,7 @@ use std::env;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
-use crate::updater::{
-    InlineUpdateOutcome, Updater, execute_inline_update, run_inline_update_prompt,
-};
+use crate::updater::{InlineUpdateOutcome, Updater, execute_inline_update, run_inline_update_prompt};
 
 fn control_for_update_outcome(outcome: InlineUpdateOutcome) -> SlashCommandControl {
     match outcome {
@@ -26,10 +24,8 @@ pub(crate) async fn handle_update(
     let current_version = env!("CARGO_PKG_VERSION");
     let mut updater = Updater::new(current_version)?;
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Checking for updates (current: v{current_version})..."),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Checking for updates (current: v{current_version})..."))?;
 
     match updater.check_for_updates().await {
         Ok(Some(update)) => {
@@ -44,10 +40,8 @@ pub(crate) async fn handle_update(
             }
 
             if check_only {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Run {} to apply this release.", "/update install".green()),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, &format!("Run {} to apply this release.", "/update install".green()))?;
                 return Ok(SlashCommandControl::Continue);
             }
 
@@ -72,19 +66,12 @@ pub(crate) async fn handle_update(
             ctx.handle.set_header_context(ctx.header_context.clone());
 
             if install && force {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Force reinstall requested; running the current install command.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, "Force reinstall requested; running the current install command.")?;
                 let notice = updater.notice_for_version(updater.current_version().clone());
-                execute_inline_update(
-                    ctx.renderer,
-                    ctx.handle,
-                    ctx.config.workspace.as_path(),
-                    &notice,
-                )
-                .await
-                .map(control_for_update_outcome)
+                execute_inline_update(ctx.renderer, ctx.handle, ctx.config.workspace.as_path(), &notice)
+                    .await
+                    .map(control_for_update_outcome)
             } else {
                 Ok(SlashCommandControl::Continue)
             }

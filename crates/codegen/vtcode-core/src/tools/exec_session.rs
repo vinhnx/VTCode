@@ -115,9 +115,7 @@ impl PipeSessionManager {
         let output_activity_tx = activity_tx.clone();
         let output_task = tokio::spawn(async move {
             loop {
-                match tokio::time::timeout(tokio::time::Duration::from_millis(15), output_rx.recv())
-                    .await
-                {
+                match tokio::time::timeout(tokio::time::Duration::from_millis(15), output_rx.recv()).await {
                     Ok(Ok(chunk)) => {
                         let text = String::from_utf8_lossy(&chunk);
                         let mut guard = output_clone.lock().await;
@@ -139,14 +137,8 @@ impl PipeSessionManager {
             let _ = exit_rx.await;
             exit_activity_tx.send_modify(|version| *version += 1);
         });
-        let record = Arc::new(PipeSessionRecord::new(
-            metadata.clone(),
-            handle,
-            output,
-            output_task,
-            exit_task,
-            activity_tx,
-        ));
+        let record =
+            Arc::new(PipeSessionRecord::new(metadata.clone(), handle, output, output_task, exit_task, activity_tx));
 
         let mut sessions = self.sessions.write().await;
         sessions.insert(session_id, record);
@@ -162,9 +154,10 @@ impl PipeSessionManager {
             return Ok(None);
         }
 
-        let pending = output.get(start..).map(ToOwned::to_owned).ok_or_else(|| {
-            anyhow!("pipe session '{session_id}' produced invalid output boundary")
-        })?;
+        let pending = output
+            .get(start..)
+            .map(ToOwned::to_owned)
+            .ok_or_else(|| anyhow!("pipe session '{session_id}' produced invalid output boundary"))?;
 
         if drain {
             record.pending_offset.store(output.len(), Ordering::SeqCst);
@@ -177,12 +170,7 @@ impl PipeSessionManager {
         }
     }
 
-    async fn send_input_to_session(
-        &self,
-        session_id: &str,
-        data: &[u8],
-        append_newline: bool,
-    ) -> Result<usize> {
+    async fn send_input_to_session(&self, session_id: &str, data: &[u8], append_newline: bool) -> Result<usize> {
         let record = self.session_record(session_id).await?;
         record
             .handle
@@ -297,11 +285,7 @@ struct ExecSessionRecord {
 }
 
 impl ExecSessionRecord {
-    fn new(
-        metadata: VTCodeExecSession,
-        backend: ExecSessionBackend,
-        pty_guard: Option<PtySessionGuard>,
-    ) -> Self {
+    fn new(metadata: VTCodeExecSession, backend: ExecSessionBackend, pty_guard: Option<PtySessionGuard>) -> Self {
         Self { metadata, backend, _pty_guard: pty_guard }
     }
 }
@@ -331,8 +315,7 @@ impl ExecSessionManager {
         env: HashMap<String, String>,
     ) -> Result<VTCodeExecSession> {
         self.ensure_session_absent(&session_id).await?;
-        let metadata =
-            self.pipe_sessions.create_session(session_id, command, working_dir, env).await?;
+        let metadata = self.pipe_sessions.create_session(session_id, command, working_dir, env).await?;
         self.insert_session(metadata.clone(), ExecSessionBackend::Pipe, None).await?;
         Ok(metadata)
     }
@@ -365,23 +348,21 @@ impl ExecSessionManager {
     pub(crate) async fn snapshot_session(&self, session_id: &str) -> Result<VTCodeExecSession> {
         let record = self.session_record(session_id).await?;
         match record.backend {
-            ExecSessionBackend::Pipe => {
-                self.pipe_sessions.session_record(session_id).await.map(|r| {
-                    let mut metadata = r.metadata.clone();
-                    let exit_code = if r.handle.has_exited() {
-                        r.handle.exit_code()
-                    } else {
-                        None
-                    };
-                    metadata.exit_code = exit_code;
-                    metadata.lifecycle_state = Some(if exit_code.is_some() {
-                        crate::tools::types::VTCodeSessionLifecycleState::Exited
-                    } else {
-                        crate::tools::types::VTCodeSessionLifecycleState::Running
-                    });
-                    metadata
-                })
-            }
+            ExecSessionBackend::Pipe => self.pipe_sessions.session_record(session_id).await.map(|r| {
+                let mut metadata = r.metadata.clone();
+                let exit_code = if r.handle.has_exited() {
+                    r.handle.exit_code()
+                } else {
+                    None
+                };
+                metadata.exit_code = exit_code;
+                metadata.lifecycle_state = Some(if exit_code.is_some() {
+                    crate::tools::types::VTCodeSessionLifecycleState::Exited
+                } else {
+                    crate::tools::types::VTCodeSessionLifecycleState::Running
+                });
+                metadata
+            }),
             ExecSessionBackend::Pty => self
                 .pty_sessions
                 .manager()
@@ -392,25 +373,16 @@ impl ExecSessionManager {
 
     pub(crate) async fn list_sessions(&self) -> Vec<VTCodeExecSession> {
         let sessions = self.sessions.read().await;
-        let mut listed =
-            sessions.values().map(|record| record.metadata.clone()).collect::<Vec<_>>();
+        let mut listed = sessions.values().map(|record| record.metadata.clone()).collect::<Vec<_>>();
         listed.sort_by(|left, right| left.id.cmp(&right.id));
         listed
     }
 
-    pub(crate) async fn read_session_output(
-        &self,
-        session_id: &str,
-        drain: bool,
-    ) -> Result<Option<String>> {
+    pub(crate) async fn read_session_output(&self, session_id: &str, drain: bool) -> Result<Option<String>> {
         let record = self.session_record(session_id).await?;
         match record.backend {
-            ExecSessionBackend::Pipe => {
-                self.pipe_sessions.read_session_output(session_id, drain).await
-            }
-            ExecSessionBackend::Pty => {
-                self.pty_sessions.manager().read_session_output(session_id, drain)
-            }
+            ExecSessionBackend::Pipe => self.pipe_sessions.read_session_output(session_id, drain).await,
+            ExecSessionBackend::Pty => self.pty_sessions.manager().read_session_output(session_id, drain),
         }
     }
 
@@ -441,15 +413,10 @@ impl ExecSessionManager {
         }
     }
 
-    pub(crate) async fn activity_receiver(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<watch::Receiver<u64>>> {
+    pub(crate) async fn activity_receiver(&self, session_id: &str) -> Result<Option<watch::Receiver<u64>>> {
         let record = self.session_record(session_id).await?;
         match record.backend {
-            ExecSessionBackend::Pipe => {
-                self.pipe_sessions.activity_receiver(session_id).await.map(Some)
-            }
+            ExecSessionBackend::Pipe => self.pipe_sessions.activity_receiver(session_id).await.map(Some),
             ExecSessionBackend::Pty => Ok(None),
         }
     }
@@ -490,10 +457,7 @@ impl ExecSessionManager {
         Ok(metadata)
     }
 
-    pub(crate) async fn prune_exited_session(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<VTCodeExecSession>> {
+    pub(crate) async fn prune_exited_session(&self, session_id: &str) -> Result<Option<VTCodeExecSession>> {
         if self.is_session_completed(session_id).await?.is_some() {
             return self.close_session(session_id).await.map(Some);
         }
@@ -533,9 +497,7 @@ impl ExecSessionManager {
         let mut sessions = self.sessions.write().await;
         use hashbrown::hash_map::Entry;
         match sessions.entry(metadata.id.clone()) {
-            Entry::Occupied(_) => {
-                Err(anyhow!("exec session '{}' already exists", metadata.id.as_str()))
-            }
+            Entry::Occupied(_) => Err(anyhow!("exec session '{}' already exists", metadata.id.as_str())),
             Entry::Vacant(entry) => {
                 entry.insert(Arc::new(ExecSessionRecord::new(metadata, backend, pty_guard)));
                 Ok(())
@@ -577,10 +539,8 @@ mod tests {
     async fn pty_session_limit_holds_until_exec_session_close() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         let workspace_root = canonicalize_workspace(temp_dir.path());
-        let pty_sessions = PtySessionManager::new(
-            workspace_root.clone(),
-            PtyConfig { max_sessions: 1, ..Default::default() },
-        );
+        let pty_sessions =
+            PtySessionManager::new(workspace_root.clone(), PtyConfig { max_sessions: 1, ..Default::default() });
         let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
         let size = PtySize {
             rows: 24,
@@ -592,11 +552,7 @@ mod tests {
         manager
             .create_pty_session(
                 "run-1".to_string().into(),
-                vec![
-                    "/bin/sh".to_string(),
-                    "-c".to_string(),
-                    "sleep 1".to_string(),
-                ],
+                vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 1".to_string()],
                 workspace_root.clone(),
                 size,
                 HashMap::new(),
@@ -607,11 +563,7 @@ mod tests {
         let second = manager
             .create_pty_session(
                 "run-2".to_string().into(),
-                vec![
-                    "/bin/sh".to_string(),
-                    "-c".to_string(),
-                    "sleep 1".to_string(),
-                ],
+                vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 1".to_string()],
                 workspace_root.clone(),
                 size,
                 HashMap::new(),
@@ -625,11 +577,7 @@ mod tests {
         manager
             .create_pty_session(
                 "run-3".to_string().into(),
-                vec![
-                    "/bin/sh".to_string(),
-                    "-c".to_string(),
-                    "sleep 1".to_string(),
-                ],
+                vec!["/bin/sh".to_string(), "-c".to_string(), "sleep 1".to_string()],
                 workspace_root,
                 size,
                 HashMap::new(),
@@ -652,11 +600,7 @@ mod tests {
         manager
             .create_pipe_session(
                 "run-1".to_string().into(),
-                vec![
-                    "/bin/sh".to_string(),
-                    "-c".to_string(),
-                    "printf hello".to_string(),
-                ],
+                vec!["/bin/sh".to_string(), "-c".to_string(), "printf hello".to_string()],
                 workspace_root,
                 HashMap::new(),
             )

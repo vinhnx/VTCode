@@ -4,9 +4,8 @@ use super::{
     archive::workspace_archive_label,
     effective_max_tool_calls_for_turn,
     support::{
-        TurnHistoryCheckpoint, build_tracked_file_freshness_note,
-        build_unrelated_dirty_worktree_note, checkpoint_session_archive_start,
-        latest_assistant_result_text, prepare_resume_bootstrap_without_archive,
+        TurnHistoryCheckpoint, build_tracked_file_freshness_note, build_unrelated_dirty_worktree_note,
+        checkpoint_session_archive_start, latest_assistant_result_text, prepare_resume_bootstrap_without_archive,
         remove_transient_system_notes, take_pending_resumed_user_prompt,
     },
 };
@@ -88,9 +87,7 @@ fn take_pending_resumed_user_prompt_handles_trailing_system_notes() {
     let mut history = vec![
         vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
         vtcode_core::llm::provider::Message::user("what is this project".to_string()),
-        vtcode_core::llm::provider::Message::system(
-            "Recovered from interrupted session".to_string(),
-        ),
+        vtcode_core::llm::provider::Message::system("Recovered from interrupted session".to_string()),
     ];
 
     let pending = take_pending_resumed_user_prompt(&mut history);
@@ -105,9 +102,7 @@ fn take_pending_resumed_user_prompt_handles_trailing_system_notes() {
 fn take_pending_resumed_user_prompt_ignores_completed_turns() {
     let mut history = vec![
         vtcode_core::llm::provider::Message::user("what is this project".to_string()),
-        vtcode_core::llm::provider::Message::assistant(
-            "VT Code is a Rust coding agent".to_string(),
-        ),
+        vtcode_core::llm::provider::Message::assistant("VT Code is a Rust coding agent".to_string()),
         vtcode_core::llm::provider::Message::system("[Session Memory Envelope]".to_string()),
     ];
 
@@ -257,8 +252,7 @@ fn unrelated_dirty_worktree_note_skips_agent_touched_files() {
     let mut touched_paths = BTreeSet::new();
     touched_paths.insert(normalize_workspace_path(repo.path(), &path));
 
-    let note =
-        build_unrelated_dirty_worktree_note(repo.path(), &touched_paths).expect("note build");
+    let note = build_unrelated_dirty_worktree_note(repo.path(), &touched_paths).expect("note build");
 
     assert!(note.is_none());
 }
@@ -301,22 +295,12 @@ fn resume_bootstrap_without_archive_reuses_identifier_for_in_place_resume() {
     let resume = resume_session(ArchivedSessionIntent::ResumeInPlace);
     let (bootstrap, thread_id) = prepare_resume_bootstrap_without_archive(
         &resume,
-        SessionArchiveMetadata::new(
-            "workspace",
-            "/tmp/workspace",
-            "model",
-            "provider",
-            "theme",
-            "medium",
-        ),
+        SessionArchiveMetadata::new("workspace", "/tmp/workspace", "model", "provider", "theme", "medium"),
         None,
     );
 
     assert_eq!(thread_id, "session-source");
-    assert_eq!(
-        bootstrap.metadata.as_ref().map(|meta| meta.workspace_label.as_str()),
-        Some("workspace")
-    );
+    assert_eq!(bootstrap.metadata.as_ref().map(|meta| meta.workspace_label.as_str()), Some("workspace"));
 }
 
 #[test]
@@ -327,14 +311,7 @@ fn resume_bootstrap_without_archive_prefers_reserved_identifier_for_forks() {
     });
     let (_, thread_id) = prepare_resume_bootstrap_without_archive(
         &resume,
-        SessionArchiveMetadata::new(
-            "workspace",
-            "/tmp/workspace",
-            "model",
-            "provider",
-            "theme",
-            "medium",
-        ),
+        SessionArchiveMetadata::new("workspace", "/tmp/workspace", "model", "provider", "theme", "medium"),
         Some("reserved-session-id".to_string()),
     );
 
@@ -368,14 +345,7 @@ fn resume_bootstrap_without_archive_preserves_compatible_prompt_cache_lineage() 
     let resume = ResumeSession::from_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
     let (bootstrap, _) = prepare_resume_bootstrap_without_archive(
         &resume,
-        SessionArchiveMetadata::new(
-            "workspace",
-            "/tmp/workspace",
-            "model",
-            "provider",
-            "other-theme",
-            "high",
-        ),
+        SessionArchiveMetadata::new("workspace", "/tmp/workspace", "model", "provider", "other-theme", "high"),
         None,
     );
 
@@ -398,10 +368,7 @@ fn thread_completion_status_matches_public_contract() {
         SessionEndReason::NewSession.thread_completion_status(false),
         ("new_session", ThreadCompletionSubtype::Success)
     );
-    assert_eq!(
-        SessionEndReason::Exit.thread_completion_status(false),
-        ("exit", ThreadCompletionSubtype::Cancelled)
-    );
+    assert_eq!(SessionEndReason::Exit.thread_completion_status(false), ("exit", ThreadCompletionSubtype::Cancelled));
     assert_eq!(
         SessionEndReason::Cancelled.thread_completion_status(false),
         ("cancelled", ThreadCompletionSubtype::Cancelled)
@@ -421,10 +388,7 @@ fn latest_assistant_result_text_uses_latest_nonempty_assistant_message() {
     let messages = vec![
         vtcode_core::llm::provider::Message::user("hello".to_string()),
         vtcode_core::llm::provider::Message::assistant(" first ".to_string()),
-        vtcode_core::llm::provider::Message::tool_response(
-            "call-1".to_string(),
-            "{\"ok\":true}".to_string(),
-        ),
+        vtcode_core::llm::provider::Message::tool_response("call-1".to_string(), "{\"ok\":true}".to_string()),
         vtcode_core::llm::provider::Message::assistant(" final answer ".to_string()),
     ];
 
@@ -435,14 +399,7 @@ fn latest_assistant_result_text_uses_latest_nonempty_assistant_message() {
 async fn checkpoint_session_archive_start_writes_initial_snapshot() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let archive_path = temp_dir.path().join("session-vtcode-test-start.json");
-    let metadata = SessionArchiveMetadata::new(
-        "workspace",
-        "/tmp/workspace",
-        "model",
-        "provider",
-        "theme",
-        "medium",
-    );
+    let metadata = SessionArchiveMetadata::new("workspace", "/tmp/workspace", "model", "provider", "theme", "medium");
     let archive = SessionArchive::resume_from_listing(
         &SessionListing {
             path: archive_path.clone(),
@@ -463,9 +420,8 @@ async fn checkpoint_session_archive_start_writes_initial_snapshot() {
     let thread_manager = vtcode_core::core::threads::ThreadManager::new();
     let thread_handle = thread_manager.start_thread_with_identifier(
         "session-vtcode-test-start",
-        vtcode_core::core::threads::ThreadBootstrap::new(Some(metadata)).with_messages(vec![
-            vtcode_core::llm::provider::Message::user("hello".to_string()),
-        ]),
+        vtcode_core::core::threads::ThreadBootstrap::new(Some(metadata))
+            .with_messages(vec![vtcode_core::llm::provider::Message::user("hello".to_string())]),
     );
 
     checkpoint_session_archive_start(&archive, &thread_handle)
@@ -473,8 +429,7 @@ async fn checkpoint_session_archive_start_writes_initial_snapshot() {
         .expect("startup checkpoint");
 
     let snapshot: SessionSnapshot =
-        serde_json::from_str(&fs::read_to_string(archive_path).expect("read archive"))
-            .expect("parse archive");
+        serde_json::from_str(&fs::read_to_string(archive_path).expect("read archive")).expect("parse archive");
     assert_eq!(snapshot.total_messages, 1);
     assert_eq!(snapshot.messages.len(), 1);
     assert!(snapshot.progress.is_some());

@@ -12,8 +12,7 @@ use sha2::{Digest, Sha256};
 const CODE_VERIFIER_LENGTH: usize = 64;
 
 /// Characters allowed in code verifier (unreserved URI characters)
-const CODE_VERIFIER_CHARSET: &[u8] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+const CODE_VERIFIER_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 
 /// PKCE challenge pair containing verifier and challenge strings.
 #[derive(Debug, Clone)]
@@ -104,10 +103,7 @@ mod tests {
 
         // Verify all characters are in allowed charset
         for c in challenge.code_verifier.chars() {
-            assert!(
-                CODE_VERIFIER_CHARSET.contains(&(c as u8)),
-                "Invalid character in verifier: {c}"
-            );
+            assert!(CODE_VERIFIER_CHARSET.contains(&(c as u8)), "Invalid character in verifier: {c}");
         }
 
         // Verify challenge method

@@ -201,9 +201,7 @@ fn cleanup_old_audit_logs(audit_dir: &Path, max_age_days: u64) -> Result<()> {
         Ok(e) => e,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(err) => {
-            return Err(err).with_context(|| {
-                format!("Failed to read audit log directory {}", audit_dir.display())
-            });
+            return Err(err).with_context(|| format!("Failed to read audit log directory {}", audit_dir.display()));
         }
     };
 

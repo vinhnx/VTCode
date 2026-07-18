@@ -122,17 +122,9 @@ impl ToolOutput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentItem {
-    Text {
-        text: String,
-    },
-    Image {
-        data: String,
-        mime_type: String,
-    },
-    Resource {
-        uri: String,
-        mime_type: Option<String>,
-    },
+    Text { text: String },
+    Image { data: String, mime_type: String },
+    Resource { uri: String, mime_type: Option<String> },
 }
 
 impl ContentItem {
@@ -247,11 +239,7 @@ impl TurnContext {
         match path {
             Some(p) => {
                 let path = PathBuf::from(p);
-                if path.is_absolute() {
-                    path
-                } else {
-                    self.cwd.join(path)
-                }
+                if path.is_absolute() { path } else { self.cwd.join(path) }
             }
             None => self.cwd.clone(),
         }
@@ -298,18 +286,10 @@ impl DiffTracker {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum FileChange {
-    Add {
-        content: String,
-    },
+    Add { content: String },
     Delete,
-    Update {
-        old_content: String,
-        new_content: String,
-    },
-    Rename {
-        new_path: PathBuf,
-        content: Option<String>,
-    },
+    Update { old_content: String, new_content: String },
+    Rename { new_path: PathBuf, content: Option<String> },
 }
 
 /// Tool execution events (from Codex)

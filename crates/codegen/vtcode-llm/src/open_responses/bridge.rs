@@ -7,15 +7,14 @@
 use serde_json::json;
 
 use super::{
-    ContentPart, CustomItem, FunctionCallItem, ItemStatus, MessageItem, MessageRole,
-    OpenResponseError, OpenUsage, OutputItem, ReasoningItem, Response, ResponseStatus,
-    ResponseStreamEvent, StreamEventEmitter,
+    ContentPart, CustomItem, FunctionCallItem, ItemStatus, MessageItem, MessageRole, OpenResponseError, OpenUsage,
+    OutputItem, ReasoningItem, Response, ResponseStatus, ResponseStreamEvent, StreamEventEmitter,
     response::{generate_item_id, generate_response_id},
 };
 use crate::provider::{FinishReason, NormalizedStreamEvent, ToolCall};
 use vtcode_exec_events::{
-    CommandExecutionStatus, McpToolCallStatus, PatchApplyStatus, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ToolOutputItem,
+    CommandExecutionStatus, McpToolCallStatus, PatchApplyStatus, ThreadEvent, ThreadItem, ThreadItemDetails,
+    ToolOutputItem,
 };
 
 /// Builder for constructing Open Responses `Response` objects from VT Code events.
@@ -202,11 +201,7 @@ impl ResponseBuilder {
     }
 
     /// Processes a normalized provider stream event and emits corresponding Open Responses events.
-    pub fn process_normalized_event<E: StreamEventEmitter>(
-        &mut self,
-        event: &NormalizedStreamEvent,
-        emitter: &mut E,
-    ) {
+    pub fn process_normalized_event<E: StreamEventEmitter>(&mut self, event: &NormalizedStreamEvent, emitter: &mut E) {
         if self.response.status.is_terminal() {
             return;
         }
@@ -242,8 +237,7 @@ impl ResponseBuilder {
                     return;
                 }
 
-                let (item_id, output_index) =
-                    self.ensure_normalized_tool_call(call_id, None, emitter);
+                let (item_id, output_index) = self.ensure_normalized_tool_call(call_id, None, emitter);
                 self.append_tool_call_delta(call_id, output_index, delta);
                 emitter.emit(ResponseStreamEvent::FunctionCallArgumentsDelta {
                     response_id: self.response.id.clone(),
@@ -303,12 +297,7 @@ impl ResponseBuilder {
         }
     }
 
-    fn emit_custom_event<E: StreamEventEmitter>(
-        &self,
-        emitter: &mut E,
-        event_type: &str,
-        data: serde_json::Value,
-    ) {
+    fn emit_custom_event<E: StreamEventEmitter>(&self, emitter: &mut E, event_type: &str, data: serde_json::Value) {
         emitter.emit(ResponseStreamEvent::CustomEvent {
             response_id: self.response.id.clone(),
             event_type: event_type.to_string(),
@@ -547,19 +536,13 @@ impl ResponseBuilder {
         }
     }
 
-    fn resolve_tool_call_correlation_id(
-        &mut self,
-        harness_call_id: &str,
-        raw_tool_call_id: Option<&str>,
-    ) -> String {
+    fn resolve_tool_call_correlation_id(&mut self, harness_call_id: &str, raw_tool_call_id: Option<&str>) -> String {
         if let Some(existing) = self.tool_call_correlation_ids.get(harness_call_id) {
             return existing.clone();
         }
 
         let correlation_id = match raw_tool_call_id {
-            Some(raw_id) if self.used_tool_call_ids.insert(raw_id.to_string()) => {
-                raw_id.to_string()
-            }
+            Some(raw_id) if self.used_tool_call_ids.insert(raw_id.to_string()) => raw_id.to_string(),
             _ => harness_call_id.to_string(),
         };
         self.tool_call_correlation_ids
@@ -606,27 +589,21 @@ impl ResponseBuilder {
                 }),
             }),
 
-            ThreadItemDetails::ToolInvocation(invocation) => {
-                OutputItem::FunctionCall(FunctionCallItem {
-                    id: item.id.clone().into(),
-                    status,
-                    name: invocation.tool_name.clone(),
-                    arguments: invocation.arguments.clone().unwrap_or(json!({})),
-                    call_id: Some(self.resolve_tool_call_correlation_id(
-                        &item.id,
-                        invocation.tool_call_id.as_deref(),
-                    )),
-                })
-            }
+            ThreadItemDetails::ToolInvocation(invocation) => OutputItem::FunctionCall(FunctionCallItem {
+                id: item.id.clone().into(),
+                status,
+                name: invocation.tool_name.clone(),
+                arguments: invocation.arguments.clone().unwrap_or(json!({})),
+                call_id: Some(self.resolve_tool_call_correlation_id(&item.id, invocation.tool_call_id.as_deref())),
+            }),
 
             ThreadItemDetails::ToolOutput(output) => {
                 OutputItem::FunctionCallOutput(crate::open_responses::FunctionCallOutputItem {
                     id: item.id.clone().into(),
                     status,
-                    call_id: Some(self.resolve_tool_call_correlation_id(
-                        &output.call_id,
-                        output.tool_call_id.as_deref(),
-                    )),
+                    call_id: Some(
+                        self.resolve_tool_call_correlation_id(&output.call_id, output.tool_call_id.as_deref()),
+                    ),
                     output: tool_output_text(output),
                 })
             }
@@ -711,10 +688,7 @@ impl ResponseBuilder {
         self.normalized.response_started = true;
     }
 
-    fn ensure_normalized_message_item<E: StreamEventEmitter>(
-        &mut self,
-        emitter: &mut E,
-    ) -> (String, usize) {
+    fn ensure_normalized_message_item<E: StreamEventEmitter>(&mut self, emitter: &mut E) -> (String, usize) {
         if let Some(item_id) = self.normalized.message_item_id.clone()
             && let Some(state) = self.active_items.get(&item_id)
         {
@@ -723,11 +697,7 @@ impl ResponseBuilder {
 
         let item_id = generate_item_id();
         let output_index = self.allocate_output_index(&item_id);
-        let item = OutputItem::message(
-            item_id.clone(),
-            MessageRole::Assistant,
-            vec![ContentPart::output_text("")],
-        );
+        let item = OutputItem::message(item_id.clone(), MessageRole::Assistant, vec![ContentPart::output_text("")]);
 
         self.response.add_output(item.clone());
         self.active_items.insert(
@@ -752,10 +722,7 @@ impl ResponseBuilder {
         (item_id, output_index)
     }
 
-    fn ensure_normalized_reasoning_item<E: StreamEventEmitter>(
-        &mut self,
-        emitter: &mut E,
-    ) -> (String, usize) {
+    fn ensure_normalized_reasoning_item<E: StreamEventEmitter>(&mut self, emitter: &mut E) -> (String, usize) {
         if let Some(item_id) = self.normalized.reasoning_item_id.clone()
             && let Some(state) = self.active_items.get(&item_id)
         {
@@ -792,9 +759,7 @@ impl ResponseBuilder {
                 && let Some(name) = name
             {
                 existing.name = Some(name.to_string());
-                if let Some(OutputItem::FunctionCall(item)) =
-                    self.response.output.get_mut(existing.output_index)
-                {
+                if let Some(OutputItem::FunctionCall(item)) = self.response.output.get_mut(existing.output_index) {
                     item.name = name.to_string();
                 }
             }
@@ -859,8 +824,7 @@ impl ResponseBuilder {
     fn append_tool_call_delta(&mut self, call_id: &str, output_index: usize, delta: &str) {
         if let Some(state) = self.normalized.tool_calls.get_mut(call_id) {
             state.arguments.push_str(delta);
-            if let Some(OutputItem::FunctionCall(item)) = self.response.output.get_mut(output_index)
-            {
+            if let Some(OutputItem::FunctionCall(item)) = self.response.output.get_mut(output_index) {
                 item.arguments = normalized_tool_call_arguments(&state.arguments);
             }
         }
@@ -919,15 +883,11 @@ impl ResponseBuilder {
             FinishReason::Length => {
                 self.response
                     .incomplete(crate::open_responses::IncompleteReason::MaxOutputTokens);
-                emitter.emit(ResponseStreamEvent::ResponseIncomplete {
-                    response: self.response.clone(),
-                });
+                emitter.emit(ResponseStreamEvent::ResponseIncomplete { response: self.response.clone() });
             }
             FinishReason::ContentFilter => {
                 self.response.incomplete(crate::open_responses::IncompleteReason::ContentFilter);
-                emitter.emit(ResponseStreamEvent::ResponseIncomplete {
-                    response: self.response.clone(),
-                });
+                emitter.emit(ResponseStreamEvent::ResponseIncomplete { response: self.response.clone() });
             }
             FinishReason::Error(message) => {
                 self.response.fail(OpenResponseError::model_error(message));
@@ -940,21 +900,14 @@ impl ResponseBuilder {
         }
     }
 
-    fn complete_normalized_message_item<E: StreamEventEmitter>(
-        &mut self,
-        text: &str,
-        emitter: &mut E,
-    ) {
+    fn complete_normalized_message_item<E: StreamEventEmitter>(&mut self, text: &str, emitter: &mut E) {
         let (item_id, output_index) = match self.normalized.message_item_id.clone() {
             Some(item_id) => (item_id.clone(), self.output_index_for_item(&item_id)),
             None => {
                 let item_id = generate_item_id();
                 let output_index = self.allocate_output_index(&item_id);
-                let item = OutputItem::message(
-                    item_id.clone(),
-                    MessageRole::Assistant,
-                    vec![ContentPart::output_text("")],
-                );
+                let item =
+                    OutputItem::message(item_id.clone(), MessageRole::Assistant, vec![ContentPart::output_text("")]);
                 self.response.add_output(item.clone());
                 emitter.output_item_added(&self.response.id, output_index, item);
                 emitter.emit(ResponseStreamEvent::ContentPartAdded {
@@ -994,11 +947,7 @@ impl ResponseBuilder {
         emitter.output_item_done(&self.response.id, output_index, completed);
     }
 
-    fn complete_normalized_reasoning_item<E: StreamEventEmitter>(
-        &mut self,
-        text: &str,
-        emitter: &mut E,
-    ) {
+    fn complete_normalized_reasoning_item<E: StreamEventEmitter>(&mut self, text: &str, emitter: &mut E) {
         let (item_id, output_index) = match self.normalized.reasoning_item_id.clone() {
             Some(item_id) => (item_id.clone(), self.output_index_for_item(&item_id)),
             None => {
@@ -1038,11 +987,7 @@ impl ResponseBuilder {
         emitter.output_item_done(&self.response.id, output_index, completed);
     }
 
-    fn complete_normalized_tool_call<E: StreamEventEmitter>(
-        &mut self,
-        tool_call: &ToolCall,
-        emitter: &mut E,
-    ) {
+    fn complete_normalized_tool_call<E: StreamEventEmitter>(&mut self, tool_call: &ToolCall, emitter: &mut E) {
         let arguments = tool_call
             .function
             .as_ref()
@@ -1057,11 +1002,7 @@ impl ResponseBuilder {
         self.complete_tool_call_item(&tool_call.id, Some(name), arguments, emitter);
     }
 
-    fn complete_normalized_tool_call_fallback<E: StreamEventEmitter>(
-        &mut self,
-        call_id: &str,
-        emitter: &mut E,
-    ) {
+    fn complete_normalized_tool_call_fallback<E: StreamEventEmitter>(&mut self, call_id: &str, emitter: &mut E) {
         let Some(state) = self.normalized.tool_calls.get(call_id).cloned() else {
             return;
         };
@@ -1076,11 +1017,9 @@ impl ResponseBuilder {
         emitter: &mut E,
     ) {
         let (item_id, output_index, final_name) = match self.normalized.tool_calls.get(call_id) {
-            Some(state) => (
-                state.item_id.clone(),
-                state.output_index,
-                name.or_else(|| state.name.clone()).unwrap_or_default(),
-            ),
+            Some(state) => {
+                (state.item_id.clone(), state.output_index, name.or_else(|| state.name.clone()).unwrap_or_default())
+            }
             None => {
                 let item_id = call_id.to_string();
                 let output_index = self.allocate_output_index(&item_id);
@@ -1158,8 +1097,7 @@ fn normalized_tool_call_arguments(arguments: &str) -> serde_json::Value {
         return json!({});
     }
 
-    serde_json::from_str(arguments)
-        .unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
+    serde_json::from_str(arguments).unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
 /// Adapter that wraps a VT Code event sink and also emits Open Responses events.
@@ -1210,9 +1148,8 @@ mod tests {
     use crate::provider::{FinishReason, LLMResponse, NormalizedStreamEvent, ToolCall};
     use serde_json::json;
     use vtcode_exec_events::{
-        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent,
-        ItemStartedEvent, PlanItem, ThreadStartedEvent, ToolCallStatus, ToolInvocationItem,
-        ToolOutputItem, TurnCompletedEvent, Usage,
+        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent, PlanItem,
+        ThreadStartedEvent, ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, Usage,
     };
 
     #[test]
@@ -1261,26 +1198,16 @@ mod tests {
         // Item started
         let item = ThreadItem {
             id: "msg_1".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Hello".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }), &mut emitter);
 
         // Item completed
         let completed_item = ThreadItem {
             id: "msg_1".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Hello, world!".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello, world!".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }), &mut emitter);
 
         assert_eq!(builder.response().output.len(), 1);
         assert!(matches!(&builder.response().output[0], OutputItem::Message(_)));
@@ -1302,12 +1229,9 @@ mod tests {
         // Complete item without prior start (atomic)
         let item = ThreadItem {
             id: "msg_atomic".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Atomic message".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Atomic message".to_string() }),
         };
-        builder
-            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
+        builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         let events = emitter.into_events();
         // Must emit Added before Done for atomic completions
@@ -1331,14 +1255,9 @@ mod tests {
         // Update without prior start
         let item = ThreadItem {
             id: "msg_implicit".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Hello".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item }), &mut emitter);
 
         let events = emitter.into_events();
         // Should have implicitly started
@@ -1353,21 +1272,14 @@ mod tests {
         // Start with emoji
         let item1 = ThreadItem {
             id: "msg_unicode".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Hello 👋".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello 👋".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }), &mut emitter);
 
         // Update with more content
         let item2 = ThreadItem {
             id: "msg_unicode".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Hello 👋 World 🌍".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello 👋 World 🌍".to_string() }),
         };
         builder.process_event(
             &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item2 }),
@@ -1387,21 +1299,14 @@ mod tests {
         // Start with some text
         let item1 = ThreadItem {
             id: "msg_edit".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Original text".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Original text".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item1 }), &mut emitter);
 
         // Update with completely different text (non-append)
         let item2 = ThreadItem {
             id: "msg_edit".to_string(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: "Completely different".to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Completely different".to_string() }),
         };
         builder.process_event(
             &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent { item: item2 }),
@@ -1428,8 +1333,7 @@ mod tests {
             id: "plan_1".to_string(),
             details: ThreadItemDetails::Plan(PlanItem { text: "- Step 1\n- Step 2".to_string() }),
         };
-        builder
-            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
+        builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         assert_eq!(builder.response().output.len(), 1);
         match &builder.response().output[0] {
@@ -1464,8 +1368,7 @@ mod tests {
             }),
         };
 
-        builder
-            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
+        builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
@@ -1533,8 +1436,7 @@ mod tests {
             }),
         };
 
-        builder
-            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
+        builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
@@ -1720,10 +1622,7 @@ mod tests {
                 }),
             },
         ] {
-            builder.process_event(
-                &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-                &mut emitter,
-            );
+            builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
         }
 
         match &builder.response().output[0] {
@@ -1790,16 +1689,11 @@ mod tests {
             &mut emitter,
         );
         builder.process_event(
-            &ThreadEvent::TurnFailed(vtcode_exec_events::TurnFailedEvent {
-                message: "boom".to_string(),
-                usage: None,
-            }),
+            &ThreadEvent::TurnFailed(vtcode_exec_events::TurnFailedEvent { message: "boom".to_string(), usage: None }),
             &mut emitter,
         );
-        builder.process_event(
-            &ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }),
-            &mut emitter,
-        );
+        builder
+            .process_event(&ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }), &mut emitter);
 
         assert_eq!(builder.response().status, ResponseStatus::Failed);
         let events = emitter.into_events();

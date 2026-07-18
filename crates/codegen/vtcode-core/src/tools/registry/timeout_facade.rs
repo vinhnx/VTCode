@@ -22,8 +22,7 @@ impl ToolRegistry {
             }
         }
 
-        self.resiliency.lock().adaptive_tuning =
-            super::config_helpers::load_adaptive_tuning_from_config(timeouts);
+        self.resiliency.lock().adaptive_tuning = super::config_helpers::load_adaptive_tuning_from_config(timeouts);
     }
 
     pub fn timeout_policy(&self) -> ToolTimeoutPolicy {

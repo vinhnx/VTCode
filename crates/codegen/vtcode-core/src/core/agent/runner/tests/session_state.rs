@@ -13,22 +13,8 @@ fn record_turn_duration_records_once() {
     let mut recorded = false;
     let start = Instant::now();
 
-    record_turn_duration(
-        &mut durations,
-        &mut total_ms,
-        &mut max_ms,
-        &mut count,
-        &mut recorded,
-        &start,
-    );
-    record_turn_duration(
-        &mut durations,
-        &mut total_ms,
-        &mut max_ms,
-        &mut count,
-        &mut recorded,
-        &start,
-    );
+    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
+    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
 
     assert_eq!(durations.len(), 1);
     assert_eq!(count, 1);
@@ -65,10 +51,7 @@ fn finalize_outcome_tool_loop_limit() {
 
     assert_eq!(
         state.outcome,
-        TaskOutcome::tool_loop_limit_reached(
-            state.constraints.max_tool_loops,
-            state.consecutive_tool_loops
-        )
+        TaskOutcome::tool_loop_limit_reached(state.constraints.max_tool_loops, state.consecutive_tool_loops)
     );
 }
 

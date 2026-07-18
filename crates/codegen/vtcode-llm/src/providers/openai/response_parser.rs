@@ -12,8 +12,7 @@ pub(crate) fn parse_chat_response(
     include_cached_prompt_tokens: bool,
 ) -> Result<provider::LLMResponse, provider::LLMError> {
     let choices = response_json.get("choices").and_then(|c| c.as_array()).ok_or_else(|| {
-        let formatted_error =
-            error_display::format_llm_error("OpenAI", "Invalid response format: missing choices");
+        let formatted_error = error_display::format_llm_error("OpenAI", "Invalid response format: missing choices");
         provider::LLMError::Provider { message: formatted_error, metadata: None }
     })?;
 
@@ -24,8 +23,7 @@ pub(crate) fn parse_chat_response(
 
     let choice = &choices[0];
     let message = choice.get("message").ok_or_else(|| {
-        let formatted_error =
-            error_display::format_llm_error("OpenAI", "Invalid response format: missing message");
+        let formatted_error = error_display::format_llm_error("OpenAI", "Invalid response format: missing message");
         provider::LLMError::Provider { message: formatted_error, metadata: None }
     })?;
 

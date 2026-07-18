@@ -2,14 +2,11 @@ use anyhow::Result;
 use serde_json::json;
 
 use crate::agent::runloop::unified::planning_workflow::{
-    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
-    detect_planning_intent,
+    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent, detect_planning_intent,
 };
 use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    push_tool_response, tool_output_from_outcome,
-};
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{push_tool_response, tool_output_from_outcome};
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use vtcode_core::config::constants::defaults::{
@@ -47,15 +44,13 @@ pub(super) fn extract_turn_config(
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            request_user_input_enabled: features
-                .request_user_input_enabled(planning_active, interactive_session),
+            request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: resolve_tool_loop_limit(DEFAULT_MAX_TOOL_LOOPS, planning_active),
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
-            request_user_input_enabled: features
-                .request_user_input_enabled(planning_active, interactive_session),
+            request_user_input_enabled: features.request_user_input_enabled(planning_active, interactive_session),
         })
 }
 
@@ -92,7 +87,8 @@ const PLANNING_WORKFLOW_MIN_TOOL_LOOPS: usize = 40;
 const PLANNING_WORKFLOW_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
 const PLANNING_WORKFLOW_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
 const PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
-const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str = "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
+const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str =
+    "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
 const PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS: &str = "Planning workflow: implementation intent detected from your message. Running `finish_planning` for plan confirmation; once approved, VT Code will switch to the selected primary agent and execute.";
 const PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS: &str = "Planning workflow disabled. Continuing this turn with the selected primary agent to execute your implementation request.";
 
@@ -107,8 +103,7 @@ fn resolve_tool_loop_limit(configured_limit: usize, planning_active: bool) -> us
 }
 
 fn planning_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
-    !ctx.tool_registry.is_planning_active()
-        && !ctx.tool_registry.planning_workflow_state().is_active()
+    !ctx.tool_registry.is_planning_active() && !ctx.tool_registry.planning_workflow_state().is_active()
 }
 
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
@@ -210,9 +205,7 @@ pub(super) async fn handle_steering_messages(
             break Ok(true);
         }
 
-        if let Some(pause_index) =
-            pending.iter().position(|message| matches!(message, SteeringMessage::Pause))
-        {
+        if let Some(pause_index) = pending.iter().position(|message| matches!(message, SteeringMessage::Pause)) {
             for message in pending.drain(..pause_index) {
                 if let SteeringMessage::FollowUpInput(input) = message {
                     queue_follow_up_input(renderer, ctx.runtime_steering, input)?;
@@ -261,10 +254,7 @@ fn queue_follow_up_input(
     Ok(())
 }
 
-async fn cancel_for_steering_stop(
-    tool_registry: &mut vtcode_core::tools::ToolRegistry,
-    result: &mut TurnLoopResult,
-) {
+async fn cancel_for_steering_stop(tool_registry: &mut vtcode_core::tools::ToolRegistry, result: &mut TurnLoopResult) {
     if let Err(err) = tool_registry.terminate_all_exec_sessions_async().await {
         tracing::warn!(error = %err, "Failed to terminate exec sessions after steering stop");
     }
@@ -356,9 +346,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
         return Ok(false);
     }
 
-    let Some(last_user_msg) =
-        working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User)
-    else {
+    let Some(last_user_msg) = working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User) else {
         return Ok(false);
     };
 
@@ -474,9 +462,7 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
         return Ok(false);
     }
 
-    let Some(last_user_msg) =
-        working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User)
-    else {
+    let Some(last_user_msg) = working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User) else {
         return Ok(false);
     };
 
@@ -546,10 +532,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         return Ok(ToolLoopLimitAction::Proceed);
     }
 
-    display_status(
-        ctx.renderer,
-        &format!("Reached maximum tool loops ({})", *current_max_tool_loops),
-    )?;
+    display_status(ctx.renderer, &format!("Reached maximum tool loops ({})", *current_max_tool_loops))?;
 
     let planning_active = ctx.is_planning_active();
     let base_limit = configured_tool_loop_base_limit(ctx);
@@ -565,9 +548,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         );
         display_status(
             ctx.renderer,
-            &format!(
-                "Tool loop hard cap reached ({hard_cap}). Stopping turn to prevent runaway looping."
-            ),
+            &format!("Tool loop hard cap reached ({hard_cap}). Stopping turn to prevent runaway looping."),
         )?;
         return Ok(ToolLoopLimitAction::BreakLoop);
     }
@@ -582,12 +563,8 @@ pub(super) async fn maybe_handle_tool_loop_limit(
     .await
     {
         Ok(Some(requested_increment)) => {
-            let increment = clamp_tool_loop_increment(
-                requested_increment,
-                *current_max_tool_loops,
-                hard_cap,
-                planning_active,
-            );
+            let increment =
+                clamp_tool_loop_increment(requested_increment, *current_max_tool_loops, hard_cap, planning_active);
             if increment == 0 {
                 emit_loop_hard_cap_break_metric(
                     ctx,
@@ -597,10 +574,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
                     hard_cap,
                     "no_remaining_headroom",
                 );
-                display_status(
-                    ctx.renderer,
-                    "Tool loop limit cannot be increased further for this turn.",
-                )?;
+                display_status(ctx.renderer, "Tool loop limit cannot be increased further for this turn.")?;
                 return Ok(ToolLoopLimitAction::BreakLoop);
             }
             let previous_max_tool_loops = *current_max_tool_loops;
@@ -612,10 +586,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
             );
             display_status(
                 ctx.renderer,
-                &format!(
-                    "Tool loop limit increased to {} (+{}, cap {})",
-                    *current_max_tool_loops, increment, hard_cap
-                ),
+                &format!("Tool loop limit increased to {} (+{}, cap {})", *current_max_tool_loops, increment, hard_cap),
             )?;
             Ok(ToolLoopLimitAction::ContinueLoop)
         }
@@ -627,9 +598,8 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 mod tests {
     use super::{
         PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS,
-        PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment,
-        extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
-        resolve_tool_loop_limit, tool_loop_hard_cap,
+        PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
+        handle_steering_messages, resolve_safety_tool_call_limits, resolve_tool_loop_limit, tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::planning_workflow::{
         PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
@@ -642,10 +612,7 @@ mod tests {
 
     #[test]
     fn detects_implement_the_plan_trigger() {
-        assert_eq!(
-            detect_planning_intent("Implement the plan.", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("Implement the plan.", false), PlanningIntent::ExitAndImplement);
         assert_eq!(
             detect_planning_intent("Please execute this plan and start coding.", false),
             PlanningIntent::ExitAndImplement
@@ -667,16 +634,10 @@ mod tests {
     #[test]
     fn does_not_exit_when_user_wants_to_keep_planning() {
         assert_eq!(
-            detect_planning_intent(
-                "Don't implement yet, stay in planning workflow and refine the plan.",
-                false
-            ),
+            detect_planning_intent("Don't implement yet, stay in planning workflow and refine the plan.", false),
             PlanningIntent::StayInPlanning
         );
-        assert_eq!(
-            detect_planning_intent("Continue planning for now.", false),
-            PlanningIntent::StayInPlanning
-        );
+        assert_eq!(detect_planning_intent("Continue planning for now.", false), PlanningIntent::StayInPlanning);
     }
 
     #[test]
@@ -688,14 +649,8 @@ mod tests {
 
     #[test]
     fn detects_short_implement_variants() {
-        assert_eq!(
-            detect_planning_intent("Implement now", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("Start implementing", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("Implement now", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("Start implementing", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -724,10 +679,7 @@ mod tests {
 
     #[test]
     fn does_not_false_trigger_on_non_intent_implementation_text() {
-        assert_eq!(
-            detect_planning_intent("The implementation details are unclear.", false),
-            PlanningIntent::None
-        );
+        assert_eq!(detect_planning_intent("The implementation details are unclear.", false), PlanningIntent::None);
     }
 
     #[test]

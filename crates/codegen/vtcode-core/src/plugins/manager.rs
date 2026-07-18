@@ -40,8 +40,7 @@ impl PluginManager {
         let runtime = Arc::new(PluginRuntime::new(config.clone(), base_dir.join("runtime")));
         let cache = Arc::new(RwLock::new(PluginCache::new(base_dir.join("cache"))));
 
-        let loader =
-            Arc::new(PluginLoader::new(base_dir.join("installed"), runtime.as_ref().clone()));
+        let loader = Arc::new(PluginLoader::new(base_dir.join("installed"), runtime.as_ref().clone()));
 
         Ok(Self {
             runtime,
@@ -52,11 +51,7 @@ impl PluginManager {
     }
 
     /// Install a plugin from a source
-    pub async fn install_plugin(
-        &self,
-        source: super::loader::PluginSource,
-        name: Option<String>,
-    ) -> PluginResult<()> {
+    pub async fn install_plugin(&self, source: super::loader::PluginSource, name: Option<String>) -> PluginResult<()> {
         // Install the plugin using the loader
         self.loader.install_plugin(source, name).await?;
         Ok(())
@@ -108,8 +103,7 @@ impl PluginManager {
         plugin_path: &Path,
         manifest: &PluginManifest,
     ) -> Result<super::components::PluginComponents> {
-        super::components::PluginComponentsHandler::process_all_components(plugin_path, manifest)
-            .await
+        super::components::PluginComponentsHandler::process_all_components(plugin_path, manifest).await
     }
 
     /// Check if a plugin is enabled
@@ -141,10 +135,7 @@ impl PluginManager {
     /// # Errors
     ///
     /// Returns an error if the refresh worker lock is poisoned or if root scanning fails.
-    pub async fn refresh_non_curated_plugin_cache(
-        &self,
-        roots: &[PathBuf],
-    ) -> Result<RefreshResult> {
+    pub async fn refresh_non_curated_plugin_cache(&self, roots: &[PathBuf]) -> Result<RefreshResult> {
         // Prevent concurrent refreshes
         {
             let worker = self.refresh_worker.read().await;
@@ -172,10 +163,7 @@ impl PluginManager {
     }
 
     /// Internal implementation for refreshing non-curated plugins from workspace roots.
-    async fn refresh_non_curated_from_roots_impl(
-        &self,
-        roots: &[PathBuf],
-    ) -> Result<RefreshResult> {
+    async fn refresh_non_curated_from_roots_impl(&self, roots: &[PathBuf]) -> Result<RefreshResult> {
         if roots.is_empty() {
             debug!("no workspace roots provided for non-curated plugin cache refresh");
             return Ok(RefreshResult::NoRootsProvided);
@@ -198,20 +186,12 @@ impl PluginManager {
                             && existing.exists()
                             && plugin_info.version_matches_existing(&existing).await
                         {
-                            debug!(
-                                "plugin '{}' version unchanged, skipping cache update",
-                                plugin_info.name
-                            );
+                            debug!("plugin '{}' version unchanged, skipping cache update", plugin_info.name);
                             continue;
                         }
 
-                        if let Err(e) =
-                            self.cache_plugin(&plugin_info.name, &plugin_info.path).await
-                        {
-                            errors.push(format!(
-                                "failed to cache plugin '{}': {e}",
-                                plugin_info.name
-                            ));
+                        if let Err(e) = self.cache_plugin(&plugin_info.name, &plugin_info.path).await {
+                            errors.push(format!("failed to cache plugin '{}': {e}", plugin_info.name));
                         } else {
                             refreshed_count += 1;
                             info!("cached non-curated plugin: {}", plugin_info.name);
@@ -267,11 +247,7 @@ impl PluginManager {
                 match self.load_plugin_manifest(&manifest_path).await {
                     Ok(info) => discovered.push(info),
                     Err(e) => {
-                        warn!(
-                            "Failed to load plugin manifest from {}: {}",
-                            manifest_path.display(),
-                            e
-                        );
+                        warn!("Failed to load plugin manifest from {}: {}", manifest_path.display(), e);
                     }
                 }
             }
@@ -282,12 +258,11 @@ impl PluginManager {
 
     /// Load a plugin manifest from a marketplace.json or plugin.json path.
     async fn load_plugin_manifest(&self, manifest_path: &Path) -> Result<DiscoveredPluginInfo> {
-        let content = tokio::fs::read_to_string(manifest_path).await.with_context(|| {
-            format!("failed to read plugin manifest at {}", manifest_path.display())
-        })?;
-        let manifest: PluginManifest = serde_json::from_str(&content).with_context(|| {
-            format!("failed to parse plugin manifest at {}", manifest_path.display())
-        })?;
+        let content = tokio::fs::read_to_string(manifest_path)
+            .await
+            .with_context(|| format!("failed to read plugin manifest at {}", manifest_path.display()))?;
+        let manifest: PluginManifest = serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse plugin manifest at {}", manifest_path.display()))?;
 
         Ok(DiscoveredPluginInfo {
             name: manifest.name.clone(),

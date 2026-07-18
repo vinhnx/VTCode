@@ -3,9 +3,8 @@
 use std::error::Error;
 
 use vtcode_exec_events::{
-    CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent,
-    ItemUpdatedEvent, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    TurnCompletedEvent, TurnStartedEvent, Usage,
+    CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnStartedEvent, Usage,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {

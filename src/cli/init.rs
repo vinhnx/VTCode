@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::Path;
 use vtcode_core::commands::init::{
-    GuidedInitAnswer, GuidedInitAnswers, GuidedInitOverwriteState, GuidedInitQuestion,
-    GuidedInitQuestionKey, prepare_guided_init, render_agents_md, write_agents_file,
+    GuidedInitAnswer, GuidedInitAnswers, GuidedInitOverwriteState, GuidedInitQuestion, GuidedInitQuestionKey,
+    prepare_guided_init, render_agents_md, write_agents_file,
 };
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -12,9 +12,7 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 use vtcode_core::utils::colors::style;
@@ -30,8 +28,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
 
     ensure_dir_exists(workspace).await?;
 
-    VTCodeConfig::bootstrap_project(workspace, force)
-        .with_context(|| "failed to initialize configuration files")?;
+    VTCodeConfig::bootstrap_project(workspace, force).with_context(|| "failed to initialize configuration files")?;
 
     let plan = prepare_guided_init(workspace, force)?;
     let stdin_is_tty = io::stdin().is_tty_ext();
@@ -63,17 +60,12 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
         };
 
         let content = render_agents_md(&plan, &answers)?;
-        let overwrite_existing = matches!(
-            plan.overwrite_state,
-            GuidedInitOverwriteState::Confirm | GuidedInitOverwriteState::Force
-        );
+        let overwrite_existing =
+            matches!(plan.overwrite_state, GuidedInitOverwriteState::Confirm | GuidedInitOverwriteState::Force);
         let report = write_agents_file(workspace, &content, overwrite_existing)?;
         println!("  {:16} {}", "agents", report.path.display());
     } else {
-        println!(
-            "{} Keeping existing AGENTS.md; other workspace scaffolding still completed.",
-            style("Info").cyan()
-        );
+        println!("{} Keeping existing AGENTS.md; other workspace scaffolding still completed.", style("Info").cyan());
     }
 
     if run {
@@ -141,12 +133,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
         println!("{} {}", style(question.header.as_str()).cyan(), question.prompt);
 
         for (index, option) in question.options.iter().enumerate() {
-            println!(
-                "  {}) {}{}",
-                index + 1,
-                option.label,
-                if option.recommended { " [default]" } else { "" }
-            );
+            println!("  {}) {}{}", index + 1, option.label, if option.recommended { " [default]" } else { "" });
             println!("     {}", option.description);
         }
 
@@ -163,10 +150,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
             .map(|index| index + 1);
 
         loop {
-            print!(
-                "Select an option{}: ",
-                recommended_index.map(|index| format!(" [{index}]")).unwrap_or_default()
-            );
+            print!("Select an option{}: ", recommended_index.map(|index| format!(" [{index}]")).unwrap_or_default());
             io::stdout().flush().context("failed to flush guided /init prompt")?;
 
             let mut input = String::new();

@@ -66,19 +66,11 @@ impl ToolAssembly {
         &self.catalog
     }
 
-    pub(super) fn resolve_public_tool(
-        &self,
-        requested_name: &str,
-    ) -> Result<PublicToolResolution, ToolCallError> {
+    pub(super) fn resolve_public_tool(&self, requested_name: &str) -> Result<PublicToolResolution, ToolCallError> {
         public_tool_name_candidates(requested_name)
             .into_iter()
             .find_map(|candidate| self.public_routes.get(&candidate).cloned())
-            .ok_or_else(|| {
-                ToolCallError::respond(format!(
-                    "Unknown tool: {}",
-                    canonical_tool_name(requested_name)
-                ))
-            })
+            .ok_or_else(|| ToolCallError::respond(format!("Unknown tool: {}", canonical_tool_name(requested_name))))
     }
 }
 
@@ -111,10 +103,7 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
             continue;
         }
 
-        let resolution = PublicToolResolution::new(
-            entry.registration_name.clone(),
-            entry.default_permission.clone(),
-        );
+        let resolution = PublicToolResolution::new(entry.registration_name.clone(), entry.default_permission.clone());
         public_routes.insert(entry.public_name.clone(), resolution.clone());
         for alias in &entry.aliases {
             if is_removed_public_tool_name(alias) {
@@ -210,12 +199,11 @@ mod tests {
 
     #[test]
     fn public_routes_keep_exact_aliases_only() {
-        let registration =
-            ToolRegistration::new("visible_tool", CapabilityLevel::Bash, true, noop_executor)
-                .with_description("Run commands")
-                .with_parameter_schema(json!({"type": "object"}))
-                .with_permission(ToolPolicy::Prompt)
-                .with_aliases(["visible label", "visible_alias"]);
+        let registration = ToolRegistration::new("visible_tool", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Run commands")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Prompt)
+            .with_aliases(["visible label", "visible_alias"]);
 
         let assembly = ToolAssembly::from_registrations(vec![registration]);
 
@@ -300,16 +288,12 @@ mod tests {
 
     #[test]
     fn public_routes_reject_removed_file_surface_names_and_aliases() {
-        let legacy_registration = ToolRegistration::new(
-            tools::UNIFIED_FILE,
-            CapabilityLevel::Editing,
-            true,
-            noop_executor,
-        )
-        .with_description("Legacy file surface")
-        .with_parameter_schema(json!({"type": "object"}))
-        .with_permission(ToolPolicy::Prompt)
-        .with_aliases([tools::READ_FILE, tools::WRITE_FILE]);
+        let legacy_registration =
+            ToolRegistration::new(tools::UNIFIED_FILE, CapabilityLevel::Editing, true, noop_executor)
+                .with_description("Legacy file surface")
+                .with_parameter_schema(json!({"type": "object"}))
+                .with_permission(ToolPolicy::Prompt)
+                .with_aliases([tools::READ_FILE, tools::WRITE_FILE]);
         let custom_registration =
             ToolRegistration::new("custom_tool", CapabilityLevel::CodeSearch, true, noop_executor)
                 .with_description("Custom tool")
@@ -317,8 +301,7 @@ mod tests {
                 .with_permission(ToolPolicy::Allow)
                 .with_aliases([tools::DELETE_FILE, "custom_alias"]);
 
-        let assembly =
-            ToolAssembly::from_registrations(vec![legacy_registration, custom_registration]);
+        let assembly = ToolAssembly::from_registrations(vec![legacy_registration, custom_registration]);
 
         for removed_name in [
             tools::UNIFIED_EXEC,

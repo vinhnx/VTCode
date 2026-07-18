@@ -233,16 +233,10 @@ impl ToolDefinition {
     /// Supports regex and bm25 search algorithms
     pub fn tool_search(algorithm: ToolSearchAlgorithm) -> Self {
         let (tool_type, name) = match algorithm {
-            ToolSearchAlgorithm::Regex => {
-                ("tool_search_tool_regex_20251119", "tool_search_tool_regex")
-            }
-            ToolSearchAlgorithm::Bm25 => {
-                ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25")
-            }
+            ToolSearchAlgorithm::Regex => ("tool_search_tool_regex_20251119", "tool_search_tool_regex"),
+            ToolSearchAlgorithm::Bm25 => ("tool_search_tool_bm25_20251119", "tool_search_tool_bm25"),
             // Unknown algorithms default to regex
-            ToolSearchAlgorithm::Unknown => {
-                ("tool_search_tool_regex_20251119", "tool_search_tool_regex")
-            }
+            ToolSearchAlgorithm::Unknown => ("tool_search_tool_regex_20251119", "tool_search_tool_regex"),
         };
 
         let mut tool = Self::empty(tool_type);
@@ -386,9 +380,7 @@ impl ToolDefinition {
                 self.validate_hosted_tool_config()
             }
             "tool_search" => Ok(()),
-            "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
-                self.validate_function()
-            }
+            "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => self.validate_function(),
             other if other.starts_with("web_search_") => self.validate_anthropic_web_search(),
             other if other.starts_with("code_execution_") => Ok(()),
             other if other.starts_with("memory_") => Ok(()),
@@ -441,10 +433,7 @@ impl ToolDefinition {
     fn validate_apply_patch(&self) -> Result<(), String> {
         if let Some(func) = &self.function {
             if func.name != "apply_patch" {
-                return Err(format!(
-                    "apply_patch tool must have name 'apply_patch', got: {}",
-                    func.name
-                ));
+                return Err(format!("apply_patch tool must have name 'apply_patch', got: {}", func.name));
             }
             if func.description.is_empty() {
                 return Err("apply_patch description cannot be empty".to_owned());
@@ -507,10 +496,7 @@ impl ToolDefinition {
         };
 
         if config.contains_key("allowed_domains") && config.contains_key("blocked_domains") {
-            return Err(
-                "anthropic web_search tools cannot set both allowed_domains and blocked_domains"
-                    .to_owned(),
-            );
+            return Err("anthropic web_search tools cannot set both allowed_domains and blocked_domains".to_owned());
         }
 
         Ok(())
@@ -524,16 +510,11 @@ impl ToolDefinition {
         }
     }
 
-    fn web_search_config_object(
-        &self,
-        required: bool,
-    ) -> Result<Option<&Map<String, Value>>, String> {
+    fn web_search_config_object(&self, required: bool) -> Result<Option<&Map<String, Value>>, String> {
         match self.web_search.as_ref() {
             Some(Value::Object(config)) => Ok(Some(config)),
             Some(_) => Err(format!("{} tool configuration must be a JSON object", self.tool_type)),
-            None if required => {
-                Err(format!("{} tool missing web_search configuration", self.tool_type))
-            }
+            None if required => Err(format!("{} tool missing web_search configuration", self.tool_type)),
             None => Ok(None),
         }
     }

@@ -22,12 +22,10 @@ use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 
 use super::context_management::resolve_context_management;
 use super::metrics::{
-    TokenBudgetBreakdown, ToolCatalogCacheMetrics, emit_token_budget_breakdown,
-    emit_tool_catalog_cache_metrics, estimate_message_history_tokens, estimate_tool_schema_tokens,
+    TokenBudgetBreakdown, ToolCatalogCacheMetrics, emit_token_budget_breakdown, emit_tool_catalog_cache_metrics,
+    estimate_message_history_tokens, estimate_tool_schema_tokens,
 };
-use super::prompt_assembly::{
-    PromptAssemblyInput, assemble_prompt, render_primary_agent_runtime_context,
-};
+use super::prompt_assembly::{PromptAssemblyInput, assemble_prompt, render_primary_agent_runtime_context};
 use super::response_chain::{prepare_responses_request_history, prepend_request_context_message};
 use super::snapshot::{TurnRequestSnapshot, resolve_effective_reasoning_effort};
 use super::tool_shaping::{client_local_wire_tools, uses_out_of_band_copilot_tools};
@@ -42,10 +40,7 @@ pub(super) struct TurnRequestBuildResult {
 
 pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
     anyhow::Error::new(uni::LLMError::Provider {
-        message: vtcode_core::llm::error_display::format_llm_error(
-            provider_name,
-            "Interrupted by user",
-        ),
+        message: vtcode_core::llm::error_display::format_llm_error(provider_name, "Interrupted by user"),
         metadata: None,
     })
 }
@@ -60,8 +55,7 @@ pub(super) async fn build_turn_request(
     use_streaming: bool,
 ) -> Result<TurnRequestBuildResult> {
     let request_model = turn_snapshot.active_model.as_str();
-    let mut prompt_output =
-        assemble_prompt(ctx, PromptAssemblyInput { turn: turn_snapshot }).await?;
+    let mut prompt_output = assemble_prompt(ctx, PromptAssemblyInput { turn: turn_snapshot }).await?;
 
     let reasoning_effort = resolve_effective_reasoning_effort(ctx.vt_cfg, turn_snapshot);
     let primary_agent_context = render_primary_agent_runtime_context(
@@ -74,13 +68,12 @@ pub(super) async fn build_turn_request(
     )
     .await;
     let _ = writeln!(prompt_output.system_prompt, "\n{primary_agent_context}");
-    let temperature = if reasoning_effort.is_some()
-        && matches!(turn_snapshot.provider_name.as_str(), "anthropic" | "minimax")
-    {
-        None
-    } else {
-        Some(0.7)
-    };
+    let temperature =
+        if reasoning_effort.is_some() && matches!(turn_snapshot.provider_name.as_str(), "anthropic" | "minimax") {
+            None
+        } else {
+            Some(0.7)
+        };
     let parallel_config = if prompt_output.tool_snapshot.has_tools()
         && !turn_snapshot.tool_free_recovery
         && turn_snapshot.capabilities.parallel_tool_config
@@ -89,8 +82,7 @@ pub(super) async fn build_turn_request(
     } else {
         None
     };
-    let use_out_of_band_copilot_tools =
-        uses_out_of_band_copilot_tools(&turn_snapshot.provider_name);
+    let use_out_of_band_copilot_tools = uses_out_of_band_copilot_tools(&turn_snapshot.provider_name);
     let tool_choice = if turn_snapshot.tool_free_recovery {
         Some(uni::ToolChoice::none())
     } else if use_out_of_band_copilot_tools {
@@ -115,11 +107,9 @@ pub(super) async fn build_turn_request(
     );
     let stable_prefix_hash = stable_system_prefix_hash(&prompt_output.system_prompt);
     let tool_catalog_hash = prompt_output.tool_snapshot.tool_catalog_hash;
-    let prefix_change_reason = ctx.session_stats.record_prompt_cache_fingerprint(
-        request_model,
-        stable_prefix_hash,
-        tool_catalog_hash,
-    );
+    let prefix_change_reason =
+        ctx.session_stats
+            .record_prompt_cache_fingerprint(request_model, stable_prefix_hash, tool_catalog_hash);
     emit_tool_catalog_cache_metrics(
         ctx,
         ToolCatalogCacheMetrics {
@@ -135,8 +125,7 @@ pub(super) async fn build_turn_request(
         },
     );
     let context_management = resolve_context_management(ctx, turn_snapshot, request_model);
-    let continuation_messages =
-        ctx.context_manager.normalize_history_for_request(ctx.working_history);
+    let continuation_messages = ctx.context_manager.normalize_history_for_request(ctx.working_history);
     let (request_messages, previous_response_id) = prepare_responses_request_history(
         ctx.session_stats,
         &turn_snapshot.provider_name,
@@ -145,10 +134,8 @@ pub(super) async fn build_turn_request(
         &continuation_messages,
     );
     let request_messages = request_messages.into_owned();
-    let request_messages = prepend_request_context_message(
-        request_messages,
-        ctx.context_manager.request_editor_context_message(),
-    );
+    let request_messages =
+        prepend_request_context_message(request_messages, ctx.context_manager.request_editor_context_message());
     let request_plan = build_harness_request_plan(HarnessRequestPlanInput {
         messages: Arc::new(request_messages),
         system_prompt: prompt_output.system_prompt,
@@ -299,10 +286,7 @@ mod tests {
     #[tokio::test]
     async fn recovery_request_omits_tools_and_disables_tool_choice() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        backing.select_primary_agent_from_specs(
-            &[vtcode_config::builtin_primary_build_agent()],
-            "build",
-        );
+        backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");
         backing
             .add_tool_definition(ToolDefinition::function(
                 "code_search".to_string(),
@@ -346,14 +330,12 @@ mod tests {
         normal_snapshot.tool_free_recovery = false;
         normal_snapshot.capabilities.reasoning_effort = true;
 
-        let normal_built =
-            build_turn_request(&mut ctx, 1, "noop-model", &normal_snapshot, Some(320), None, false)
-                .await
-                .expect("normal request should build");
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("recovery request should build");
+        let normal_built = build_turn_request(&mut ctx, 1, "noop-model", &normal_snapshot, Some(320), None, false)
+            .await
+            .expect("normal request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("recovery request should build");
 
         assert_eq!(normal_built.request.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert!(built.request.reasoning_effort.is_none());
@@ -408,10 +390,9 @@ mod tests {
 
         let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
         snapshot.capabilities.tools = false;
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("text-only request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("text-only request should build");
 
         assert!(!built.has_tools);
         assert!(built.request.tools.is_none());
@@ -460,10 +441,9 @@ mod tests {
         let mut snapshot = capture_turn_request_snapshot(&mut ctx, "copilot-gpt-5.4", false);
         snapshot.provider_name = vtcode_core::copilot::COPILOT_PROVIDER_KEY.to_string();
         snapshot.capabilities.tools = true;
-        let built =
-            build_turn_request(&mut ctx, 1, "copilot-gpt-5.4", &snapshot, Some(320), None, true)
-                .await
-                .expect("copilot request should build");
+        let built = build_turn_request(&mut ctx, 1, "copilot-gpt-5.4", &snapshot, Some(320), None, true)
+            .await
+            .expect("copilot request should build");
 
         assert!(built.has_tools);
         assert!(built.request.tools.is_none());
@@ -504,10 +484,9 @@ mod tests {
         // how it is derived from `active_deferred_tool_policy` in production.
         snapshot.client_local_tool_deferral = true;
 
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("client-local request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("client-local request should build");
 
         let tool_names = request_tool_names(&built.request);
         assert!(tool_names.contains(&"read_file".to_string()));
@@ -549,10 +528,9 @@ mod tests {
         // stay byte-identical: every deferred tool remains on the wire.
         assert!(!snapshot.client_local_tool_deferral);
 
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("hosted request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("hosted request should build");
 
         let tool_names = request_tool_names(&built.request);
         assert!(tool_names.contains(&"read_file".to_string()));
@@ -569,18 +547,13 @@ mod tests {
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
         ctx.working_history.push(uni::Message::user("continue".to_string()));
-        ctx.session_stats.set_previous_response_chain(
-            "openai",
-            "noop-model",
-            Some("resp_123"),
-            &prior_messages,
-        );
+        ctx.session_stats
+            .set_previous_response_chain("openai", "noop-model", Some("resp_123"), &prior_messages);
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("openai request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("openai request should build");
 
         assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
@@ -600,20 +573,15 @@ mod tests {
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
         ctx.working_history.push(uni::Message::user("continue".to_string()));
-        ctx.session_stats.set_previous_response_chain(
-            "mycorp",
-            "noop-model",
-            Some("resp_123"),
-            &prior_messages,
-        );
+        ctx.session_stats
+            .set_previous_response_chain("mycorp", "noop-model", Some("resp_123"), &prior_messages);
 
         let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
         snapshot.provider_name = "mycorp".to_string();
         snapshot.capabilities.responses_compaction = true;
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("compatible provider request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("compatible provider request should build");
 
         assert_eq!(built.request.previous_response_id, None);
         assert_eq!(
@@ -632,19 +600,14 @@ mod tests {
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
         ctx.working_history.push(uni::Message::user("continue".to_string()));
-        ctx.session_stats.set_previous_response_chain(
-            "gemini",
-            "noop-model",
-            Some("resp_123"),
-            &prior_messages,
-        );
+        ctx.session_stats
+            .set_previous_response_chain("gemini", "noop-model", Some("resp_123"), &prior_messages);
 
         let mut snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
         snapshot.provider_name = "gemini".to_string();
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("gemini request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("gemini request should build");
 
         assert_eq!(built.request.previous_response_id.as_deref(), Some("resp_123"));
         assert_eq!(
@@ -680,10 +643,9 @@ mod tests {
         ctx.working_history.push(uni::Message::user("hello".to_string()));
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
-        let built =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("request should build");
+        let built = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("request should build");
 
         let system_prompt = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(!system_prompt.contains("## Active Editor Context"));
@@ -749,9 +711,10 @@ mod tests {
         assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: code_search"));
-        assert!(runtime_context.contains(
-            "- Session state: planning_workflow=false, auto_permission=false, full_auto=false"
-        ));
+        assert!(
+            runtime_context
+                .contains("- Session state: planning_workflow=false, auto_permission=false, full_auto=false")
+        );
         assert!(runtime_context.contains("- Active primary permission default: deny"));
         assert!(runtime_context.contains("Plan carefully before editing."));
         assert_eq!(built.continuation_messages, vec![uni::Message::user("hello".to_string())]);
@@ -761,15 +724,13 @@ mod tests {
     async fn active_primary_agent_memory_appendix_uses_canonical_name_for_alias_selection() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let workspace = backing.workspace_path().to_path_buf();
-        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/reviewer"))
-            .expect("canonical memory dir");
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/reviewer")).expect("canonical memory dir");
         std::fs::write(
             workspace.join(".vtcode/agent-memory/reviewer/MEMORY.md"),
             "# Reviewer Memory\n\n- Canonical reviewer memory.\n",
         )
         .expect("canonical memory");
-        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/critic"))
-            .expect("alias memory dir");
+        std::fs::create_dir_all(workspace.join(".vtcode/agent-memory/critic")).expect("alias memory dir");
         std::fs::write(
             workspace.join(".vtcode/agent-memory/critic/MEMORY.md"),
             "# Critic Memory\n\n- Alias memory must not load.\n",
@@ -921,18 +882,13 @@ mod tests {
         };
 
         assert_eq!(request_tool_names(&built.request), vec!["apply_patch"]);
-        assert!(
-            system_prompt_text(&built.request).contains("- Effective request tools: apply_patch")
-        );
+        assert!(system_prompt_text(&built.request).contains("- Effective request tools: apply_patch"));
     }
 
     #[tokio::test]
     async fn unconstrained_primary_agent_falls_back_to_baseline_tools() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
-        backing.select_primary_agent_from_specs(
-            &[vtcode_config::builtin_primary_build_agent()],
-            "build",
-        );
+        backing.select_primary_agent_from_specs(&[vtcode_config::builtin_primary_build_agent()], "build");
         backing.add_tool_definition(named_tool("code_search")).await;
         backing.add_tool_definition(named_tool("apply_patch")).await;
 
@@ -960,12 +916,8 @@ mod tests {
             let mut ctx = backing.turn_processing_context();
             ctx.working_history.extend(prior_messages.clone());
             ctx.working_history.push(uni::Message::user("continue".to_string()));
-            ctx.session_stats.set_previous_response_chain(
-                "openai",
-                "noop-model",
-                Some("resp_123"),
-                &prior_messages,
-            );
+            ctx.session_stats
+                .set_previous_response_chain("openai", "noop-model", Some("resp_123"), &prior_messages);
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -980,9 +932,7 @@ mod tests {
                 uni::Message::user("continue".to_string())
             ]
         );
-        assert!(
-            system_prompt_text(&built.request).contains("## Active Primary Agent Runtime State")
-        );
+        assert!(system_prompt_text(&built.request).contains("## Active Primary Agent Runtime State"));
         assert_eq!(
             built.continuation_messages,
             vec![
@@ -1028,10 +978,7 @@ mod tests {
         let first_system = first_built.request.system_prompt.as_ref().expect("system");
         let second_system = second_built.request.system_prompt.as_ref().expect("system");
         assert_ne!(first_system, second_system);
-        assert_eq!(
-            stable_system_prefix_hash(first_system),
-            stable_system_prefix_hash(second_system)
-        );
+        assert_eq!(stable_system_prefix_hash(first_system), stable_system_prefix_hash(second_system));
         assert!(first_system.contains("Planner instructions."));
         assert!(second_system.contains("Reviewer instructions."));
         assert!(first_system.contains("Current date and time"));
@@ -1134,10 +1081,9 @@ mod tests {
         ctx.working_history.push(uni::Message::user("hello".to_string()));
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
-        let first =
-            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("first request should build");
+        let first = build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("first request should build");
         update_previous_response_chain_after_success(
             ctx.session_stats,
             "openai",
@@ -1164,10 +1110,9 @@ mod tests {
             Some(&vtcode_config::IdeContextConfig::default()),
         );
 
-        let second =
-            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
-                .await
-                .expect("second request should build");
+        let second = build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+            .await
+            .expect("second request should build");
 
         assert_eq!(second.request.previous_response_id, None);
         let non_runtime_messages = non_runtime_request_messages(&second.request);
@@ -1206,10 +1151,9 @@ mod tests {
         snapshot.provider_name = "anthropic".to_string();
         snapshot.capabilities.context_edits = true;
 
-        let built =
-            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
-                .await
-                .expect("anthropic request should build");
+        let built = build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+            .await
+            .expect("anthropic request should build");
 
         assert_eq!(
             built.request.context_management,
@@ -1236,10 +1180,9 @@ mod tests {
         // scenario exercises the "compaction only" path (clearing off).
         compaction_only_cfg.agent.harness.tool_result_clearing.enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(compaction_only_cfg)));
-        let built =
-            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
-                .await
-                .expect("compaction-only anthropic request should build");
+        let built = build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+            .await
+            .expect("compaction-only anthropic request should build");
         assert_eq!(
             built.request.context_management,
             Some(json!({
@@ -1258,10 +1201,9 @@ mod tests {
         // "no context management payload" (fully disabled) path is exercised.
         disabled_cfg.agent.harness.tool_result_clearing.enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(disabled_cfg)));
-        let built =
-            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
-                .await
-                .expect("disabled anthropic request should build");
+        let built = build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+            .await
+            .expect("disabled anthropic request should build");
         assert!(built.request.context_management.is_none());
     }
 

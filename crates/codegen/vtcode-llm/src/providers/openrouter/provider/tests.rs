@@ -61,8 +61,7 @@ fn request_with_tools(model: &str) -> LLMRequest {
 }
 
 fn test_provider(base_url: &str, model: &str) -> OpenRouterProvider {
-    let http_client =
-        reqwest::Client::builder().no_proxy().build().expect("test client should build");
+    let http_client = reqwest::Client::builder().no_proxy().build().expect("test client should build");
     OpenRouterProvider::new_with_client(
         "test-key".to_string(),
         model.to_string(),
@@ -95,10 +94,7 @@ fn enforce_tool_capabilities_disables_tools_for_restricted_models() {
 
 #[test]
 fn enforce_tool_capabilities_keeps_tools_for_supported_models() {
-    let provider = OpenRouterProvider::with_model(
-        "test-key".to_string(),
-        models::openrouter::OPENAI_GPT_5.to_string(),
-    );
+    let provider = OpenRouterProvider::with_model("test-key".to_string(), models::openrouter::OPENAI_GPT_5.to_string());
     let request = request_with_tools(models::openrouter::OPENAI_GPT_5);
 
     match provider.enforce_tool_capabilities(&request) {
@@ -112,15 +108,10 @@ fn enforce_tool_capabilities_keeps_tools_for_supported_models() {
 
 #[test]
 fn enforce_tool_capabilities_keeps_apply_patch_for_supported_models() {
-    let provider = OpenRouterProvider::with_model(
-        "test-key".to_string(),
-        models::openrouter::OPENAI_GPT_5.to_string(),
-    );
+    let provider = OpenRouterProvider::with_model("test-key".to_string(), models::openrouter::OPENAI_GPT_5.to_string());
     let request = LLMRequest {
         messages: vec![Message::user("hi".to_string())].into(),
-        tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch(
-            "Apply VT Code patches".to_string(),
-        )])),
+        tools: Some(std::sync::Arc::new(vec![ToolDefinition::apply_patch("Apply VT Code patches".to_string())])),
         model: models::openrouter::OPENAI_GPT_5.to_string(),
         tool_choice: Some(ToolChoice::Any),
         parallel_tool_calls: Some(true),
@@ -246,9 +237,7 @@ async fn generate_retries_without_tools_when_openrouter_rejects_tool_endpoints()
             "model": model_id,
             "tool_choice": "required"
         })))
-        .respond_with(
-            ResponseTemplate::new(404).set_body_string("No endpoints found that support tool use"),
-        )
+        .respond_with(ResponseTemplate::new(404).set_body_string("No endpoints found that support tool use"))
         .expect(1)
         .mount(&server)
         .await;
@@ -389,10 +378,7 @@ data: [DONE]\n\n",
             _ => None,
         })
         .collect();
-    assert!(
-        delta_ids.iter().all(|id| *id == start_id),
-        "all deltas must reuse the fabricated start id"
-    );
+    assert!(delta_ids.iter().all(|id| *id == start_id), "all deltas must reuse the fabricated start id");
     assert!(start_id.starts_with("call_"));
 
     let finalized = events

@@ -5,12 +5,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::ContentPart;
 use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
-use super::selection::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-};
-use super::style::{
-    InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme,
-};
+use super::selection::{InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig};
+use super::style::{InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme};
 use crate::tui::core_tui::session::config::AppearanceConfig;
 
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
@@ -225,8 +221,7 @@ pub enum InlineEvent {
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
 pub type FocusChangeCallback = Arc<dyn Fn(bool) + Send + Sync + 'static>;
-pub type PreviewCallback =
-    Arc<dyn Fn(Option<&InlineListSelection>) -> anyhow::Result<()> + Send + Sync + 'static>;
+pub type PreviewCallback = Arc<dyn Fn(Option<&InlineListSelection>) -> anyhow::Result<()> + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct InlineHandle {
@@ -257,12 +252,7 @@ impl InlineHandle {
         self.send_command(InlineCommand::Inline { kind, segment });
     }
 
-    pub fn replace_last(
-        &self,
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-    ) {
+    pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
         self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
     }
 
@@ -273,12 +263,7 @@ impl InlineHandle {
         lines: Vec<Vec<InlineSegment>>,
         link_ranges: Vec<Vec<InlineLinkRange>>,
     ) {
-        self.send_command(InlineCommand::ReplaceLast {
-            count,
-            kind,
-            lines,
-            link_ranges: Some(link_ranges),
-        });
+        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: Some(link_ranges) });
     }
 
     pub fn suspend_event_loop(&self) {
@@ -413,17 +398,8 @@ impl InlineHandle {
         self.send_command(InlineCommand::ShowOverlay { request: Box::new(request) });
     }
 
-    pub fn show_modal(
-        &self,
-        title: String,
-        lines: Vec<String>,
-        secure_prompt: Option<SecurePromptConfig>,
-    ) {
-        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
-            title,
-            lines,
-            secure_prompt,
-        }));
+    pub fn show_modal(&self, title: String, lines: Vec<String>, secure_prompt: Option<SecurePromptConfig>) {
+        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest { title, lines, secure_prompt }));
     }
 
     pub fn show_list_modal(

@@ -24,8 +24,7 @@ fn combined_error_message(result: &Value) -> String {
 async fn test_multiple_chunks_precision() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("multi_chunk.txt");
-    let original_content =
-        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
+    let original_content = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
     fs::write(&file_path, original_content).unwrap();
 
     let patch_text = r#"*** Begin Patch
@@ -51,7 +50,8 @@ async fn test_multiple_chunks_precision() {
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     let new_content = fs::read_to_string(&file_path).unwrap();
-    let expected_content = "line 1\nline 2 modified\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9 modified\nline 10\n";
+    let expected_content =
+        "line 1\nline 2 modified\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9 modified\nline 10\n";
     assert_eq!(new_content, expected_content);
 }
 
@@ -232,9 +232,7 @@ async fn test_invalid_format_error() {
     assert!(result["error"].is_object(), "Expected error object: {result:?}");
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
-        error_msg.contains("invalid patch")
-            || error_msg.contains("begin patch")
-            || error_msg.contains("invalid hunk"),
+        error_msg.contains("invalid patch") || error_msg.contains("begin patch") || error_msg.contains("invalid hunk"),
         "Unexpected error message: {error_msg}"
     );
 }
@@ -330,8 +328,7 @@ async fn test_diff_preview_correctness() {
     let applied = result["applied"]
         .as_array()
         .expect("Expected applied array in apply_patch result");
-    let applied_lines =
-        applied.iter().filter_map(|entry| entry.as_str()).collect::<Vec<_>>().join("\n");
+    let applied_lines = applied.iter().filter_map(|entry| entry.as_str()).collect::<Vec<_>>().join("\n");
     assert!(
         applied_lines.contains("Updated file: preview.txt"),
         "Expected update entry in applied list: {result:?}"
@@ -368,11 +365,8 @@ async fn test_move_file_operation() {
 #[tokio::test]
 async fn test_workspace_escape_is_rejected() {
     let temp_dir = TempDir::new().unwrap();
-    let outside_name =
-        format!("{}-outside.txt", temp_dir.path().file_name().unwrap().to_string_lossy());
-    let patch_text = format!(
-        "*** Begin Patch\n*** Add File: ../{outside_name}\n+must not be written\n*** End Patch"
-    );
+    let outside_name = format!("{}-outside.txt", temp_dir.path().file_name().unwrap().to_string_lossy());
+    let patch_text = format!("*** Begin Patch\n*** Add File: ../{outside_name}\n+must not be written\n*** End Patch");
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry

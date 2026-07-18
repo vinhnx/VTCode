@@ -6,8 +6,8 @@ use tokio::sync::Notify;
 use vtcode_core::tools::terminal_app::{TerminalAppLauncher, TerminalCommandStrategy};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSelection,
-    InlineMessageKind, InlineSession, ListOverlayRequest, TransientRequest, TransientSubmission,
+    InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem, InlineListSelection, InlineMessageKind,
+    InlineSession, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -47,10 +47,7 @@ fn update_highlight(notice: &StartupUpdateNotice) -> InlineHeaderHighlight {
     }
 }
 
-pub(crate) fn append_notice_highlight(
-    highlights: &mut Vec<InlineHeaderHighlight>,
-    notice: &StartupUpdateNotice,
-) {
+pub(crate) fn append_notice_highlight(highlights: &mut Vec<InlineHeaderHighlight>, notice: &StartupUpdateNotice) {
     let highlight = update_highlight(notice);
     if highlights
         .iter()
@@ -87,11 +84,7 @@ pub(crate) fn display_update_notice(
     handle.force_redraw();
 }
 
-pub(crate) fn display_release_notes(
-    handle: &InlineHandle,
-    version: &semver::Version,
-    highlights: &[String],
-) {
+pub(crate) fn display_release_notes(handle: &InlineHandle, version: &semver::Version, highlights: &[String]) {
     let text = format_release_notes_text(version, highlights);
     handle.append_pasted_message(InlineMessageKind::Info, text.clone(), line_count(&text));
     handle.force_redraw();
@@ -99,11 +92,7 @@ pub(crate) fn display_release_notes(
 
 fn format_release_notes_text(version: &semver::Version, highlights: &[String]) -> String {
     if highlights.is_empty() {
-        return format!(
-            "VT Code v{}\n\nSee full release notes:\n{}",
-            version,
-            Updater::release_url(version)
-        );
+        return format!("VT Code v{}\n\nSee full release notes:\n{}", version, Updater::release_url(version));
     }
 
     let mut lines = vec![format!("VT Code v{}", version)];
@@ -125,14 +114,10 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
         items: vec![
             InlineListItem {
                 title: "Update and restart".to_string(),
-                subtitle: Some(
-                    "Run the documented install command and relaunch VT Code.".to_string(),
-                ),
+                subtitle: Some("Run the documented install command and relaunch VT Code.".to_string()),
                 badge: Some("Recommended".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    UPDATE_AND_RESTART_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(UPDATE_AND_RESTART_ACTION.to_string())),
                 search_value: None,
             },
             InlineListItem {
@@ -172,9 +157,7 @@ fn map_update_prompt_submission(submission: TransientSubmission) -> Option<Updat
         {
             Some(UpdatePromptChoice::UpdateAndRestart)
         }
-        TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-            if action == STAY_CURRENT_ACTION =>
-        {
+        TransientSubmission::Selection(InlineListSelection::ConfigAction(action)) if action == STAY_CURRENT_ACTION => {
             Some(UpdatePromptChoice::StayCurrent)
         }
         TransientSubmission::Selection(_) => Some(UpdatePromptChoice::StayCurrent),
@@ -206,13 +189,12 @@ pub(crate) async fn run_inline_update_prompt(
             execute_inline_update(renderer, handle, workspace_root, notice).await
         }
         OverlayWaitOutcome::Submitted(UpdatePromptChoice::StayCurrent) => {
-            renderer
-                .line(MessageStyle::Info, "Staying on the current version for this session.")?;
+            renderer.line(MessageStyle::Info, "Staying on the current version for this session.")?;
             Ok(InlineUpdateOutcome::Continue)
         }
-        OverlayWaitOutcome::Cancelled
-        | OverlayWaitOutcome::Interrupted
-        | OverlayWaitOutcome::Exit => Ok(InlineUpdateOutcome::Continue),
+        OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted | OverlayWaitOutcome::Exit => {
+            Ok(InlineUpdateOutcome::Continue)
+        }
     }
 }
 
@@ -238,17 +220,11 @@ pub(crate) async fn execute_inline_update(
     match updater.install_update_with_progress(false, false).await {
         Ok(InstallOutcome::Updated(version)) => {
             queue_runtime_relaunch(relaunch_preference(notice));
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Update installed (v{version}). Restarting VT Code..."),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Update installed (v{version}). Restarting VT Code..."))?;
             Ok(InlineUpdateOutcome::RestartRequested)
         }
         Ok(InstallOutcome::UpToDate(version)) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Already on the latest version (v{version})."),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Already on the latest version (v{version})."))?;
             Ok(InlineUpdateOutcome::Continue)
         }
         Err(err) => {
@@ -264,17 +240,12 @@ fn execute_managed_update(
     workspace_root: &Path,
     notice: &StartupUpdateNotice,
 ) -> Result<InlineUpdateOutcome> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Running update command: {}", notice.guidance.command()),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("Running update command: {}", notice.guidance.command()))?;
 
     let launcher = TerminalAppLauncher::new(workspace_root.to_path_buf());
     handle.suspend_event_loop();
-    let result = launcher.run_command_with_strategy(
-        notice.guidance.command(),
-        terminal_strategy(notice.guidance.action.execution),
-    );
+    let result = launcher
+        .run_command_with_strategy(notice.guidance.command(), terminal_strategy(notice.guidance.action.execution));
     handle.resume_event_loop();
     handle.force_redraw();
 
@@ -332,10 +303,7 @@ mod tests {
         let first = rx.blocking_recv().expect("header command");
         let second = rx.blocking_recv().expect("transcript command");
         assert!(matches!(first, InlineCommand::SetHeaderContext { .. }));
-        assert!(matches!(
-            second,
-            InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Info, .. }
-        ));
+        assert!(matches!(second, InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Info, .. }));
     }
 
     #[test]

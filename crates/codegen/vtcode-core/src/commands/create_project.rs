@@ -16,11 +16,7 @@ fn print_result(action: &str, result: &Result<serde_json::Value>) {
 }
 
 /// Handle the create-project command - create a complete project structure
-pub async fn handle_create_project_command(
-    config: AgentConfig,
-    name: String,
-    features: String,
-) -> Result<()> {
+pub async fn handle_create_project_command(config: AgentConfig, name: String, features: String) -> Result<()> {
     println!(
         "{}",
         style(format!("Creating Rust project '{name}' with features: {features}"))
@@ -224,10 +220,7 @@ Cargo.lock
     }
 
     println!("{}", style("Project creation complete!").green().bold());
-    println!(
-        "{}",
-        style(format!(" Project '{}' created with {} features", name, features.len())).cyan()
-    );
+    println!("{}", style(format!(" Project '{}' created with {} features", name, features.len())).cyan());
     println!("{}", style(format!(" Run 'cd {name} && cargo run' to test your new project")).dim());
 
     Ok(())

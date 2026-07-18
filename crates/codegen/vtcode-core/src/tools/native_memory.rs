@@ -92,22 +92,14 @@ pub fn parameter_schema() -> Value {
     })
 }
 
-pub async fn execute(
-    workspace_root: &Path,
-    config: &PersistentMemoryConfig,
-    args: Value,
-) -> Result<Value> {
+pub async fn execute(workspace_root: &Path, config: &PersistentMemoryConfig, args: Value) -> Result<Value> {
     let request: NativeMemoryRequest = deserialize_tool_args(&args, "memory")?;
     let root = prepare_root(workspace_root, config).await?;
     let output = execute_request(&root, workspace_root, config, request).await?;
     Ok(Value::String(output))
 }
 
-pub async fn execute_with_vt_config(
-    workspace_root: &Path,
-    vt_cfg: &VTCodeConfig,
-    args: Value,
-) -> Result<Value> {
+pub async fn execute_with_vt_config(workspace_root: &Path, vt_cfg: &VTCodeConfig, args: Value) -> Result<Value> {
     if !vt_cfg.persistent_memory_enabled() {
         bail!(
             "Persistent memory is disabled. Enable features.memories and agent.persistent_memory.enabled to use /memories"
@@ -183,8 +175,7 @@ async fn execute_request(
         }
         NativeMemoryCommand::Insert => {
             let path = required_text(request.path.as_deref(), "path")?;
-            let insert_line =
-                request.insert_line.ok_or_else(|| anyhow!("insert_line is required"))?;
+            let insert_line = request.insert_line.ok_or_else(|| anyhow!("insert_line is required"))?;
             let insert_text = required_text(request.insert_text.as_deref(), "insert_text")?;
             let resolved = resolve_virtual_path(root, path)?;
             ensure_writable_path(&resolved.relative, path)?;
@@ -301,8 +292,7 @@ fn resolve_virtual_path(root: &Path, virtual_path: &str) -> Result<ResolvedMemor
         bail!("memory paths must stay under {MEMORIES_ROOT}");
     }
 
-    let relative_raw =
-        trimmed.strip_prefix(MEMORIES_ROOT).unwrap_or_default().trim_start_matches('/');
+    let relative_raw = trimmed.strip_prefix(MEMORIES_ROOT).unwrap_or_default().trim_start_matches('/');
     let relative = if relative_raw.is_empty() {
         PathBuf::new()
     } else {
@@ -364,8 +354,7 @@ mod tests {
     use super::{MEMORIES_ROOT, execute, parameter_schema};
     use crate::config::PersistentMemoryConfig;
     use crate::persistent_memory::{
-        MEMORY_FILENAME, MEMORY_SUMMARY_FILENAME, ROLLOUT_SUMMARIES_DIRNAME,
-        resolve_persistent_memory_dir,
+        MEMORY_FILENAME, MEMORY_SUMMARY_FILENAME, ROLLOUT_SUMMARIES_DIRNAME, resolve_persistent_memory_dir,
     };
     use serde_json::json;
     use tempfile::tempdir;
@@ -375,14 +364,7 @@ mod tests {
         let schema = parameter_schema();
         assert_eq!(
             schema["properties"]["command"]["enum"],
-            json!([
-                "view",
-                "create",
-                "str_replace",
-                "insert",
-                "delete",
-                "rename"
-            ])
+            json!(["view", "create", "str_replace", "insert", "delete", "rename"])
         );
     }
 
@@ -458,8 +440,7 @@ mod tests {
         let memory_dir = resolve_persistent_memory_dir(&config, workspace.path())
             .expect("dir")
             .expect("resolved");
-        let summary =
-            std::fs::read_to_string(memory_dir.join(MEMORY_SUMMARY_FILENAME)).expect("summary");
+        let summary = std::fs::read_to_string(memory_dir.join(MEMORY_SUMMARY_FILENAME)).expect("summary");
         assert!(summary.contains("Updated finding") || summary.contains("Follow-up"));
 
         execute(
@@ -472,8 +453,7 @@ mod tests {
         )
         .await
         .expect("delete");
-        let recreated_summary =
-            std::fs::read_to_string(memory_dir.join(MEMORY_SUMMARY_FILENAME)).expect("summary");
+        let recreated_summary = std::fs::read_to_string(memory_dir.join(MEMORY_SUMMARY_FILENAME)).expect("summary");
         assert!(!recreated_summary.contains("Updated finding"));
         assert!(!recreated_summary.contains("Follow-up"));
     }

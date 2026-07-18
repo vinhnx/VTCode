@@ -12,11 +12,7 @@ pub(super) struct ToolExecutionGuard {
 }
 
 impl ToolExecutionGuard {
-    pub(super) fn new(
-        tool_name: &str,
-        tool_call_id: &str,
-        error_recovery: Arc<Mutex<ErrorRecoveryState>>,
-    ) -> Self {
+    pub(super) fn new(tool_name: &str, tool_call_id: &str, error_recovery: Arc<Mutex<ErrorRecoveryState>>) -> Self {
         Self {
             tool_name: tool_name.to_string(),
             tool_call_id: tool_call_id.to_string(),
@@ -36,10 +32,8 @@ impl Drop for ToolExecutionGuard {
             return;
         }
 
-        let error_message = format!(
-            "tool execution interrupted before completion (tool_call_id={})",
-            self.tool_call_id
-        );
+        let error_message =
+            format!("tool execution interrupted before completion (tool_call_id={})", self.tool_call_id);
 
         tracing::warn!(
             tool = %self.tool_name,

@@ -190,12 +190,7 @@ fn wrap_mixed_content(
     for (url_start, url_end, url_text) in urls {
         // Process text before this URL
         if *url_start > text_pos {
-            push_wrapped_text(
-                &text[text_pos..*url_start],
-                &mut current_line,
-                &mut current_width,
-                &mut result,
-            );
+            push_wrapped_text(&text[text_pos..*url_start], &mut current_line, &mut current_width, &mut result);
         }
 
         // Add URL — keep atomic if it fits, otherwise break it across lines
@@ -232,10 +227,7 @@ fn wrap_mixed_content(
 }
 
 /// Wrap multiple lines with URL preservation.
-pub fn wrap_lines_preserving_urls(
-    lines: Vec<Line<'static>>,
-    max_width: usize,
-) -> Vec<Line<'static>> {
+pub fn wrap_lines_preserving_urls(lines: Vec<Line<'static>>, max_width: usize) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];
     }
@@ -272,9 +264,7 @@ mod tests {
         assert!(contains_preserved_token("./src/main.rs"));
         assert!(contains_preserved_token("/tmp/example.txt"));
         assert!(contains_preserved_token("\"./docs/My Notes.md\""));
-        assert!(contains_preserved_token(
-            "`/Users/example/Library/Application Support/Code/User/settings.json`"
-        ));
+        assert!(contains_preserved_token("`/Users/example/Library/Application Support/Code/User/settings.json`"));
     }
 
     #[test]

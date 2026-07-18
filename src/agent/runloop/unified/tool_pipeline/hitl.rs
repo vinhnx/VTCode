@@ -24,14 +24,8 @@ pub(crate) async fn execute_hitl_tool(
 
     match tool_name {
         tools::REQUEST_USER_INPUT => Some(
-            request_user_input::execute_request_user_input_tool(
-                handle,
-                session,
-                args,
-                ctrl_c_state,
-                ctrl_c_notify,
-            )
-            .await,
+            request_user_input::execute_request_user_input_tool(handle, session, args, ctrl_c_state, ctrl_c_notify)
+                .await,
         ),
         _ => None,
     }

@@ -31,8 +31,7 @@ impl ComplexityAnalyzer {
         let cognitive_complexity = self.calculate_cognitive_complexity(source);
 
         // Calculate maintainability index
-        let maintainability_index =
-            self.calculate_maintainability_index(cyclomatic_complexity, lines_of_code, source);
+        let maintainability_index = self.calculate_maintainability_index(cyclomatic_complexity, lines_of_code, source);
 
         ComplexityResult {
             cyclomatic_complexity,
@@ -121,20 +120,12 @@ impl ComplexityAnalyzer {
     }
 
     /// Calculate maintainability index
-    fn calculate_maintainability_index(
-        &self,
-        cyclomatic_complexity: f64,
-        lines_of_code: usize,
-        source: &str,
-    ) -> f64 {
+    fn calculate_maintainability_index(&self, cyclomatic_complexity: f64, lines_of_code: usize, source: &str) -> f64 {
         // Count Halstead volume approximation (simplified)
         let halstead_volume = source.chars().count() as f64;
 
         // Maintainability index formula (simplified)
-        let mi = 171.0
-            - 5.2 * halstead_volume.ln()
-            - 0.23 * cyclomatic_complexity
-            - 16.2 * (lines_of_code as f64).ln();
+        let mi = 171.0 - 5.2 * halstead_volume.ln() - 0.23 * cyclomatic_complexity - 16.2 * (lines_of_code as f64).ln();
 
         // Normalize to 0-100 scale
         mi.clamp(0.0, 100.0)

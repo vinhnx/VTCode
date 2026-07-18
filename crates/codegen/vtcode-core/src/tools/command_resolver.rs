@@ -62,11 +62,7 @@ impl CommandResolver {
         // Check cache first
         if let Some(cached) = self.cache.get(base_cmd) {
             self.cache_hits += 1;
-            debug!(
-                command = base_cmd,
-                cache_hits = self.cache_hits,
-                "Command resolution cache hit"
-            );
+            debug!(command = base_cmd, cache_hits = self.cache_hits, "Command resolution cache hit");
             return cached.clone();
         }
 

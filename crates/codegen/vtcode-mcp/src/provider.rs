@@ -2,8 +2,8 @@ use anyhow::{Context, Result, anyhow};
 use arc_swap::ArcSwap;
 use hashbrown::HashMap;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, GetPromptRequestParams, InitializeRequestParams,
-    InitializeResult, Prompt, ReadResourceRequestParams, Resource, Tool,
+    CallToolRequestParams, CallToolResult, GetPromptRequestParams, InitializeRequestParams, InitializeResult, Prompt,
+    ReadResourceRequestParams, Resource, Tool,
 };
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -22,8 +22,8 @@ use vtcode_utility_tool_specs::parse_mcp_tool;
 
 use super::{McpClient, RmcpClient};
 use super::{
-    McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo,
-    McpToolInfo, TIMEZONE_ARGUMENT, build_headers, ensure_timezone_argument, schema_requires_field,
+    McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo,
+    TIMEZONE_ARGUMENT, build_headers, ensure_timezone_argument, schema_requires_field,
 };
 
 pub struct McpProvider {
@@ -105,9 +105,10 @@ impl McpProvider {
                         .map(Some)?
                 } else {
                     match http.api_key_env.as_ref() {
-                        Some(var) => Some(std::env::var(var).with_context(|| {
-                            format!("Missing MCP API key environment variable: {var}")
-                        })?),
+                        Some(var) => Some(
+                            std::env::var(var)
+                                .with_context(|| format!("Missing MCP API key environment variable: {var}"))?,
+                        ),
                         None => None,
                     }
                 };
@@ -235,11 +236,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
     ) -> Result<CallToolResult> {
         if !allowlist.is_tool_allowed(&self.name, tool_name) {
-            return Err(anyhow!(
-                "Tool '{}' is blocked by the MCP allow list for provider '{}'",
-                tool_name,
-                self.name
-            ));
+            return Err(anyhow!("Tool '{}' is blocked by the MCP allow list for provider '{}'", tool_name, self.name));
         }
 
         let _permit = self
@@ -252,10 +249,7 @@ impl McpProvider {
         self.add_argument_defaults(tool_name, &mut arguments, allowlist, timeout)
             .await
             .with_context(|| {
-                format!(
-                    "failed to prepare arguments for MCP tool '{}' on provider '{}'",
-                    tool_name, self.name
-                )
+                format!("failed to prepare arguments for MCP tool '{}' on provider '{}'", tool_name, self.name)
             })?;
         let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
         let client = self.client.load_full();
@@ -370,11 +364,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
     ) -> Result<McpResourceData> {
         if !allowlist.is_resource_allowed(&self.name, uri) {
-            return Err(anyhow!(
-                "Resource '{}' is blocked by the MCP allow list for provider '{}'",
-                uri,
-                self.name
-            ));
+            return Err(anyhow!("Resource '{}' is blocked by the MCP allow list for provider '{}'", uri, self.name));
         }
 
         let _permit = self
@@ -472,8 +462,7 @@ impl McpProvider {
             .await
             .context("Failed to acquire MCP request slot")?;
         // Convert HashMap<String, String> to JsonObject (BTreeMap<String, Value>)
-        let args_json: Map<String, Value> =
-            arguments.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+        let args_json: Map<String, Value> = arguments.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
 
         let params = GetPromptRequestParams::new(prompt_name.to_string()).with_arguments(args_json);
         let client = self.client.load_full();
@@ -533,10 +522,9 @@ impl McpProvider {
         }
 
         // Create a fresh client from the stored config.
-        let new_provider =
-            McpProvider::connect(self.config.clone(), self.elicitation_handler.clone())
-                .await
-                .with_context(|| format!("MCP reconnect failed for provider '{}'", self.name))?;
+        let new_provider = McpProvider::connect(self.config.clone(), self.elicitation_handler.clone())
+            .await
+            .with_context(|| format!("MCP reconnect failed for provider '{}'", self.name))?;
 
         // Swap inner client.
         {
@@ -555,9 +543,7 @@ impl McpProvider {
         .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05);
         self.initialize(init_params, startup_timeout, tool_timeout, allowlist)
             .await
-            .with_context(|| {
-                format!("MCP re-initialization failed for provider '{}'", self.name)
-            })?;
+            .with_context(|| format!("MCP re-initialization failed for provider '{}'", self.name))?;
 
         tracing::info!(provider = self.name.as_str(), "MCP reconnection successful");
         Ok(())
@@ -579,11 +565,7 @@ impl McpProvider {
             .collect()
     }
 
-    fn filter_resources(
-        &self,
-        resources: Vec<Resource>,
-        allowlist: &McpAllowListConfig,
-    ) -> Vec<McpResourceInfo> {
+    fn filter_resources(&self, resources: Vec<Resource>, allowlist: &McpAllowListConfig) -> Vec<McpResourceInfo> {
         resources
             .into_iter()
             .filter(|resource| allowlist.is_resource_allowed(&self.name, &resource.uri))
@@ -598,11 +580,7 @@ impl McpProvider {
             .collect()
     }
 
-    fn filter_prompts(
-        &self,
-        prompts: Vec<Prompt>,
-        allowlist: &McpAllowListConfig,
-    ) -> Vec<McpPromptInfo> {
+    fn filter_prompts(&self, prompts: Vec<Prompt>, allowlist: &McpAllowListConfig) -> Vec<McpPromptInfo> {
         prompts
             .into_iter()
             .filter(|prompt| allowlist.is_prompt_allowed(&self.name, &prompt.name))
@@ -616,20 +594,15 @@ impl McpProvider {
     }
 }
 
-fn mcp_tool_call_span(
-    provider_name: &str,
-    tool_name: &str,
-    transport: &McpTransportConfig,
-) -> Span {
+fn mcp_tool_call_span(provider_name: &str, tool_name: &str, transport: &McpTransportConfig) -> Span {
     let (transport_label, server_address, server_port) = match transport {
         McpTransportConfig::Stdio(_) => ("stdio", String::new(), 0_u16),
         McpTransportConfig::Http(http) => {
             let (server_address, server_port) = Url::parse(&http.endpoint)
                 .ok()
                 .and_then(|url| {
-                    url.host_str().map(|host| {
-                        (host.to_string(), url.port_or_known_default().unwrap_or_default())
-                    })
+                    url.host_str()
+                        .map(|host| (host.to_string(), url.port_or_known_default().unwrap_or_default()))
                 })
                 .unwrap_or_default();
             ("streamable_http", server_address, server_port)

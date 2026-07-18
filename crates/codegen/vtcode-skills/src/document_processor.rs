@@ -106,9 +106,7 @@ impl DocumentType {
             Some("csv") => DocumentType::Csv,
             Some("txt") => DocumentType::Txt,
             Some("rtf") => DocumentType::Rtf,
-            Some("png") | Some("jpg") | Some("jpeg") | Some("gif") | Some("bmp") | Some("tiff") => {
-                DocumentType::Image
-            }
+            Some("png") | Some("jpg") | Some("jpeg") | Some("gif") | Some("bmp") | Some("tiff") => DocumentType::Image,
             _ => DocumentType::Unknown,
         }
     }
@@ -191,12 +189,8 @@ impl DocumentProcessor {
 
         match doc_type {
             DocumentType::Pdf => self.process_pdf(document_path).await,
-            DocumentType::Docx | DocumentType::Doc => {
-                self.process_word_document(document_path).await
-            }
-            DocumentType::Xlsx | DocumentType::Xls | DocumentType::Csv => {
-                self.process_spreadsheet(document_path).await
-            }
+            DocumentType::Docx | DocumentType::Doc => self.process_word_document(document_path).await,
+            DocumentType::Xlsx | DocumentType::Xls | DocumentType::Csv => self.process_spreadsheet(document_path).await,
             DocumentType::Image => self.process_image(document_path).await,
             other => {
                 warn!("Unsupported document type: {:?}", other);
@@ -296,11 +290,7 @@ impl DocumentProcessor {
     }
 
     /// Generate a prompt for vision model analysis
-    pub fn generate_vision_prompt(
-        &self,
-        processed: &ProcessedDocument,
-        query: &str,
-    ) -> Result<String> {
+    pub fn generate_vision_prompt(&self, processed: &ProcessedDocument, query: &str) -> Result<String> {
         let mut prompt = String::new();
 
         prompt.push_str(&format!("Document: {}\n", processed.source_path.display()));

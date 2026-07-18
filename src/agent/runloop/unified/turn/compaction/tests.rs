@@ -1,11 +1,10 @@
 use super::{
     CompactionContext, CompactionState, GroundedFactRecord, SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION,
-    SessionMemoryEnvelope, build_server_compaction_context_management,
-    build_summarized_fork_history, compact_history_for_recovery_in_place,
-    compact_history_from_index_in_place, compact_history_in_place,
-    compact_history_in_place_with_events, compact_history_on_model_switch_in_place,
-    inject_latest_memory_envelope, latest_memory_envelope_path_for_session,
-    manual_compact_history_in_place, maybe_auto_compact_history, resolve_compaction_threshold,
+    SessionMemoryEnvelope, build_server_compaction_context_management, build_summarized_fork_history,
+    compact_history_for_recovery_in_place, compact_history_from_index_in_place, compact_history_in_place,
+    compact_history_in_place_with_events, compact_history_on_model_switch_in_place, inject_latest_memory_envelope,
+    latest_memory_envelope_path_for_session, manual_compact_history_in_place, maybe_auto_compact_history,
+    resolve_compaction_threshold,
 };
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
@@ -22,8 +21,7 @@ use vtcode_core::compaction::ManualCompactionOptions;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
-    ResponsesCompactionOptions, ToolCall,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ResponsesCompactionOptions, ToolCall,
 };
 
 struct LocalCompactionProvider;
@@ -77,15 +75,9 @@ impl LLMProvider for ProviderCompactionProvider {
         Ok(LLMResponse::new("stub-model", "summary"))
     }
 
-    async fn compact_history(
-        &self,
-        _model: &str,
-        history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, _model: &str, history: &[Message]) -> Result<Vec<Message>, LLMError> {
         let mut compacted = Vec::new();
-        compacted.push(Message::system(
-            "Previous conversation summary:\nProvider compacted history".to_string(),
-        ));
+        compacted.push(Message::system("Previous conversation summary:\nProvider compacted history".to_string()));
         compacted.extend(history.iter().rev().take(2).cloned().collect::<Vec<_>>());
         compacted.reverse();
         Ok(compacted)
@@ -131,11 +123,7 @@ impl LLMProvider for NoOpProviderCompactionProvider {
         Ok(LLMResponse::new("stub-model", "summary"))
     }
 
-    async fn compact_history(
-        &self,
-        _model: &str,
-        history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, _model: &str, history: &[Message]) -> Result<Vec<Message>, LLMError> {
         Ok(history.to_vec())
     }
 
@@ -187,11 +175,7 @@ impl LLMProvider for FailingProviderCompactionProvider {
         })
     }
 
-    async fn compact_history(
-        &self,
-        _model: &str,
-        _history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, _model: &str, _history: &[Message]) -> Result<Vec<Message>, LLMError> {
         Err(LLMError::Provider {
             message: "provider compaction failed".to_string(),
             metadata: None,
@@ -229,11 +213,7 @@ impl LLMProvider for RecordingProviderCompactionProvider {
         Ok(LLMResponse::new("stub-model", "summary"))
     }
 
-    async fn compact_history(
-        &self,
-        _model: &str,
-        history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, _model: &str, history: &[Message]) -> Result<Vec<Message>, LLMError> {
         *self.seen_history.write().await = history.to_vec();
         Ok(history.to_vec())
     }
@@ -338,17 +318,12 @@ fn assert_local_compaction_history(history: &[Message], _old_envelope_index: usi
     assert_local_compaction_history_with_user_count(history, 4);
 }
 
-fn assert_local_compaction_history_with_user_count(
-    history: &[Message],
-    _retained_user_messages: usize,
-) {
+fn assert_local_compaction_history_with_user_count(history: &[Message], _retained_user_messages: usize) {
     let envelope_found = history.iter().any(|message| {
-        message.role == MessageRole::System
-            && message.content.as_text().contains("[Session Memory Envelope]")
+        message.role == MessageRole::System && message.content.as_text().contains("[Session Memory Envelope]")
     });
     let summary_found = history.iter().any(|message| {
-        message.role == MessageRole::System
-            && message.content.as_text().contains("Previous conversation summary")
+        message.role == MessageRole::System && message.content.as_text().contains("Previous conversation summary")
     });
     assert!(
         envelope_found || summary_found,
@@ -360,11 +335,7 @@ fn assert_local_compaction_history_with_user_count(
 }
 
 fn read_file_tool_call(id: &str, path: &str) -> ToolCall {
-    ToolCall::function(
-        id.to_string(),
-        tool_names::READ_FILE.to_string(),
-        json!({ "path": path }).to_string(),
-    )
+    ToolCall::function(id.to_string(), tool_names::READ_FILE.to_string(), json!({ "path": path }).to_string())
 }
 
 fn file_operation_read_tool_call(id: &str, path: &str) -> ToolCall {
@@ -382,12 +353,7 @@ fn assistant_with_tool_call(tool_call: ToolCall) -> Message {
 }
 
 fn test_context_manager() -> ContextManager {
-    ContextManager::new(
-        "You are VT Code.".to_string(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    )
+    ContextManager::new("You are VT Code.".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None)
 }
 
 #[tokio::test]
@@ -786,14 +752,8 @@ fn dedup_repeated_file_reads_rewrites_only_older_exact_matches() {
     let older_payload: serde_json::Value =
         serde_json::from_str(deduped[1].content.as_text().as_ref()).expect("json payload");
     assert_eq!(older_payload.get("deduped_read").and_then(serde_json::Value::as_bool), Some(true));
-    assert_eq!(
-        older_payload.get("note").and_then(serde_json::Value::as_str),
-        Some(super::DEDUPED_FILE_READ_NOTE)
-    );
-    assert_eq!(
-        older_payload.get("file_path").and_then(serde_json::Value::as_str),
-        Some("src/lib.rs")
-    );
+    assert_eq!(older_payload.get("note").and_then(serde_json::Value::as_str), Some(super::DEDUPED_FILE_READ_NOTE));
+    assert_eq!(older_payload.get("file_path").and_then(serde_json::Value::as_str), Some("src/lib.rs"));
     assert!(deduped[3].content.as_text().contains("newer contents"));
     assert!(!deduped[3].content.as_text().contains("deduped_read"));
 }
@@ -861,10 +821,7 @@ fn dedup_repeated_file_reads_keeps_different_slices_and_chunked_reads() {
         super::dedup_repeated_file_reads_for_local_compaction(&different_slice_history),
         different_slice_history
     );
-    assert_eq!(
-        super::dedup_repeated_file_reads_for_local_compaction(&chunked_history),
-        chunked_history
-    );
+    assert_eq!(super::dedup_repeated_file_reads_for_local_compaction(&chunked_history), chunked_history);
 }
 
 #[test]
@@ -928,11 +885,8 @@ fn recovery_context_previews_extract_nested_error_guidance_and_spool_excerpt() {
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     fs::create_dir_all(&spool_dir).expect("spool dir");
     let spool_path = spool_dir.join("read_1.txt");
-    fs::write(
-        &spool_path,
-        (1..=40).map(|idx| format!("spooled-line-{idx}")).collect::<Vec<_>>().join("\n"),
-    )
-    .expect("spool file");
+    fs::write(&spool_path, (1..=40).map(|idx| format!("spooled-line-{idx}")).collect::<Vec<_>>().join("\n"))
+        .expect("spool file");
 
     let history = vec![
         Message::user("review the read failure".to_string()),
@@ -951,8 +905,7 @@ fn recovery_context_previews_extract_nested_error_guidance_and_spool_excerpt() {
         ),
     ];
 
-    let previews =
-        super::build_recovery_context_previews_with_workspace(&history, Some(temp.path()));
+    let previews = super::build_recovery_context_previews_with_workspace(&history, Some(temp.path()));
 
     assert_eq!(previews[0], "Latest user request: review the read failure");
     assert!(previews[1].contains("Read failed"));
@@ -1152,8 +1105,8 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     assert!(envelope.touched_files.contains(&"src/child.rs".to_string()));
     assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
 
-    let persisted_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
-        .expect("persisted envelope path");
+    let persisted_path =
+        latest_memory_envelope_path_for_session(temp.path(), "session-alpha").expect("persisted envelope path");
     let persisted: SessionMemoryEnvelope =
         serde_json::from_str(&fs::read_to_string(persisted_path).expect("read persisted envelope"))
             .expect("deserialize persisted envelope");
@@ -1197,8 +1150,8 @@ fn refresh_session_memory_envelope_prefers_structured_verify_metadata() {
         )
     );
     assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
-    let persisted_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
-        .expect("persisted envelope path");
+    let persisted_path =
+        latest_memory_envelope_path_for_session(temp.path(), "session-alpha").expect("persisted envelope path");
     let persisted: SessionMemoryEnvelope =
         serde_json::from_str(&fs::read_to_string(persisted_path).expect("read persisted envelope"))
             .expect("deserialize persisted envelope");
@@ -1284,11 +1237,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
     )
     .expect("refresh succeeds");
     assert!(second.is_none(), "second identical refresh should be throttled");
-    assert_eq!(
-        history.len(),
-        history_len_after_first,
-        "history should not grow when refresh is throttled"
-    );
+    assert_eq!(history.len(), history_len_after_first, "history should not grow when refresh is throttled");
     assert_eq!(history, original_history, "throttled refresh should leave live history unchanged");
 }
 
@@ -1307,10 +1256,7 @@ fn refresh_session_memory_envelope_summary_is_concise() {
     let history = vec![
         Message::user("Check the log and reduce repeated duplicated work.".to_string()),
         Message::assistant("I will audit the agent loop.".to_string()),
-        Message::tool_response(
-            "call_1".to_string(),
-            json!({"error": "some tool error"}).to_string(),
-        ),
+        Message::tool_response("call_1".to_string(), json!({"error": "some tool error"}).to_string()),
     ];
     let original_history = history.clone();
     let session_stats = SessionStats::default();
@@ -1326,15 +1272,9 @@ fn refresh_session_memory_envelope_summary_is_concise() {
     .expect("refresh succeeds")
     .expect("envelope should be refreshed");
 
-    assert!(
-        !envelope.summary.contains("{\"error\""),
-        "summary should not contain raw JSON tool output"
-    );
+    assert!(!envelope.summary.contains("{\"error\""), "summary should not contain raw JSON tool output");
     assert!(envelope.summary.len() < 300, "summary should be concise, got: {}", envelope.summary);
-    assert!(
-        envelope.summary.contains("Audit agent loop"),
-        "summary should reference the objective"
-    );
+    assert!(envelope.summary.contains("Audit agent loop"), "summary should reference the objective");
     assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
 }
 
@@ -1625,10 +1565,7 @@ fn inject_latest_memory_envelope_is_session_scoped() {
     let history_dir = temp.path().join(".vtcode").join("history");
     fs::create_dir_all(&history_dir).expect("history dir");
 
-    for (session_id, summary) in [
-        ("session-alpha", "Alpha summary"),
-        ("session-beta", "Beta summary"),
-    ] {
+    for (session_id, summary) in [("session-alpha", "Alpha summary"), ("session-beta", "Beta summary")] {
         let envelope_path = history_dir.join(format!("{session_id}_0001.memory.json"));
         let envelope = SessionMemoryEnvelope {
             session_id: session_id.to_string(),
@@ -1648,11 +1585,8 @@ fn inject_latest_memory_envelope_is_session_scoped() {
             history_artifact_path: None,
             generated_at: "2026-03-14T00:00:00Z".to_string(),
         };
-        fs::write(
-            envelope_path,
-            serde_json::to_string_pretty(&envelope).expect("serialize envelope"),
-        )
-        .expect("write envelope");
+        fs::write(envelope_path, serde_json::to_string_pretty(&envelope).expect("serialize envelope"))
+            .expect("write envelope");
     }
 
     let mut history = vec![Message::user("resume".to_string())];
@@ -1689,11 +1623,8 @@ fn inject_latest_memory_envelope_requires_exact_session_prefix_match() {
             history_artifact_path: None,
             generated_at: "2026-03-14T00:00:00Z".to_string(),
         };
-        fs::write(
-            history_dir.join(file_name),
-            serde_json::to_string_pretty(&envelope).expect("serialize envelope"),
-        )
-        .expect("write envelope");
+        fs::write(history_dir.join(file_name), serde_json::to_string_pretty(&envelope).expect("serialize envelope"))
+            .expect("write envelope");
     }
 
     let mut history = vec![Message::user("resume".to_string())];
@@ -1735,9 +1666,7 @@ async fn persisted_envelope_uses_recorded_touched_files_only() {
     let temp = tempdir().expect("tempdir");
     let provider = LocalCompactionProvider;
     let mut history = test_history();
-    history.push(Message::user(
-        "Mentioning docs/example.md in prose should not populate touched files.".to_string(),
-    ));
+    history.push(Message::user("Mentioning docs/example.md in prose should not populate touched files.".to_string()));
     let mut session_stats = SessionStats::default();
     session_stats.record_touched_files(["src/main.rs".to_string(), "Cargo.toml".to_string()]);
     let mut context_manager = test_context_manager();
@@ -1755,11 +1684,9 @@ async fn persisted_envelope_uses_recorded_touched_files_only() {
     .await
     .expect("compaction succeeds");
 
-    let envelope_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
-        .expect("envelope path");
+    let envelope_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha").expect("envelope path");
     let envelope: SessionMemoryEnvelope =
-        serde_json::from_str(&fs::read_to_string(envelope_path).expect("read envelope"))
-            .expect("parse envelope");
+        serde_json::from_str(&fs::read_to_string(envelope_path).expect("read envelope")).expect("parse envelope");
 
     assert_eq!(envelope.touched_files, vec!["src/main.rs".to_string(), "Cargo.toml".to_string()]);
     assert_eq!(envelope.session_id, "session-alpha");
@@ -1797,11 +1724,8 @@ fn inject_latest_memory_envelope_uses_exact_session_id_when_prefixes_collide() {
             generated_at: "2026-03-14T00:00:00Z".to_string(),
         };
         let file_name = format!("{}_{suffix}.memory.json", &session_id[..32]);
-        fs::write(
-            history_dir.join(file_name),
-            serde_json::to_string_pretty(&envelope).expect("serialize envelope"),
-        )
-        .expect("write envelope");
+        fs::write(history_dir.join(file_name), serde_json::to_string_pretty(&envelope).expect("serialize envelope"))
+            .expect("write envelope");
     }
 
     let mut history = vec![Message::user("resume".to_string())];
@@ -1815,10 +1739,7 @@ async fn compaction_strips_existing_memory_envelope_before_recompacting() {
     let temp = tempdir().expect("tempdir");
     let provider = LocalCompactionProvider;
     let mut history = test_history();
-    history.insert(
-        0,
-        Message::system("[Session Memory Envelope]\nSummary:\nPersisted summary".to_string()),
-    );
+    history.insert(0, Message::system("[Session Memory Envelope]\nSummary:\nPersisted summary".to_string()));
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
 
@@ -1899,9 +1820,11 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
     assert!(compacted[0].content.as_text().contains("src/lib.rs"));
     assert!(compacted[1].content.as_text().contains("Previous conversation summary"));
     assert_eq!(compacted.iter().filter(|message| message.role == MessageRole::User).count(), 4);
-    assert!(compacted.iter().all(
-        |message| message.role == MessageRole::System || message.role == MessageRole::User
-    ));
+    assert!(
+        compacted
+            .iter()
+            .all(|message| message.role == MessageRole::System || message.role == MessageRole::User)
+    );
 }
 
 #[tokio::test]

@@ -28,10 +28,7 @@ pub enum SandboxPermissions {
 impl SandboxPermissions {
     /// Check if this permission requires approval.
     pub fn requires_approval(&self) -> bool {
-        matches!(
-            self,
-            Self::RequireEscalated | Self::WithAdditionalPermissions | Self::BypassSandbox
-        )
+        matches!(self, Self::RequireEscalated | Self::WithAdditionalPermissions | Self::BypassSandbox)
     }
 
     /// Check if this permission requests full unsandboxed execution.
@@ -60,9 +57,7 @@ impl SandboxPermissions {
         match (self, other) {
             (BypassSandbox, _) | (_, BypassSandbox) => BypassSandbox,
             (RequireEscalated, _) | (_, RequireEscalated) => RequireEscalated,
-            (WithAdditionalPermissions, _) | (_, WithAdditionalPermissions) => {
-                WithAdditionalPermissions
-            }
+            (WithAdditionalPermissions, _) | (_, WithAdditionalPermissions) => WithAdditionalPermissions,
             (UseDefault, UseDefault) => UseDefault,
         }
     }

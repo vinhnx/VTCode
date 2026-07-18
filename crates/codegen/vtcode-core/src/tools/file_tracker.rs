@@ -140,11 +140,7 @@ sys.exit(0 if exists and is_file else 1)
 
         let mut summary = String::from("Generated files:\n");
         for file in files {
-            summary.push_str(&format!(
-                "  - {} ({} bytes)\n",
-                file.absolute_path.display(),
-                file.size
-            ));
+            summary.push_str(&format!("  - {} ({} bytes)\n", file.absolute_path.display(), file.size));
         }
         summary
     }

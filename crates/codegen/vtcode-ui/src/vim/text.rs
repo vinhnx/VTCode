@@ -110,11 +110,7 @@ pub(crate) fn vim_end_word(content: &str, cursor: usize) -> usize {
     last
 }
 
-pub(crate) fn vim_motion_range(
-    content: &str,
-    cursor: usize,
-    motion: Motion,
-) -> Option<(usize, usize)> {
+pub(crate) fn vim_motion_range(content: &str, cursor: usize, motion: Motion) -> Option<(usize, usize)> {
     let target = match motion {
         Motion::WordForward => vim_next_word_start(content, cursor),
         Motion::EndWord => vim_end_word(content, cursor),
@@ -122,9 +118,7 @@ pub(crate) fn vim_motion_range(
     };
     match motion {
         Motion::WordBackward => (target < cursor).then_some((target, cursor)),
-        Motion::EndWord => {
-            (target >= cursor).then_some((cursor, next_char_boundary(content, target)))
-        }
+        Motion::EndWord => (target >= cursor).then_some((cursor, next_char_boundary(content, target))),
         Motion::WordForward => (target > cursor).then_some((cursor, target)),
     }
 }
@@ -141,17 +135,10 @@ pub(crate) fn vim_current_line_full_range(content: &str, cursor: usize) -> (usiz
 }
 
 pub(crate) fn vim_is_linewise_range(content: &str, start: usize, end: usize) -> bool {
-    start == vim_line_start(content, start)
-        && (end == content.len() || content.get(end - 1..end) == Some("\n"))
+    start == vim_line_start(content, start) && (end == content.len() || content.get(end - 1..end) == Some("\n"))
 }
 
-pub(crate) fn vim_find_char(
-    content: &str,
-    cursor: usize,
-    ch: char,
-    forward: bool,
-    till: bool,
-) -> Option<usize> {
+pub(crate) fn vim_find_char(content: &str, cursor: usize, ch: char, forward: bool, till: bool) -> Option<usize> {
     let (start, end) = vim_current_line_bounds(content, cursor);
     if forward {
         let search_start = next_char_boundary(content, cursor);
@@ -176,19 +163,11 @@ pub(crate) fn vim_find_char(
     }
 }
 
-pub(crate) fn vim_text_object_range(
-    content: &str,
-    cursor: usize,
-    object: TextObjectSpec,
-) -> Option<(usize, usize)> {
+pub(crate) fn vim_text_object_range(content: &str, cursor: usize, object: TextObjectSpec) -> Option<(usize, usize)> {
     match object {
         TextObjectSpec::Word { around, big } => {
             let classify = |ch: char| {
-                if big {
-                    !ch.is_whitespace()
-                } else {
-                    vim_is_word_char(ch)
-                }
+                if big { !ch.is_whitespace() } else { vim_is_word_char(ch) }
             };
 
             let current_byte = cursor.min(content.len());

@@ -10,10 +10,7 @@ use crate::core::agent::session::AgentSessionState;
 /// recorder.  This two-step pattern (`take_emitted_events` →
 /// `record_thread_events`) is repeated across tool execution paths; the helper
 /// keeps call-sites concise and consistent.
-pub(super) fn drain_and_record_runtime_events(
-    runtime: &mut AgentRuntime,
-    event_recorder: &mut ExecEventRecorder,
-) {
+pub(super) fn drain_and_record_runtime_events(runtime: &mut AgentRuntime, event_recorder: &mut ExecEventRecorder) {
     let events = runtime.take_emitted_events();
     event_recorder.record_thread_events(events);
 }

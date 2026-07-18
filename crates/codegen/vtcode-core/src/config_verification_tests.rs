@@ -44,10 +44,7 @@ mod config_verification {
             "PTY max scrollback should be 25MB (optimized from 50MB)"
         );
 
-        println!(
-            "v PTY config verified: max_scrollback={}MB",
-            config.pty.max_scrollback_bytes / 1_000_000
-        );
+        println!("v PTY config verified: max_scrollback={}MB", config.pty.max_scrollback_bytes / 1_000_000);
     }
 
     /// Test: Verify default config is reasonable

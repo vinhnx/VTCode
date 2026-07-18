@@ -55,15 +55,9 @@ pub trait TuiSessionDriver {
     fn has_active_navigation_ui(&self) -> bool;
     fn apply_coalesced_scroll(&mut self, line_delta: i32, page_delta: i32);
     fn set_show_logs(&mut self, show: bool);
-    fn set_active_pty_sessions(
-        &mut self,
-        sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
-    );
+    fn set_active_pty_sessions(&mut self, sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>);
     fn set_workspace_root(&mut self, root: Option<std::path::PathBuf>);
-    fn set_log_receiver(
-        &mut self,
-        receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>,
-    );
+    fn set_log_receiver(&mut self, receiver: UnboundedReceiver<crate::tui::core_tui::log::LogEntry>);
     fn set_fullscreen_active(&mut self, active: bool);
     fn set_fullscreen_interaction(&mut self, config: FullscreenInteractionSettings);
     fn set_preview_callback(&mut self, callback: Option<PreviewCallback>);

@@ -3,8 +3,7 @@ use serde_json::{Value, json};
 use crate::error_display;
 use crate::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
 use crate::providers::common::{
-    assistant_interleaved_history_text, normalize_reasoning_detail_objects,
-    serialize_message_content_openai_for_role,
+    assistant_interleaved_history_text, normalize_reasoning_detail_objects, serialize_message_content_openai_for_role,
 };
 use crate::rig_adapter::RigProviderCapabilities;
 use vtcode_config::models::Provider;
@@ -12,10 +11,7 @@ use vtcode_config::models::Provider;
 use super::OpenRouterProvider;
 
 impl OpenRouterProvider {
-    pub(super) fn convert_to_openrouter_format(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Value, LLMError> {
+    pub(super) fn convert_to_openrouter_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let resolved_model = self.resolve_model(request);
         let mut messages = Vec::new();
 
@@ -30,9 +26,7 @@ impl OpenRouterProvider {
             let role = msg.role.as_openai_str();
             let content_value = assistant_interleaved_history_text(msg, resolved_model)
                 .map(Value::String)
-                .unwrap_or_else(|| {
-                    serialize_message_content_openai_for_role(&msg.role, &msg.content)
-                });
+                .unwrap_or_else(|| serialize_message_content_openai_for_role(&msg.role, &msg.content));
 
             let mut message = json!({
                 "role": role,
@@ -83,10 +77,7 @@ impl OpenRouterProvider {
                             "OpenRouter",
                             "Tool response message missing required tool_call_id",
                         );
-                        return Err(LLMError::InvalidRequest {
-                            message: formatted_error,
-                            metadata: None,
-                        });
+                        return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
                     }
                 }
             }
@@ -95,8 +86,7 @@ impl OpenRouterProvider {
         }
 
         if messages.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("OpenRouter", "No messages provided");
+            let formatted_error = error_display::format_llm_error("OpenRouter", "No messages provided");
             return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
@@ -146,8 +136,7 @@ impl OpenRouterProvider {
             && self.supports_reasoning_effort(resolved_model)
         {
             if let Some(payload) =
-                RigProviderCapabilities::new(Provider::OpenRouter, resolved_model)
-                    .reasoning_parameters(effort)
+                RigProviderCapabilities::new(Provider::OpenRouter, resolved_model).reasoning_parameters(effort)
             {
                 provider_request["reasoning"] = payload;
             } else {
@@ -175,9 +164,7 @@ mod tests {
 
     #[test]
     fn normalize_reasoning_detail_for_minimax_decodes_stringified_object() {
-        let parsed = normalize_reasoning_detail_object(&json!(
-            r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#
-        ));
+        let parsed = normalize_reasoning_detail_object(&json!(r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#));
         assert!(parsed.as_ref().is_some_and(|value| value.is_object()));
         assert_eq!(parsed.expect("parsed")["type"], json!("reasoning.text"));
     }
@@ -192,10 +179,7 @@ mod tests {
         let provider = OpenRouterProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: "z-ai/glm-5".to_string(),
-            messages: vec![
-                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ]
-            .into(),
+            messages: vec![Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string()))].into(),
             ..Default::default()
         };
 

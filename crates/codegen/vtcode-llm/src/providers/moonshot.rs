@@ -1,9 +1,7 @@
 use serde_json::{Map, Value};
 use vtcode_config::constants::{env_vars, models, urls};
 
-use super::openai_compat::{
-    OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider,
-};
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider};
 use crate::provider::{LLMError, LLMRequest};
 
 pub struct MoonshotSpec;
@@ -49,8 +47,7 @@ impl OpenAiCompatSpec for MoonshotSpec {
         if let Some(effort) = request.reasoning_effort
             && is_thinking_model(&request.model)
         {
-            payload
-                .insert("reasoning_effort".to_string(), Value::String(effort.as_str().to_string()));
+            payload.insert("reasoning_effort".to_string(), Value::String(effort.as_str().to_string()));
         }
         Ok(())
     }

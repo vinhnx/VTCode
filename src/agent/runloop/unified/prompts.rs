@@ -4,8 +4,8 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::SystemPromptMode;
 use vtcode_core::prompts::PromptContext;
 use vtcode_core::prompts::system::{
-    SystemPromptReport, compose_system_instruction_with_report, default_lightweight_prompt,
-    default_system_prompt, minimal_system_prompt, specialized_system_prompt,
+    SystemPromptReport, compose_system_instruction_with_report, default_lightweight_prompt, default_system_prompt,
+    minimal_system_prompt, specialized_system_prompt,
 };
 
 fn fallback_base_system_prompt(vt_cfg: Option<&vtcode_core::config::VTCodeConfig>) -> &'static str {
@@ -22,8 +22,7 @@ pub(crate) async fn read_system_prompt(
     session_addendum: Option<&str>,
     available_subagents: &[(String, String, bool)],
 ) -> (String, SystemPromptReport) {
-    let mut prompt_context =
-        PromptContext::from_workspace_tools(workspace, std::iter::empty::<String>());
+    let mut prompt_context = PromptContext::from_workspace_tools(workspace, std::iter::empty::<String>());
     prompt_context.load_available_skills();
 
     let vt_cfg = ConfigManager::load_from_workspace(workspace)
@@ -31,8 +30,7 @@ pub(crate) async fn read_system_prompt(
         .map(|manager| manager.config().clone());
 
     let (mut prompt, mut report) =
-        compose_system_instruction_with_report(workspace, vt_cfg.as_ref(), Some(&prompt_context))
-            .await;
+        compose_system_instruction_with_report(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
 
     if prompt.is_empty() {
         prompt = fallback_base_system_prompt(vt_cfg.as_ref()).to_string();
@@ -114,10 +112,7 @@ fn build_full_subagent_section(subagents: &[(String, String, bool)]) -> String {
     let mut lines = Vec::with_capacity(4 + subagents.len());
     lines.push("## Subagents".to_string());
     lines.push("Delegated child agents available in this session. Treat the main thread as the controller: keep the next blocking step local, and delegate only bounded independent work. Read-only agents may be used proactively when their description matches; write-capable agents require explicit delegation.".to_string());
-    lines.push(
-        "Users can explicitly target one with natural language or an `@agent-<name>` mention."
-            .to_string(),
-    );
+    lines.push("Users can explicitly target one with natural language or an `@agent-<name>` mention.".to_string());
     lines.push("If the user explicitly selects a subagent for the task, delegate with `spawn_agent` to that subagent instead of handling the task on the main thread. Join child results back into the parent flow before you depend on them.".to_string());
     for (name, description, read_only) in subagents {
         let suffix = if *read_only {
@@ -144,10 +139,7 @@ fn budget_subagent_section(subagents: &[(String, String, bool)], max_chars: usiz
     let mut lines = Vec::with_capacity(4 + subagents.len());
     lines.push("## Subagents".to_string());
     lines.push("Delegated child agents available in this session. Treat the main thread as the controller: keep the next blocking step local, and delegate only bounded independent work. Read-only agents may be used proactively when their description matches; write-capable agents require explicit delegation.".to_string());
-    lines.push(
-        "Users can explicitly target one with natural language or an `@agent-<name>` mention."
-            .to_string(),
-    );
+    lines.push("Users can explicitly target one with natural language or an `@agent-<name>` mention.".to_string());
     lines.push("If the user explicitly selects a subagent for the task, delegate with `spawn_agent` to that subagent instead of handling the task on the main thread. Join child results back into the parent flow before you depend on them.".to_string());
     let mut remaining = max_chars.saturating_sub(lines.join("\n").len());
     for (name, description, read_only) in subagents {
@@ -159,10 +151,7 @@ fn budget_subagent_section(subagents: &[(String, String, bool)], max_chars: usiz
         let entry = format!("- {name}: {description}{suffix}");
         let entry_len = entry.len();
         if entry_len > remaining {
-            lines.push(format!(
-                "- ... ({} more agents truncated)",
-                subagents.len() - lines.len() + 4
-            ));
+            lines.push(format!("- ... ({} more agents truncated)", subagents.len() - lines.len() + 4));
             break;
         }
         lines.push(entry);
@@ -248,10 +237,7 @@ mod tests {
         let (prompt, _report) = read_system_prompt(workspace.path(), None, &subagents).await;
 
         assert!(prompt.contains("explorer: Read-only repo explorer Read-only."));
-        assert!(
-            prompt
-                .contains("builder: Write-capable implementation agent Explicit delegation only.")
-        );
+        assert!(prompt.contains("builder: Write-capable implementation agent Explicit delegation only."));
         assert!(!prompt.contains("subagents available"));
     }
 }

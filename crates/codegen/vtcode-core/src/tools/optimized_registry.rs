@@ -45,8 +45,7 @@ impl OptimizedToolRegistry {
             tool_metadata: Arc::new(RwLock::new(HashMap::with_capacity(64))),
             execution_semaphore: Arc::new(Semaphore::new(max_concurrent_tools)),
             hot_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(HOT_CACHE_CAPACITY)
-                    .unwrap_or(std::num::NonZeroUsize::MIN),
+                std::num::NonZeroUsize::new(HOT_CACHE_CAPACITY).unwrap_or(std::num::NonZeroUsize::MIN),
             ))),
             execution_stats: Arc::new(RwLock::new(Vec::with_capacity(1024))),
         }
@@ -103,12 +102,7 @@ impl OptimizedToolRegistry {
     }
 
     /// Record execution statistics with minimal blocking
-    fn record_execution_stats(
-        &self,
-        tool_name: &str,
-        execution_time: std::time::Duration,
-        success: bool,
-    ) {
+    fn record_execution_stats(&self, tool_name: &str, execution_time: std::time::Duration, success: bool) {
         let record = ToolExecutionRecord {
             tool_name: tool_name.to_string(),
             requested_name: String::new(), // Optimize: reuse from pool
@@ -122,10 +116,7 @@ impl OptimizedToolRegistry {
             },
             timestamp: std::time::SystemTime::now(),
             success,
-            context: crate::tools::registry::HarnessContextSnapshot::new(
-                "optimized".to_string(),
-                None,
-            ),
+            context: crate::tools::registry::HarnessContextSnapshot::new("optimized".to_string(), None),
             timeout_category: None,
             base_timeout_ms: None,
             adaptive_timeout_ms: None,

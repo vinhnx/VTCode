@@ -8,9 +8,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate complete Kitty configuration with all features
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut config_lines = Vec::new();
 
     // Add header comment
@@ -29,10 +27,7 @@ pub fn generate_config(
                 config_lines.push("# Enhanced copy/paste".to_string());
                 config_lines.push("enable_bracketed_paste yes".to_string());
                 config_lines.push("copy_on_select clipboard".to_string());
-                config_lines.push(
-                    "mouse_map shift+left click grabbed,ungrabbed mouse_selection normal"
-                        .to_string(),
-                );
+                config_lines.push("mouse_map shift+left click grabbed,ungrabbed mouse_selection normal".to_string());
                 config_lines.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
@@ -42,9 +37,7 @@ pub fn generate_config(
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_lines.push("# Theme synchronization".to_string());
-                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
-                    TerminalType::Kitty,
-                )?;
+                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(TerminalType::Kitty)?;
                 config_lines.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {

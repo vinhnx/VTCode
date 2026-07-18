@@ -32,16 +32,10 @@ pub(crate) struct DynamicModelRegistry {
 }
 
 impl DynamicModelRegistry {
-    pub(super) async fn load(
-        options: &[ModelOption],
-        workspace: Option<&Path>,
-        vt_cfg: Option<&VTCodeConfig>,
-    ) -> Self {
+    pub(super) async fn load(options: &[ModelOption], workspace: Option<&Path>, vt_cfg: Option<&VTCodeConfig>) -> Self {
         let static_index = build_static_model_index(options);
-        let (endpoints, mut cache_store) = tokio::join!(
-            ProviderEndpointConfig::gather(workspace),
-            CachedDynamicModelStore::load()
-        );
+        let (endpoints, mut cache_store) =
+            tokio::join!(ProviderEndpointConfig::gather(workspace), CachedDynamicModelStore::load());
         let workspace_root = workspace
             .map(Path::to_path_buf)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
@@ -62,27 +56,15 @@ impl DynamicModelRegistry {
 
         let ollama_base_url = endpoints.resolved_base_url(Provider::Ollama);
         let (ollama_result, ollama_warning) = cache_store
-            .fetch_with_cache(
-                Provider::Ollama,
-                endpoints.base_url(Provider::Ollama),
-                fetch_ollama_models,
-            )
+            .fetch_with_cache(Provider::Ollama, endpoints.base_url(Provider::Ollama), fetch_ollama_models)
             .await;
         let llamacpp_base_url = endpoints.resolved_base_url(Provider::LlamaCpp);
         let (llamacpp_result, llamacpp_warning) = cache_store
-            .fetch_with_cache(
-                Provider::LlamaCpp,
-                endpoints.base_url(Provider::LlamaCpp),
-                fetch_llamacpp_models,
-            )
+            .fetch_with_cache(Provider::LlamaCpp, endpoints.base_url(Provider::LlamaCpp), fetch_llamacpp_models)
             .await;
         let lmstudio_base_url = endpoints.resolved_base_url(Provider::LmStudio);
         let (lmstudio_result, lmstudio_warning) = cache_store
-            .fetch_with_cache(
-                Provider::LmStudio,
-                endpoints.base_url(Provider::LmStudio),
-                fetch_lmstudio_models,
-            )
+            .fetch_with_cache(Provider::LmStudio, endpoints.base_url(Provider::LmStudio), fetch_lmstudio_models)
             .await;
 
         let copilot_auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
@@ -96,8 +78,7 @@ impl DynamicModelRegistry {
                         let copilot_auth_cfg = copilot_auth_cfg.clone();
                         let workspace_root = workspace_root.clone();
                         async move {
-                            let models =
-                                list_available_models(&copilot_auth_cfg, &workspace_root).await?;
+                            let models = list_available_models(&copilot_auth_cfg, &workspace_root).await?;
                             Ok(models.into_iter().map(|model| model.id).collect())
                         }
                     }
@@ -120,31 +101,16 @@ impl DynamicModelRegistry {
         if let Some(warning) = ollama_warning {
             registry.record_warning(Provider::Ollama, warning);
         }
-        registry.process_fetch(
-            Provider::LlamaCpp,
-            llamacpp_result,
-            llamacpp_base_url,
-            &static_index,
-        );
+        registry.process_fetch(Provider::LlamaCpp, llamacpp_result, llamacpp_base_url, &static_index);
         if let Some(warning) = llamacpp_warning {
             registry.record_warning(Provider::LlamaCpp, warning);
         }
-        registry.process_fetch(
-            Provider::LmStudio,
-            lmstudio_result,
-            lmstudio_base_url,
-            &static_index,
-        );
+        registry.process_fetch(Provider::LmStudio, lmstudio_result, lmstudio_base_url, &static_index);
         if let Some(warning) = lmstudio_warning {
             registry.record_warning(Provider::LmStudio, warning);
         }
         if let Some((copilot_result, copilot_warning)) = copilot_fetch {
-            registry.process_fetch(
-                Provider::Copilot,
-                copilot_result,
-                "copilot-cli".to_string(),
-                &static_index,
-            );
+            registry.process_fetch(Provider::Copilot, copilot_result, "copilot-cli".to_string(), &static_index);
             if let Some(warning) = copilot_warning {
                 registry.record_warning(Provider::Copilot, warning);
             }
@@ -202,20 +168,12 @@ impl DynamicModelRegistry {
         match result {
             Ok(models) => self.register_provider_models(provider, models, static_index),
             Err(err) => {
-                self.record_error(
-                    provider,
-                    format!("Failed to query {} at {} ({})", provider.label(), base_url, err),
-                );
+                self.record_error(provider, format!("Failed to query {} at {} ({})", provider.label(), base_url, err));
             }
         }
     }
 
-    fn register_provider_models(
-        &mut self,
-        provider: Provider,
-        models: Vec<String>,
-        static_index: &StaticModelIndex,
-    ) {
+    fn register_provider_models(&mut self, provider: Provider, models: Vec<String>, static_index: &StaticModelIndex) {
         if !models.is_empty() {
             self.provider_errors.remove(&provider);
             self.provider_warnings.remove(&provider);
@@ -234,16 +192,11 @@ impl DynamicModelRegistry {
             if self.has_model(provider, trimmed) {
                 continue;
             }
-            if provider == Provider::Ollama
-                && (trimmed.contains(":cloud") || trimmed.contains("-cloud"))
-            {
+            if provider == Provider::Ollama && (trimmed.contains(":cloud") || trimmed.contains("-cloud")) {
                 continue;
             }
 
-            self.register_model(
-                provider,
-                selection_from_dynamic(provider, trimmed, trimmed, None, None),
-            );
+            self.register_model(provider, selection_from_dynamic(provider, trimmed, trimmed, None, None));
         }
     }
 
@@ -306,10 +259,7 @@ fn copilot_cache_base(config: &vtcode_config::auth::CopilotAuthConfig) -> String
         .unwrap_or_else(|| "copilot-cli://github.com".to_string())
 }
 
-async fn fetch_openai_models(
-    base_url: Option<String>,
-    api_key: String,
-) -> Result<Vec<String>, anyhow::Error> {
+async fn fetch_openai_models(base_url: Option<String>, api_key: String) -> Result<Vec<String>, anyhow::Error> {
     #[derive(Debug, Deserialize)]
     struct ModelsResponse {
         data: Vec<ModelEntry>,
@@ -371,11 +321,7 @@ mod tests {
         let static_index = build_static_model_index(MODEL_OPTIONS.as_slice());
         let mut registry = DynamicModelRegistry::default();
 
-        registry.register_provider_models(
-            Provider::Ollama,
-            vec!["custom-local-model".to_string()],
-            &static_index,
-        );
+        registry.register_provider_models(Provider::Ollama, vec!["custom-local-model".to_string()], &static_index);
 
         let indexes = registry.indexes_for(Provider::Ollama);
         assert_eq!(indexes.len(), 1);
@@ -434,9 +380,6 @@ mod tests {
 
     #[test]
     fn copilot_cache_base_defaults_to_github_com() {
-        assert_eq!(
-            copilot_cache_base(&vtcode_config::auth::CopilotAuthConfig::default()),
-            "copilot-cli://github.com"
-        );
+        assert_eq!(copilot_cache_base(&vtcode_config::auth::CopilotAuthConfig::default()), "copilot-cli://github.com");
     }
 }

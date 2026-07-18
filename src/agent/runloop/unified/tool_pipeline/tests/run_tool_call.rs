@@ -56,28 +56,14 @@ async fn test_run_tool_call_unknown_tool_failure() {
         None,
     );
 
-    let call = vtcode_core::llm::provider::ToolCall::function(
-        "call_1".to_string(),
-        "test_tool".to_string(),
-        "{}".to_string(),
-    );
+    let call =
+        vtcode_core::llm::provider::ToolCall::function("call_1".to_string(), "test_tool".to_string(), "{}".to_string());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+        .await
+        .expect("run_tool_call must run");
 
     assert!(matches!(outcome.status, ToolExecutionStatus::Failure { .. }));
 }
@@ -129,20 +115,9 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, None, 0, false)
+        .await
+        .expect("run_tool_call must run");
 
     println!("Outcome status: {:?}", outcome.status);
 
@@ -203,20 +178,9 @@ async fn test_run_tool_call_allows_unlimited_budget_when_disabled() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, None, 0, false)
+        .await
+        .expect("run_tool_call must run");
 
     assert!(!matches!(
         outcome.status,
@@ -283,20 +247,10 @@ async fn test_run_tool_call_forwards_runtime_agent_permissions_to_routing() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        Some(&vt_cfg),
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome =
+        run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, Some(&vt_cfg), 0, false)
+            .await
+            .expect("run_tool_call must run");
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
@@ -365,20 +319,9 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() 
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        true,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, true)
+        .await
+        .expect("run_tool_call must run");
 
     println!("Planning workflow guard test outcome status: {:?}", outcome.status);
 
@@ -448,36 +391,20 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflo
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        true,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, true)
+        .await
+        .expect("run_tool_call must run");
 
     match outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            assert!(
-                output["status"] == "ok" || output["status"] == "empty",
-                "unexpected status: {}",
-                output["status"]
-            );
+            assert!(output["status"] == "ok" || output["status"] == "empty", "unexpected status: {}", output["status"]);
         }
         other => panic!("Expected task_tracker success in planning workflow, got: {other:?}"),
     }
 }
 
 #[tokio::test]
-async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_workflow_and_tracks_budget()
- {
+async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_workflow_and_tracks_budget() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -531,28 +458,13 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_wor
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+        .await
+        .expect("run_tool_call must run");
 
     match outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            assert!(
-                output["status"] == "ok" || output["status"] == "empty",
-                "unexpected status: {}",
-                output["status"]
-            );
+            assert!(output["status"] == "ok" || output["status"] == "empty", "unexpected status: {}", output["status"]);
         }
         other => panic!("Expected task_tracker success in planning workflow, got: {other:?}"),
     }
@@ -605,38 +517,18 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let first_outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("first run_tool_call must run");
+    let first_outcome =
+        run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, None, 0, false)
+            .await
+            .expect("first run_tool_call must run");
 
     assert!(matches!(first_outcome.status, ToolExecutionStatus::Failure { .. }));
     assert_eq!(ctx.harness_state.tool_calls, 0);
 
-    let second_outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("second run_tool_call must run");
+    let second_outcome =
+        run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, None, 0, false)
+            .await
+            .expect("second run_tool_call must run");
 
     assert!(matches!(second_outcome.status, ToolExecutionStatus::Failure { .. }));
     assert_eq!(ctx.harness_state.tool_calls, 0);
@@ -707,35 +599,15 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let first_outcome = run_tool_call(
-        &mut ctx,
-        &first_call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("first command_session call must run");
+    let first_outcome =
+        run_tool_call(&mut ctx, &first_call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+            .await
+            .expect("first command_session call must run");
 
-    let second_outcome = run_tool_call(
-        &mut ctx,
-        &second_call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("second command_session call must run");
+    let second_outcome =
+        run_tool_call(&mut ctx, &second_call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+            .await
+            .expect("second command_session call must run");
 
     let extract_session_id = |status: &ToolExecutionStatus| -> String {
         match status {
@@ -787,8 +659,7 @@ async fn successful_apply_patch_invalidates_cached_code_search() {
     let mut test_ctx = TestContext::new().await;
     let source_dir = test_ctx.workspace.join("src");
     std::fs::create_dir_all(&source_dir).expect("create source directory");
-    std::fs::write(source_dir.join("widget.rs"), "pub struct Widget;\n")
-        .expect("write search fixture");
+    std::fs::write(source_dir.join("widget.rs"), "pub struct Widget;\n").expect("write search fixture");
 
     let mut registry = test_ctx.registry;
     registry.allow_all_tools().await.expect("allow test tools");
@@ -871,26 +742,12 @@ async fn successful_apply_patch_invalidates_cached_code_search() {
         tools::APPLY_PATCH.to_string(),
         json!({"input": "*** Begin Patch\n*** Not An Operation\n*** End Patch\n"}).to_string(),
     );
-    let failed = run_tool_call(
-        &mut ctx,
-        &failed_patch,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("failed apply_patch should produce a pipeline outcome");
+    let failed =
+        run_tool_call(&mut ctx, &failed_patch, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+            .await
+            .expect("failed apply_patch should produce a pipeline outcome");
     assert!(matches!(failed.status, ToolExecutionStatus::Failure { .. }));
-    assert_eq!(
-        result_cache.read().await.stats().current_size,
-        1,
-        "a failed patch must preserve cached reads"
-    );
+    assert_eq!(result_cache.read().await.stats().current_size, 1, "a failed patch must preserve cached reads");
 
     let cached = run_tool_call(
         &mut ctx,
@@ -918,23 +775,22 @@ async fn successful_apply_patch_invalidates_cached_code_search() {
         tools::APPLY_PATCH.to_string(),
         json!({"input": patch}).to_string(),
     );
-    let patched = run_tool_call(
-        &mut ctx,
-        &successful_patch,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("successful apply_patch should run");
+    let patched =
+        run_tool_call(&mut ctx, &successful_patch, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+            .await
+            .expect("successful apply_patch should run");
     match patched.status {
         ToolExecutionStatus::Success { modified_files, .. } => {
-            assert_eq!(modified_files, vec![source_dir.join("widget.rs").to_string_lossy()]);
+            assert_eq!(
+                modified_files,
+                vec![
+                    source_dir
+                        .join("widget.rs")
+                        .canonicalize()
+                        .expect("canonical widget.rs")
+                        .to_string_lossy()
+                ]
+            );
         }
         other => panic!("expected patch success, got: {other:?}"),
     }
@@ -1027,20 +883,10 @@ async fn test_run_tool_call_rejects_escalated_shell_when_hitl_disabled() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        Some(&vt_cfg),
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome =
+        run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, Some(&vt_cfg), 0, false)
+            .await
+            .expect("run_tool_call must run");
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
@@ -1091,9 +937,10 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.security.human_in_the_loop = false;
     vt_cfg.runtime_agent_permissions = Some(AgentPermissionsConfig::new(PermissionDefault::Allow));
-    vt_cfg.commands.approval_prefixes.push(
-        "echo hi|sandbox_permissions=\"require_escalated\"|additional_permissions=null".to_string(),
-    );
+    vt_cfg
+        .commands
+        .approval_prefixes
+        .push("echo hi|sandbox_permissions=\"require_escalated\"|additional_permissions=null".to_string());
     ctx.tool_registry.apply_commands_config(&vt_cfg.commands);
 
     let args = serde_json::to_string(&json!({
@@ -1112,20 +959,10 @@ async fn test_run_tool_call_allows_escalated_shell_with_saved_prefix_rule() {
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        false,
-        Some(&vt_cfg),
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome =
+        run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, false, Some(&vt_cfg), 0, false)
+            .await
+            .expect("run_tool_call must run");
 
     match outcome.status {
         ToolExecutionStatus::Success { .. } => {}
@@ -1165,8 +1002,7 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     let mut harness_state = build_harness_state();
     let tool_call_id = "call_streamed".to_string();
     let streamed_item_id = "streamed-tool-item".to_string();
-    harness_state
-        .remember_streamed_tool_call_items([(tool_call_id.clone(), streamed_item_id.clone())]);
+    harness_state.remember_streamed_tool_call_items([(tool_call_id.clone(), streamed_item_id.clone())]);
     emitter
         .emit(crate::agent::runloop::unified::inline_events::harness::tool_started_event(
             streamed_item_id.clone(),
@@ -1204,26 +1040,14 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
-    let outcome = run_tool_call(
-        &mut ctx,
-        &call,
-        &ctrl_c_state,
-        &ctrl_c_notify,
-        None,
-        None,
-        true,
-        None,
-        0,
-        false,
-    )
-    .await
-    .expect("run_tool_call must run");
+    let outcome = run_tool_call(&mut ctx, &call, &ctrl_c_state, &ctrl_c_notify, None, None, true, None, 0, false)
+        .await
+        .expect("run_tool_call must run");
 
     assert!(matches!(outcome.status, ToolExecutionStatus::Success { .. }));
     assert!(ctx.harness_state.take_streamed_tool_call_item_id(&tool_call_id).is_none());
 
-    let payload =
-        std::fs::read_to_string(log_dir.path().join("harness.jsonl")).expect("read harness log");
+    let payload = std::fs::read_to_string(log_dir.path().join("harness.jsonl")).expect("read harness log");
     let mut started_count = 0usize;
     let mut completed_count = 0usize;
 

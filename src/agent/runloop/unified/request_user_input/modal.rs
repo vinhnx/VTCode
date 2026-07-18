@@ -4,16 +4,16 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineSession, InlineTextStyle, WizardStep,
+    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
+    InlineTextStyle, WizardStep,
 };
 
 use super::super::state::CtrlCState;
 use super::super::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 use super::options::{ensure_recommended_first, resolve_question_options};
 use super::schema::{
-    NormalizedRequestUserInput, RequestUserInputAnswer, RequestUserInputOption,
-    RequestUserInputQuestion, RequestUserInputResponse, normalize_request_user_input_args,
+    NormalizedRequestUserInput, RequestUserInputAnswer, RequestUserInputOption, RequestUserInputQuestion,
+    RequestUserInputResponse, normalize_request_user_input_args,
 };
 #[cfg(test)]
 use super::suggestions::generate_suggested_options;
@@ -90,12 +90,7 @@ pub(crate) async fn execute_request_user_input_tool(
             let mut answers: HashMap<String, RequestUserInputAnswer> = HashMap::new();
 
             for selection in selections {
-                if let InlineListSelection::RequestUserInputAnswer {
-                    question_id,
-                    selected,
-                    other,
-                } = selection
-                {
+                if let InlineListSelection::RequestUserInputAnswer { question_id, selected, other } = selection {
                     answers.insert(question_id, RequestUserInputAnswer { selected, other });
                 }
             }
@@ -103,8 +98,7 @@ pub(crate) async fn execute_request_user_input_tool(
             append_summary_lines(handle, &parsed.questions, &answers, wizard_mode);
 
             let response = RequestUserInputResponse { answers };
-            serde_json::to_value(response)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {e}"))
+            serde_json::to_value(response).map_err(|e| anyhow::anyhow!("Failed to serialize response: {e}"))
         }
         WizardModalOutcome::Cancelled { signal } => {
             if let Some(signal) = signal {
@@ -148,9 +142,7 @@ pub(super) fn build_question_items_with_options(
 
         items.push(InlineListItem {
             title: format!("{}. Custom note (inline)", options.len() + 1),
-            subtitle: Some(
-                "Type your custom response inline, then press Enter to continue".to_string(),
-            ),
+            subtitle: Some("Type your custom response inline, then press Enter to continue".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::RequestUserInputAnswer {
@@ -187,10 +179,7 @@ fn append_summary_lines(
     let summary_segment = |text: String| InlineSegment { text, style: summary_style.clone() };
 
     if wizard_mode == vtcode_ui::tui::app::WizardModalMode::TabbedList {
-        handle.append_line(
-            InlineMessageKind::Info,
-            vec![summary_segment("• Selection captured".to_string())],
-        );
+        handle.append_line(InlineMessageKind::Info, vec![summary_segment("• Selection captured".to_string())]);
         return;
     }
 
@@ -204,10 +193,7 @@ fn append_summary_lines(
     );
 
     for question in questions {
-        handle.append_line(
-            InlineMessageKind::Info,
-            vec![summary_segment(format!("  • {}", question.question))],
-        );
+        handle.append_line(InlineMessageKind::Info, vec![summary_segment(format!("  • {}", question.question))]);
         let answer_text = answers
             .get(&question.id)
             .map(|answer| {
@@ -215,9 +201,7 @@ fn append_summary_lines(
                 if !answer.selected.is_empty() {
                     parts.push(answer.selected.join(", "));
                 }
-                if let Some(other) =
-                    answer.other.as_ref().map(|text| text.trim()).filter(|text| !text.is_empty())
-                {
+                if let Some(other) = answer.other.as_ref().map(|text| text.trim()).filter(|text| !text.is_empty()) {
                     if parts.is_empty() {
                         parts.push(other.to_string());
                     } else {
@@ -231,9 +215,6 @@ fn append_summary_lines(
                 }
             })
             .unwrap_or_else(|| "(unanswered)".to_string());
-        handle.append_line(
-            InlineMessageKind::Info,
-            vec![summary_segment(format!("    answer: {answer_text}"))],
-        );
+        handle.append_line(InlineMessageKind::Info, vec![summary_segment(format!("    answer: {answer_text}"))]);
     }
 }

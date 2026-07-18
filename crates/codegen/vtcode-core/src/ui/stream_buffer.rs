@@ -62,8 +62,7 @@ impl StreamBuffer {
 
     /// Check if buffer should be flushed
     fn should_flush(&self) -> bool {
-        self.lines.len() >= self.config.batch_size
-            || self.approximate_size >= self.config.max_buffer_bytes
+        self.lines.len() >= self.config.batch_size || self.approximate_size >= self.config.max_buffer_bytes
     }
 
     /// Get buffered lines and clear buffer
@@ -210,8 +209,7 @@ mod tests {
 
     #[test]
     fn test_stream_buffer_batch_flush() {
-        let mut buffer =
-            StreamBuffer::with_config(StreamConfig { batch_size: 5, max_buffer_bytes: usize::MAX });
+        let mut buffer = StreamBuffer::with_config(StreamConfig { batch_size: 5, max_buffer_bytes: usize::MAX });
 
         for i in 0..5 {
             let segment = InlineSegment {
@@ -230,8 +228,7 @@ mod tests {
 
     #[test]
     fn test_stream_buffer_byte_limit_flush() {
-        let mut buffer =
-            StreamBuffer::with_config(StreamConfig { batch_size: 100, max_buffer_bytes: 50 });
+        let mut buffer = StreamBuffer::with_config(StreamConfig { batch_size: 100, max_buffer_bytes: 50 });
 
         let segment = InlineSegment {
             text: "x".repeat(60),

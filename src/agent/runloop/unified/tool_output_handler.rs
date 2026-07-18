@@ -16,11 +16,7 @@ use vtcode_ui::tui::app::{InlineHandle, InlineMessageKind, InlineSegment, Inline
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 
-fn record_mcp_success_event(
-    mcp_panel_state: &mut McpPanelState,
-    tool_name: &str,
-    args_val: &serde_json::Value,
-) {
+fn record_mcp_success_event(mcp_panel_state: &mut McpPanelState, tool_name: &str, args_val: &serde_json::Value) {
     let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
         "mcp".to_string(),
         tool_name.to_string(),
@@ -40,26 +36,13 @@ fn collect_instruction_activity_paths(
     output: &serde_json::Value,
     modified_files: &[String],
 ) -> Vec<PathBuf> {
-    let canonical_workspace =
-        std::fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
+    let canonical_workspace = std::fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
     let mut paths = BTreeSet::new();
     for modified in modified_files {
         push_activity_path(workspace_root, &canonical_workspace, modified, &mut paths);
     }
-    collect_paths_from_value(
-        workspace_root,
-        &canonical_workspace,
-        Some("args"),
-        args_val,
-        &mut paths,
-    );
-    collect_paths_from_value(
-        workspace_root,
-        &canonical_workspace,
-        Some("output"),
-        output,
-        &mut paths,
-    );
+    collect_paths_from_value(workspace_root, &canonical_workspace, Some("args"), args_val, &mut paths);
+    collect_paths_from_value(workspace_root, &canonical_workspace, Some("output"), output, &mut paths);
     paths.into_iter().collect()
 }
 
@@ -114,12 +97,7 @@ fn path_like_key(key: &str) -> bool {
     )
 }
 
-fn push_activity_path(
-    workspace_root: &Path,
-    canonical_workspace: &Path,
-    raw: &str,
-    paths: &mut BTreeSet<PathBuf>,
-) {
+fn push_activity_path(workspace_root: &Path, canonical_workspace: &Path, raw: &str, paths: &mut BTreeSet<PathBuf>) {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.contains("://") || trimmed.starts_with("untitled:") {
         return;
@@ -135,10 +113,7 @@ fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
     tool_intent::is_command_run_tool_call(name, args_val)
 }
 
-fn compact_run_completion_line(
-    output: &serde_json::Value,
-    command_success: bool,
-) -> Option<String> {
+fn compact_run_completion_line(output: &serde_json::Value, command_success: bool) -> Option<String> {
     if let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64) {
         if exit_code == 0 {
             return Some("✓ run completed (exit code: 0)".to_string());
@@ -193,8 +168,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     }
     if let Some(index) = args_val.get("index").and_then(serde_json::Value::as_u64) {
         lines.push(format!("  └ Index: {index}"));
-    } else if let Some(index_path) = args_val.get("index_path").and_then(serde_json::Value::as_str)
-    {
+    } else if let Some(index_path) = args_val.get("index_path").and_then(serde_json::Value::as_str) {
         lines.push(format!("  └ Index: {index_path}"));
     }
     if let Some(status) = args_val.get("status").and_then(serde_json::Value::as_str) {
@@ -212,9 +186,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     if let Some(verify) = args_val.get("verify") {
         let commands = match verify {
             serde_json::Value::String(command) => vec![command.as_str()],
-            serde_json::Value::Array(values) => {
-                values.iter().filter_map(serde_json::Value::as_str).collect::<Vec<_>>()
-            }
+            serde_json::Value::Array(values) => values.iter().filter_map(serde_json::Value::as_str).collect::<Vec<_>>(),
             _ => Vec::new(),
         };
         if !commands.is_empty() {
@@ -224,8 +196,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     if let Some(items) = args_val.get("items").and_then(serde_json::Value::as_array)
         && !items.is_empty()
     {
-        let preview =
-            items.iter().filter_map(task_tracker_item_preview).take(2).collect::<Vec<_>>();
+        let preview = items.iter().filter_map(task_tracker_item_preview).take(2).collect::<Vec<_>>();
         let suffix = match items.len().saturating_sub(preview.len()) {
             0 => String::new(),
             remaining => format!(" +{remaining} more"),
@@ -238,10 +209,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     lines
 }
 
-fn task_tracker_block_lines(
-    args_val: &serde_json::Value,
-    output: &serde_json::Value,
-) -> Vec<String> {
+fn task_tracker_block_lines(args_val: &serde_json::Value, output: &serde_json::Value) -> Vec<String> {
     let mut lines = task_tracker_call_lines(args_val);
     lines.extend(crate::agent::runloop::tool_output::tracker_view_lines(output));
     lines
@@ -286,12 +254,7 @@ fn extract_command_line(args: &serde_json::Value) -> Option<String> {
 }
 
 /// Record the tool-call summary line ("• Ran ...") to the transcript only.
-fn record_summary_line(
-    name: &str,
-    args: &serde_json::Value,
-    _output: &serde_json::Value,
-    _command_success: bool,
-) {
+fn record_summary_line(name: &str, args: &serde_json::Value, _output: &serde_json::Value, _command_success: bool) {
     let action_label = if tool_intent::is_command_run_tool_call(name, args) {
         "Run command"
     } else {
@@ -363,13 +326,9 @@ async fn render_tool_output_common(
     // (streamed PTY tools with git_diff_payload also skip summary here,
     //  falling through to the full render_tool_output path.)
     if !(inline_run_tool && git_diff_payload) {
-        let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
-            output,
-            command_success,
-        );
-        let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext {
-            workspace_root,
-        };
+        let stream_label =
+            crate::agent::runloop::unified::tool_summary::stream_label_from_output(output, command_success);
+        let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext { workspace_root };
         crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
             renderer,
             name,
@@ -379,16 +338,10 @@ async fn render_tool_output_common(
         )?;
     }
 
-    crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
-        .await
+    crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config).await
 }
 
-fn render_error_common(
-    renderer: &mut AnsiRenderer,
-    name: &str,
-    error: &str,
-    error_type: &str,
-) -> Result<()> {
+fn render_error_common(renderer: &mut AnsiRenderer, name: &str, error: &str, error_type: &str) -> Result<()> {
     let err_msg = format!("Tool '{name}' {error_type}: {error}");
     renderer.line(MessageStyle::Error, &err_msg)?;
     Ok(())
@@ -466,11 +419,7 @@ async fn handle_success_common(
     Ok(())
 }
 
-fn handle_non_success_common(
-    ctx: &mut OutcomeContext<'_>,
-    name: &str,
-    status: &ToolExecutionStatus,
-) -> Result<()> {
+fn handle_non_success_common(ctx: &mut OutcomeContext<'_>, name: &str, status: &ToolExecutionStatus) -> Result<()> {
     match status {
         ToolExecutionStatus::Failure { error } => {
             render_error_common(ctx.renderer, name, &error.user_message(), "failure")?;
@@ -553,12 +502,8 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await?;
 
     if let ToolExecutionStatus::Success { output, modified_files, .. } = &outcome.status {
-        let activity_paths = collect_instruction_activity_paths(
-            ctx.config.workspace.as_path(),
-            args_val,
-            output,
-            modified_files,
-        );
+        let activity_paths =
+            collect_instruction_activity_paths(ctx.config.workspace.as_path(), args_val, output, modified_files);
         if !activity_paths.is_empty() {
             ctx.context_manager.record_instruction_activity_paths(activity_paths);
         }
@@ -583,9 +528,7 @@ mod tests {
     use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
     use vtcode_core::ui::inline_theme_from_core_styles;
     use vtcode_core::ui::theme;
-    use vtcode_ui::tui::app::{
-        InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options,
-    };
+    use vtcode_ui::tui::app::{InlineCommand, InlineHandle, SessionOptions, spawn_session_with_options};
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
@@ -673,15 +616,11 @@ mod tests {
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
-        let (_mod_files, _last_stdout) = process_outcome_common(
-            &mut output_ctx,
-            "mcp_example",
-            &serde_json::json!({}),
-            &outcome,
-        )
-        .await
-        .expect("render should succeed")
-        .into_tuple();
+        let (_mod_files, _last_stdout) =
+            process_outcome_common(&mut output_ctx, "mcp_example", &serde_json::json!({}), &outcome)
+                .await
+                .expect("render should succeed")
+                .into_tuple();
 
         // Ensure mcp panel recorded an event
         assert!(mcp.event_count() > 0);
@@ -734,13 +673,8 @@ mod tests {
         let transcript_lines = transcript::snapshot();
         let transcript_text = transcript_lines.join("\n");
         let stripped_text = vtcode_core::utils::ansi_parser::strip_ansi(&transcript_text);
-        assert!(
-            stripped_text.contains("Large output was spooled to"),
-            "Transcript: {stripped_text:?}"
-        );
-        assert!(
-            !stripped_text.contains("preview text that should stay out of transcript persistence")
-        );
+        assert!(stripped_text.contains("Large output was spooled to"), "Transcript: {stripped_text:?}");
+        assert!(!stripped_text.contains("preview text that should stay out of transcript persistence"));
 
         transcript::clear();
     }
@@ -757,8 +691,7 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state =
-            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+        let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),
@@ -817,15 +750,10 @@ mod tests {
             command_success: true,
         });
 
-        let (mod_files, _last_stdout) = handle_pipeline_output(
-            &mut ctx,
-            "read_file",
-            &serde_json::json!({}),
-            &outcome,
-            None::<&VTCodeConfig>,
-        )
-        .await
-        .expect("handle should succeed");
+        let (mod_files, _last_stdout) =
+            handle_pipeline_output(&mut ctx, "read_file", &serde_json::json!({}), &outcome, None::<&VTCodeConfig>)
+                .await
+                .expect("handle should succeed");
 
         assert_eq!(mod_files, vec![PathBuf::from("/tmp/foo.txt")]);
 
@@ -941,10 +869,7 @@ mod tests {
             }
         }
 
-        assert!(
-            saw_task_panel_update,
-            "expected tracker updates to refresh the dedicated task panel"
-        );
+        assert!(saw_task_panel_update, "expected tracker updates to refresh the dedicated task panel");
     }
 
     #[tokio::test]
@@ -959,8 +884,7 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state =
-            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+        let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),
@@ -1012,15 +936,10 @@ mod tests {
             command_success: true,
         });
 
-        let (_mod_files, _last_stdout) = handle_pipeline_output(
-            &mut ctx,
-            "mcp_example",
-            &serde_json::json!({}),
-            &outcome,
-            None::<&VTCodeConfig>,
-        )
-        .await
-        .expect("handle should succeed");
+        let (_mod_files, _last_stdout) =
+            handle_pipeline_output(&mut ctx, "mcp_example", &serde_json::json!({}), &outcome, None::<&VTCodeConfig>)
+                .await
+                .expect("handle should succeed");
 
         assert!(ctx.mcp_panel_state.event_count() > 0);
     }

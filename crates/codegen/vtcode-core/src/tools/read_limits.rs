@@ -10,8 +10,7 @@ use super::cache::file_read_cache_config;
 ///
 /// Re-exported from [`vtcode_config::constants::optimization`] so there is a
 /// single source of truth for the default cap value.
-pub const DEFAULT_MAX_READ_LINES: usize =
-    vtcode_config::constants::optimization::DEFAULT_MAX_READ_LINES;
+pub const DEFAULT_MAX_READ_LINES: usize = vtcode_config::constants::optimization::DEFAULT_MAX_READ_LINES;
 
 /// Update the read cache config (called during startup)
 pub fn configure_read_limits(_config: &vtcode_config::FileReadCacheConfig) {

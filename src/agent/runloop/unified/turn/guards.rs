@@ -86,9 +86,7 @@ pub(crate) fn validate_tool_args_security(
 
     fn is_missing_arg_value(args: &Value, key: &str) -> bool {
         match args.get(key) {
-            Some(v) => {
-                v.is_null() || (v.is_string() && v.as_str().is_none_or(|s| s.trim().is_empty()))
-            }
+            Some(v) => v.is_null() || (v.is_string() && v.as_str().is_none_or(|s| s.trim().is_empty())),
             None => true,
         }
     }
@@ -96,14 +94,8 @@ pub(crate) fn validate_tool_args_security(
     fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
         if tool_name == tool_names::EDIT_FILE {
             return match key {
-                "old_str" => {
-                    is_missing_arg_value(args, "old_str")
-                        && is_missing_arg_value(args, "old_string")
-                }
-                "new_str" => {
-                    is_missing_arg_value(args, "new_str")
-                        && is_missing_arg_value(args, "new_string")
-                }
+                "old_str" => is_missing_arg_value(args, "old_str") && is_missing_arg_value(args, "old_string"),
+                "new_str" => is_missing_arg_value(args, "new_str") && is_missing_arg_value(args, "new_string"),
                 _ => is_missing_arg_value(args, key),
             };
         }
@@ -139,12 +131,11 @@ pub(crate) fn validate_tool_args_security(
         }
     }
     if name == tool_names::UNIFIED_EXEC {
-        let exec_failures =
-            vtcode_core::tools::command_args::command_session_missing_required_args(args);
+        let exec_failures = vtcode_core::tools::command_args::command_session_missing_required_args(args);
         if !exec_failures.is_empty() {
-            failures.get_or_insert_with(|| Vec::with_capacity(exec_failures.len())).extend(
-                exec_failures.into_iter().map(|key| format!("Missing required argument: {key}")),
-            );
+            failures
+                .get_or_insert_with(|| Vec::with_capacity(exec_failures.len()))
+                .extend(exec_failures.into_iter().map(|key| format!("Missing required argument: {key}")));
         }
     }
 
@@ -154,12 +145,9 @@ pub(crate) fn validate_tool_args_security(
         return failures;
     }
 
-    if name == tool_names::UNIFIED_EXEC
-        && vtcode_core::tools::tool_intent::command_session_action(args).is_none()
-    {
+    if name == tool_names::UNIFIED_EXEC && vtcode_core::tools::tool_intent::command_session_action(args).is_none() {
         return Some(vec![
-            "Invalid arguments: missing action; provide `action` or inferable exec arguments"
-                .to_string(),
+            "Invalid arguments: missing action; provide `action` or inferable exec arguments".to_string(),
         ]);
     }
 
@@ -197,10 +185,7 @@ pub(crate) fn validate_tool_args_security(
     failures
 }
 
-pub(crate) async fn run_proactive_guards(
-    ctx: &mut TurnProcessingContext<'_>,
-    _step_count: usize,
-) -> Result<()> {
+pub(crate) async fn run_proactive_guards(ctx: &mut TurnProcessingContext<'_>, _step_count: usize) -> Result<()> {
     // Auto-prune decision ledgers to prevent unbounded memory growth
     {
         let mut decision_ledger = ctx.decision_ledger.write().await;
@@ -242,8 +227,7 @@ fn is_readonly_signature(signature: &str) -> bool {
     let tool_name_str: &str = tool_name.as_ref();
 
     if let Ok(args) = serde_json::from_str::<Value>(args_json) {
-        return !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name_str, &args)
-            .mutating;
+        return !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name_str, &args).mutating;
     }
 
     // Fallback for malformed signature payloads.
@@ -369,10 +353,7 @@ pub(crate) async fn handle_turn_balancer(
         );
         ctx.activate_recovery(recovery_reason.clone());
         ctx.renderer
-            .line(
-                MessageStyle::Warning,
-                "[!] Navigation Loop: scheduling a recovery synthesis pass.",
-            )
+            .line(MessageStyle::Warning, "[!] Navigation Loop: scheduling a recovery synthesis pass.")
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(format!(
             "{} {}",
@@ -414,8 +395,7 @@ pub(crate) async fn handle_turn_balancer(
                     content:
                         "Repeated low-signal navigation was detected; an early tool-free recovery pass was scheduled."
                             .to_string(),
-                    response_type:
-                        vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
+                    response_type: vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
                 },
                 None,
             );
@@ -454,11 +434,8 @@ pub(crate) async fn handle_turn_balancer(
             ledger.record_decision(
                 "Turn balancer: Recovery intervention".to_string(),
                 vtcode_core::core::decision_tracker::Action::Response {
-                    content:
-                        "Low-signal churn detected; a final tool-free recovery pass was scheduled."
-                            .to_string(),
-                    response_type:
-                        vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
+                    content: "Low-signal churn detected; a final tool-free recovery pass was scheduled.".to_string(),
+                    response_type: vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
                 },
                 None,
             );
@@ -479,8 +456,7 @@ fn apply_balancer_recovery(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_balancer_recovery, is_readonly_signature, navigation_loop_guidance,
-        validate_tool_args_security,
+        apply_balancer_recovery, is_readonly_signature, navigation_loop_guidance, validate_tool_args_security,
     };
     use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
     use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
@@ -502,9 +478,7 @@ mod tests {
 
     #[test]
     fn readonly_signature_treats_safe_exec_runs_as_readonly() {
-        assert!(is_readonly_signature(
-            r#"command_session:{"action":"run","command":"cargo check"}"#
-        ));
+        assert!(is_readonly_signature(r#"command_session:{"action":"run","command":"cargo check"}"#));
     }
 
     #[test]
@@ -534,37 +508,27 @@ mod tests {
             "path": "src/lib.rs"
         });
 
-        let failures =
-            validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).unwrap();
+        let failures = validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).unwrap();
         assert!(failures.iter().any(|msg| msg.contains("old_str")));
         assert!(failures.iter().any(|msg| msg.contains("new_str")));
     }
 
     #[test]
     fn validate_command_session_args_without_registry_reports_single_missing_command() {
-        let failures = validate_tool_args_security(
-            tool_names::UNIFIED_EXEC,
-            &json!({"action": "run"}),
-            None,
-            None,
-        )
-        .expect("missing command should fail");
+        let failures = validate_tool_args_security(tool_names::UNIFIED_EXEC, &json!({"action": "run"}), None, None)
+            .expect("missing command should fail");
 
         assert_eq!(failures, vec!["Missing required argument: command".to_string()]);
     }
 
     #[test]
     fn validate_command_session_args_without_registry_rejects_missing_action() {
-        let failures =
-            validate_tool_args_security(tool_names::UNIFIED_EXEC, &json!({}), None, None)
-                .expect("missing action should fail");
+        let failures = validate_tool_args_security(tool_names::UNIFIED_EXEC, &json!({}), None, None)
+            .expect("missing action should fail");
 
         assert_eq!(
             failures,
-            vec![
-                "Invalid arguments: missing action; provide `action` or inferable exec arguments"
-                    .to_string()
-            ]
+            vec!["Invalid arguments: missing action; provide `action` or inferable exec arguments".to_string()]
         );
     }
 
@@ -584,9 +548,7 @@ mod tests {
     #[test]
     fn navigation_loop_guidance_escalates_on_repetition() {
         let guidance = navigation_loop_guidance(false, 2);
-        assert!(
-            guidance.contains("CRITICAL: You have triggered the navigation-loop guard repeatedly")
-        );
+        assert!(guidance.contains("CRITICAL: You have triggered the navigation-loop guard repeatedly"));
     }
 
     #[test]
@@ -641,8 +603,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_completes()
-    {
+    async fn low_signal_search_churn_schedules_recovery_and_progress_only_recovery_text_completes() {
         let mut backing = TestTurnProcessingBacking::new(8).await;
         backing.set_loop_limit(tool_names::CODE_SEARCH, 2);
         let seeded_args = json!({"query":"Result","path":"src"});
@@ -671,13 +632,7 @@ mod tests {
         assert!(ctx.consume_recovery_pass());
 
         let recovery_outcome = ctx
-            .handle_text_response(
-                "Let me try a narrower search next.".to_string(),
-                Vec::new(),
-                None,
-                None,
-                false,
-            )
+            .handle_text_response("Let me try a narrower search next.".to_string(), Vec::new(), None, None, false)
             .await
             .expect("recovery response should be handled");
 

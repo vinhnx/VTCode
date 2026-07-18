@@ -1,6 +1,5 @@
 use super::selection::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardModalMode, WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 
 #[derive(Clone, Debug)]

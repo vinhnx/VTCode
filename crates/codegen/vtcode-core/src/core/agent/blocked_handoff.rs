@@ -42,11 +42,8 @@ pub fn write_blocked_handoff(
     let tracker_path = tasks_dir.join(CURRENT_TASK_FILE);
     let current_path = tasks_dir.join(CURRENT_BLOCKED_FILE);
     let timestamp = Utc::now();
-    let archive_name = format!(
-        "{}-{}.md",
-        sanitize_debug_component(session_id, "session"),
-        timestamp.format("%Y%m%dT%H%M%SZ")
-    );
+    let archive_name =
+        format!("{}-{}.md", sanitize_debug_component(session_id, "session"), timestamp.format("%Y%m%dT%H%M%SZ"));
     let archive_path = blockers_dir.join(archive_name);
 
     let markdown = render_blocked_handoff(
@@ -61,10 +58,8 @@ pub fn write_blocked_handoff(
         timestamp.to_rfc3339(),
     );
 
-    fs::write(&current_path, &markdown)
-        .with_context(|| format!("failed to write {}", current_path.display()))?;
-    fs::write(&archive_path, markdown)
-        .with_context(|| format!("failed to write {}", archive_path.display()))?;
+    fs::write(&current_path, &markdown).with_context(|| format!("failed to write {}", current_path.display()))?;
+    fs::write(&archive_path, markdown).with_context(|| format!("failed to write {}", archive_path.display()))?;
 
     Ok(BlockedHandoffArtifacts { current_path, archive_path })
 }
@@ -151,8 +146,7 @@ pub fn write_async_approval_blocker(
 
     let cost_line = estimated_cost.map(|c| format!("Estimated cost: ${c:.4}")).unwrap_or_default();
 
-    let notify_line =
-        notify_command.map(|cmd| format!("Notify command: `{cmd}`")).unwrap_or_default();
+    let notify_line = notify_command.map(|cmd| format!("Notify command: `{cmd}`")).unwrap_or_default();
 
     let markdown = format!(
         "---\ntoken: {approval_token}\nsession_id: {session_id}\ntool: {tool_name}\ncreated_at: {created_at}\ntype: async_approval\n---\n\n\
@@ -181,11 +175,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("temp dir");
         let tasks_dir = temp.path().join(".vtcode/tasks");
         fs::create_dir_all(&tasks_dir).expect("tasks dir");
-        fs::write(
-            tasks_dir.join("current_task.md"),
-            "# Current Task\n\n- [ ] investigate blocker\n",
-        )
-        .expect("tracker");
+        fs::write(tasks_dir.join("current_task.md"), "# Current Task\n\n- [ ] investigate blocker\n").expect("tracker");
 
         let artifacts = write_blocked_handoff(
             temp.path(),

@@ -9,8 +9,7 @@ use vtcode_commons::llm::BackendKind;
 use vtcode_commons::tool_types::CompactStr;
 
 use super::{
-    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
-    ResponsesCompactionOptions,
+    LLMNormalizedStream, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, ResponsesCompactionOptions,
 };
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
@@ -262,11 +261,7 @@ pub trait LLMProvider: Send + Sync {
 
     /// Compact conversation history using provider-native Responses `/compact`
     /// support when available.
-    async fn compact_history(
-        &self,
-        _model: &str,
-        _history: &[Message],
-    ) -> Result<Vec<Message>, LLMError> {
+    async fn compact_history(&self, _model: &str, _history: &[Message]) -> Result<Vec<Message>, LLMError> {
         Err(LLMError::Provider {
             message: "Conversation compaction is not supported by this provider".to_string(),
             metadata: None,
@@ -300,10 +295,7 @@ pub trait LLMProvider: Send + Sync {
     }
 
     /// Normalized streaming contract layered on top of the legacy provider stream.
-    async fn stream_normalized(
-        &self,
-        request: LLMRequest,
-    ) -> Result<LLMNormalizedStream, LLMError> {
+    async fn stream_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
         let mut legacy_stream = self.stream(request).await?;
         let stream = try_stream! {
             while let Some(event) = futures::StreamExt::next(&mut legacy_stream).await {

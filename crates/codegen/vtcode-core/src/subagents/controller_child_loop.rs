@@ -57,9 +57,10 @@ impl SubagentController {
             // the Send-ness of child_loop's future.
             let worktree_info = {
                 let state = controller.state.read().await;
-                state.children.get(&target).and_then(|record| {
-                    record.worktree_path.as_ref().map(|p| (p.clone(), record.spec.name.clone()))
-                })
+                state
+                    .children
+                    .get(&target)
+                    .and_then(|record| record.worktree_path.as_ref().map(|p| (p.clone(), record.spec.name.clone())))
             };
 
             if let Some((wt_path, wt_name)) = worktree_info
@@ -211,13 +212,11 @@ impl SubagentController {
             parent_session_id.as_str(),
             !bootstrap_messages.is_empty(),
         );
-        let bootstrap = ThreadBootstrap::new(Some(archive_metadata.clone()))
-            .with_messages(bootstrap_messages.clone());
+        let bootstrap = ThreadBootstrap::new(Some(archive_metadata.clone())).with_messages(bootstrap_messages.clone());
         let archive = if let Some(listing) = find_session_by_identifier(&session_id).await? {
             SessionArchive::resume_from_listing(&listing, archive_metadata.clone())
         } else {
-            SessionArchive::new_with_identifier(archive_metadata.clone(), session_id.clone())
-                .await?
+            SessionArchive::new_with_identifier(archive_metadata.clone(), session_id.clone()).await?
         };
         checkpoint_subagent_archive_start(&archive, &bootstrap_messages).await?;
         let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
@@ -272,8 +271,7 @@ impl SubagentController {
             );
         }
 
-        let filtered_tools =
-            filter_child_tools(&spec, runner.build_universal_tools().await?, spec.is_read_only());
+        let filtered_tools = filter_child_tools(&spec, runner.build_universal_tools().await?, spec.is_read_only());
         let allowed_tools = filtered_tools
             .iter()
             .map(|tool| tool.function_name().to_string())
@@ -281,16 +279,13 @@ impl SubagentController {
         runner.set_tool_definitions_override(filtered_tools);
         runner.enable_full_auto(&allowed_tools).await;
 
-        let memory_appendix =
-            load_memory_appendix(&self.config.workspace_root, spec.name.as_str(), spec.memory)?;
-        let mut task =
-            Task::new(format!("subagent-{}", spec.name), format!("Subagent {}", spec.name), prompt);
+        let memory_appendix = load_memory_appendix(&self.config.workspace_root, spec.name.as_str(), spec.memory)?;
+        let mut task = Task::new(format!("subagent-{}", spec.name), format!("Subagent {}", spec.name), prompt);
         task.instructions = Some(compose_subagent_instructions(&spec, memory_appendix));
 
         let results = Box::pin(runner.execute_task(&task, &[])).await?;
         let messages = runner.session_messages();
-        let transcript_path =
-            persist_child_archive(&archive, &messages, spec.name.as_str()).await?;
+        let transcript_path = persist_child_archive(&archive, &messages, spec.name.as_str()).await?;
 
         Ok(ChildRunResult {
             messages,

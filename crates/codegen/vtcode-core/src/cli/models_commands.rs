@@ -14,14 +14,7 @@ pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result
         ModelCommands::SetProvider { provider } => handle_set_provider(cli, provider).await,
         ModelCommands::SetModel { model } => handle_set_model(cli, model).await,
         ModelCommands::Config { provider, api_key, base_url, model } => {
-            handle_config_provider(
-                cli,
-                provider,
-                api_key.as_deref(),
-                base_url.as_deref(),
-                model.as_deref(),
-            )
-            .await
+            handle_config_provider(cli, provider, api_key.as_deref(), base_url.as_deref(), model.as_deref()).await
         }
         ModelCommands::Test { provider } => handle_test_provider(cli, provider).await,
         ModelCommands::Compare => handle_compare_models(cli).await,
@@ -121,11 +114,7 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     }; // Lock is released here when factory guard goes out of scope
 
     if !available.iter().any(|p| p == provider) {
-        return Err(anyhow!(
-            "Unknown provider '{}'. Available: {}",
-            provider,
-            available.join(", ")
-        ));
+        return Err(anyhow!("Unknown provider '{}'. Available: {}", provider, available.join(", ")));
     }
 
     let manager = {
@@ -183,17 +172,15 @@ async fn handle_config_provider(
         let guard = get_dot_manager()
             .context("Failed to initialize dot manager while configuring provider")?
             .lock()
-            .map_err(|err| {
-                anyhow!("Dot manager lock poisoned while configuring provider: {err}")
-            })?;
+            .map_err(|err| anyhow!("Dot manager lock poisoned while configuring provider: {err}"))?;
         guard.clone()
     };
 
     let mut config = manager.load_config().await?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio"
-        | "llamacpp" | "stepfun" | "evolink" => {
+        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio" | "llamacpp"
+        | "stepfun" | "evolink" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {provider}")),

@@ -20,22 +20,15 @@ impl AgentRunner {
             request_user_input_enabled,
             model_capabilities: ToolModelCapabilities::for_model_name(&self.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
-                crate::llm::factory::infer_provider(
-                    Some(&self.config().agent.provider),
-                    &self.model,
-                ),
+                crate::llm::factory::infer_provider(Some(&self.config().agent.provider), &self.model),
                 self.provider_client.supports_responses_compaction(&self.model),
                 Some(self.config()),
             ),
-            anthropic_native_memory_enabled:
-                crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
-                    crate::llm::factory::infer_provider(
-                        Some(&self.config().agent.provider),
-                        &self.model,
-                    ),
-                    &self.model,
-                    Some(self.config()),
-                ),
+            anthropic_native_memory_enabled: crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+                crate::llm::factory::infer_provider(Some(&self.config().agent.provider), &self.model),
+                &self.model,
+                Some(self.config()),
+            ),
             tool_profile: self.config().tools.profile,
         }
     }
@@ -58,8 +51,7 @@ impl AgentRunner {
         if let Some(full_auto_allowlist) = self.tool_registry.current_full_auto_allowlist().await {
             runtime_tool_names.extend(full_auto_allowlist);
         }
-        let supports_active_name_restriction =
-            self.provider_client.supports_native_allowed_tools(&self.model);
+        let supports_active_name_restriction = self.provider_client.supports_native_allowed_tools(&self.model);
         let mut active_tool_names = Vec::new();
         let mut exposed_definitions = Vec::new();
         for tool in definitions {
@@ -67,8 +59,7 @@ impl AgentRunner {
             if !self.is_tool_permitted_for_advertisement(tool_name.as_str()).await {
                 continue;
             }
-            let active = runtime_tool_names.contains(&tool_name)
-                && self.is_tool_exposed(tool_name.as_str()).await;
+            let active = runtime_tool_names.contains(&tool_name) && self.is_tool_exposed(tool_name.as_str()).await;
             if active {
                 active_tool_names.push(tool_name);
             }
@@ -90,8 +81,7 @@ impl AgentRunner {
 
     pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
         let snapshot = self.build_exposed_tool_snapshot().await?;
-        let active_tool_names: HashSet<&str> =
-            snapshot.active_tool_names.iter().map(String::as_str).collect();
+        let active_tool_names: HashSet<&str> = snapshot.active_tool_names.iter().map(String::as_str).collect();
         Ok(snapshot
             .snapshot
             .as_ref()
@@ -158,10 +148,7 @@ impl AgentRunner {
 /// Validate a single tool definition for schema correctness.
 ///
 /// Borrows the tool name into `seen` to detect duplicates without cloning.
-fn validate_tool_definition<'a>(
-    tool: &'a ToolDefinition,
-    seen: &mut HashSet<&'a str>,
-) -> Result<()> {
+fn validate_tool_definition<'a>(tool: &'a ToolDefinition, seen: &mut HashSet<&'a str>) -> Result<()> {
     let Some(func) = tool.function.as_ref() else {
         return Ok(());
     };

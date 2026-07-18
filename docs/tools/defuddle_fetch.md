@@ -1,7 +1,7 @@
 # Defuddle Fetch (now `web_fetch` `format=markdown`)
 
 > **Consolidated.** The standalone `defuddle_fetch` tool was merged into
-> [`web_fetch`](./web_fetch.md). Clean-markdown extraction is now a fetch *mode*,
+> `web_fetch`. Clean-markdown extraction is now a fetch *mode*,
 > not a separate tool, so the model has one fewer tool to choose between.
 
 Fetch cleaned markdown for a URL by calling `web_fetch` with `format="markdown"`:

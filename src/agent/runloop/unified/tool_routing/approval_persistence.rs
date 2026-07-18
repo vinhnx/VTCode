@@ -8,8 +8,7 @@ use super::permission_prompt::{
 };
 
 const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
-const DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE: &str =
-    "sandbox_permissions=\"use_default\"|additional_permissions=null";
+const DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE: &str = "sandbox_permissions=\"use_default\"|additional_permissions=null";
 
 fn shell_command_words_match_prefix(command_words: &[String], prefix_words: &[String]) -> bool {
     command_words.len() >= prefix_words.len()
@@ -46,9 +45,8 @@ pub(super) fn shell_command_has_persisted_approval_prefix(
         .any(|entry| {
             let (prefix_text, entry_scope_signature) = split_persisted_shell_approval_prefix(entry);
             let prefix_words = shell_words::split(prefix_text).ok();
-            let scope_matches = entry_scope_signature
-                .unwrap_or(DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE)
-                == scope_signature;
+            let scope_matches =
+                entry_scope_signature.unwrap_or(DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE) == scope_signature;
 
             scope_matches
                 && prefix_words
@@ -62,19 +60,14 @@ pub(super) async fn persisted_shell_approval(
     normalized_tool_name: &str,
     tool_args: Option<&Value>,
 ) -> Option<(Vec<String>, String)> {
-    let (command_words, scope_signature) =
-        extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args)
-            .zip(extract_shell_approval_scope_signature(normalized_tool_name, tool_args))?;
+    let (command_words, scope_signature) = extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args)
+        .zip(extract_shell_approval_scope_signature(normalized_tool_name, tool_args))?;
 
     if tool_registry
         .find_persisted_shell_approval_prefix(&command_words, &scope_signature)
         .await
         .is_some()
-        || shell_command_has_persisted_approval_prefix(
-            tool_registry,
-            &command_words,
-            &scope_signature,
-        )
+        || shell_command_has_persisted_approval_prefix(tool_registry, &command_words, &scope_signature)
     {
         Some((command_words, scope_signature))
     } else {
@@ -88,9 +81,8 @@ pub(super) async fn persist_shell_approval_prefix_rule(
     tool_args: Option<&Value>,
     prefix_rule: &[String],
 ) -> Result<String> {
-    let rendered_rule =
-        render_shell_persistent_approval_prefix_entry(tool_name, tool_args, prefix_rule)
-            .context("Failed to render shell approval prefix entry")?;
+    let rendered_rule = render_shell_persistent_approval_prefix_entry(tool_name, tool_args, prefix_rule)
+        .context("Failed to render shell approval prefix entry")?;
     tool_registry
         .persist_approval_cache_prefix(&rendered_rule)
         .await

@@ -204,11 +204,7 @@ impl std::fmt::Debug for JsonlFileSink {
 impl JsonlFileSink {
     /// Open (or create) the sink at `path`. Returns an error if the file can't
     /// be created — typically a permissions issue.
-    pub fn open(
-        path: impl Into<PathBuf>,
-        max_size_bytes: u64,
-        max_files: usize,
-    ) -> std::io::Result<Self> {
+    pub fn open(path: impl Into<PathBuf>, max_size_bytes: u64, max_files: usize) -> std::io::Result<Self> {
         let path = path.into();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -282,9 +278,7 @@ impl ToolAuditSink for JsonlFileSink {
         };
         let line_length = serialized.len() as u64 + 1; // account for trailing newline
 
-        if let Err(err) =
-            Self::rotate_if_needed(&mut state, &self.path, self.max_size_bytes, self.max_files)
-        {
+        if let Err(err) = Self::rotate_if_needed(&mut state, &self.path, self.max_size_bytes, self.max_files) {
             tracing::warn!(error = %err, path = %self.path.display(), "JsonlFileSink: rotation failed");
         }
         if let Some(writer) = state.writer.as_mut() {
@@ -511,15 +505,9 @@ mod tests {
         // After rotation, the original path should contain the most recent entry
         // and `<path>.1` should contain the older one.
         let active = std::fs::read_to_string(&path).expect("active");
-        assert!(
-            active.contains("\"call-b\""),
-            "expected rotated active file to contain call-b, got: {active}"
-        );
+        assert!(active.contains("\"call-b\""), "expected rotated active file to contain call-b, got: {active}");
         let rotated = std::fs::read_to_string(dir.path().join("audit.jsonl.1")).expect("rotated");
-        assert!(
-            rotated.contains("\"call-a\""),
-            "expected rotated file to contain call-a, got: {rotated}"
-        );
+        assert!(rotated.contains("\"call-a\""), "expected rotated file to contain call-a, got: {rotated}");
     }
 
     #[test]
@@ -543,10 +531,7 @@ mod tests {
 
     #[test]
     fn sha256_hex_is_stable() {
-        assert_eq!(
-            sha256_hex(b"hello"),
-            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        );
+        assert_eq!(sha256_hex(b"hello"), "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
         assert_eq!(sha256_hex(b"hello"), sha256_hex(b"hello"));
     }
 }

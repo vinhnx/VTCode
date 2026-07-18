@@ -173,10 +173,8 @@ impl TaskHistoryIndex {
         }
         let serialized = serde_json::to_string_pretty(self)?;
         // Atomic write via temp file + rename
-        let temp_path = path.with_file_name(format!(
-            ".{}.tmp",
-            path.file_name().and_then(|n| n.to_str()).unwrap_or("task_index")
-        ));
+        let temp_path =
+            path.with_file_name(format!(".{}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("task_index")));
         std::fs::write(&temp_path, &serialized)?;
         std::fs::rename(&temp_path, path)?;
         Ok(())
@@ -264,11 +262,7 @@ mod tests {
         entry2.summary = "Migrated from SQLite to PostgreSQL".to_string();
         index.push(entry2, None);
 
-        let task = Task::new(
-            "test".to_string(),
-            "Refactor auth".to_string(),
-            "Improve authentication".to_string(),
-        );
+        let task = Task::new("test".to_string(), "Refactor auth".to_string(), "Improve authentication".to_string());
 
         let similar = index.find_similar(&task, 5);
         // The "auth" and "refactor" keywords should match entry1

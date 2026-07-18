@@ -9,23 +9,14 @@ use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, TransientSubmissi
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
-use crate::agent::runloop::unified::display::{
-    persist_theme_preference, sync_runtime_theme_selection,
-};
-use crate::agent::runloop::unified::model_selection::{
-    ModelSwitchCompactionTargets, finalize_model_selection,
-};
-use crate::agent::runloop::unified::overlay_prompt::{
-    OverlayWaitOutcome, wait_for_overlay_submission,
-};
+use crate::agent::runloop::unified::display::{persist_theme_preference, sync_runtime_theme_selection};
+use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, wait_for_overlay_submission};
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, apply_prompt_style, build_lightweight_palette_view,
-    show_lightweight_model_palette, show_mode_palette, show_model_target_palette,
-    show_sessions_palette, show_theme_palette,
+    ActivePalette, apply_prompt_style, build_lightweight_palette_view, show_lightweight_model_palette,
+    show_mode_palette, show_model_target_palette, show_sessions_palette, show_theme_palette,
 };
-use crate::agent::runloop::unified::session_setup::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
-};
+use crate::agent::runloop::unified::session_setup::{apply_ide_context_snapshot, ide_context_status_label_from_bridge};
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
@@ -37,15 +28,10 @@ mod terminal_title;
 pub(crate) use statusline::handle_start_statusline_setup;
 pub(crate) use terminal_title::handle_start_terminal_title_setup;
 
-pub(super) fn ensure_selection_ui_available(
-    ctx: &mut SlashCommandContext<'_>,
-    activity: &str,
-) -> Result<bool> {
+pub(super) fn ensure_selection_ui_available(ctx: &mut SlashCommandContext<'_>, activity: &str) -> Result<bool> {
     if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Close the active model picker before {activity}."),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Error, &format!("Close the active model picker before {activity}."))?;
         return Ok(false);
     }
     if ctx.palette_state.is_some() {
@@ -58,29 +44,22 @@ pub(super) fn ensure_selection_ui_available(
     Ok(true)
 }
 
-pub(super) async fn wait_for_list_modal_selection(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Option<InlineListSelection> {
-    let outcome: OverlayWaitOutcome<InlineListSelection> = wait_for_overlay_submission(
-        ctx.handle,
-        ctx.session,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        |submission| match submission {
-            TransientSubmission::Selection(selection) => Some(selection),
-            _ => None,
-        },
-    )
-    .await
-    .ok()?;
+pub(super) async fn wait_for_list_modal_selection(ctx: &mut SlashCommandContext<'_>) -> Option<InlineListSelection> {
+    let outcome: OverlayWaitOutcome<InlineListSelection> =
+        wait_for_overlay_submission(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify, |submission| {
+            match submission {
+                TransientSubmission::Selection(selection) => Some(selection),
+                _ => None,
+            }
+        })
+        .await
+        .ok()?;
 
     close_list_modal(ctx).await;
 
     match outcome {
         OverlayWaitOutcome::Submitted(selection) => Some(selection),
-        OverlayWaitOutcome::Cancelled
-        | OverlayWaitOutcome::Interrupted
-        | OverlayWaitOutcome::Exit => None,
+        OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted | OverlayWaitOutcome::Exit => None,
     }
 }
 
@@ -111,8 +90,7 @@ pub(crate) async fn handle_start_theme_palette(
         return Ok(SlashCommandControl::Continue);
     }
     if show_theme_palette(ctx.renderer, mode)? {
-        *ctx.palette_state =
-            Some(ActivePalette::Theme { mode, original_theme_id: theme::active_theme_id() });
+        *ctx.palette_state = Some(ActivePalette::Theme { mode, original_theme_id: theme::active_theme_id() });
     }
     Ok(SlashCommandControl::Continue)
 }
@@ -139,8 +117,7 @@ pub(crate) async fn handle_start_session_palette(
     match list_recent_sessions_in_scope(limit, &scope).await {
         Ok(listings) => {
             if show_sessions_palette(ctx.renderer, mode, &listings, limit, show_all)? {
-                *ctx.palette_state =
-                    Some(ActivePalette::Sessions { mode, listings, limit, show_all });
+                *ctx.palette_state = Some(ActivePalette::Sessions { mode, listings, limit, show_all });
             }
         }
         Err(err) => {
@@ -151,18 +128,13 @@ pub(crate) async fn handle_start_session_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) fn handle_continue_latest(
-    _ctx: SlashCommandContext<'_>,
-    show_all: bool,
-) -> Result<SlashCommandControl> {
+pub(crate) fn handle_continue_latest(_ctx: SlashCommandContext<'_>, show_all: bool) -> Result<SlashCommandControl> {
     // Session existence and loading are handled downstream by the
     // ResumeLatest control flow handler, avoiding a redundant query.
     Ok(SlashCommandControl::ResumeLatest { show_all })
 }
 
-pub(crate) async fn handle_start_history_picker(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_history_picker(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -215,18 +187,14 @@ fn config_action_item(
     }
 }
 
-pub(crate) async fn handle_start_model_selection(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_model_selection(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ensure_selection_ui_available(&mut ctx, "selecting a model target")? {
         return Ok(SlashCommandControl::Continue);
     }
 
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Inline UI is unavailable; opening the main model picker directly.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Inline UI is unavailable; opening the main model picker directly.")?;
         return start_model_selection_target(ctx, ModelPickerTarget::Main).await;
     }
 
@@ -272,9 +240,7 @@ pub(super) async fn start_model_selection_target(
     }
 }
 
-pub(crate) async fn handle_toggle_ide_context(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_toggle_ide_context(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let enabled = ctx.context_manager.toggle_session_ide_context();
 
     let latest_editor_snapshot = if let Some(bridge) = ctx.ide_context_bridge.as_mut() {
@@ -310,9 +276,7 @@ pub(crate) async fn handle_toggle_ide_context(
 
     let message = match (enabled, latest_editor_snapshot.is_some()) {
         (true, true) => "IDE context enabled for this session.",
-        (true, false) => {
-            "IDE context enabled for this session. No IDE snapshot is currently available."
-        }
+        (true, false) => "IDE context enabled for this session. No IDE snapshot is currently available.",
         (false, _) => "IDE context disabled for this session.",
     };
     ctx.renderer.line(MessageStyle::Info, message)?;
@@ -320,9 +284,7 @@ pub(crate) async fn handle_toggle_ide_context(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(super) async fn start_model_picker(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(super) async fn start_model_picker(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if ctx.model_picker_state.is_some() {
         ctx.renderer.line(
             MessageStyle::Error,
@@ -395,10 +357,8 @@ pub(super) async fn start_model_picker(
             )
             .await
             {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to apply model selection: {err}"),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
             }
         }
         Err(err) => {
@@ -409,9 +369,7 @@ pub(super) async fn start_model_picker(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_start_mode_palette(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_mode_palette(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ensure_selection_ui_available(&mut ctx, "selecting an agent mode")? {
         return Ok(SlashCommandControl::Continue);
     }

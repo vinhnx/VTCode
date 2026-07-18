@@ -78,8 +78,7 @@ fn bench_event_burst(c: &mut Criterion) {
         b.iter(|| {
             for _ in 0..events {
                 let payload = make_payload(4096);
-                let tokens_vec: Vec<String> =
-                    (0..tokens).map(|i| format!("token-{i}-{i:064}")).collect();
+                let tokens_vec: Vec<String> = (0..tokens).map(|i| format!("token-{i}-{i:064}")).collect();
                 std::hint::black_box((&payload, &tokens_vec));
             }
         });

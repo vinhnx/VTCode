@@ -22,10 +22,7 @@ pub struct BetaHeaderConfig<'a> {
     pub include_fallback_credit: bool,
 }
 
-pub fn prompt_cache_beta_header_value(
-    cache_enabled: bool,
-    settings: &AnthropicPromptCacheSettings,
-) -> Option<String> {
+pub fn prompt_cache_beta_header_value(cache_enabled: bool, settings: &AnthropicPromptCacheSettings) -> Option<String> {
     if !cache_enabled {
         return None;
     }
@@ -52,9 +49,7 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.include_manual_interleaved_beta
-        && supports_manual_interleaved_beta(config.model, config.model)
-    {
+    if config.include_manual_interleaved_beta && supports_manual_interleaved_beta(config.model, config.model) {
         pieces.push(config.config.interleaved_thinking_beta.clone());
     }
 

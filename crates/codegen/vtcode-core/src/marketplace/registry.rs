@@ -186,15 +186,11 @@ impl MarketplaceRegistry {
             .header("Accept", "application/vnd.github.v3+json")
             .send()
             .await
-            .with_context(|| {
-                format!("Failed to fetch manifest from GitHub: {owner}/{repo} (ref: {refspec})")
-            })?;
+            .with_context(|| format!("Failed to fetch manifest from GitHub: {owner}/{repo} (ref: {refspec})"))?;
 
         if !response.status().is_success() {
             if response.status() == 404 {
-                bail!(
-                    "Marketplace manifest not found in GitHub repository: {owner}/{repo} (ref: {refspec})"
-                );
+                bail!("Marketplace manifest not found in GitHub repository: {owner}/{repo} (ref: {refspec})");
             } else {
                 bail!(
                     "Failed to fetch manifest from GitHub API: HTTP {} - {}",
@@ -217,32 +213,23 @@ impl MarketplaceRegistry {
             .ok_or_else(|| anyhow::anyhow!("GitHub API response missing content field"))?;
 
         // Decode the base64 content
-        let content_bytes =
-            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded)
-                .with_context(|| {
-                    format!("Failed to decode base64 content from GitHub: {owner}/{repo}")
-                })?;
+        let content_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, content_encoded)
+            .with_context(|| format!("Failed to decode base64 content from GitHub: {owner}/{repo}"))?;
 
-        let content = String::from_utf8(content_bytes).with_context(|| {
-            format!("Failed to decode UTF-8 content from GitHub: {owner}/{repo}")
-        })?;
+        let content = String::from_utf8(content_bytes)
+            .with_context(|| format!("Failed to decode UTF-8 content from GitHub: {owner}/{repo}"))?;
 
         // Parse the manifest from the content
         parse_json_with_context(&content, &format!("GitHub: {owner}/{repo}"))
     }
 
     /// Fetch manifest from Git repository
-    async fn fetch_git_manifest(
-        &self,
-        url: &str,
-        refspec: Option<&str>,
-    ) -> Result<MarketplaceManifest> {
+    async fn fetch_git_manifest(&self, url: &str, refspec: Option<&str>) -> Result<MarketplaceManifest> {
         use tempfile::TempDir;
         use tokio::process::Command;
 
         // Create a temporary directory for the git clone
-        let temp_dir =
-            TempDir::new().with_context(|| "Failed to create temporary directory for git clone")?;
+        let temp_dir = TempDir::new().with_context(|| "Failed to create temporary directory for git clone")?;
         let temp_path = temp_dir.path();
 
         // Build the git clone command

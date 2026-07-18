@@ -67,9 +67,7 @@ impl fmt::Debug for McpInitStatus {
                 f.debug_struct("Initializing").field("progress", progress).finish()
             }
             McpInitStatus::Ready { .. } => f.write_str("Ready { client: <redacted> }"),
-            McpInitStatus::Error { message } => {
-                f.debug_struct("Error").field("message", message).finish()
-            }
+            McpInitStatus::Error { message } => f.debug_struct("Error").field("message", message).finish(),
         }
     }
 }
@@ -182,14 +180,7 @@ impl AsyncMcpManager {
             }
 
             // Initialize MCP client
-            match Self::initialize_mcp_client(
-                config,
-                hitl_notification_bell,
-                approval_policy,
-                event_callback,
-            )
-            .await
-            {
+            match Self::initialize_mcp_client(config, hitl_notification_bell, approval_policy, event_callback).await {
                 Ok(client) => {
                     let mut status_guard = status.write().await;
                     *status_guard = McpInitStatus::Ready { client: Arc::new(client) };
@@ -265,8 +256,8 @@ impl AsyncMcpManager {
     }
 
     pub(crate) async fn reconfigure_active_runtime(&self, config: McpClientConfig) -> Result<bool> {
-        let should_restart = self.has_running_initialization_task()
-            || matches!(self.get_status().await, McpInitStatus::Ready { .. });
+        let should_restart =
+            self.has_running_initialization_task() || matches!(self.get_status().await, McpInitStatus::Ready { .. });
 
         self.reconfigure(config).await?;
 
@@ -322,8 +313,7 @@ impl AsyncMcpManager {
                 if let Ok(mcp_tools) = client.list_tools().await {
                     info!("Found {} MCP tools", mcp_tools.len());
                     for mcp_tool in mcp_tools {
-                        let mut event =
-                            McpEvent::new(mcp_tool.provider.clone(), mcp_tool.name.clone(), None);
+                        let mut event = McpEvent::new(mcp_tool.provider.clone(), mcp_tool.name.clone(), None);
                         event.success(None);
                         (*event_callback)(event);
                     }
@@ -334,9 +324,7 @@ impl AsyncMcpManager {
                 Ok(client)
             }
             Ok(Err(e)) => Err(e).context("MCP client initialization failed"),
-            Err(_) => Err(anyhow::anyhow!(
-                "MCP client initialization timed out after {startup_timeout_secs} seconds"
-            )),
+            Err(_) => Err(anyhow::anyhow!("MCP client initialization timed out after {startup_timeout_secs} seconds")),
         }
     }
 
@@ -429,8 +417,7 @@ mod tests {
         let disabled_status = McpInitStatus::Disabled;
         assert_eq!(disabled_status.to_string(), "MCP is disabled");
 
-        let initializing_status =
-            McpInitStatus::Initializing { progress: "Connecting...".to_string() };
+        let initializing_status = McpInitStatus::Initializing { progress: "Connecting...".to_string() };
         assert_eq!(initializing_status.to_string(), "MCP initializing: Connecting...");
 
         let error_status = McpInitStatus::Error { message: "Connection failed".to_string() };
@@ -455,15 +442,8 @@ mod tests {
 
         if let Ok(mut guard) = manager.init_task.lock() {
             let task = guard.as_ref().expect("running init task should still be present");
-            assert_eq!(
-                task.id(),
-                blocker_id,
-                "start_initialization should not replace a running init task"
-            );
-            assert!(
-                !task.is_finished(),
-                "existing task should still be running after skipped start"
-            );
+            assert_eq!(task.id(), blocker_id, "start_initialization should not replace a running init task");
+            assert!(!task.is_finished(), "existing task should still be running after skipped start");
             if let Some(task) = guard.take() {
                 task.abort();
             }
@@ -476,8 +456,7 @@ mod tests {
     async fn reconfigure_active_runtime_restarts_running_initialization() {
         let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager =
-            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
+        let manager = AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
         let initialization_guard = manager.initialization_mutex.lock().await;
 
         let blocker = tokio::spawn(async {
@@ -511,10 +490,8 @@ mod tests {
     async fn reconfigure_active_runtime_restarts_ready_client_without_registry_attachment() {
         let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager =
-            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
-        *manager.status.write().await =
-            McpInitStatus::Ready { client: Arc::new(McpClient::new(config.clone())) };
+        let manager = AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
+        *manager.status.write().await = McpInitStatus::Ready { client: Arc::new(McpClient::new(config.clone())) };
         let initialization_guard = manager.initialization_mutex.lock().await;
 
         let restarted = manager
@@ -541,8 +518,7 @@ mod tests {
     async fn reconfigure_active_runtime_preserves_manual_activation_pending() {
         let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager =
-            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
+        let manager = AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
 
         let restarted = manager
             .reconfigure_active_runtime(config)

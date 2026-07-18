@@ -5,8 +5,7 @@ use crate::tui::core_tui::session::transcript_links::decorate_detected_link_line
 use crate::tui::core_tui::style::ratatui_color_from_ansi;
 use crate::tui::core_tui::types::InlineMessageKind;
 use crate::tui::ui::tui::session::modal::{
-    ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
-    render_wizard_modal_body,
+    ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body, render_wizard_modal_body,
 };
 use crate::tui::ui::tui::types::InlineListSelection;
 use anstyle::{Ansi256Color, Color as AnsiColorEnum};
@@ -29,9 +28,9 @@ fn modal_heading_style(session: &Session) -> Style {
 
 fn list_has_two_line_items(list: &ModalListState) -> bool {
     list.visible_indices.iter().any(|&index| {
-        list.items.get(index).is_some_and(|item| {
-            item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty())
-        })
+        list.items
+            .get(index)
+            .is_some_and(|item| item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty()))
     })
 }
 
@@ -89,9 +88,7 @@ fn render_modal_divider(frame: &mut Frame<'_>, area: Rect, style: Style) {
     frame.render_widget(Fill::new(ui::INLINE_BLOCK_HORIZONTAL).style(style), area);
 }
 
-fn wizard_step_has_inline_custom_editor(
-    wizard: &crate::tui::ui::tui::session::modal::WizardModalState,
-) -> bool {
+fn wizard_step_has_inline_custom_editor(wizard: &crate::tui::ui::tui::session::modal::WizardModalState) -> bool {
     let Some(step) = wizard.steps.get(wizard.current_step) else {
         return false;
     };
@@ -160,8 +157,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         {
             lines = lines.saturating_add(1);
         }
-        lines =
-            lines.saturating_add(wizard.instruction_lines().len().min(MAX_INLINE_INSTRUCTION_ROWS));
+        lines = lines.saturating_add(wizard.instruction_lines().len().min(MAX_INLINE_INSTRUCTION_ROWS));
         if title_chrome_rows > 0 {
             lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
         }
@@ -204,8 +200,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
     }
     .saturating_add(title_chrome_rows);
     let capped_max = modal_height_cap.min(max_panel_height).max(min_height);
-    let desired_height =
-        (desired_lines.min(u16::MAX as usize) as u16).max(min_height).min(capped_max);
+    let desired_height = (desired_lines.min(u16::MAX as usize) as u16).max(min_height).min(capped_max);
 
     let [transcript_area, modal_area] = area
         .try_layout(&Layout::vertical([Constraint::Min(1), Constraint::Length(desired_height)]))
@@ -284,10 +279,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         );
         title_link_targets = link_targets;
         render_modal_background(frame, title_area, styles.selectable);
-        frame.render_widget(
-            Paragraph::new(decorated_title).style(styles.title).wrap(Wrap { trim: true }),
-            title_area,
-        );
+        frame.render_widget(Paragraph::new(decorated_title).style(styles.title).wrap(Wrap { trim: true }), title_area);
         render_modal_divider(frame, top_divider_area, styles.border);
         render_modal_divider(frame, bottom_divider_area, styles.border);
         (body_area, Some(title_area))

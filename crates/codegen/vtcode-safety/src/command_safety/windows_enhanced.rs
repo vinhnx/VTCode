@@ -243,10 +243,7 @@ fn is_dangerous_net_command(command: &[String]) -> bool {
     let subcommand = command[1].to_lowercase();
 
     // Dangerous network commands
-    matches!(
-        subcommand.as_str(),
-        "user" | "localgroup" | "group" | "share" | "use" | "config" | "session"
-    )
+    matches!(subcommand.as_str(), "user" | "localgroup" | "group" | "share" | "use" | "config" | "session")
 }
 
 fn is_powershell_executable(exe: &str) -> bool {
@@ -267,10 +264,7 @@ mod tests {
 
     #[test]
     fn detects_wscript_shell_creation() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "CreateObject(\"WScript.Shell\")".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "CreateObject(\"WScript.Shell\")".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
@@ -306,10 +300,7 @@ mod tests {
 
     #[test]
     fn detects_script_block() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "-ScriptBlock { malicious }".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "-ScriptBlock { malicious }".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
@@ -333,28 +324,19 @@ mod tests {
 
     #[test]
     fn allows_safe_powershell() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "Write-Host 'Hello World'".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "Write-Host 'Hello World'".to_string()];
         assert!(!is_dangerous_windows_enhanced(&cmd));
     }
 
     #[test]
     fn allows_get_process() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "Get-Process -Name explorer".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "Get-Process -Name explorer".to_string()];
         assert!(!is_dangerous_windows_enhanced(&cmd));
     }
 
     #[test]
     fn detects_vbscript_createobject() {
-        let cmd = vec![
-            "cscript.exe".to_string(),
-            "CreateObject(\"WScript.Shell\")".to_string(),
-        ];
+        let cmd = vec!["cscript.exe".to_string(), "CreateObject(\"WScript.Shell\")".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
@@ -370,11 +352,7 @@ mod tests {
 
     #[test]
     fn detects_net_user_command() {
-        let cmd = vec![
-            "net".to_string(),
-            "user".to_string(),
-            "administrator".to_string(),
-        ];
+        let cmd = vec!["net".to_string(), "user".to_string(), "administrator".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
@@ -414,19 +392,13 @@ mod tests {
 
     #[test]
     fn detects_pipeline_to_iex() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "Get-Content script.ps1 | iex".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "Get-Content script.ps1 | iex".to_string()];
         assert!(is_dangerous_windows_enhanced(&cmd));
     }
 
     #[test]
     fn allows_safe_get_content() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "Get-Content config.txt".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "Get-Content config.txt".to_string()];
         assert!(!is_dangerous_windows_enhanced(&cmd));
     }
 }

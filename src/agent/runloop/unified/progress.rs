@@ -44,10 +44,7 @@ impl ProgressState {
         Self {
             current: AtomicU64::new(0),
             total: AtomicU64::new(0),
-            metadata: Mutex::new(ProgressMetadata {
-                message: String::new(),
-                estimated_remaining: None,
-            }),
+            metadata: Mutex::new(ProgressMetadata { message: String::new(), estimated_remaining: None }),
             is_complete: AtomicBool::new(false),
             start_time: Instant::now(),
         }

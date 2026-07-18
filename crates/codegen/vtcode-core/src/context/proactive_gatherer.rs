@@ -222,11 +222,7 @@ impl ProactiveGatherer {
     }
 
     /// Read file snippet around entity locations
-    async fn read_file_snippet(
-        &self,
-        file: &Path,
-        entity_matches: &[EntityMatch],
-    ) -> Result<Option<FileSnippet>> {
+    async fn read_file_snippet(&self, file: &Path, entity_matches: &[EntityMatch]) -> Result<Option<FileSnippet>> {
         // Find locations in this file
         let mut locations: Vec<&FileLocation> = Vec::new();
         for entity_match in entity_matches {
@@ -289,8 +285,8 @@ impl ProactiveGatherer {
             match grep_manager.perform_search(input).await {
                 Ok(result) => {
                     // Convert to JSON value
-                    let json_value = serde_json::to_value(&result.matches)
-                        .with_context(|| "Failed to serialize search results")?;
+                    let json_value =
+                        serde_json::to_value(&result.matches).with_context(|| "Failed to serialize search results")?;
                     Ok(Some(json_value))
                 }
                 Err(_) => Ok(None),

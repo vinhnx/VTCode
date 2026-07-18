@@ -18,8 +18,7 @@ use nix::sys::resource::{RLIM_INFINITY, Resource, getrlimit, setrlimit};
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn prctl_set_dumpable() -> std::io::Result<()> {
-    prctl::set_dumpable(false)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e}")))
+    prctl::set_dumpable(false).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e}")))
 }
 
 #[cfg(unix)]
@@ -77,9 +76,7 @@ fn check_environment_sanity() {
     }
 
     if std::env::var_os("USER").is_none() {
-        eprintln!(
-            "warning: USER environment variable is not set; some features may not work correctly"
-        );
+        eprintln!("warning: USER environment variable is not set; some features may not work correctly");
     }
 }
 
@@ -231,11 +228,7 @@ mod tests {
             b"LD_",
         );
 
-        assert_eq!(
-            keys,
-            vec![non_utf8_key2],
-            "non-UTF-8 env entries with LD_ prefix should be retained"
-        );
+        assert_eq!(keys, vec![non_utf8_key2], "non-UTF-8 env entries with LD_ prefix should be retained");
     }
 
     #[test]
@@ -284,12 +277,6 @@ mod tests {
         ];
 
         let keys = env_keys_with_prefix(vars, b"DYLD_");
-        assert_eq!(
-            keys,
-            vec![
-                OsString::from("DYLD_INSERT_LIBRARIES"),
-                OsString::from("DYLD_FOO")
-            ]
-        );
+        assert_eq!(keys, vec![OsString::from("DYLD_INSERT_LIBRARIES"), OsString::from("DYLD_FOO")]);
     }
 }

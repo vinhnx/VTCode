@@ -171,9 +171,9 @@ impl From<InteractionGenerationConfig> for GenerationConfig {
             top_p: value.top_p,
             max_output_tokens: value.max_output_tokens,
             stop_sequences: value.stop_sequences,
-            thinking_config: value.thinking_level.map(|thinking_level| super::ThinkingConfig {
-                thinking_level: Some(thinking_level),
-            }),
+            thinking_config: value
+                .thinking_level
+                .map(|thinking_level| super::ThinkingConfig { thinking_level: Some(thinking_level) }),
             ..Default::default()
         }
     }

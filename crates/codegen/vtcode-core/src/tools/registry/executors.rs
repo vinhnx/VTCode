@@ -64,8 +64,7 @@ fn set_payload_default(payload: &mut serde_json::Map<String, Value>, key: &str, 
 }
 
 pub(super) fn normalize_command_session_run_alias_args(args: &Value, tty: bool) -> Result<Value> {
-    let mut args =
-        crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
+    let mut args = crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
     if let Some(payload) = args.as_object_mut() {
         set_payload_default(payload, "action", json!("run"));
         if tty {
@@ -85,10 +84,8 @@ fn with_command_session_action_default(mut args: Value, action: &'static str) ->
 pub(super) fn normalize_write_stdin_args(
     args: &Value,
 ) -> Result<(Value, crate::tools::command_args::WriteStdinDispatch)> {
-    let dispatch =
-        crate::tools::command_args::write_stdin_dispatch(args).map_err(|error| anyhow!(error))?;
-    let mut args =
-        crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
+    let dispatch = crate::tools::command_args::write_stdin_dispatch(args).map_err(|error| anyhow!(error))?;
+    let mut args = crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
     let payload = args
         .as_object_mut()
         .ok_or_else(|| anyhow!("write_stdin requires a JSON object"))?;
@@ -119,8 +116,7 @@ fn parse_action<T>(action_str: &str) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    serde_json::from_value(json!(action_str))
-        .with_context(|| format!("Invalid action: {action_str}"))
+    serde_json::from_value(json!(action_str)).with_context(|| format!("Invalid action: {action_str}"))
 }
 
 /// Generate an executor that delegates to a cloned tool instance from the inventory.
@@ -189,16 +185,10 @@ impl ToolRegistry {
             let run_at = args.get("run_at").and_then(Value::as_str);
 
             let schedule = match (cron, delay_minutes, run_at) {
-                (Some(expression), None, None) => {
-                    crate::scheduler::ScheduleSpec::cron5(expression)?
-                }
-                (None, Some(minutes), None) => {
-                    crate::scheduler::ScheduleSpec::fixed_interval(Duration::from_secs(
-                        minutes
-                            .checked_mul(60)
-                            .ok_or_else(|| anyhow!("delay_minutes is too large"))?,
-                    ))?
-                }
+                (Some(expression), None, None) => crate::scheduler::ScheduleSpec::cron5(expression)?,
+                (None, Some(minutes), None) => crate::scheduler::ScheduleSpec::fixed_interval(Duration::from_secs(
+                    minutes.checked_mul(60).ok_or_else(|| anyhow!("delay_minutes is too large"))?,
+                ))?,
                 (None, None, Some(raw)) => crate::scheduler::ScheduleSpec::one_shot(
                     crate::scheduler::parse_local_datetime(raw, chrono::Local::now())?,
                 ),
@@ -299,10 +289,9 @@ impl ToolRegistry {
                 payload.get("shell").and_then(|value| value.as_str()),
                 self.pty_config(),
             )?,
-            ExecRunBackendKind::Pipe => resolve_shell_preference(
-                payload.get("shell").and_then(|value| value.as_str()),
-                self.pty_config(),
-            ),
+            ExecRunBackendKind::Pipe => {
+                resolve_shell_preference(payload.get("shell").and_then(|value| value.as_str()), self.pty_config())
+            }
         };
         let login_shell = payload.get("login").and_then(|value| value.as_bool()).unwrap_or(false);
         let confirm = payload.get("confirm").and_then(|value| value.as_bool()).unwrap_or(false);
@@ -327,19 +316,15 @@ impl ToolRegistry {
         )?;
 
         let rows = match backend {
-            ExecRunBackendKind::Pty => Some(parse_pty_dimension(
-                "rows",
-                payload.get("rows"),
-                self.pty_config().default_rows,
-            )?),
+            ExecRunBackendKind::Pty => {
+                Some(parse_pty_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?)
+            }
             ExecRunBackendKind::Pipe => None,
         };
         let cols = match backend {
-            ExecRunBackendKind::Pty => Some(parse_pty_dimension(
-                "cols",
-                payload.get("cols"),
-                self.pty_config().default_cols,
-            )?),
+            ExecRunBackendKind::Pty => {
+                Some(parse_pty_dimension("cols", payload.get("cols"), self.pty_config().default_cols)?)
+            }
             ExecRunBackendKind::Pipe => None,
         };
 
@@ -365,36 +350,23 @@ impl ToolRegistry {
         self.execute_command_session_internal(args, ExecSettlementMode::Manual).await
     }
 
-    pub(super) async fn execute_harness_command_session_terminal_run_raw(
-        &self,
-        args: Value,
-    ) -> Result<Value> {
+    pub(super) async fn execute_harness_command_session_terminal_run_raw(&self, args: Value) -> Result<Value> {
         let args = normalize_command_session_run_alias_args(&args, true)?;
         self.execute_command_session_run_pty(args, true).await
     }
 
     fn dispatch_command_session_alias(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            self.execute_command_session(args).await.map(super::normalize_tool_output)
-        })
+        Box::pin(async move { self.execute_command_session(args).await.map(super::normalize_tool_output) })
     }
 
-    fn dispatch_command_session_run_alias(
-        &self,
-        args: Value,
-        tty: bool,
-    ) -> BoxFuture<'_, Result<Value>> {
+    fn dispatch_command_session_run_alias(&self, args: Value, tty: bool) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let args = normalize_command_session_run_alias_args(&args, tty)?;
             self.execute_command_session(args).await.map(super::normalize_tool_output)
         })
     }
 
-    fn dispatch_command_session_action_alias(
-        &self,
-        args: Value,
-        action: &'static str,
-    ) -> BoxFuture<'_, Result<Value>> {
+    fn dispatch_command_session_action_alias(&self, args: Value, action: &'static str) -> BoxFuture<'_, Result<Value>> {
         self.dispatch_command_session_alias(with_command_session_action_default(args, action))
     }
 
@@ -403,21 +375,16 @@ impl ToolRegistry {
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
-        let args = crate::tools::command_args::normalize_shell_args(&args)
-            .map_err(|error| anyhow!(error))?;
+        let args = crate::tools::command_args::normalize_shell_args(&args).map_err(|error| anyhow!(error))?;
 
-        let action_str = tool_intent::command_session_action(&args)
-            .ok_or_else(|| missing_command_session_action_error(&args))?;
+        let action_str =
+            tool_intent::command_session_action(&args).ok_or_else(|| missing_command_session_action_error(&args))?;
         let action: CommandSessionAction = parse_action(action_str)?;
 
         match action {
-            CommandSessionAction::Run => {
-                self.execute_command_session_run_internal(args, exec_settlement_mode).await
-            }
+            CommandSessionAction::Run => self.execute_command_session_run_internal(args, exec_settlement_mode).await,
             CommandSessionAction::Write => self.execute_command_session_write(args).await,
-            CommandSessionAction::Poll => {
-                self.execute_command_session_poll_internal(args, exec_settlement_mode).await
-            }
+            CommandSessionAction::Poll => self.execute_command_session_poll_internal(args, exec_settlement_mode).await,
             CommandSessionAction::Continue => {
                 self.execute_command_session_continue_internal(args, exec_settlement_mode).await
             }
@@ -465,12 +432,9 @@ impl ToolRegistry {
         // (curated, non-recursive subset) when a weak self-reference was
         // installed at session bootstrap.
         let builtin_executor = self.builtin_executor_for_code();
-        let executor = crate::exec::code_executor::CodeExecutor::new(
-            language,
-            mcp_client.clone(),
-            workspace_root.clone(),
-        )
-        .with_builtin_executor(builtin_executor);
+        let executor =
+            crate::exec::code_executor::CodeExecutor::new(language, mcp_client.clone(), workspace_root.clone())
+                .with_builtin_executor(builtin_executor);
         let execution_start = SystemTime::now();
 
         let result = executor.execute(code).await?;
@@ -521,10 +485,8 @@ impl ToolRegistry {
     }
 
     fn prepare_apply_patch_args(&self, args: Value) -> Result<(Value, usize, bool)> {
-        let patch_input =
-            crate::tools::apply_patch::decode_apply_patch_input(&args)?.ok_or_else(|| {
-                anyhow!("Missing patch input {}", crate::tools::error_helpers::PATCH_PARAMETER_HINT)
-            })?;
+        let patch_input = crate::tools::apply_patch::decode_apply_patch_input(&args)?
+            .ok_or_else(|| anyhow!("Missing patch input {}", crate::tools::error_helpers::PATCH_PARAMETER_HINT))?;
         let patch_input_bytes = patch_input.source_bytes;
         let patch_base64 = patch_input.was_base64;
 
@@ -541,8 +503,7 @@ impl ToolRegistry {
         &self,
         payload: &serde_json::Map<String, Value>,
     ) -> Result<ResolvedExecSandboxRequest> {
-        let working_dir_path =
-            self.pty_manager().resolve_working_dir(shell_working_dir_value(payload)).await?;
+        let working_dir_path = self.pty_manager().resolve_working_dir(shell_working_dir_value(payload)).await?;
         let (sandbox_permissions, additional_permissions) =
             parse_requested_sandbox_permissions(payload, &working_dir_path)?;
 
@@ -631,12 +592,8 @@ impl ToolRegistry {
                     self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN).await
                 }
                 crate::tools::command_args::WriteStdinDispatch::Poll => {
-                    self.execute_command_session_poll_for_tool(
-                        args,
-                        ExecSettlementMode::Manual,
-                        tools::WRITE_STDIN,
-                    )
-                    .await
+                    self.execute_command_session_poll_for_tool(args, ExecSettlementMode::Manual, tools::WRITE_STDIN)
+                        .await
                 }
             }?;
             Ok(response)
@@ -875,8 +832,8 @@ mod pty_output_filter_tests {
 #[cfg(test)]
 mod pty_context_tests {
     use super::{
-        ExecOutputPreview, PtyEphemeralCapture, attach_exec_response_context,
-        attach_pty_continuation, build_exec_response, build_exec_session_command_display,
+        ExecOutputPreview, PtyEphemeralCapture, attach_exec_response_context, attach_pty_continuation,
+        build_exec_response, build_exec_session_command_display,
     };
     use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
@@ -887,11 +844,7 @@ mod pty_context_tests {
             id: "run-123".to_string().into(),
             backend: "pty".to_string(),
             command: "zsh".to_string(),
-            args: vec![
-                "-l".to_string(),
-                "-c".to_string(),
-                "cargo check".to_string(),
-            ],
+            args: vec!["-l".to_string(), "-c".to_string(), "cargo check".to_string()],
             working_dir: Some(".".to_string()),
             rows: Some(24),
             cols: Some(80),
@@ -911,11 +864,7 @@ mod pty_context_tests {
             id: "run-123".to_string().into(),
             backend: "pty".to_string(),
             command: "zsh".to_string(),
-            args: vec![
-                "-l".to_string(),
-                "-c".to_string(),
-                "cargo check".to_string(),
-            ],
+            args: vec!["-l".to_string(), "-c".to_string(), "cargo check".to_string()],
             working_dir: Some(".".to_string()),
             rows: Some(30),
             cols: Some(120),
@@ -1035,13 +984,11 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
-        CargoTestCommandKind, ExecOutputPreview, PtyEphemeralCapture,
-        attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
-        build_exec_output_preview, build_exec_response, build_head_tail_preview,
-        cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint,
-        clamp_inspect_lines, clamp_max_matches, extract_run_session_id_from_read_file_error,
-        extract_run_session_id_from_tool_output_path, filter_lines,
-        missing_command_session_action_error, resolve_exec_run_session_id, summarized_arg_keys,
+        CargoTestCommandKind, ExecOutputPreview, PtyEphemeralCapture, attach_exec_recovery_guidance,
+        attach_failure_diagnostics_metadata, build_exec_output_preview, build_exec_response, build_head_tail_preview,
+        cargo_selector_error_diagnostics, cargo_test_failure_diagnostics, cargo_test_rerun_hint, clamp_inspect_lines,
+        clamp_max_matches, extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
+        filter_lines, missing_command_session_action_error, resolve_exec_run_session_id, summarized_arg_keys,
     };
     use crate::tools::types::VTCodeExecSession;
     use serde_json::json;
@@ -1069,15 +1016,11 @@ mod unified_action_error_tests {
     #[test]
     fn extracts_run_session_id_from_tool_output_path() {
         assert_eq!(
-            extract_run_session_id_from_tool_output_path(
-                ".vtcode/context/tool_outputs/run-abc123.txt"
-            ),
+            extract_run_session_id_from_tool_output_path(".vtcode/context/tool_outputs/run-abc123.txt"),
             Some("run-abc123".to_string())
         );
         assert_eq!(
-            extract_run_session_id_from_tool_output_path(
-                ".vtcode/context/tool_outputs/not-a-session.txt"
-            ),
+            extract_run_session_id_from_tool_output_path(".vtcode/context/tool_outputs/not-a-session.txt"),
             None
         );
     }
@@ -1137,8 +1080,7 @@ mod unified_action_error_tests {
 
     #[test]
     fn inspect_helpers_filter_lines_literal() {
-        let (output, matched, truncated) =
-            filter_lines("alpha\nbeta\nalpha2", "alpha", true, 1).expect("filter");
+        let (output, matched, truncated) = filter_lines("alpha\nbeta\nalpha2", "alpha", true, 1).expect("filter");
         assert_eq!(matched, 2);
         assert!(truncated);
         assert!(output.contains("1: alpha"));
@@ -1221,10 +1163,7 @@ mod unified_action_error_tests {
 
         assert_eq!(diagnostics["kind"], "cargo_test_selector_error");
         assert_eq!(diagnostics["package"], "vtcode-core");
-        assert_eq!(
-            diagnostics["requested_test_target"],
-            "exec_only_policy_skips_when_full_auto_is_disabled"
-        );
+        assert_eq!(diagnostics["requested_test_target"], "exec_only_policy_skips_when_full_auto_is_disabled");
         assert_eq!(diagnostics["selector_error"], true);
         assert_eq!(
             diagnostics["validation_hint"],
@@ -1246,9 +1185,8 @@ mod unified_action_error_tests {
     task result: Invalid request: QueuedProvider has no queued responses
 "#;
 
-        let diagnostics =
-            cargo_test_failure_diagnostics("cargo nextest run -p vtcode-core", output, Some(100))
-                .expect("failure diagnostics");
+        let diagnostics = cargo_test_failure_diagnostics("cargo nextest run -p vtcode-core", output, Some(100))
+            .expect("failure diagnostics");
 
         assert_eq!(diagnostics["kind"], "cargo_test_failure");
         assert_eq!(diagnostics["package"], "vtcode-core");
@@ -1257,14 +1195,8 @@ mod unified_action_error_tests {
             diagnostics["test_fqname"],
             "core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled"
         );
-        assert_eq!(
-            diagnostics["panic"],
-            "task result: Invalid request: QueuedProvider has no queued responses"
-        );
-        assert_eq!(
-            diagnostics["source_file"],
-            "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs"
-        );
+        assert_eq!(diagnostics["panic"], "task result: Invalid request: QueuedProvider has no queued responses");
+        assert_eq!(diagnostics["source_file"], "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs");
         assert_eq!(diagnostics["source_line"], 692);
         assert_eq!(
             diagnostics["rerun_hint"],
@@ -1328,10 +1260,7 @@ mod unified_action_error_tests {
         );
         assert_eq!(response["package"], "vtcode-core");
         assert_eq!(response["binary_kind"], "unit");
-        assert_eq!(
-            response["source_file"],
-            "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs"
-        );
+        assert_eq!(response["source_file"], "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs");
         assert_eq!(response["source_line"], 692);
         assert_eq!(
             response["rerun_hint"],
@@ -1366,10 +1295,7 @@ mod unified_action_error_tests {
         assert_eq!(response["package"], "vtcode-core");
         assert_eq!(response["binary_kind"], "test_target_selector");
         assert_eq!(response["selector_error"], true);
-        assert_eq!(
-            response["validation_hint"],
-            "cargo test -p vtcode-core --lib -- --list | rg 'bad'"
-        );
+        assert_eq!(response["validation_hint"], "cargo test -p vtcode-core --lib -- --list | rg 'bad'");
         assert_eq!(response["rerun_hint"], "cargo nextest run -p vtcode-core bad");
         assert_eq!(response["critical_note"], "selector mismatch");
         assert_eq!(response["next_action"], "validate first");

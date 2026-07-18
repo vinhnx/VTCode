@@ -8,7 +8,7 @@
 mod tests;
 
 pub use vtcode_config::models::{
-    MiMoAuthMethod, ModelCatalogEntry, ModelId, ModelParseError, ModelPricing, OpenRouterMetadata,
-    Provider, ProviderModelSupport, catalog_provider_keys, detect_mimo_auth_method,
-    model_catalog_entry, supported_models_for_provider,
+    MiMoAuthMethod, ModelCatalogEntry, ModelId, ModelParseError, ModelPricing, OpenRouterMetadata, Provider,
+    ProviderModelSupport, catalog_provider_keys, detect_mimo_auth_method, model_catalog_entry,
+    supported_models_for_provider,
 };

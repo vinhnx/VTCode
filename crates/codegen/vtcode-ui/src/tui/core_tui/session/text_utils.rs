@@ -76,9 +76,7 @@ pub fn format_tool_parameters(text: &str) -> String {
 
 pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str) -> String {
     let stripped = strip_ansi_codes(line_text);
-    let hang_width = if stripped.starts_with("  └ ")
-        || stripped.starts_with("  │ ")
-        || stripped.starts_with("    ")
+    let hang_width = if stripped.starts_with("  └ ") || stripped.starts_with("  │ ") || stripped.starts_with("    ")
     {
         4
     } else if stripped.starts_with("• Ran ") {
@@ -290,11 +288,7 @@ fn wrap_line_internal(
 
                         let token_width = UnicodeWidthStr::width(token);
                         if token_width == 0 {
-                            ensure_continuation_prefix(
-                                &mut current_spans,
-                                &mut current_width,
-                                &rows,
-                            );
+                            ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
                             push_span(&mut current_spans, &style, token);
                             continue;
                         }
@@ -326,33 +320,17 @@ fn wrap_line_internal(
                             if has_content {
                                 flush_current(&mut current_spans, &mut rows);
                                 current_width = 0;
-                                ensure_continuation_prefix(
-                                    &mut current_spans,
-                                    &mut current_width,
-                                    &rows,
-                                );
+                                ensure_continuation_prefix(&mut current_spans, &mut current_width, &rows);
                             }
                             push_span(&mut current_spans, &style, token);
                             current_width += token_width;
                             continue;
                         }
 
-                        push_wrapped_token(
-                            token,
-                            &style,
-                            &mut current_spans,
-                            &mut current_width,
-                            &mut rows,
-                        );
+                        push_wrapped_token(token, &style, &mut current_spans, &mut current_width, &mut rows);
                     }
                 } else {
-                    push_wrapped_token(
-                        text,
-                        &style,
-                        &mut current_spans,
-                        &mut current_width,
-                        &mut rows,
-                    );
+                    push_wrapped_token(text, &style, &mut current_spans, &mut current_width, &mut rows);
                 }
             }
 
@@ -454,11 +432,7 @@ fn structural_continuation_prefix(text: &str) -> String {
         return " ".repeat(width + marker_width);
     }
 
-    if width > 0 {
-        " ".repeat(width)
-    } else {
-        String::new()
-    }
+    if width > 0 { " ".repeat(width) } else { String::new() }
 }
 
 fn numbered_list_marker_width(text: &str) -> Option<usize> {
@@ -508,9 +482,7 @@ pub fn detect_todo_state(text: &str) -> TodoState {
 
     // Common patterns: "- [ ]", "* [ ]", "[ ]", "- [x]", "* [x]", "[x]"
     let patterns_pending = ["- [ ]", "* [ ]", "+ [ ]", "[ ]"];
-    let patterns_completed = [
-        "- [x]", "- [X]", "* [x]", "* [X]", "+ [x]", "+ [X]", "[x]", "[X]",
-    ];
+    let patterns_completed = ["- [x]", "- [X]", "* [x]", "* [X]", "+ [x]", "+ [X]", "[x]", "[X]"];
 
     for pattern in patterns_completed {
         if trimmed.starts_with(pattern) {
@@ -538,10 +510,7 @@ pub fn is_list_item(text: &str) -> bool {
     let trimmed = text.trim_start();
 
     // Bullet patterns
-    if trimmed.starts_with("- ")
-        || trimmed.starts_with("* ")
-        || trimmed.starts_with("+ ")
-        || trimmed.starts_with("• ")
+    if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") || trimmed.starts_with("• ")
     {
         return true;
     }
@@ -696,10 +665,7 @@ mod tests {
             pty_wrapped_continuation_prefix("  ", "\u{1b}[32m• Ran cargo check -p vtcode\u{1b}[0m",),
             "        "
         );
-        assert_eq!(
-            pty_wrapped_continuation_prefix("  ", "• Ran cargo check -p vtcode"),
-            "        "
-        );
+        assert_eq!(pty_wrapped_continuation_prefix("  ", "• Ran cargo check -p vtcode"), "        ");
         assert_eq!(pty_wrapped_continuation_prefix("  ", "plain output"), "  ");
     }
 }

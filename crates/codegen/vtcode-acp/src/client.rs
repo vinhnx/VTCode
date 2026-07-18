@@ -67,12 +67,7 @@ impl AcpClient {
     }
 
     /// Send a request to a remote agent synchronously
-    pub async fn call_sync(
-        &self,
-        remote_agent_id: &str,
-        action: String,
-        args: Value,
-    ) -> AcpResult<Value> {
+    pub async fn call_sync(&self, remote_agent_id: &str, action: String, args: Value) -> AcpResult<Value> {
         debug!(
             remote_agent = remote_agent_id,
             action = %action,
@@ -85,12 +80,7 @@ impl AcpClient {
             .await
             .map_err(|_err| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
 
-        let message = AcpMessage::request(
-            self.local_agent_id.clone(),
-            remote_agent_id.to_string(),
-            action,
-            args,
-        );
+        let message = AcpMessage::request(self.local_agent_id.clone(), remote_agent_id.to_string(), action, args);
 
         let response = self.send_request(&agent_info.base_url, &message).await?;
 
@@ -100,12 +90,7 @@ impl AcpClient {
     }
 
     /// Send a request to a remote agent asynchronously
-    pub async fn call_async(
-        &self,
-        remote_agent_id: &str,
-        action: String,
-        args: Value,
-    ) -> AcpResult<String> {
+    pub async fn call_async(&self, remote_agent_id: &str, action: String, args: Value) -> AcpResult<String> {
         debug!(
             remote_agent = remote_agent_id,
             action = %action,
@@ -118,12 +103,7 @@ impl AcpClient {
             .await
             .map_err(|_err| AcpError::AgentNotFound(remote_agent_id.to_string()))?;
 
-        let mut message = AcpMessage::request(
-            self.local_agent_id.clone(),
-            remote_agent_id.to_string(),
-            action,
-            args,
-        );
+        let mut message = AcpMessage::request(self.local_agent_id.clone(), remote_agent_id.to_string(), action, args);
 
         // Set async flag in request
         if let crate::messages::MessageContent::Request(ref mut req) = message.content {
@@ -165,18 +145,13 @@ impl AcpClient {
                     return Ok(Value::Null);
                 }
 
-                serde_json::from_str(&body).map_err(|e| {
-                    AcpError::SerializationError(format!("Failed to parse response: {e}: {body}",))
-                })
+                serde_json::from_str(&body)
+                    .map_err(|e| AcpError::SerializationError(format!("Failed to parse response: {e}: {body}",)))
             }
 
-            StatusCode::REQUEST_TIMEOUT => {
-                Err(AcpError::Timeout("Request to remote agent timed out".to_string()))
-            }
+            StatusCode::REQUEST_TIMEOUT => Err(AcpError::Timeout("Request to remote agent timed out".to_string())),
 
-            StatusCode::NOT_FOUND => {
-                Err(AcpError::AgentNotFound("Remote agent endpoint not found".to_string()))
-            }
+            StatusCode::NOT_FOUND => Err(AcpError::AgentNotFound("Remote agent endpoint not found".to_string())),
 
             status => {
                 let body = response.text().await.unwrap_or_default();
@@ -203,10 +178,7 @@ impl AcpClient {
             .map_err(|e| AcpError::NetworkError(format!("Discovery failed: {e}")))?;
 
         if !response.status().is_success() {
-            return Err(AcpError::NetworkError(format!(
-                "Discovery failed with status {}",
-                response.status()
-            )));
+            return Err(AcpError::NetworkError(format!("Discovery failed with status {}", response.status())));
         }
 
         let agent_info = response.json().await?;

@@ -45,14 +45,8 @@ pub(super) async fn emit_turn_outcome_notification(
         tracing::debug!(error = %err, "Failed to emit turn outcome notification");
     }
 
-    if let Err(err) = maybe_run_external_turn_complete_notify(
-        vt_cfg,
-        working_history,
-        workspace,
-        harness_state,
-        result,
-    )
-    .await
+    if let Err(err) =
+        maybe_run_external_turn_complete_notify(vt_cfg, working_history, workspace, harness_state, result).await
     {
         tracing::debug!(error = %err, "Failed to run external turn-complete notify hook");
     }

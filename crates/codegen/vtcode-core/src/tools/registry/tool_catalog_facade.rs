@@ -5,9 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::RwLock;
 
-use crate::core::agent::harness_kernel::{
-    SessionToolCatalogSnapshot, filter_tool_definitions_for_mode,
-};
+use crate::core::agent::harness_kernel::{SessionToolCatalogSnapshot, filter_tool_definitions_for_mode};
 use crate::llm::provider::ToolDefinition;
 use crate::prompts::sort_tool_definitions;
 
@@ -57,8 +55,7 @@ pub struct ToolGroup {
 /// deterministic, stable ordering across calls.
 #[must_use]
 pub fn tool_groups(tools: &[ToolDefinition]) -> Vec<ToolGroup> {
-    let mut groups: std::collections::BTreeMap<String, ToolGroup> =
-        std::collections::BTreeMap::new();
+    let mut groups: std::collections::BTreeMap<String, ToolGroup> = std::collections::BTreeMap::new();
 
     for tool in tools {
         let Some(namespace) = tool.namespace.as_ref() else {
@@ -197,10 +194,7 @@ impl SessionToolCatalogState {
     /// The index is rebuilt when the catalog epoch changes (tools added/removed,
     /// deferred tools expanded). This is the infrastructure for client-side
     /// embedding-guided tool search described in the Microsoft article.
-    pub async fn embedding_index(
-        &self,
-        tools: &Arc<RwLock<Vec<ToolDefinition>>>,
-    ) -> Arc<ToolEmbeddingIndex> {
+    pub async fn embedding_index(&self, tools: &Arc<RwLock<Vec<ToolDefinition>>>) -> Arc<ToolEmbeddingIndex> {
         let current_epoch = self.current_epoch();
 
         // Check if the cached index is still valid
@@ -341,10 +335,7 @@ impl SessionToolCatalogState {
         )
     }
 
-    async fn sorted_snapshot(
-        &self,
-        tools: &Arc<RwLock<Vec<ToolDefinition>>>,
-    ) -> Option<Arc<Vec<ToolDefinition>>> {
+    async fn sorted_snapshot(&self, tools: &Arc<RwLock<Vec<ToolDefinition>>>) -> Option<Arc<Vec<ToolDefinition>>> {
         let version = self.current_version();
         if let Some(snapshot) = {
             let cache_guard = self.cached_sorted.read().await;
@@ -503,10 +494,7 @@ mod tests {
             .collect();
 
         assert_eq!(names, vec!["a_tool", tools::UNIFIED_EXEC, "z_tool"]);
-        assert_eq!(
-            snapshot.active_tool_names.as_ref(),
-            &vec!["a_tool".to_string(), "z_tool".to_string()]
-        );
+        assert_eq!(snapshot.active_tool_names.as_ref(), &vec!["a_tool".to_string(), "z_tool".to_string()]);
         assert_eq!(snapshot.catalog_tools(), 3);
         assert_eq!(snapshot.available_tools(), 2);
     }
@@ -517,13 +505,9 @@ mod tests {
 
     #[tokio::test]
     async fn session_model_tools_defaults_to_none_and_round_trips_through_attach() {
-        let registry =
-            crate::tools::registry::ToolRegistry::new(std::path::PathBuf::from("/tmp/test")).await;
+        let registry = crate::tools::registry::ToolRegistry::new(std::path::PathBuf::from("/tmp/test")).await;
 
-        assert!(
-            registry.session_model_tools().is_none(),
-            "session tools should be unattached by default"
-        );
+        assert!(registry.session_model_tools().is_none(), "session tools should be unattached by default");
 
         let session_tools = Arc::new(RwLock::new(vec![function_tool("demo_tool")]));
         registry.attach_session_model_tools(Arc::clone(&session_tools));
@@ -531,10 +515,7 @@ mod tests {
         let fetched = registry
             .session_model_tools()
             .expect("session tools should be attached after attach_session_model_tools");
-        assert!(
-            Arc::ptr_eq(&fetched, &session_tools),
-            "getter should return the same Arc that was attached"
-        );
+        assert!(Arc::ptr_eq(&fetched, &session_tools), "getter should return the same Arc that was attached");
     }
 
     #[test]

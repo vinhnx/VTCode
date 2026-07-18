@@ -1,8 +1,8 @@
 use super::{
-    AutoPermissionRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
-    approval_learning_target, approval_persistence::shell_command_has_persisted_approval_prefix,
-    approval_policy_rejects_prompt, ensure_tool_permission, persist_segment_approval_cache_keys,
-    persist_shell_approval_prefix_rule, persisted_segment_approval_hit_key, tool_display_labels,
+    AutoPermissionRuntimeContext, SessionStats, ToolPermissionFlow, ToolPermissionsContext, approval_learning_target,
+    approval_persistence::shell_command_has_persisted_approval_prefix, approval_policy_rejects_prompt,
+    ensure_tool_permission, persist_segment_approval_cache_keys, persist_shell_approval_prefix_rule,
+    persisted_segment_approval_hit_key, tool_display_labels,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -18,9 +18,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tool_policy::ToolPolicy;
@@ -255,13 +253,9 @@ async fn shell_approval_prefix_rules_persist_to_workspace_config() {
     )
     .await
     .expect("persist approval prefix");
-    assert_eq!(
-        rendered,
-        "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
-    );
+    assert_eq!(rendered, "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null");
 
-    let saved =
-        ConfigManager::load_from_workspace(temp_dir.path()).expect("reload workspace config");
+    let saved = ConfigManager::load_from_workspace(temp_dir.path()).expect("reload workspace config");
     assert!(saved.config().commands.approval_prefixes.iter().any(|entry| entry == &rendered));
     assert!(shell_command_has_persisted_approval_prefix(
         &registry,
@@ -294,8 +288,7 @@ async fn shell_approval_prefix_matching_respects_token_boundaries() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let workspace_root = registry.workspace_root().clone();
-    let mut manager =
-        ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+    let mut manager = ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
     let mut config = manager.config().clone();
     config.commands.approval_prefixes.push("echo hi".to_string());
     manager.save_config(&config).expect("save config");
@@ -313,13 +306,12 @@ async fn shell_approval_prefix_matching_respects_permission_scope() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let workspace_root = registry.workspace_root().clone();
-    let mut manager =
-        ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+    let mut manager = ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
     let mut config = manager.config().clone();
-    config.commands.approval_prefixes.push(
-        "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
-            .to_string(),
-    );
+    config
+        .commands
+        .approval_prefixes
+        .push("cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null".to_string());
     manager.save_config(&config).expect("save config");
     registry.apply_commands_config(&config.commands);
 
@@ -340,8 +332,7 @@ async fn legacy_unscoped_shell_prefixes_do_not_match_escalated_runs() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let workspace_root = registry.workspace_root().clone();
-    let mut manager =
-        ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+    let mut manager = ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
     let mut config = manager.config().clone();
     config.commands.approval_prefixes.push("echo hi".to_string());
     manager.save_config(&config).expect("save config");
@@ -1607,21 +1598,16 @@ async fn permanent_shell_approval_persists_segmented_commands() {
         "command": ["/bin/zsh", "-lc", "git status && cargo check"],
     });
 
-    persist_segment_approval_cache_keys(&registry, "exec_command", "exec_command", Some(&args))
-        .await;
+    persist_segment_approval_cache_keys(&registry, "exec_command", "exec_command", Some(&args)).await;
 
     assert!(
         registry
-            .has_persisted_approval(
-                "git status|sandbox_permissions=\"use_default\"|additional_permissions=null"
-            )
+            .has_persisted_approval("git status|sandbox_permissions=\"use_default\"|additional_permissions=null")
             .await
     );
     assert!(
         registry
-            .has_persisted_approval(
-                "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
-            )
+            .has_persisted_approval("cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null")
             .await
     );
 }
@@ -1635,13 +1621,7 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
         "command": "cd crates/codegen/vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
     });
 
-    persist_segment_approval_cache_keys(
-        &registry,
-        "exec_command",
-        "exec_command",
-        Some(&approved_args),
-    )
-    .await;
+    persist_segment_approval_cache_keys(&registry, "exec_command", "exec_command", Some(&approved_args)).await;
 
     let later_args = json!({
         "action": "run",
@@ -1802,9 +1782,7 @@ async fn auto_permission_interactive_fallback_notice_is_emitted_once() {
 
     let first_lines = drain_appended_lines(&mut receiver);
     assert!(first_lines.iter().any(|line| {
-        line.contains(
-            "Auto permission review fell back to manual prompts after repeated classifier denials.",
-        )
+        line.contains("Auto permission review fell back to manual prompts after repeated classifier denials.")
     }));
 
     let second_flow = ensure_tool_permission(

@@ -43,10 +43,7 @@ pub enum LocalReadinessError {
     /// The local server process is not reachable.
     ServerDown { provider: LocalProvider },
     /// The server is up but the requested model is not available/loaded.
-    ModelMissing {
-        provider: LocalProvider,
-        model: String,
-    },
+    ModelMissing { provider: LocalProvider, model: String },
 }
 
 impl LocalReadinessError {
@@ -67,9 +64,7 @@ impl LocalReadinessError {
                 LocalProvider::Ollama => format!("ollama pull {model}"),
                 LocalProvider::LmStudio => format!("lms load {model}"),
                 LocalProvider::LlamaCpp => {
-                    format!(
-                        "load '{model}' in llama.cpp (set LLAMACPP_MODEL_PATH and run /local start llamacpp)"
-                    )
+                    format!("load '{model}' in llama.cpp (set LLAMACPP_MODEL_PATH and run /local start llamacpp)")
                 }
             },
         }
@@ -84,11 +79,9 @@ impl LocalReadinessError {
                 provider.display_name(),
                 provider.key()
             ),
-            Self::ModelMissing { provider, model } => format!(
-                "Model '{model}' is not available on {}. Fix: {}",
-                provider.display_name(),
-                self.fix_command()
-            ),
+            Self::ModelMissing { provider, model } => {
+                format!("Model '{model}' is not available on {}. Fix: {}", provider.display_name(), self.fix_command())
+            }
         }
     }
 
@@ -181,10 +174,7 @@ async fn cached_models(provider: LocalProvider, base_url: Option<&str>) -> Optio
     }
 }
 
-async fn fetch_models(
-    provider: LocalProvider,
-    base_url: Option<&str>,
-) -> anyhow::Result<Vec<String>> {
+async fn fetch_models(provider: LocalProvider, base_url: Option<&str>) -> anyhow::Result<Vec<String>> {
     let base = base_url.map(str::to_string);
     match provider {
         LocalProvider::Ollama => fetch_ollama_models(base).await,

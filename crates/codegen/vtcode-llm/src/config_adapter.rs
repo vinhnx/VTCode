@@ -78,8 +78,7 @@ trait CanProjectFactoryConfig {
 impl<Ctx> CanProjectFactoryConfig for Ctx
 where
     Ctx: HasComponent<FactoryConfigProjectionComponent>,
-    <Ctx as HasComponent<FactoryConfigProjectionComponent>>::Provider:
-        FactoryConfigProjectionProvider<Ctx>,
+    <Ctx as HasComponent<FactoryConfigProjectionComponent>>::Provider: FactoryConfigProjectionProvider<Ctx>,
 {
     fn project_factory_config(&self) -> crate::factory_types::ProviderConfig {
         <<Ctx as HasComponent<FactoryConfigProjectionComponent>>::Provider as FactoryConfigProjectionProvider<Ctx>>::project(self)
@@ -112,10 +111,7 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> crate::factory_types::P
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AdapterEvent {
     /// Records the resolved prompt cache directory and its associated scope.
-    PromptCacheResolved {
-        scope: PathScope,
-        cache_dir: PathBuf,
-    },
+    PromptCacheResolved { scope: PathScope, cache_dir: PathBuf },
     /// Emitted when the telemetry sink itself fails so callers can log a
     /// fallback message.
     TelemetryFailure { message: String },
@@ -166,8 +162,7 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     }
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
-        let resolved =
-            prompt_cache.resolve_cache_dir(Some(self.hooks.workspace_paths().workspace_root()));
+        let resolved = prompt_cache.resolve_cache_dir(Some(self.hooks.workspace_paths().workspace_root()));
         let scope = self.hooks.workspace_paths().scope_for_path(&resolved);
         // Check absoluteness before moving `resolved` so we can report a meaningful error.
         let is_abs = resolved.is_absolute();
@@ -224,14 +219,10 @@ impl<'source, 'hooks, Hooks: AdapterHooksProvider> HasComponent<FactoryConfigPro
 }
 
 impl<'source, 'hooks, Hooks: AdapterHooksProvider>
-    FactoryConfigProjectionProvider<HookedConfigProjectionCtx<'source, 'hooks, Hooks>>
-    for HookedConfigProjection
+    FactoryConfigProjectionProvider<HookedConfigProjectionCtx<'source, 'hooks, Hooks>> for HookedConfigProjection
 {
-    fn project(
-        ctx: &HookedConfigProjectionCtx<'source, 'hooks, Hooks>,
-    ) -> crate::factory_types::ProviderConfig {
-        let mut config =
-            BorrowedConfigProjectionCtx { source: ctx.source }.project_factory_config();
+    fn project(ctx: &HookedConfigProjectionCtx<'source, 'hooks, Hooks>) -> crate::factory_types::ProviderConfig {
+        let mut config = BorrowedConfigProjectionCtx { source: ctx.source }.project_factory_config();
         if let Some(prompt_cache) = config.prompt_cache.as_mut() {
             ctx.hooks.enrich_prompt_cache(prompt_cache);
         }
@@ -540,26 +531,11 @@ mod tests {
             .with_anthropic(AnthropicConfig::default())
             .with_model_behavior(ModelConfig::default());
 
-        assert!(matches!(
-            <OwnedProviderConfig as ProviderConfig>::prompt_cache(&config),
-            Some(Cow::Borrowed(_))
-        ));
-        assert!(matches!(
-            <OwnedProviderConfig as ProviderConfig>::timeouts(&config),
-            Some(Cow::Borrowed(_))
-        ));
-        assert!(matches!(
-            <OwnedProviderConfig as ProviderConfig>::openai(&config),
-            Some(Cow::Borrowed(_))
-        ));
-        assert!(matches!(
-            <OwnedProviderConfig as ProviderConfig>::anthropic(&config),
-            Some(Cow::Borrowed(_))
-        ));
-        assert!(matches!(
-            <OwnedProviderConfig as ProviderConfig>::model_behavior(&config),
-            Some(Cow::Borrowed(_))
-        ));
+        assert!(matches!(<OwnedProviderConfig as ProviderConfig>::prompt_cache(&config), Some(Cow::Borrowed(_))));
+        assert!(matches!(<OwnedProviderConfig as ProviderConfig>::timeouts(&config), Some(Cow::Borrowed(_))));
+        assert!(matches!(<OwnedProviderConfig as ProviderConfig>::openai(&config), Some(Cow::Borrowed(_))));
+        assert!(matches!(<OwnedProviderConfig as ProviderConfig>::anthropic(&config), Some(Cow::Borrowed(_))));
+        assert!(matches!(<OwnedProviderConfig as ProviderConfig>::model_behavior(&config), Some(Cow::Borrowed(_))));
     }
 
     #[test]

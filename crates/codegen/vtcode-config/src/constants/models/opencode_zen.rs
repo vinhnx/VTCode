@@ -56,17 +56,10 @@ pub const ANTHROPIC_MODELS: &[&str] = &[
     CLAUDE_3_5_HAIKU,
 ];
 
-pub const OPENAI_COMPATIBLE_MODELS: &[&str] = &[
-    MINIMAX_M2_5,
-    MINIMAX_M2_5_FREE,
-    GLM_5_1,
-    KIMI_K2_5,
-    BIG_PICKLE,
-];
+pub const OPENAI_COMPATIBLE_MODELS: &[&str] = &[MINIMAX_M2_5, MINIMAX_M2_5_FREE, GLM_5_1, KIMI_K2_5, BIG_PICKLE];
 
 // Curated models VT Code currently exposes in config flows and ModelId metadata.
-pub const CONFIGURED_MODELS: &[&str] =
-    &[GPT_5_4, GPT_5_4_MINI, CLAUDE_SONNET_4_6, GLM_5_1, KIMI_K2_5];
+pub const CONFIGURED_MODELS: &[&str] = &[GPT_5_4, GPT_5_4_MINI, CLAUDE_SONNET_4_6, GLM_5_1, KIMI_K2_5];
 
 pub const SUPPORTED_MODELS: &[&str] = &[
     GPT_5_4,

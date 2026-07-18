@@ -38,8 +38,7 @@ impl ToolRegistry {
             if let Some(base) = self.timeout_policy.read().ceiling_for(category) {
                 if *adaptive < base {
                     #[allow(clippy::cast_sign_loss)]
-                    let relaxed_ms = (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio))
-                        .max(0.0)) as u128;
+                    let relaxed_ms = (((*adaptive).as_millis() as f64 * (1.0 / tuning.decay_ratio)).max(0.0)) as u128;
                     let relaxed = Duration::from_millis(relaxed_ms as u64);
                     *adaptive = std::cmp::min(relaxed, base);
                 }
@@ -89,8 +88,7 @@ impl ToolRegistry {
         let mut state = self.resiliency.lock();
         let tuning = state.adaptive_tuning;
 
-        let stats =
-            state.latency_stats.entry(category).or_insert_with(|| ToolLatencyStats::new(50));
+        let stats = state.latency_stats.entry(category).or_insert_with(|| ToolLatencyStats::new(50));
         stats.record(duration);
 
         if let Some(p95) = stats.percentile(0.95) {
@@ -104,10 +102,7 @@ impl ToolRegistry {
                     );
                     let adjusted = std::cmp::min(
                         ceiling,
-                        std::cmp::max(
-                            Duration::from_millis(tuning.min_floor_ms),
-                            Self::scale_duration(p95, 11, 10),
-                        ),
+                        std::cmp::max(Duration::from_millis(tuning.min_floor_ms), Self::scale_duration(p95, 11, 10)),
                     );
                     state.adaptive_timeout_ceiling.insert(category, adjusted);
                     tracing::debug!(
@@ -118,10 +113,8 @@ impl ToolRegistry {
                 }
             } else {
                 // No ceiling configured; derive one from p95 with headroom
-                let derived = std::cmp::max(
-                    Duration::from_millis(tuning.min_floor_ms),
-                    Self::scale_duration(p95, 12, 10),
-                );
+                let derived =
+                    std::cmp::max(Duration::from_millis(tuning.min_floor_ms), Self::scale_duration(p95, 12, 10));
                 state.adaptive_timeout_ceiling.insert(category, derived);
                 tracing::debug!(
                     category = %category.label(),

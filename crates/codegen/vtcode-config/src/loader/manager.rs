@@ -30,9 +30,8 @@ impl ConfigManager {
         if let Ok(config_path) = std::env::var("VTCODE_CONFIG_PATH") {
             let trimmed = config_path.trim();
             if !trimmed.is_empty() {
-                return Self::load_from_file(trimmed).with_context(|| {
-                    format!("Failed to load configuration from VTCODE_CONFIG_PATH={trimmed}")
-                });
+                return Self::load_from_file(trimmed)
+                    .with_context(|| format!("Failed to load configuration from VTCODE_CONFIG_PATH={trimmed}"));
             }
         }
 
@@ -54,27 +53,21 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::System { file: system_config })
-            {
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::System { file: system_config }) {
                 layer_stack.push(layer);
             }
         }
 
         // 2. User home config (~/.vtcode/vtcode.toml)
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::User { file: home_config_path })
-            {
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::User { file: home_config_path }) {
                 layer_stack.push(layer);
             }
         }
 
         // 3. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
-        if let Some(project_config_path) =
-            Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
-            && let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::Project { file: project_config_path })
+        if let Some(project_config_path) = Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
+            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Project { file: project_config_path })
         {
             layer_stack.push(layer);
         }
@@ -84,16 +77,15 @@ impl ConfigManager {
         let workspace_config_path = workspace_root.join(&config_file_name);
         if fallback_path.exists()
             && fallback_path != workspace_config_path
-            && let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::Workspace { file: fallback_path })
+            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Workspace { file: fallback_path })
         {
             layer_stack.push(layer);
         }
 
         // 5. Workspace config (vtcode.toml in workspace root)
-        if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Workspace {
-            file: workspace_config_path.clone(),
-        }) {
+        if let Some(layer) =
+            Self::load_optional_layer(ConfigLayerSource::Workspace { file: workspace_config_path.clone() })
+        {
             layer_stack.push(layer);
         }
 
@@ -143,11 +135,7 @@ impl ConfigManager {
         }
 
         if let Some((layer, error)) = layer_stack.first_layer_error() {
-            bail!(
-                "Configuration layer '{}' failed to load: {}",
-                layer.source.label(),
-                error.message
-            );
+            bail!("Configuration layer '{}' failed to load: {}", layer.source.label(), error.message);
         }
 
         let (effective_toml, origins) = layer_stack.effective_config_with_origins();
@@ -161,16 +149,18 @@ impl ConfigManager {
         // Migrate any plain-text API keys from config to secure storage
         migrate_custom_api_keys_if_needed(&mut config)?;
 
-        let config_path =
-            layer_stack.layers().iter().rev().find(|layer| layer.is_enabled()).and_then(
-                |l| match &l.source {
-                    ConfigLayerSource::User { file } => Some(file.clone()),
-                    ConfigLayerSource::Project { file } => Some(file.clone()),
-                    ConfigLayerSource::Workspace { file } => Some(file.clone()),
-                    ConfigLayerSource::System { file } => Some(file.clone()),
-                    ConfigLayerSource::Runtime => None,
-                },
-            );
+        let config_path = layer_stack
+            .layers()
+            .iter()
+            .rev()
+            .find(|layer| layer.is_enabled())
+            .and_then(|l| match &l.source {
+                ConfigLayerSource::User { file } => Some(file.clone()),
+                ConfigLayerSource::Project { file } => Some(file.clone()),
+                ConfigLayerSource::Workspace { file } => Some(file.clone()),
+                ConfigLayerSource::System { file } => Some(file.clone()),
+                ConfigLayerSource::Runtime => None,
+            });
 
         Ok(Self {
             config,
@@ -182,10 +172,10 @@ impl ConfigManager {
     }
 
     fn load_toml_from_file(path: &Path) -> Result<toml::Value> {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-        let value: toml::Value = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+        let content =
+            fs::read_to_string(path).with_context(|| format!("Failed to read config file: {}", path.display()))?;
+        let value: toml::Value =
+            toml::from_str(&content).with_context(|| format!("Failed to parse config file: {}", path.display()))?;
         Ok(value)
     }
 
@@ -206,23 +196,12 @@ impl ConfigManager {
 
         let resolved_file = canonicalize_workspace_root(file);
         let resolved_source = match source {
-            ConfigLayerSource::System { .. } => {
-                ConfigLayerSource::System { file: resolved_file.clone() }
-            }
-            ConfigLayerSource::User { .. } => {
-                ConfigLayerSource::User { file: resolved_file.clone() }
-            }
-            ConfigLayerSource::Project { .. } => {
-                ConfigLayerSource::Project { file: resolved_file.clone() }
-            }
-            ConfigLayerSource::Workspace { .. } => {
-                ConfigLayerSource::Workspace { file: resolved_file.clone() }
-            }
+            ConfigLayerSource::System { .. } => ConfigLayerSource::System { file: resolved_file.clone() },
+            ConfigLayerSource::User { .. } => ConfigLayerSource::User { file: resolved_file.clone() },
+            ConfigLayerSource::Project { .. } => ConfigLayerSource::Project { file: resolved_file.clone() },
+            ConfigLayerSource::Workspace { .. } => ConfigLayerSource::Workspace { file: resolved_file.clone() },
             ConfigLayerSource::Runtime => {
-                return Some(ConfigLayerEntry::new(
-                    ConfigLayerSource::Runtime,
-                    toml::Value::Table(toml::Table::new()),
-                ));
+                return Some(ConfigLayerEntry::new(ConfigLayerSource::Runtime, toml::Value::Table(toml::Table::new())));
             }
         };
 
@@ -232,10 +211,7 @@ impl ConfigManager {
         }
     }
 
-    fn disabled_layer_from_error(
-        source: ConfigLayerSource,
-        error: anyhow::Error,
-    ) -> ConfigLayerEntry {
+    fn disabled_layer_from_error(source: ConfigLayerSource, error: anyhow::Error) -> ConfigLayerEntry {
         let reason = if error.to_string().contains("parse") {
             LayerDisabledReason::ParseError
         } else {
@@ -271,28 +247,23 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::System { file: system_config })
-            {
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::System { file: system_config }) {
                 layer_stack.push(layer);
             }
         }
 
         // 2. User home config
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if let Some(layer) =
-                Self::load_optional_layer(ConfigLayerSource::User { file: home_config_path })
-            {
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::User { file: home_config_path }) {
                 layer_stack.push(layer);
             }
         }
 
         // 3. The specific file provided (Workspace layer)
         match Self::load_toml_from_file(path) {
-            Ok(toml) => layer_stack.push(ConfigLayerEntry::new(
-                ConfigLayerSource::Workspace { file: path.to_path_buf() },
-                toml,
-            )),
+            Ok(toml) => {
+                layer_stack.push(ConfigLayerEntry::new(ConfigLayerSource::Workspace { file: path.to_path_buf() }, toml))
+            }
             Err(error) => layer_stack.push(Self::disabled_layer_from_error(
                 ConfigLayerSource::Workspace { file: path.to_path_buf() },
                 error,
@@ -324,22 +295,18 @@ impl ConfigManager {
         }
 
         if let Some((layer, error)) = layer_stack.first_layer_error() {
-            bail!(
-                "Configuration layer '{}' failed to load: {}",
-                layer.source.label(),
-                error.message
-            );
+            bail!("Configuration layer '{}' failed to load: {}", layer.source.label(), error.message);
         }
 
         let (effective_toml, origins) = layer_stack.effective_config_with_origins();
-        let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
-            format!("Failed to parse effective config with file: {}", path.display())
-        })?;
+        let config: VTCodeConfig = effective_toml
+            .try_into()
+            .with_context(|| format!("Failed to parse effective config with file: {}", path.display()))?;
         Self::validate_restricted_agent_fields(&layer_stack, &origins)?;
 
-        config.validate().with_context(|| {
-            format!("Failed to validate effective config with file: {}", path.display())
-        })?;
+        config
+            .validate()
+            .with_context(|| format!("Failed to validate effective config with file: {}", path.display()))?;
 
         Ok(Self {
             config,
@@ -388,10 +355,9 @@ impl ConfigManager {
     /// Persist configuration to a specific path, preserving comments
     pub fn save_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
         let path = path.as_ref();
-        let sparse_value =
-            Self::sparse_config_value(config).context("Failed to prepare sparse configuration")?;
-        let sparse_content = toml::to_string_pretty(&sparse_value)
-            .context("Failed to serialize sparse configuration")?;
+        let sparse_value = Self::sparse_config_value(config).context("Failed to prepare sparse configuration")?;
+        let sparse_content =
+            toml::to_string_pretty(&sparse_value).context("Failed to serialize sparse configuration")?;
 
         // If file exists, preserve comments by using toml_edit
         if path.exists() {
@@ -406,8 +372,8 @@ impl ConfigManager {
             let new_doc: toml_edit::DocumentMut = sparse_content
                 .parse()
                 .context("Failed to parse sparse serialized configuration")?;
-            let default_value = toml::Value::try_from(VTCodeConfig::default())
-                .context("Failed to serialize default configuration")?;
+            let default_value =
+                toml::Value::try_from(VTCodeConfig::default()).context("Failed to serialize default configuration")?;
             let default_doc: toml_edit::DocumentMut = toml::to_string_pretty(&default_value)
                 .context("Failed to serialize default configuration")?
                 .parse()
@@ -431,11 +397,7 @@ impl ConfigManager {
         table.remove("project_doc_max_bytes");
         table.remove("project_doc_fallback_filenames");
         Self::remove_table_keys(table, "agent", &["autonomous_mode", "default_editing_mode"]);
-        Self::remove_table_keys(
-            table,
-            "permissions",
-            &["allowed_tools", "disallowed_tools", "auto_permission"],
-        );
+        Self::remove_table_keys(table, "permissions", &["allowed_tools", "disallowed_tools", "auto_permission"]);
     }
 
     fn remove_table_keys(table: &mut toml_edit::Table, section: &str, keys: &[&str]) {
@@ -449,10 +411,9 @@ impl ConfigManager {
     }
 
     pub fn sparse_config_value(config: &VTCodeConfig) -> Result<toml::Value> {
-        let mut value =
-            toml::Value::try_from(config).context("Failed to serialize configuration")?;
-        let default_value = toml::Value::try_from(VTCodeConfig::default())
-            .context("Failed to serialize default configuration")?;
+        let mut value = toml::Value::try_from(config).context("Failed to serialize configuration")?;
+        let default_value =
+            toml::Value::try_from(VTCodeConfig::default()).context("Failed to serialize default configuration")?;
         Self::prune_default_values(&mut value, &default_value);
         Ok(value)
     }
@@ -461,9 +422,9 @@ impl ConfigManager {
         match (value, default_value) {
             (toml::Value::Table(table), toml::Value::Table(default_table)) => {
                 table.retain(|key, child| {
-                    default_table.get(key).is_none_or(|default_child| {
-                        !Self::prune_default_values(child, default_child)
-                    })
+                    default_table
+                        .get(key)
+                        .is_none_or(|default_child| !Self::prune_default_values(child, default_child))
                 });
                 table.is_empty()
             }
@@ -480,11 +441,7 @@ impl ConfigManager {
         Self::merge_sparse_tables(original.as_table_mut(), new.as_table(), default_doc.as_table());
     }
 
-    fn merge_sparse_tables(
-        original: &mut toml_edit::Table,
-        new: &toml_edit::Table,
-        default_table: &toml_edit::Table,
-    ) {
+    fn merge_sparse_tables(original: &mut toml_edit::Table, new: &toml_edit::Table, default_table: &toml_edit::Table) {
         let mut remove_keys = Vec::with_capacity(default_table.len());
 
         for (key, default_value) in default_table.iter() {
@@ -520,11 +477,7 @@ impl ConfigManager {
         }
     }
 
-    fn merge_sparse_items(
-        original: &mut toml_edit::Item,
-        new: &toml_edit::Item,
-        default_value: &toml_edit::Item,
-    ) {
+    fn merge_sparse_items(original: &mut toml_edit::Item, new: &toml_edit::Item, default_value: &toml_edit::Item) {
         match (original, new, default_value) {
             (
                 toml_edit::Item::Table(orig_table),
@@ -537,10 +490,7 @@ impl ConfigManager {
         }
     }
 
-    fn remove_known_default_item(
-        original: &mut toml_edit::Item,
-        default_value: &toml_edit::Item,
-    ) -> bool {
+    fn remove_known_default_item(original: &mut toml_edit::Item, default_value: &toml_edit::Item) -> bool {
         match (original, default_value) {
             (toml_edit::Item::Table(orig_table), toml_edit::Item::Table(default_table)) => {
                 let mut remove_keys = Vec::new();
@@ -561,11 +511,7 @@ impl ConfigManager {
         }
     }
 
-    fn project_config_path(
-        config_dir: &Path,
-        workspace_root: &Path,
-        config_file_name: &str,
-    ) -> Option<PathBuf> {
+    fn project_config_path(config_dir: &Path, workspace_root: &Path, config_file_name: &str) -> Option<PathBuf> {
         let project_name = Self::identify_current_project(workspace_root)?;
         let project_config_path = config_dir
             .join("projects")
@@ -664,8 +610,7 @@ fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
         tracing::info!("Detected plain-text API keys in config, migrating to secure storage...");
 
         // Migrate keys to secure storage
-        let migration_results =
-            migrate_custom_api_keys_to_keyring(&config.agent.custom_api_keys, storage_mode)?;
+        let migration_results = migrate_custom_api_keys_to_keyring(&config.agent.custom_api_keys, storage_mode)?;
 
         // Clear keys from config (keep provider names for tracking)
         let mut migrated_count = 0;
@@ -761,8 +706,7 @@ max_consecutive_denials = 3
         )
         .expect("write legacy config");
 
-        ConfigManager::save_config_to_path(&config_path, &VTCodeConfig::default())
-            .expect("save config");
+        ConfigManager::save_config_to_path(&config_path, &VTCodeConfig::default()).expect("save config");
 
         let saved_content = fs::read_to_string(&config_path).expect("read saved config");
         assert!(

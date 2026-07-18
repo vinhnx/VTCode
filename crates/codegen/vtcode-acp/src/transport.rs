@@ -93,14 +93,7 @@ impl StdioTransport {
         stderr: ChildStderr,
         rpc_timeout: Duration,
     ) -> Self {
-        Self::from_child_with_options(
-            child,
-            stdin,
-            stdout,
-            stderr,
-            rpc_timeout,
-            StdioTransportOptions::default(),
-        )
+        Self::from_child_with_options(child, stdin, stdout, stderr, rpc_timeout, StdioTransportOptions::default())
     }
 
     pub fn from_child_with_options(
@@ -252,12 +245,7 @@ impl StdioTransport {
         self.respond_error_value(Value::from(id), code, message)
     }
 
-    pub fn respond_error_value(
-        &self,
-        id: Value,
-        code: i32,
-        message: impl Into<String>,
-    ) -> AcpResult<()> {
+    pub fn respond_error_value(&self, id: Value, code: i32, message: impl Into<String>) -> AcpResult<()> {
         let mut payload = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -273,12 +261,10 @@ impl StdioTransport {
     fn send_raw(&self, payload: Value) -> AcpResult<()> {
         let text = serde_json::to_string(&payload)?;
         self.write_tx.try_send(text).map_err(|e| match e {
-            mpsc::error::TrySendError::Full(_) => AcpError::Internal(
-                "stdio transport write channel full; subprocess may be slow".into(),
-            ),
-            mpsc::error::TrySendError::Closed(_) => {
-                AcpError::Internal("stdio transport writer channel closed".into())
+            mpsc::error::TrySendError::Full(_) => {
+                AcpError::Internal("stdio transport write channel full; subprocess may be slow".into())
             }
+            mpsc::error::TrySendError::Closed(_) => AcpError::Internal("stdio transport writer channel closed".into()),
         })
     }
 }
@@ -371,8 +357,7 @@ fn spawn_reader(
 
             // Clone the handler Arc out of the lock so the lock is released
             // before the handler runs (prevents re-entrancy / call-site latency).
-            if let Some(handler) =
-                notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
+            if let Some(handler) = notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
                 && let Err(e) = handler(message)
             {
                 tracing::warn!("stdio transport: notification handler error: {e}");
@@ -543,10 +528,7 @@ mod tests {
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
         transport
-            .respond_value(
-                Value::String("request-1".to_string()),
-                serde_json::json!({ "ok": true }),
-            )
+            .respond_value(Value::String("request-1".to_string()), serde_json::json!({ "ok": true }))
             .unwrap();
 
         let raw = rx.try_recv().unwrap();

@@ -44,9 +44,7 @@
 //! 3. De-tokenizes responses before returning to code
 //! 4. Maintains token mapping for the session
 
-use crate::utils::file_utils::{
-    parse_json_with_context, read_file_with_context, write_file_with_context,
-};
+use crate::utils::file_utils::{parse_json_with_context, read_file_with_context, write_file_with_context};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -111,10 +109,8 @@ impl ToolIpcHandler {
     /// Process request for PII (tokenize if enabled).
     pub fn process_request_for_pii(&self, request: &mut ToolRequest) -> Result<()> {
         if let Some(tokenizer) = &self.pii_tokenizer {
-            let args_str =
-                serde_json::to_string(&request.args).context("failed to serialize request args")?;
-            let (tokenized, _) =
-                tokenizer.tokenize_string(&args_str).context("PII tokenization failed")?;
+            let args_str = serde_json::to_string(&request.args).context("failed to serialize request args")?;
+            let (tokenized, _) = tokenizer.tokenize_string(&args_str).context("PII tokenization failed")?;
             request.args = parse_json_with_context(&tokenized, "tokenized args")?;
         }
         Ok(())
@@ -125,10 +121,8 @@ impl ToolIpcHandler {
         if let Some(tokenizer) = &self.pii_tokenizer
             && let Some(result) = &response.result
         {
-            let result_str =
-                serde_json::to_string(result).context("failed to serialize response result")?;
-            let detokenized =
-                tokenizer.detokenize_string(&result_str).context("PII de-tokenization failed")?;
+            let result_str = serde_json::to_string(result).context("failed to serialize response result")?;
+            let detokenized = tokenizer.detokenize_string(&result_str).context("PII de-tokenization failed")?;
             response.result = Some(parse_json_with_context(&detokenized, "de-tokenized result")?);
         }
         Ok(())
@@ -236,8 +230,7 @@ mod tests {
             args: json!({"path": "/tmp/test"}),
             metadata: None,
         };
-        let request_json =
-            serde_json::to_string(&request).expect("request should serialize to JSON");
+        let request_json = serde_json::to_string(&request).expect("request should serialize to JSON");
         let request_path = temp_dir.path().join("request.json");
 
         tokio::spawn(async move {

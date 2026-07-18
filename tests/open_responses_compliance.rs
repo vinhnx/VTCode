@@ -6,14 +6,13 @@
 
 use serde_json::json;
 use vtcode_core::open_responses::{
-    IncompleteReason, ItemStatus, MessageRole, OpenResponseError, OpenResponseErrorCode,
-    OutputItem, Request, Response, ResponseBuilder, ResponseStatus, VecStreamEmitter,
-    is_valid_extension_type,
+    IncompleteReason, ItemStatus, MessageRole, OpenResponseError, OpenResponseErrorCode, OutputItem, Request, Response,
+    ResponseBuilder, ResponseStatus, VecStreamEmitter, is_valid_extension_type,
 };
 use vtcode_core::{
-    AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, McpToolCallItem,
-    McpToolCallStatus, ReasoningItem as ExecReasoningItem, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, Usage,
+    AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, McpToolCallItem, McpToolCallStatus,
+    ReasoningItem as ExecReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
+    TurnCompletedEvent, Usage,
 };
 
 #[test]
@@ -64,50 +63,32 @@ fn test_streaming_event_sequence_compliance() {
     let mut emitter = VecStreamEmitter::new();
 
     // 1. Response Created
-    builder.process_event(
-        &ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "t1".to_string() }),
-        &mut emitter,
-    );
+    builder
+        .process_event(&ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "t1".to_string() }), &mut emitter);
 
     // 2. Item Started
     let item = ThreadItem {
         id: "msg_1".to_string(),
         details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello".to_string() }),
     };
-    builder.process_event(
-        &ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }), &mut emitter);
 
     // 3. Text Delta
     let updated_item = ThreadItem {
         id: "msg_1".to_string(),
-        details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-            text: "Hello world".to_string(),
-        }),
+        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello world".to_string() }),
     };
-    builder.process_event(
-        &ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: updated_item }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: updated_item }), &mut emitter);
 
     // 4. Item Completed
     let final_item = ThreadItem {
         id: "msg_1".to_string(),
-        details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-            text: "Hello world!".to_string(),
-        }),
+        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello world!".to_string() }),
     };
-    builder.process_event(
-        &ThreadEvent::ItemCompleted(ItemCompletedEvent { item: final_item }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: final_item }), &mut emitter);
 
     // 5. Response Completed
-    builder.process_event(
-        &ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }), &mut emitter);
 
     let events = emitter.into_events();
 
@@ -151,10 +132,7 @@ fn test_incomplete_response_compliance() {
 
     assert_eq!(response.status, ResponseStatus::Incomplete);
     assert!(response.incomplete_details.is_some());
-    assert_eq!(
-        response.incomplete_details.as_ref().unwrap().reason,
-        IncompleteReason::MaxOutputTokens
-    );
+    assert_eq!(response.incomplete_details.as_ref().unwrap().reason, IncompleteReason::MaxOutputTokens);
 
     let json = serde_json::to_value(&response).unwrap();
     assert_eq!(json["status"], "incomplete");
@@ -171,8 +149,8 @@ fn test_custom_extension_compliance() {
 
 #[test]
 fn test_error_object_compliance() {
-    let err = OpenResponseError::invalid_param("model", "Model not found")
-        .with_code(OpenResponseErrorCode::InvalidModel);
+    let err =
+        OpenResponseError::invalid_param("model", "Model not found").with_code(OpenResponseErrorCode::InvalidModel);
 
     let json = serde_json::to_value(&err).unwrap();
     assert_eq!(json["type"], "invalid_request");
@@ -188,16 +166,10 @@ fn test_reasoning_item_compliance() {
 
     let item = ThreadItem {
         id: "r1".to_string(),
-        details: ThreadItemDetails::Reasoning(ExecReasoningItem {
-            text: "Thinking...".to_string(),
-            stage: None,
-        }),
+        details: ThreadItemDetails::Reasoning(ExecReasoningItem { text: "Thinking...".to_string(), stage: None }),
     };
 
-    builder.process_event(
-        &ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }), &mut emitter);
 
     builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 

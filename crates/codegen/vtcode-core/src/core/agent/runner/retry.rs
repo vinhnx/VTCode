@@ -29,12 +29,7 @@ impl AgentRunner {
     ) -> VtCodeResult<TaskResults> {
         use std::time::Duration;
 
-        let policy = RetryPolicy::from_retries(
-            max_retries,
-            Duration::from_secs(2),
-            Duration::from_secs(30),
-            2.0,
-        );
+        let policy = RetryPolicy::from_retries(max_retries, Duration::from_secs(2), Duration::from_secs(30), 2.0);
         let metrics = self.tool_registry.metrics_collector();
         let task_id = task.id.clone();
         let mut ctx = AgentRetryContext {
@@ -130,9 +125,7 @@ impl AgentRunner {
             move |_policy| {
                 VtCodeError::execution(
                     ErrorCode::ToolExecutionFailed,
-                    format!(
-                        "agent task '{task_id}' exhausted the retry loop without an error payload"
-                    ),
+                    format!("agent task '{task_id}' exhausted the retry loop without an error payload"),
                 )
             },
         )

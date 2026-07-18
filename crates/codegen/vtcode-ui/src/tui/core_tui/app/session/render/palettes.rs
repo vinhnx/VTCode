@@ -2,9 +2,9 @@ use super::*;
 use crate::tui::config::constants::ui;
 use crate::tui::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::tui::core_tui::session::list_panel::{
-    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
-    StaticRowsListPanelModel, fixed_section_rows, fixed_section_rows_with_divider,
-    input_styles_from_theme, render_shared_list_panel, rows_to_u16,
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
+    fixed_section_rows, fixed_section_rows_with_divider, input_styles_from_theme, render_shared_list_panel,
+    rows_to_u16,
 };
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -55,11 +55,7 @@ pub fn split_inline_agent_palette_area(session: &mut Session, area: Rect) -> (Re
 }
 
 pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if !session.inline_lists_visible()
-        || area.height == 0
-        || area.width == 0
-        || !session.agent_palette_visible()
-    {
+    if !session.inline_lists_visible() || area.height == 0 || area.width == 0 || !session.agent_palette_visible() {
         return;
     }
 
@@ -101,26 +97,15 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             } else {
                 blank_gutter.clone()
             };
-            let cursor_style = if is_selected {
-                highlight_style
-            } else {
-                dim_style
-            };
+            let cursor_style = if is_selected { highlight_style } else { dim_style };
             let name_style = if is_selected {
                 highlight_style
             } else {
                 row.style.add_modifier(Modifier::DIM)
             };
-            let mut spans = vec![
-                Span::styled(cursor, cursor_style),
-                Span::styled(row.text, name_style),
-            ];
+            let mut spans = vec![Span::styled(cursor, cursor_style), Span::styled(row.text, name_style)];
             if let Some(subtitle) = row.subtitle {
-                let sub_style = if is_selected {
-                    highlight_style
-                } else {
-                    dim_style
-                };
+                let sub_style = if is_selected { highlight_style } else { dim_style };
                 spans.push(Span::styled(format!("  {subtitle}"), sub_style));
             }
 
@@ -139,10 +124,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         .collect::<Vec<_>>();
 
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled(
-            "Agents".to_owned(),
-            highlight_style,
-        ))],
+        header: vec![Line::from(Span::styled("Agents".to_owned(), highlight_style))],
         info: instructions,
         search: Some(SharedSearchField {
             label: "Search agents".to_owned(),
@@ -207,11 +189,7 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
 }
 
 pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if !session.inline_lists_visible()
-        || area.height == 0
-        || area.width == 0
-        || !session.file_palette_visible()
-    {
+    if !session.inline_lists_visible() || area.height == 0 || area.width == 0 || !session.file_palette_visible() {
         return;
     }
 
@@ -249,11 +227,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
             } else {
                 blank_gutter.clone()
             };
-            let cursor_style = if is_selected {
-                highlight_style
-            } else {
-                dim_style
-            };
+            let cursor_style = if is_selected { highlight_style } else { dim_style };
             let name_style = if entry.is_dir {
                 if is_selected { highlight_style } else { accent }
             } else if is_selected {
@@ -323,10 +297,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     }
 }
 
-fn build_agent_palette_rows(
-    session: &Session,
-    palette: &AgentPalette,
-) -> Vec<AgentPaletteRenderRow> {
+fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<AgentPaletteRenderRow> {
     let mut rows = Vec::new();
     let default = default_style(session);
 
@@ -386,10 +357,7 @@ fn agent_palette_instructions(session: &Session, palette: &AgentPalette) -> Vec<
         )));
 
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("Showing {count_text}"),
-                default_style(session).add_modifier(Modifier::DIM),
-            ),
+            Span::styled(format!("Showing {count_text}"), default_style(session).add_modifier(Modifier::DIM)),
             Span::styled(
                 if !palette.filter_query().is_empty() {
                     format!(" matching '{}'", palette.filter_query())
@@ -426,10 +394,7 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
         )]));
 
         lines.push(Line::from(vec![
-            Span::styled(
-                format!("Showing {count_text}"),
-                default_style(session).add_modifier(Modifier::DIM),
-            ),
+            Span::styled(format!("Showing {count_text}"), default_style(session).add_modifier(Modifier::DIM)),
             Span::styled(
                 if !palette.filter_query().is_empty() {
                     format!(" matching '{}'", palette.filter_query())

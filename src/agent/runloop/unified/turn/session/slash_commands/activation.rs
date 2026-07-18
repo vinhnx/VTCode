@@ -4,9 +4,7 @@ use tracing::warn;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
-use crate::agent::runloop::unified::session_setup::{
-    active_deferred_tool_policy, refresh_tool_snapshot,
-};
+use crate::agent::runloop::unified::session_setup::{active_deferred_tool_policy, refresh_tool_snapshot};
 
 use super::SlashCommandContext;
 
@@ -15,11 +13,7 @@ pub(super) async fn ensure_skills_context_activated(ctx: &SlashCommandContext<'_
         return Ok(());
     };
 
-    vtcode_core::context::ensure_skills_dynamic_context(
-        &ctx.config.workspace,
-        &vt_cfg.context.dynamic,
-    )
-    .await
+    vtcode_core::context::ensure_skills_dynamic_context(&ctx.config.workspace, &vt_cfg.context.dynamic).await
 }
 
 pub(super) async fn ensure_mcp_activated(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
@@ -57,11 +51,8 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
                         .as_ref()
                         .map(|cfg| cfg.agent.tool_documentation_mode)
                         .unwrap_or_default();
-                    let deferred_tool_policy = active_deferred_tool_policy(
-                        ctx.config,
-                        ctx.vt_cfg.as_ref(),
-                        &**ctx.provider_client,
-                    );
+                    let deferred_tool_policy =
+                        active_deferred_tool_policy(ctx.config, ctx.vt_cfg.as_ref(), &**ctx.provider_client);
                     refresh_tool_snapshot(
                         ctx.tool_registry,
                         ctx.tools,

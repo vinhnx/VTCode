@@ -23,13 +23,9 @@ pub mod query;
 pub mod retention;
 
 pub use error::SessionStoreError;
-pub use event_log::{
-    DEFAULT_MAX_EVENTS, SessionEventLog, SessionManifest, TurnIndex, TurnIndexEntry,
-};
+pub use event_log::{DEFAULT_MAX_EVENTS, SessionEventLog, SessionManifest, TurnIndex, TurnIndexEntry};
 pub use migration::{MigrationReport, migrate_legacy};
-pub use progress::{
-    Milestone, MilestoneStatus, ProgressLedger, load_progress, progress_path, save_progress,
-};
+pub use progress::{Milestone, MilestoneStatus, ProgressLedger, load_progress, progress_path, save_progress};
 pub use query::{FactRecord, SessionSummary, query_facts, recent_sessions};
 pub use retention::{RetentionPolicy, apply_retention, gc_legacy};
 
@@ -62,11 +58,7 @@ pub fn session_dir(workspace: &Path, session_id: &str) -> PathBuf {
 /// returned [`SessionEventLog`] is cheap to clone (internally `Arc`-free but the
 /// file handle is shared via an internal mutex) and supports concurrent
 /// `append` calls from the runloop's event sink.
-pub fn open(
-    workspace: &Path,
-    session_id: &str,
-    max_events: usize,
-) -> Result<SessionEventLog, SessionStoreError> {
+pub fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<SessionEventLog, SessionStoreError> {
     SessionEventLog::open(workspace, session_id, max_events)
 }
 
@@ -82,11 +74,7 @@ fn sanitize_id(id: &str) -> String {
     }
     // Strip leading dots to avoid creating hidden directories.
     let out = out.trim_start_matches('.').to_string();
-    if out.is_empty() {
-        "session".to_string()
-    } else {
-        out
-    }
+    if out.is_empty() { "session".to_string() } else { out }
 }
 
 #[cfg(test)]

@@ -94,9 +94,7 @@ pub fn resolve_lightweight_route(
     let main_provider = main_route.provider_name.as_str();
 
     let mut warning = None;
-    if let Some(configured_model) =
-        explicit_override_model.map(str::trim).filter(|value| !value.is_empty())
-    {
+    if let Some(configured_model) = explicit_override_model.map(str::trim).filter(|value| !value.is_empty()) {
         if let Some(route) = route_for_candidate(main_provider, configured_model) {
             return LightweightRouteResolution {
                 fallback: (route != main_route).then_some(main_route),
@@ -266,20 +264,14 @@ pub fn create_provider_for_model_route(
         },
     )
     .with_context(|| {
-        format!(
-            "Failed to initialize lightweight provider '{}' for model '{}'",
-            route.provider_name, route.model
-        )
+        format!("Failed to initialize lightweight provider '{}' for model '{}'", route.provider_name, route.model)
     })
 }
 
 /// Resolve the API key for a model route, using the runtime key when the route
 /// targets the same provider as the main model, or falling back to environment
 /// variables otherwise.
-pub fn resolve_api_key_for_model_route(
-    route: &ModelRoute,
-    runtime_config: &RuntimeAgentConfig,
-) -> Option<String> {
+pub fn resolve_api_key_for_model_route(route: &ModelRoute, runtime_config: &RuntimeAgentConfig) -> Option<String> {
     if route
         .provider_name
         .eq_ignore_ascii_case(main_model_route(runtime_config).provider_name.as_str())
@@ -430,9 +422,7 @@ fn preferred_lightweight_model_slug(provider: Provider, active_model: &str) -> O
     }
 }
 
-fn provider_default_lightweight_model(
-    provider: Provider,
-) -> Option<std::borrow::Cow<'static, str>> {
+fn provider_default_lightweight_model(provider: Provider) -> Option<std::borrow::Cow<'static, str>> {
     match provider {
         Provider::OpenAI => Some(ModelId::GPT54Mini.as_str()),
         Provider::Anthropic => Some(ModelId::ClaudeHaiku45.as_str()),
@@ -497,12 +487,7 @@ mod tests {
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.small_model.model = "claude-4-5-haiku".to_string();
 
-        let route = resolve_lightweight_route(
-            &runtime,
-            Some(&vt_cfg),
-            LightweightFeature::PromptSuggestions,
-            None,
-        );
+        let route = resolve_lightweight_route(&runtime, Some(&vt_cfg), LightweightFeature::PromptSuggestions, None);
 
         assert_eq!(route.primary.provider_name, "openai");
         assert_eq!(route.primary.model, ModelId::GPT54Mini.as_str());
@@ -512,10 +497,7 @@ mod tests {
 
     #[test]
     fn auto_lightweight_model_prefers_same_generation_openai_sibling() {
-        assert_eq!(
-            auto_lightweight_model("openai", &ModelId::GPT54.as_str()),
-            ModelId::GPT54Mini.as_str()
-        );
+        assert_eq!(auto_lightweight_model("openai", &ModelId::GPT54.as_str()), ModelId::GPT54Mini.as_str());
     }
 
     #[test]
@@ -524,18 +506,12 @@ mod tests {
             auto_lightweight_model("anthropic", &ModelId::ClaudeSonnet46.as_str()),
             ModelId::ClaudeHaiku45.as_str()
         );
-        assert_eq!(
-            auto_lightweight_model("anthropic", "claude-sonnet-4.5"),
-            ModelId::ClaudeHaiku45.as_str()
-        );
+        assert_eq!(auto_lightweight_model("anthropic", "claude-sonnet-4.5"), ModelId::ClaudeHaiku45.as_str());
     }
 
     #[test]
     fn auto_lightweight_model_uses_lower_generation_glm_pair() {
-        assert_eq!(
-            auto_lightweight_model("zai", &ModelId::ZaiGlm51.as_str()),
-            ModelId::ZaiGlm51.as_str()
-        );
+        assert_eq!(auto_lightweight_model("zai", &ModelId::ZaiGlm51.as_str()), ModelId::ZaiGlm51.as_str());
     }
 
     #[test]
@@ -548,10 +524,7 @@ mod tests {
 
     #[test]
     fn auto_lightweight_model_infers_family_for_custom_provider() {
-        assert_eq!(
-            auto_lightweight_model("mycorp", &ModelId::GPT54.as_str()),
-            ModelId::GPT54Mini.as_str()
-        );
+        assert_eq!(auto_lightweight_model("mycorp", &ModelId::GPT54.as_str()), ModelId::GPT54Mini.as_str());
     }
 
     #[test]
@@ -560,8 +533,7 @@ mod tests {
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.small_model.use_for_memory = false;
 
-        let route =
-            resolve_lightweight_route(&runtime, Some(&vt_cfg), LightweightFeature::Memory, None);
+        let route = resolve_lightweight_route(&runtime, Some(&vt_cfg), LightweightFeature::Memory, None);
 
         assert_eq!(route.primary.model, ModelId::GPT54.as_str());
         assert_eq!(route.source, LightweightRouteSource::MainModel);

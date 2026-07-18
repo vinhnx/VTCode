@@ -222,11 +222,7 @@ impl SkillCompatibilityChecker {
     }
 
     /// Check semantic version compatibility
-    fn check_version_compatibility(
-        &self,
-        required: &str,
-        available: &str,
-    ) -> Result<VersionCompatibility> {
+    fn check_version_compatibility(&self, required: &str, available: &str) -> Result<VersionCompatibility> {
         // required format: "1.2" (accepts 1.2.x)
         // available format: "1.2.3" (current version)
 
@@ -236,11 +232,7 @@ impl SkillCompatibilityChecker {
         }
 
         let req_major: u32 = req_parts[0].parse()?;
-        let req_minor: u32 = if req_parts.len() == 2 {
-            req_parts[1].parse()?
-        } else {
-            0
-        };
+        let req_minor: u32 = if req_parts.len() == 2 { req_parts[1].parse()? } else { 0 };
 
         let (avail_major, avail_minor, _avail_patch) = ToolVersion::from_string(available)?;
 
@@ -300,11 +292,8 @@ impl SkillCompatibilityChecker {
         if !report.migrations.is_empty() {
             output.push_str("\nRequired Migrations:\n");
             for migration in &report.migrations {
-                let _ = writeln!(
-                    output,
-                    "  - {}: {} -> {}",
-                    migration.tool, migration.from_version, migration.to_version
-                );
+                let _ =
+                    writeln!(output, "  - {}: {} -> {}", migration.tool, migration.from_version, migration.to_version);
             }
         }
 

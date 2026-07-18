@@ -6,9 +6,8 @@ use std::sync::Arc;
 use crate::AuthCredentialsStoreMode;
 use crate::config::{OpenAIAuthConfig, OpenAIPreferredMethod};
 use crate::openai_chatgpt_oauth::{
-    OpenAIChatGptAuthHandle, OpenAIChatGptSession, OpenAIChatGptSessionRefresher,
-    OpenAICredentialOverview, OpenAIResolvedAuth, OpenAIResolvedAuthSource,
-    load_openai_chatgpt_session_with_mode,
+    OpenAIChatGptAuthHandle, OpenAIChatGptSession, OpenAIChatGptSessionRefresher, OpenAICredentialOverview,
+    OpenAIResolvedAuth, OpenAIResolvedAuthSource, load_openai_chatgpt_session_with_mode,
 };
 
 /// Service contract for resolving VT Code's OpenAI account auth state.
@@ -30,11 +29,7 @@ impl OpenAIAccountAuthService {
         match self.auth_config.preferred_method {
             OpenAIPreferredMethod::Chatgpt => {
                 let session = session.ok_or_else(|| anyhow!("Run vtcode login openai"))?;
-                let handle = OpenAIChatGptAuthHandle::new(
-                    session,
-                    self.auth_config.clone(),
-                    self.storage_mode,
-                );
+                let handle = OpenAIChatGptAuthHandle::new(session, self.auth_config.clone(), self.storage_mode);
                 let api_key = handle.current_api_key()?;
                 Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
             }
@@ -44,11 +39,7 @@ impl OpenAIAccountAuthService {
             }
             OpenAIPreferredMethod::Auto => {
                 if let Some(session) = session {
-                    let handle = OpenAIChatGptAuthHandle::new(
-                        session,
-                        self.auth_config.clone(),
-                        self.storage_mode,
-                    );
+                    let handle = OpenAIChatGptAuthHandle::new(session, self.auth_config.clone(), self.storage_mode);
                     let api_key = handle.current_api_key()?;
                     Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
                 } else {
@@ -65,29 +56,18 @@ impl OpenAIAccountAuthService {
         session: OpenAIChatGptSession,
         refresher: Arc<dyn OpenAIChatGptSessionRefresher>,
     ) -> Result<OpenAIResolvedAuth> {
-        let handle = OpenAIChatGptAuthHandle::new_external(
-            session,
-            self.auth_config.auto_refresh,
-            refresher,
-        );
+        let handle = OpenAIChatGptAuthHandle::new_external(session, self.auth_config.auto_refresh, refresher);
         let api_key = handle.current_api_key()?;
         Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
     }
 
     /// Summarize the available OpenAI credentials without mutating storage.
-    pub fn summarize_credentials(
-        &self,
-        api_key: Option<String>,
-    ) -> Result<OpenAICredentialOverview> {
+    pub fn summarize_credentials(&self, api_key: Option<String>) -> Result<OpenAICredentialOverview> {
         let chatgpt_session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
         let api_key_available = api_key.as_ref().is_some_and(|value| !value.trim().is_empty());
         let active_source = match self.auth_config.preferred_method {
-            OpenAIPreferredMethod::Chatgpt => {
-                chatgpt_session.as_ref().map(|_| OpenAIResolvedAuthSource::ChatGpt)
-            }
-            OpenAIPreferredMethod::ApiKey => {
-                api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey)
-            }
+            OpenAIPreferredMethod::Chatgpt => chatgpt_session.as_ref().map(|_| OpenAIResolvedAuthSource::ChatGpt),
+            OpenAIPreferredMethod::ApiKey => api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey),
             OpenAIPreferredMethod::Auto => {
                 if chatgpt_session.is_some() {
                     Some(OpenAIResolvedAuthSource::ChatGpt)
@@ -112,9 +92,7 @@ impl OpenAIAccountAuthService {
                 Some(OpenAIResolvedAuthSource::ApiKey) => {
                     "Next step: keep the current priority, remove OPENAI_API_KEY if ChatGPT should win, or set [auth.openai].preferred_method = \"chatgpt\"."
                 }
-                None => {
-                    "Next step: choose a single preferred source or set [auth.openai].preferred_method explicitly."
-                }
+                None => "Next step: choose a single preferred source or set [auth.openai].preferred_method explicitly.",
             };
             (
                 Some(format!(

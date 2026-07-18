@@ -25,11 +25,7 @@ fn set_input_command_activates_file_palette_for_at_query() {
 #[test]
 fn file_palette_renders_search_field_above_results() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
-    load_app_file_palette(
-        &mut session,
-        vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
-        PathBuf::from("."),
-    );
+    load_app_file_palette(&mut session, vec!["src/main.rs".to_string(), "src/lib.rs".to_string()], PathBuf::from("."));
     session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
 
     let lines = rendered_app_session_lines(&mut session, 20);
@@ -54,11 +50,7 @@ fn file_palette_uses_full_width_header_background_and_divider() {
         ..InlineTheme::default()
     };
     let mut session = AppSession::new(theme, None, VIEW_ROWS);
-    load_app_file_palette(
-        &mut session,
-        vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
-        PathBuf::from("."),
-    );
+    load_app_file_palette(&mut session, vec!["src/main.rs".to_string(), "src/lib.rs".to_string()], PathBuf::from("."));
     session.handle_command(app_types::InlineCommand::SetInput("@src".to_string()));
 
     let backend = TestBackend::new(VIEW_WIDTH, 20);

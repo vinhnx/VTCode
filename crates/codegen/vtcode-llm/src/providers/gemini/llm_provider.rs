@@ -205,8 +205,7 @@ impl LLMProvider for GeminiProvider {
             let config = StreamingConfig::with_total_timeout(streaming_timeout);
             let mut processor = StreamingProcessor::with_config(config);
             let event_sender = completion_sender.clone();
-            let mut aggregator =
-                crate::providers::shared::StreamAggregator::new(model_clone.clone());
+            let mut aggregator = crate::providers::shared::StreamAggregator::new(model_clone.clone());
 
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {
@@ -219,11 +218,9 @@ impl LLMProvider for GeminiProvider {
                     }
 
                     for event in aggregator.sanitizer.process_chunk(&delta) {
-                        event_sender.send(Ok(event)).map_err(|_e| {
-                            StreamingError::StreamingError {
-                                message: "Streaming consumer dropped".to_string(),
-                                partial_content: Some(chunk.to_string()),
-                            }
+                        event_sender.send(Ok(event)).map_err(|_e| StreamingError::StreamingError {
+                            message: "Streaming consumer dropped".to_string(),
+                            partial_content: Some(chunk.to_string()),
                         })?;
                     }
                 }
@@ -233,9 +230,7 @@ impl LLMProvider for GeminiProvider {
             let result = processor.process_stream(response, &mut on_chunk).await;
             match result {
                 Ok(mut streaming_response) => {
-                    if streaming_response.candidates.is_empty()
-                        && !aggregator.content.trim().is_empty()
-                    {
+                    if streaming_response.candidates.is_empty() && !aggregator.content.trim().is_empty() {
                         streaming_response.candidates.push(StreamingCandidate {
                             content: Content {
                                 role: "model".to_string(),
@@ -259,9 +254,8 @@ impl LLMProvider for GeminiProvider {
                                 final_response.content = aggregator_response.content;
                             }
 
-                            let _ = completion_sender.send(Ok(LLMStreamEvent::Completed {
-                                response: Box::new(final_response),
-                            }));
+                            let _ = completion_sender
+                                .send(Ok(LLMStreamEvent::Completed { response: Box::new(final_response) }));
                         }
                         Err(err) => {
                             let _ = completion_sender.send(Err(err));
@@ -303,10 +297,8 @@ impl LLMProvider for GeminiProvider {
         }
 
         if !models::google::SUPPORTED_MODELS.iter().any(|m| *m == request.model) {
-            let formatted_error = error_display::format_llm_error(
-                "Gemini",
-                &format!("Unsupported model: {}", request.model),
-            );
+            let formatted_error =
+                error_display::format_llm_error("Gemini", &format!("Unsupported model: {}", request.model));
             return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 

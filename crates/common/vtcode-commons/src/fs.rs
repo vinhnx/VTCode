@@ -45,11 +45,7 @@ pub async fn write_file_with_context(path: &Path, content: &str, context: &str) 
 ///
 /// On rename failure the temp file is best-effort removed before returning
 /// the error.
-pub async fn write_file_atomic_with_context(
-    path: &Path,
-    content: &str,
-    context: &str,
-) -> Result<()> {
+pub async fn write_file_atomic_with_context(path: &Path, content: &str, context: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         ensure_dir_exists(parent).await?;
     }
@@ -62,8 +58,7 @@ pub async fn write_file_atomic_with_context(
 
     if let Err(err) = fs::rename(&temp_path, path).await {
         let _ = fs::remove_file(&temp_path).await;
-        return Err(err)
-            .with_context(|| format!("Failed to write {}: {}", context, path.display()));
+        return Err(err).with_context(|| format!("Failed to write {}: {}", context, path.display()));
     }
 
     Ok(())
@@ -80,8 +75,7 @@ fn atomic_temp_path(path: &Path) -> PathBuf {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let file_name =
-        path.file_name().and_then(|name| name.to_str()).unwrap_or("vtcode-atomic-write");
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("vtcode-atomic-write");
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
@@ -103,15 +97,11 @@ pub async fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<()> 
 pub async fn read_json_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let content = read_file_with_context(path, "JSON file").await?;
 
-    serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse JSON from {}", path.display()))
+    serde_json::from_str(&content).with_context(|| format!("Failed to parse JSON from {}", path.display()))
 }
 
 /// Parse JSON with context for better error messages
-pub fn parse_json_with_context<T: for<'de> Deserialize<'de>>(
-    content: &str,
-    context: &str,
-) -> Result<T> {
+pub fn parse_json_with_context<T: for<'de> Deserialize<'de>>(content: &str, context: &str) -> Result<T> {
     serde_json::from_str(content).with_context(|| format!("Failed to parse JSON from {context}"))
 }
 
@@ -122,8 +112,7 @@ pub fn serialize_json_with_context<T: Serialize>(data: &T, context: &str) -> Res
 
 /// Serialize JSON pretty with context
 pub fn serialize_json_pretty_with_context<T: Serialize>(data: &T, context: &str) -> Result<String> {
-    serde_json::to_string_pretty(data)
-        .with_context(|| format!("Failed to pretty-serialize JSON for {context}"))
+    serde_json::to_string_pretty(data).with_context(|| format!("Failed to pretty-serialize JSON for {context}"))
 }
 
 /// Parse JSON into a typed value, returning `None` on failure.
@@ -152,10 +141,7 @@ pub fn try_parse_json_value(input: &str) -> Option<serde_json::Value> {
 /// A parse failure is logged at `debug` level with the provided `label` so the
 /// failure is visible in traces without being fatal.
 #[inline]
-pub fn parse_json_or_default<T: for<'de> Deserialize<'de> + Default>(
-    input: &str,
-    label: &str,
-) -> T {
+pub fn parse_json_or_default<T: for<'de> Deserialize<'de> + Default>(input: &str, label: &str) -> T {
     serde_json::from_str(input).unwrap_or_else(|err| {
         tracing::debug!(label, %err, "JSON parse failed, using default");
         T::default()
@@ -215,16 +201,14 @@ pub async fn rename_async(from: &Path, to: &Path) -> Result<()> {
 /// Ensure a directory exists (sync)
 pub fn ensure_dir_exists_sync(path: &Path) -> Result<()> {
     if !path.exists() {
-        std::fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory: {}", path.display()))?;
+        std::fs::create_dir_all(path).with_context(|| format!("Failed to create directory: {}", path.display()))?;
     }
     Ok(())
 }
 
 /// Read a file with contextual error message (sync)
 pub fn read_file_with_context_sync(path: &Path, context: &str) -> Result<String> {
-    std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}: {}", context, path.display()))
+    std::fs::read_to_string(path).with_context(|| format!("Failed to read {}: {}", context, path.display()))
 }
 
 /// Write a file with contextual error message (sync)
@@ -232,8 +216,7 @@ pub fn write_file_with_context_sync(path: &Path, content: &str, context: &str) -
     if let Some(parent) = path.parent() {
         ensure_dir_exists_sync(parent)?;
     }
-    std::fs::write(path, content)
-        .with_context(|| format!("Failed to write {}: {}", context, path.display()))
+    std::fs::write(path, content).with_context(|| format!("Failed to write {}: {}", context, path.display()))
 }
 
 /// Write a JSON file (sync)
@@ -248,8 +231,7 @@ pub fn write_json_file_sync<T: Serialize>(path: &Path, data: &T) -> Result<()> {
 pub fn read_json_file_sync<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let content = read_file_with_context_sync(path, "JSON file")?;
 
-    serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse JSON from {}", path.display()))
+    serde_json::from_str(&content).with_context(|| format!("Failed to parse JSON from {}", path.display()))
 }
 
 /// Check whether a path looks like an image file based on extension.
@@ -275,10 +257,7 @@ pub fn is_image_path(path: &Path) -> bool {
 /// Check whether a string is a Windows absolute path (e.g., `C:\...` or `C:/...`).
 pub fn is_windows_absolute_path(path: &str) -> bool {
     let bytes = path.as_bytes();
-    bytes.len() > 2
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && (bytes[2] == b'\\' || bytes[2] == b'/')
+    bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && (bytes[2] == b'\\' || bytes[2] == b'/')
 }
 
 /// Remove backslash-escaped whitespace from a token.

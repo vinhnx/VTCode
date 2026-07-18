@@ -89,11 +89,7 @@ impl ListNavigator {
         }
 
         let current = self.selected.unwrap_or(0);
-        let next = if current > 0 {
-            current - 1
-        } else {
-            self.item_count - 1
-        };
+        let next = if current > 0 { current - 1 } else { self.item_count - 1 };
         self.select_index(next)
     }
 
@@ -103,11 +99,7 @@ impl ListNavigator {
         }
 
         let current = self.selected.unwrap_or(self.item_count - 1);
-        let next = if current + 1 < self.item_count {
-            current + 1
-        } else {
-            0
-        };
+        let next = if current + 1 < self.item_count { current + 1 } else { 0 };
         self.select_index(next)
     }
 

@@ -10,24 +10,22 @@
 //! or storing in session archives.
 
 use regex::Regex;
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 /// OpenAI API key pattern: sk- followed by alphanumeric characters
 static OPENAI_KEY_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"sk-[A-Za-z0-9]{20,}"));
 
 /// AWS Access Key ID pattern: AKIA followed by 16 alphanumeric characters
-static AWS_ACCESS_KEY_ID_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| compile_regex(r"\bAKIA[0-9A-Z]{16}\b"));
+static AWS_ACCESS_KEY_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"\bAKIA[0-9A-Z]{16}\b"));
 
 /// Bearer token pattern: "Bearer " followed by token characters
-static BEARER_TOKEN_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| compile_regex(r"(?i)\bBearer\s+[A-Za-z0-9.\-_]{16,}\b"));
+static BEARER_TOKEN_REGEX: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"(?i)\bBearer\s+[A-Za-z0-9.\-_]{16,}\b"));
 
 /// Generic secret assignment pattern: key=value or key: value format
 /// Matches common secret key names like api_key, token, secret, password
-static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(r#"(?i)\b(api[\-_]?key|token|secret|password)\b(\s*[:=]\s*)(["']?)[^\s"']{8,}"#)
-});
+static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r#"(?i)\b(api[\-_]?key|token|secret|password)\b(\s*[:=]\s*)(["']?)[^\s"']{8,}"#));
 
 /// Redact secrets and sensitive keys from a string.
 ///
@@ -44,12 +42,15 @@ static SECRET_ASSIGNMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// assert_eq!(output, "API key is [REDACTED_SECRET]");
 /// ```
 pub fn redact_secrets(input: String) -> String {
-    let redacted = OPENAI_KEY_REGEX.replace_all(&input, "[REDACTED_SECRET]");
-    let redacted = AWS_ACCESS_KEY_ID_REGEX.replace_all(&redacted, "[REDACTED_SECRET]");
-    let redacted = BEARER_TOKEN_REGEX.replace_all(&redacted, "Bearer [REDACTED_SECRET]");
-    let redacted = SECRET_ASSIGNMENT_REGEX.replace_all(&redacted, "$1$2$3[REDACTED_SECRET]");
+    let r1 = OPENAI_KEY_REGEX.replace_all(&input, "[REDACTED_SECRET]");
+    let r2 = AWS_ACCESS_KEY_ID_REGEX.replace_all(&r1, "[REDACTED_SECRET]");
+    let r3 = BEARER_TOKEN_REGEX.replace_all(&r2, "Bearer [REDACTED_SECRET]");
+    let r4 = SECRET_ASSIGNMENT_REGEX.replace_all(&r3, "$1$2$3[REDACTED_SECRET]");
 
-    redacted.to_string()
+    match r4 {
+        Cow::Borrowed(_) => input,
+        Cow::Owned(s) => s,
+    }
 }
 
 #[allow(clippy::panic)]

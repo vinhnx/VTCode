@@ -1,8 +1,7 @@
 use super::status_line::InputStatusState;
 use super::ui_interaction::{
-    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions, start_loading_status,
-    stream_and_render_response, stream_and_render_response_with_options,
-    stream_and_render_response_with_options_and_progress,
+    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions, start_loading_status, stream_and_render_response,
+    stream_and_render_response_with_options, stream_and_render_response_with_options_and_progress,
 };
 use futures::stream;
 use std::sync::Arc;
@@ -257,10 +256,7 @@ impl uni::LLMProvider for NormalizedToolCallProvider {
         })
     }
 
-    async fn stream_normalized(
-        &self,
-        request: uni::LLMRequest,
-    ) -> Result<uni::LLMNormalizedStream, uni::LLMError> {
+    async fn stream_normalized(&self, request: uni::LLMRequest) -> Result<uni::LLMNormalizedStream, uni::LLMError> {
         let response = self.generate(request).await?;
         let mut events = Vec::with_capacity(self.tool_argument_chunks.len() + 2);
         events.push(Ok(uni::NormalizedStreamEvent::ToolCallStart {
@@ -371,10 +367,7 @@ async fn placeholder_spinner_applies_message_updates_before_next_tick() {
         loop {
             match rx.recv().await {
                 Some(InlineCommand::SetInputStatus { left, .. })
-                    if left
-                        .as_deref()
-                        .map(|text| text.contains("Still working"))
-                        .unwrap_or(false) =>
+                    if left.as_deref().map(|text| text.contains("Still working")).unwrap_or(false) =>
                 {
                     return left;
                 }
@@ -410,10 +403,7 @@ async fn placeholder_spinner_uses_latest_message_update() {
         loop {
             match rx.recv().await {
                 Some(InlineCommand::SetInputStatus { left, .. })
-                    if left
-                        .as_deref()
-                        .map(|text| text.contains("Final update"))
-                        .unwrap_or(false) =>
+                    if left.as_deref().map(|text| text.contains("Final update")).unwrap_or(false) =>
                 {
                     return left;
                 }
@@ -629,12 +619,16 @@ async fn emits_progress_events_for_stream_deltas() {
     .await
     .expect("stream should succeed");
 
-    assert!(events.iter().any(
-        |event| matches!(event, StreamProgressEvent::ReasoningDelta(delta) if delta == "thinking")
-    ));
-    assert!(events.iter().any(
-        |event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content")
-    ));
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::ReasoningDelta(delta) if delta == "thinking"))
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content"))
+    );
 }
 
 #[tokio::test]
@@ -677,9 +671,11 @@ async fn skips_reasoning_progress_events_when_streaming_is_unavailable() {
             .any(|event| matches!(event, StreamProgressEvent::ReasoningDelta(_))),
         "reasoning deltas should not stream when inline reasoning streaming is unavailable"
     );
-    assert!(events.iter().any(
-        |event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content")
-    ));
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content"))
+    );
 }
 
 #[tokio::test]
@@ -773,9 +769,11 @@ async fn emits_tool_call_progress_events_from_normalized_stream() {
             if call_id == "call_123" && delta == "ho hi\"}"
         )
     }));
-    assert!(events.iter().any(
-        |event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content")
-    ));
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content"))
+    );
 }
 
 #[tokio::test]
@@ -900,10 +898,7 @@ async fn inline_streaming_compacts_blank_lines_and_highlights_decisions() {
         }
     }
 
-    assert!(
-        !reasoning_text.contains("\n\n"),
-        "blank-line spam should be collapsed, got: {reasoning_text:?}"
-    );
+    assert!(!reasoning_text.contains("\n\n"), "blank-line spam should be collapsed, got: {reasoning_text:?}");
     assert!(
         reasoning_text.contains("I will run the tests now"),
         "decision line must be present, got: {reasoning_text:?}"
@@ -952,10 +947,7 @@ async fn inline_streaming_does_not_replay_reasoning_on_completion() {
         reasoning_occurrences += text.matches("thinking").count();
     }
 
-    assert_eq!(
-        reasoning_occurrences, 1,
-        "expected live reasoning to render once, without replay at completion"
-    );
+    assert_eq!(reasoning_occurrences, 1, "expected live reasoning to render once, without replay at completion");
 }
 
 #[tokio::test]

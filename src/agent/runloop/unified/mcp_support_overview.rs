@@ -57,10 +57,7 @@ pub(crate) async fn display_mcp_status(
             if enabled.is_empty() {
                 renderer.line(MessageStyle::Status, "  • Providers present but all disabled")?;
             } else {
-                renderer.line(
-                    MessageStyle::Status,
-                    &format!("  • Enabled providers: {}", enabled.join(", ")),
-                )?;
+                renderer.line(MessageStyle::Status, &format!("  • Enabled providers: {}", enabled.join(", ")))?;
             }
         }
     }
@@ -87,20 +84,14 @@ pub(crate) async fn display_mcp_status(
                 if !runtime_status.configured_providers.is_empty() {
                     renderer.line(
                         MessageStyle::Status,
-                        &format!(
-                            "  • Configured providers: {}",
-                            runtime_status.configured_providers.join(", ")
-                        ),
+                        &format!("  • Configured providers: {}", runtime_status.configured_providers.join(", ")),
                     )?;
                 }
 
                 match tool_registry.list_mcp_tools().await {
                     Ok(tools) => {
                         if tools.is_empty() {
-                            renderer.line(
-                                MessageStyle::Status,
-                                "  • No MCP tools exposed by providers",
-                            )?;
+                            renderer.line(MessageStyle::Status, "  • No MCP tools exposed by providers")?;
                         } else {
                             let mut samples = Vec::new();
                             for info in tools.iter().take(5) {
@@ -119,18 +110,12 @@ pub(crate) async fn display_mcp_status(
                         }
                     }
                     Err(err) => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("  • Failed to list MCP tools: {err}"),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("  • Failed to list MCP tools: {err}"))?;
                     }
                 }
             }
             McpInitStatus::Error { message } => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("  • MCP initialization failed: {message}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("  • MCP initialization failed: {message}"))?;
             }
         }
     } else {
@@ -182,21 +167,14 @@ pub(crate) async fn display_mcp_providers(
     renderer.line(MessageStyle::Status, "MCP providers configured in vtcode.toml:")?;
 
     let Some(configured) = &session_bootstrap.mcp_providers else {
-        renderer
-            .line(MessageStyle::Info, "No vtcode.toml configuration detected for MCP providers.")?;
-        renderer.line(
-            MessageStyle::Info,
-            "Use `vtcode mcp add <name> --command <...>` to register providers.",
-        )?;
+        renderer.line(MessageStyle::Info, "No vtcode.toml configuration detected for MCP providers.")?;
+        renderer.line(MessageStyle::Info, "Use `vtcode mcp add <name> --command <...>` to register providers.")?;
         return Ok(());
     };
 
     if configured.is_empty() {
         renderer.line(MessageStyle::Info, "No providers defined in vtcode.toml.")?;
-        renderer.line(
-            MessageStyle::Info,
-            "Run `vtcode mcp add` to connect VT Code to external tools.",
-        )?;
+        renderer.line(MessageStyle::Info, "Run `vtcode mcp add` to connect VT Code to external tools.")?;
         return Ok(());
     }
 
@@ -220,15 +198,8 @@ pub(crate) async fn display_mcp_providers(
         } else {
             "disabled"
         };
-        let status_label = if provider.enabled {
-            "enabled"
-        } else {
-            "disabled"
-        };
-        renderer.line(
-            MessageStyle::Info,
-            &format!("- {} ({}, {})", provider.name, status_label, runtime_state),
-        )?;
+        let status_label = if provider.enabled { "enabled" } else { "disabled" };
+        renderer.line(MessageStyle::Info, &format!("- {} ({}, {})", provider.name, status_label, runtime_state))?;
 
         match &provider.transport {
             McpTransportConfig::Stdio(stdio) => {
@@ -237,27 +208,20 @@ pub(crate) async fn display_mcp_providers(
                     command_desc.push(' ');
                     command_desc.push_str(&stdio.args.join(" "));
                 }
-                renderer
-                    .line(MessageStyle::Info, &format!("    transport: stdio · {command_desc}"))?;
+                renderer.line(MessageStyle::Info, &format!("    transport: stdio · {command_desc}"))?;
                 if let Some(dir) = &stdio.working_directory {
                     renderer.line(MessageStyle::Info, &format!("    working_dir: {dir}"))?;
                 }
             }
             McpTransportConfig::Http(http) => {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("    transport: http · {}", http.endpoint),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("    transport: http · {}", http.endpoint))?;
                 if let Some(env) = &http.api_key_env {
                     renderer.line(MessageStyle::Info, &format!("    bearer token env: {env}"))?;
                 }
                 if !http.http_headers.is_empty() {
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "    headers: {}",
-                            http.http_headers.keys().cloned().collect::<Vec<_>>().join(", ")
-                        ),
+                        &format!("    headers: {}", http.http_headers.keys().cloned().collect::<Vec<_>>().join(", ")),
                     )?;
                 }
                 if !http.env_http_headers.is_empty() {
@@ -272,18 +236,13 @@ pub(crate) async fn display_mcp_providers(
             }
         }
 
-        renderer.line(
-            MessageStyle::Info,
-            &format!("    max concurrent requests: {}", provider.max_concurrent_requests),
-        )?;
+        renderer
+            .line(MessageStyle::Info, &format!("    max concurrent requests: {}", provider.max_concurrent_requests))?;
 
         if !provider.env.is_empty() {
             renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "    env vars: {}",
-                    provider.env.keys().cloned().collect::<Vec<_>>().join(", ")
-                ),
+                &format!("    env vars: {}", provider.env.keys().cloned().collect::<Vec<_>>().join(", ")),
             )?;
         }
     }
@@ -295,10 +254,7 @@ pub(crate) async fn display_mcp_providers(
     Ok(())
 }
 
-pub(crate) async fn display_mcp_tools(
-    renderer: &mut AnsiRenderer,
-    tool_registry: &mut ToolRegistry,
-) -> Result<()> {
+pub(crate) async fn display_mcp_tools(renderer: &mut AnsiRenderer, tool_registry: &mut ToolRegistry) -> Result<()> {
     renderer.line(MessageStyle::Status, "Listing MCP tools exposed by connected providers:")?;
     match tool_registry.list_mcp_tools().await {
         Ok(tools) => {
@@ -311,10 +267,7 @@ pub(crate) async fn display_mcp_tools(
             }
 
             for (provider, entries) in group_mcp_tools_by_provider_preserving_order(tools) {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("- Provider: {} ({} tool(s))", provider, entries.len()),
-                )?;
+                renderer.line(MessageStyle::Info, &format!("- Provider: {} ({} tool(s))", provider, entries.len()))?;
                 for info in entries {
                     renderer.line(MessageStyle::Info, &format!("    • {}", info.name))?;
                 }
@@ -327,29 +280,19 @@ pub(crate) async fn display_mcp_tools(
     Ok(())
 }
 
-pub(crate) async fn refresh_mcp_tools(
-    renderer: &mut AnsiRenderer,
-    tool_registry: &mut ToolRegistry,
-) -> Result<bool> {
+pub(crate) async fn refresh_mcp_tools(renderer: &mut AnsiRenderer, tool_registry: &mut ToolRegistry) -> Result<bool> {
     renderer.line(MessageStyle::Status, "Refreshing MCP tool index…")?;
     match tool_registry.refresh_mcp_tools().await {
         Ok(()) => {
             match tool_registry.list_mcp_tools().await {
                 Ok(tools) => {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Indexed {} MCP tool(s).", tools.len()),
-                    )?;
+                    renderer.line(MessageStyle::Info, &format!("Indexed {} MCP tool(s).", tools.len()))?;
                 }
                 Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Refreshed but failed to list tools: {err}"),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("Refreshed but failed to list tools: {err}"))?;
                 }
             }
-            renderer
-                .line(MessageStyle::Info, "Use /mcp tools to inspect the refreshed catalog.")?;
+            renderer.line(MessageStyle::Info, "Use /mcp tools to inspect the refreshed catalog.")?;
             Ok(true)
         }
         Err(err) => {

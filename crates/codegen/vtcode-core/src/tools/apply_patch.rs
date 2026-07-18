@@ -41,9 +41,7 @@ pub fn patch_source_from_args(args: &Value) -> Option<&str> {
     // only if neither field is patch-shaped.
     match (input, patch) {
         (Some(i), Some(p)) => {
-            if crate::tools::editing::looks_like_vte_patch(p)
-                && !crate::tools::editing::looks_like_vte_patch(i)
-            {
+            if crate::tools::editing::looks_like_vte_patch(p) && !crate::tools::editing::looks_like_vte_patch(i) {
                 Some(p)
             } else {
                 Some(i)
@@ -63,8 +61,7 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
     let was_base64 = source.starts_with("base64:");
     let cap = effective_max_payload_bytes();
     let text = if was_base64 {
-        let decoded =
-            BASE64.decode(&source[7..]).with_context(|| "Failed to decode base64 patch")?;
+        let decoded = BASE64.decode(&source[7..]).with_context(|| "Failed to decode base64 patch")?;
         enforce_decoded_size_limit(decoded.len(), source.len(), was_base64, cap)?;
         String::from_utf8(decoded).with_context(|| "Decoded patch is not valid UTF-8")?
     } else {
@@ -83,9 +80,7 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
 /// do not expose paths return an empty vector and cannot invalidate a scoped
 /// replay.
 pub fn mutation_target_paths(tool_name: &str, args: &Value) -> Vec<PathBuf> {
-    if crate::tools::names::canonical_tool_name(tool_name)
-        == crate::config::constants::tools::APPLY_PATCH
-    {
+    if crate::tools::names::canonical_tool_name(tool_name) == crate::config::constants::tools::APPLY_PATCH {
         return decode_apply_patch_input(args)
             .ok()
             .flatten()
@@ -208,9 +203,8 @@ pub fn parameter_schema(input_description: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, decode_apply_patch_input,
-        mutation_target_paths, parameter_schema, patch_mutation_target_paths,
-        patch_source_from_args, with_semantic_anchor_guidance,
+        APPLY_PATCH_ALIAS_DESCRIPTION, SEMANTIC_ANCHOR_GUIDANCE, decode_apply_patch_input, mutation_target_paths,
+        parameter_schema, patch_mutation_target_paths, patch_source_from_args, with_semantic_anchor_guidance,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -277,10 +271,7 @@ mod tests {
         assert_eq!(mutation_target_paths("apply_patch", &json!(patch)), expected);
         assert_eq!(mutation_target_paths("apply_patch", &json!({"input": patch})), expected);
         assert_eq!(
-            mutation_target_paths(
-                "apply_patch",
-                &json!({"patch": format!("base64:{}", BASE64.encode(patch))}),
-            ),
+            mutation_target_paths("apply_patch", &json!({"patch": format!("base64:{}", BASE64.encode(patch))}),),
             expected
         );
 
@@ -288,19 +279,13 @@ mod tests {
             "*** Begin Patch\n*** Update File: src/same.rs\n*** Move to: src/same.rs\n@@\n-old\n+new\n*** End Patch\n",
         )
         .expect("duplicate-path patch should parse");
-        assert_eq!(
-            patch_mutation_target_paths(&duplicate_patch),
-            vec![PathBuf::from("src/same.rs")]
-        );
+        assert_eq!(patch_mutation_target_paths(&duplicate_patch), vec![PathBuf::from("src/same.rs")]);
     }
 
     #[test]
     fn mutation_paths_include_move_and_copy_destinations() {
         assert_eq!(
-            mutation_target_paths(
-                "move_file",
-                &json!({"path": "src/old.rs", "destination": "src/new.rs"}),
-            ),
+            mutation_target_paths("move_file", &json!({"path": "src/old.rs", "destination": "src/new.rs"}),),
             vec![PathBuf::from("src/old.rs"), PathBuf::from("src/new.rs")]
         );
         assert_eq!(
@@ -311,17 +296,14 @@ mod tests {
                     "destination_path": "src/copy.rs"
                 }),
             ),
-            vec![
-                PathBuf::from("src/original.rs"),
-                PathBuf::from("src/copy.rs")
-            ]
+            vec![PathBuf::from("src/original.rs"), PathBuf::from("src/copy.rs")]
         );
     }
 
     #[test]
     fn decode_apply_patch_input_rejects_invalid_base64() {
-        let error = decode_apply_patch_input(&json!({"input": "base64:not-valid"}))
-            .expect_err("invalid base64 should fail");
+        let error =
+            decode_apply_patch_input(&json!({"input": "base64:not-valid"})).expect_err("invalid base64 should fail");
 
         assert!(error.to_string().contains("Failed to decode base64 patch"));
     }
@@ -336,8 +318,7 @@ mod tests {
         let encoded = base64::engine::general_purpose::STANDARD.encode(large.as_bytes());
         let payload = json!({ "input": format!("base64:{encoded}") });
 
-        let error = decode_apply_patch_input(&payload)
-            .expect_err("oversized decoded payload should be rejected");
+        let error = decode_apply_patch_input(&payload).expect_err("oversized decoded payload should be rejected");
         let message = error.to_string();
         assert!(
             message.contains("apply_patch payload too large after decoding"),
@@ -353,8 +334,7 @@ mod tests {
         let large = "B".repeat(1_500_000);
         let payload = json!({ "input": large });
 
-        let error = decode_apply_patch_input(&payload)
-            .expect_err("oversized raw payload should be rejected");
+        let error = decode_apply_patch_input(&payload).expect_err("oversized raw payload should be rejected");
         let message = error.to_string();
         assert!(
             message.contains("apply_patch payload too large after decoding"),
@@ -368,11 +348,7 @@ mod tests {
         let base = "Patch in VT Code format.";
         let with_guidance = with_semantic_anchor_guidance(base);
         assert!(with_guidance.contains(SEMANTIC_ANCHOR_GUIDANCE));
-        assert_eq!(
-            with_semantic_anchor_guidance(&with_guidance),
-            with_guidance,
-            "guidance should not be duplicated"
-        );
+        assert_eq!(with_semantic_anchor_guidance(&with_guidance), with_guidance, "guidance should not be duplicated");
     }
 
     #[test]
@@ -390,14 +366,8 @@ mod tests {
         let patch_description = schema["properties"]["patch"]["description"]
             .as_str()
             .expect("patch description");
-        assert!(
-            patch_description.contains("*** Begin Patch"),
-            "patch description must name the envelope format"
-        );
-        assert!(
-            patch_description.contains("unified diff"),
-            "patch description must warn against unified diff"
-        );
+        assert!(patch_description.contains("*** Begin Patch"), "patch description must name the envelope format");
+        assert!(patch_description.contains("unified diff"), "patch description must warn against unified diff");
         assert!(patch_description.contains(SEMANTIC_ANCHOR_GUIDANCE));
 
         let input_description = schema["properties"]["input"]["description"]

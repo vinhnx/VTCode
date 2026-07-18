@@ -5,16 +5,16 @@
 use std::fmt::Write as _;
 
 use super::{
-    REDACTION_NOTICE, SUMMARY_PREVIEW_LIMIT, TIMELINE_SOURCE_CONVERSATION_FALLBACK,
-    TIMELINE_SOURCE_THREAD_EVENTS, TimelineExport, TimelineRow,
+    REDACTION_NOTICE, SUMMARY_PREVIEW_LIMIT, TIMELINE_SOURCE_CONVERSATION_FALLBACK, TIMELINE_SOURCE_THREAD_EVENTS,
+    TimelineExport, TimelineRow,
 };
 use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{
-    CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus,
-    ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, Usage,
+    CommandExecutionStatus, HarnessEventKind, McpToolCallStatus, PatchApplyStatus, ThreadCompletionSubtype,
+    ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus, Usage,
 };
 
 pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) -> Vec<TimelineRow> {
@@ -361,11 +361,7 @@ pub(super) fn timeline_row_from_item(
             record.turn_id.as_deref(),
             record.submission_id.as_ref().map(|value| value.as_str()),
             "File change".to_string(),
-            format!(
-                "{} file(s) ({})",
-                file_change.changes.len(),
-                patch_status_label(&file_change.status)
-            ),
+            format!("{} file(s) ({})", file_change.changes.len(), patch_status_label(&file_change.status)),
             file_change
                 .changes
                 .iter()
@@ -517,9 +513,7 @@ pub(super) fn timeline_rows_from_messages(messages: &[Value]) -> Vec<TimelineRow
                     .unwrap_or_else(|| "unknown".to_string());
                 let tool_call_id = tool_call.get("id").and_then(Value::as_str);
                 let mut body = String::new();
-                if let Some(arguments) =
-                    tool_call.get("function").and_then(|value| value.get("arguments"))
-                {
+                if let Some(arguments) = tool_call.get("function").and_then(|value| value.get("arguments")) {
                     append_json_section(&mut body, "Arguments", arguments);
                 }
                 rows.push(timeline_row(
@@ -547,13 +541,9 @@ pub(super) fn timeline_rows_from_messages(messages: &[Value]) -> Vec<TimelineRow
     rows
 }
 
-pub(super) fn render_session_timeline_html(
-    export: &TimelineExport,
-    session_log_json: &Value,
-) -> Result<String> {
+pub(super) fn render_session_timeline_html(export: &TimelineExport, session_log_json: &Value) -> Result<String> {
     let export_json = serde_json::to_string(export).context("Failed to serialize timeline data")?;
-    let session_log_json = serde_json::to_string_pretty(session_log_json)
-        .context("Failed to serialize session log")?;
+    let session_log_json = serde_json::to_string_pretty(session_log_json).context("Failed to serialize session log")?;
     let mut html = String::new();
     let escaped_workspace = escape_html(&export.workspace);
     let escaped_model = escape_html(&export.model);
@@ -561,10 +551,8 @@ pub(super) fn render_session_timeline_html(
     let escaped_thread_id = escape_html(&export.thread_id);
     let escaped_source = escape_html(&export.source);
     let escaped_exported_at = escape_html(&export.exported_at);
-    let escaped_overview_json = escape_html(
-        &serde_json::to_string_pretty(&export.overview)
-            .context("Failed to serialize session overview")?,
-    );
+    let escaped_overview_json =
+        escape_html(&serde_json::to_string_pretty(&export.overview).context("Failed to serialize session overview")?);
     html.push_str(
         "<!DOCTYPE html>\n<html lang=\"en\" data-theme=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>VT Code Thread Share</title>\n<style>\n:root{--success:#7ea36d;--danger:#BF4545;--warning:#D99A4E}[data-theme=\"dark\"]{color-scheme:dark;--bg:#262626;--panel:#2f2b28;--panel-soft:#38322d;--panel-muted:#433a32;--surface:#312c29;--line:#5b4c45;--line-soft:#4a3f39;--text:#BFB38F;--muted:#d1c59f;--accent:#D9487D;--summary:#e4d8b3;--user:#D99A4E;--assistant:#BFB38F;--system:#D9487D}[data-theme=\"light\"]{color-scheme:light;--bg:#F6F1E5;--panel:#FFFDF8;--panel-soft:#F5EFE5;--panel-muted:#EFE7DB;--surface:#FAF5ED;--line:#DDD1C2;--line-soft:#EBE1D3;--text:#393A34;--muted:#6A695F;--accent:#1C6B48;--summary:#4A463E;--user:#B07000;--assistant:#393A34;--system:#1C6B48}*{box-sizing:border-box}html,body{background:var(--bg)}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:var(--text);line-height:1.55;transition:background-color .18s ease,color .18s ease}a{color:inherit}button,input,select{font:inherit}main{max-width:1240px;margin:0 auto;padding:28px 18px 80px}.masthead{margin:0 auto 20px}.masthead-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.eyebrow{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.theme-toggle,.button{padding:9px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel-soft);color:var(--text);cursor:pointer}.theme-toggle:hover,.button:hover{background:var(--panel-muted)}.masthead h1{margin:10px 0 14px;font-size:clamp(2rem,4vw,3.2rem);line-height:1.05;font-weight:800}.byline{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--muted);font-size:.96rem}.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--panel-soft);border:1px solid var(--line-soft)}.pill.notice{color:var(--accent)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}.transcript-column{min-width:0}.sidebar{position:sticky;top:18px;display:grid;gap:14px}.panel,.lede,.entry,.empty{background:var(--panel);border:1px solid var(--line);border-radius:18px}.panel{padding:14px 16px}.panel details{margin:0}.panel details>summary,.summary-toggle{cursor:pointer;list-style:none;color:var(--muted);font-weight:700}.panel details>summary::-webkit-details-marker{display:none}.panel-body{margin-top:14px}.lede{padding:16px 18px;color:var(--summary)}.lede pre,.raw-json,.log-stream pre,.inline-json-preview{margin:0;white-space:pre-wrap;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92rem;line-height:1.6}.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}.fact{padding:14px;border-radius:14px;background:var(--panel-soft)}.fact-label{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.fact-value{display:block;margin-top:6px;font-weight:700}.kv-list{list-style:none;margin:0;padding:0}.kv-list li{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-soft)}.kv-list li:first-child{border-top:0;padding-top:0}.kv-key{color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.kv-value{color:var(--text);min-width:0;white-space:pre-wrap;word-break:break-word}.control-grid{display:grid;gap:10px}.control{display:grid;gap:6px}.control label{font-size:.8rem;color:var(--muted);font-weight:600}.control input,.control select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-muted);color:var(--text)}.control input:focus,.control select:focus{outline:none;border-color:var(--accent)}.toolbar{display:grid;gap:10px;margin-top:12px}.toggle{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:600}.results{color:var(--muted);font-weight:600}.sidebar-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.inline-json-preview{margin-top:12px;padding:12px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}.timeline{display:grid;gap:14px}.entry{padding:16px 18px}.entry-head{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between}.entry-meta{display:grid;gap:8px;min-width:0}.entry-identity{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.role-badge,.seq,.kind-badge,.status-badge{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid var(--line-soft);background:var(--panel-soft);font-size:.76rem;font-weight:700}.role-user{color:var(--user)}.role-assistant{color:var(--assistant)}.role-system{color:var(--system)}.seq{color:var(--muted)}.entry-title{font-size:1.02rem;font-weight:700}.entry-subtitle{color:var(--muted);font-size:.92rem}.entry-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.kind-badge{color:var(--muted)}.status-badge.status-completed{color:var(--success)}.status-badge.status-in_progress{color:var(--accent)}.status-badge.status-failed,.status-badge.status-cancelled{color:var(--danger)}.status-badge.low-signal{color:var(--warning)}.entry-body{margin-top:14px;display:grid;gap:12px}.message-block,.system-block,.log-stream,.detail-shell{padding:14px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}.message-text p,.system-copy p{margin:0 0 10px}.message-text p:last-child,.system-copy p:last-child{margin-bottom:0}.message-text ul,.system-copy ul{margin:0;padding-left:18px}.message-text li,.system-copy li{margin:0 0 6px}.message-section-title,.system-label{display:block;margin-bottom:8px;color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.message-text code,.system-copy code{padding:1px 5px;border-radius:6px;background:var(--panel-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}.message-text strong,.system-copy strong{font-weight:800}.log-stream-title{display:block;margin-bottom:8px;color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}.raw-json{padding:14px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--line-soft)}details{margin-top:12px}details summary{cursor:pointer;color:var(--muted);font-weight:700}.empty{padding:28px;text-align:center;color:var(--muted)}.footer-note{margin-top:20px;color:var(--muted);font-size:.9rem}@media (max-width:980px){.layout{grid-template-columns:1fr}.sidebar{position:static}}@media (max-width:760px){main{padding:20px 12px 48px}.masthead-top{flex-direction:column;align-items:stretch}.facts{grid-template-columns:1fr}.kv-list li{grid-template-columns:1fr;gap:4px}.entry{padding:14px}}\n</style>\n</head>\n<body>\n<main>\n<header class=\"masthead\">\n<div class=\"masthead-top\">\n<div class=\"eyebrow\">Shared Thread</div>\n<button id=\"theme-toggle\" class=\"theme-toggle\" type=\"button\">Switch to light</button>\n</div>\n<h1>VT Code Session Transcript</h1>\n<div class=\"byline\">\n<span class=\"pill\">Provider: ");
     html.push_str(&escaped_provider);
@@ -696,10 +684,7 @@ fn append_json_section(body: &mut String, label: &str, value: &Value) {
 fn format_usage_summary(usage: &Usage) -> String {
     format!(
         "input={} cached={} cache_create={} output={}",
-        usage.input_tokens,
-        usage.cached_input_tokens,
-        usage.cache_creation_tokens,
-        usage.output_tokens
+        usage.input_tokens, usage.cached_input_tokens, usage.cache_creation_tokens, usage.output_tokens
     )
 }
 
@@ -748,8 +733,7 @@ pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport 
             .submission_id
             .as_ref()
             .map(|value| super::super::redact_sensitive_text(value));
-        row.detail_json =
-            row.detail_json.as_ref().map(|value| super::super::redact_sensitive_text(value));
+        row.detail_json = row.detail_json.as_ref().map(|value| super::super::redact_sensitive_text(value));
     }
     redacted
 }

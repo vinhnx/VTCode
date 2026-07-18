@@ -9,16 +9,14 @@ use vtcode_core::llm::{
     factory::create_provider_for_model,
     provider::{LLMProvider, LLMRequest, Message, ToolCall, ToolChoice, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, LmStudioProvider, OllamaProvider, OpenAIProvider,
-        OpenRouterProvider,
+        AnthropicProvider, GeminiProvider, LmStudioProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider,
     },
 };
 
 #[test]
 fn test_openai_tool_call_format() {
     let provider =
-        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
-            .expect("openai provider");
+        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None).expect("openai provider");
 
     // Test tool definition
     let tool = ToolDefinition::function(
@@ -252,19 +250,15 @@ fn test_gemini_tool_call_format() {
 #[test]
 fn test_all_providers_tool_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
-    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
-        .expect("openai provider");
+    let openai =
+        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None).expect("openai provider");
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);
     let lmstudio = LmStudioProvider::from_config(None, None, None, None, None, None, None);
 
     // Test valid requests with tools
-    let tool = ToolDefinition::function(
-        "test_tool".to_string(),
-        "A test tool".to_string(),
-        json!({"type": "object"}),
-    );
+    let tool = ToolDefinition::function("test_tool".to_string(), "A test tool".to_string(), json!({"type": "object"}));
 
     let gemini_request = LLMRequest {
         messages: Arc::new(vec![Message::user("test".to_string())]),
@@ -513,10 +507,7 @@ fn test_all_providers_tool_validation() {
         anthropic_request_overrides: None,
     };
 
-    assert!(
-        ollama.validate_request(&ollama_request).is_ok(),
-        "Ollama should accept tool-bearing requests"
-    );
+    assert!(ollama.validate_request(&ollama_request).is_ok(), "Ollama should accept tool-bearing requests");
 }
 
 #[test]
@@ -615,10 +606,7 @@ fn test_provider_tool_support_matrix() {
     }
 
     for &model in models::anthropic::SUPPORTED_MODELS {
-        assert!(
-            anthropic.supports_tools(model),
-            "Anthropic should advertise tool calling for {model}"
-        );
+        assert!(anthropic.supports_tools(model), "Anthropic should advertise tool calling for {model}");
     }
 
     for &model in models::openrouter::SUPPORTED_MODELS {
@@ -639,9 +627,6 @@ fn test_provider_tool_support_matrix() {
     }
 
     for &model in models::openrouter::TOOL_UNAVAILABLE_MODELS {
-        assert!(
-            !openrouter.supports_tools(model),
-            "OpenRouter should disable tool calling for {model}"
-        );
+        assert!(!openrouter.supports_tools(model), "OpenRouter should disable tool calling for {model}");
     }
 }

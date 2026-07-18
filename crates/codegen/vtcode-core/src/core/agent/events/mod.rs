@@ -2,19 +2,17 @@
 
 mod lifecycle;
 pub use lifecycle::{
-    SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event,
-    tool_invocation_completed_event, tool_output_completed_event, tool_output_item_id,
-    tool_output_payload_from_value, tool_output_started_event, tool_output_updated_event,
-    tool_started_event,
+    SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event,
+    tool_output_completed_event, tool_output_item_id, tool_output_payload_from_value, tool_output_started_event,
+    tool_output_updated_event, tool_started_event,
 };
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
-    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, ErrorItem,
-    FileChangeItem, FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
-    ItemStartedEvent, PatchApplyStatus, PatchChangeKind, ThreadCompactBoundaryEvent,
-    ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, ErrorItem, FileChangeItem,
+    FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus,
+    PatchChangeKind, ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -131,20 +129,12 @@ impl ExecEventRecorder {
             active_turn_id: None,
             lifecycle: SharedLifecycleEmitter::default(),
         };
-        recorder.record_with_context(
-            None,
-            None,
-            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }),
-        );
+        recorder.record_with_context(None, None, ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
         recorder
     }
 
     fn record(&mut self, event: ThreadEvent) {
-        self.record_with_context(
-            self.active_submission_id.clone(),
-            self.active_turn_id.clone(),
-            event,
-        );
+        self.record_with_context(self.active_submission_id.clone(), self.active_turn_id.clone(), event);
     }
 
     fn record_with_context(
@@ -203,10 +193,7 @@ impl ExecEventRecorder {
     }
 
     pub fn turn_failed(&mut self, message: &str) {
-        self.record(ThreadEvent::TurnFailed(TurnFailedEvent {
-            message: message.to_string(),
-            usage: None,
-        }));
+        self.record(ThreadEvent::TurnFailed(TurnFailedEvent { message: message.to_string(), usage: None }));
         self.finish_turn();
     }
 
@@ -356,12 +343,7 @@ impl ExecEventRecorder {
         self.record(tool_output_started_event(call_item_id.to_string(), tool_call_id));
     }
 
-    pub fn tool_output_updated(
-        &mut self,
-        call_item_id: &str,
-        tool_call_id: Option<&str>,
-        output: &str,
-    ) {
+    pub fn tool_output_updated(&mut self, call_item_id: &str, tool_call_id: Option<&str>, output: &str) {
         self.record(tool_output_updated_event(call_item_id.to_string(), tool_call_id, output));
     }
 
@@ -532,13 +514,7 @@ impl ExecEventRecorder {
 
     /// Emit a `ToolRetryAttempted` harness event, recording that a transient
     /// tool failure triggered an automatic retry.
-    pub fn tool_retry_attempted(
-        &mut self,
-        tool_name: &str,
-        attempt: u32,
-        error_category: &str,
-        delay_ms: u64,
-    ) {
+    pub fn tool_retry_attempted(&mut self, tool_name: &str, attempt: u32, error_category: &str, delay_ms: u64) {
         self.harness_event(
             HarnessEventKind::ToolRetryAttempted,
             Some(format!("{tool_name}: retry {attempt} after {delay_ms}ms")),
@@ -625,8 +601,7 @@ mod tests {
 
     #[test]
     fn thread_backed_recorder_reuses_submission_id_within_turn() {
-        let handle =
-            ThreadManager::new().start_thread_with_identifier("thread", ThreadBootstrap::new(None));
+        let handle = ThreadManager::new().start_thread_with_identifier("thread", ThreadBootstrap::new(None));
         let mut recorder = ExecEventRecorder::new("thread", None, Some(handle.clone()));
 
         recorder.turn_started();
@@ -640,13 +615,15 @@ mod tests {
             .collect();
 
         assert_eq!(submission_ids.len(), 1);
-        assert!(records.iter().any(|record| matches!(record.event, ThreadEvent::TurnStarted(_))
-            && record.submission_id.is_some()));
         assert!(
             records
                 .iter()
-                .any(|record| matches!(record.event, ThreadEvent::TurnCompleted(_))
-                    && record.submission_id.is_some())
+                .any(|record| matches!(record.event, ThreadEvent::TurnStarted(_)) && record.submission_id.is_some())
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| matches!(record.event, ThreadEvent::TurnCompleted(_)) && record.submission_id.is_some())
         );
     }
 

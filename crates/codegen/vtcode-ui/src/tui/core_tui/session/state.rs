@@ -15,8 +15,8 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind,
-    ModalOverlayRequest, OverlayRequest, WizardOverlayRequest,
+    InlineEvent, InlineListSelection, ListOverlayRequest, LocalAgentEntry, LocalAgentKind, ModalOverlayRequest,
+    OverlayRequest, WizardOverlayRequest,
 };
 use super::mouse_selection::MouseSelectionState;
 use super::status_requires_shimmer;
@@ -317,9 +317,7 @@ impl Session {
 
             if normalized_title.contains("input required") {
                 Some(INPUT_REQUIRED_STATUS_TEXT)
-            } else if normalized_title.contains("approval")
-                || normalized_title.contains("permission")
-            {
+            } else if normalized_title.contains("approval") || normalized_title.contains("permission") {
                 Some(APPROVAL_REQUIRED_STATUS_TEXT)
             } else {
                 Some(ACTION_REQUIRED_STATUS_TEXT)
@@ -439,11 +437,7 @@ impl Session {
         lines: Vec<String>,
         secure_prompt: Option<super::super::types::SecurePromptConfig>,
     ) {
-        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
-            title,
-            lines,
-            secure_prompt,
-        }));
+        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest { title, lines, secure_prompt }));
     }
 
     /// Show a help modal using the ratatui-cheese Help widget
@@ -609,13 +603,8 @@ impl Session {
     }
 
     fn activate_wizard_overlay(&mut self, request: WizardOverlayRequest) {
-        let wizard = WizardModalState::new(
-            request.title,
-            request.steps,
-            request.current_step,
-            request.search,
-            request.mode,
-        );
+        let wizard =
+            WizardModalState::new(request.title, request.steps, request.current_step, request.search, request.mode);
         self.active_overlay = Some(ActiveOverlay::Wizard(Box::new(wizard)));
         self.input_enabled = false;
         self.cursor_visible = false;
@@ -780,11 +769,7 @@ impl Session {
     }
 
     /// Prepare transcript scroll parameters
-    pub(crate) fn prepare_transcript_scroll(
-        &mut self,
-        total_rows: usize,
-        viewport_rows: usize,
-    ) -> (usize, usize) {
+    pub(crate) fn prepare_transcript_scroll(&mut self, total_rows: usize, viewport_rows: usize) -> (usize, usize) {
         let viewport = viewport_rows.max(1);
         let clamped_total = total_rows.max(1);
         self.scroll_manager.set_viewport_rows(viewport as u16);

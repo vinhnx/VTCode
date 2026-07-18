@@ -8,9 +8,7 @@ use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
 /// Generate iTerm2 setup instructions (manual configuration required)
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut instructions = vec![
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string(),
         "  iTerm2 Manual Configuration Instructions".to_string(),
@@ -37,8 +35,7 @@ pub fn generate_config(
                 instructions.push("2. Go to General → Selection".to_string());
                 instructions.push("3. Enable 'Copy to pasteboard on selection'".to_string());
                 instructions.push("4. Go to Pointer tab".to_string());
-                instructions
-                    .push("5. Set middle-click action to 'Paste from Clipboard'".to_string());
+                instructions.push("5. Set middle-click action to 'Paste from Clipboard'".to_string());
                 instructions.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ShellIntegration => {
@@ -47,9 +44,7 @@ pub fn generate_config(
                 instructions.push("1. Open iTerm2 Preferences (Cmd+,)".to_string());
                 instructions.push("2. Go to Profiles → General".to_string());
                 instructions.push("3. Under 'Command', select your shell".to_string());
-                instructions.push(
-                    "4. iTerm2's shell integration will auto-install on first launch".to_string(),
-                );
+                instructions.push("4. iTerm2's shell integration will auto-install on first launch".to_string());
                 instructions.push("5. Or manually install: curl -L https://iterm2.com/shell_integration/install_shell_integration.sh | bash".to_string());
                 instructions.push(String::new());
             }
@@ -59,8 +54,7 @@ pub fn generate_config(
                 instructions.push("1. Open iTerm2 Preferences (Cmd+,)".to_string());
                 instructions.push("2. Go to Profiles → Colors".to_string());
                 instructions.push("3. Choose a color preset or customize manually".to_string());
-                instructions
-                    .push("4. VT Code theme colors can be manually configured here".to_string());
+                instructions.push("4. VT Code theme colors can be manually configured here".to_string());
                 instructions.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
@@ -68,17 +62,20 @@ pub fn generate_config(
                 instructions.push(String::new());
                 instructions.push("1. Open iTerm2 Preferences (Cmd+,)".to_string());
                 instructions.push("2. Navigate to Profiles → Terminal".to_string());
-                instructions.push("3. Enable 'Silence bell' and Filter Alerts → 'Send escape sequence-generated alerts'".to_string());
+                instructions.push(
+                    "3. Enable 'Silence bell' and Filter Alerts → 'Send escape sequence-generated alerts'".to_string(),
+                );
                 instructions.push("4. Set your preferred notification delay".to_string());
-                instructions.push("5. For shell integration notifications, consider using tools like terminal-notifier".to_string());
+                instructions.push(
+                    "5. For shell integration notifications, consider using tools like terminal-notifier".to_string(),
+                );
                 instructions.push(String::new());
             }
         }
     }
 
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
-    instructions
-        .push("After configuration, restart iTerm2 for changes to take effect.".to_string());
+    instructions.push("After configuration, restart iTerm2 for changes to take effect.".to_string());
     instructions.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".to_string());
 
     Ok(instructions.join("\n"))

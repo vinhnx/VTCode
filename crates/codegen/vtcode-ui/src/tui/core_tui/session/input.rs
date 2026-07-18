@@ -1,7 +1,4 @@
-use super::{
-    PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_color_from_ansi,
-    ratatui_style_from_inline,
-};
+use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline};
 use crate::tui::config::constants::ui;
 use crate::tui::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
@@ -238,12 +235,7 @@ impl Session {
         if area.height > ui::INLINE_INPUT_STATUS_HEIGHT {
             let block_height = area.height.saturating_sub(ui::INLINE_INPUT_STATUS_HEIGHT);
             input_area.height = block_height.max(1);
-            status_area = Some(Rect::new(
-                area.x,
-                area.y + block_height,
-                area.width,
-                ui::INLINE_INPUT_STATUS_HEIGHT,
-            ));
+            status_area = Some(Rect::new(area.x, area.y + block_height, area.width, ui::INLINE_INPUT_STATUS_HEIGHT));
         }
 
         let background_style = self.styles.input_background_style();
@@ -257,12 +249,9 @@ impl Session {
         };
         block = block.style(background_style).padding(self.input_block_padding());
         if shell_mode_title.is_some() || active_subagent_title.is_some() {
-            block = block
-                .border_type(super::terminal_capabilities::get_border_type())
-                .border_style(
-                    active_subagent_border_style
-                        .unwrap_or_else(|| self.styles.accent_style().add_modifier(Modifier::BOLD)),
-                );
+            block = block.border_type(super::terminal_capabilities::get_border_type()).border_style(
+                active_subagent_border_style.unwrap_or_else(|| self.styles.accent_style().add_modifier(Modifier::BOLD)),
+            );
         }
         if let Some(title) = shell_mode_title {
             block = block.title_top(Line::from(title).left_aligned());
@@ -283,8 +272,7 @@ impl Session {
         }
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
-            let cursor_x =
-                input_render.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
+            let cursor_x = input_render.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
             let cursor_y = input_render
                 .cursor_y
                 .min(inner.height.saturating_sub(1))
@@ -310,9 +298,7 @@ impl Session {
             return 1;
         }
 
-        if self.input_compact_mode
-            && self.input_manager.cursor() == self.input_manager.content().len()
-        {
+        if self.input_compact_mode && self.input_manager.cursor() == self.input_manager.content().len() {
             if let Some(preview) = self.input_compact_preview() {
                 return preview.line_count().min(ui::INLINE_INPUT_MAX_LINES.max(1)) as u16;
             }
@@ -381,11 +367,7 @@ impl Session {
             if ch == '\n' {
                 let end = idx + ch.len_utf8();
                 char_idx += 1;
-                buffers.push(InputLineBuffer::new(
-                    indent_prefix.clone(),
-                    prompt_display_width,
-                    char_idx,
-                ));
+                buffers.push(InputLineBuffer::new(indent_prefix.clone(), prompt_display_width, char_idx));
                 if !cursor_set && cursor_pos == end {
                     cursor_line_idx = buffers.len() - 1;
                     cursor_column = prompt_display_width;
@@ -399,15 +381,8 @@ impl Session {
 
             if let Some(current) = buffers.last_mut() {
                 let capacity = width.saturating_sub(current.prefix_width);
-                if capacity > 0
-                    && current.text_width + char_width > capacity
-                    && !current.text.is_empty()
-                {
-                    buffers.push(InputLineBuffer::new(
-                        indent_prefix.clone(),
-                        prompt_display_width,
-                        char_idx,
-                    ));
+                if capacity > 0 && current.text_width + char_width > capacity && !current.text.is_empty() {
+                    buffers.push(InputLineBuffer::new(indent_prefix.clone(), prompt_display_width, char_idx));
                 }
             }
 
@@ -474,8 +449,7 @@ impl Session {
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
-        let accent_style =
-            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
+        let accent_style = ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
         let cursor_at_end = self.input_manager.cursor() == self.input_manager.content().len();
         if self.input_compact_mode
@@ -493,10 +467,7 @@ impl Session {
                 bg_color: None,
                 effects: Effects::DIMMED,
             };
-            let style = ratatui_style_from_inline(
-                &placeholder_style,
-                Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-            );
+            let style = ratatui_style_from_inline(&placeholder_style, Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)));
             let mut spans = Vec::new();
             spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
             if !preview.before.is_empty() {
@@ -507,8 +478,7 @@ impl Session {
                 }
             }
             let first_after = preview.after_lines.first().map(String::as_str).unwrap_or_default();
-            let needs_after_space =
-                !first_after.is_empty() && !first_after.starts_with(char::is_whitespace);
+            let needs_after_space = !first_after.is_empty() && !first_after.starts_with(char::is_whitespace);
             spans.push(Span::styled(preview.placeholder, style));
             if needs_after_space {
                 spans.push(Span::styled(" ".to_string(), accent_style));
@@ -560,10 +530,7 @@ impl Session {
                     bg_color: None,
                     effects: Effects::ITALIC,
                 });
-                let style = ratatui_style_from_inline(
-                    &placeholder_style,
-                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-                );
+                let style = ratatui_style_from_inline(&placeholder_style, Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)));
                 spans.push(Span::styled(placeholder.clone(), style));
             }
 
@@ -607,9 +574,7 @@ impl Session {
                     let text: String = buf_chars[seg_start..seg_end].iter().collect();
                     let style = match token.kind {
                         InputTokenKind::SlashCommand => slash_style,
-                        InputTokenKind::AgentReference | InputTokenKind::FileReference => {
-                            file_ref_style
-                        }
+                        InputTokenKind::AgentReference | InputTokenKind::FileReference => file_ref_style,
                         InputTokenKind::InlineCode => code_style,
                         InputTokenKind::Normal => accent_style,
                     };
@@ -658,10 +623,8 @@ impl Session {
         }
 
         let (layout, start, end) = self.visible_input_window(area.width, area.height);
-        let selection_start_char =
-            byte_index_to_char_index(self.input_manager.content(), selection_start);
-        let selection_end_char =
-            byte_index_to_char_index(self.input_manager.content(), selection_end);
+        let selection_start_char = byte_index_to_char_index(self.input_manager.content(), selection_start);
+        let selection_end_char = byte_index_to_char_index(self.input_manager.content(), selection_end);
 
         for (row_offset, buffer) in layout.buffers[start..end].iter().enumerate() {
             let line_char_start = buffer.char_start;
@@ -848,11 +811,7 @@ impl Session {
             None
         };
 
-        if left.is_none()
-            && right.is_none()
-            && scroll_indicator.is_none()
-            && !self.thinking_spinner.is_active
-        {
+        if left.is_none() && right.is_none() && scroll_indicator.is_none() && !self.thinking_spinner.is_active {
             return None;
         }
 
@@ -867,9 +826,7 @@ impl Session {
 
         // Add left content (git status or shimmered activity)
         if let Some(left_value) = left.as_ref() {
-            if status_requires_shimmer(left_value)
-                && self.appearance.should_animate_progress_status()
-            {
+            if status_requires_shimmer(left_value) && self.appearance.should_animate_progress_status() {
                 spans.extend(shimmer_spans_with_style_at_phase(
                     left_value,
                     self.styles.accent_style().add_modifier(Modifier::DIM),
@@ -959,11 +916,9 @@ impl Session {
 
     fn active_subagent_input_border_style(&self) -> Option<Style> {
         // Use the primary agent color if available, otherwise fall back to badge color.
-        if let Some(color_style) = super::super::style::agent_color_style(
-            self.header_context.primary_agent_color.as_deref(),
-            Color::Magenta,
-        )
-        .fg
+        if let Some(color_style) =
+            super::super::style::agent_color_style(self.header_context.primary_agent_color.as_deref(), Color::Magenta)
+                .fg
         {
             return Some(self.styles.accent_style().fg(color_style).add_modifier(Modifier::BOLD));
         }
@@ -1213,23 +1168,7 @@ fn image_label_for_path(raw: &str) -> Option<String> {
 }
 
 fn is_spinner_frame(indicator: &str) -> bool {
-    matches!(
-        indicator,
-        "⠋" | "⠙"
-            | "⠹"
-            | "⠸"
-            | "⠼"
-            | "⠴"
-            | "⠦"
-            | "⠧"
-            | "⠇"
-            | "⠏"
-            | "-"
-            | "\\"
-            | "|"
-            | "/"
-            | "."
-    )
+    matches!(indicator, "⠋" | "⠙" | "⠹" | "⠸" | "⠼" | "⠴" | "⠦" | "⠧" | "⠇" | "⠏" | "-" | "\\" | "|" | "/" | ".")
 }
 
 pub(crate) fn status_requires_shimmer(text: &str) -> bool {

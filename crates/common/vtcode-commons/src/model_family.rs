@@ -351,9 +351,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
 fn opencode_provider_and_raw_slug(slug: &str) -> Option<(Provider, &str)> {
     if let Some(raw_slug) = slug.strip_prefix("opencode-go/") {
         Some((Provider::OpenCodeGo, raw_slug))
-    } else if let Some(raw_slug) =
-        slug.strip_prefix("opencode/").or_else(|| slug.strip_prefix("opencode-zen/"))
-    {
+    } else if let Some(raw_slug) = slug.strip_prefix("opencode/").or_else(|| slug.strip_prefix("opencode-zen/")) {
         Some((Provider::OpenCodeZen, raw_slug))
     } else {
         None

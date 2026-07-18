@@ -64,22 +64,14 @@ impl ColorContext {
 
     /// Ensure minimum contrast against background, then balance luminance
     /// into the comfortable reading range. Used for text-content colors.
-    pub(crate) fn guaranteed_text_color(
-        &self,
-        candidate: RgbColor,
-        fallbacks: &[RgbColor],
-    ) -> RgbColor {
+    pub(crate) fn guaranteed_text_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
         let color = ensure_contrast(candidate, self.background, self.min_contrast, fallbacks);
         balance_text_luminance(color, self.background, self.min_contrast)
     }
 
     /// Ensure minimum contrast against background only. Used for accent/UI
     /// colors where luminance balancing would override the intended tint.
-    pub(crate) fn guaranteed_accent_color(
-        &self,
-        candidate: RgbColor,
-        fallbacks: &[RgbColor],
-    ) -> RgbColor {
+    pub(crate) fn guaranteed_accent_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
         ensure_contrast(candidate, self.background, self.min_contrast, fallbacks)
     }
 
@@ -112,10 +104,7 @@ impl ColorContext {
         self.guaranteed_accent_color(
             lighten(text_color, ui::THEME_MIX_RATIO),
             &[
-                lighten(
-                    lighten(text_color, ui::THEME_MIX_RATIO),
-                    ui::THEME_TOOL_BODY_LIGHTEN_RATIO,
-                ),
+                lighten(lighten(text_color, ui::THEME_MIX_RATIO), ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
                 text_color,
                 self.fallback_light,
             ],
@@ -124,18 +113,11 @@ impl ColorContext {
 
     /// 4. Tool body text color (subdued variant of tool accent).
     pub(crate) fn compute_tool_body_color(&self, text_color: RgbColor) -> RgbColor {
-        let candidate = mix(
-            lighten(text_color, ui::THEME_MIX_RATIO),
-            text_color,
-            ui::THEME_TOOL_BODY_MIX_RATIO,
-        );
+        let candidate = mix(lighten(text_color, ui::THEME_MIX_RATIO), text_color, ui::THEME_TOOL_BODY_MIX_RATIO);
         self.guaranteed_accent_color(
             candidate,
             &[
-                lighten(
-                    lighten(text_color, ui::THEME_MIX_RATIO),
-                    ui::THEME_TOOL_BODY_LIGHTEN_RATIO,
-                ),
+                lighten(lighten(text_color, ui::THEME_MIX_RATIO), ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
                 text_color,
                 self.fallback_light,
             ],
@@ -144,11 +126,7 @@ impl ColorContext {
 
     /// 5. PTY/shell output color — dimmed by blending tool_body toward the
     ///    background, then balanced for readability.
-    pub(crate) fn compute_pty_output_color(
-        &self,
-        tool_body_color: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    pub(crate) fn compute_pty_output_color(&self, tool_body_color: RgbColor, text_color: RgbColor) -> RgbColor {
         let candidate = mix(tool_body_color, self.background, ui::THEME_PTY_OUTPUT_MIX_RATIO);
         self.guaranteed_text_color(candidate, &[tool_body_color, text_color])
     }
@@ -202,11 +180,7 @@ impl ColorContext {
     }
 
     /// 10. Primary accent (for UI chrome, not body text).
-    pub(crate) fn compute_primary_color(
-        &self,
-        primary: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    pub(crate) fn compute_primary_color(&self, primary: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             ensure_contrast(primary, self.background, self.min_contrast, &[text_color]),
             &[text_color],
@@ -221,12 +195,7 @@ impl ColorContext {
         text_color: RgbColor,
     ) -> RgbColor {
         self.guaranteed_text_color(
-            ensure_contrast(
-                secondary,
-                self.background,
-                self.min_contrast,
-                &[info_color, text_color],
-            ),
+            ensure_contrast(secondary, self.background, self.min_contrast, &[info_color, text_color]),
             &[info_color, text_color],
         )
     }
@@ -239,12 +208,7 @@ impl ColorContext {
         text_color: RgbColor,
     ) -> RgbColor {
         self.guaranteed_text_color(
-            ensure_contrast(
-                logo_accent,
-                self.background,
-                self.min_contrast,
-                &[secondary_color, text_color],
-            ),
+            ensure_contrast(logo_accent, self.background, self.min_contrast, &[secondary_color, text_color]),
             &[secondary_color, text_color],
         )
     }
@@ -288,10 +252,7 @@ impl ThemePalette {
         style
     }
 
-    pub(crate) fn build_styles_with_accessibility(
-        &self,
-        accessibility: &ColorAccessibilityConfig,
-    ) -> ThemeStyles {
+    pub(crate) fn build_styles_with_accessibility(&self, accessibility: &ColorAccessibilityConfig) -> ThemeStyles {
         let ctx = ColorContext::new(self.background, accessibility.minimum_contrast);
         let bold_is_bright = accessibility.bold_is_bright;
 
@@ -305,11 +266,7 @@ impl ThemePalette {
 
         ThemeStyles {
             info: Self::style_from(info, true, bold_is_bright),
-            error: Self::style_from(
-                ctx.compute_alert_color(self.alert, text),
-                true,
-                bold_is_bright,
-            ),
+            error: Self::style_from(ctx.compute_alert_color(self.alert, text), true, bold_is_bright),
             output: Self::style_from(text, false, bold_is_bright),
             response: Self::style_from(ctx.compute_response_color(text), false, bold_is_bright),
             reasoning: Self::style_from(ctx.compute_reasoning_color(text), false, bold_is_bright)
@@ -318,17 +275,9 @@ impl ThemePalette {
             tool_detail: Style::new().fg_color(Some(Color::Rgb(tool_body))),
             tool_output: Style::new(),
             pty_output: Style::new().fg_color(Some(Color::Rgb(pty))),
-            status: Self::style_from(
-                ctx.compute_status_color(primary, info, text),
-                true,
-                bold_is_bright,
-            ),
+            status: Self::style_from(ctx.compute_status_color(primary, info, text), true, bold_is_bright),
             mcp: Self::style_from(ctx.compute_mcp_color(logo, info), true, bold_is_bright),
-            user: Self::style_from(
-                ctx.compute_user_color(self.secondary_accent, info, text),
-                false,
-                bold_is_bright,
-            ),
+            user: Self::style_from(ctx.compute_user_color(self.secondary_accent, info, text), false, bold_is_bright),
             primary: Self::style_from(primary, false, bold_is_bright),
             secondary: Self::style_from(secondary, false, bold_is_bright),
             background: Color::Rgb(self.background),

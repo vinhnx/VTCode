@@ -13,9 +13,8 @@ use vtcode_core::core::threads::{
 };
 use vtcode_core::review::{ReviewSpec, build_review_prompt};
 use vtcode_core::utils::session_archive::{
-    SessionArchive, SessionListing, find_session_by_identifier,
-    generate_session_archive_identifier, history_persistence_enabled,
-    reserve_session_archive_identifier,
+    SessionArchive, SessionListing, find_session_by_identifier, generate_session_archive_identifier,
+    history_persistence_enabled, reserve_session_archive_identifier,
 };
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
@@ -67,10 +66,7 @@ struct ExecVtConfig {
     primary_agent_explicitly_configured: bool,
 }
 
-pub(crate) fn resolve_exec_command(
-    command: Option<ExecSubcommand>,
-    prompt: Option<String>,
-) -> Result<ExecCommandKind> {
+pub(crate) fn resolve_exec_command(command: Option<ExecSubcommand>, prompt: Option<String>) -> Result<ExecCommandKind> {
     match command {
         Some(ExecSubcommand::Resume(resume)) => resolve_resume_command(resume),
         Some(ExecSubcommand::Eval(eval_args)) => Ok(ExecCommandKind::Eval {
@@ -84,9 +80,7 @@ pub(crate) fn resolve_exec_command(
 fn resolve_resume_command(resume: ExecResumeArgs) -> Result<ExecCommandKind> {
     if resume.last {
         if resume.prompt.is_some() {
-            bail!(
-                "Exec resume --last accepts a single prompt argument. Quote multi-word prompts or pipe stdin."
-            );
+            bail!("Exec resume --last accepts a single prompt argument. Quote multi-word prompts or pipe stdin.");
         }
 
         return Ok(ExecCommandKind::Resume {
@@ -113,9 +107,7 @@ pub(super) async fn prepare_exec_run(
     validate_resume_prompt_requirement(&options.command, io::stdin().is_tty_ext())?;
 
     let (prompt, resume_listing) = match &options.command {
-        ExecCommandKind::Run { prompt_arg } => {
-            (resolve_prompt(prompt_arg.clone(), config.quiet)?, None)
-        }
+        ExecCommandKind::Run { prompt_arg } => (resolve_prompt(prompt_arg.clone(), config.quiet)?, None),
         ExecCommandKind::Resume { prompt_arg, .. } => (
             resolve_prompt(prompt_arg.clone(), config.quiet)?,
             Some(resolve_resume_listing(options, config).await?),
@@ -137,21 +129,16 @@ pub(super) async fn prepare_exec_run(
     };
     run_config.workspace = run_workspace.clone();
 
-    let loaded_vt_cfg = load_exec_vt_config(
-        vt_cfg,
-        &run_workspace,
-        &config.workspace,
-        options.primary_agent_explicitly_configured,
-    )
-    .await?;
+    let loaded_vt_cfg =
+        load_exec_vt_config(vt_cfg, &run_workspace, &config.workspace, options.primary_agent_explicitly_configured)
+            .await?;
     let mut run_vt_cfg = loaded_vt_cfg.config;
     apply_runtime_overrides(Some(&mut run_vt_cfg), &run_config);
-    let primary_agent_runtime =
-        crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
-            &run_config.workspace,
-            &run_vt_cfg,
-            loaded_vt_cfg.primary_agent_explicitly_configured,
-        )?;
+    let primary_agent_runtime = crate::cli::full_auto_primary_agent::resolve_full_auto_primary_agent_runtime(
+        &run_config.workspace,
+        &run_vt_cfg,
+        loaded_vt_cfg.primary_agent_explicitly_configured,
+    )?;
     run_vt_cfg = primary_agent_runtime.vt_cfg;
     run_config.model = run_vt_cfg.agent.default_model.clone();
     run_config.reasoning_effort = run_vt_cfg.agent.reasoning_effort;
@@ -161,10 +148,9 @@ pub(super) async fn prepare_exec_run(
     // This avoids the interactive trust prompt in CI/eval scenarios.
     let automation_cfg = &run_vt_cfg.automation.full_auto;
     if automation_cfg.enabled {
-        let current_trust =
-            vtcode_core::utils::dot_config::load_workspace_trust_level(&run_config.workspace)
-                .await
-                .unwrap_or(None);
+        let current_trust = vtcode_core::utils::dot_config::load_workspace_trust_level(&run_config.workspace)
+            .await
+            .unwrap_or(None);
         if current_trust.is_none() {
             vtcode_core::utils::dot_config::update_workspace_trust(
                 &run_config.workspace,
@@ -178,9 +164,7 @@ pub(super) async fn prepare_exec_run(
     require_full_auto_workspace_trust(&run_config.workspace, "exec runs", "exec").await?;
 
     if !automation_cfg.enabled {
-        bail!(
-            "Automation is disabled in configuration. Enable [automation.full_auto] to continue."
-        );
+        bail!("Automation is disabled in configuration. Enable [automation.full_auto] to continue.");
     }
 
     let model_id = ModelId::from_str(&run_config.model).with_context(|| {
@@ -190,8 +174,7 @@ pub(super) async fn prepare_exec_run(
         )
     })?;
 
-    let metadata =
-        build_exec_archive_metadata(run_workspace.as_path(), &model_id, &run_vt_cfg, &run_config);
+    let metadata = build_exec_archive_metadata(run_workspace.as_path(), &model_id, &run_vt_cfg, &run_config);
     let history_enabled = history_persistence_enabled();
     let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
 
@@ -214,9 +197,7 @@ pub(super) async fn prepare_exec_run(
             (session_id, None, bootstrap)
         }
     } else {
-        let session_id =
-            next_exec_session_id(run_workspace.as_path(), reserved_archive_id, history_enabled)
-                .await?;
+        let session_id = next_exec_session_id(run_workspace.as_path(), reserved_archive_id, history_enabled).await?;
         let archive = if history_enabled {
             Some(
                 SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
@@ -247,17 +228,12 @@ pub(super) async fn prepare_exec_run(
     })
 }
 
-pub(super) fn validate_resume_prompt_requirement(
-    command: &ExecCommandKind,
-    stdin_is_tty: bool,
-) -> Result<()> {
+pub(super) fn validate_resume_prompt_requirement(command: &ExecCommandKind, stdin_is_tty: bool) -> Result<()> {
     if let ExecCommandKind::Resume { prompt_arg, .. } = command
         && prompt_arg.is_none()
         && stdin_is_tty
     {
-        bail!(
-            "Exec resume requires a follow-up prompt. Pass one explicitly, use '-' to read stdin, or pipe input."
-        );
+        bail!("Exec resume requires a follow-up prompt. Pass one explicitly, use '-' to read stdin, or pipe input.");
     }
 
     Ok(())
@@ -266,9 +242,7 @@ pub(super) fn validate_resume_prompt_requirement(
 fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
     let prompt = match prompt_arg {
         Some(prompt) if prompt != "-" => {
-            if let Some(stdin_text) =
-                read_prompt_from_stdin(StdinPromptBehavior::OptionalAppend, quiet)?
-            {
+            if let Some(stdin_text) = read_prompt_from_stdin(StdinPromptBehavior::OptionalAppend, quiet)? {
                 prompt_with_stdin_context(&prompt, &stdin_text)
             } else {
                 prompt
@@ -280,8 +254,7 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
             } else {
                 StdinPromptBehavior::RequiredIfPiped
             };
-            read_prompt_from_stdin(behavior, quiet)?
-                .expect("required stdin prompt should produce content")
+            read_prompt_from_stdin(behavior, quiet)?.expect("required stdin prompt should produce content")
         }
     };
 
@@ -294,9 +267,7 @@ fn read_prompt_from_stdin(behavior: StdinPromptBehavior, quiet: bool) -> Result<
 
     match behavior {
         StdinPromptBehavior::RequiredIfPiped if stdin_is_tty => {
-            bail!(
-                "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
-            );
+            bail!("No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin.");
         }
         StdinPromptBehavior::RequiredIfPiped => {
             if !quiet {
@@ -374,10 +345,7 @@ fn build_exec_archive_metadata(
         &vt_cfg.agent.theme,
         config.reasoning_effort.as_str(),
     )
-    .with_debug_log_path(
-        crate::main_helpers::runtime_debug_log_path()
-            .map(|path| path.to_string_lossy().to_string()),
-    )
+    .with_debug_log_path(crate::main_helpers::runtime_debug_log_path().map(|path| path.to_string_lossy().to_string()))
 }
 
 async fn next_exec_session_id(
@@ -421,10 +389,7 @@ async fn load_exec_vt_config(
     })
 }
 
-async fn resolve_resume_listing(
-    options: &ExecCommandOptions,
-    config: &CoreAgentConfig,
-) -> Result<SessionListing> {
+async fn resolve_resume_listing(options: &ExecCommandOptions, config: &CoreAgentConfig) -> Result<SessionListing> {
     let ExecCommandKind::Resume { session_id, last, all, .. } = &options.command else {
         bail!("Internal error: resume listing requested for non-resume exec command");
     };
@@ -445,9 +410,9 @@ async fn resolve_resume_listing(
     let identifier = session_id
         .as_deref()
         .context("Session id is required when --last is not used.")?;
-    find_session_by_identifier(identifier).await?.with_context(|| {
-        format!("No archived exec session with identifier '{identifier}' was found.")
-    })
+    find_session_by_identifier(identifier)
+        .await?
+        .with_context(|| format!("No archived exec session with identifier '{identifier}' was found."))
 }
 
 #[cfg(test)]
@@ -526,10 +491,7 @@ mod tests {
     #[test]
     fn review_command_does_not_require_resume_prompt() {
         let spec = build_review_spec(false, None, Vec::new(), None).expect("review spec");
-        let result = validate_resume_prompt_requirement(
-            &ExecCommandKind::Review { spec: spec.clone() },
-            true,
-        );
+        let result = validate_resume_prompt_requirement(&ExecCommandKind::Review { spec: spec.clone() }, true);
 
         result.unwrap();
         assert!(matches!(spec.target, ReviewTarget::CurrentDiff));
@@ -551,10 +513,9 @@ mod tests {
 
     #[tokio::test]
     async fn next_exec_session_id_prefers_reserved_identifier() {
-        let session_id =
-            next_exec_session_id(Path::new("."), Some("session-reserved".to_string()), true)
-                .await
-                .expect("reserved session id should win");
+        let session_id = next_exec_session_id(Path::new("."), Some("session-reserved".to_string()), true)
+            .await
+            .expect("reserved session id should win");
 
         assert_eq!(session_id, "session-reserved");
     }
@@ -574,14 +535,9 @@ default_model = "gpt-5"
         )
         .expect("resumed config");
 
-        let loaded = load_exec_vt_config(
-            &VTCodeConfig::default(),
-            resumed_dir.path(),
-            launch_dir.path(),
-            false,
-        )
-        .await
-        .expect("resumed config should load");
+        let loaded = load_exec_vt_config(&VTCodeConfig::default(), resumed_dir.path(), launch_dir.path(), false)
+            .await
+            .expect("resumed config should load");
 
         assert_eq!(loaded.config.default_primary_agent, "duck");
         assert!(loaded.primary_agent_explicitly_configured);
@@ -591,10 +547,9 @@ default_model = "gpt-5"
     async fn load_exec_vt_config_preserves_launch_primary_agent_metadata_for_same_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");
 
-        let loaded =
-            load_exec_vt_config(&VTCodeConfig::default(), workspace.path(), workspace.path(), true)
-                .await
-                .expect("same-workspace config should load");
+        let loaded = load_exec_vt_config(&VTCodeConfig::default(), workspace.path(), workspace.path(), true)
+            .await
+            .expect("same-workspace config should load");
 
         assert!(loaded.primary_agent_explicitly_configured);
     }

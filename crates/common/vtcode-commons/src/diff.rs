@@ -234,14 +234,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
 }
 
 #[allow(clippy::cast_sign_loss)]
-fn backtrack_myers(
-    old: &[char],
-    new: &[char],
-    v_index: &[usize],
-    d: usize,
-    mut k: i32,
-    max_d: usize,
-) -> Vec<Edit> {
+fn backtrack_myers(old: &[char], new: &[char], v_index: &[usize], d: usize, mut k: i32, max_d: usize) -> Vec<Edit> {
     let mut edits = Vec::with_capacity(old.len() + new.len());
     let mut x = old.len();
     let mut y = new.len();
@@ -263,8 +256,7 @@ fn backtrack_myers(
 
         let cur_d_i32 = cur_d as i32;
         let prev_k = if k == cur_d_i32.wrapping_neg()
-            || (k != cur_d_i32
-                && v_index[prev_row_start + k_idx - 1] < v_index[prev_row_start + k_idx + 1])
+            || (k != cur_d_i32 && v_index[prev_row_start + k_idx - 1] < v_index[prev_row_start + k_idx + 1])
         {
             k + 1
         } else {
@@ -400,10 +392,7 @@ fn split_lines_with_terminator(text: &str) -> Vec<String> {
 }
 
 #[inline]
-fn collect_line_records<'a>(
-    old_lines: &'a [&'a str],
-    new_lines: &'a [&'a str],
-) -> Vec<LineRecord<'a>> {
+fn collect_line_records<'a>(old_lines: &'a [&'a str], new_lines: &'a [&'a str]) -> Vec<LineRecord<'a>> {
     let (old_encoded, new_encoded) = encode_line_sequences(old_lines, new_lines);
     let mut records = Vec::with_capacity(old_lines.len() + new_lines.len());
     let mut old_index = 0u32;
@@ -466,10 +455,7 @@ fn collect_line_records<'a>(
     records
 }
 
-fn encode_line_sequences<'a>(
-    old_lines: &'a [&'a str],
-    new_lines: &'a [&'a str],
-) -> (String, String) {
+fn encode_line_sequences<'a>(old_lines: &'a [&'a str], new_lines: &'a [&'a str]) -> (String, String) {
     let mut token_map: HashMap<&'a str, char> = HashMap::new();
     let mut next_codepoint: u32 = 0;
 
@@ -479,11 +465,7 @@ fn encode_line_sequences<'a>(
     (old_encoded, new_encoded)
 }
 
-fn encode_line_list<'a>(
-    lines: &'a [&'a str],
-    map: &mut HashMap<&'a str, char>,
-    next_codepoint: &mut u32,
-) -> String {
+fn encode_line_list<'a>(lines: &'a [&'a str], map: &mut HashMap<&'a str, char>, next_codepoint: &mut u32) -> String {
     let mut encoded = String::with_capacity(lines.len());
     for &line in lines {
         let token = if let Some(&value) = map.get(line) {

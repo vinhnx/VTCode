@@ -12,8 +12,8 @@ use crate::core::loop_detector::LoopDetector;
 use crate::tools::apply_patch::decode_apply_patch_input;
 use crate::tools::command_args::{command_text, interactive_input_text};
 use crate::tools::tool_intent::{
-    self, classify_tool_intent, command_session_action, command_session_action_in,
-    file_operation_action_in, file_operation_action_is,
+    self, classify_tool_intent, command_session_action, command_session_action_in, file_operation_action_in,
+    file_operation_action_is,
 };
 use anyhow::{Context, Result};
 use hashbrown::{HashMap, HashSet};
@@ -213,9 +213,7 @@ impl AutonomousExecutor {
             Ok(detector) => {
                 // Check if hard limit already exceeded
                 if detector.is_hard_limit_exceeded(tool_key) {
-                    return Some(format!(
-                        "Tool '{tool_key}' blocked: hard limit exceeded. Agent is stuck in a loop."
-                    ));
+                    return Some(format!("Tool '{tool_key}' blocked: hard limit exceeded. Agent is stuck in a loop."));
                 }
 
                 // Check call count and provide early warning
@@ -333,8 +331,7 @@ impl AutonomousExecutor {
     /// First checks for sensitive system paths via `validate_path_safety`,
     /// then enforces workspace boundary constraints.
     fn validate_file_path(&self, path: Option<&Value>) -> Result<()> {
-        let path_str =
-            path.and_then(|v| v.as_str()).context("Missing or invalid 'path' argument")?;
+        let path_str = path.and_then(|v| v.as_str()).context("Missing or invalid 'path' argument")?;
 
         // Check for sensitive system paths (e.g., /var/db/shadow, /etc/shadow)
         validate_path_safety(path_str)?;
@@ -369,16 +366,13 @@ impl AutonomousExecutor {
             // Resolve the path and check if it stays within workspace
             if let Some(workspace) = &self.workspace_dir {
                 let path_obj = Path::new(path_str);
-                let canonical_ok =
-                    resolve_workspace_path(workspace, &workspace.join(path_obj)).is_ok();
+                let canonical_ok = resolve_workspace_path(workspace, &workspace.join(path_obj)).is_ok();
                 let lexical_ok = is_within_workspace_lexically(workspace, path_obj);
                 if !canonical_ok && !lexical_ok {
                     anyhow::bail!("Path traversal escapes workspace boundary: {path_str}");
                 }
             } else {
-                anyhow::bail!(
-                    "Path traversal blocked: workspace boundary is unknown for '{path_str}'"
-                );
+                anyhow::bail!("Path traversal blocked: workspace boundary is unknown for '{path_str}'");
             }
         }
 
@@ -464,9 +458,7 @@ impl AutonomousExecutor {
         }
 
         match canonical_tool_name {
-            tools::UNIFIED_FILE => {
-                file_operation_action_in(args, &["write", "edit", "move", "copy"])
-            }
+            tools::UNIFIED_FILE => file_operation_action_in(args, &["write", "edit", "move", "copy"]),
             tools::UNIFIED_EXEC => command_session_action_in(args, &["run", "code", "close"]),
             _ => false,
         }
@@ -527,8 +519,7 @@ impl AutonomousExecutor {
     fn record_rate_history(&self, tool_name: &str) {
         let now = Instant::now();
         if let Ok(mut history) = self.rate_history.write() {
-            let entries =
-                history.entry(Self::canonical_tool_key(tool_name).to_string()).or_default();
+            let entries = history.entry(Self::canonical_tool_key(tool_name).to_string()).or_default();
             entries.push_back(now);
             prune_expired_timestamps(entries, now, self.rate_limit_window);
         }
@@ -599,20 +590,15 @@ mod tests {
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
-            executor
-                .get_policy(tools::UNIFIED_FILE, &json!({"action": "read", "path": "README.md"})),
+            executor.get_policy(tools::UNIFIED_FILE, &json!({"action": "read", "path": "README.md"})),
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
-            executor
-                .get_policy(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": "run-1"})),
+            executor.get_policy(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": "run-1"})),
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
-            executor.get_policy(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "continue", "session_id": "run-1"})
-            ),
+            executor.get_policy(tools::UNIFIED_EXEC, &json!({"action": "continue", "session_id": "run-1"})),
             AutonomousPolicy::AutoExecute
         );
     }
@@ -632,11 +618,7 @@ mod tests {
         for cmd in destructive_cmds {
             let args = json!({"command": cmd});
             let policy = executor.get_policy("shell", &args);
-            assert_eq!(
-                policy,
-                AutonomousPolicy::RequireConfirmation,
-                "unexpected policy for command: {cmd}"
-            );
+            assert_eq!(policy, AutonomousPolicy::RequireConfirmation, "unexpected policy for command: {cmd}");
         }
     }
 
@@ -655,10 +637,8 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         assert_eq!(
-            executor.get_policy(
-                tools::UNIFIED_FILE,
-                &json!({"action": "write", "path": "foo.txt", "content": "hello"})
-            ),
+            executor
+                .get_policy(tools::UNIFIED_FILE, &json!({"action": "write", "path": "foo.txt", "content": "hello"})),
             AutonomousPolicy::VerifyThenExecute
         );
         assert_eq!(
@@ -764,9 +744,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(
-            err.contains("workspace boundary")
-                || err.contains("Path traversal")
-                || err.contains("system directory"),
+            err.contains("workspace boundary") || err.contains("Path traversal") || err.contains("system directory"),
             "{err}"
         );
 
@@ -805,9 +783,7 @@ mod tests {
 
         let err = err.to_string();
         assert!(
-            err.contains("workspace boundary")
-                || err.contains("Path traversal")
-                || err.contains("system directory"),
+            err.contains("workspace boundary") || err.contains("Path traversal") || err.contains("system directory"),
             "{err}"
         );
     }

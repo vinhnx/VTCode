@@ -13,12 +13,10 @@ use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::PtyConfig;
 use vtcode_core::copilot::{
-    CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus,
-    CopilotPermissionDecision, CopilotPermissionRequest, CopilotRuntimeRequest,
-    CopilotTerminalCreateRequest, CopilotTerminalCreateResponse, CopilotTerminalExitStatus,
-    CopilotTerminalOutputResponse, CopilotToolCallFailure, CopilotToolCallRequest,
-    CopilotToolCallResponse, CopilotToolCallSuccess, PromptSession, PromptSessionCancelHandle,
-    PromptUpdate,
+    CopilotAcpCompatibilityState, CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionDecision,
+    CopilotPermissionRequest, CopilotRuntimeRequest, CopilotTerminalCreateRequest, CopilotTerminalCreateResponse,
+    CopilotTerminalExitStatus, CopilotTerminalOutputResponse, CopilotToolCallFailure, CopilotToolCallRequest,
+    CopilotToolCallResponse, CopilotToolCallSuccess, PromptSession, PromptSessionCancelHandle, PromptUpdate,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::exec::events::ToolCallStatus;
@@ -33,19 +31,15 @@ use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
-    tool_output_started_event, tool_started_event, tool_updated_event,
+    HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event, tool_output_started_event,
+    tool_started_event, tool_updated_event,
 };
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
-use crate::agent::runloop::unified::progress::{
-    ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater,
-};
+use crate::agent::runloop::unified::progress::{ProgressReporter, ProgressUpdateGuard, spawn_elapsed_time_updater};
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::tool_call_safety::{
-    ToolCallSafetyValidator, invocation_id_from_call_id,
-};
+use crate::agent::runloop::unified::tool_call_safety::{ToolCallSafetyValidator, invocation_id_from_call_id};
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
 use crate::agent::runloop::unified::tool_pipeline::{
     PtyStreamRuntime, ToolExecutionStatus, run_tool_call_with_args,
@@ -190,9 +184,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             return Ok(decision);
         }
 
-        if let Some((permission_decision, cache_for_session)) =
-            auto_approve_builtin_permission(&request)
-        {
+        if let Some((permission_decision, cache_for_session)) = auto_approve_builtin_permission(&request) {
             if cache_for_session {
                 let mut cache = self.tool_permission_cache.write().await;
                 cache.cache_grant(summary.cache_key, PermissionGrant::Session);
@@ -226,9 +218,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         // Record the user's decision for auto-accept pattern learning.
         let approved = matches!(
             decision,
-            HitlDecision::Approved
-                | HitlDecision::ApprovedSession
-                | HitlDecision::ApprovedPermanent
+            HitlDecision::Approved | HitlDecision::ApprovedSession | HitlDecision::ApprovedPermanent
         );
         if let Err(err) = self
             .approval_recorder
@@ -252,10 +242,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         Ok(permission_decision)
     }
 
-    async fn cached_permission_decision(
-        &self,
-        cache_key: &str,
-    ) -> Option<CopilotPermissionDecision> {
+    async fn cached_permission_decision(&self, cache_key: &str) -> Option<CopilotPermissionDecision> {
         let mut cache = self.tool_permission_cache.write().await;
         match cache.get_permission(cache_key) {
             Some(PermissionGrant::Session | PermissionGrant::Permanent) => {
@@ -287,12 +274,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         }
 
         if let Some(response) = self
-            .prepare_vtcode_tool_execution(
-                renderer,
-                &request.tool_call_id,
-                &canonical_tool_name,
-                &effective_arguments,
-            )
+            .prepare_vtcode_tool_execution(renderer, &request.tool_call_id, &canonical_tool_name, &effective_arguments)
             .await?
         {
             return Ok(response);
@@ -302,11 +284,7 @@ impl<'a> CopilotRuntimeHost<'a> {
 
         let tools = Arc::new(RwLock::new(self.exposed_tools.clone()));
         let turn_index = self.harness_state.tool_calls;
-        let tool_item_id = harness_call_item_id(
-            &self.harness_item_prefix,
-            &request.tool_call_id,
-            &canonical_tool_name,
-        );
+        let tool_item_id = harness_call_item_id(&self.harness_item_prefix, &request.tool_call_id, &canonical_tool_name);
         let (pipeline_outcome, last_stdout) = {
             let mut run_loop_ctx = RunLoopContext::new(
                 renderer,
@@ -353,13 +331,11 @@ impl<'a> CopilotRuntimeHost<'a> {
                 self.vt_cfg,
             )
             .await
-            .with_context(|| {
-                format!("copilot tool output rendering for '{canonical_tool_name}'")
-            })?;
+            .with_context(|| format!("copilot tool output rendering for '{canonical_tool_name}'"))?;
             if !modified_files.is_empty() {
-                run_loop_ctx.session_stats.record_touched_files(
-                    modified_files.iter().map(|path| path.display().to_string()),
-                );
+                run_loop_ctx
+                    .session_stats
+                    .record_touched_files(modified_files.iter().map(|path| path.display().to_string()));
             }
 
             (pipeline_outcome, last_stdout)
@@ -367,20 +343,13 @@ impl<'a> CopilotRuntimeHost<'a> {
 
         match pipeline_outcome.status {
             ToolExecutionStatus::Success { output, .. } => {
-                let text_result =
-                    last_stdout.filter(|s: &String| !s.trim().is_empty()).unwrap_or_else(|| {
-                        serde_json::to_string_pretty(&output).unwrap_or_else(|_| output.to_string())
-                    });
-                Ok(CopilotToolCallResponse::Success(CopilotToolCallSuccess {
-                    text_result_for_llm: text_result,
-                }))
+                let text_result = last_stdout
+                    .filter(|s: &String| !s.trim().is_empty())
+                    .unwrap_or_else(|| serde_json::to_string_pretty(&output).unwrap_or_else(|_| output.to_string()));
+                Ok(CopilotToolCallResponse::Success(CopilotToolCallSuccess { text_result_for_llm: text_result }))
             }
-            ToolExecutionStatus::Failure { error } => {
-                Ok(tool_failed_response(&canonical_tool_name, &error.message))
-            }
-            ToolExecutionStatus::Timeout { error } => {
-                Ok(tool_timed_out_response(&canonical_tool_name, &error.message))
-            }
+            ToolExecutionStatus::Failure { error } => Ok(tool_failed_response(&canonical_tool_name, &error.message)),
+            ToolExecutionStatus::Timeout { error } => Ok(tool_timed_out_response(&canonical_tool_name, &error.message)),
             ToolExecutionStatus::Cancelled => Ok(tool_cancelled_response(&canonical_tool_name)),
         }
     }
@@ -420,18 +389,12 @@ impl<'a> CopilotRuntimeHost<'a> {
             }
             Err(SafetyValidationFailure::NeedsApproval(justification)) => Some(justification),
             Err(SafetyValidationFailure::Validation(error)) => {
-                return Ok(Some(denied_tool_response(
-                    tool_name,
-                    &format!("safety validation failed: {error}"),
-                )));
+                return Ok(Some(denied_tool_response(tool_name, &format!("safety validation failed: {error}"))));
             }
         };
 
         match ensure_tool_permission_with_call_id(
-            self.tool_permissions_context_with_safety(
-                renderer,
-                safety_approval_justification.as_deref(),
-            ),
+            self.tool_permissions_context_with_safety(renderer, safety_approval_justification.as_deref()),
             tool_name,
             Some(arguments),
             Some(tool_call_id),
@@ -466,9 +429,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         }
 
         if let Some(warning) = self.harness_state.record_tool_call_with_default_warning() {
-            warning.log_threshold_reached(
-                "Tool-call budget warning threshold reached in copilot ACP path",
-            );
+            warning.log_threshold_reached("Tool-call budget warning threshold reached in copilot ACP path");
         }
 
         Ok(None)
@@ -515,8 +476,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         };
         let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
         let raw_id = raw_tool_call_id(tool_call_id);
-        let _ =
-            emitter.emit(tool_started_event(item_id.clone(), tool_name, Some(arguments), raw_id));
+        let _ = emitter.emit(tool_started_event(item_id.clone(), tool_name, Some(arguments), raw_id));
         let _ = emitter.emit(tool_output_started_event(item_id, raw_id));
     }
 
@@ -540,14 +500,8 @@ impl<'a> CopilotRuntimeHost<'a> {
             raw_id,
             status.clone(),
         ));
-        let _ = emitter.emit(tool_output_completed_event(
-            item_id,
-            raw_id,
-            status,
-            None,
-            None,
-            output.unwrap_or_default(),
-        ));
+        let _ =
+            emitter.emit(tool_output_completed_event(item_id, raw_id, status, None, None, output.unwrap_or_default()));
     }
 
     fn emit_tool_output_event(&self, tool_call_id: &str, tool_name: &str, output: &str) {
@@ -623,10 +577,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         Ok(CopilotTerminalCreateResponse { terminal_id })
     }
 
-    async fn handle_terminal_output(
-        &self,
-        terminal_id: &str,
-    ) -> Result<CopilotTerminalOutputResponse> {
+    async fn handle_terminal_output(&self, terminal_id: &str) -> Result<CopilotTerminalOutputResponse> {
         self.local_terminal_sessions
             .get(terminal_id)
             .map(|s| s.snapshot_output())
@@ -654,10 +605,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             .with_context(|| format!("copilot terminal kill '{}'", session.exec_session_id))
     }
 
-    async fn handle_terminal_wait_for_exit(
-        &self,
-        terminal_id: &str,
-    ) -> Result<CopilotTerminalExitStatus> {
+    async fn handle_terminal_wait_for_exit(&self, terminal_id: &str) -> Result<CopilotTerminalExitStatus> {
         let session = self
             .local_terminal_sessions
             .get(terminal_id)
@@ -711,11 +659,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         if tool_update.started {
             let tool_name = self.observed_tool_calls[&tool_call_id].tool_name.clone();
             self.record_tool_use(&tool_name);
-            self.emit_tool_started_event(
-                &tool_call_id,
-                &tool_name,
-                update.arguments.as_ref().unwrap_or(&Value::Null),
-            );
+            self.emit_tool_started_event(&tool_call_id, &tool_name, update.arguments.as_ref().unwrap_or(&Value::Null));
         }
 
         if let Some(output) = tool_update.output_delta {
@@ -884,16 +828,11 @@ fn process_observed_tool_state(
         && state.pty_stream.is_none()
         && let Some(cmd) = observed_tool_command_display(update)
     {
-        state.pty_stream = Some(ObservedToolPtyStream::start(
-            handle,
-            tail_limit,
-            cmd,
-            tool_registry.pty_config().clone(),
-        ));
+        state.pty_stream =
+            Some(ObservedToolPtyStream::start(handle, tail_limit, cmd, tool_registry.pty_config().clone()));
     }
 
-    let output_delta = if let Some(output) =
-        update.output.as_deref().filter(|t| !t.trim().is_empty())
+    let output_delta = if let Some(output) = update.output.as_deref().filter(|t| !t.trim().is_empty())
         && state.last_output.as_deref() != Some(output)
     {
         if let Some(delta) = observed_tool_output_delta(state.last_output.as_deref(), output)
@@ -909,10 +848,7 @@ fn process_observed_tool_state(
     };
 
     let finished = !state.finished
-        && matches!(
-            update.status,
-            CopilotObservedToolCallStatus::Completed | CopilotObservedToolCallStatus::Failed
-        );
+        && matches!(update.status, CopilotObservedToolCallStatus::Completed | CopilotObservedToolCallStatus::Failed);
     if finished {
         state.finished = true;
         let _ = state.pty_stream.take().map(|s| s.finish());
@@ -929,12 +865,7 @@ struct ObservedToolPtyStream {
 }
 
 impl ObservedToolPtyStream {
-    fn start(
-        handle: &InlineHandle,
-        tail_limit: usize,
-        command_display: String,
-        pty_config: PtyConfig,
-    ) -> Self {
+    fn start(handle: &InlineHandle, tail_limit: usize, command_display: String, pty_config: PtyConfig) -> Self {
         let progress_reporter = ProgressReporter::new();
         let spinner = PlaceholderSpinner::with_progress(
             handle,
@@ -1264,8 +1195,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
         pty_config,
     } = task;
 
-    let (pty_stream, _elapsed_guard) =
-        setup_terminal_stream(&handle, tail_limit, &command_display, pty_config).await;
+    let (pty_stream, _elapsed_guard) = setup_terminal_stream(&handle, tail_limit, &command_display, pty_config).await;
 
     if let Some(output) = initial_output.as_deref() {
         pty_stream.progress_callback("exec_command", output);
@@ -1279,9 +1209,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
         match tool_registry.read_harness_exec_session_output(&exec_session_id, true).await {
             Ok(Some(chunk)) if !chunk.is_empty() => {
                 pty_stream.progress_callback("exec_command", &chunk);
-                if let Some((tool_call_id, tool_name, output)) =
-                    update_local_terminal_output(&state, &chunk)
-                {
+                if let Some((tool_call_id, tool_name, output)) = update_local_terminal_output(&state, &chunk) {
                     emit_terminal_output_event(
                         harness_emitter.as_ref(),
                         &harness_item_prefix,
@@ -1431,8 +1359,7 @@ fn terminal_command_display(command: &str, args: &[String]) -> String {
     if args.is_empty() {
         command.to_string()
     } else {
-        let parts: Vec<&str> =
-            std::iter::once(command).chain(args.iter().map(|s| s.as_str())).collect();
+        let parts: Vec<&str> = std::iter::once(command).chain(args.iter().map(|s| s.as_str())).collect();
         shell_words::join(&parts)
     }
 }
@@ -1680,30 +1607,21 @@ fn map_builtin_permission_prompt_decision(
     feedback: Option<String>,
 ) -> (CopilotPermissionDecision, bool) {
     match decision {
-        HitlDecision::Approved | HitlDecision::Enable => {
-            (CopilotPermissionDecision::Approved, false)
-        }
+        HitlDecision::Approved | HitlDecision::Enable => (CopilotPermissionDecision::Approved, false),
         HitlDecision::ApprovedSession | HitlDecision::ApprovedPermanent => {
             (CopilotPermissionDecision::ApprovedAlways, true)
         }
-        HitlDecision::Denied
-        | HitlDecision::DeniedOnce
-        | HitlDecision::Exit
-        | HitlDecision::Interrupt => {
+        HitlDecision::Denied | HitlDecision::DeniedOnce | HitlDecision::Exit | HitlDecision::Interrupt => {
             (CopilotPermissionDecision::DeniedInteractivelyByUser { feedback }, false)
         }
     }
 }
 
-fn auto_approve_builtin_permission(
-    request: &CopilotPermissionRequest,
-) -> Option<(CopilotPermissionDecision, bool)> {
+fn auto_approve_builtin_permission(request: &CopilotPermissionRequest) -> Option<(CopilotPermissionDecision, bool)> {
     match request {
         // Copilot ACP keeps asking permission for these descriptive custom-tool
         // requests even though VT Code still controls the actual tool-call path.
-        CopilotPermissionRequest::CustomTool { .. } => {
-            Some((CopilotPermissionDecision::ApprovedAlways, true))
-        }
+        CopilotPermissionRequest::CustomTool { .. } => Some((CopilotPermissionDecision::ApprovedAlways, true)),
         _ => None,
     }
 }
@@ -1719,10 +1637,7 @@ fn tool_not_exposed_response(tool_name: &str) -> CopilotToolCallResponse {
     denied_tool_response(tool_name, "is not allowlisted in VT Code")
 }
 
-fn tool_exceeded_budget_response(
-    tool_name: &str,
-    max_tool_calls: usize,
-) -> CopilotToolCallResponse {
+fn tool_exceeded_budget_response(tool_name: &str, max_tool_calls: usize) -> CopilotToolCallResponse {
     CopilotToolCallResponse::Failure(CopilotToolCallFailure {
         text_result_for_llm: format!(
             "VT Code denied the tool `{tool_name}` because the turn exceeded its tool-call budget."
@@ -1749,9 +1664,7 @@ fn tool_cancelled_response(tool_name: &str) -> CopilotToolCallResponse {
     denied_tool_response(tool_name, "execution cancelled")
 }
 
-fn summarize_permission_request(
-    request: &CopilotPermissionRequest,
-) -> Option<PermissionPromptSummary> {
+fn summarize_permission_request(request: &CopilotPermissionRequest) -> Option<PermissionPromptSummary> {
     #[derive(Debug)]
     struct SummaryDef {
         prefix: &'static str,
@@ -1834,16 +1747,14 @@ fn summarize_permission_request(
             tool_args: Some(json!({"subject": subject, "fact": fact})),
             reason: Some("GitHub Copilot wants to store a memory fact.".to_string()),
         },
-        CopilotPermissionRequest::CustomTool { tool_name, tool_description, args, .. } => {
-            SummaryDef {
-                prefix: "copilot:custom-tool",
-                tool_name: format!("copilot_custom_{tool_name}"),
-                display_name: format!("GitHub Copilot custom tool {tool_name}"),
-                cache_scope: json!({"tool": tool_name, "args": args}),
-                tool_args: args.clone(),
-                reason: Some(tool_description.clone()),
-            }
-        }
+        CopilotPermissionRequest::CustomTool { tool_name, tool_description, args, .. } => SummaryDef {
+            prefix: "copilot:custom-tool",
+            tool_name: format!("copilot_custom_{tool_name}"),
+            display_name: format!("GitHub Copilot custom tool {tool_name}"),
+            cache_scope: json!({"tool": tool_name, "args": args}),
+            tool_args: args.clone(),
+            reason: Some(tool_description.clone()),
+        },
         CopilotPermissionRequest::Hook { tool_name, tool_args, hook_message, .. } => SummaryDef {
             prefix: "copilot:hook",
             tool_name: format!("copilot_hook_{tool_name}"),

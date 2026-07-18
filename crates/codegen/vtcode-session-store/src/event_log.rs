@@ -58,11 +58,7 @@ pub struct SessionEventLog {
 impl SessionEventLog {
     /// Open the log for `session_id`, creating the session directory tree and
     /// rebuilding the index from `events.jsonl` if it already exists.
-    pub fn open(
-        workspace: &Path,
-        session_id: &str,
-        max_events: usize,
-    ) -> Result<Self, SessionStoreError> {
+    pub fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
         std::fs::create_dir_all(dir.join(crate::DERIVED_DIR))
             .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
@@ -210,9 +206,12 @@ impl SessionEventLog {
     pub fn reconstruct_turn(&self, turn: u64) -> Result<Vec<ThreadEvent>, SessionStoreError> {
         let entry = {
             let st = self.state.lock().map_err(poison)?;
-            st.index.entries.iter().find(|e| e.turn_number == turn).cloned().ok_or(
-                SessionStoreError::TurnNotFound { session: st.manifest.session_id.clone(), turn },
-            )?
+            st.index
+                .entries
+                .iter()
+                .find(|e| e.turn_number == turn)
+                .cloned()
+                .ok_or(SessionStoreError::TurnNotFound { session: st.manifest.session_id.clone(), turn })?
         };
         let buf = {
             let mut file = self.file.lock().map_err(poison)?;
@@ -231,8 +230,7 @@ impl SessionEventLog {
             if line.is_empty() {
                 continue;
             }
-            let v: VersionedThreadEvent =
-                serde_json::from_str(line).map_err(SessionStoreError::Json)?;
+            let v: VersionedThreadEvent = serde_json::from_str(line).map_err(SessionStoreError::Json)?;
             events.push(v.into_event());
         }
         Ok(events)
@@ -284,8 +282,7 @@ impl SessionEventLog {
         if !self.events_path.exists() {
             return Ok(());
         }
-        let file = File::open(&self.events_path)
-            .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+        let file = File::open(&self.events_path).map_err(|e| SessionStoreError::io(&self.events_path, e))?;
         let mut reader = std::io::BufReader::new(file);
         let mut buf = Vec::new();
         let mut pos = 0u64;

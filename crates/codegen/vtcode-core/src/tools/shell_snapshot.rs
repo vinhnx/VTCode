@@ -351,8 +351,7 @@ pub struct SnapshotStats {
 async fn capture_shell_snapshot(shell_path: &str) -> Result<ShellSnapshot> {
     let shell_kind = ShellKind::from_path(shell_path);
 
-    let capture_script =
-        format!("printf '{ENV_BEGIN_MARKER}\\n'; env -0; printf '\\n{ENV_END_MARKER}\\n'");
+    let capture_script = format!("printf '{ENV_BEGIN_MARKER}\\n'; env -0; printf '\\n{ENV_END_MARKER}\\n'");
 
     let output = Command::new(shell_path)
         .args(["-lc", &capture_script])

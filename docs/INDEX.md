@@ -57,8 +57,6 @@ Last reviewed: 2026-06-28
 
 ## Historical and Archive Paths
 
-- `docs/mcp/archive/` - Historical MCP implementation reports.
 - `docs/async/` - Async migration implementation logs.
-- `docs/vscode-extension-improve-docs/` - VS Code extension review artifacts.
 
 When adding implementation summaries or one-off reports, prefer a domain folder or an archive path instead of placing files at `docs/*.md`.

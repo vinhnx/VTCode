@@ -44,9 +44,7 @@ fn normalized_command_name(tokens: &[String]) -> Option<String> {
 
 fn command_is_multicol_listing(tokens: &[String]) -> bool {
     normalized_command_name(tokens)
-        .map(|name| {
-            matches!(name.as_str(), "ls" | "dir" | "vdir" | "gls" | "colorls" | "exa" | "eza")
-        })
+        .map(|name| matches!(name.as_str(), "ls" | "dir" | "vdir" | "gls" | "colorls" | "exa" | "eza"))
         .unwrap_or(false)
 }
 
@@ -54,47 +52,38 @@ fn listing_has_single_column_flag(tokens: &[String]) -> bool {
     tokens.iter().any(|arg| {
         matches!(
             arg.as_str(),
-            "-1" | "--format=single-column"
-                | "--long"
-                | "-l"
-                | "--tree"
-                | "--grid=never"
-                | "--no-grid"
+            "-1" | "--format=single-column" | "--long" | "-l" | "--tree" | "--grid=never" | "--no-grid"
         )
     })
 }
 
-pub(super) fn preprocess_terminal_stdout<'a>(
-    tokens: Option<&[String]>,
-    stdout: &'a str,
-) -> Cow<'a, str> {
+pub(super) fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) -> Cow<'a, str> {
     if stdout.trim().is_empty() {
         return Cow::Borrowed(stdout);
     }
 
-    let filtered_text =
-        if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
-            let mut filtered = String::with_capacity(stdout.len());
-            let mut removed_any = false;
+    let filtered_text = if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
+        let mut filtered = String::with_capacity(stdout.len());
+        let mut removed_any = false;
 
-            for line in stdout.lines() {
-                if line.contains("MallocStackLogging:")
-                    || line.contains("malloc: enabling abort()")
-                    || line.contains("can't turn off malloc stack logging")
-                {
-                    removed_any = true;
-                    continue;
-                }
-                if !filtered.is_empty() {
-                    filtered.push('\n');
-                }
-                filtered.push_str(line);
+        for line in stdout.lines() {
+            if line.contains("MallocStackLogging:")
+                || line.contains("malloc: enabling abort()")
+                || line.contains("can't turn off malloc stack logging")
+            {
+                removed_any = true;
+                continue;
             }
+            if !filtered.is_empty() {
+                filtered.push('\n');
+            }
+            filtered.push_str(line);
+        }
 
-            removed_any.then_some(filtered)
-        } else {
-            None
-        };
+        removed_any.then_some(filtered)
+    } else {
+        None
+    };
 
     let normalized = if let Some(filtered) = filtered_text {
         let stripped = strip_ansi_codes(&filtered);
@@ -190,8 +179,7 @@ fn strip_rust_diagnostic_columns_from_str(input: &str) -> Option<String> {
     let mut changed = false;
 
     for chunk in input.split_inclusive('\n') {
-        let (line, had_newline) =
-            chunk.strip_suffix('\n').map(|line| (line, true)).unwrap_or((chunk, false));
+        let (line, had_newline) = chunk.strip_suffix('\n').map(|line| (line, true)).unwrap_or((chunk, false));
 
         if let Some(prefix_end) = rust_diagnostic_prefix_end(line) {
             changed = true;

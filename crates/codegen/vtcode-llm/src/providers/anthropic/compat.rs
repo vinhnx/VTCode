@@ -1,8 +1,7 @@
 use crate::provider::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides,
-    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart, FinishReason,
-    LLMRequest, LLMResponse, Message, MessageContent, MessageRole, ParallelToolConfig, ToolCall,
-    ToolChoice, ToolDefinition,
+    AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, ContentPart, FinishReason, LLMRequest,
+    LLMResponse, Message, MessageContent, MessageRole, ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
 };
 use crate::providers::anthropic_types::{
     AnthropicOutputConfig, AnthropicOutputFormat, ThinkingConfig, ThinkingDisplay,
@@ -71,11 +70,7 @@ pub enum AnthropicContentBlock {
     #[serde(rename = "image")]
     Image { source: AnthropicImageSource },
     #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: Value,
-    },
+    ToolUse { id: String, name: String, input: Value },
     #[serde(rename = "tool_result")]
     ToolResult {
         tool_use_id: String,
@@ -91,11 +86,7 @@ pub enum AnthropicContentBlock {
     #[serde(rename = "redacted_thinking")]
     RedactedThinking { data: String },
     #[serde(rename = "server_tool_use")]
-    ServerToolUse {
-        id: String,
-        name: String,
-        input: Value,
-    },
+    ServerToolUse { id: String, name: String, input: Value },
     #[serde(rename = "container_upload")]
     ContainerUpload { file_id: String },
     #[serde(rename = "code_execution_tool_result")]
@@ -198,10 +189,7 @@ pub enum AnthropicStreamEvent {
         content_block: AnthropicContentBlock,
     },
     #[serde(rename = "content_block_delta")]
-    ContentBlockDelta {
-        index: u32,
-        delta: AnthropicContentDelta,
-    },
+    ContentBlockDelta { index: u32, delta: AnthropicContentDelta },
     #[serde(rename = "content_block_stop")]
     ContentBlockStop { index: u32 },
     #[serde(rename = "message_delta")]
@@ -252,8 +240,7 @@ struct ConvertedAnthropicBlocks {
 }
 
 pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LLMRequest {
-    let (tool_choice, parallel_tool_config) =
-        parse_anthropic_tool_choice(request.tool_choice.as_ref());
+    let (tool_choice, parallel_tool_config) = parse_anthropic_tool_choice(request.tool_choice.as_ref());
     let effort = request.output_config.as_ref().and_then(|config| config.effort.clone());
     let output_format = request.output_config.as_ref().and_then(|config| {
         config.format.as_ref().and_then(|format| match format {
@@ -302,19 +289,14 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                     || !converted.tool_calls.is_empty()
                     || !converted.reasoning_chunks.is_empty()
                 {
-                    let mut message =
-                        Message::base(role, message_content_from_parts(converted.content_parts));
+                    let mut message = Message::base(role, message_content_from_parts(converted.content_parts));
                     if !converted.tool_calls.is_empty() {
                         message.tool_calls = Some(converted.tool_calls);
                     }
-                    if !converted.reasoning_chunks.is_empty()
-                        && message.role == MessageRole::Assistant
-                    {
+                    if !converted.reasoning_chunks.is_empty() && message.role == MessageRole::Assistant {
                         message.reasoning = Some(converted.reasoning_chunks.join("\n"));
                     }
-                    if !converted.reasoning_details.is_empty()
-                        && message.role == MessageRole::Assistant
-                    {
+                    if !converted.reasoning_details.is_empty() && message.role == MessageRole::Assistant {
                         message.reasoning_details = Some(converted.reasoning_details);
                     }
                     messages.push(message);
@@ -375,11 +357,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                     strict,
                     allowed_callers,
                 } => {
-                    let mut tool = ToolDefinition::function(
-                        name,
-                        description.unwrap_or_default(),
-                        input_schema,
-                    );
+                    let mut tool = ToolDefinition::function(name, description.unwrap_or_default(), input_schema);
                     tool.input_examples = input_examples;
                     tool.strict = strict;
                     tool.allowed_callers = allowed_callers;
@@ -401,9 +379,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                             namespace: None,
                             advisor: None,
                         }
-                    } else if tool_type.starts_with("code_execution_")
-                        || tool_type.starts_with("memory_")
-                    {
+                    } else if tool_type.starts_with("code_execution_") || tool_type.starts_with("memory_") {
                         ToolDefinition {
                             tool_type,
                             function: None,
@@ -483,9 +459,7 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
 
     if let Some(reasoning_details) = response.reasoning_details.as_ref() {
         for detail in reasoning_details {
-            let Some(normalized) =
-                normalize_reasoning_detail_object(&Value::String(detail.clone()))
-            else {
+            let Some(normalized) = normalize_reasoning_detail_object(&Value::String(detail.clone())) else {
                 continue;
             };
 
@@ -521,8 +495,7 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
         && let Some(reasoning) = response.reasoning.as_ref()
         && !reasoning.trim().is_empty()
     {
-        content_blocks
-            .push(AnthropicContentBlock::Thinking { thinking: reasoning.clone(), signature: None });
+        content_blocks.push(AnthropicContentBlock::Thinking { thinking: reasoning.clone(), signature: None });
     }
 
     if let Some(content) = response.content.as_ref()
@@ -584,9 +557,7 @@ pub(crate) fn anthropic_stop_reason(finish_reason: FinishReason) -> String {
     }
 }
 
-fn parse_anthropic_tool_choice(
-    tool_choice: Option<&Value>,
-) -> (Option<ToolChoice>, Option<Box<ParallelToolConfig>>) {
+fn parse_anthropic_tool_choice(tool_choice: Option<&Value>) -> (Option<ToolChoice>, Option<Box<ParallelToolConfig>>) {
     let Some(choice) = tool_choice else {
         return (None, None);
     };
@@ -657,11 +628,9 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
             }
             AnthropicContentBlock::ToolUse { id, name, input }
             | AnthropicContentBlock::ServerToolUse { id, name, input } => {
-                converted.tool_calls.push(ToolCall::function(
-                    id.clone(),
-                    name.clone(),
-                    input.to_string(),
-                ));
+                converted
+                    .tool_calls
+                    .push(ToolCall::function(id.clone(), name.clone(), input.to_string()));
             }
             AnthropicContentBlock::ToolResult { tool_use_id, content, .. } => converted
                 .emitted_messages
@@ -750,28 +719,20 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
     }
 }
 
-fn compatibility_thinking_mode(
-    _model: &str,
-    thinking: Option<&ThinkingConfig>,
-) -> AnthropicThinkingModeOverride {
+fn compatibility_thinking_mode(_model: &str, thinking: Option<&ThinkingConfig>) -> AnthropicThinkingModeOverride {
     match thinking {
         Some(ThinkingConfig::Adaptive { .. }) => AnthropicThinkingModeOverride::Adaptive,
         Some(ThinkingConfig::Enabled { budget_tokens, .. }) => {
             AnthropicThinkingModeOverride::ManualBudget(*budget_tokens)
         }
-        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) => {
-            AnthropicThinkingModeOverride::Disabled
-        }
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) => AnthropicThinkingModeOverride::Disabled,
         None => AnthropicThinkingModeOverride::Disabled,
     }
 }
 
-fn compatibility_thinking_display(
-    thinking: Option<&ThinkingConfig>,
-) -> AnthropicThinkingDisplayOverride {
+fn compatibility_thinking_display(thinking: Option<&ThinkingConfig>) -> AnthropicThinkingDisplayOverride {
     let display = match thinking {
-        Some(ThinkingConfig::Adaptive { display })
-        | Some(ThinkingConfig::Enabled { display, .. }) => *display,
+        Some(ThinkingConfig::Adaptive { display }) | Some(ThinkingConfig::Enabled { display, .. }) => *display,
         Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) | None => None,
     };
 

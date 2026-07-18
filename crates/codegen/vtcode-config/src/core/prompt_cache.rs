@@ -88,8 +88,7 @@ impl PromptCachingConfig {
             "openai" => self.providers.openai.enabled,
             "anthropic" | "minimax" => self.providers.anthropic.enabled,
             "gemini" => {
-                self.providers.gemini.enabled
-                    && !matches!(self.providers.gemini.mode, GeminiPromptCacheMode::Off)
+                self.providers.gemini.enabled && !matches!(self.providers.gemini.mode, GeminiPromptCacheMode::Off)
             }
             "openrouter" => self.providers.openrouter.enabled,
             "moonshot" => self.providers.moonshot.enabled,
@@ -111,10 +110,7 @@ impl PromptCachingConfig {
 
         let provider = provider_name.to_ascii_lowercase();
         if provider == "openai"
-            && matches!(
-                self.providers.openai.prompt_cache_retention,
-                Some(PromptCacheRetention::H24)
-            )
+            && matches!(self.providers.openai.prompt_cache_retention, Some(PromptCacheRetention::H24))
         {
             return None;
         }
@@ -258,9 +254,7 @@ pub fn build_openai_prompt_cache_key(
 
     let lineage_id = lineage_id.map(str::trim).filter(|value| !value.is_empty());
     match prompt_cache_key_mode {
-        OpenAIPromptCacheKeyMode::Session => {
-            lineage_id.map(|lineage_id| format!("vtcode:openai:{lineage_id}"))
-        }
+        OpenAIPromptCacheKeyMode::Session => lineage_id.map(|lineage_id| format!("vtcode:openai:{lineage_id}")),
         OpenAIPromptCacheKeyMode::Off => None,
     }
 }
@@ -594,21 +588,12 @@ mod tests {
         assert!(cfg.enabled);
         assert_eq!(cfg.max_entries, prompt_cache::DEFAULT_MAX_ENTRIES);
         assert_eq!(cfg.max_age_days, prompt_cache::DEFAULT_MAX_AGE_DAYS);
-        assert!(
-            (cfg.min_quality_threshold - prompt_cache::DEFAULT_MIN_QUALITY_THRESHOLD).abs()
-                < f64::EPSILON
-        );
-        assert_eq!(
-            cfg.cache_friendly_prompt_shaping,
-            prompt_cache::DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING
-        );
+        assert!((cfg.min_quality_threshold - prompt_cache::DEFAULT_MIN_QUALITY_THRESHOLD).abs() < f64::EPSILON);
+        assert_eq!(cfg.cache_friendly_prompt_shaping, prompt_cache::DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING);
         assert!(cfg.providers.openai.enabled);
         assert_eq!(cfg.providers.openai.min_prefix_tokens, prompt_cache::OPENAI_MIN_PREFIX_TOKENS);
         assert_eq!(cfg.providers.openai.prompt_cache_key_mode, OpenAIPromptCacheKeyMode::Session);
-        assert_eq!(
-            cfg.providers.anthropic.extended_ttl_seconds,
-            Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
-        );
+        assert_eq!(cfg.providers.anthropic.extended_ttl_seconds, Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS));
         assert_eq!(cfg.providers.gemini.mode, GeminiPromptCacheMode::Implicit);
         assert!(cfg.providers.moonshot.enabled);
         assert_eq!(cfg.providers.openai.prompt_cache_retention, None);
@@ -692,29 +677,16 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn build_openai_prompt_cache_key_uses_trimmed_lineage_id() {
-        let key = build_openai_prompt_cache_key(
-            true,
-            &OpenAIPromptCacheKeyMode::Session,
-            Some(" lineage-abc "),
-        );
+        let key = build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some(" lineage-abc "));
 
         assert_eq!(key.as_deref(), Some("vtcode:openai:lineage-abc"));
     }
 
     #[test]
     fn build_openai_prompt_cache_key_honors_disabled_or_off_mode() {
-        assert_eq!(
-            build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("id")),
-            None
-        );
-        assert_eq!(
-            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("id")),
-            None
-        );
-        assert_eq!(
-            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some("  ")),
-            None
-        );
+        assert_eq!(build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, Some("id")), None);
+        assert_eq!(build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, Some("id")), None);
+        assert_eq!(build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, Some("  ")), None);
     }
 
     #[test]
@@ -742,22 +714,10 @@ prompt_cache_key_mode = "off"
     #[test]
     fn gap_threshold_uses_provider_defaults() {
         let cfg = PromptCachingConfig::default();
-        assert_eq!(
-            cfg.gap_threshold_secs("anthropic"),
-            Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS)
-        );
-        assert_eq!(
-            cfg.gap_threshold_secs("minimax"),
-            Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS)
-        );
-        assert_eq!(
-            cfg.gap_threshold_secs("openai"),
-            Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS)
-        );
-        assert_eq!(
-            cfg.gap_threshold_secs("gemini"),
-            Some(prompt_cache::DEFAULT_CACHE_GAP_WARNING_SECONDS)
-        );
+        assert_eq!(cfg.gap_threshold_secs("anthropic"), Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS));
+        assert_eq!(cfg.gap_threshold_secs("minimax"), Some(prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS));
+        assert_eq!(cfg.gap_threshold_secs("openai"), Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS));
+        assert_eq!(cfg.gap_threshold_secs("gemini"), Some(prompt_cache::DEFAULT_CACHE_GAP_WARNING_SECONDS));
     }
 
     #[test]
@@ -781,10 +741,7 @@ prompt_cache_key_mode = "off"
         assert_eq!(cfg.gap_threshold_secs("openai"), None);
 
         cfg.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::InMemory);
-        assert_eq!(
-            cfg.gap_threshold_secs("openai"),
-            Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS)
-        );
+        assert_eq!(cfg.gap_threshold_secs("openai"), Some(prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS));
     }
 
     #[test]
@@ -818,35 +775,35 @@ gap_warning_threshold_secs = 120
     #[test]
     fn bundled_config_templates_match_prompt_cache_defaults() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let loader_source = fs::read_to_string(manifest_dir.join("src/loader/config.rs"))
-            .expect("loader config source");
+        let loader_source =
+            fs::read_to_string(manifest_dir.join("src/loader/config.rs")).expect("loader config source");
         assert!(loader_source.contains("[prompt_cache]"));
         assert!(loader_source.contains("enabled = true"));
         assert!(loader_source.contains("cache_friendly_prompt_shaping = true"));
         assert!(loader_source.contains("# prompt_cache_retention = \"24h\""));
 
         let workspace_root = manifest_dir.parent().expect("workspace root").to_path_buf();
-        let example_config = fs::read_to_string(workspace_root.join("vtcode.toml.example"))
-            .expect("vtcode.toml.example");
+        let example_config =
+            fs::read_to_string(workspace_root.join("vtcode.toml.example")).expect("vtcode.toml.example");
         if example_config.contains("[prompt_cache]") {
             assert!(example_config.contains("enabled = true"));
             assert!(example_config.contains("cache_friendly_prompt_shaping = true"));
             assert!(example_config.contains("# prompt_cache_retention = \"24h\""));
         }
 
-        let prompt_cache_guide =
-            fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md"))
-                .expect("prompt caching guide");
-        assert!(prompt_cache_guide.contains(
-            "VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default."
-        ));
-        assert!(prompt_cache_guide.contains(
-            "Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default;"
-        ));
+        let prompt_cache_guide = fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md"))
+            .expect("prompt caching guide");
+        assert!(
+            prompt_cache_guide
+                .contains("VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default.")
+        );
+        assert!(
+            prompt_cache_guide
+                .contains("Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default;")
+        );
 
-        let field_reference =
-            fs::read_to_string(workspace_root.join("docs/config/CONFIG_FIELD_REFERENCE.md"))
-                .expect("config field reference");
+        let field_reference = fs::read_to_string(workspace_root.join("docs/config/CONFIG_FIELD_REFERENCE.md"))
+            .expect("config field reference");
         assert!(field_reference.contains("`prompt_cache.cache_friendly_prompt_shaping`"));
         assert!(field_reference.contains("`prompt_cache.providers.openai.prompt_cache_retention`"));
     }

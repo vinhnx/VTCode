@@ -41,14 +41,12 @@ mod workspace;
 
 pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
 pub(crate) use apps::run_with_event_loop_suspended;
-pub(super) use apps::{
-    handle_launch_editor, handle_new_session, handle_open_docs, handle_open_donate_links,
-};
+pub(super) use apps::{handle_launch_editor, handle_new_session, handle_open_docs, handle_open_donate_links};
 pub(super) use compact::handle_compact_conversation;
 pub(super) use control::{
-    handle_clear_conversation, handle_clear_screen, handle_copy_latest_assistant_reply,
-    handle_exit, handle_notify, handle_show_permissions, handle_show_settings,
-    handle_show_settings_at_path, handle_stop_agent, show_settings_at_path_from_context,
+    handle_clear_conversation, handle_clear_screen, handle_copy_latest_assistant_reply, handle_exit, handle_notify,
+    handle_show_permissions, handle_show_settings, handle_show_settings_at_path, handle_stop_agent,
+    show_settings_at_path_from_context,
 };
 pub(super) use diagnostics::{
     handle_run_checkup, handle_show_memory, handle_show_memory_config, handle_show_status,
@@ -58,15 +56,10 @@ pub(super) use diagnostics::{
 // config_toml, the future checkup flow, etc.) share one tested
 // load -> mutate -> save -> refresh persistence unit instead of re-implementing
 // the ConfigManager dance inline.
-#[expect(
-    unused_imports,
-    reason = "guard-rail for the upcoming /checkup 7-step flow"
-)]
+#[expect(unused_imports, reason = "guard-rail for the upcoming /checkup 7-step flow")]
 pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
 pub(super) use effort::handle_set_effort;
-pub(super) use interactive::{
-    handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions,
-};
+pub(super) use interactive::{handle_show_jobs_panel, handle_toggle_tasks_panel, handle_trigger_prompt_suggestions};
 pub(super) use local_server::handle_manage_local_server;
 pub(super) use mcp::handle_manage_mcp;
 pub(super) use oauth::{
@@ -79,9 +72,9 @@ pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
     handle_continue_latest, handle_select_primary_agent_from_slash, handle_start_file_browser,
-    handle_start_history_picker, handle_start_mode_palette, handle_start_model_selection,
-    handle_start_session_palette, handle_start_statusline_setup, handle_start_terminal_title_setup,
-    handle_start_theme_palette, handle_theme_changed, handle_toggle_ide_context,
+    handle_start_history_picker, handle_start_mode_palette, handle_start_model_selection, handle_start_session_palette,
+    handle_start_statusline_setup, handle_start_terminal_title_setup, handle_start_theme_palette, handle_theme_changed,
+    handle_toggle_ide_context,
 };
 pub(super) use update::handle_update;
 pub(super) use workspace::handle_initialize_workspace;

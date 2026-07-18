@@ -37,8 +37,7 @@ struct CommandCacheInner {
     cache: UnifiedCache<CommandCacheKey, ShellOutput>,
 }
 
-static COMMAND_CACHE: Lazy<CommandCache> =
-    Lazy::new(|| CommandCache::new(CommandCacheConfig::default()));
+static COMMAND_CACHE: Lazy<CommandCache> = Lazy::new(|| CommandCache::new(CommandCacheConfig::default()));
 
 pub type InFlightResult = Result<ShellOutput, String>;
 
@@ -100,9 +99,7 @@ impl CommandCache {
         let trimmed = command.trim();
         cfg.allowlist.iter().any(|entry| {
             let entry = entry.trim();
-            trimmed == entry
-                || (trimmed.starts_with(entry)
-                    && trimmed.as_bytes().get(entry.len()) == Some(&b' '))
+            trimmed == entry || (trimmed.starts_with(entry) && trimmed.as_bytes().get(entry.len()) == Some(&b' '))
         })
     }
 

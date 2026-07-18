@@ -18,9 +18,7 @@ use crate::agent::runloop::unified::model_switch_compaction::{
     ModelSwitchCompactionOutcome, ModelSwitchCompactionRequest, compact_on_model_switch,
 };
 
-use crate::agent::runloop::model_picker::{
-    ModelPickerState, ModelSelectionResult, persist_lightweight_selection,
-};
+use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult, persist_lightweight_selection};
 
 // Re-exported so call sites can keep importing `ModelSwitchCompactionTargets`
 // from this module even though its definition lives in `model_switch_compaction`.
@@ -30,9 +28,7 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::agent::runloop::ui::build_inline_header_context;
 use vtcode_core::llm::{LightweightFeature, LightweightRouteSource, resolve_lightweight_route};
 
-fn service_tier_message_label(
-    service_tier: Option<vtcode_config::OpenAIServiceTier>,
-) -> &'static str {
+fn service_tier_message_label(service_tier: Option<vtcode_config::OpenAIServiceTier>) -> &'static str {
     match service_tier {
         Some(vtcode_config::OpenAIServiceTier::Flex) => "flex",
         Some(vtcode_config::OpenAIServiceTier::Priority) => "priority",
@@ -62,10 +58,8 @@ pub(crate) async fn finalize_model_selection(
     let prev_model = config.model.clone();
     let workspace = config.workspace.clone();
     let auth_cfg = vt_cfg.as_ref().cloned().unwrap_or_default();
-    let (api_key, openai_chatgpt_auth) =
-        resolve_runtime_api_key(&workspace, Some(&auth_cfg), &selection).await?;
-    let using_chatgpt_auth =
-        selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
+    let (api_key, openai_chatgpt_auth) = resolve_runtime_api_key(&workspace, Some(&auth_cfg), &selection).await?;
+    let using_chatgpt_auth = selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
     let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     *vt_cfg = Some(updated_cfg);
     let custom_provider_enabled = vt_cfg
@@ -112,13 +106,10 @@ pub(crate) async fn finalize_model_selection(
 
     if let Some(provider_enum) = selection.provider_enum
         && selection.reasoning_supported
-        && let Some(payload) = RigProviderCapabilities::new(provider_enum, &selection.model)
-            .reasoning_parameters(selection.reasoning)
+        && let Some(payload) =
+            RigProviderCapabilities::new(provider_enum, &selection.model).reasoning_parameters(selection.reasoning)
     {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Rig reasoning configuration prepared: {payload}"),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Rig reasoning configuration prepared: {payload}"))?;
     }
 
     let reasoning_label = selection.reasoning.as_str().to_string();
@@ -137,10 +128,7 @@ pub(crate) async fn finalize_model_selection(
 
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Model set to {} ({}) via {}.",
-            selection.model_display, selection.model, selection.provider_label
-        ),
+        &format!("Model set to {} ({}) via {}.", selection.model_display, selection.model, selection.provider_label),
     )?;
 
     let compact_on_model_switch_enabled = vt_cfg
@@ -164,10 +152,8 @@ pub(crate) async fn finalize_model_selection(
 
     match outcome {
         ModelSwitchCompactionOutcome::Unchanged => {
-            renderer.line(
-                MessageStyle::Info,
-                "Model selection unchanged (same model); conversation history preserved.",
-            )?;
+            renderer
+                .line(MessageStyle::Info, "Model selection unchanged (same model); conversation history preserved.")?;
         }
         ModelSwitchCompactionOutcome::Disabled => {
             renderer.line(
@@ -199,15 +185,12 @@ pub(crate) async fn finalize_model_selection(
             )?;
         }
         ModelSwitchCompactionOutcome::AlreadyCompact => {
-            renderer
-                .line(MessageStyle::Info, "Model switched; conversation was already compact.")?;
+            renderer.line(MessageStyle::Info, "Model switched; conversation was already compact.")?;
         }
         ModelSwitchCompactionOutcome::Failed(err) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Model switched, but context compaction failed: {err}. Continuing with full history."
-                ),
+                &format!("Model switched, but context compaction failed: {err}. Continuing with full history."),
             )?;
         }
     }
@@ -242,15 +225,9 @@ pub(crate) async fn finalize_model_selection(
 
     if selection.service_tier_supported {
         let message = if selection.service_tier_changed {
-            format!(
-                "Service tier updated to '{}'.",
-                service_tier_message_label(selection.service_tier)
-            )
+            format!("Service tier updated to '{}'.", service_tier_message_label(selection.service_tier))
         } else {
-            format!(
-                "Service tier remains '{}'.",
-                service_tier_message_label(selection.service_tier)
-            )
+            format!("Service tier remains '{}'.", service_tier_message_label(selection.service_tier))
         };
         renderer.line(MessageStyle::Info, &message)?;
     }
@@ -261,10 +238,7 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(MessageStyle::Info, "Using GitHub Copilot managed authentication.")?;
     } else if selection.provider_enum == Some(Provider::MiMo) {
         if let Some(method) = selection.mimo_auth_method {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Using MiMo {} authentication.", method.label()),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Using MiMo {} authentication.", method.label()))?;
         }
     } else if selection.api_key.is_some() {
         renderer.line(
@@ -300,12 +274,7 @@ pub(crate) async fn finalize_lightweight_model_selection(
     } else {
         selected_model
     };
-    let resolution = resolve_lightweight_route(
-        config,
-        vt_cfg.as_ref(),
-        LightweightFeature::PromptSuggestions,
-        None,
-    );
+    let resolution = resolve_lightweight_route(config, vt_cfg.as_ref(), LightweightFeature::PromptSuggestions, None);
     let effective_route = match resolution.source {
         LightweightRouteSource::MainModel => config.model.clone(),
         _ => match resolution.fallback_to_main_model() {
@@ -317,8 +286,7 @@ pub(crate) async fn finalize_lightweight_model_selection(
     };
 
     renderer.line(MessageStyle::Info, &format!("Lightweight model set to {configured_label}."))?;
-    renderer
-        .line(MessageStyle::Info, &format!("Effective lightweight route: {effective_route}."))?;
+    renderer.line(MessageStyle::Info, &format!("Effective lightweight route: {effective_route}."))?;
     if let Some(warning) = resolution.warning {
         renderer.line(MessageStyle::Warning, &warning)?;
     }
@@ -348,16 +316,13 @@ async fn resolve_runtime_api_key(
                 );
             })
             .ok();
-        let resolved =
-            resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
+        let resolved = resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 
     if selection.provider_enum == Some(Provider::Copilot) {
         let Some(cfg) = vt_cfg else {
-            return Err(anyhow!(
-                "GitHub Copilot configuration is unavailable. Run `vtcode login copilot`."
-            ));
+            return Err(anyhow!("GitHub Copilot configuration is unavailable. Run `vtcode login copilot`."));
         };
         let status = probe_auth_status(&cfg.auth.copilot, Some(workspace)).await;
         return match status.kind {
@@ -493,8 +458,7 @@ mod tests {
     #[test]
     fn resolve_runtime_api_key_prefers_workspace_env_file() {
         let dir = tempdir().expect("temp dir");
-        std::fs::write(dir.path().join(".env"), "OPENAI_API_KEY=workspace-key\n")
-            .expect("workspace env");
+        std::fs::write(dir.path().join(".env"), "OPENAI_API_KEY=workspace-key\n").expect("workspace env");
         let selection = selection("openai", Some(Provider::OpenAI), "OPENAI_API_KEY", None, true);
 
         let resolved = tokio::runtime::Runtime::new()
@@ -508,15 +472,13 @@ mod tests {
     #[test]
     fn resolve_runtime_api_key_writes_user_supplied_key_to_workspace_env() {
         let dir = tempdir().expect("temp dir");
-        let selection =
-            selection("openai", Some(Provider::OpenAI), "OPENAI_API_KEY", Some("user-key"), true);
+        let selection = selection("openai", Some(Provider::OpenAI), "OPENAI_API_KEY", Some("user-key"), true);
 
         let resolved = tokio::runtime::Runtime::new()
             .expect("runtime")
             .block_on(resolve_runtime_api_key(dir.path(), None, &selection))
             .expect("user key should resolve");
-        let written =
-            read_workspace_api_key(dir.path(), "OPENAI_API_KEY").expect("workspace env read");
+        let written = read_workspace_api_key(dir.path(), "OPENAI_API_KEY").expect("workspace env read");
 
         assert_eq!(resolved.0, "user-key");
         assert_eq!(written.as_deref(), Some("user-key"));

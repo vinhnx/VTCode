@@ -143,11 +143,7 @@ pub enum AnthropicContentBlock {
     },
     /// Server-side tool use (e.g., tool search execution) - advanced-tool-use beta
     #[serde(rename = "server_tool_use")]
-    ServerToolUse {
-        id: String,
-        name: String,
-        input: Value,
-    },
+    ServerToolUse { id: String, name: String, input: Value },
     /// Tool search result containing discovered tool references - advanced-tool-use beta
     #[serde(rename = "tool_search_tool_result")]
     ToolSearchToolResult {
@@ -411,10 +407,7 @@ pub enum AnthropicStreamEvent {
     #[serde(rename = "ping")]
     Ping,
     #[serde(rename = "content_block_delta")]
-    ContentBlockDelta {
-        index: usize,
-        delta: AnthropicStreamDelta,
-    },
+    ContentBlockDelta { index: usize, delta: AnthropicStreamDelta },
     #[serde(rename = "content_block_stop")]
     ContentBlockStop { index: usize },
     #[serde(rename = "message_delta")]
@@ -582,9 +575,7 @@ pub struct CountTokensRequest {
     pub thinking: Option<ThinkingConfig>,
 }
 
-fn deserialize_boxed_output_config_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<Box<AnthropicOutputConfig>>, D::Error>
+fn deserialize_boxed_output_config_opt<'de, D>(deserializer: D) -> Result<Option<Box<AnthropicOutputConfig>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -600,10 +591,7 @@ pub struct CountTokensResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        AnthropicContentBlock, AnthropicOutputConfig, AnthropicRequest, AnthropicStreamEvent,
-        TextCitation,
-    };
+    use super::{AnthropicContentBlock, AnthropicOutputConfig, AnthropicRequest, AnthropicStreamEvent, TextCitation};
 
     #[test]
     fn stream_content_block_start_thinking_allows_missing_signature() {
@@ -616,8 +604,7 @@ mod tests {
             }
         }"#;
 
-        let event: AnthropicStreamEvent =
-            serde_json::from_str(payload).expect("should deserialize thinking block");
+        let event: AnthropicStreamEvent = serde_json::from_str(payload).expect("should deserialize thinking block");
         match event {
             AnthropicStreamEvent::ContentBlockStart {
                 content_block: AnthropicContentBlock::Thinking { thinking, signature, .. },
@@ -678,13 +665,10 @@ mod tests {
             serde_json::from_str(payload).expect("should deserialize bash code execution result");
         match event {
             AnthropicStreamEvent::ContentBlockStart {
-                content_block:
-                    AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, .. },
+                content_block: AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, .. },
                 ..
             } => assert_eq!(tool_use_id, "srvtoolu_456"),
-            other => panic!(
-                "expected bash_code_execution_tool_result content_block_start, got {other:?}"
-            ),
+            other => panic!("expected bash_code_execution_tool_result content_block_start, got {other:?}"),
         }
     }
 
@@ -703,17 +687,14 @@ mod tests {
             }
         }"#;
 
-        let event: AnthropicStreamEvent = serde_json::from_str(payload)
-            .expect("should deserialize text editor code execution result");
+        let event: AnthropicStreamEvent =
+            serde_json::from_str(payload).expect("should deserialize text editor code execution result");
         match event {
             AnthropicStreamEvent::ContentBlockStart {
-                content_block:
-                    AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, .. },
+                content_block: AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, .. },
                 ..
             } => assert_eq!(tool_use_id, "srvtoolu_789"),
-            other => panic!(
-                "expected text_editor_code_execution_tool_result content_block_start, got {other:?}"
-            ),
+            other => panic!("expected text_editor_code_execution_tool_result content_block_start, got {other:?}"),
         }
     }
 
@@ -731,8 +712,7 @@ mod tests {
             }]
         }"#;
 
-        let block: AnthropicContentBlock =
-            serde_json::from_str(payload).expect("should deserialize cited text block");
+        let block: AnthropicContentBlock = serde_json::from_str(payload).expect("should deserialize cited text block");
         match block {
             AnthropicContentBlock::Text { citations: Some(citations), .. } => {
                 assert!(matches!(
@@ -772,9 +752,6 @@ mod tests {
     fn boxed_output_config_is_smaller_than_inline_option() {
         use std::mem::size_of;
 
-        assert!(
-            size_of::<Option<Box<AnthropicOutputConfig>>>()
-                < size_of::<Option<AnthropicOutputConfig>>()
-        );
+        assert!(size_of::<Option<Box<AnthropicOutputConfig>>>() < size_of::<Option<AnthropicOutputConfig>>());
     }
 }

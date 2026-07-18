@@ -87,10 +87,7 @@ impl IrreversibilityClassifier {
                 let lower = command.to_lowercase();
 
                 // Destructive shell commands
-                if lower.contains("rm -rf /")
-                    || lower.contains("rm -r /")
-                    || lower.contains("rm --recursive /")
-                {
+                if lower.contains("rm -rf /") || lower.contains("rm -r /") || lower.contains("rm --recursive /") {
                     return IrreversibilityClass::Irreversible;
                 }
                 if lower.contains("git push --force") || lower.contains("git push -f") {
@@ -138,8 +135,7 @@ impl ConfidenceEstimator {
         let mut confidence = 1.0_f64;
 
         // --- Penalty from recent errors for this tool ---
-        let recent_count =
-            error_state.recent_errors.iter().filter(|e| e.tool_name == tool_name).count();
+        let recent_count = error_state.recent_errors.iter().filter(|e| e.tool_name == tool_name).count();
         if recent_count > 0 {
             // Each recent error reduces confidence by 15%, min 0.1
             let penalty = 0.15_f64.mul_add(recent_count as f64, 0.0);
@@ -147,8 +143,7 @@ impl ConfidenceEstimator {
         }
 
         // --- Penalty from open circuits for this tool ---
-        let circuit_count =
-            error_state.circuit_events.iter().filter(|e| e.tool_name == tool_name).count();
+        let circuit_count = error_state.circuit_events.iter().filter(|e| e.tool_name == tool_name).count();
         if circuit_count > 0 {
             let penalty = 0.25_f64.mul_add(circuit_count as f64, 0.0);
             confidence = (confidence - penalty).max(0.05);
@@ -243,8 +238,7 @@ impl EscalationGate {
             None => return EscalationDecision::Proceed,
         };
         let tool_name = &func.name;
-        let args_value: serde_json::Value =
-            serde_json::from_str(&func.arguments).unwrap_or(serde_json::Value::Null);
+        let args_value: serde_json::Value = serde_json::from_str(&func.arguments).unwrap_or(serde_json::Value::Null);
 
         // --- Rule 1: Action in A_irreversible ---
         if config.always_escalate_tools.iter().any(|t| t == tool_name) {
@@ -265,8 +259,7 @@ impl EscalationGate {
         }
 
         // --- Rule 2: p_success < tau_conf ---
-        let p_success =
-            ConfidenceEstimator::estimate(tool_name, error_state, config.use_llm_confidence);
+        let p_success = ConfidenceEstimator::estimate(tool_name, error_state, config.use_llm_confidence);
         if p_success < config.confidence_threshold {
             return EscalationDecision::Escalate {
                 reason: format!(
@@ -311,56 +304,38 @@ mod tests {
     #[test]
     fn classify_delete_file_is_irreversible() {
         let args = serde_json::json!({"path": "/tmp/foo.txt"});
-        assert_eq!(
-            IrreversibilityClassifier::classify("delete_file", &args),
-            IrreversibilityClass::Irreversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("delete_file", &args), IrreversibilityClass::Irreversible,);
     }
 
     #[test]
     fn classify_read_file_is_reversible() {
         let args = serde_json::json!({"path": "/tmp/foo.txt"});
-        assert_eq!(
-            IrreversibilityClassifier::classify("read_file", &args),
-            IrreversibilityClass::Reversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("read_file", &args), IrreversibilityClass::Reversible,);
     }
 
     #[test]
     fn classify_rm_rf_root_is_irreversible() {
         let args = serde_json::json!({"command": "rm -rf /var/log"});
-        assert_eq!(
-            IrreversibilityClassifier::classify("exec_command", &args),
-            IrreversibilityClass::Irreversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("exec_command", &args), IrreversibilityClass::Irreversible,);
     }
 
     #[test]
     fn classify_git_force_push_is_irreversible() {
         let args = serde_json::json!({"command": "git push --force origin main"});
         // The tool name for this is "exec_command" or "bash", not "git_push"
-        assert_eq!(
-            IrreversibilityClassifier::classify("exec_command", &args),
-            IrreversibilityClass::Irreversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("exec_command", &args), IrreversibilityClass::Irreversible,);
     }
 
     #[test]
     fn classify_destructive_shell_is_irreversible() {
         let args = serde_json::json!({"command": "rm -rf /"});
-        assert_eq!(
-            IrreversibilityClassifier::classify("exec_command", &args),
-            IrreversibilityClass::Irreversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("exec_command", &args), IrreversibilityClass::Irreversible,);
     }
 
     #[test]
     fn classify_drop_table_is_irreversible() {
         let args = serde_json::json!({"command": "DROP TABLE users"});
-        assert_eq!(
-            IrreversibilityClassifier::classify("exec_command", &args),
-            IrreversibilityClass::Irreversible,
-        );
+        assert_eq!(IrreversibilityClassifier::classify("exec_command", &args), IrreversibilityClass::Irreversible,);
     }
 
     // -- ConfidenceEstimator tests --

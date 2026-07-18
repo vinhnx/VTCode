@@ -184,8 +184,7 @@ mod tests {
     use super::*;
     use hashbrown::HashMap;
     use vtcode_config::mcp::{
-        McpClientConfig, McpProviderConfig, McpServerConfig, McpStdioServerConfig,
-        McpTransportConfig,
+        McpClientConfig, McpProviderConfig, McpServerConfig, McpStdioServerConfig, McpTransportConfig,
     };
 
     fn create_test_config() -> McpClientConfig {

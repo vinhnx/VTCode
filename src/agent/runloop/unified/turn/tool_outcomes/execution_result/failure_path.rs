@@ -106,18 +106,10 @@ async fn push_tool_error_response(
             fallback_tool_args,
             failure_kind,
         ),
-        None => super::build_error_content(
-            error_msg.to_string(),
-            fallback_tool,
-            fallback_tool_args,
-            failure_kind,
-        ),
+        None => super::build_error_content(error_msg.to_string(), fallback_tool, fallback_tool_args, failure_kind),
     };
     let serialized = error_content.to_string();
-    if let Err(err) =
-        push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, serialized)
-            .await
-    {
+    if let Err(err) = push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, serialized).await {
         tracing::warn!(tool = %tool_name, error = %err, "failed to push probed tool error response");
     }
 }

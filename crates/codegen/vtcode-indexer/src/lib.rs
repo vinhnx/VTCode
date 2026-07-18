@@ -123,10 +123,7 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 }
 
-fn persist_markdown_snapshot<'a>(
-    index_dir: &Path,
-    entries: impl IntoIterator<Item = &'a FileIndex>,
-) -> Result<()> {
+fn persist_markdown_snapshot<'a>(index_dir: &Path, entries: impl IntoIterator<Item = &'a FileIndex>) -> Result<()> {
     let entries = entries.into_iter().collect::<Vec<_>>();
 
     fs::create_dir_all(index_dir)?;
@@ -165,9 +162,7 @@ impl TraversalFilter for ConfigTraversalFilter {
         }
 
         // Skip hidden files when configured.
-        if config.ignore_hidden
-            && path.file_name().and_then(|n| n.to_str()).is_some_and(|s| s.starts_with('.'))
-        {
+        if config.ignore_hidden && path.file_name().and_then(|n| n.to_str()).is_some_and(|s| s.starts_with('.')) {
             return false;
         }
 
@@ -312,11 +307,7 @@ impl SimpleIndexer {
 
     /// Create a simple indexer with the provided configuration.
     pub fn with_config(config: SimpleIndexerConfig) -> Self {
-        Self::with_components(
-            config,
-            Arc::new(MarkdownIndexStorage),
-            Arc::new(ConfigTraversalFilter),
-        )
+        Self::with_components(config, Arc::new(MarkdownIndexStorage), Arc::new(ConfigTraversalFilter))
     }
 
     /// Create a new simple indexer using a custom index directory.
@@ -478,9 +469,8 @@ impl SimpleIndexer {
             .collect();
 
         entries.sort_by(|a, b| {
-            b.1.cmp(&a.1).then_with(|| {
-                a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase())
-            })
+            b.1.cmp(&a.1)
+                .then_with(|| a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase()))
         });
         entries
     }
@@ -702,9 +692,7 @@ impl SimpleIndexer {
         let filter = Arc::clone(&self.filter);
 
         let mut builder = vtcode_commons::walk::build_default_walker(dir_path);
-        builder.filter_entry(move |entry| {
-            should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref())
-        });
+        builder.filter_entry(move |entry| should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref()));
         builder.build()
     }
 
@@ -716,9 +704,7 @@ impl SimpleIndexer {
         let mut builder = vtcode_commons::walk::build_default_walker(dir_path);
         // Only immediate children — directory navigation lists one level at a time.
         builder.max_depth(Some(1));
-        builder.filter_entry(move |entry| {
-            should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref())
-        });
+        builder.filter_entry(move |entry| should_visit_entry(entry, walk_root.as_path(), &config, filter.as_ref()));
         builder.build()
     }
 
@@ -729,11 +715,7 @@ impl SimpleIndexer {
             .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
     }
 
-    fn apply_snapshot_file_update(
-        &mut self,
-        cache_key: String,
-        next_entry: Option<FileIndex>,
-    ) -> Result<()> {
+    fn apply_snapshot_file_update(&mut self, cache_key: String, next_entry: Option<FileIndex>) -> Result<()> {
         let previous_entry = match next_entry {
             Some(entry) => self.index_cache.insert(cache_key.clone(), entry),
             None => self.index_cache.remove(cache_key.as_str()),
@@ -754,11 +736,7 @@ impl SimpleIndexer {
         Ok(())
     }
 
-    fn apply_snapshot_directory_update(
-        &mut self,
-        dir_path: &Path,
-        entries: &[FileIndex],
-    ) -> Result<()> {
+    fn apply_snapshot_directory_update(&mut self, dir_path: &Path, entries: &[FileIndex]) -> Result<()> {
         let previous_entries = self.take_cached_entries(dir_path);
         self.index_cache
             .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
@@ -1019,8 +997,7 @@ mod tests {
 
         assert!(indexer.find_files("notes\\.txt$")?.is_empty());
 
-        let index_content =
-            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
         assert!(!index_content.contains(file_path.to_string_lossy().as_ref()));
 
         Ok(())
@@ -1063,8 +1040,7 @@ mod tests {
         let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
         indexer.index_directory(workspace)?;
 
-        let index_content =
-            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
         assert!(index_content.contains(workspace.join("notes.txt").to_string_lossy().as_ref()));
 
         Ok(())
@@ -1162,8 +1138,7 @@ mod tests {
         fs::write(workspace.join("README.md"), "# Notes")?;
 
         let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let mut indexer =
-            SimpleIndexer::with_config(config).with_filter(Arc::new(SkipRustFilter::default()));
+        let mut indexer = SimpleIndexer::with_config(config).with_filter(Arc::new(SkipRustFilter::default()));
         indexer.init()?;
         indexer.index_directory(workspace)?;
 
@@ -1202,8 +1177,7 @@ mod tests {
         fs::write(workspace.join("README.md"), "# Notes")?;
 
         let config = SimpleIndexerConfig::new(workspace.to_path_buf());
-        let indexer = SimpleIndexer::with_config(config)
-            .with_filter(Arc::new(SkipGeneratedFilter::default()));
+        let indexer = SimpleIndexer::with_config(config).with_filter(Arc::new(SkipGeneratedFilter::default()));
         let files = indexer.discover_files(workspace);
 
         assert!(!files.iter().any(|file| file.ends_with("skip.txt")));
@@ -1262,8 +1236,7 @@ mod tests {
         assert!(indexer.find_files("lib\\.rs$")?.iter().any(|file| file.ends_with("lib.rs")));
         assert!(indexer.find_files("guide\\.md$")?.iter().any(|file| file.ends_with("guide.md")));
 
-        let index_content =
-            fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
+        let index_content = fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
         assert!(index_content.contains(src_dir.join("lib.rs").to_string_lossy().as_ref()));
         assert!(index_content.contains(docs_dir.join("guide.md").to_string_lossy().as_ref()));
 
@@ -1368,10 +1341,7 @@ mod tests {
         let snapshots = snapshots.lock().expect("lock poisoned");
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].len(), 1);
-        assert_eq!(
-            snapshots[0][0].path,
-            workspace.join("notes.txt").to_string_lossy().into_owned()
-        );
+        assert_eq!(snapshots[0][0].path, workspace.join("notes.txt").to_string_lossy().into_owned());
 
         Ok(())
     }

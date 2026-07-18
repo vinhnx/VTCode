@@ -138,9 +138,7 @@ impl MouseSelectionState {
     /// to be treated as a double click.
     pub fn register_click(&mut self, col: u16, row: u16, at: Instant) -> bool {
         let is_double_click = self.last_click.is_some_and(|last| {
-            last.column == col
-                && last.row == row
-                && at.saturating_duration_since(last.at) <= DOUBLE_CLICK_INTERVAL
+            last.column == col && last.row == row && at.saturating_duration_since(last.at) <= DOUBLE_CLICK_INTERVAL
         });
 
         self.last_click = Some(ClickRecord { column: col, row, at });
@@ -338,9 +336,7 @@ impl MouseSelectionState {
 fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
     use std::process::Stdio;
 
-    let Ok(mut child) =
-        cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()
-    else {
+    let Ok(mut child) = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() else {
         return false;
     };
     if let Some(stdin) = child.stdin.as_mut() {

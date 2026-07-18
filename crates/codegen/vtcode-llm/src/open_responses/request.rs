@@ -168,18 +168,13 @@ impl Request {
 
     /// Convenience method to create a request from a single user message.
     pub fn from_message(model: impl Into<String>, text: impl Into<String>) -> Self {
-        let item = OutputItem::completed_message(
-            "msg_init",
-            MessageRole::User,
-            vec![super::ContentPart::input_text(text)],
-        );
+        let item =
+            OutputItem::completed_message("msg_init", MessageRole::User, vec![super::ContentPart::input_text(text)]);
         Self::new(model, vec![item])
     }
 }
 
-fn deserialize_boxed_reasoning_config_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<Box<ReasoningConfig>>, D::Error>
+fn deserialize_boxed_reasoning_config_opt<'de, D>(deserializer: D) -> Result<Option<Box<ReasoningConfig>>, D::Error>
 where
     D: Deserializer<'de>,
 {

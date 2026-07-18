@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use super::super::install_support::vtcode_state_dir_from_home;
 use super::super::install_support::{
-    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache,
-    unix_timestamp_now, vtcode_state_dir,
+    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache, unix_timestamp_now,
+    vtcode_state_dir,
 };
 #[cfg(test)]
 use std::path::Path;
@@ -80,8 +80,8 @@ impl InstallationCache {
 
 impl InstallPaths {
     pub(super) fn discover() -> Result<Self> {
-        let state_dir = vtcode_state_dir()
-            .context("Cannot determine home directory for VT Code-managed ast-grep install")?;
+        let state_dir =
+            vtcode_state_dir().context("Cannot determine home directory for VT Code-managed ast-grep install")?;
         Ok(Self::from_state_dir(state_dir))
     }
 

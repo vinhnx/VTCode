@@ -19,10 +19,7 @@ pub struct CommandsHandler;
 
 impl CommandsHandler {
     /// Process plugin commands from the plugin directory
-    pub async fn process_commands(
-        plugin_path: &Path,
-        manifest_commands: Option<Vec<String>>,
-    ) -> Result<Vec<PathBuf>> {
+    pub async fn process_commands(plugin_path: &Path, manifest_commands: Option<Vec<String>>) -> Result<Vec<PathBuf>> {
         let mut command_files = Vec::new();
 
         // Add commands from manifest paths
@@ -56,10 +53,7 @@ pub struct AgentsHandler;
 
 impl AgentsHandler {
     /// Process plugin agents from the plugin directory
-    pub async fn process_agents(
-        plugin_path: &Path,
-        manifest_agents: Option<Vec<String>>,
-    ) -> Result<Vec<PathBuf>> {
+    pub async fn process_agents(plugin_path: &Path, manifest_agents: Option<Vec<String>>) -> Result<Vec<PathBuf>> {
         let mut agent_files = Vec::new();
 
         // Add agents from manifest paths
@@ -93,10 +87,7 @@ pub struct SkillsHandler;
 
 impl SkillsHandler {
     /// Process plugin skills from the plugin directory
-    pub async fn process_skills(
-        plugin_path: &Path,
-        manifest_skills: Option<Vec<String>>,
-    ) -> Result<Vec<PathBuf>> {
+    pub async fn process_skills(plugin_path: &Path, manifest_skills: Option<Vec<String>>) -> Result<Vec<PathBuf>> {
         let mut skill_dirs = Vec::new();
 
         // Add skills from manifest paths
@@ -229,8 +220,7 @@ impl PluginComponentsHandler {
         manifest: &PluginManifest,
     ) -> Result<PluginComponents> {
         let path_buf = plugin_path.as_ref().to_path_buf();
-        let commands =
-            CommandsHandler::process_commands(&path_buf, manifest.commands.clone()).await?;
+        let commands = CommandsHandler::process_commands(&path_buf, manifest.commands.clone()).await?;
 
         let agents = AgentsHandler::process_agents(&path_buf, manifest.agents.clone()).await?;
 
@@ -239,9 +229,7 @@ impl PluginComponentsHandler {
         let hooks = HooksHandler::process_hooks(
             &path_buf,
             manifest.hooks.as_ref().map(|h| match h {
-                crate::plugins::manifest::HookConfig::Path(path) => {
-                    serde_json::Value::String(path.clone())
-                }
+                crate::plugins::manifest::HookConfig::Path(path) => serde_json::Value::String(path.clone()),
                 crate::plugins::manifest::HookConfig::Inline(_) => serde_json::Value::Null, // For inline, we'll handle separately
             }),
         )
@@ -250,9 +238,7 @@ impl PluginComponentsHandler {
         let mcp_servers = McpServersHandler::process_mcp_servers(
             &path_buf,
             manifest.mcp_servers.as_ref().map(|m| match m {
-                crate::plugins::manifest::McpServerConfig::Path(path) => {
-                    serde_json::Value::String(path.clone())
-                }
+                crate::plugins::manifest::McpServerConfig::Path(path) => serde_json::Value::String(path.clone()),
                 crate::plugins::manifest::McpServerConfig::Inline(_) => serde_json::Value::Null, // For inline, we'll handle separately
             }),
         )
@@ -261,9 +247,7 @@ impl PluginComponentsHandler {
         let lsp_servers = LspServersHandler::process_lsp_servers(
             &path_buf,
             manifest.lsp_servers.as_ref().map(|l| match l {
-                crate::plugins::manifest::LspServerConfig::Path(path) => {
-                    serde_json::Value::String(path.clone())
-                }
+                crate::plugins::manifest::LspServerConfig::Path(path) => serde_json::Value::String(path.clone()),
                 crate::plugins::manifest::LspServerConfig::Inline(_) => serde_json::Value::Null, // For inline, we'll handle separately
             }),
         )

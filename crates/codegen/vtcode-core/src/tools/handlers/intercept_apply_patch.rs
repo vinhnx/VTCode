@@ -92,9 +92,7 @@ pub async fn intercept_apply_patch(
     // an oversized or base64-decompression patch from bypassing the preflight cap
     // when it is delivered via a shell command.
     let args = json!({ "input": &patch });
-    let decoded = match decode_apply_patch_input(&args)
-        .map_err(|e| ApplyPatchError::ParseError(e.to_string()))?
-    {
+    let decoded = match decode_apply_patch_input(&args).map_err(|e| ApplyPatchError::ParseError(e.to_string()))? {
         Some(decoded) => decoded,
         None => return Ok(None),
     };
@@ -117,8 +115,7 @@ pub async fn intercept_apply_patch(
     }
 
     // Create the request
-    let req = ApplyPatchRequest::new(decoded.text.clone(), cwd.to_path_buf())
-        .with_timeout(timeout_ms.unwrap_or(30000));
+    let req = ApplyPatchRequest::new(decoded.text.clone(), cwd.to_path_buf()).with_timeout(timeout_ms.unwrap_or(30000));
 
     // Emit patch begin event
     if let Some(tracker) = tracker {
@@ -140,9 +137,7 @@ pub async fn intercept_apply_patch(
 
     match result {
         Ok(output) => Ok(Some(ToolOutput::simple(output))),
-        Err(e) => {
-            Ok(Some(ToolOutput::error(format!("{e} (call_id={call_id}, tool_name={tool_name})"))))
-        }
+        Err(e) => Ok(Some(ToolOutput::error(format!("{e} (call_id={call_id}, tool_name={tool_name})")))),
     }
 }
 
@@ -190,28 +185,15 @@ mod tests {
             Some("*** Begin Patch\n*** End Patch".to_string())
         );
         assert_eq!(
-            maybe_parse_apply_patch_from_command(&[
-                "codex".to_string(),
-                CODEX_APPLY_PATCH_ARG.to_string(),
-            ]),
+            maybe_parse_apply_patch_from_command(&["codex".to_string(), CODEX_APPLY_PATCH_ARG.to_string(),]),
             None
         );
         assert_eq!(
-            maybe_parse_apply_patch_from_command(&[
-                "git".to_string(),
-                "apply".to_string(),
-                "test.patch".to_string(),
-            ]),
+            maybe_parse_apply_patch_from_command(&["git".to_string(), "apply".to_string(), "test.patch".to_string(),]),
             None
         );
-        assert_eq!(
-            maybe_parse_apply_patch_from_command(&["patch".to_string(), "-p1".to_string(),]),
-            None
-        );
-        assert_eq!(
-            maybe_parse_apply_patch_from_command(&["echo".to_string(), "hello".to_string(),]),
-            None
-        );
+        assert_eq!(maybe_parse_apply_patch_from_command(&["patch".to_string(), "-p1".to_string(),]), None);
+        assert_eq!(maybe_parse_apply_patch_from_command(&["echo".to_string(), "hello".to_string(),]), None);
     }
 
     #[test]

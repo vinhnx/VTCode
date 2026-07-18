@@ -58,11 +58,7 @@ pub struct AgentCard {
 
 impl AgentCard {
     /// Create a new Agent Card with required fields
-    pub fn new(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        version: impl Into<String>,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, description: impl Into<String>, version: impl Into<String>) -> Self {
         Self {
             protocol_version: A2A_PROTOCOL_VERSION.to_string(),
             name: name.into(),

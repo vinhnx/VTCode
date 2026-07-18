@@ -110,12 +110,10 @@ pub fn loop_state_path(workspace_root: &Path, loop_id: &str) -> PathBuf {
 /// Save loop run state to disk using atomic write (temp file + rename).
 pub fn save_loop_state(workspace_root: &Path, state: &LoopRunState) -> Result<PathBuf> {
     let dir = state_dir(workspace_root);
-    fs::create_dir_all(&dir)
-        .with_context(|| format!("Failed to create state directory {}", dir.display()))?;
+    fs::create_dir_all(&dir).with_context(|| format!("Failed to create state directory {}", dir.display()))?;
 
     let path = loop_state_path(workspace_root, &state.loop_id);
-    let serialized =
-        serde_json::to_vec_pretty(state).context("Failed to serialize loop run state")?;
+    let serialized = serde_json::to_vec_pretty(state).context("Failed to serialize loop run state")?;
 
     atomic_write(&path, &serialized)?;
     Ok(path)
@@ -127,10 +125,9 @@ pub fn load_loop_state(workspace_root: &Path, loop_id: &str) -> Result<Option<Lo
     if !path.exists() {
         return Ok(None);
     }
-    let raw = fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read loop state {}", path.display()))?;
-    let state: LoopRunState = serde_json::from_str(&raw)
-        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    let raw = fs::read_to_string(&path).with_context(|| format!("Failed to read loop state {}", path.display()))?;
+    let state: LoopRunState =
+        serde_json::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))?;
     Ok(Some(state))
 }
 
@@ -138,8 +135,7 @@ pub fn load_loop_state(workspace_root: &Path, loop_id: &str) -> Result<Option<Lo
 pub fn delete_loop_state(workspace_root: &Path, loop_id: &str) -> Result<bool> {
     let path = loop_state_path(workspace_root, loop_id);
     if path.exists() {
-        fs::remove_file(&path)
-            .with_context(|| format!("Failed to delete loop state {}", path.display()))?;
+        fs::remove_file(&path).with_context(|| format!("Failed to delete loop state {}", path.display()))?;
         Ok(true)
     } else {
         Ok(false)
@@ -153,9 +149,7 @@ pub fn list_loop_states(workspace_root: &Path) -> Result<Vec<LoopRunState>> {
         return Ok(Vec::new());
     }
     let mut states = Vec::new();
-    for entry in fs::read_dir(&dir)
-        .with_context(|| format!("Failed to read state directory {}", dir.display()))?
-    {
+    for entry in fs::read_dir(&dir).with_context(|| format!("Failed to read state directory {}", dir.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path
@@ -163,8 +157,7 @@ pub fn list_loop_states(workspace_root: &Path) -> Result<Vec<LoopRunState>> {
             .and_then(|n| n.to_str())
             .is_some_and(|n| n.starts_with("loop-") && n.ends_with(".json"))
         {
-            let raw = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read {}", path.display()))?;
+            let raw = fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
             match serde_json::from_str::<LoopRunState>(&raw) {
                 Ok(state) => states.push(state),
                 Err(e) => {
@@ -182,8 +175,7 @@ pub fn list_loop_states(workspace_root: &Path) -> Result<Vec<LoopRunState>> {
 /// `scheduler/mod.rs:1381`.
 fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
 
     let temp_name = format!(
@@ -192,10 +184,8 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
         WRITE_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
     let temp_path = path.with_file_name(temp_name);
-    fs::write(&temp_path, content)
-        .with_context(|| format!("Failed to write {}", temp_path.display()))?;
-    fs::rename(&temp_path, path)
-        .with_context(|| format!("Failed to replace {}", path.display()))?;
+    fs::write(&temp_path, content).with_context(|| format!("Failed to write {}", temp_path.display()))?;
+    fs::rename(&temp_path, path).with_context(|| format!("Failed to replace {}", path.display()))?;
     Ok(())
 }
 

@@ -6,9 +6,7 @@ mod support;
 
 use super::*;
 use crate::agent::runloop::git::{compute_session_code_change_delta, normalize_workspace_path};
-use crate::agent::runloop::unified::inline_events::harness::{
-    HARNESS_LOG_MAX_AGE_DAYS, prune_old_harness_logs,
-};
+use crate::agent::runloop::unified::inline_events::harness::{HARNESS_LOG_MAX_AGE_DAYS, prune_old_harness_logs};
 use crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint;
 use crate::agent::runloop::unified::postamble::{ExitData, print_exit_summary};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
@@ -24,21 +22,16 @@ use vtcode_core::core::interfaces::session::PlanningEntrySource;
 const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
 const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
 
-use archive::{
-    create_session_archive, refresh_runtime_debug_context_for_next_session, workspace_archive_label,
-};
+use archive::{create_session_archive, refresh_runtime_debug_context_for_next_session, workspace_archive_label};
 use execution_policy::effective_max_tool_calls_for_turn;
 use metrics::{
-    TurnExecutionMetrics, capture_code_change_snapshot, emit_turn_execution_metrics,
-    estimate_history_bytes,
+    TurnExecutionMetrics, capture_code_change_snapshot, emit_turn_execution_metrics, estimate_history_bytes,
 };
 use plan_seed::load_active_plan_seed;
 use support::{
-    append_transient_turn_notes, checkpoint_session_archive_start,
-    force_reload_workspace_config_for_execution, latest_assistant_result_text,
-    live_reload_preserves_session_config, prepare_resume_bootstrap_without_archive,
-    prompt_startup_planning_workflow, remove_transient_system_notes,
-    take_pending_resumed_user_prompt,
+    append_transient_turn_notes, checkpoint_session_archive_start, force_reload_workspace_config_for_execution,
+    latest_assistant_result_text, live_reload_preserves_session_config, prepare_resume_bootstrap_without_archive,
+    prompt_startup_planning_workflow, remove_transient_system_notes, take_pending_resumed_user_prompt,
 };
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider::MessageRole;
@@ -64,8 +57,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
     config_watcher.set_check_interval(15);
     config_watcher.set_debounce_duration(500);
-    let live_reload_enabled =
-        live_reload_preserves_session_config(initial_vt_cfg.as_ref(), &config);
+    let live_reload_enabled = live_reload_preserves_session_config(initial_vt_cfg.as_ref(), &config);
     if !live_reload_enabled {
         tracing::debug!(
             "Configuration live reload disabled because startup overrides cannot be reproduced from workspace config"
@@ -97,16 +89,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             config.reasoning_effort.as_str(),
         )
         .with_debug_log_path(
-            crate::main_helpers::runtime_debug_log_path()
-                .map(|path| path.to_string_lossy().to_string()),
+            crate::main_helpers::runtime_debug_log_path().map(|path| path.to_string_lossy().to_string()),
         );
         let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
         let history_enabled = session_archive::history_persistence_enabled();
         let summarized_fork_provider = if resume_ref.is_some_and(|resume| resume.summarize_fork()) {
-            Some(crate::agent::runloop::unified::session_setup::create_provider_client(
-                &config,
-                vt_cfg.as_ref(),
-            )?)
+            Some(crate::agent::runloop::unified::session_setup::create_provider_client(&config, vt_cfg.as_ref())?)
         } else {
             None
         };
@@ -139,10 +127,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .await?;
                 }
                 (
-                    thread_manager.start_thread_with_identifier(
-                        prepared.thread_id.clone(),
-                        prepared.bootstrap,
-                    ),
+                    thread_manager.start_thread_with_identifier(prepared.thread_id.clone(), prepared.bootstrap),
                     Some(prepared.archive),
                 )
             } else {
@@ -171,32 +156,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             let thread_id = if let Some(identifier) = reserved_archive_id.clone() {
                 identifier
             } else if history_enabled {
-                session_archive::reserve_session_archive_identifier(
-                    &workspace_archive_label(&config.workspace),
-                    None,
-                )
-                .await?
+                session_archive::reserve_session_archive_identifier(&workspace_archive_label(&config.workspace), None)
+                    .await?
             } else {
-                session_archive::generate_session_archive_identifier(
-                    &workspace_archive_label(&config.workspace),
-                    None,
-                )
+                session_archive::generate_session_archive_identifier(&workspace_archive_label(&config.workspace), None)
             };
-            let bootstrap =
-                vtcode_core::core::threads::ThreadBootstrap::new(Some(archive_metadata.clone()));
+            let bootstrap = vtcode_core::core::threads::ThreadBootstrap::new(Some(archive_metadata.clone()));
             let archive = if history_enabled {
-                Some(
-                    create_session_archive(archive_metadata.clone(), Some(thread_id.clone()))
-                        .await?,
-                )
+                Some(create_session_archive(archive_metadata.clone(), Some(thread_id.clone())).await?)
             } else {
                 None
             };
             (thread_manager.start_thread_with_identifier(thread_id, bootstrap), archive)
         };
-        crate::main_helpers::set_runtime_archive_session_id(Some(
-            thread_handle.thread_id().to_string(),
-        ));
+        crate::main_helpers::set_runtime_archive_session_id(Some(thread_handle.thread_id().to_string()));
         if let Some(archive) = session_archive.as_ref()
             && let Err(err) = checkpoint_session_archive_start(archive, &thread_handle).await
         {
@@ -216,8 +189,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(archive) = session_archive.as_mut() {
             archive.set_primary_agent(session_state.active_primary_agent.active().name());
         }
-        let harness_config =
-            vt_cfg.as_ref().map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
+        let harness_config = vt_cfg.as_ref().map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
         let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
         let effective_log_path: Option<String> = harness_config
             .event_log_path
@@ -235,14 +207,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             };
             prune_old_harness_logs(dir, HARNESS_LOG_MAX_AGE_DAYS);
         }
-        let harness_emitter: Option<HarnessEventEmitter> =
-            effective_log_path.as_deref().and_then(|path| {
-                let resolved = resolve_event_log_path(path, &turn_run_id);
-                HarnessEventEmitter::new(resolved).ok()
-            });
+        let harness_emitter: Option<HarnessEventEmitter> = effective_log_path.as_deref().and_then(|path| {
+            let resolved = resolve_event_log_path(path, &turn_run_id);
+            HarnessEventEmitter::new(resolved).ok()
+        });
         if let Some(emitter) = harness_emitter.as_ref() {
-            let open_responses_config =
-                vt_cfg.as_ref().map(|cfg| cfg.agent.open_responses.clone()).unwrap_or_default();
+            let open_responses_config = vt_cfg.as_ref().map(|cfg| cfg.agent.open_responses.clone()).unwrap_or_default();
             let features = FeatureSet::from_config(vt_cfg.as_ref());
             if features.open_responses.emit_events {
                 let or_path = effective_log_path.as_ref().map(|base| {
@@ -252,25 +222,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
                     parent.join(format!("open-responses-{}-{}.jsonl", turn_run_id.0, timestamp))
                 });
-                let _ =
-                    emitter.enable_open_responses(open_responses_config, &config.model, or_path);
+                let _ = emitter.enable_open_responses(open_responses_config, &config.model, or_path);
             }
             // Enable ATIF trajectory export if configured
-            let atif_enabled =
-                vt_cfg.as_ref().map(|cfg| cfg.telemetry.atif_enabled).unwrap_or(false);
+            let atif_enabled = vt_cfg.as_ref().map(|cfg| cfg.telemetry.atif_enabled).unwrap_or(false);
             if atif_enabled {
                 let dir = effective_log_path
                     .as_ref()
                     .map(|base| std::path::PathBuf::from(base.as_str()))
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-                let atif_path =
-                    dir.join(format!("atif-trajectory-{}-{}.json", turn_run_id.0, timestamp));
+                let atif_path = dir.join(format!("atif-trajectory-{}-{}.json", turn_run_id.0, timestamp));
                 let _ = emitter.enable_atif(&config.model, atif_path);
             }
-            let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: turn_run_id.0.clone(),
-            }));
+            let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: turn_run_id.0.clone() }));
         }
         let steering_sender = if steering_receiver.is_none() {
             let (sender, receiver) = mpsc::unbounded_channel();
@@ -366,8 +331,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         );
         runtime.state.messages = Arc::new(conversation_history);
         if resume_ref.is_some()
-            && let Some(pending_prompt) =
-                take_pending_resumed_user_prompt(runtime.state.messages_mut())
+            && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut())
         {
             let (_, runtime_steering) = runtime.split_mut();
             runtime_steering.queue_follow_up_input(pending_prompt);
@@ -426,13 +390,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .await;
             render_planning_workflow_next_step_hint(&mut renderer)?;
         } else if planning_entry_source.requires_startup_prompt() && resume_ref.is_none() {
-            let should_enter = prompt_startup_planning_workflow(
-                &handle,
-                &mut session,
-                &ctrl_c_state,
-                &ctrl_c_notify,
-            )
-            .await?;
+            let should_enter =
+                prompt_startup_planning_workflow(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify).await?;
             if should_enter {
                 transition_to_planning_workflow(
                     &tool_registry,
@@ -463,9 +422,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ide_context_bridge.as_ref(),
             ),
         );
-        let mut queued_inputs: VecDeque<
-            crate::agent::runloop::unified::inline_events::QueuedInput,
-        > = VecDeque::with_capacity(8);
+        let mut queued_inputs: VecDeque<crate::agent::runloop::unified::inline_events::QueuedInput> =
+            VecDeque::with_capacity(8);
         let mut agent_touched_paths = std::collections::BTreeSet::new();
         let mut ctrl_c_notice_displayed = false;
         let mut inline_prompt_cost_notice_shown = false;
@@ -473,30 +431,24 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
         let mut pending_mcp_refresh = false;
         let mut last_mcp_refresh = Instant::now();
-        let startup_update_requested_restart =
-            if let Some(notice) = startup_update_cached_notice.as_ref() {
-                display_update_notice(
+        let startup_update_requested_restart = if let Some(notice) = startup_update_cached_notice.as_ref() {
+            display_update_notice(&handle, &mut header_context, renderer.should_use_unicode_formatting(), notice);
+            matches!(
+                run_inline_update_prompt(
+                    &mut renderer,
                     &handle,
-                    &mut header_context,
-                    renderer.should_use_unicode_formatting(),
+                    &mut session,
+                    &ctrl_c_state,
+                    &ctrl_c_notify,
+                    config.workspace.as_path(),
                     notice,
-                );
-                matches!(
-                    run_inline_update_prompt(
-                        &mut renderer,
-                        &handle,
-                        &mut session,
-                        &ctrl_c_state,
-                        &ctrl_c_notify,
-                        config.workspace.as_path(),
-                        notice,
-                    )
-                    .await?,
-                    InlineUpdateOutcome::RestartRequested
                 )
-            } else {
-                false
-            };
+                .await?,
+                InlineUpdateOutcome::RestartRequested
+            )
+        } else {
+            false
+        };
 
         if startup_update_requested_restart {
             session_end_reason = SessionEndReason::Completed;
@@ -510,8 +462,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             crate::updater::record_current_version_seen();
         }
 
-        let mut cross_turn_tracker =
-            crate::agent::runloop::unified::run_loop_context::CrossTurnTracker::new();
+        let mut cross_turn_tracker = crate::agent::runloop::unified::run_loop_context::CrossTurnTracker::new();
 
         if !startup_update_requested_restart {
             loop {
@@ -527,167 +478,153 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 } else {
                     let mut interaction_turn_metadata_cache = None;
                     let (session_state, runtime_steering) = runtime.split_mut();
-                    let mut interaction_ctx = crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
-                    thread_id: &turn_run_id.0,
-                    active_thread_label,
-                    thread_handle: &thread_handle,
-                    renderer: &mut renderer,
-                    session: &mut session,
-                    handle: &handle,
-                    header_context: &mut header_context,
-                    ide_context_bridge: &mut ide_context_bridge,
-                    ctrl_c_state: &ctrl_c_state,
-                    ctrl_c_notify: &ctrl_c_notify,
-                    input_activity_counter: &input_activity_counter,
-                    config: &mut config,
-                    vt_cfg: &mut vt_cfg,
-                    provider_client: &mut provider_client,
-                    session_bootstrap: &session_bootstrap,
-                    async_mcp_manager: &async_mcp_manager,
-                    tool_registry: &mut tool_registry,
-                    tools: &tools,
-                    tool_catalog: &tool_catalog,
-                    conversation_history: Arc::make_mut(&mut session_state.messages),
-                    agent_touched_paths: &mut agent_touched_paths,
-                    decision_ledger: &decision_ledger,
-                    context_manager: &mut context_manager,
-                    active_primary_agent: &mut active_primary_agent,
-                    session_stats: &mut session_stats,
-                    plan_session: &mut plan_session,
-                    mcp_panel_state: &mut mcp_panel_state,
-                    linked_directories: &mut linked_directories,
-                    lifecycle_hooks: &mut lifecycle_hooks,
-                    full_auto,
-                    skip_confirmations,
-                    approval_recorder: &approval_recorder,
-                    tool_permission_cache: &tool_permission_cache,
-                    permissions_state: &permissions_state,
-                    loaded_skills: &loaded_skills,
-                    default_placeholder: &mut default_placeholder,
-                    follow_up_placeholder: &mut follow_up_placeholder,
-                    checkpoint_manager: checkpoint_manager.as_ref(),
-                    tool_result_cache: &tool_result_cache,
-                    traj: &traj,
-                    harness_emitter: harness_emitter.as_ref(),
-                    safety_validator: &safety_validator,
-                    circuit_breaker: &circuit_breaker,
-                    tool_health_tracker: &tool_health_tracker,
-                    rate_limiter: &rate_limiter,
-                    telemetry: &telemetry,
-                    autonomous_executor: &autonomous_executor,
-                    error_recovery: &error_recovery,
-                    last_forced_redraw: &mut last_forced_redraw,
-                    turn_metadata_cache: &mut interaction_turn_metadata_cache,
-                    harness_config: harness_config.clone(),
-                    runtime_steering,
-                    startup_update_notice_rx: &mut startup_update_notice_rx,
-                };
+                    let mut interaction_ctx =
+                        crate::agent::runloop::unified::turn::session::interaction_loop::InteractionLoopContext {
+                            thread_id: &turn_run_id.0,
+                            active_thread_label,
+                            thread_handle: &thread_handle,
+                            renderer: &mut renderer,
+                            session: &mut session,
+                            handle: &handle,
+                            header_context: &mut header_context,
+                            ide_context_bridge: &mut ide_context_bridge,
+                            ctrl_c_state: &ctrl_c_state,
+                            ctrl_c_notify: &ctrl_c_notify,
+                            input_activity_counter: &input_activity_counter,
+                            config: &mut config,
+                            vt_cfg: &mut vt_cfg,
+                            provider_client: &mut provider_client,
+                            session_bootstrap: &session_bootstrap,
+                            async_mcp_manager: &async_mcp_manager,
+                            tool_registry: &mut tool_registry,
+                            tools: &tools,
+                            tool_catalog: &tool_catalog,
+                            conversation_history: Arc::make_mut(&mut session_state.messages),
+                            agent_touched_paths: &mut agent_touched_paths,
+                            decision_ledger: &decision_ledger,
+                            context_manager: &mut context_manager,
+                            active_primary_agent: &mut active_primary_agent,
+                            session_stats: &mut session_stats,
+                            plan_session: &mut plan_session,
+                            mcp_panel_state: &mut mcp_panel_state,
+                            linked_directories: &mut linked_directories,
+                            lifecycle_hooks: &mut lifecycle_hooks,
+                            full_auto,
+                            skip_confirmations,
+                            approval_recorder: &approval_recorder,
+                            tool_permission_cache: &tool_permission_cache,
+                            permissions_state: &permissions_state,
+                            loaded_skills: &loaded_skills,
+                            default_placeholder: &mut default_placeholder,
+                            follow_up_placeholder: &mut follow_up_placeholder,
+                            checkpoint_manager: checkpoint_manager.as_ref(),
+                            tool_result_cache: &tool_result_cache,
+                            traj: &traj,
+                            harness_emitter: harness_emitter.as_ref(),
+                            safety_validator: &safety_validator,
+                            circuit_breaker: &circuit_breaker,
+                            tool_health_tracker: &tool_health_tracker,
+                            rate_limiter: &rate_limiter,
+                            telemetry: &telemetry,
+                            autonomous_executor: &autonomous_executor,
+                            error_recovery: &error_recovery,
+                            last_forced_redraw: &mut last_forced_redraw,
+                            turn_metadata_cache: &mut interaction_turn_metadata_cache,
+                            harness_config: harness_config.clone(),
+                            runtime_steering,
+                            startup_update_notice_rx: &mut startup_update_notice_rx,
+                        };
 
                     let mut interaction_state =
-                    crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
-                        input_status_state: &mut input_status_state,
-                        dismissed_memory_cleanup_fingerprint: &mut dismissed_memory_cleanup_fingerprint,
-                        queued_inputs: &mut queued_inputs,
-                        prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
-                        model_picker_state: &mut model_picker_state,
-                        palette_state: &mut palette_state,
-                        last_known_mcp_tools: &mut last_known_mcp_tools,
-                        pending_mcp_refresh: &mut pending_mcp_refresh,
-                        mcp_catalog_initialized: &mut mcp_catalog_initialized,
-                        last_mcp_refresh: &mut last_mcp_refresh,
-                        ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
-                        inline_prompt_cost_notice_shown: &mut inline_prompt_cost_notice_shown,
-                    };
+                        crate::agent::runloop::unified::turn::session::interaction_loop::InteractionState {
+                            input_status_state: &mut input_status_state,
+                            dismissed_memory_cleanup_fingerprint: &mut dismissed_memory_cleanup_fingerprint,
+                            queued_inputs: &mut queued_inputs,
+                            prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
+                            model_picker_state: &mut model_picker_state,
+                            palette_state: &mut palette_state,
+                            last_known_mcp_tools: &mut last_known_mcp_tools,
+                            pending_mcp_refresh: &mut pending_mcp_refresh,
+                            mcp_catalog_initialized: &mut mcp_catalog_initialized,
+                            last_mcp_refresh: &mut last_mcp_refresh,
+                            ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+                            inline_prompt_cost_notice_shown: &mut inline_prompt_cost_notice_shown,
+                        };
 
                     crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
-                    &mut interaction_ctx,
-                    &mut interaction_state,
-                ).await?
+                        &mut interaction_ctx,
+                        &mut interaction_state,
+                    )
+                    .await?
                 };
-                let (next_turn_input, completed_turn_prompt_message_index) =
-                    match interaction_outcome {
-                        InteractionOutcome::Exit { reason } => {
-                            session_end_reason = reason;
-                            break;
-                        }
-                        InteractionOutcome::Resume { resume_session } => {
-                            resume_state = Some(*resume_session);
-                            session_end_reason = SessionEndReason::Completed;
-                            break;
-                        }
-                        InteractionOutcome::DirectToolHandled => {
-                            // Explicit `run ...` / `!cmd` interactions are direct command mode:
-                            // render the tool output and wait for the next user input instead of
-                            // fabricating an autonomous follow-up turn.
-                            continue;
-                        }
-                        InteractionOutcome::Continue {
-                            input,
-                            prompt_message_index,
-                            turn_id: next_turn_id,
-                        } => {
-                            turn_id = next_turn_id;
-                            (input, prompt_message_index)
-                        }
-                        InteractionOutcome::PlanApproved { auto_accept } => {
-                            let plan_seed = load_active_plan_seed(&tool_registry).await;
-                            crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
+                let (next_turn_input, completed_turn_prompt_message_index) = match interaction_outcome {
+                    InteractionOutcome::Exit { reason } => {
+                        session_end_reason = reason;
+                        break;
+                    }
+                    InteractionOutcome::Resume { resume_session } => {
+                        resume_state = Some(*resume_session);
+                        session_end_reason = SessionEndReason::Completed;
+                        break;
+                    }
+                    InteractionOutcome::DirectToolHandled => {
+                        // Explicit `run ...` / `!cmd` interactions are direct command mode:
+                        // render the tool output and wait for the next user input instead of
+                        // fabricating an autonomous follow-up turn.
+                        continue;
+                    }
+                    InteractionOutcome::Continue { input, prompt_message_index, turn_id: next_turn_id } => {
+                        turn_id = next_turn_id;
+                        (input, prompt_message_index)
+                    }
+                    InteractionOutcome::PlanApproved { auto_accept } => {
+                        let plan_seed = load_active_plan_seed(&tool_registry).await;
+                        crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
                             &tool_registry,
                             &mut plan_session,
                             &handle,
                             true,
                         )
                         .await;
-                            // Switch from plan agent to build agent for execution.
-                            active_primary_agent.reset_to_default_from_specs(&[]);
-                            let build_display = active_primary_agent.active().display_name.clone();
-                            let build_color = active_primary_agent
-                                .active()
-                                .color
-                                .clone()
-                                .filter(|c| !c.trim().is_empty());
-                            handle.set_primary_agent(Some(build_display), build_color);
-                            handle.set_skip_confirmations(auto_accept);
-                            renderer.line(MessageStyle::Info, "Executing approved plan...")?;
+                        // Switch from plan agent to build agent for execution.
+                        active_primary_agent.reset_to_default_from_specs(&[]);
+                        let build_display = active_primary_agent.active().display_name.clone();
+                        let build_color = active_primary_agent.active().color.clone().filter(|c| !c.trim().is_empty());
+                        handle.set_primary_agent(Some(build_display), build_color);
+                        handle.set_skip_confirmations(auto_accept);
+                        renderer.line(MessageStyle::Info, "Executing approved plan...")?;
 
-                            if let Err(err) = force_reload_workspace_config_for_execution(
-                                config.workspace.as_path(),
-                                &config,
-                                &mut vt_cfg,
-                                &mut tool_registry,
-                                async_mcp_manager.as_deref(),
-                            )
-                            .await
-                            {
-                                tracing::warn!(
-                                    "Failed to reload workspace configuration at plan approval: {}",
-                                    err
-                                );
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to reload configuration: {err}"),
-                                )?;
-                            }
-
-                            let mut execution_directive =
-                                PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
-                            if let Some(seed) = plan_seed {
-                                execution_directive.push_str("\n\nApproved plan context:\n");
-                                execution_directive.push_str(&seed);
-                            }
-                            runtime.state.messages_mut().push(
-                                vtcode_core::llm::provider::Message::system(execution_directive),
-                            );
-                            (PLAN_APPROVED_EXECUTION_INPUT.to_string(), None)
+                        if let Err(err) = force_reload_workspace_config_for_execution(
+                            config.workspace.as_path(),
+                            &config,
+                            &mut vt_cfg,
+                            &mut tool_registry,
+                            async_mcp_manager.as_deref(),
+                        )
+                        .await
+                        {
+                            tracing::warn!("Failed to reload workspace configuration at plan approval: {}", err);
+                            renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {err}"))?;
                         }
-                    };
+
+                        let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
+                        if let Some(seed) = plan_seed {
+                            execution_directive.push_str("\n\nApproved plan context:\n");
+                            execution_directive.push_str(&seed);
+                        }
+                        runtime
+                            .state
+                            .messages_mut()
+                            .push(vtcode_core::llm::provider::Message::system(execution_directive));
+                        (PLAN_APPROVED_EXECUTION_INPUT.to_string(), None)
+                    }
+                };
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
                 let (session_state, runtime_steering) = runtime.split_mut();
-                let mut working_history =
-                    Arc::try_unwrap(std::mem::take(&mut session_state.messages))
-                        .unwrap_or_else(|arc| arc.as_ref().clone());
+                let mut working_history = Arc::try_unwrap(std::mem::take(&mut session_state.messages))
+                    .unwrap_or_else(|arc| arc.as_ref().clone());
                 let transient_system_notes = append_transient_turn_notes(
                     &mut working_history,
                     config.workspace.as_path(),
@@ -705,10 +642,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let outcome = match {
                     let mut auto_finish_planning_attempted = false;
                     let planning_active = tool_registry.is_planning_active();
-                    let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
-                        harness_config.max_tool_calls_per_turn,
-                        planning_active,
-                    );
+                    let max_tool_calls_per_turn =
+                        effective_max_tool_calls_for_turn(harness_config.max_tool_calls_per_turn, planning_active);
                     let mut harness_state = HarnessTurnState::new(
                         TurnRunId(turn_run_id.0.clone()),
                         TurnId(turn_id.clone()),
@@ -759,24 +694,17 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         runtime_steering,
                     );
 
-                    let result = crate::agent::runloop::unified::turn::run_turn_loop(
-                        &mut working_history,
-                        turn_loop_ctx,
-                    )
-                    .await;
+                    let result =
+                        crate::agent::runloop::unified::turn::run_turn_loop(&mut working_history, turn_loop_ctx).await;
 
                     match result {
                         Ok(inner) => {
                             // Extract cross-turn tracking data before harness_state
                             // goes out of scope.
-                            cross_turn_read_sigs = harness_state
-                                .seen_successful_readonly_signatures
-                                .iter()
-                                .cloned()
-                                .collect();
+                            cross_turn_read_sigs =
+                                harness_state.seen_successful_readonly_signatures.iter().cloned().collect();
                             cross_turn_written = harness_state.recently_written_files.clone();
-                            cross_turn_shell_cmd =
-                                harness_state.last_shell_command_signature.clone();
+                            cross_turn_shell_cmd = harness_state.last_shell_command_signature.clone();
                             Ok(inner)
                         }
                         Err(err) => Err(err),
@@ -805,8 +733,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     cross_turn_shell_cmd.as_deref(),
                 ) {
                     tracing::warn!(warning = %cross_turn_warning, "Cross-turn loop detector triggered");
-                    working_history
-                        .push(vtcode_core::llm::provider::Message::system(cross_turn_warning));
+                    working_history.push(vtcode_core::llm::provider::Message::system(cross_turn_warning));
                 }
 
                 agent_touched_paths.extend(
@@ -820,8 +747,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let outcome_result = outcome.result.clone();
                 let switch_primary_agent = outcome.pending_primary_agent.clone();
                 let turn_elapsed = turn_started_at.elapsed();
-                let show_turn_timer =
-                    vt_cfg.as_ref().map(|cfg| cfg.ui.show_turn_timer).unwrap_or(true);
+                let show_turn_timer = vt_cfg.as_ref().map(|cfg| cfg.ui.show_turn_timer).unwrap_or(true);
                 let harness_snapshot = tool_registry.harness_context_snapshot();
                 if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                     outcome,
@@ -872,11 +798,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     match active_primary_agent.select_from_specs(&specs, &agent) {
                         Ok(_) => {
                             let display = active_primary_agent.active().display_name.clone();
-                            let color = active_primary_agent
-                                .active()
-                                .color
-                                .clone()
-                                .filter(|c| !c.trim().is_empty());
+                            let color = active_primary_agent.active().color.clone().filter(|c| !c.trim().is_empty());
                             handle.set_primary_agent(Some(display), color);
                             tracing::info!(
                                 target: "vtcode.planning_workflow",
@@ -893,16 +815,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                     }
                 }
-                if let Err(err) =
-                    crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(
-                        config.workspace.as_path(),
-                        &harness_snapshot.session_id,
-                        vt_cfg.as_ref(),
-                        &runtime.state.messages,
-                        &session_stats,
-                        None,
-                    )
-                {
+                if let Err(err) = crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(
+                    config.workspace.as_path(),
+                    &harness_snapshot.session_id,
+                    vt_cfg.as_ref(),
+                    &runtime.state.messages,
+                    &session_stats,
+                    None,
+                ) {
                     tracing::warn!(
                         error = %err,
                         session_id = %harness_snapshot.session_id,
@@ -942,8 +862,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
                     let progress_turn = next_checkpoint_turn.saturating_sub(1).max(1);
                     let distinct_tools = session_stats.sorted_tools();
-                    let skill_names: Vec<String> =
-                        loaded_skills.read().await.keys().cloned().collect();
+                    let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
 
                     if let Err(err) = archive
                         .persist_progress_async(SessionProgressArgs {
@@ -963,20 +882,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 }
                 match &outcome_result {
                     RunLoopTurnLoopResult::Aborted => {
-                        session_stats.mark_turn_stalled(
-                            true,
-                            Some("Turn aborted due to an execution error.".to_string()),
-                        );
+                        session_stats
+                            .mark_turn_stalled(true, Some("Turn aborted due to an execution error.".to_string()));
                     }
                     RunLoopTurnLoopResult::Blocked { reason } => {
                         session_stats.mark_turn_stalled(
                             true,
-                            reason.clone().or_else(|| {
-                                Some(
-                                    "Turn blocked due to repeated failing tool behavior."
-                                        .to_string(),
-                                )
-                            }),
+                            reason
+                                .clone()
+                                .or_else(|| Some("Turn blocked due to repeated failing tool behavior.".to_string())),
                         );
                         if !renderer.supports_inline_ui()
                             && session_stats.auto_permission_prompt_fallback_active()
@@ -999,18 +913,16 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(archive) = session_archive.as_mut() {
             let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
             archive.set_loaded_skills(skill_names);
-            archive.set_continuation_metadata(session_stats.budget_limit().map(
-                |(max_budget_usd, actual_cost_usd)| {
-                    session_archive::SessionContinuationMetadata::budget_limit(
-                        max_budget_usd,
-                        actual_cost_usd,
-                        crate::agent::runloop::unified::turn::compaction::has_latest_memory_envelope(
-                            &config.workspace,
-                            thread_handle.thread_id().as_str(),
-                        ),
-                    )
-                },
-            ));
+            archive.set_continuation_metadata(session_stats.budget_limit().map(|(max_budget_usd, actual_cost_usd)| {
+                session_archive::SessionContinuationMetadata::budget_limit(
+                    max_budget_usd,
+                    actual_cost_usd,
+                    crate::agent::runloop::unified::turn::compaction::has_latest_memory_envelope(
+                        &config.workspace,
+                        thread_handle.thread_id().as_str(),
+                    ),
+                )
+            }));
         }
         if let Some(emitter) = harness_emitter.as_ref() {
             let harness_snapshot = tool_registry.harness_context_snapshot();
@@ -1020,20 +932,18 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .is_success()
                 .then(|| latest_assistant_result_text(&runtime.state.messages))
                 .flatten();
-            let total_cost_usd =
-                session_stats.total_cost_usd().and_then(serde_json::Number::from_f64);
-            let event =
-                crate::agent::runloop::unified::inline_events::harness::thread_completed_event(
-                    turn_run_id.0.clone(),
-                    harness_snapshot.session_id,
-                    subtype,
-                    outcome_code,
-                    result,
-                    session_stats.stop_reason().map(str::to_string),
-                    session_stats.total_usage(),
-                    total_cost_usd,
-                    session_stats.total_turns(),
-                );
+            let total_cost_usd = session_stats.total_cost_usd().and_then(serde_json::Number::from_f64);
+            let event = crate::agent::runloop::unified::inline_events::harness::thread_completed_event(
+                turn_run_id.0.clone(),
+                harness_snapshot.session_id,
+                subtype,
+                outcome_code,
+                result,
+                session_stats.stop_reason().map(str::to_string),
+                session_stats.total_usage(),
+                total_cost_usd,
+                session_stats.total_turns(),
+            );
             if let Err(err) = emitter.emit(event) {
                 tracing::debug!(error = %err, "harness thread.completed event emission failed");
             }
@@ -1062,10 +972,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .await
             {
                 Ok(Err(err)) => {
-                    tracing::warn!(
-                        "Failed to update persistent memory at session finalization: {}",
-                        err
-                    );
+                    tracing::warn!("Failed to update persistent memory at session finalization: {}", err);
                 }
                 Err(_elapsed) => {
                     tracing::warn!("Persistent memory finalization timed out, skipping");
@@ -1098,11 +1005,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             }
         };
         if let Some(next_resume) = resume_state.as_ref() {
-            refresh_runtime_debug_context_for_next_session(
-                config.workspace.as_path(),
-                Some(next_resume),
-            )
-            .await?;
+            refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), Some(next_resume)).await?;
             continue;
         }
         if matches!(session_end_reason, SessionEndReason::NewSession) {
@@ -1113,8 +1016,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 tracing::debug!("Configuration reloaded due to file changes");
             }
 
-            refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), None)
-                .await?;
+            refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), None).await?;
             resume_state = None;
             pending_session_start_trigger = Some(SessionStartTrigger::NewSession);
             _consecutive_idle_cycles = 0;
@@ -1146,10 +1048,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         }
 
         let end_code_changes = capture_code_change_snapshot(&config.workspace, "end").await;
-        let code_change_delta = compute_session_code_change_delta(
-            start_code_changes.as_ref(),
-            end_code_changes.as_ref(),
-        );
+        let code_change_delta =
+            compute_session_code_change_delta(start_code_changes.as_ref(), end_code_changes.as_ref());
         let finalization_succeeded = finalization_output.is_some();
         let resume_identifier = finalization_output
             .as_ref()
@@ -1157,20 +1057,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .and_then(|path| path.file_stem())
             .and_then(|stem| stem.to_str());
         let trust_label = match session_bootstrap.acp_workspace_trust {
-            Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => {
-                "full auto"
-            }
-            Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
-                "tools policy"
-            }
+            Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => "full auto",
+            Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => "tools policy",
             None if full_auto => "full auto",
             None => "tools policy",
         };
         let provider_label = {
-            let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
-                &config,
-                vt_cfg.as_ref(),
-            );
+            let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(&config, vt_cfg.as_ref());
             if label.is_empty() {
                 provider_client.name().to_string()
             } else {
@@ -1181,8 +1074,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .as_ref()
             .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
             .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-        let (code_additions, code_deletions) =
-            code_change_delta.map(|d| (d.additions, d.deletions)).unwrap_or((0, 0));
+        let (code_additions, code_deletions) = code_change_delta.map(|d| (d.additions, d.deletions)).unwrap_or((0, 0));
         if !finalization_succeeded {
             let _ = vtcode_ui::tui::panic_hook::restore_tui();
         }
@@ -1242,8 +1134,7 @@ async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineH
                 continue;
             }
             // Use first line as the prompt preview
-            let preview =
-                trimmed.lines().next().unwrap_or(trimmed).chars().take(200).collect::<String>();
+            let preview = trimmed.lines().next().unwrap_or(trimmed).chars().take(200).collect::<String>();
             // NOTE: `created_at` uses the session start time because per-message
             // timestamps are not stored in the archive format. The time label is
             // therefore an approximation of when the conversation happened.

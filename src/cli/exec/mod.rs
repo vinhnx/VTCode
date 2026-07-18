@@ -38,20 +38,16 @@ pub async fn handle_exec_command(
 #[cfg(test)]
 mod tests {
     use super::ExecCommandKind;
-    use super::event_output::{
-        ExecEventProcessor, human_event_line, render_final_tail, serialize_event_line,
-    };
+    use super::event_output::{ExecEventProcessor, human_event_line, render_final_tail, serialize_event_line};
     use super::run::{
-        REVIEW_TASK_ID, effective_exec_events_path, resolve_exec_event_log_path, task_instructions,
-        task_spec,
+        REVIEW_TASK_ID, effective_exec_events_path, resolve_exec_event_log_path, task_instructions, task_spec,
     };
     use tempfile::TempDir;
     use vtcode_core::core::agent::task::{TaskOutcome, TaskResults};
     use vtcode_core::exec::events::{
-        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem,
-        HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent,
-        ThreadErrorEvent, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-        TurnCompletedEvent, Usage,
+        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, HarnessEventItem, HarnessEventKind,
+        ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, ThreadErrorEvent, ThreadEvent, ThreadItem,
+        ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, Usage,
     };
 
     type TestProcessor = ExecEventProcessor<Vec<u8>, Vec<u8>, Vec<u8>>;
@@ -71,8 +67,7 @@ mod tests {
 
     #[test]
     fn review_commands_use_review_instructions() {
-        let spec = vtcode_core::review::build_review_spec(false, None, Vec::new(), None)
-            .expect("review spec");
+        let spec = vtcode_core::review::build_review_spec(false, None, Vec::new(), None).expect("review spec");
         let task = task_spec(&ExecCommandKind::Review { spec }, false);
 
         assert_eq!(task.id, REVIEW_TASK_ID);
@@ -81,14 +76,12 @@ mod tests {
 
     #[test]
     fn json_mode_serializes_raw_event_lines() {
-        let event =
-            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() });
+        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() });
         let mut processor = TestProcessor::new(true, false, Some(Vec::new()), None, None);
 
         processor.process_event(&event);
 
-        let output = String::from_utf8(processor.stdout.take().expect("stdout buffer"))
-            .expect("stdout should be utf8");
+        let output = String::from_utf8(processor.stdout.take().expect("stdout buffer")).expect("stdout should be utf8");
         assert_eq!(output, serialize_event_line(&event).expect("event should serialize"));
         assert!(processor.stderr.is_none());
     }
@@ -107,9 +100,7 @@ mod tests {
         processor.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: "msg-1".to_string(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: "Final summary".to_string(),
-                }),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Final summary".to_string() }),
             },
         }));
         assert_eq!(processor.final_message(), Some("Final summary"));
@@ -117,8 +108,7 @@ mod tests {
 
     #[test]
     fn human_mode_uses_stderr_and_preserves_tail_sections() {
-        let mut processor =
-            TestProcessor::new(false, true, Some(Vec::new()), None, Some(Vec::new()));
+        let mut processor = TestProcessor::new(false, true, Some(Vec::new()), None, Some(Vec::new()));
         processor.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {
                 id: "cmd-1".to_string(),
@@ -157,10 +147,8 @@ mod tests {
         processor.finish_output(&result, false);
         processor.take_error().expect("processor should succeed");
 
-        let stdout = String::from_utf8(processor.stdout.take().expect("stdout buffer"))
-            .expect("stdout should be utf8");
-        let stderr = String::from_utf8(processor.stderr.take().expect("stderr buffer"))
-            .expect("stderr should be utf8");
+        let stdout = String::from_utf8(processor.stdout.take().expect("stdout buffer")).expect("stdout should be utf8");
+        let stderr = String::from_utf8(processor.stderr.take().expect("stderr buffer")).expect("stderr should be utf8");
 
         assert!(stdout.is_empty());
         assert!(stderr.contains("[COMMAND]"));
@@ -174,9 +162,8 @@ mod tests {
 
     #[test]
     fn human_event_line_formats_failures() {
-        let line =
-            human_event_line(&ThreadEvent::Error(ThreadErrorEvent { message: "boom".to_string() }))
-                .expect("error event should render");
+        let line = human_event_line(&ThreadEvent::Error(ThreadErrorEvent { message: "boom".to_string() }))
+            .expect("error event should render");
         assert!(line.contains("[ERROR]"));
         assert!(line.contains("boom"));
     }
@@ -230,8 +217,7 @@ mod tests {
     #[test]
     fn resolve_exec_event_log_path_appends_jsonl_when_given_directory() {
         let temp = TempDir::new().expect("tempdir");
-        let resolved =
-            resolve_exec_event_log_path(temp.path().to_str().expect("tempdir path"), "session-123");
+        let resolved = resolve_exec_event_log_path(temp.path().to_str().expect("tempdir path"), "session-123");
 
         assert_eq!(resolved.parent(), Some(temp.path()));
         let file_name = resolved.file_name().and_then(|value| value.to_str()).expect("file name");
@@ -244,12 +230,9 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let configured = temp.path().join("events.jsonl");
 
-        let resolved = effective_exec_events_path(
-            None,
-            Some(configured.to_str().expect("configured path")),
-            "session-123",
-        )
-        .expect("resolved path");
+        let resolved =
+            effective_exec_events_path(None, Some(configured.to_str().expect("configured path")), "session-123")
+                .expect("resolved path");
 
         assert_eq!(resolved, configured);
     }

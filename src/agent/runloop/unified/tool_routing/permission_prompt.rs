@@ -9,8 +9,8 @@ use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{
-    InlineHandle, ListOverlayRequest, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey,
-    TransientRequest, TransientSubmission,
+    InlineHandle, ListOverlayRequest, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
+    TransientSubmission,
 };
 
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
@@ -96,9 +96,9 @@ fn shell_run_uses_nested_shell(command_words: &[String]) -> bool {
     let args = &command_words[1..];
 
     match basename.as_str() {
-        "sh" | "bash" | "zsh" | "fish" => args.iter().any(|arg| {
-            matches!(arg.as_str(), "-c" | "-ic" | "-lc" | "--command" | "--login" | "--interactive")
-        }),
+        "sh" | "bash" | "zsh" | "fish" => args
+            .iter()
+            .any(|arg| matches!(arg.as_str(), "-c" | "-ic" | "-lc" | "--command" | "--login" | "--interactive")),
         "pwsh" | "powershell" | "powershell.exe" => args
             .iter()
             .any(|arg| arg.eq_ignore_ascii_case("-command") || arg.eq_ignore_ascii_case("-c")),
@@ -139,23 +139,16 @@ fn parse_shell_sandbox_permissions(args: &Value) -> CoreSandboxPermissions {
 fn shell_permission_scope_suffix(args: &Value) -> String {
     let sandbox_permissions = parse_shell_sandbox_permissions(args);
     let additional_permissions = args.get("additional_permissions");
-    let sandbox_permissions = serde_json::to_string(&sandbox_permissions)
-        .unwrap_or_else(|_| "\"use_default\"".to_string());
+    let sandbox_permissions =
+        serde_json::to_string(&sandbox_permissions).unwrap_or_else(|_| "\"use_default\"".to_string());
     let additional_permissions = additional_permissions
-        .map(|value| {
-            serde_json::to_string(value).unwrap_or_else(|_| "\"<invalid_additional>\"".to_string())
-        })
+        .map(|value| serde_json::to_string(value).unwrap_or_else(|_| "\"<invalid_additional>\"".to_string()))
         .unwrap_or_else(|| "null".to_string());
 
-    format!(
-        "sandbox_permissions={sandbox_permissions}|additional_permissions={additional_permissions}"
-    )
+    format!("sandbox_permissions={sandbox_permissions}|additional_permissions={additional_permissions}")
 }
 
-fn extract_shell_approval_justification(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+fn extract_shell_approval_justification(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
     let args = shell_run_args(tool_name, tool_args)?;
     args.get("justification")
         .and_then(Value::as_str)
@@ -164,10 +157,7 @@ fn extract_shell_approval_justification(
         .map(ToOwned::to_owned)
 }
 
-pub(super) fn extract_shell_command_text(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+pub(super) fn extract_shell_command_text(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
     let args = shell_run_args(tool_name, tool_args)?;
     extract_shell_command_text_from_run_args(args)
 }
@@ -202,10 +192,7 @@ pub(super) fn split_command_words_on_operators(parts: &[String]) -> Option<Vec<V
     Some(segments)
 }
 
-pub(super) fn extract_shell_approval_command_words(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<Vec<String>> {
+pub(super) fn extract_shell_approval_command_words(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
     let args = shell_run_args(tool_name, tool_args)?;
     extract_shell_command_words_from_run_args(args)
 }
@@ -219,22 +206,15 @@ pub(super) fn extract_shell_approval_command_prefix_words(
     shell_command_supports_persistent_approval(args, &command_words).then_some(command_words)
 }
 
-pub(super) fn extract_shell_permission_scope_signature(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+pub(super) fn extract_shell_permission_scope_signature(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
     let args = shell_run_args(tool_name, tool_args)?;
     Some(shell_permission_scope_suffix(args))
 }
 
-pub(super) fn extract_shell_approval_scope_signature(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+pub(super) fn extract_shell_approval_scope_signature(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
     let args = shell_run_args(tool_name, tool_args)?;
     let command_words = extract_shell_approval_command_words(tool_name, tool_args)?;
-    shell_command_supports_persistent_approval(args, &command_words)
-        .then(|| shell_permission_scope_suffix(args))
+    shell_command_supports_persistent_approval(args, &command_words).then(|| shell_permission_scope_suffix(args))
 }
 
 pub(super) fn extract_shell_persistent_approval_prefix_rule(
@@ -278,10 +258,7 @@ pub(super) fn render_shell_approval_command_words(parts: &[String]) -> String {
     render_shell_command_words(parts)
 }
 
-pub(super) fn shell_permission_cache_suffix(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+pub(super) fn shell_permission_cache_suffix(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
     let args = shell_run_args(tool_name, tool_args)?;
     let command = extract_shell_command_text_from_run_args(args)?;
     let scope_suffix = shell_permission_scope_suffix(args);
@@ -296,10 +273,7 @@ pub(super) fn shell_permission_cache_suffix(
 }
 
 #[cfg(test)]
-pub(super) fn shell_allows_persistent_decisions(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> bool {
+pub(super) fn shell_allows_persistent_decisions(tool_name: &str, tool_args: Option<&Value>) -> bool {
     extract_shell_command_text(tool_name, tool_args).is_none()
 }
 
@@ -319,10 +293,8 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
     let args = tool_args?.as_object()?;
     let (before, after) = match tool_name {
         "edit_file" => {
-            let old_str =
-                args.get("old_str").or_else(|| args.get("old_string")).and_then(Value::as_str)?;
-            let new_str =
-                args.get("new_str").or_else(|| args.get("new_string")).and_then(Value::as_str)?;
+            let old_str = args.get("old_str").or_else(|| args.get("old_string")).and_then(Value::as_str)?;
+            let new_str = args.get("new_str").or_else(|| args.get("new_string")).and_then(Value::as_str)?;
             (Some(old_str), new_str)
         }
         "write_file" | "create_file" => {
@@ -346,14 +318,8 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
 
             match action {
                 "edit" => {
-                    let old_str = args
-                        .get("old_str")
-                        .or_else(|| args.get("old_string"))
-                        .and_then(Value::as_str)?;
-                    let new_str = args
-                        .get("new_str")
-                        .or_else(|| args.get("new_string"))
-                        .and_then(Value::as_str)?;
+                    let old_str = args.get("old_str").or_else(|| args.get("old_string")).and_then(Value::as_str)?;
+                    let new_str = args.get("new_str").or_else(|| args.get("new_string")).and_then(Value::as_str)?;
                     (Some(old_str), new_str)
                 }
                 "write" | "create" => {
@@ -435,9 +401,7 @@ fn build_tool_permission_options(
 
     if let Some(target) = persistent_approval_target {
         let subtitle = match target {
-            PersistentApprovalTarget::ToolLevel => {
-                "Remember approval for this tool in this workspace".to_string()
-            }
+            PersistentApprovalTarget::ToolLevel => "Remember approval for this tool in this workspace".to_string(),
             PersistentApprovalTarget::ExactInvocation { display_label } => {
                 format!("Remember approval for {display_label} in this workspace")
             }
@@ -538,10 +502,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     let approval_learning_label = learning_target.display_label.as_str();
 
     let prompt_kind = tool_permission_prompt_kind(tool_name);
-    let mut description_lines = vec![
-        format!("Tool: {}", tool_name),
-        format!("Action: {}", display_name),
-    ];
+    let mut description_lines = vec![format!("Tool: {}", tool_name), format!("Action: {}", display_name)];
 
     if let Some(source_label) = source_thread_label {
         description_lines.push(format!("Source: {source_label}"));
@@ -759,24 +720,14 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
 
     let overlay = TransientRequest::List(request);
 
-    let result = show_overlay_and_wait(
-        handle,
-        session,
-        overlay,
-        ctrl_c_state,
-        ctrl_c_notify,
-        |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => {
-                Some(HitlDecision::Enable)
-            }
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
-                Some(HitlDecision::DeniedOnce)
-            }
+    let result =
+        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
+            TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => Some(HitlDecision::Enable),
+            TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => Some(HitlDecision::DeniedOnce),
             TransientSubmission::Selection(_) => Some(HitlDecision::DeniedOnce),
             _ => None,
-        },
-    )
-    .await?;
+        })
+        .await?;
 
     match result {
         OverlayWaitOutcome::Submitted(decision) => Ok(decision),
@@ -792,9 +743,9 @@ mod tests {
         ToolPermissionPromptKind, build_tool_permission_options, cancelled_prompt_decision,
         extract_shell_approval_command_prefix_words, extract_shell_approval_justification,
         extract_shell_approval_scope_signature, extract_shell_command_text,
-        extract_shell_persistent_approval_prefix_rule,
-        render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
-        shell_permission_cache_suffix, tool_permission_prompt_kind, truncate_arg_preview,
+        extract_shell_persistent_approval_prefix_rule, render_shell_persistent_approval_prefix_entry,
+        shell_allows_persistent_decisions, shell_permission_cache_suffix, tool_permission_prompt_kind,
+        truncate_arg_preview,
     };
     use crate::agent::runloop::unified::tool_routing::shell_approval::PersistentApprovalTarget;
     use serde_json::json;
@@ -901,10 +852,7 @@ mod tests {
         });
 
         let justification = extract_shell_approval_justification(tools::UNIFIED_EXEC, Some(&args));
-        assert_eq!(
-            justification.as_deref(),
-            Some("Do you want to build the project outside the sandbox?")
-        );
+        assert_eq!(justification.as_deref(), Some("Do you want to build the project outside the sandbox?"));
     }
 
     #[test]
@@ -927,8 +875,7 @@ mod tests {
             "prefix_rule": ["cargo", "build"]
         });
 
-        let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
+        let prefix_rule = extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -940,8 +887,7 @@ mod tests {
             "prefix_rule": ["cargo", "test"]
         });
 
-        let prefix_rule =
-            extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
+        let prefix_rule = extract_shell_persistent_approval_prefix_rule(tools::UNIFIED_EXEC, Some(&args));
         assert_eq!(prefix_rule, None);
     }
 
@@ -973,10 +919,7 @@ mod tests {
         });
 
         let scope = extract_shell_approval_scope_signature(tools::UNIFIED_EXEC, Some(&args));
-        assert_eq!(
-            scope.as_deref(),
-            Some("sandbox_permissions=\"require_escalated\"|additional_permissions=null")
-        );
+        assert_eq!(scope.as_deref(), Some("sandbox_permissions=\"require_escalated\"|additional_permissions=null"));
     }
 
     #[test]
@@ -995,45 +938,32 @@ mod tests {
         );
         assert_eq!(
             entry.as_deref(),
-            Some(
-                "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
-            )
+            Some("cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null")
         );
     }
 
     #[test]
     fn canonical_mcp_tools_use_mcp_prompt_kind() {
-        assert_eq!(
-            tool_permission_prompt_kind("mcp::calendar::list_events"),
-            ToolPermissionPromptKind::Mcp
-        );
+        assert_eq!(tool_permission_prompt_kind("mcp::calendar::list_events"), ToolPermissionPromptKind::Mcp);
     }
 
     #[test]
     fn model_visible_mcp_tools_use_mcp_prompt_kind() {
-        assert_eq!(
-            tool_permission_prompt_kind("mcp__calendar__list_events"),
-            ToolPermissionPromptKind::Mcp
-        );
+        assert_eq!(tool_permission_prompt_kind("mcp__calendar__list_events"), ToolPermissionPromptKind::Mcp);
     }
 
     #[test]
     fn non_mcp_tools_keep_standard_prompt_kind() {
-        assert_eq!(
-            tool_permission_prompt_kind(tools::UNIFIED_EXEC),
-            ToolPermissionPromptKind::Standard
-        );
+        assert_eq!(tool_permission_prompt_kind(tools::UNIFIED_EXEC), ToolPermissionPromptKind::Standard);
     }
 
     #[test]
     fn mcp_prompt_uses_cancel_without_persistent_deny() {
-        let titles = build_tool_permission_options(
-            ToolPermissionPromptKind::Mcp,
-            Some(&PersistentApprovalTarget::ToolLevel),
-        )
-        .into_iter()
-        .map(|item| item.title)
-        .collect::<Vec<_>>();
+        let titles =
+            build_tool_permission_options(ToolPermissionPromptKind::Mcp, Some(&PersistentApprovalTarget::ToolLevel))
+                .into_iter()
+                .map(|item| item.title)
+                .collect::<Vec<_>>();
         assert!(titles.iter().any(|title| title == "Cancel"));
         assert!(!titles.iter().any(|title| title == "Always Deny"));
     }
@@ -1068,9 +998,6 @@ mod tests {
 
     #[test]
     fn mcp_prompt_cancellation_is_non_persistent() {
-        assert_eq!(
-            cancelled_prompt_decision(ToolPermissionPromptKind::Mcp),
-            super::HitlDecision::DeniedOnce
-        );
+        assert_eq!(cancelled_prompt_decision(ToolPermissionPromptKind::Mcp), super::HitlDecision::DeniedOnce);
     }
 }

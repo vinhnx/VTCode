@@ -8,9 +8,7 @@ use toml::Value as TomlValue;
 use vtcode_commons::paths::normalize_path;
 use vtcode_config::defaults;
 use vtcode_config::loader::layers::{ConfigLayerMetadata, ConfigLayerSource};
-use vtcode_config::loader::{
-    ConfigBuilder, ConfigManager, VTCodeConfig, fingerprint_str, merge_toml_values,
-};
+use vtcode_config::loader::{ConfigBuilder, ConfigManager, VTCodeConfig, fingerprint_str, merge_toml_values};
 
 /// Request to read the effective configuration for a workspace.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,8 +111,8 @@ impl ConfigService {
         }
         let manager = builder.build().context("Failed to build configuration")?;
         let (effective_toml, origins) = manager.layer_stack().effective_config_with_origins();
-        let effective_config = serde_json::to_value(&effective_toml)
-            .context("Failed to serialize effective configuration to JSON")?;
+        let effective_config =
+            serde_json::to_value(&effective_toml).context("Failed to serialize effective configuration to JSON")?;
         let merged_version = merged_version(manager.layer_stack().layers());
 
         let layers = manager
@@ -138,10 +136,8 @@ impl ConfigService {
             bail!("Config path cannot be empty");
         }
 
-        let manager =
-            ConfigManager::load_from_workspace(&request.workspace).with_context(|| {
-                format!("Failed to load workspace config from {}", request.workspace.display())
-            })?;
+        let manager = ConfigManager::load_from_workspace(&request.workspace)
+            .with_context(|| format!("Failed to load workspace config from {}", request.workspace.display()))?;
 
         let target_path = resolve_target_path(&manager, &request.workspace, &request.target)?;
 
@@ -166,28 +162,25 @@ impl ConfigService {
         let mut target_toml = load_or_default_toml(&target_path)?;
         apply_write(&mut target_toml, &request.path, &request.value, request.strategy)?;
 
-        let updated_config: VTCodeConfig = target_toml.clone().try_into().with_context(|| {
-            format!("Updated configuration at {} could not be deserialized", target_path.display())
-        })?;
+        let updated_config: VTCodeConfig = target_toml
+            .clone()
+            .try_into()
+            .with_context(|| format!("Updated configuration at {} could not be deserialized", target_path.display()))?;
         updated_config.validate().context("Updated configuration failed validation")?;
 
-        ConfigManager::save_config_to_path(&target_path, &updated_config).with_context(|| {
-            format!("Failed to write updated configuration to {}", target_path.display())
-        })?;
+        ConfigManager::save_config_to_path(&target_path, &updated_config)
+            .with_context(|| format!("Failed to write updated configuration to {}", target_path.display()))?;
 
         let reloaded_manager = ConfigManager::load_from_workspace(&request.workspace)
             .context("Failed to reload configuration after write")?;
-        let (effective_toml, origins) =
-            reloaded_manager.layer_stack().effective_config_with_origins();
+        let (effective_toml, origins) = reloaded_manager.layer_stack().effective_config_with_origins();
 
         let written_layer = reloaded_manager
             .layer_stack()
             .layers()
             .iter()
             .find(|layer| source_matches_target(&layer.source, &request.target, &target_path))
-            .with_context(|| {
-                format!("Unable to find written layer {} in reloaded stack", target_path.display())
-            })?;
+            .with_context(|| format!("Unable to find written layer {} in reloaded stack", target_path.display()))?;
 
         let effective_value = get_value_by_path(&effective_toml, &request.path).cloned();
         let overridden_metadata = if let Some(origin) = origins.get(&request.path) {
@@ -232,11 +225,7 @@ fn merged_version(layers: &[vtcode_config::loader::layers::ConfigLayerEntry]) ->
     fingerprint_str(&parts.join("|"))
 }
 
-fn resolve_target_path(
-    manager: &ConfigManager,
-    workspace: &Path,
-    target: &ConfigWriteTarget,
-) -> Result<PathBuf> {
+fn resolve_target_path(manager: &ConfigManager, workspace: &Path, target: &ConfigWriteTarget) -> Result<PathBuf> {
     match target {
         ConfigWriteTarget::Workspace => {
             let root = manager.workspace_root().unwrap_or(workspace).to_path_buf();
@@ -267,19 +256,11 @@ fn resolve_target_path(
     }
 }
 
-fn source_matches_target(
-    source: &ConfigLayerSource,
-    target: &ConfigWriteTarget,
-    path: &Path,
-) -> bool {
+fn source_matches_target(source: &ConfigLayerSource, target: &ConfigWriteTarget, path: &Path) -> bool {
     match (source, target) {
         (ConfigLayerSource::User { file }, ConfigWriteTarget::User) => same_config_path(file, path),
-        (ConfigLayerSource::Workspace { file }, ConfigWriteTarget::Workspace) => {
-            same_config_path(file, path)
-        }
-        (ConfigLayerSource::Project { file }, ConfigWriteTarget::Project) => {
-            same_config_path(file, path)
-        }
+        (ConfigLayerSource::Workspace { file }, ConfigWriteTarget::Workspace) => same_config_path(file, path),
+        (ConfigLayerSource::Project { file }, ConfigWriteTarget::Project) => same_config_path(file, path),
         _ => false,
     }
 }
@@ -295,18 +276,11 @@ fn load_or_default_toml(path: &Path) -> Result<TomlValue> {
         return Ok(TomlValue::Table(toml::Table::new()));
     }
 
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read config file {}", path.display()))?;
-    toml::from_str(&content)
-        .with_context(|| format!("Failed to parse config file {}", path.display()))
+    let content = fs::read_to_string(path).with_context(|| format!("Failed to read config file {}", path.display()))?;
+    toml::from_str(&content).with_context(|| format!("Failed to parse config file {}", path.display()))
 }
 
-fn apply_write(
-    root: &mut TomlValue,
-    path: &str,
-    value: &TomlValue,
-    strategy: ConfigWriteStrategy,
-) -> Result<()> {
+fn apply_write(root: &mut TomlValue, path: &str, value: &TomlValue, strategy: ConfigWriteStrategy) -> Result<()> {
     let existing = get_or_create_path_mut(root, path)?;
     match strategy {
         ConfigWriteStrategy::Replace => {
@@ -381,15 +355,11 @@ mod tests {
         fs::create_dir_all(home_config.parent().expect("home parent")).expect("home dir");
 
         fs::write(&home_config, "agent.provider = \"openai\"\n").expect("home config");
-        fs::write(
-            &workspace_config,
-            "agent.provider = \"anthropic\"\nagent.default_model = \"claude-sonnet-4-6\"\n",
-        )
-        .expect("workspace config");
+        fs::write(&workspace_config, "agent.provider = \"anthropic\"\nagent.default_model = \"claude-sonnet-4-6\"\n")
+            .expect("workspace config");
 
         let static_paths = StaticWorkspacePaths::new(workspace, workspace.join(".vtcode"));
-        let provider =
-            WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![home_config]);
+        let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![home_config]);
 
         with_config_defaults_provider_for_test(Arc::new(provider), || {
             let response = ConfigService::read(ConfigReadRequest {
@@ -417,8 +387,7 @@ mod tests {
         fs::write(&workspace_config, "agent.provider = \"gemini\"\n").expect("workspace config");
 
         let static_paths = StaticWorkspacePaths::new(workspace, workspace.join(".vtcode"));
-        let provider =
-            WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![home_config]);
+        let provider = WorkspacePathsDefaults::new(Arc::new(static_paths)).with_home_paths(vec![home_config]);
 
         with_config_defaults_provider_for_test(Arc::new(provider), || {
             let response = ConfigService::write(ConfigWriteRequest {

@@ -4,8 +4,8 @@ use std::fs::{self, File};
 use std::path::PathBuf;
 
 use super::super::install_support::{
-    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache,
-    unix_timestamp_now, vtcode_state_dir_or_default,
+    acquire_lock_file, cache_is_stale, load_json_cache, lock_is_active, save_json_cache, unix_timestamp_now,
+    vtcode_state_dir_or_default,
 };
 
 const INSTALL_LOCK_MAX_AGE_SECS: u64 = 1_800;

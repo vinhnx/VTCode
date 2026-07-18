@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 use crate::config::loader::VTCodeConfig;
 use crate::hooks::{LifecycleHookEngine, NotificationHookType};
 use vtcode_config::{
-    NotificationBackend, NotificationCondition, NotificationDeliveryMode,
-    TerminalNotificationMethod, TuiNotificationEvent, TuiNotificationsConfig,
+    NotificationBackend, NotificationCondition, NotificationDeliveryMode, TerminalNotificationMethod,
+    TuiNotificationEvent, TuiNotificationsConfig,
 };
 
 /// Types of important events that trigger notifications
@@ -39,15 +39,9 @@ pub enum NotificationEvent {
         details: Option<String>,
     },
     /// Tool execution succeeded
-    ToolSuccess {
-        tool_name: String,
-        details: Option<String>,
-    },
+    ToolSuccess { tool_name: String, details: Option<String> },
     /// General error occurred
-    Error {
-        message: String,
-        context: Option<String>,
-    },
+    Error { message: String, context: Option<String> },
     /// Policy approval required for action
     PolicyApprovalRequest { action: String, details: String },
     /// Human in the loop interaction required
@@ -63,10 +57,7 @@ pub enum NotificationEvent {
         details: Option<String>,
     },
     /// Request received
-    Request {
-        request_type: String,
-        details: String,
-    },
+    Request { request_type: String, details: String },
 }
 
 /// Status of a completed task
@@ -147,21 +138,13 @@ impl NotificationConfig {
     pub fn from_vtcode_config(config: &VTCodeConfig) -> Self {
         let notifications = &config.ui.notifications;
         let mut resolved = Self {
-            command_failure_notifications: notifications
-                .command_failure
-                .unwrap_or(notifications.tool_failure),
+            command_failure_notifications: notifications.command_failure.unwrap_or(notifications.tool_failure),
             tool_failure_notifications: notifications.tool_failure,
             error_notifications: notifications.error,
-            policy_approval_notifications: notifications
-                .policy_approval
-                .unwrap_or(notifications.hitl),
+            policy_approval_notifications: notifications.policy_approval.unwrap_or(notifications.hitl),
             hitl_notifications: notifications.hitl,
-            completion_success_notifications: notifications
-                .completion_success
-                .unwrap_or(notifications.completion),
-            completion_failure_notifications: notifications
-                .completion_failure
-                .unwrap_or(notifications.completion),
+            completion_success_notifications: notifications.completion_success.unwrap_or(notifications.completion),
+            completion_failure_notifications: notifications.completion_failure.unwrap_or(notifications.completion),
             request_notifications: notifications.request.unwrap_or(notifications.hitl),
             tool_success_notifications: notifications.tool_success,
             terminal_notifications_enabled: notifications.enabled,
@@ -181,8 +164,7 @@ impl NotificationConfig {
                 }
                 TuiNotificationsConfig::Events(events) => {
                     let turn_complete = events.contains(&TuiNotificationEvent::AgentTurnComplete);
-                    let approval_requested =
-                        events.contains(&TuiNotificationEvent::ApprovalRequested);
+                    let approval_requested = events.contains(&TuiNotificationEvent::ApprovalRequested);
                     resolved.terminal_notifications_enabled = true;
                     resolved.command_failure_notifications = false;
                     resolved.tool_failure_notifications = false;
@@ -231,11 +213,9 @@ enum DesktopNotificationBackend {
     NotifyRust,
 }
 
-const AUTO_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] =
-    &[DesktopNotificationBackend::NotifyRust];
+const AUTO_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] = &[DesktopNotificationBackend::NotifyRust];
 #[cfg(target_os = "macos")]
-const OSASCRIPT_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] =
-    &[DesktopNotificationBackend::Osascript];
+const OSASCRIPT_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] = &[DesktopNotificationBackend::Osascript];
 const NOTIFY_RUST_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] =
     &[DesktopNotificationBackend::NotifyRust];
 const NO_DESKTOP_NOTIFICATION_BACKENDS: &[DesktopNotificationBackend] = &[];
@@ -320,19 +300,15 @@ impl NotificationManager {
             NotificationEvent::IdlePrompt { .. } => config.request_notifications,
             NotificationEvent::Completion { status, .. } => match status {
                 CompletionStatus::Success => config.completion_success_notifications,
-                CompletionStatus::PartialSuccess
-                | CompletionStatus::Failure
-                | CompletionStatus::Cancelled => config.completion_failure_notifications,
+                CompletionStatus::PartialSuccess | CompletionStatus::Failure | CompletionStatus::Cancelled => {
+                    config.completion_failure_notifications
+                }
             },
             NotificationEvent::Request { .. } => config.request_notifications,
         }
     }
 
-    fn repeat_decision(
-        &self,
-        event: &NotificationEvent,
-        config: &NotificationConfig,
-    ) -> RepeatDecision {
+    fn repeat_decision(&self, event: &NotificationEvent, config: &NotificationConfig) -> RepeatDecision {
         if config.repeat_window_seconds == 0 {
             return RepeatDecision::Deliver;
         }
@@ -366,18 +342,13 @@ impl NotificationManager {
     }
 
     /// Internal method to send the actual notification
-    async fn send_notification_impl(
-        &self,
-        event: &NotificationEvent,
-        config: &NotificationConfig,
-    ) -> Result<()> {
+    async fn send_notification_impl(&self, event: &NotificationEvent, config: &NotificationConfig) -> Result<()> {
         let message = self.format_notification_message(event);
         self.send_message(&message, config).await
     }
 
     async fn run_notification_hook_if_configured(&self, event: &NotificationEvent) {
-        let Some((notification_type, title, message)) = self.notification_hook_payload(event)
-        else {
+        let Some((notification_type, title, message)) = self.notification_hook_payload(event) else {
             return;
         };
         let Some(engine) = get_global_notification_hook_engine() else {
@@ -456,13 +427,11 @@ impl NotificationManager {
                 }
             }
             NotificationEvent::CommandFailure { command, error, exit_code } => {
-                let exit_code_str =
-                    exit_code.map(|code| format!(" (exit code: {code})")).unwrap_or_default();
+                let exit_code_str = exit_code.map(|code| format!(" (exit code: {code})")).unwrap_or_default();
                 format!("Command failed: {command}{exit_code_str} - Error: {error}")
             }
             NotificationEvent::ToolFailure { tool_name, error, details } => {
-                let details_str =
-                    details.as_ref().map(|d| format!(" - Details: {d}")).unwrap_or_default();
+                let details_str = details.as_ref().map(|d| format!(" - Details: {d}")).unwrap_or_default();
                 format!("Tool '{tool_name}' failed: {error}{details_str}")
             }
             NotificationEvent::ToolSuccess { tool_name, details } => {
@@ -470,8 +439,7 @@ impl NotificationManager {
                 format!("Tool '{tool_name}' completed{details_str}")
             }
             NotificationEvent::Error { message, context } => {
-                let context_str =
-                    context.as_ref().map(|ctx| format!(" [{ctx}]")).unwrap_or_default();
+                let context_str = context.as_ref().map(|ctx| format!(" [{ctx}]")).unwrap_or_default();
                 format!("Error occurred{context_str}: {message}")
             }
             NotificationEvent::PolicyApprovalRequest { action, details } => {
@@ -525,10 +493,7 @@ impl NotificationManager {
         false
     }
 
-    fn desktop_notification_backends(
-        &self,
-        backend: NotificationBackend,
-    ) -> &'static [DesktopNotificationBackend] {
+    fn desktop_notification_backends(&self, backend: NotificationBackend) -> &'static [DesktopNotificationBackend] {
         match backend {
             NotificationBackend::Auto => AUTO_DESKTOP_NOTIFICATION_BACKENDS,
             NotificationBackend::Osascript => {
@@ -543,17 +508,11 @@ impl NotificationManager {
                 }
             }
             NotificationBackend::NotifyRust => NOTIFY_RUST_DESKTOP_NOTIFICATION_BACKENDS,
-            NotificationBackend::Terminal | NotificationBackend::Unknown => {
-                NO_DESKTOP_NOTIFICATION_BACKENDS
-            }
+            NotificationBackend::Terminal | NotificationBackend::Unknown => NO_DESKTOP_NOTIFICATION_BACKENDS,
         }
     }
 
-    fn try_send_desktop_notification_backend(
-        &self,
-        backend: DesktopNotificationBackend,
-        message: &str,
-    ) -> bool {
+    fn try_send_desktop_notification_backend(&self, backend: DesktopNotificationBackend, message: &str) -> bool {
         match backend {
             #[cfg(target_os = "macos")]
             DesktopNotificationBackend::Osascript => self.send_osascript_notification(message),
@@ -633,10 +592,7 @@ impl NotificationManager {
         self.terminal_focused.load(Ordering::Relaxed)
     }
 
-    fn notification_hook_payload(
-        &self,
-        event: &NotificationEvent,
-    ) -> Option<(NotificationHookType, String, String)> {
+    fn notification_hook_payload(&self, event: &NotificationEvent) -> Option<(NotificationHookType, String, String)> {
         match event {
             NotificationEvent::PermissionPrompt { title, message } => {
                 Some((NotificationHookType::PermissionPrompt, title.clone(), message.clone()))
@@ -659,8 +615,7 @@ impl Default for NotificationManager {
 use std::sync::OnceLock;
 
 static GLOBAL_NOTIFICATION_MANAGER: OnceLock<NotificationManager> = OnceLock::new();
-static GLOBAL_NOTIFICATION_HOOK_ENGINE: OnceLock<RwLock<Option<LifecycleHookEngine>>> =
-    OnceLock::new();
+static GLOBAL_NOTIFICATION_HOOK_ENGINE: OnceLock<RwLock<Option<LifecycleHookEngine>>> = OnceLock::new();
 
 /// Initialize the global notification manager
 pub fn init_global_notification_manager() -> Result<()> {
@@ -756,11 +711,7 @@ pub fn is_global_terminal_focused() -> bool {
 
 /// Convenience function to send a tool failure notification
 #[cold]
-pub async fn notify_tool_failure(
-    tool_name: &str,
-    error: &str,
-    details: Option<&str>,
-) -> Result<(), anyhow::Error> {
+pub async fn notify_tool_failure(tool_name: &str, error: &str, details: Option<&str>) -> Result<(), anyhow::Error> {
     let event = NotificationEvent::ToolFailure {
         tool_name: tool_name.to_string(),
         error: error.to_string(),
@@ -770,10 +721,7 @@ pub async fn notify_tool_failure(
 }
 
 /// Convenience function to send a tool success notification
-pub async fn notify_tool_success(
-    tool_name: &str,
-    details: Option<&str>,
-) -> Result<(), anyhow::Error> {
+pub async fn notify_tool_success(tool_name: &str, details: Option<&str>) -> Result<(), anyhow::Error> {
     let event = NotificationEvent::ToolSuccess {
         tool_name: tool_name.to_string(),
         details: details.map(|s| s.to_string()),
@@ -783,11 +731,7 @@ pub async fn notify_tool_success(
 
 /// Convenience function to send a command failure notification
 #[cold]
-pub async fn notify_command_failure(
-    command: &str,
-    error: &str,
-    exit_code: Option<i32>,
-) -> Result<(), anyhow::Error> {
+pub async fn notify_command_failure(command: &str, error: &str, exit_code: Option<i32>) -> Result<(), anyhow::Error> {
     let event = NotificationEvent::CommandFailure {
         command: command.to_string(),
         error: error.to_string(),

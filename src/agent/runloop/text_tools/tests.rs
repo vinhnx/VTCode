@@ -88,10 +88,7 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
     let stripped = strip_textual_tool_call_regions(bare);
     assert!(!stripped.contains("<function="), "function= block should be stripped");
     assert!(stripped.contains("Prose before."), "leading prose must survive");
-    assert!(
-        stripped.contains("Prose after."),
-        "trailing prose must survive bare parameterised close tag"
-    );
+    assert!(stripped.contains("Prose after."), "trailing prose must survive bare parameterised close tag");
 
     // When the function= block is nested inside <tool_call> with prose after
     // </tool_call>, the fallback `end=text.len()` must NOT swallow trailing prose.
@@ -105,10 +102,7 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
     let stripped2 = strip_textual_tool_call_regions(wrapped);
     assert!(!stripped2.contains("<function=apply_patch>"), "function= content must be stripped");
     assert!(stripped2.contains("Prose before."), "leading prose must survive");
-    assert!(
-        stripped2.contains("Prose after."),
-        "trailing prose must not be eaten by merged regions"
-    );
+    assert!(stripped2.contains("Prose after."), "trailing prose must not be eaten by merged regions");
 }
 
 #[test]
@@ -150,8 +144,7 @@ fn test_detect_textual_tool_call_parses_function_style_block() {
 
 #[test]
 fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
-    let message =
-        "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_pty_cmd {\n    command: \"pwd\"\n}\n```";
+    let message = "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_pty_cmd {\n    command: \"pwd\"\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["action"], serde_json::json!("run"));
@@ -161,8 +154,7 @@ fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
 
 #[test]
 fn test_detect_textual_tool_call_handles_boolean_and_numbers() {
-    let message =
-        "default_api.search_workspace(query='todo', max_results=5, include_archived=false)";
+    let message = "default_api.search_workspace(query='todo', max_results=5, include_archived=false)";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "search_workspace");
     assert_eq!(
@@ -187,10 +179,7 @@ fn test_detect_textual_tool_call_rejects_excessive_bracketed_nesting() {
     }
 
     let message = format!("[tool: read_file] {nested}");
-    assert!(
-        detect_textual_tool_call(&message).is_none(),
-        "Overly deep bracketed payload should be rejected"
-    );
+    assert!(detect_textual_tool_call(&message).is_none(), "Overly deep bracketed payload should be rejected");
 }
 
 #[test]
@@ -205,10 +194,7 @@ fn test_detect_textual_tool_call_rejects_excessive_function_nesting() {
     }
 
     let message = format!("default_api.read_file(path={nested})");
-    assert!(
-        detect_textual_tool_call(&message).is_none(),
-        "Overly deep function payload should be rejected"
-    );
+    assert!(detect_textual_tool_call(&message).is_none(), "Overly deep function payload should be rejected");
 }
 
 #[test]
@@ -244,8 +230,7 @@ fn test_detect_textual_tool_call_skips_malformed_deep_candidate() {
         malformed.push('(');
     }
 
-    let message =
-        format!("default_api.read_file(path={malformed} ignored default_api.list_files(path='.')");
+    let message = format!("default_api.read_file(path={malformed} ignored default_api.list_files(path='.')");
     let (name, args) = detect_textual_tool_call(&message).expect("should parse second call");
     assert_eq!(name, tools::LIST_FILES);
     assert_eq!(args["path"], serde_json::json!("."));
@@ -283,7 +268,8 @@ fn test_detect_tagged_tool_call_respects_indexed_arguments() {
 
 #[test]
 fn test_detect_tagged_tool_call_handles_one_based_indexes() {
-    let message = "<tool_call>run_pty_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
+    let message =
+        "<tool_call>run_pty_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
@@ -363,8 +349,7 @@ fn test_detect_minimax_child_element_parameters() {
 </invoke>
 </minimax:tool_call>
 "#;
-    let (name, args) =
-        detect_textual_tool_call(message).expect("should parse child-element format");
+    let (name, args) = detect_textual_tool_call(message).expect("should parse child-element format");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
         args,
@@ -403,8 +388,7 @@ fn test_detect_minimax_parameter_name_format_still_works() {
 </invoke>
 </minimax:tool_call>
 "#;
-    let (name, args) =
-        detect_textual_tool_call(message).expect("should parse parameter name format");
+    let (name, args) = detect_textual_tool_call(message).expect("should parse parameter name format");
     assert_eq!(name, tools::READ_FILE);
     assert_eq!(
         args,
@@ -455,8 +439,7 @@ fn test_detect_rust_struct_tool_call_parses_command_block() {
 
 #[test]
 fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
-    let message =
-        "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
+    let message = "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(
@@ -596,7 +579,8 @@ fn test_parse_harmony_channel_tool_call_with_constrain() {
 
 #[test]
 fn test_parse_harmony_channel_tool_call_without_constrain() {
-    let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
+    let message =
+        "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["command"], serde_json::json!(["ls", "-la"]));
@@ -604,8 +588,7 @@ fn test_parse_harmony_channel_tool_call_without_constrain() {
 
 #[test]
 fn test_parse_harmony_channel_tool_call_with_string_cmd() {
-    let message =
-        "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
+    let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
     assert_eq!(name, tools::EXEC_COMMAND);
     assert_eq!(args["command"], serde_json::json!("pwd"));
@@ -781,8 +764,7 @@ fn test_convert_harmony_args_maps_close_pty_session_to_close() {
 fn test_parse_harmony_channel_rejects_empty_command() {
     // Harmony format parser (OpenAI/GPT-OSS): should reject tool call if command is empty
     // because convert_harmony_args_to_tool_format() returns Err which parse_channel_tool_call() rejects
-    let message =
-        "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
+    let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
     assert!(result.is_none(), "Should reject Harmony format with empty command");
 }
@@ -790,8 +772,7 @@ fn test_parse_harmony_channel_rejects_empty_command() {
 #[test]
 fn test_parse_harmony_channel_rejects_empty_array() {
     // Harmony format parser: should reject tool call if command array is empty
-    let message =
-        "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
+    let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
     assert!(result.is_none(), "Should reject Harmony format with empty array");
 }
@@ -799,8 +780,7 @@ fn test_parse_harmony_channel_rejects_empty_array() {
 #[test]
 fn test_parse_harmony_channel_rejects_whitespace_command() {
     // Harmony format parser: should reject tool call if command is whitespace-only
-    let message =
-        "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
+    let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
     assert!(result.is_none(), "Should reject Harmony format with whitespace-only command");
 }
@@ -845,8 +825,7 @@ fn test_parse_tagged_tool_call_extracts_json_with_space() {
 #[test]
 fn test_parse_tagged_tool_call_handles_nested_json() {
     // Nested JSON should be parsed correctly
-    let message =
-        r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
+    let message = r#"<tool_call>run_pty_cmd{"command": "echo", "env": {"PATH": "/usr/bin"}}</tool_call>"#;
     // Use detect_textual_tool_call which applies canonicalization
     let result = detect_textual_tool_call(message);
     assert!(result.is_some(), "Should parse nested JSON");

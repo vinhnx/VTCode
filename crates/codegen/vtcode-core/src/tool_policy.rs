@@ -21,15 +21,12 @@ use crate::config::core::tools::ToolsConfig;
 pub use crate::config::core::tools::ToolPolicy;
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
-use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_atomic_with_context,
-};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_atomic_with_context};
 use crate::utils::tool_name_parsing::{canonical_tool_name, parse_canonical_mcp_tool_name};
 
 /// Memoized compiled approval regexes, keyed by the exact pattern list, so we
 /// don't recompile `Regex::new` on every approval-policy check.
-static APPROVAL_REGEX_CACHE: std::sync::Mutex<Option<(IndexSet<String>, Vec<Regex>)>> =
-    std::sync::Mutex::new(None);
+static APPROVAL_REGEX_CACHE: std::sync::Mutex<Option<(IndexSet<String>, Vec<Regex>)>> = std::sync::Mutex::new(None);
 
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::START_PLANNING,
@@ -48,12 +45,10 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
 ];
 
 const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
-const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str =
-    "sandbox_permissions=\"use_default\"|additional_permissions=null";
+const DEFAULT_APPROVAL_SCOPE_SIGNATURE: &str = "sandbox_permissions=\"use_default\"|additional_permissions=null";
 const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-    "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl",
-    "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch",
-    "truncate", "wget",
+    "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl", "python", "python3",
+    "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch", "truncate", "wget",
 ];
 const MUTATING_OPTION_HINTS: &[&str] = &[
     "--delete",
@@ -208,14 +203,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
                 "experimental_use_rmcp_client".into(),
             ],
         ),
-        (
-            "ui".into(),
-            vec![
-                "mode".into(),
-                "max_events".into(),
-                "show_provider_names".into(),
-            ],
-        ),
+        ("ui".into(), vec!["mode".into(), "max_events".into(), "show_provider_names".into()]),
         (
             "server".into(),
             vec![
@@ -259,10 +247,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         ]),
         prompts: Some(vec!["context7::*".into(), "support::*".into(), "docs::*".into()]),
         logging: Some(mcp_standard_logging()),
-        configuration: Some(mcp_provider_config_with((
-            "context7",
-            vec!["workspace", "search_scope", "max_results"],
-        ))),
+        configuration: Some(mcp_provider_config_with(("context7", vec!["workspace", "search_scope", "max_results"]))),
     };
 
     let seq_rules = McpAllowListRules {
@@ -281,10 +266,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
             "critique".into(),
         ]),
         logging: Some(mcp_standard_logging()),
-        configuration: Some(mcp_provider_config_with((
-            "sequencing",
-            vec!["max_depth", "max_branches"],
-        ))),
+        configuration: Some(mcp_provider_config_with(("sequencing", vec!["max_depth", "max_branches"]))),
     };
 
     let mut allowlist = McpAllowListConfig {
@@ -305,8 +287,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
 }
 
 fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
-    parse_canonical_mcp_tool_name(tool_name)
-        .map(|(provider, tool)| (provider.to_string(), tool.to_string()))
+    parse_canonical_mcp_tool_name(tool_name).map(|(provider, tool)| (provider.to_string(), tool.to_string()))
 }
 
 /// Alternative tool policy configuration format (user's format)
@@ -469,10 +450,7 @@ impl ToolPolicyManager {
 
         if !tokio::fs::try_exists(&workspace_vtcode_dir).await.unwrap_or(false) {
             ensure_dir_exists(&workspace_vtcode_dir).await.with_context(|| {
-                format!(
-                    "Failed to create workspace policy directory at {}",
-                    workspace_vtcode_dir.display()
-                )
+                format!("Failed to create workspace policy directory at {}", workspace_vtcode_dir.display())
             })?;
         }
 
@@ -540,11 +518,7 @@ impl ToolPolicyManager {
         let backup_path = config_path.with_extension("json.bak");
 
         if let Err(err) = tokio::fs::rename(config_path, &backup_path).await {
-            tracing::warn!(
-                "Unable to back up invalid tool policy config ({}). {}",
-                config_path.display(),
-                err
-            );
+            tracing::warn!("Unable to back up invalid tool policy config ({}). {}", config_path.display(), err);
         } else {
             tracing::info!("Backed up invalid tool policy config to {}", backup_path.display());
         }
@@ -563,8 +537,7 @@ impl ToolPolicyManager {
                 .with_context(|| format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display()))?;
         }
 
-        let serialized = serde_json::to_string_pretty(config)
-            .context("Failed to serialize tool policy config")?;
+        let serialized = serde_json::to_string_pretty(config).context("Failed to serialize tool policy config")?;
 
         write_file_atomic_with_context(path, &serialized, "tool policy config")
             .await
@@ -691,18 +664,11 @@ impl ToolPolicyManager {
 
         Self::ensure_network_constraints(&mut self.config);
 
-        if has_changes {
-            self.save_config().await
-        } else {
-            Ok(())
-        }
+        if has_changes { self.save_config().await } else { Ok(()) }
     }
 
     /// Synchronize MCP provider tool lists with persisted policies
-    pub async fn update_mcp_tools(
-        &mut self,
-        provider_tools: &HashMap<String, Vec<String>>,
-    ) -> Result<()> {
+    pub async fn update_mcp_tools(&mut self, provider_tools: &HashMap<String, Vec<String>>) -> Result<()> {
         let stored_providers: HashSet<String> = self.config.mcp.providers.keys().cloned().collect();
         let mut has_changes = false;
 
@@ -730,9 +696,7 @@ impl ToolPolicyManager {
 
         // Remove providers that are no longer present
         let advertised_providers: HashSet<String> = provider_tools.keys().cloned().collect();
-        for provider in
-            stored_providers.difference(&advertised_providers).cloned().collect::<Vec<_>>()
-        {
+        for provider in stored_providers.difference(&advertised_providers).cloned().collect::<Vec<_>>() {
             self.config.mcp.providers.shift_remove(provider.as_str());
             has_changes = true;
         }
@@ -760,9 +724,13 @@ impl ToolPolicyManager {
             .cloned()
             .collect();
 
-        available.extend(self.config.mcp.providers.iter().flat_map(|(provider, policy)| {
-            policy.tools.keys().map(move |tool| format!("mcp::{provider}::{tool}"))
-        }));
+        available.extend(
+            self.config
+                .mcp
+                .providers
+                .iter()
+                .flat_map(|(provider, policy)| policy.tools.keys().map(move |tool| format!("mcp::{provider}::{tool}"))),
+        );
 
         available.sort();
         available.dedup();
@@ -773,11 +741,7 @@ impl ToolPolicyManager {
             has_changes = true;
         }
 
-        if has_changes {
-            self.save_config().await
-        } else {
-            Ok(())
-        }
+        if has_changes { self.save_config().await } else { Ok(()) }
     }
 
     /// Retrieve policy for a specific MCP tool
@@ -792,12 +756,7 @@ impl ToolPolicyManager {
     }
 
     /// Update policy for a specific MCP tool
-    pub async fn set_mcp_tool_policy(
-        &mut self,
-        provider: &str,
-        tool: &str,
-        policy: ToolPolicy,
-    ) -> Result<()> {
+    pub async fn set_mcp_tool_policy(&mut self, provider: &str, tool: &str, policy: ToolPolicy) -> Result<()> {
         // OPTIMIZATION: Use into() for cleaner conversion
         let entry = self.config.mcp.providers.entry(provider.into()).or_default();
         entry.tools.insert(tool.into(), policy);
@@ -907,11 +866,7 @@ impl ToolPolicyManager {
         self.persist_policy_to_workspace_config(&canonical, policy)
     }
 
-    pub(crate) async fn seed_default_policy(
-        &mut self,
-        tool_name: &str,
-        policy: ToolPolicy,
-    ) -> Result<()> {
+    pub(crate) async fn seed_default_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let canonical = canonical_tool_name(tool_name).to_owned();
         self.config.policies.insert(canonical, policy);
         self.save_config().await
@@ -1018,12 +973,9 @@ impl ToolPolicyManager {
         // Regex match against persisted regex patterns. Compiled regexes are
         // memoized per unique pattern list so we don't recompile on every check.
         let compiled = {
-            let mut cache =
-                APPROVAL_REGEX_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut cache = APPROVAL_REGEX_CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             match &*cache {
-                Some((patterns, regexes)) if *patterns == self.config.approval_cache.regexes => {
-                    regexes.clone()
-                }
+                Some((patterns, regexes)) if *patterns == self.config.approval_cache.regexes => regexes.clone(),
                 _ => {
                     let regexes: Vec<Regex> = self
                         .config
@@ -1073,10 +1025,7 @@ impl ToolPolicyManager {
     ///
     /// For example, approving "cargo check --target x86_64" also caches
     /// "cargo check" as a segment prefix, so "cargo check --release" also matches.
-    pub async fn add_approval_cache_key_with_segments(
-        &mut self,
-        approval_key: impl Into<String>,
-    ) -> Result<()> {
+    pub async fn add_approval_cache_key_with_segments(&mut self, approval_key: impl Into<String>) -> Result<()> {
         let key: String = approval_key.into();
         let mut changed = false;
 
@@ -1098,10 +1047,7 @@ impl ToolPolicyManager {
     }
 
     /// Persist a shell prefix approval entry for future prompts in this workspace.
-    pub async fn add_approval_cache_prefix(
-        &mut self,
-        prefix_entry: impl Into<String>,
-    ) -> Result<()> {
+    pub async fn add_approval_cache_prefix(&mut self, prefix_entry: impl Into<String>) -> Result<()> {
         if self.config.approval_cache.prefixes.insert(prefix_entry.into()) {
             self.save_config().await?;
         }
@@ -1109,19 +1055,13 @@ impl ToolPolicyManager {
     }
 
     /// Check whether a persisted shell prefix approval matches the command words and scope.
-    pub fn matching_shell_approval_prefix(
-        &self,
-        command_words: &[String],
-        scope_signature: &str,
-    ) -> Option<String> {
+    pub fn matching_shell_approval_prefix(&self, command_words: &[String], scope_signature: &str) -> Option<String> {
         self.config.approval_cache.prefixes.iter().find_map(|entry| {
             let (prefix_text, entry_scope_signature) = split_shell_approval_entry(entry.as_str());
             let prefix_words = shell_words::split(prefix_text).ok()?;
-            let entry_scope_signature =
-                entry_scope_signature.unwrap_or(DEFAULT_APPROVAL_SCOPE_SIGNATURE);
-            (entry_scope_signature == scope_signature
-                && shell_command_words_match_prefix(command_words, &prefix_words))
-            .then(|| entry.clone())
+            let entry_scope_signature = entry_scope_signature.unwrap_or(DEFAULT_APPROVAL_SCOPE_SIGNATURE);
+            (entry_scope_signature == scope_signature && shell_command_words_match_prefix(command_words, &prefix_words))
+                .then(|| entry.clone())
         })
     }
 
@@ -1144,11 +1084,7 @@ impl ToolPolicyManager {
         Self::write_config(&self.config_path, &self.config)
     }
 
-    fn persist_policy_to_workspace_config(
-        &self,
-        tool_name: &str,
-        policy: ToolPolicy,
-    ) -> Result<()> {
+    fn persist_policy_to_workspace_config(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let Some(workspace_root) = self.workspace_root.as_ref() else {
             return Ok(());
         };
@@ -1157,10 +1093,7 @@ impl ToolPolicyManager {
         let mut config = if config_path.exists() {
             ConfigManager::load_from_file(&config_path)
                 .with_context(|| {
-                    format!(
-                        "Failed to load config for tool policy persistence at {}",
-                        config_path.display()
-                    )
+                    format!("Failed to load config for tool policy persistence at {}", config_path.display())
                 })?
                 .config()
                 .clone()
@@ -1242,8 +1175,7 @@ fn split_shell_approval_entry(entry: &str) -> (&str, Option<&str>) {
 }
 
 fn shell_words_lossy(text: &str) -> Vec<String> {
-    shell_words::split(text)
-        .unwrap_or_else(|_| text.split_whitespace().map(str::to_owned).collect())
+    shell_words::split(text).unwrap_or_else(|_| text.split_whitespace().map(str::to_owned).collect())
 }
 
 fn shell_command_words_for_approval(text: &str) -> Vec<String> {
@@ -1341,8 +1273,7 @@ fn derived_shell_approval_prefixes(key: &str) -> Vec<String> {
                 prefixes.push(append_scope("sed -n".to_string()));
             }
             "cargo" | "git" if words.len() >= 2 => {
-                prefixes
-                    .push(append_scope(shell_words::join(words[..2].iter().map(String::as_str))));
+                prefixes.push(append_scope(shell_words::join(words[..2].iter().map(String::as_str))));
             }
             _ => {}
         }
@@ -1421,16 +1352,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(
-            ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
-            ToolPolicy::Allow
-        );
+        assert_eq!(ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH), ToolPolicy::Allow);
 
         tools_config.policies.insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
-        assert_eq!(
-            ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH),
-            ToolPolicy::Deny
-        );
+        assert_eq!(ToolPolicyManager::resolve_config_policy(&tools_config, tools::CODE_SEARCH), ToolPolicy::Deny);
     }
 
     #[tokio::test]
@@ -1449,8 +1374,7 @@ mod tests {
         std::fs::write(&config_path, content).unwrap();
 
         // Load and update
-        let mut loaded_config =
-            ToolPolicyManager::load_or_create_config(&config_path).await.unwrap();
+        let mut loaded_config = ToolPolicyManager::load_or_create_config(&config_path).await.unwrap();
 
         // Add new tool
         let new_tools = vec!["tool1".to_owned(), "tool2".to_owned()];
@@ -1473,35 +1397,30 @@ mod tests {
     async fn approval_cache_keys_round_trip() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
-            .add_approval_cache_key(
-                "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null",
-            )
+            .add_approval_cache_key("cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null")
             .await
             .expect("persist approval");
 
         let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
             .await
             .expect("reload manager");
-        assert!(reloaded.has_approval_cache_key(
-            "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        ));
+        assert!(
+            reloaded
+                .has_approval_cache_key("cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null")
+        );
     }
 
     #[tokio::test]
     async fn approval_cache_prefixes_match_shell_prefixes() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
-            .add_approval_cache_prefix(
-                "cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null",
-            )
+            .add_approval_cache_prefix("cargo test|sandbox_permissions=\"use_default\"|additional_permissions=null")
             .await
             .expect("persist prefix");
 
@@ -1529,8 +1448,7 @@ mod tests {
     async fn approval_cache_key_persists_shell_token_prefixes_with_scope() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
             .add_approval_cache_key_with_segments(
@@ -1566,8 +1484,7 @@ mod tests {
     async fn approval_cache_path_command_options_also_persist_base_family() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
             .add_approval_cache_key_with_segments(
@@ -1585,8 +1502,7 @@ mod tests {
     async fn approval_cache_key_does_not_cross_permission_scope() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
             .add_approval_cache_key_with_segments(
@@ -1606,9 +1522,11 @@ mod tests {
             "sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs|sandbox_permissions=\"use_default\"|additional_permissions=null",
         );
 
-        assert!(prefixes.iter().any(|prefix| {
-            prefix == "sed -n|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        }));
+        assert!(
+            prefixes
+                .iter()
+                .any(|prefix| { prefix == "sed -n|sandbox_permissions=\"use_default\"|additional_permissions=null" })
+        );
     }
 
     #[test]
@@ -1617,9 +1535,11 @@ mod tests {
             "ls /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/|sandbox_permissions=\"use_default\"|additional_permissions=null",
         );
 
-        assert!(prefixes.iter().any(|prefix| {
-            prefix == "ls|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        }));
+        assert!(
+            prefixes
+                .iter()
+                .any(|prefix| { prefix == "ls|sandbox_permissions=\"use_default\"|additional_permissions=null" })
+        );
     }
 
     #[test]
@@ -1628,27 +1548,30 @@ mod tests {
             "wc -l src/lib.rs README.md|sandbox_permissions=\"use_default\"|additional_permissions=null",
         );
 
-        assert!(prefixes.iter().any(|prefix| {
-            prefix == "wc|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        }));
+        assert!(
+            prefixes
+                .iter()
+                .any(|prefix| { prefix == "wc|sandbox_permissions=\"use_default\"|additional_permissions=null" })
+        );
         assert!(
             derived_shell_approval_prefixes(
                 "rm src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
             )
             .is_empty()
         );
-        assert!(derived_shell_approval_prefixes(
-            "perl -i -pe 's/a/b/' src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        )
-        .is_empty());
+        assert!(
+            derived_shell_approval_prefixes(
+                "perl -i -pe 's/a/b/' src/lib.rs|sandbox_permissions=\"use_default\"|additional_permissions=null"
+            )
+            .is_empty()
+        );
     }
 
     #[tokio::test]
     async fn approval_cache_regexes_match_keys() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager
             .config
@@ -1660,23 +1583,21 @@ mod tests {
         let reloaded = ToolPolicyManager::new_with_config_path(&config_path)
             .await
             .expect("reload manager");
-        assert!(reloaded.has_approval_cache_key(
-            "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null"
-        ));
+        assert!(
+            reloaded
+                .has_approval_cache_key("cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null")
+        );
     }
 
     #[tokio::test]
     async fn reset_to_prompt_clears_approval_cache() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
-        let mut manager =
-            ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
+        let mut manager = ToolPolicyManager::new_with_config_path(&config_path).await.expect("manager");
 
         manager.add_approval_cache_key("read_file").await.expect("persist approval");
         manager
-            .add_approval_cache_prefix(
-                "cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null",
-            )
+            .add_approval_cache_prefix("cargo check|sandbox_permissions=\"use_default\"|additional_permissions=null")
             .await
             .expect("persist prefix");
         manager.config.approval_cache.regexes.insert("^cargo check.*$".to_string());

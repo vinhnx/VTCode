@@ -111,13 +111,7 @@ pub fn get_com_objects() -> HashMap<&'static str, ComObjectInfo> {
         ComObjectInfo {
             prog_id: "Scripting.FileSystemObject",
             risk_level: ComRiskLevel::High,
-            dangerous_methods: &[
-                "createtextfile",
-                "createfolder",
-                "copyfile",
-                "movefile",
-                "deletefile",
-            ],
+            dangerous_methods: &["createtextfile", "createfolder", "copyfile", "movefile", "deletefile"],
             description: "File system operations without PowerShell restrictions",
         },
     );
@@ -262,17 +256,14 @@ impl ComObjectAnalyzer {
                     .dangerous_methods
                     .iter()
                     .filter(|method| {
-                        script_lower.contains(&format!(".{}", method))
-                            || script_lower.contains(&format!(" {}", method))
+                        script_lower.contains(&format!(".{}", method)) || script_lower.contains(&format!(" {}", method))
                     })
                     .map(|s| s.to_string())
                     .collect();
 
-                let is_in_scriptblock =
-                    script_lower.contains("-scriptblock") || script_lower.contains("&{");
+                let is_in_scriptblock = script_lower.contains("-scriptblock") || script_lower.contains("&{");
 
-                let has_invoke_expression =
-                    script_lower.contains("invoke-expression") || script_lower.contains("iex");
+                let has_invoke_expression = script_lower.contains("invoke-expression") || script_lower.contains("iex");
 
                 contexts.push(ComObjectContext {
                     object_name: prog_id.to_string(),
@@ -390,8 +381,7 @@ mod tests {
 
     #[test]
     fn test_creation_method_detection() {
-        let method1 =
-            identify_creation_method("New-Object -ComObject WScript.Shell", "wscript.shell");
+        let method1 = identify_creation_method("New-Object -ComObject WScript.Shell", "wscript.shell");
         assert_eq!(method1, "New-Object -ComObject");
 
         let method2 = identify_creation_method("[activexobject]'WScript.Shell'", "wscript.shell");

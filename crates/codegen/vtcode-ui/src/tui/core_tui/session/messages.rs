@@ -40,8 +40,7 @@ fn is_large_json_payload(kind: InlineMessageKind, text: &str, line_count: usize)
         line_count
     };
 
-    text.len() >= INLINE_JSON_COLLAPSE_BYTES
-        || effective_lines >= ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD
+    text.len() >= INLINE_JSON_COLLAPSE_BYTES || effective_lines >= ui::INLINE_JSON_COLLAPSE_LINE_THRESHOLD
 }
 
 fn tail_lines(text: &str, limit: usize) -> Vec<&str> {
@@ -61,10 +60,7 @@ fn tail_lines(text: &str, limit: usize) -> Vec<&str> {
 }
 
 impl Session {
-    pub(crate) fn retint_lines_for_theme_change(
-        &mut self,
-        previous_theme: &super::super::types::InlineTheme,
-    ) {
+    pub(crate) fn retint_lines_for_theme_change(&mut self, previous_theme: &super::super::types::InlineTheme) {
         let previous_colors = [
             previous_theme.foreground.as_ref(),
             previous_theme.primary.as_ref(),
@@ -122,9 +118,7 @@ impl Session {
     #[expect(dead_code)]
     pub(crate) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
-            InlineMessageKind::User => {
-                Some(self.labels.user.clone().unwrap_or_else(|| USER_PREFIX.to_owned()))
-            }
+            InlineMessageKind::User => Some(self.labels.user.clone().unwrap_or_else(|| USER_PREFIX.to_owned())),
             InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool
@@ -178,9 +172,7 @@ impl Session {
             // `\n` suffix in `append_inline`. It sits right before the new line.
             if self.lines.len() >= 2 {
                 let idx = self.lines.len() - 2;
-                if self.lines[idx].kind == InlineMessageKind::Policy
-                    && self.lines[idx].segments.is_empty()
-                {
+                if self.lines[idx].kind == InlineMessageKind::Policy && self.lines[idx].segments.is_empty() {
                     let notify = idx;
                     self.lines.remove(idx);
                     self.mark_line_dirty(notify);
@@ -200,17 +192,9 @@ impl Session {
     }
 
     /// Append a large pasted message as a collapsible placeholder.
-    pub(crate) fn append_pasted_message(
-        &mut self,
-        kind: InlineMessageKind,
-        text: String,
-        line_count: usize,
-    ) {
+    pub(crate) fn append_pasted_message(&mut self, kind: InlineMessageKind, text: String, line_count: usize) {
         if is_large_json_payload(kind, &text, line_count) {
-            let mut preview = format!(
-                "[...] showing last {} lines - click to expand",
-                ui::INLINE_JSON_TAIL_LINES
-            );
+            let mut preview = format!("[...] showing last {} lines - click to expand", ui::INLINE_JSON_TAIL_LINES);
 
             let tail = tail_lines(&text, ui::INLINE_JSON_TAIL_LINES);
             if !tail.is_empty() {
@@ -258,9 +242,7 @@ impl Session {
             let style = segment.style.clone();
 
             while !remaining.is_empty() {
-                if let Some((index, control)) =
-                    remaining.char_indices().find(|(_, ch)| matches!(ch, '\n' | '\r'))
-                {
+                if let Some((index, control)) = remaining.char_indices().find(|(_, ch)| matches!(ch, '\n' | '\r')) {
                     let (text, _) = remaining.split_at(index);
                     if !text.is_empty() {
                         self.append_text(kind, text, &style);
@@ -338,9 +320,7 @@ impl Session {
             return false;
         }
 
-        let Some(index) =
-            self.collapsed_pastes.iter().position(|paste| paste.line_index == line_index)
-        else {
+        let Some(index) = self.collapsed_pastes.iter().position(|paste| paste.line_index == line_index) else {
             return false;
         };
 
@@ -489,12 +469,7 @@ impl Session {
     /// Append text to the current or new message line
     ///
     /// This method handles appending text efficiently by reusing the last line if possible
-    pub(crate) fn append_text(
-        &mut self,
-        kind: InlineMessageKind,
-        text: &str,
-        style: &InlineTextStyle,
-    ) {
+    pub(crate) fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
         if text.is_empty() {
             return;
         }

@@ -43,10 +43,8 @@ pub(crate) async fn handle_toggle_planning_workflow(
         .await;
         sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
         ctx.renderer.line(MessageStyle::Info, "Planning workflow started")?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "  The agent will focus on analysis and planning with a structured plan.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Output, "  The agent will focus on analysis and planning with a structured plan.")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Mutating tools are blocked; optional plan-file writes under `.vtcode/plans/` (or an explicit custom plan path) remain allowed.",
@@ -56,9 +54,7 @@ pub(crate) async fn handle_toggle_planning_workflow(
             MessageStyle::Info,
             "Allowed tools: exec_command for shell inspection, code_search for a focused literal query with bounded filters, apply_patch for allowed plan file edits, request_user_input for planning interview prompts",
         )?;
-        crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint(
-            ctx.renderer,
-        )?;
+        crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint(ctx.renderer)?;
     } else {
         crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
             ctx.tool_registry,
@@ -86,11 +82,8 @@ async fn sync_workspace_trust_prompt_policy(
         Some(level) => Some(level.to_workspace_trust_level()),
         None => load_workspace_trust_level(&ctx.config.workspace).await?,
     };
-    let enforce_safe_mode_prompts = should_enforce_safe_mode_prompts(
-        ctx.full_auto,
-        auto_permission_review_active,
-        workspace_trust_level,
-    );
+    let enforce_safe_mode_prompts =
+        should_enforce_safe_mode_prompts(ctx.full_auto, auto_permission_review_active, workspace_trust_level);
     ctx.tool_registry.set_enforce_safe_mode_prompts(enforce_safe_mode_prompts).await;
     Ok(())
 }

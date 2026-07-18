@@ -46,10 +46,7 @@ pub(crate) fn parse(input: &str) -> Result<Vec<PatchOperation>, PatchError> {
     Ok(operations)
 }
 
-fn normalize_patch_lines<'a>(
-    lines: &'a [&'a str],
-    lenient: bool,
-) -> Result<&'a [&'a str], PatchError> {
+fn normalize_patch_lines<'a>(lines: &'a [&'a str], lenient: bool) -> Result<&'a [&'a str], PatchError> {
     match check_patch_boundaries(lines) {
         Ok(()) => Ok(lines),
         Err(err) => {
@@ -72,9 +69,7 @@ fn check_patch_boundaries(lines: &[&str]) -> Result<(), PatchError> {
     let last = lines.last().copied().map(str::trim);
 
     match (first, last) {
-        (Some(begin), Some(end)) if begin == BEGIN_PATCH_MARKER && end == END_PATCH_MARKER => {
-            Ok(())
-        }
+        (Some(begin), Some(end)) if begin == BEGIN_PATCH_MARKER && end == END_PATCH_MARKER => Ok(()),
         (Some(_begin), _) if first != Some(BEGIN_PATCH_MARKER) => {
             // The first line is not the `*** Begin Patch` envelope header.
             // Detect the two most common mis-formats and emit an actionable,
@@ -116,10 +111,7 @@ fn strip_heredoc<'a>(lines: &'a [&'a str]) -> Option<&'a [&'a str]> {
     }
 }
 
-fn parse_operation(
-    lines: &[&str],
-    line_number: usize,
-) -> Result<(PatchOperation, usize), PatchError> {
+fn parse_operation(lines: &[&str], line_number: usize) -> Result<(PatchOperation, usize), PatchError> {
     if lines.is_empty() {
         return Err(invalid_hunk(line_number, "unexpected end of input before operation header"));
     }
@@ -141,10 +133,7 @@ fn parse_operation(
     }
 }
 
-fn parse_add_file(
-    path_text: &str,
-    remaining: &[&str],
-) -> Result<(PatchOperation, usize), PatchError> {
+fn parse_add_file(path_text: &str, remaining: &[&str]) -> Result<(PatchOperation, usize), PatchError> {
     let path = path_text.trim();
     validate_patch_path("Add File", path)?;
 
@@ -182,9 +171,7 @@ fn parse_update_file(
     let mut index = 0usize;
     let mut new_path = None;
 
-    if let Some(candidate) =
-        remaining.first().and_then(|line| line.trim().strip_prefix(MOVE_TO_MARKER))
-    {
+    if let Some(candidate) = remaining.first().and_then(|line| line.trim().strip_prefix(MOVE_TO_MARKER)) {
         let candidate_trimmed = candidate.trim();
         validate_patch_path("Move to", candidate_trimmed)?;
         new_path = Some(candidate_trimmed.to_string());
@@ -207,8 +194,7 @@ fn parse_update_file(
             continue;
         }
 
-        let (chunk, used) =
-            parse_update_chunk(&remaining[index..], line_number + consumed, allow_missing_context)?;
+        let (chunk, used) = parse_update_chunk(&remaining[index..], line_number + consumed, allow_missing_context)?;
         chunks.push(chunk);
         index += used;
         consumed += used;
@@ -216,10 +202,7 @@ fn parse_update_file(
     }
 
     if chunks.is_empty() {
-        return Err(invalid_hunk(
-            line_number,
-            &format!("Update file hunk for path '{path}' is empty"),
-        ));
+        return Err(invalid_hunk(line_number, &format!("Update file hunk for path '{path}' is empty")));
     }
 
     Ok((PatchOperation::UpdateFile { path: path.to_string(), new_path, chunks }, consumed))
@@ -265,10 +248,7 @@ fn parse_update_chunk(
         let current = lines[consumed];
         if current == EOF_MARKER {
             if parsed_lines == 0 {
-                return Err(invalid_hunk(
-                    line_number,
-                    "update hunk does not contain any diff lines",
-                ));
+                return Err(invalid_hunk(line_number, "update hunk does not contain any diff lines"));
             }
             chunk.is_end_of_file = true;
             consumed += 1;
@@ -298,10 +278,7 @@ fn parse_update_chunk(
             }
             _ => {
                 if parsed_lines == 0 {
-                    return Err(invalid_hunk(
-                        line_number,
-                        &format!("unexpected line '{current}' in update hunk"),
-                    ));
+                    return Err(invalid_hunk(line_number, &format!("unexpected line '{current}' in update hunk")));
                 }
                 break;
             }
@@ -328,10 +305,8 @@ mod tests {
 
     #[test]
     fn context_strips_trailing_at_at() {
-        let operations = parse(
-            "*** Begin Patch\n*** Update File: README.md\n@@ section @@\n+line\n*** End Patch",
-        )
-        .unwrap();
+        let operations =
+            parse("*** Begin Patch\n*** Update File: README.md\n@@ section @@\n+line\n*** End Patch").unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 assert_eq!(
@@ -347,8 +322,7 @@ mod tests {
     #[test]
     fn context_without_trailing_at_at() {
         let operations =
-            parse("*** Begin Patch\n*** Update File: README.md\n@@ section\n+line\n*** End Patch")
-                .unwrap();
+            parse("*** Begin Patch\n*** Update File: README.md\n@@ section\n+line\n*** End Patch").unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 assert_eq!(chunks[0].change_context.as_deref(), Some("section"));
@@ -359,8 +333,7 @@ mod tests {
 
     #[test]
     fn empty_context_marker() {
-        let operations =
-            parse("*** Begin Patch\n*** Update File: README.md\n@@\n+line\n*** End Patch").unwrap();
+        let operations = parse("*** Begin Patch\n*** Update File: README.md\n@@\n+line\n*** End Patch").unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 assert_eq!(chunks[0].change_context, None);
@@ -371,10 +344,8 @@ mod tests {
 
     #[test]
     fn context_with_multiple_trailing_at_at() {
-        let operations = parse(
-            "*** Begin Patch\n*** Update File: f.txt\n@@ foo @@ bar @@\n+line\n*** End Patch",
-        )
-        .unwrap();
+        let operations =
+            parse("*** Begin Patch\n*** Update File: f.txt\n@@ foo @@ bar @@\n+line\n*** End Patch").unwrap();
         match &operations[0] {
             PatchOperation::UpdateFile { chunks, .. } => {
                 // Only the final "@@" should be stripped
@@ -420,18 +391,14 @@ mod tests {
             msg.contains("envelope") || msg.contains("*** Begin Patch"),
             "error should mention the envelope: {msg}"
         );
-        assert!(
-            !msg.contains("unified diff"),
-            "raw source should not be confused with a unified diff: {msg}"
-        );
+        assert!(!msg.contains("unified diff"), "raw source should not be confused with a unified diff: {msg}");
     }
 
     #[test]
     fn valid_envelope_still_parses_after_hint_change() {
         // Regression guard: the boundary-check enhancement must not break
         // well-formed patches.
-        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n+hi\n*** End Patch")
-            .expect("valid patch should parse");
+        let ops = parse("*** Begin Patch\n*** Add File: f.txt\n+hi\n*** End Patch").expect("valid patch should parse");
         assert_eq!(ops.len(), 1);
     }
 }

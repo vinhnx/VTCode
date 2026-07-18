@@ -72,8 +72,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub(crate) ctrl_c_state: &'a Arc<CtrlCState>,
     pub(crate) ctrl_c_notify: &'a Arc<Notify>,
     pub(crate) full_auto: bool,
-    pub(crate) loaded_skills:
-        &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
+    pub(crate) loaded_skills: &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub(crate) checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
     pub(crate) lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub(crate) harness_emitter: Option<&'a HarnessEventEmitter>,

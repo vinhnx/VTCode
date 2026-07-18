@@ -100,8 +100,7 @@ impl FileIndex {
         respect_gitignore: bool,
         threads: usize,
     ) -> anyhow::Result<Self> {
-        let walker =
-            build_parallel_walker(search_directory, exclude, threads, respect_gitignore, true)?;
+        let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore, true)?;
 
         // Collect all files and directories
         let files_arc = Arc::new(Mutex::new(Vec::new()));
@@ -119,8 +118,7 @@ impl FileIndex {
                 };
 
                 // Make path relative to search directory
-                if let Some(rel_path) =
-                    entry.path().strip_prefix(&search_dir).ok().and_then(|p| p.to_str())
+                if let Some(rel_path) = entry.path().strip_prefix(&search_dir).ok().and_then(|p| p.to_str())
                     && !rel_path.is_empty()
                 {
                     if entry.path().is_dir() {
@@ -136,19 +134,11 @@ impl FileIndex {
 
         let files = Arc::try_unwrap(files_arc)
             .map_err(|arc| {
-                anyhow::anyhow!(
-                    "failed to unwrap files arc, {} references remain",
-                    Arc::strong_count(&arc)
-                )
+                anyhow::anyhow!("failed to unwrap files arc, {} references remain", Arc::strong_count(&arc))
             })?
             .into_inner();
         let directories = Arc::try_unwrap(dirs_arc)
-            .map_err(|arc| {
-                anyhow::anyhow!(
-                    "failed to unwrap dirs arc, {} references remain",
-                    Arc::strong_count(&arc)
-                )
-            })?
+            .map_err(|arc| anyhow::anyhow!("failed to unwrap dirs arc, {} references remain", Arc::strong_count(&arc)))?
             .into_inner();
 
         Ok(Self {
@@ -177,12 +167,7 @@ impl FileIndex {
         }
 
         if match_type_filter.is_none_or(|t| t == MatchType::Directory) {
-            heaps.push(score_paths_top_k(
-                &self.directories,
-                limit,
-                pattern_text,
-                MatchType::Directory,
-            ));
+            heaps.push(score_paths_top_k(&self.directories, limit, pattern_text, MatchType::Directory));
         }
 
         merge_top_k(heaps, limit)
@@ -317,12 +302,7 @@ impl FileIndexCache {
         let cache = self.cache.clone();
 
         tokio::spawn(async move {
-            match FileIndex::build_from_directory(
-                &search_directory,
-                &exclude,
-                respect_gitignore,
-                threads,
-            ) {
+            match FileIndex::build_from_directory(&search_directory, &exclude, respect_gitignore, threads) {
                 Ok(new_index) => {
                     let mut guard = cache.write().await;
                     *guard = Some(Arc::new(new_index));
@@ -554,11 +534,7 @@ pub async fn run_with_index(
             score,
             path,
             match_type,
-            indices: if compute_indices {
-                Some(Vec::new())
-            } else {
-                None
-            },
+            indices: if compute_indices { Some(Vec::new()) } else { None },
         })
         .collect();
 
@@ -681,8 +657,7 @@ fn run_with_policy(
     let compute_indices = config.compute_indices;
     let respect_gitignore = config.respect_gitignore;
 
-    let walker =
-        build_parallel_walker(search_directory, exclude, threads, respect_gitignore, follow_links)?;
+    let walker = build_parallel_walker(search_directory, exclude, threads, respect_gitignore, follow_links)?;
 
     // Create per-worker result collection using Arc + Mutex for thread safety.
     // Each worker gets exactly one instance - no sharing between workers.
@@ -714,8 +689,7 @@ fn run_with_policy(
             };
 
             // Make path relative to search directory
-            let relative_path =
-                entry.path().strip_prefix(search_directory).ok().and_then(|p| p.to_str());
+            let relative_path = entry.path().strip_prefix(search_directory).ok().and_then(|p| p.to_str());
 
             let path_to_match = match relative_path {
                 Some(p) if !p.is_empty() => p,
@@ -759,11 +733,7 @@ fn run_with_policy(
             score,
             path,
             match_type,
-            indices: if compute_indices {
-                Some(Vec::new())
-            } else {
-                None
-            },
+            indices: if compute_indices { Some(Vec::new()) } else { None },
         })
         .collect();
 
@@ -805,8 +775,7 @@ mod tests {
         for directory in ["z", "a", "m", "b", "y"] {
             let directory = workspace.path().join(directory);
             std::fs::create_dir(&directory).expect("fixture directory");
-            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
-                .expect("fixture source");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n").expect("fixture source");
         }
 
         let expected = bounded_paths(workspace.path());
@@ -822,8 +791,7 @@ mod tests {
         for directory in ["z", "a", "m", "b", "y"] {
             let directory = workspace.path().join(directory);
             std::fs::create_dir(&directory).expect("fixture directory");
-            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n")
-                .expect("fixture source");
+            std::fs::write(directory.join("widget.rs"), "fn widget() {}\n").expect("fixture source");
         }
         let mut visited = Vec::new();
 
@@ -841,15 +809,11 @@ mod tests {
             |path| visited.push(path.to_path_buf()),
         )
         .expect("bounded path search");
-        let mut paths =
-            results.matches.into_iter().map(|candidate| candidate.path).collect::<Vec<_>>();
+        let mut paths = results.matches.into_iter().map(|candidate| candidate.path).collect::<Vec<_>>();
         paths.sort();
 
         assert_eq!(paths, vec!["a/widget.rs", "b/widget.rs"]);
-        assert!(
-            visited.len() < 11,
-            "the bounded route must stop before traversing the complete fixture tree"
-        );
+        assert!(visited.len() < 11, "the bounded route must stop before traversing the complete fixture tree");
         assert_eq!(results.total_match_count, 3);
     }
 }

@@ -228,8 +228,7 @@ impl Default for ToolsConfig {
             policies,
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
-            max_consecutive_blocked_tool_calls_per_turn:
-                default_max_consecutive_blocked_tool_calls_per_turn(),
+            max_consecutive_blocked_tool_calls_per_turn: default_max_consecutive_blocked_tool_calls_per_turn(),
             max_tool_rate_per_second: default_max_tool_rate_per_second(),
             max_sequential_spool_chunk_reads: default_max_sequential_spool_chunk_reads(),
             web_fetch: WebFetchConfig::default(),
@@ -299,9 +298,7 @@ fn default_web_fetch_allowed_domains() -> Vec<String> {
     use std::sync::OnceLock;
     static CACHE: OnceLock<Vec<String>> = OnceLock::new();
     CACHE
-        .get_or_init(|| {
-            crate::network_allowlist::NetworkAllowlist::load_default().web_fetch_relevant_domains()
-        })
+        .get_or_init(|| crate::network_allowlist::NetworkAllowlist::load_default().web_fetch_relevant_domains())
         .clone()
 }
 
@@ -443,15 +440,14 @@ mod tests {
 
     #[test]
     fn tool_profile_round_trips_through_toml() {
-        let config: ToolsConfig = toml::from_str("profile = \"advanced_vtcode\"")
-            .expect("advanced tool profile should parse");
+        let config: ToolsConfig =
+            toml::from_str("profile = \"advanced_vtcode\"").expect("advanced tool profile should parse");
         assert_eq!(config.profile, ToolProfile::AdvancedVtCode);
 
         let serialised = toml::to_string(&config).expect("tools config should serialise");
         assert!(serialised.contains("profile = \"advanced_vtcode\""));
 
-        let round_tripped: ToolsConfig =
-            toml::from_str(&serialised).expect("serialised tools config should parse");
+        let round_tripped: ToolsConfig = toml::from_str(&serialised).expect("serialised tools config should parse");
         assert_eq!(round_tripped.profile, ToolProfile::AdvancedVtCode);
     }
 
@@ -724,8 +720,7 @@ session_max_requests = 5
         // A future TOML change that moves a wildcard into a web-relevant
         // category will be picked up here.
         let allowed = WebFetchConfig::default().allowed_domains;
-        let wildcards: Vec<&str> =
-            allowed.iter().map(|s| s.as_str()).filter(|s| s.starts_with("*.")).collect();
+        let wildcards: Vec<&str> = allowed.iter().map(|s| s.as_str()).filter(|s| s.starts_with("*.")).collect();
         assert!(
             wildcards.is_empty(),
             "expected no wildcards in web_fetch defaults (dev_infra/auth are excluded); got {wildcards:?}"

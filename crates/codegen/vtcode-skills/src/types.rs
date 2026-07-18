@@ -268,10 +268,7 @@ impl SkillManifest {
 
         // Check for consecutive hyphens
         if self.name.contains("--") {
-            anyhow::bail!(
-                "name contains consecutive hyphens: '{}'\nHyphens must not appear consecutively",
-                self.name
-            );
+            anyhow::bail!("name contains consecutive hyphens: '{}'\nHyphens must not appear consecutively", self.name);
         }
 
         // Check for leading hyphen
@@ -286,10 +283,7 @@ impl SkillManifest {
 
         // Check for reserved words
         if self.name.contains("anthropic") || self.name.contains("claude") {
-            anyhow::bail!(
-                "name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'",
-                self.name
-            );
+            anyhow::bail!("name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'", self.name);
         }
 
         Ok(())
@@ -302,10 +296,7 @@ impl SkillManifest {
         }
 
         if self.description.len() > 1024 {
-            anyhow::bail!(
-                "description exceeds maximum length: {} characters (max 1024)",
-                self.description.len()
-            );
+            anyhow::bail!("description exceeds maximum length: {} characters (max 1024)", self.description.len());
         }
 
         Ok(())
@@ -322,10 +313,7 @@ impl SkillManifest {
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
 
             if tools.len() > 16 {
-                anyhow::bail!(
-                    "allowed-tools exceeds maximum tool count: {} tools (max 16)",
-                    tools.len()
-                );
+                anyhow::bail!("allowed-tools exceeds maximum tool count: {} tools (max 16)", tools.len());
             }
 
             if tools.is_empty() {
@@ -355,10 +343,7 @@ impl SkillManifest {
 
     /// Validate that skill name matches the parent directory name
     /// This is a requirement per Agent Skills specification
-    pub fn validate_directory_name_match(
-        &self,
-        skill_path: &std::path::Path,
-    ) -> anyhow::Result<()> {
+    pub fn validate_directory_name_match(&self, skill_path: &std::path::Path) -> anyhow::Result<()> {
         // For CLI tools, the directory name might not match the skill name
         // Check if this is a CLI tool by looking for tool.json
         let tool_json = skill_path.join("tool.json");
@@ -366,9 +351,9 @@ impl SkillManifest {
             return Ok(());
         }
 
-        let parent_dir = skill_path.parent().ok_or_else(|| {
-            anyhow::anyhow!("Cannot determine parent directory of: {skill_path:?}")
-        })?;
+        let parent_dir = skill_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine parent directory of: {skill_path:?}"))?;
 
         let dir_name = parent_dir
             .file_name()
@@ -437,11 +422,7 @@ pub struct Skill {
 
 impl Skill {
     /// Create a new skill
-    pub fn new(
-        manifest: SkillManifest,
-        path: PathBuf,
-        instructions: String,
-    ) -> anyhow::Result<Self> {
+    pub fn new(manifest: SkillManifest, path: PathBuf, instructions: String) -> anyhow::Result<Self> {
         manifest.validate()?;
         let path_str = path.to_string_lossy();
         let scope = if path.starts_with(PathBuf::from("/etc/codex/skills")) {
@@ -451,8 +432,7 @@ impl Skill {
             || path_str.contains("\\skills\\.system\\")
         {
             SkillScope::System
-        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\")
-        {
+        } else if path_str.contains("/.agents/skills/") || path_str.contains("\\.agents\\skills\\") {
             SkillScope::Repo
         } else {
             SkillScope::User
@@ -755,16 +735,8 @@ mod tests {
     fn boxed_skill_fields_are_smaller_than_inline_options() {
         use std::mem::size_of;
 
-        assert!(
-            size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>()
-        );
-        assert!(
-            size_of::<Option<Box<SkillPermissionProfile>>>()
-                < size_of::<Option<SkillPermissionProfile>>()
-        );
-        assert!(
-            size_of::<Option<Box<SkillFileSystemPermissions>>>()
-                < size_of::<Option<SkillFileSystemPermissions>>()
-        );
+        assert!(size_of::<Option<Box<SkillNetworkPolicy>>>() < size_of::<Option<SkillNetworkPolicy>>());
+        assert!(size_of::<Option<Box<SkillPermissionProfile>>>() < size_of::<Option<SkillPermissionProfile>>());
+        assert!(size_of::<Option<Box<SkillFileSystemPermissions>>>() < size_of::<Option<SkillFileSystemPermissions>>());
     }
 }

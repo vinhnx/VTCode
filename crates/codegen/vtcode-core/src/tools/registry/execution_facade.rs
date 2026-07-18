@@ -22,17 +22,15 @@ use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
 use crate::tools::invocation::ToolInvocationId;
 use crate::tools::mcp::{legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
-use crate::tools::safety_gateway::{
-    SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError,
-};
+use crate::tools::safety_gateway::{SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError};
 use crate::ui::search::fuzzy_match;
 
 use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
 use super::normalize_tool_output;
 use super::{
-    ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError,
-    ToolExecutionOutcome, ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
+    ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionOutcome,
+    ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
 };
 use vtcode_config::constants::execution::{LOOP_THROTTLE_MAX_MS, LOOP_THROTTLE_REGISTRY_BASE_MS};
 
@@ -165,12 +163,9 @@ impl ToolReentrancyGuard {
             let mut stacks = lock_reentrancy_stacks();
             let stack = stacks.entry(task_id).or_default();
             let stack_depth = stack.len();
-            let tool_reentry_count =
-                stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
+            let tool_reentry_count = stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
 
-            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
-                || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
-            {
+            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT {
                 let stack_trace = if stack.is_empty() {
                     "<empty>".to_string()
                 } else {
@@ -186,12 +181,9 @@ impl ToolReentrancyGuard {
         let violation = THREAD_REENTRANCY_STACK.with(|stack_cell| {
             let mut stack = stack_cell.borrow_mut();
             let stack_depth = stack.len();
-            let tool_reentry_count =
-                stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
+            let tool_reentry_count = stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
 
-            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
-                || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
-            {
+            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT {
                 let stack_trace = if stack.is_empty() {
                     "<empty>".to_string()
                 } else {
@@ -321,13 +313,8 @@ impl ToolRegistry {
         match safety_result.decision {
             SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => None,
             SafetyDecision::Deny(reason) => Some(
-                self.safety_denial_error(
-                    tool_name,
-                    &reason,
-                    safety_result.violation,
-                    safety_result.retry_after,
-                )
-                .with_surface("tool_registry"),
+                self.safety_denial_error(tool_name, &reason, safety_result.violation, safety_result.retry_after)
+                    .with_surface("tool_registry"),
             ),
         }
     }
@@ -346,22 +333,16 @@ impl ToolRegistry {
         prepared: &PreparedToolCall,
         policy: ExecutionPolicySnapshot,
     ) -> ToolExecutionOutcome {
-        let request = ToolExecutionRequest::new(
-            prepared.canonical_name.clone(),
-            prepared.effective_args.clone(),
-        )
-        .with_policy(
-            policy
-                .with_prevalidated(prepared.already_preflighted)
-                .with_safety_prevalidated(false),
-        );
+        let request = ToolExecutionRequest::new(prepared.canonical_name.clone(), prepared.effective_args.clone())
+            .with_policy(
+                policy
+                    .with_prevalidated(prepared.already_preflighted)
+                    .with_safety_prevalidated(false),
+            );
         self.execute_tool_request_internal(request).await
     }
 
-    async fn execute_tool_request_internal(
-        &self,
-        request: ToolExecutionRequest,
-    ) -> ToolExecutionOutcome {
+    async fn execute_tool_request_internal(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
         let policy = request.policy.clone();
         let mut retry_policy = crate::retry::RetryPolicy::from_retries(
             policy.max_retries as u32,
@@ -378,11 +359,7 @@ impl ToolRegistry {
         while attempt_index < max_attempts {
             if !policy.safety_prevalidated
                 && let Some(safety_error) = self
-                    .check_safety_for_request(
-                        request.tool_name.as_str(),
-                        &request.args,
-                        policy.invocation_id.clone(),
-                    )
+                    .check_safety_for_request(request.tool_name.as_str(), &request.args, policy.invocation_id.clone())
                     .await
             {
                 let decorated = safety_error
@@ -399,11 +376,7 @@ impl ToolRegistry {
                 )
                 .await
                 {
-                    return ToolExecutionOutcome::failure(
-                        request.tool_name.clone(),
-                        attempt_index + 1,
-                        terminal,
-                    );
+                    return ToolExecutionOutcome::failure(request.tool_name.clone(), attempt_index + 1, terminal);
                 }
                 continue;
             }
@@ -444,11 +417,7 @@ impl ToolRegistry {
                         continue;
                     }
 
-                    return ToolExecutionOutcome::success(
-                        request.tool_name.clone(),
-                        attempt_index + 1,
-                        output,
-                    );
+                    return ToolExecutionOutcome::success(request.tool_name.clone(), attempt_index + 1, output);
                 }
                 Err(error) => {
                     let mut base = ToolExecutionError::from_anyhow(
@@ -460,11 +429,8 @@ impl ToolRegistry {
                         Some("tool_registry"),
                     );
                     let lower_message = base.message.to_ascii_lowercase();
-                    let lower_original =
-                        base.original_error.as_deref().unwrap_or_default().to_ascii_lowercase();
-                    if lower_message.contains("circuit breaker")
-                        || lower_original.contains("circuit breaker")
-                    {
+                    let lower_original = base.original_error.as_deref().unwrap_or_default().to_ascii_lowercase();
+                    if lower_message.contains("circuit breaker") || lower_original.contains("circuit breaker") {
                         base.category = ErrorCategory::CircuitOpen;
                         base.retryable = true;
                         base.is_recoverable = true;
@@ -483,11 +449,7 @@ impl ToolRegistry {
                     )
                     .await
                     {
-                        return ToolExecutionOutcome::failure(
-                            request.tool_name.clone(),
-                            attempt_index + 1,
-                            terminal,
-                        );
+                        return ToolExecutionOutcome::failure(request.tool_name.clone(), attempt_index + 1, terminal);
                     }
                     continue;
                 }
@@ -525,8 +487,7 @@ impl ToolRegistry {
         max_attempts: u32,
         last_error: &mut Option<ToolExecutionError>,
     ) -> Option<ToolExecutionError> {
-        let structured =
-            retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
+        let structured = retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
         let retry_delay = structured.retry_after().or_else(|| structured.retry_delay());
         if structured.retryable
             && *attempt_index + 1 < max_attempts
@@ -540,11 +501,7 @@ impl ToolRegistry {
         Some(structured)
     }
 
-    async fn should_skip_loop_detection_for_exec_continuation(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> bool {
+    async fn should_skip_loop_detection_for_exec_continuation(&self, tool_name: &str, args: &Value) -> bool {
         if tool_name == tools::WRITE_STDIN {
             return matches!(
                 crate::tools::command_args::write_stdin_dispatch(args),
@@ -572,10 +529,7 @@ impl ToolRegistry {
         matches!(self.exec_session_completed(session_id).await, Ok(None))
     }
 
-    async fn public_tool_catalog_for_error(
-        &self,
-        requested_name: &str,
-    ) -> (Vec<String>, Vec<String>) {
+    async fn public_tool_catalog_for_error(&self, requested_name: &str) -> (Vec<String>, Vec<String>) {
         let mut tool_names = self.available_tools().await;
         tool_names.sort_unstable();
         tool_names.dedup();
@@ -606,28 +560,15 @@ impl ToolRegistry {
         (tool_names, similar_tools)
     }
 
-    pub fn preflight_validate_call(
-        &self,
-        name: &str,
-        args: &Value,
-    ) -> Result<super::ToolPreflightOutcome> {
+    pub fn preflight_validate_call(&self, name: &str, args: &Value) -> Result<super::ToolPreflightOutcome> {
         execution_kernel::preflight_validate_call(self, name, args)
     }
 
     /// Preflight a tool call from the harness path, allowing dispatch to
     /// internal (model-hidden) tool registrations such as read_file/write_file.
     /// Direct model-originated entry should use `preflight_validate_call`.
-    pub fn preflight_validate_harness_call(
-        &self,
-        name: &str,
-        args: &Value,
-    ) -> Result<super::ToolPreflightOutcome> {
-        execution_kernel::preflight_validate_call_with_mode(
-            self,
-            name,
-            args,
-            execution_kernel::DispatchMode::Harness,
-        )
+    pub fn preflight_validate_harness_call(&self, name: &str, args: &Value) -> Result<super::ToolPreflightOutcome> {
+        execution_kernel::preflight_validate_call_with_mode(self, name, args, execution_kernel::DispatchMode::Harness)
     }
 
     pub fn admit_public_tool_call(&self, name: &str, args: &Value) -> Result<PreparedToolCall> {
@@ -666,11 +607,7 @@ impl ToolRegistry {
     }
 
     /// Prevalidated model-originated execution that still routes through the public assembly.
-    pub async fn execute_public_tool_ref_prevalidated(
-        &self,
-        name: &str,
-        args: &Value,
-    ) -> Result<Value> {
+    pub async fn execute_public_tool_ref_prevalidated(&self, name: &str, args: &Value) -> Result<Value> {
         self.execute_public_tool_ref_prevalidated_with_mode(name, args, ExecSettlementMode::Manual)
             .await
     }
@@ -704,12 +641,7 @@ impl ToolRegistry {
         .await
     }
 
-    async fn execute_public_tool_ref_internal(
-        &self,
-        name: &str,
-        args: &Value,
-        prevalidated: bool,
-    ) -> Result<Value> {
+    async fn execute_public_tool_ref_internal(&self, name: &str, args: &Value, prevalidated: bool) -> Result<Value> {
         self.execute_public_tool_ref_dispatch(
             name,
             args,
@@ -756,14 +688,8 @@ impl ToolRegistry {
     ) -> Result<Value> {
         let routed_name = execution_kernel::resolve_dispatch_target(self, name, dispatch_mode)
             .map_err(|err| anyhow!(err.to_string()))?;
-        let effective_args = execution_kernel::remap_public_file_operation_alias_args(
-            name,
-            routed_name.as_str(),
-            args,
-        )
-        .or_else(|| {
-            execution_kernel::remap_consolidated_action_alias_args(name, routed_name.as_str(), args)
-        });
+        let effective_args = execution_kernel::remap_public_file_operation_alias_args(name, routed_name.as_str(), args)
+            .or_else(|| execution_kernel::remap_consolidated_action_alias_args(name, routed_name.as_str(), args));
         self.execute_tool_ref_internal(
             routed_name.as_str(),
             effective_args.as_ref().unwrap_or(args),
@@ -798,11 +724,7 @@ impl ToolRegistry {
                     recommendation.value_size_recommendation,
                     recommendation.vec_size_recommendation
                 ),
-                (
-                    SizeRecommendation::Maintain,
-                    SizeRecommendation::Maintain,
-                    SizeRecommendation::Maintain
-                )
+                (SizeRecommendation::Maintain, SizeRecommendation::Maintain, SizeRecommendation::Maintain)
             ) {
                 tracing::debug!(
                     "Memory pool tuning recommendation: string={:?}, value={:?}, vec={:?}, allocations_avoided={}",
@@ -853,8 +775,7 @@ impl ToolRegistry {
             .inventory
             .registration_for(&tool_name)
             .and_then(|registration| registration.parameter_schema().cloned());
-        let normalized_args =
-            execution_kernel::normalize_tool_args(&tool_name, args, parameter_schema.as_ref())?;
+        let normalized_args = execution_kernel::normalize_tool_args(&tool_name, args, parameter_schema.as_ref())?;
         let args = normalized_args.as_ref();
         let requested_name = name.to_string();
 
@@ -935,14 +856,10 @@ impl ToolRegistry {
         let readonly_classification = if prevalidated {
             #[cfg(debug_assertions)]
             {
-                if let Err(err) =
-                    execution_kernel::preflight_validate_resolved_call(self, &tool_name, args)
+                if let Err(err) = execution_kernel::preflight_validate_resolved_call(self, &tool_name, args)
                     && !agent_execution::is_planning_active_denial(&err.to_string())
                 {
-                    debug_assert!(
-                        false,
-                        "prevalidated execution received invalid call for '{tool_name}': {err}"
-                    );
+                    debug_assert!(false, "prevalidated execution received invalid call for '{tool_name}': {err}");
                 }
             }
             !intent.mutating
@@ -975,9 +892,7 @@ impl ToolRegistry {
         // Defense-in-depth: prevalidated fast path skips full preflight, but planning workflow
         // mutating-tool enforcement remains a hard safety invariant. Reuse the already-computed
         // `intent` so we don't reclassify on the hot path.
-        if self.is_planning_active()
-            && !self.is_planning_active_allowed_with_intent(&tool_name, args, &intent)
-        {
+        if self.is_planning_active() && !self.is_planning_active_allowed_with_intent(&tool_name, args, &intent) {
             let error_msg = agent_execution::planning_workflow_denial_message(&display_name);
             record_failure(
                 tool_name_owned.clone(),
@@ -1090,8 +1005,7 @@ impl ToolRegistry {
             }
         }
 
-        let skip_loop_detection =
-            self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
+        let skip_loop_detection = self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
         if skip_loop_detection {
             trace!(
                 tool = %tool_name,
@@ -1110,11 +1024,8 @@ impl ToolRegistry {
                 .execution_history
                 .find_recent_spooled_result(&tool_name, args, fast_reuse_max_age)
                 .or_else(|| {
-                    self.execution_history.find_recent_successful_result(
-                        &tool_name,
-                        args,
-                        fast_reuse_max_age,
-                    )
+                    self.execution_history
+                        .find_recent_successful_result(&tool_name, args, fast_reuse_max_age)
                 });
             if let Some(mut reused_value) = fast_reused {
                 if let Some(obj) = reused_value.as_object_mut() {
@@ -1181,8 +1092,7 @@ impl ToolRegistry {
             self.execution_history.detect_loop(&tool_name, args)
         };
         if loop_result.detected && loop_result.repeat_count > 1 {
-            let delay_ms = (LOOP_THROTTLE_REGISTRY_BASE_MS * loop_result.repeat_count as u64)
-                .min(LOOP_THROTTLE_MAX_MS);
+            let delay_ms = (LOOP_THROTTLE_REGISTRY_BASE_MS * loop_result.repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
             if delay_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
@@ -1207,11 +1117,8 @@ impl ToolRegistry {
                         .execution_history
                         .find_recent_spooled_result(&tool_name, args, reuse_max_age)
                         .or_else(|| {
-                            self.execution_history.find_recent_successful_result(
-                                &tool_name,
-                                args,
-                                reuse_max_age,
-                            )
+                            self.execution_history
+                                .find_recent_successful_result(&tool_name, args, reuse_max_age)
                         });
                     if let Some(mut reused_value) = reused {
                         if let Some(obj) = reused_value.as_object_mut() {
@@ -1220,8 +1127,7 @@ impl ToolRegistry {
                             obj.insert("repeat_count".into(), json!(loop_result.repeat_count));
                             obj.insert("limit".into(), json!(loop_limit));
                             obj.insert("tool".into(), json!(display_name));
-                            let reused_spooled =
-                                obj.get("spool_path").and_then(|v| v.as_str()).is_some();
+                            let reused_spooled = obj.get("spool_path").and_then(|v| v.as_str()).is_some();
                             let note = if reused_spooled {
                                 "Loop detected: this identical read-only call has been repeated. The full output is in the spool file. STOP making this same tool call -- use the spool file or conversation history. Calling this tool again will be blocked."
                             } else {
@@ -1233,8 +1139,8 @@ impl ToolRegistry {
                     }
                 }
 
-                let delay_ms = (LOOP_THROTTLE_REGISTRY_BASE_MS * loop_result.repeat_count as u64)
-                    .min(LOOP_THROTTLE_MAX_MS);
+                let delay_ms =
+                    (LOOP_THROTTLE_REGISTRY_BASE_MS * loop_result.repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
                 if delay_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }
@@ -1242,11 +1148,7 @@ impl ToolRegistry {
                 let error = ToolExecutionError::new(
                     tool_name_owned.clone(),
                     ToolErrorType::PolicyViolation,
-                    agent_execution::loop_detection_block_message(
-                        &display_name,
-                        loop_result.repeat_count as u64,
-                        None,
-                    ),
+                    agent_execution::loop_detection_block_message(&display_name, loop_result.repeat_count as u64, None),
                 );
                 let mut payload = error.to_json_value();
                 if let Some(obj) = payload.as_object_mut() {
@@ -1285,9 +1187,7 @@ impl ToolRegistry {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
-                format!(
-                    "Tool '{display_name}' is not permitted while full-auto permission review is active"
-                ),
+                format!("Tool '{display_name}' is not permitted while full-auto permission review is active"),
             );
 
             record_failure(
@@ -1303,10 +1203,8 @@ impl ToolRegistry {
                 false,
             );
 
-            return Err(anyhow!(
-                "Tool '{display_name}' is not permitted while full-auto permission review is active"
-            )
-            .context("tool denied by full-auto allowlist"));
+            return Err(anyhow!("Tool '{display_name}' is not permitted while full-auto permission review is active")
+                .context("tool denied by full-auto allowlist"));
         }
 
         let skip_policy_prompt = self.policy_gateway.lock().await.take_preapproved(&tool_name);
@@ -1327,11 +1225,8 @@ impl ToolRegistry {
                 _ => format!("Tool '{display_name}' execution denied by policy"),
             };
 
-            let _error = ToolExecutionError::new(
-                tool_name_owned.clone(),
-                ToolErrorType::PolicyViolation,
-                error_msg.clone(),
-            );
+            let _error =
+                ToolExecutionError::new(tool_name_owned.clone(), ToolErrorType::PolicyViolation, error_msg.clone());
 
             record_failure(
                 tool_name_owned.clone(),
@@ -1349,8 +1244,7 @@ impl ToolRegistry {
             return Err(anyhow!("{error_msg}").context("tool denied by policy"));
         }
 
-        let args = match self.policy_gateway.lock().await.apply_policy_constraints(&tool_name, args)
-        {
+        let args = match self.policy_gateway.lock().await.apply_policy_constraints(&tool_name, args) {
             Ok(processed_args) => processed_args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
@@ -1468,14 +1362,8 @@ impl ToolRegistry {
                 String::new()
             };
             let available_tool_list = all_tool_names.join(", ");
-            let message = format!(
-                "Unknown tool: {display_name}. Available tools: {available_tool_list}.{suggestion}"
-            );
-            let error = ToolExecutionError::new(
-                tool_name_owned.clone(),
-                ToolErrorType::ToolNotFound,
-                message.clone(),
-            );
+            let message = format!("Unknown tool: {display_name}. Available tools: {available_tool_list}.{suggestion}");
+            let error = ToolExecutionError::new(tool_name_owned.clone(), ToolErrorType::ToolNotFound, message.clone());
 
             record_failure(
                 tool_name_owned,
@@ -1591,18 +1479,11 @@ impl ToolRegistry {
                     .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
                 self.execute_mcp_tool(mcp_name, args).await
             } else if exec_settlement_mode.settle_noninteractive()
-                && matches!(
-                    tool_name.as_str(),
-                    tools::UNIFIED_EXEC | tools::EXEC_COMMAND | tools::EXEC_PTY_CMD
-                )
+                && matches!(tool_name.as_str(), tools::UNIFIED_EXEC | tools::EXEC_COMMAND | tools::EXEC_PTY_CMD)
             {
                 let exec_args = match tool_name.as_str() {
-                    tools::EXEC_COMMAND => {
-                        super::executors::normalize_command_session_run_alias_args(&args, false)?
-                    }
-                    tools::EXEC_PTY_CMD => {
-                        super::executors::normalize_command_session_run_alias_args(&args, true)?
-                    }
+                    tools::EXEC_COMMAND => super::executors::normalize_command_session_run_alias_args(&args, false)?,
+                    tools::EXEC_PTY_CMD => super::executors::normalize_command_session_run_alias_args(&args, true)?,
                     _ => args.clone(),
                 };
                 if self.optimization_config.memory_pool.enabled {
@@ -1613,22 +1494,15 @@ impl ToolRegistry {
                 } else {
                     self.execute_command_session_internal(exec_args, exec_settlement_mode).await
                 }
-            } else if exec_settlement_mode.settle_noninteractive()
-                && tool_name == tools::WRITE_STDIN
-            {
+            } else if exec_settlement_mode.settle_noninteractive() && tool_name == tools::WRITE_STDIN {
                 let (exec_args, dispatch) = super::executors::normalize_write_stdin_args(&args)?;
                 match dispatch {
                     crate::tools::command_args::WriteStdinDispatch::Write => {
-                        self.execute_command_session_write_for_tool(exec_args, tools::WRITE_STDIN)
-                            .await
+                        self.execute_command_session_write_for_tool(exec_args, tools::WRITE_STDIN).await
                     }
                     crate::tools::command_args::WriteStdinDispatch::Poll => {
-                        self.execute_command_session_poll_for_tool(
-                            exec_args,
-                            exec_settlement_mode,
-                            tools::WRITE_STDIN,
-                        )
-                        .await
+                        self.execute_command_session_poll_for_tool(exec_args, exec_settlement_mode, tools::WRITE_STDIN)
+                            .await
                     }
                 }
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
@@ -1637,10 +1511,7 @@ impl ToolRegistry {
                     if let Some(msg) = registration.deprecation_message() {
                         warn!("Tool '{}' is deprecated: {}", tool_name, msg);
                     } else {
-                        warn!(
-                            "Tool '{}' is deprecated and may be removed in a future version",
-                            tool_name
-                        );
+                        warn!("Tool '{}' is deprecated and may be removed in a future version", tool_name);
                     }
                 }
 
@@ -1676,8 +1547,7 @@ impl ToolRegistry {
             } else {
                 // This should theoretically never happen since we checked tool_exists above
                 // Generate helpful error message with available tools
-                let (tool_names, similar_tools) =
-                    self.public_tool_catalog_for_error(&requested_name).await;
+                let (tool_names, similar_tools) = self.public_tool_catalog_for_error(&requested_name).await;
                 let available_tool_list = tool_names.join(", ");
 
                 let error_msg = if tool_name != requested_name {
@@ -1699,11 +1569,8 @@ impl ToolRegistry {
                     )
                 };
 
-                let error = ToolExecutionError::new(
-                    tool_name_owned.clone(),
-                    ToolErrorType::ToolNotFound,
-                    error_msg.clone(),
-                );
+                let error =
+                    ToolExecutionError::new(tool_name_owned.clone(), ToolErrorType::ToolNotFound, error_msg.clone());
 
                 record_failure(
                     tool_name_owned.clone(),
@@ -1760,21 +1627,14 @@ impl ToolRegistry {
 
                     if tool_name_owned == tools::UNIFIED_EXEC {
                         timeout_error.recovery_suggestions = vec![
-                            Cow::Borrowed(
-                                "Use write_stdin with empty chars to poll command progress",
-                            ),
-                            Cow::Borrowed(
-                                "Use exec_command with a fresh command if the original session is stale",
-                            ),
-                            Cow::Borrowed(
-                                "Ask for manual cleanup if a stale session is still active",
-                            ),
+                            Cow::Borrowed("Use write_stdin with empty chars to poll command progress"),
+                            Cow::Borrowed("Use exec_command with a fresh command if the original session is stale"),
+                            Cow::Borrowed("Ask for manual cleanup if a stale session is still active"),
                         ];
                     }
 
                     if let Some(delay) = retry_after {
-                        timeout_error.retry_after_ms =
-                            Some(delay.as_millis().min(u128::from(u64::MAX)) as u64);
+                        timeout_error.retry_after_ms = Some(delay.as_millis().min(u128::from(u64::MAX)) as u64);
                     }
 
                     let mut timeout_payload = timeout_error.to_json_value();
@@ -1786,10 +1646,7 @@ impl ToolRegistry {
                     );
 
                     if let Some(breaker) = shared_circuit_breaker.as_ref() {
-                        breaker.record_failure_category_for_tool(
-                            &tool_name_owned,
-                            ErrorCategory::Timeout,
-                        );
+                        breaker.record_failure_category_for_tool(&tool_name_owned, ErrorCategory::Timeout);
                     }
                     if is_mcp_tool {
                         self.mcp_circuit_breaker.record_failure_category(ErrorCategory::Timeout);
@@ -1847,8 +1704,7 @@ impl ToolRegistry {
                 }
                 self.record_tool_latency(timeout_category, execution_started_at.elapsed());
                 // Dynamic context discovery: spool large outputs to files
-                let processed_value =
-                    self.process_tool_output(&tool_name_owned, value, is_mcp_tool).await;
+                let processed_value = self.process_tool_output(&tool_name_owned, value, is_mcp_tool).await;
                 let mut normalized_value = normalize_tool_output(processed_value);
                 if tool_name_owned == tools::CODE_SEARCH
                     && let Some(output) = normalized_value.as_object_mut()

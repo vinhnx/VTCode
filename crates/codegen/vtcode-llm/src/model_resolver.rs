@@ -5,8 +5,8 @@ use crate::provider::Usage;
 use vtcode_config::api_keys::api_key_env_var;
 use vtcode_config::auth::{AuthCredentialsStoreMode, CustomApiKeyStorage};
 use vtcode_config::models::{
-    ModelCatalogEntry, ModelId, ModelPricing, Provider, ProviderModelSupport,
-    catalog_provider_keys, model_catalog_entry,
+    ModelCatalogEntry, ModelId, ModelPricing, Provider, ProviderModelSupport, catalog_provider_keys,
+    model_catalog_entry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,8 +162,7 @@ impl ModelResolver {
         model: &str,
         dynamic_models: &[DynamicModelRef<'_>],
     ) -> Option<Provider> {
-        Self::resolve(provider_override, model, dynamic_models, None)
-            .map(|resolved| resolved.provider)
+        Self::resolve(provider_override, model, dynamic_models, None).map(|resolved| resolved.provider)
     }
 
     pub fn availability(provider: Provider, model: &str) -> ModelAvailability {
@@ -175,15 +174,11 @@ impl ModelResolver {
             return ModelAvailability::ManagedAuthAvailable;
         }
 
-        if provider == Provider::OpenAI
-            && vtcode_config::auth::load_openai_chatgpt_session().ok().flatten().is_some()
-        {
+        if provider == Provider::OpenAI && vtcode_config::auth::load_openai_chatgpt_session().ok().flatten().is_some() {
             return ModelAvailability::ManagedAuthAvailable;
         }
 
-        if provider == Provider::OpenRouter
-            && vtcode_config::auth::load_oauth_token().ok().flatten().is_some()
-        {
+        if provider == Provider::OpenRouter && vtcode_config::auth::load_oauth_token().ok().flatten().is_some() {
             return ModelAvailability::ManagedAuthAvailable;
         }
 
@@ -207,8 +202,7 @@ impl ModelResolver {
         let input_cost = pricing.input?;
         let output_cost = pricing.output?;
 
-        let mut total = (usage.prompt_tokens as f64 * input_cost)
-            + (usage.completion_tokens as f64 * output_cost);
+        let mut total = (usage.prompt_tokens as f64 * input_cost) + (usage.completion_tokens as f64 * output_cost);
 
         if let Some(cache_read_cost) = pricing.cache_read {
             total += usage.cache_read_tokens_or_fallback() as f64 * cache_read_cost;
@@ -257,18 +251,17 @@ impl ModelResolver {
     ) -> ResolvedModel {
         let provider = model_id.provider();
         let catalog = model_catalog_entry(provider.as_ref(), &model_id.as_str());
-        let dynamic =
-            if catalog.is_some() || !has_dynamic_model(provider, requested_model, dynamic_models) {
-                None
-            } else {
-                dynamic_meta.or_else(|| {
-                    Some(DynamicModelMeta {
-                        display_name: requested_model.to_string(),
-                        description: None,
-                        context_window: None,
-                    })
+        let dynamic = if catalog.is_some() || !has_dynamic_model(provider, requested_model, dynamic_models) {
+            None
+        } else {
+            dynamic_meta.or_else(|| {
+                Some(DynamicModelMeta {
+                    display_name: requested_model.to_string(),
+                    description: None,
+                    context_window: None,
                 })
-            };
+            })
+        };
 
         ResolvedModel {
             provider,
@@ -314,14 +307,10 @@ fn find_dynamic_provider(model: &str, dynamic_models: &[DynamicModelRef<'_>]) ->
     }
 }
 
-fn has_dynamic_model(
-    provider: Provider,
-    model: &str,
-    dynamic_models: &[DynamicModelRef<'_>],
-) -> bool {
-    dynamic_models.iter().any(|candidate| {
-        candidate.provider == provider && candidate.model_id.eq_ignore_ascii_case(model)
-    })
+fn has_dynamic_model(provider: Provider, model: &str, dynamic_models: &[DynamicModelRef<'_>]) -> bool {
+    dynamic_models
+        .iter()
+        .any(|candidate| candidate.provider == provider && candidate.model_id.eq_ignore_ascii_case(model))
 }
 
 fn provider_precedence(provider: Provider) -> usize {
@@ -391,10 +380,7 @@ pub fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         Some(Provider::Anthropic)
     } else if model.starts_with("deepseek-") {
         Some(Provider::DeepSeek)
-    } else if model.starts_with("mistral-")
-        || model.starts_with("ministral-")
-        || model.starts_with("codestral-")
-    {
+    } else if model.starts_with("mistral-") || model.starts_with("ministral-") || model.starts_with("codestral-") {
         Some(Provider::Mistral)
     } else if model.contains("gemini") || model.starts_with("palm") {
         Some(Provider::Gemini)
@@ -456,14 +442,12 @@ mod tests {
         let bare = ModelResolver::resolve(None, "glm-5.1", &[], None).expect("bare model");
         assert_eq!(bare.provider, Provider::ZAI);
 
-        let zen =
-            ModelResolver::resolve(None, "opencode/glm-5.1", &[], None).expect("opencode zen");
+        let zen = ModelResolver::resolve(None, "opencode/glm-5.1", &[], None).expect("opencode zen");
         assert_eq!(zen.provider, Provider::OpenCodeZen);
         assert!(zen.known_model());
         assert_eq!(zen.display_name(), "GLM-5.1 (OpenCode Zen)");
 
-        let go =
-            ModelResolver::resolve(None, "opencode-go/glm-5.1", &[], None).expect("opencode go");
+        let go = ModelResolver::resolve(None, "opencode-go/glm-5.1", &[], None).expect("opencode go");
         assert_eq!(go.provider, Provider::OpenCodeGo);
         assert!(go.known_model());
         assert_eq!(go.display_name(), "GLM-5.1 (OpenCode Go)");

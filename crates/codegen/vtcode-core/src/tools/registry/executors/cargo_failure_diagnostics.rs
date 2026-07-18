@@ -59,10 +59,7 @@ fn cargo_package_from_command(command: &str) -> Option<String> {
     None
 }
 
-fn infer_cargo_test_binary_kind(
-    source_file: Option<&str>,
-    test_fqname: Option<&str>,
-) -> &'static str {
+fn infer_cargo_test_binary_kind(source_file: Option<&str>, test_fqname: Option<&str>) -> &'static str {
     let normalized_path = source_file.map(|path| path.replace('\\', "/"));
     if let Some(path) = normalized_path.as_deref() {
         if path.starts_with("tests/") || path.contains("/tests/") {
@@ -109,8 +106,7 @@ pub(super) fn cargo_selector_error_diagnostics(
         return None;
     }
 
-    let validation_hint =
-        format!("cargo test -p {package} --lib -- --list | rg '{requested_target}'");
+    let validation_hint = format!("cargo test -p {package} --lib -- --list | rg '{requested_target}'");
     let rerun_hint = match command_kind {
         CargoTestCommandKind::Nextest => {
             format!("cargo nextest run -p {package} {requested_target}")
@@ -192,11 +188,7 @@ fn cargo_panic_location_and_message(output: &str) -> (Option<String>, Option<u64
     (None, None, None)
 }
 
-pub(super) fn cargo_test_failure_diagnostics(
-    command: &str,
-    output: &str,
-    exit_code: Option<i32>,
-) -> Option<Value> {
+pub(super) fn cargo_test_failure_diagnostics(command: &str, output: &str, exit_code: Option<i32>) -> Option<Value> {
     if exit_code == Some(0) {
         return None;
     }
@@ -210,8 +202,7 @@ pub(super) fn cargo_test_failure_diagnostics(
     let (source_file, source_line, panic_message) = cargo_panic_location_and_message(output);
     let package = package_from_output.or_else(|| cargo_package_from_command(command))?;
     let test_fqname = test_fqname?;
-    let binary_kind =
-        infer_cargo_test_binary_kind(source_file.as_deref(), Some(test_fqname.as_str()));
+    let binary_kind = infer_cargo_test_binary_kind(source_file.as_deref(), Some(test_fqname.as_str()));
     let rerun_hint = cargo_test_rerun_hint(command_kind, &package, binary_kind, &test_fqname);
 
     Some(json!({
@@ -252,17 +243,12 @@ pub(super) fn attach_failure_diagnostics_metadata(response: &mut Value, diagnost
     }
 }
 
-pub(super) fn attach_exec_recovery_guidance(
-    response: &mut Value,
-    command: &str,
-    exit_code: Option<i32>,
-) {
+pub(super) fn attach_exec_recovery_guidance(response: &mut Value, command: &str, exit_code: Option<i32>) {
     if exit_code != Some(127) {
         return;
     }
 
     let command_name = first_command_token(command).unwrap_or_else(|| "command".to_string());
     response["critical_note"] = json!(format!("Command `{command_name}` was not found in PATH."));
-    response["next_action"] =
-        json!("Check the command name or install the missing binary, then rerun the command.");
+    response["next_action"] = json!("Check the command name or install the missing binary, then rerun the command.");
 }

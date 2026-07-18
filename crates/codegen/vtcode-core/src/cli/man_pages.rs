@@ -228,13 +228,7 @@ impl ManPageGenerator {
             .control("SH", ["NAME"])
             .text([roman("vtcode-chat - Interactive AI coding assistant")])
             .control("SH", ["SYNOPSIS"])
-            .text([
-                bold("vtcode"),
-                roman(" ["),
-                bold("OPTIONS"),
-                roman("] "),
-                bold("chat"),
-            ])
+            .text([bold("vtcode"), roman(" ["), bold("OPTIONS"), roman("] "), bold("chat")])
             .control("SH", ["DESCRIPTION"])
             .text([
                 roman("Start an interactive AI coding assistant session."),
@@ -242,14 +236,24 @@ impl ManPageGenerator {
                 roman(" with support for multiple LLM providers and semantic code analysis."),
             ])
             .control("SH", ["OPTIONS"])
-            .text([roman("All global options are supported. See "), bold("vtcode(1)"), roman(" for details.")])
+            .text([
+                roman("All global options are supported. See "),
+                bold("vtcode(1)"),
+                roman(" for details."),
+            ])
             .control("SH", ["EXAMPLES"])
             .text([roman("Start basic chat session:")])
             .text([bold("  vtcode chat")])
             .text([roman("Start with specific model:")])
             .text([bold("  vtcode --model gemini-3.1-pro-preview chat")])
             .control("SH", ["SEE ALSO"])
-            .text([bold("vtcode(1)"), roman(", "), bold("vtcode-ask(1)"), roman(", "), bold("vtcode-analyze(1)")])
+            .text([
+                bold("vtcode(1)"),
+                roman(", "),
+                bold("vtcode-ask(1)"),
+                roman(", "),
+                bold("vtcode-analyze(1)"),
+            ])
             .render();
 
         Ok(page)
@@ -295,16 +299,7 @@ impl ManPageGenerator {
     fn generate_performance_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-PERFORMANCE",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
+            .control("TH", ["VTCODE-PERFORMANCE", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman(
                 "vtcode-performance - Display performance metrics and system status",
@@ -353,20 +348,9 @@ impl ManPageGenerator {
     fn generate_benchmark_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-BENCHMARK",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
+            .control("TH", ["VTCODE-BENCHMARK", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
-            .text([roman(
-                "vtcode-benchmark - Run SWE-bench evaluation framework",
-            )])
+            .text([roman("vtcode-benchmark - Run SWE-bench evaluation framework")])
             .control("SH", ["SYNOPSIS"])
             .text([
                 bold("vtcode"),
@@ -377,9 +361,7 @@ impl ManPageGenerator {
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman(
-                    "Run automated performance testing against the SWE-bench evaluation framework.",
-                ),
+                roman("Run automated performance testing against the SWE-bench evaluation framework."),
                 roman(" Provides comparative analysis across different models, benchmark scoring,"),
                 roman(" and optimization insights for coding tasks."),
             ])
@@ -400,11 +382,7 @@ impl ManPageGenerator {
             .text([roman("Run benchmark suite:")])
             .text([bold("  vtcode benchmark")])
             .control("SH", ["SEE ALSO"])
-            .text([
-                bold("vtcode(1)"),
-                roman(", "),
-                bold("vtcode-performance(1)"),
-            ])
+            .text([bold("vtcode(1)"), roman(", "), bold("vtcode-performance(1)")])
             .render();
 
         Ok(page)
@@ -414,16 +392,7 @@ impl ManPageGenerator {
     fn generate_create_project_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-CREATE-PROJECT",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
+            .control("TH", ["VTCODE-CREATE-PROJECT", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman(
                 "vtcode-create-project - Create complete Rust project with features",
@@ -467,16 +436,7 @@ impl ManPageGenerator {
     fn generate_init_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-INIT",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
+            .control("TH", ["VTCODE-INIT", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode-init - Guided AGENTS.md and workspace setup")])
             .control("SH", ["SYNOPSIS"])
@@ -502,11 +462,7 @@ impl ManPageGenerator {
             .text([roman("Overwrite an existing AGENTS.md without prompting:")])
             .text([bold("  vtcode init --force")])
             .control("SH", ["SEE ALSO"])
-            .text([
-                bold("vtcode(1)"),
-                roman(", "),
-                bold("vtcode-create-project(1)"),
-            ])
+            .text([bold("vtcode(1)"), roman(", "), bold("vtcode-create-project(1)")])
             .render();
 
         Ok(page)
@@ -516,16 +472,7 @@ impl ManPageGenerator {
     fn generate_check_man_page() -> Result<String> {
         let current_date = Self::current_date();
         let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-CHECK",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
+            .control("TH", ["VTCODE-CHECK", "1", &current_date, "VT Code", "User Commands"])
             .control("SH", ["NAME"])
             .text([roman("vtcode-check - Run built-in repository checks")])
             .control("SH", ["SYNOPSIS"])
@@ -609,7 +556,6 @@ impl ManPageGenerator {
             .text([roman("• trajectory - Pretty-print trajectory logs and analytics")])
             .text([roman("• benchmark - SWE-bench evaluation framework")])
             .text([roman("• create-project - Create complete Rust project with features")])
-
             .text([roman("• revert - Revert agent to a previous snapshot")])
             .text([roman("• snapshots - List available snapshots")])
             .text([roman("• cleanup-snapshots - Clean up old snapshots")])

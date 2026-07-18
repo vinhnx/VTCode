@@ -50,8 +50,7 @@ async fn test_agent_steering_stop() -> Result<()> {
     };
 
     // Spawn the runner in a separate task so we can send signals
-    let runner_handle =
-        tokio::spawn(async move { runner.execute_task_with_retry(&task, &[], 1).await });
+    let runner_handle = tokio::spawn(async move { runner.execute_task_with_retry(&task, &[], 1).await });
 
     // Send Stop signal immediately
     steering_tx.send(SteeringMessage::SteerStop)?;

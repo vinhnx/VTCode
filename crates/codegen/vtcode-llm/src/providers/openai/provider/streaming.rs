@@ -1,6 +1,5 @@
 use super::super::errors::{
-    fallback_model_if_not_found, format_openai_error, is_model_not_found,
-    is_responses_api_unsupported,
+    fallback_model_if_not_found, format_openai_error, is_model_not_found, is_responses_api_unsupported,
 };
 use super::super::headers;
 use super::super::responses_api::parse_responses_payload;
@@ -11,9 +10,7 @@ use crate::error_display;
 use crate::provider::LLMProvider;
 use crate::provider::{self, LLMNormalizedStream};
 use crate::providers::error_handling::{is_rate_limit_error, parse_api_error};
-use crate::providers::shared::{
-    ResponsesNormalizedStreamOptions, create_responses_normalized_stream,
-};
+use crate::providers::shared::{ResponsesNormalizedStreamOptions, create_responses_normalized_stream};
 use async_stream::try_stream;
 use futures::StreamExt;
 use serde_json::{Value, json};
@@ -50,8 +47,7 @@ impl OpenAIProvider {
         let url = format!("{}/responses", self.base_url);
         loop {
             let model = request.model.clone();
-            let include_metrics =
-                self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+            let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
             let mut openai_request = self.convert_to_openai_responses_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             let client_request_id = Self::new_client_request_id();
@@ -83,8 +79,7 @@ impl OpenAIProvider {
                         include_cached_prompt_metrics: include_metrics,
                     },
                     move |value| {
-                        let response =
-                            parse_responses_payload(value, parse_model.clone(), include_metrics)?;
+                        let response = parse_responses_payload(value, parse_model.clone(), include_metrics)?;
                         Ok(Self::normalize_reasoning_output(&parse_model, response))
                     },
                 ));
@@ -111,10 +106,7 @@ impl OpenAIProvider {
                         Some(&client_request_id),
                     ),
                 );
-                return Err(provider::LLMError::Provider {
-                    message: formatted_error,
-                    metadata: None,
-                });
+                return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
             }
 
             if matches!(responses_state, ResponsesApiState::Allowed)
@@ -131,13 +123,7 @@ impl OpenAIProvider {
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format_openai_error(
-                    status,
-                    &error_text,
-                    &headers,
-                    "Responses API error",
-                    Some(&client_request_id),
-                ),
+                &format_openai_error(status, &error_text, &headers, "Responses API error", Some(&client_request_id)),
             );
             return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
@@ -163,8 +149,7 @@ impl OpenAIProvider {
         let url = format!("{}/responses", self.base_url);
         loop {
             let model = request.model.clone();
-            let include_metrics =
-                self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+            let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
             let mut openai_request = self.convert_to_openai_responses_format(&request)?;
             openai_request["stream"] = Value::Bool(true);
             let client_request_id = Self::new_client_request_id();
@@ -185,13 +170,7 @@ impl OpenAIProvider {
                 .await?;
 
             if response.status().is_success() {
-                return Ok(stream_decoder::create_responses_stream(
-                    response,
-                    model,
-                    include_metrics,
-                    None,
-                    None,
-                ));
+                return Ok(stream_decoder::create_responses_stream(response, model, include_metrics, None, None));
             }
 
             let status = response.status();
@@ -215,10 +194,7 @@ impl OpenAIProvider {
                         Some(&client_request_id),
                     ),
                 );
-                return Err(provider::LLMError::Provider {
-                    message: formatted_error,
-                    metadata: None,
-                });
+                return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
             }
 
             if matches!(responses_state, ResponsesApiState::Allowed)
@@ -236,13 +212,7 @@ impl OpenAIProvider {
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format_openai_error(
-                    status,
-                    &error_text,
-                    &headers,
-                    "Responses API error",
-                    Some(&client_request_id),
-                ),
+                &format_openai_error(status, &error_text, &headers, "Responses API error", Some(&client_request_id)),
             );
             return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
@@ -288,13 +258,7 @@ impl OpenAIProvider {
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format_openai_error(
-                    status,
-                    &error_text,
-                    &headers,
-                    "Chat Completions error",
-                    Some(&client_request_id),
-                ),
+                &format_openai_error(status, &error_text, &headers, "Chat Completions error", Some(&client_request_id)),
             );
             return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }

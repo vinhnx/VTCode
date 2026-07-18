@@ -190,10 +190,7 @@ impl PtyScrollback {
                 self.push_text("\u{FFFD}");
                 self.unicode_errors += 1;
                 if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                    tracing::warn!(
-                        "UTF-8 buffer overflow: {} bytes, treating as invalid",
-                        buffer.len()
-                    );
+                    tracing::warn!("UTF-8 buffer overflow: {} bytes, treating as invalid", buffer.len());
                 }
                 buffer.clear();
             }
@@ -225,10 +222,7 @@ impl PtyScrollback {
                             self.push_text("\u{FFFD}");
                             self.unicode_errors += 1;
                             if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                                tracing::warn!(
-                                    "UTF-8 buffer overflow after processing: {} bytes",
-                                    buffer.len()
-                                );
+                                tracing::warn!("UTF-8 buffer overflow after processing: {} bytes", buffer.len());
                             }
                             buffer.clear();
                             break;
@@ -241,9 +235,7 @@ impl PtyScrollback {
                         self.push_text("\u{FFFD}");
                         self.unicode_errors += 1;
                         if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                            tracing::debug!(
-                                "Invalid UTF-8 sequence detected, replacing with U+FFFD"
-                            );
+                            tracing::debug!("Invalid UTF-8 sequence detected, replacing with U+FFFD");
                         }
                         buffer.drain(..error_len);
 
@@ -252,10 +244,7 @@ impl PtyScrollback {
                             self.push_text("\u{FFFD}");
                             self.unicode_errors += 1;
                             if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                                tracing::warn!(
-                                    "UTF-8 buffer overflow after error: {} bytes",
-                                    buffer.len()
-                                );
+                                tracing::warn!("UTF-8 buffer overflow after error: {} bytes", buffer.len());
                             }
                             buffer.clear();
                             break;
@@ -269,9 +258,7 @@ impl PtyScrollback {
                         self.push_text("\u{FFFD}");
                         self.unicode_errors += 1;
                         if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                            tracing::debug!(
-                                "Incomplete UTF-8 sequence at EOF, replacing with U+FFFD"
-                            );
+                            tracing::debug!("Incomplete UTF-8 sequence at EOF, replacing with U+FFFD");
                         }
                         buffer.clear();
                     } else if !buffer.is_empty() && !eof {
@@ -300,8 +287,7 @@ impl PtyScrollback {
     }
 
     pub(super) fn pending(&self) -> String {
-        let mut output =
-            String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
+        let mut output = String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
         for line in &self.pending_lines {
             output.push_str(line);
         }
@@ -310,8 +296,7 @@ impl PtyScrollback {
     }
 
     pub(super) fn take_pending(&mut self) -> String {
-        let mut output =
-            String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
+        let mut output = String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
         while let Some(line) = self.pending_lines.pop_front() {
             output.push_str(&line);
         }
@@ -370,10 +355,10 @@ pub(super) struct ScrollbackMetrics {
     pub(super) lines_dropped: usize,
     pub(super) current_lines: usize,
     pub(super) capacity_lines: usize,
-    pub(super) unicode_errors: usize, // Count of UTF-8 decoding errors
-    pub(super) utf8_buffer_size: usize, // Current size of UTF-8 incomplete buffer
+    pub(super) unicode_errors: usize,      // Count of UTF-8 decoding errors
+    pub(super) utf8_buffer_size: usize,    // Current size of UTF-8 incomplete buffer
     pub(super) total_unicode_chars: usize, // Total unicode characters processed
-    pub(super) unicode_sessions: usize, // Number of sessions with unicode content
+    pub(super) unicode_sessions: usize,    // Number of sessions with unicode content
 }
 
 /// PTY session handle with exclusive access to all PTY resources.
@@ -766,10 +751,7 @@ mod tests {
         }
 
         let metrics = scrollback.metrics();
-        assert!(
-            metrics.usage_percent > 50.0 && metrics.usage_percent < 60.0,
-            "Usage should be around 50-55%"
-        );
+        assert!(metrics.usage_percent > 50.0 && metrics.usage_percent < 60.0, "Usage should be around 50-55%");
     }
 
     #[test]

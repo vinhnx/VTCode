@@ -28,9 +28,7 @@ mod types;
 // ── Re-exports (TUI) ───────────────────────────────────────────────────────
 
 #[cfg(feature = "tui")]
-pub use command_utils::{
-    is_cargo_command, is_cargo_command_string, is_development_toolchain_command,
-};
+pub use command_utils::{is_cargo_command, is_cargo_command_string, is_development_toolchain_command};
 #[cfg(feature = "tui")]
 pub use manager::PtyManager;
 #[cfg(feature = "tui")]
@@ -121,20 +119,12 @@ mod headless_pty {
 
             let candidate = self.workspace_root.join(requested);
             let normalized = ensure_path_within_workspace(&candidate, &self.workspace_root)
-                .map_err(|_| {
-                    anyhow!(
-                        "Working directory '{}' escapes the workspace root",
-                        candidate.display()
-                    )
-                })?;
-            let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
-                format!("Working directory '{}' does not exist", normalized.display())
-            })?;
+                .map_err(|_| anyhow!("Working directory '{}' escapes the workspace root", candidate.display()))?;
+            let metadata = tokio::fs::metadata(&normalized)
+                .await
+                .with_context(|| format!("Working directory '{}' does not exist", normalized.display()))?;
             if !metadata.is_dir() {
-                return Err(anyhow!(
-                    "Working directory '{}' is not a directory",
-                    normalized.display()
-                ));
+                return Err(anyhow!("Working directory '{}' is not a directory", normalized.display()));
             }
             Ok(normalized)
         }
@@ -157,20 +147,11 @@ mod headless_pty {
             Err(anyhow!("PTY support disabled in headless build"))
         }
 
-        pub fn read_session_output(
-            &self,
-            _session_id: &str,
-            _drain: bool,
-        ) -> Result<Option<String>> {
+        pub fn read_session_output(&self, _session_id: &str, _drain: bool) -> Result<Option<String>> {
             Err(anyhow!("PTY support disabled in headless build"))
         }
 
-        pub fn send_input_to_session(
-            &self,
-            _session_id: &str,
-            _data: &[u8],
-            _append_newline: bool,
-        ) -> Result<usize> {
+        pub fn send_input_to_session(&self, _session_id: &str, _data: &[u8], _append_newline: bool) -> Result<usize> {
             Err(anyhow!("PTY support disabled in headless build"))
         }
 

@@ -13,9 +13,7 @@
 
 use crate::exec::ToolDependency;
 use crate::utils::error_messages::*;
-use crate::utils::file_utils::{
-    ensure_dir_exists, read_file_with_context, write_file_with_context,
-};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
@@ -124,8 +122,7 @@ impl SkillManager {
 
         // Save metadata
         let metadata_path = skill_dir.join("skill.json");
-        let metadata_json =
-            serde_json::to_string_pretty(&skill.metadata).context(ERR_SERIALIZE_METADATA)?;
+        let metadata_json = serde_json::to_string_pretty(&skill.metadata).context(ERR_SERIALIZE_METADATA)?;
         write_file_with_context(&metadata_path, &metadata_json, "skill metadata")
             .await
             .context(ERR_WRITE_SKILL_METADATA)?;
@@ -155,20 +152,18 @@ impl SkillManager {
         let legacy_skill_dir = self.legacy_skills_dir.join(name);
 
         // Try to find code file (python or javascript)
-        let (code_path, language, skill_root) = if tokio::fs::try_exists(skill_dir.join("skill.py"))
-            .await
-            .unwrap_or(false)
-        {
-            (skill_dir.join("skill.py"), "python3", skill_dir)
-        } else if tokio::fs::try_exists(skill_dir.join("skill.js")).await.unwrap_or(false) {
-            (skill_dir.join("skill.js"), "javascript", skill_dir)
-        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.py")).await.unwrap_or(false) {
-            (legacy_skill_dir.join("skill.py"), "python3", legacy_skill_dir)
-        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.js")).await.unwrap_or(false) {
-            (legacy_skill_dir.join("skill.js"), "javascript", legacy_skill_dir)
-        } else {
-            return Err(anyhow!("skill '{name}' not found"));
-        };
+        let (code_path, language, skill_root) =
+            if tokio::fs::try_exists(skill_dir.join("skill.py")).await.unwrap_or(false) {
+                (skill_dir.join("skill.py"), "python3", skill_dir)
+            } else if tokio::fs::try_exists(skill_dir.join("skill.js")).await.unwrap_or(false) {
+                (skill_dir.join("skill.js"), "javascript", skill_dir)
+            } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.py")).await.unwrap_or(false) {
+                (legacy_skill_dir.join("skill.py"), "python3", legacy_skill_dir)
+            } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.js")).await.unwrap_or(false) {
+                (legacy_skill_dir.join("skill.js"), "javascript", legacy_skill_dir)
+            } else {
+                return Err(anyhow!("skill '{name}' not found"));
+            };
 
         // Load code
         let code = read_file_with_context(&code_path, "skill code")
@@ -180,16 +175,11 @@ impl SkillManager {
         let metadata_json = read_file_with_context(&metadata_path, "skill metadata")
             .await
             .context(ERR_READ_SKILL_METADATA)?;
-        let metadata: SkillMetadata =
-            serde_json::from_str(&metadata_json).context(ERR_PARSE_SKILL_METADATA)?;
+        let metadata: SkillMetadata = serde_json::from_str(&metadata_json).context(ERR_PARSE_SKILL_METADATA)?;
 
         // Ensure language matches
         if metadata.language != language {
-            return Err(anyhow!(
-                "skill language mismatch: expected {}, found {}",
-                metadata.language,
-                language
-            ));
+            return Err(anyhow!("skill language mismatch: expected {}, found {}", metadata.language, language));
         }
 
         debug!(
@@ -257,9 +247,7 @@ impl SkillManager {
         let mut content = String::new();
         content.push_str("# Skills Index\n\n");
         content.push_str("This file lists all available skills for dynamic discovery.\n");
-        content.push_str(
-            "Use `read_file` on individual skill directories for full documentation.\n\n",
-        );
+        content.push_str("Use `read_file` on individual skill directories for full documentation.\n\n");
         if skills.iter().any(|entry| matches!(entry.origin, SkillOrigin::Legacy)) {
             content.push_str(
                 "Legacy skills from `.vtcode/skills/` are included but deprecated. Move them to `.agents/skills/`.\n\n",
@@ -282,11 +270,7 @@ impl SkillManager {
                     skill.tags.join(", ")
                 };
                 let desc = skill.description.replace('|', "\\|");
-                let _ = writeln!(
-                    content,
-                    "| `{}` | {} | {} | {} |",
-                    skill.name, skill.language, desc, tags
-                );
+                let _ = writeln!(content, "| `{}` | {} | {} | {} |", skill.name, skill.language, desc, tags);
             }
 
             content.push_str("\n## Quick Reference\n\n");
@@ -335,8 +319,7 @@ impl SkillManager {
         let mut entries = Vec::new();
         let mut seen = hashbrown::HashSet::new();
 
-        let primary =
-            self.read_skills_from_dir(&self.skills_dir).await.context(ERR_READ_SKILLS_DIR)?;
+        let primary = self.read_skills_from_dir(&self.skills_dir).await.context(ERR_READ_SKILLS_DIR)?;
         for metadata in primary {
             seen.insert(metadata.name.clone());
             entries.push(SkillEntry { metadata, origin: SkillOrigin::Primary });
@@ -369,8 +352,7 @@ impl SkillManager {
             let path = entry.path();
             if path.is_dir() {
                 let metadata_path = path.join("skill.json");
-                if let Ok(metadata_json) =
-                    read_file_with_context(&metadata_path, "skill metadata").await
+                if let Ok(metadata_json) = read_file_with_context(&metadata_path, "skill metadata").await
                     && let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json)
                 {
                     skills.push(metadata);
@@ -400,8 +382,7 @@ impl SkillManager {
     /// Generate Markdown documentation for a skill.
     fn generate_markdown(skill: &Skill) -> String {
         // Reserve an estimated capacity to avoid multiple reallocations.
-        let mut md =
-            String::with_capacity(1024 + skill.code.len() + skill.metadata.description.len());
+        let mut md = String::with_capacity(1024 + skill.code.len() + skill.metadata.description.len());
 
         let _ = writeln!(md, "# {}\n", skill.metadata.name);
         let _ = writeln!(md, "{}\n", skill.metadata.description);
@@ -418,11 +399,7 @@ impl SkillManager {
         if !skill.metadata.inputs.is_empty() {
             md.push_str("## Inputs\n\n");
             for param in &skill.metadata.inputs {
-                let required = if param.required {
-                    "required"
-                } else {
-                    "optional"
-                };
+                let required = if param.required { "required" } else { "optional" };
                 let _ = writeln!(
                     md,
                     "- `{name}` ({type}, {required}): {desc}",

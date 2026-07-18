@@ -42,10 +42,7 @@ pub(crate) enum PlanningIntent {
 ///
 /// # Returns
 /// A `PlanningIntent` indicating the user's intent.
-pub(crate) fn detect_planning_intent(
-    text: &str,
-    assistant_prompted_implementation: bool,
-) -> PlanningIntent {
+pub(crate) fn detect_planning_intent(text: &str, assistant_prompted_implementation: bool) -> PlanningIntent {
     let normalized = planning::normalize_plan_intent(text);
     let trimmed = normalized.trim();
 
@@ -86,9 +83,7 @@ pub(crate) fn detect_enter_planning_intent(text: &str) -> bool {
 /// message before the last user message, then checks if it contains
 /// implementation-related cues.
 pub(crate) fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) -> bool {
-    let Some(last_user_index) =
-        working_history.iter().rposition(|msg| msg.role == uni::MessageRole::User)
-    else {
+    let Some(last_user_index) = working_history.iter().rposition(|msg| msg.role == uni::MessageRole::User) else {
         return false;
     };
 
@@ -142,10 +137,7 @@ mod tests {
     #[test]
     fn detects_implement_as_exit_intent() {
         assert_eq!(detect_planning_intent("implement", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(
-            detect_planning_intent("Implement the plan.", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("Implement the plan.", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -179,23 +171,14 @@ mod tests {
     fn detects_approve_as_exit_intent() {
         assert_eq!(detect_planning_intent("approve", false), PlanningIntent::ExitAndImplement);
         assert_eq!(detect_planning_intent("approved", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(
-            detect_planning_intent("approve the plan", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("approve the plan", false), PlanningIntent::ExitAndImplement);
         assert_eq!(detect_planning_intent("lgtm", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(
-            detect_planning_intent("looks good, let's go", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("looks good, let's go", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
     fn disapprove_is_not_exit_intent() {
-        assert_eq!(
-            detect_planning_intent("I disapprove, keep planning", false),
-            PlanningIntent::StayInPlanning
-        );
+        assert_eq!(detect_planning_intent("I disapprove, keep planning", false), PlanningIntent::StayInPlanning);
     }
 
     #[test]
@@ -207,10 +190,7 @@ mod tests {
 
     #[test]
     fn non_intent_text_returns_none() {
-        assert_eq!(
-            detect_planning_intent("The implementation details are unclear.", false),
-            PlanningIntent::None
-        );
+        assert_eq!(detect_planning_intent("The implementation details are unclear.", false), PlanningIntent::None);
     }
 
     #[test]

@@ -14,8 +14,7 @@ use crate::tools::tool_intent;
 ///
 /// Dispatches to the appropriate reducer based on the tool name.
 pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
-    let canonical_tool_name =
-        tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
+    let canonical_tool_name = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     match canonical_tool_name {
         tools::READ_FILE => reduce_read_file_result(result),
         tools::UNIFIED_EXEC => reduce_command_result(result),
@@ -83,14 +82,8 @@ fn reduce_command_result(result: Value) -> Value {
     let mut reduced = obj.clone();
     reduced.insert(stream_key.to_string(), Value::String(truncated));
     reduced.insert("is_truncated".to_string(), Value::Bool(true));
-    reduced.insert(
-        "original_lines".to_string(),
-        Value::Number(serde_json::Number::from(lines_count as u64)),
-    );
-    reduced.insert(
-        "note".to_string(),
-        Value::String("Command output truncated for context economy.".to_string()),
-    );
+    reduced.insert("original_lines".to_string(), Value::Number(serde_json::Number::from(lines_count as u64)));
+    reduced.insert("note".to_string(), Value::String("Command output truncated for context economy.".to_string()));
     Value::Object(reduced)
 }
 

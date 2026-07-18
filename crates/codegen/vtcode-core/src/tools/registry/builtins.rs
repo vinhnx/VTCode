@@ -11,9 +11,7 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
-use crate::tools::handlers::{
-    FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool,
-};
+use crate::tools::handlers::{FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool};
 use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
@@ -21,8 +19,8 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool};
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters,
-    exec_command_parameters, list_files_parameters, mcp_parameters, write_stdin_parameters,
+    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
+    list_files_parameters, mcp_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -30,10 +28,7 @@ use super::registration::{ToolCatalogSource, ToolRegistration};
 use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 
 /// Register all builtin tools into the inventory using the shared planning workflow state.
-pub(super) fn register_builtin_tools(
-    inventory: &ToolInventory,
-    planning_workflow_state: &PlanningWorkflowState,
-) {
+pub(super) fn register_builtin_tools(inventory: &ToolInventory, planning_workflow_state: &PlanningWorkflowState) {
     for registration in builtin_tool_registrations(Some(planning_workflow_state)) {
         let tool_name = registration.name().to_string();
         if let Err(err) = inventory.register_tool(registration) {
@@ -89,12 +84,8 @@ pub(super) fn builtin_tool_registrations(
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_request_user_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let request_user_input_factory = native_cgp_tool_factory(|| RequestUserInputTool);
-    ToolRegistration::from_tool_instance(
-        tools::REQUEST_USER_INPUT,
-        CapabilityLevel::Basic,
-        RequestUserInputTool,
-    )
-    .with_native_cgp_factory(request_user_input_factory)
+    ToolRegistration::from_tool_instance(tools::REQUEST_USER_INPUT, CapabilityLevel::Basic, RequestUserInputTool)
+        .with_native_cgp_factory(request_user_input_factory)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -150,9 +141,7 @@ fn register_start_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolRe
         CapabilityLevel::Basic,
         StartPlanningTool::new(plan_state),
     )
-    .with_native_cgp_factory(native_cgp_tool_factory(move || {
-        StartPlanningTool::new(factory_state.clone())
-    }))
+    .with_native_cgp_factory(native_cgp_tool_factory(move || StartPlanningTool::new(factory_state.clone())))
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -166,9 +155,7 @@ fn register_finish_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolR
         CapabilityLevel::Basic,
         FinishPlanningTool::new(plan_state),
     )
-    .with_native_cgp_factory(native_cgp_tool_factory(move || {
-        FinishPlanningTool::new(factory_state.clone())
-    }))
+    .with_native_cgp_factory(native_cgp_tool_factory(move || FinishPlanningTool::new(factory_state.clone())))
 }
 
 // ---------------------------------------------------------------------------
@@ -306,9 +293,8 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let web_search = WebSearchTool::with_config(
-        tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default(),
-    );
+    let web_search =
+        WebSearchTool::with_config(tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default());
     let web_search_for_factory = web_search.clone();
     let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
     ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
@@ -342,33 +328,29 @@ fn register_defuddle_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolR
     let defuddle = DefuddleTool::new();
     let defuddle_for_factory = defuddle.clone();
     let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
-    ToolRegistration::from_tool_instance(
-        tools::DEFUDDLE_FETCH,
-        CapabilityLevel::Basic,
-        defuddle,
-    )
-    .with_native_cgp_factory(defuddle_factory)
-    .with_description(DEFUDDLE_FETCH_DESCRIPTION)
-    .with_parameter_schema(json!({
-        "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "format": "uri",
-                "pattern": "^https?://",
-                "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths."
+    ToolRegistration::from_tool_instance(tools::DEFUDDLE_FETCH, CapabilityLevel::Basic, defuddle)
+        .with_native_cgp_factory(defuddle_factory)
+        .with_description(DEFUDDLE_FETCH_DESCRIPTION)
+        .with_parameter_schema(json!({
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?://",
+                    "description": "REMOTE web page URL (http:// or https:// ONLY). Do NOT use for local file paths."
+                },
+                "max_bytes": {
+                    "type": "integer",
+                    "description": "Hard cap on the returned markdown size in bytes (default: 262144, max: 262144)."
+                }
             },
-            "max_bytes": {
-                "type": "integer",
-                "description": "Hard cap on the returned markdown size in bytes (default: 262144, max: 262144)."
-            }
-        },
-        "required": ["url"],
-        "additionalProperties": false
-    }))
-    .with_permission(ToolPolicy::Prompt)
-    .with_aliases(["defuddle", "extract_markdown"])
-    .with_llm_visibility(false)
+            "required": ["url"],
+            "additionalProperties": false
+        }))
+        .with_permission(ToolPolicy::Prompt)
+        .with_aliases(["defuddle", "extract_markdown"])
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -416,36 +398,24 @@ fn register_exec_command(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_exec_pty_cmd(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::EXEC_PTY_CMD,
-        CapabilityLevel::Bash,
-        false,
-        ToolRegistry::run_pty_cmd_executor,
-    )
-    .with_description(
-        "Execute a shell command attached to a PTY (pseudo-terminal) so interactive and \
+    ToolRegistration::new(tools::EXEC_PTY_CMD, CapabilityLevel::Bash, false, ToolRegistry::run_pty_cmd_executor)
+        .with_description(
+            "Execute a shell command attached to a PTY (pseudo-terminal) so interactive and \
          TTY-aware programs behave as in a real terminal. Use this when the command needs a \
          controlling terminal (e.g. pagers, prompts, curses UIs). Returns output, exit status, \
          and a reusable session id when the command is still running.",
-    )
-    .with_parameter_schema(exec_command_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_llm_visibility(false)
+        )
+        .with_parameter_schema(exec_command_parameters())
+        .with_permission(ToolPolicy::Allow)
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_write_stdin(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::WRITE_STDIN,
-        CapabilityLevel::Bash,
-        false,
-        ToolRegistry::write_stdin_executor,
-    )
-    .with_description(
-        "Write characters to an active exec_command session stdin, then poll for fresh output.",
-    )
-    .with_parameter_schema(write_stdin_parameters())
-    .with_permission(ToolPolicy::Allow)
+    ToolRegistration::new(tools::WRITE_STDIN, CapabilityLevel::Bash, false, ToolRegistry::write_stdin_executor)
+        .with_description("Write characters to an active exec_command session stdin, then poll for fresh output.")
+        .with_parameter_schema(write_stdin_parameters())
+        .with_permission(ToolPolicy::Allow)
 }
 
 // ---------------------------------------------------------------------------
@@ -469,66 +439,41 @@ fn register_read_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_list_files(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::LIST_FILES,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::list_files_executor,
-    )
-    .with_description(
-        "List files and directories with pagination. Exposed as a first-class browse tool for the harness surface.",
-    )
-    .with_parameter_schema(list_files_parameters())
-    .with_permission(ToolPolicy::Allow)
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::LIST_FILES, CapabilityLevel::CodeSearch, false, ToolRegistry::list_files_executor)
+        .with_description(
+            "List files and directories with pagination. Exposed as a first-class browse tool for the harness surface.",
+        )
+        .with_parameter_schema(list_files_parameters())
+        .with_permission(ToolPolicy::Allow)
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_write_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::WRITE_FILE,
-        CapabilityLevel::Editing,
-        false,
-        ToolRegistry::write_file_executor,
-    )
-    .with_description("Write or overwrite a file with new content. Internal file helper.")
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::WRITE_FILE, CapabilityLevel::Editing, false, ToolRegistry::write_file_executor)
+        .with_description("Write or overwrite a file with new content. Internal file helper.")
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_edit_file(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::EDIT_FILE,
-        CapabilityLevel::Editing,
-        false,
-        ToolRegistry::edit_file_executor,
-    )
-    .with_description("Apply a surgical text replacement in a file. Internal file helper.")
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::EDIT_FILE, CapabilityLevel::Editing, false, ToolRegistry::edit_file_executor)
+        .with_description("Apply a surgical text replacement in a file. Internal file helper.")
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_run_pty_cmd(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::RUN_PTY_CMD,
-        CapabilityLevel::Bash,
-        false,
-        ToolRegistry::run_pty_cmd_executor,
-    )
-    .with_description("Run a one-shot PTY command. Internal execution helper.")
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::RUN_PTY_CMD, CapabilityLevel::Bash, false, ToolRegistry::run_pty_cmd_executor)
+        .with_description("Run a one-shot PTY command. Internal execution helper.")
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_send_pty_input(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::SEND_PTY_INPUT,
-        CapabilityLevel::Bash,
-        false,
-        ToolRegistry::send_pty_input_executor,
-    )
-    .with_description("Send stdin to an active PTY session. Internal execution helper.")
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::SEND_PTY_INPUT, CapabilityLevel::Bash, false, ToolRegistry::send_pty_input_executor)
+        .with_description("Send stdin to an active PTY session. Internal execution helper.")
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -581,14 +526,11 @@ fn register_close_pty_session(_plan_state: Option<&PlanningWorkflowState>) -> To
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_get_errors(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    ToolRegistration::new(
-        tools::GET_ERRORS,
-        CapabilityLevel::CodeSearch,
-        false,
-        ToolRegistry::get_errors_executor,
-    )
-    .with_description("Retrieve compilation/lint errors from the most recent run. Internal — used by the harness surface.")
-    .with_llm_visibility(false)
+    ToolRegistration::new(tools::GET_ERRORS, CapabilityLevel::CodeSearch, false, ToolRegistry::get_errors_executor)
+        .with_description(
+            "Retrieve compilation/lint errors from the most recent run. Internal — used by the harness surface.",
+        )
+        .with_llm_visibility(false)
 }
 
 #[distributed_slice(BUILTIN_TOOLS)]
@@ -658,10 +600,7 @@ mod tests {
                 .iter()
                 .find(|registration| registration.name() == tool_name)
                 .expect("builtin registration should exist");
-            assert!(
-                registration.native_cgp_factory().is_some(),
-                "expected native CGP factory for {tool_name}"
-            );
+            assert!(registration.native_cgp_factory().is_some(), "expected native CGP factory for {tool_name}");
         }
 
         assert!(
@@ -685,10 +624,7 @@ mod tests {
                 .find(|registration| registration.name() == tool_name)
                 .expect("canonical public registration should exist");
             assert!(registration.expose_in_llm(), "{tool_name} should be public");
-            assert!(
-                registration.metadata().aliases().is_empty(),
-                "{tool_name} should not rely on aliases"
-            );
+            assert!(registration.metadata().aliases().is_empty(), "{tool_name} should not rely on aliases");
         }
 
         let code_search = registrations
@@ -696,10 +632,7 @@ mod tests {
             .find(|registration| registration.name() == tools::CODE_SEARCH)
             .expect("advanced public code_search registration should exist");
         assert!(code_search.expose_in_llm(), "code_search should be public");
-        assert!(
-            code_search.metadata().aliases().is_empty(),
-            "code_search should not rely on aliases"
-        );
+        assert!(code_search.metadata().aliases().is_empty(), "code_search should not rely on aliases");
         let schema = code_search.metadata().parameter_schema().expect("code_search schema");
         assert_eq!(schema["required"], json!(["query"]));
         let mut property_names = schema["properties"]
@@ -711,11 +644,7 @@ mod tests {
         property_names.sort_unstable();
         assert_eq!(property_names, ["file_types", "max_results", "path", "query", "result_types"]);
 
-        for tool_name in [
-            tools::UNIFIED_SEARCH,
-            tools::UNIFIED_EXEC,
-            tools::UNIFIED_FILE,
-        ] {
+        for tool_name in [tools::UNIFIED_SEARCH, tools::UNIFIED_EXEC, tools::UNIFIED_FILE] {
             assert!(
                 registrations.iter().all(|registration| registration.name() != tool_name),
                 "{tool_name} must not have a builtin registration"
@@ -921,10 +850,7 @@ mod tests {
 
             // Rule 1: length.
             let len = description.chars().count();
-            assert!(
-                (40..=1500).contains(&len),
-                "{tool_name}: description length {len} outside [40, 1500]"
-            );
+            assert!((40..=1500).contains(&len), "{tool_name}: description length {len} outside [40, 1500]");
 
             // Rule 2: verb cue (case-sensitive "Use " is the most common).
             let has_verb = verb_cues.iter().any(|cue| description.contains(cue));
@@ -955,8 +881,7 @@ mod tests {
         // behind the deferred-loading path, or deliberately raise this cap in
         // review.
         let registrations = builtin_tool_registrations(None);
-        let exposed: usize =
-            registrations.iter().filter(|registration| registration.expose_in_llm()).count();
+        let exposed: usize = registrations.iter().filter(|registration| registration.expose_in_llm()).count();
         assert!(
             exposed <= 14,
             "exposed built-in tool count is {exposed}; expected <= 14. \
@@ -976,9 +901,7 @@ mod tests {
     #[test]
     fn emitted_model_tool_count_stays_within_cap_for_default_config() {
         use crate::config::ToolDocumentationMode;
-        use crate::tools::handlers::{
-            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
-        };
+        use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
 
         let registrations = builtin_tool_registrations(None);
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
@@ -1012,9 +935,7 @@ mod tests {
     #[test]
     fn emitted_model_tool_schema_fits_within_first_request_budget() {
         use crate::config::ToolDocumentationMode;
-        use crate::tools::handlers::{
-            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
-        };
+        use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
         use serde::Serialize;
 
         #[derive(Serialize)]
@@ -1060,9 +981,7 @@ mod tests {
     fn first_request_total_token_budget_within_limit() {
         use crate::config::ToolDocumentationMode;
         use crate::prompts::system::default_system_prompt;
-        use crate::tools::handlers::{
-            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
-        };
+        use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
         use serde::Serialize;
 
         #[derive(Serialize)]
@@ -1100,10 +1019,8 @@ mod tests {
         let instruction_appendix_tokens = 250;
         let welcome_addendum_tokens = 200;
 
-        let total_no_mcp = system_prompt_tokens
-            + tool_schema_tokens
-            + instruction_appendix_tokens
-            + welcome_addendum_tokens;
+        let total_no_mcp =
+            system_prompt_tokens + tool_schema_tokens + instruction_appendix_tokens + welcome_addendum_tokens;
 
         assert!(
             total_no_mcp <= 12_000,
@@ -1131,9 +1048,7 @@ mod tests {
 
         use crate::config::ToolDocumentationMode;
         use crate::prompts::system::default_system_prompt;
-        use crate::tools::handlers::{
-            SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities,
-        };
+        use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
         use serde::Serialize;
 
         #[derive(Serialize)]
@@ -1176,9 +1091,6 @@ mod tests {
         let hash1 = hash_system_prompt_and_tools();
         let hash2 = hash_system_prompt_and_tools();
 
-        assert_eq!(
-            hash1, hash2,
-            "system prompt + tool schema prefix is not byte-stable across rebuilds"
-        );
+        assert_eq!(hash1, hash2, "system prompt + tool schema prefix is not byte-stable across rebuilds");
     }
 }

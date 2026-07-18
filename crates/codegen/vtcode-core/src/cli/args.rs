@@ -191,19 +191,11 @@ pub struct Cli {
     pub skip_confirmations: bool,
 
     /// Enable experimental Codex app-server features for this run
-    #[arg(
-        long = "codex-experimental",
-        global = true,
-        conflicts_with = "no_codex_experimental"
-    )]
+    #[arg(long = "codex-experimental", global = true, conflicts_with = "no_codex_experimental")]
     pub codex_experimental: bool,
 
     /// Disable experimental Codex app-server features for this run
-    #[arg(
-        long = "no-codex-experimental",
-        global = true,
-        conflicts_with = "codex_experimental"
-    )]
+    #[arg(long = "no-codex-experimental", global = true, conflicts_with = "codex_experimental")]
     pub no_codex_experimental: bool,
 
     /// Print response without launching the interactive TUI
@@ -792,10 +784,7 @@ pub enum Commands {
         )]
         name: Option<String>,
         /// Force initialization - overwrite existing project structure
-        #[arg(
-            long,
-            long_help = "Overwrite existing project structure without confirmation."
-        )]
+        #[arg(long, long_help = "Overwrite existing project structure without confirmation.")]
         force: bool,
         /// Migrate existing files - move existing config/cache files to new structure
         #[arg(
@@ -841,9 +830,7 @@ pub enum Commands {
     ///   vtcode login codex --device-code
     Login {
         /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
-        #[arg(
-            long_help = "The provider to authenticate with.\nSupported: openai, openrouter, copilot, codex"
-        )]
+        #[arg(long_help = "The provider to authenticate with.\nSupported: openai, openrouter, copilot, codex")]
         provider: String,
         /// Use device-code login when the provider supports it (currently `codex` only)
         #[arg(
@@ -863,9 +850,7 @@ pub enum Commands {
     ///   vtcode logout openrouter
     Logout {
         /// Provider name (`openai`, `openrouter`, `copilot`, or `codex`)
-        #[arg(
-            long_help = "The provider to deauthenticate.\nSupported: openai, openrouter, copilot, codex"
-        )]
+        #[arg(long_help = "The provider to deauthenticate.\nSupported: openai, openrouter, copilot, codex")]
         provider: String,
     },
 
@@ -880,9 +865,7 @@ pub enum Commands {
     ///   vtcode auth openrouter
     Auth {
         /// Optional provider name (`openai`, `openrouter`, `copilot`, or `codex`)
-        #[arg(
-            long_help = "Show status for a single provider.\nOmit to show status for all supported providers."
-        )]
+        #[arg(long_help = "Show status for a single provider.\nOmit to show status for all supported providers.")]
         provider: Option<String>,
     },
 
@@ -1006,10 +989,7 @@ pub enum Commands {
         )]
         force: bool,
         /// List available versions
-        #[arg(
-            long,
-            long_help = "Print available release versions from GitHub and exit."
-        )]
+        #[arg(long, long_help = "Print available release versions from GitHub and exit.")]
         list: bool,
         /// Number of versions to list (default: 10)
         #[arg(
@@ -1026,10 +1006,7 @@ pub enum Commands {
         )]
         pin: Option<String>,
         /// Unpin version
-        #[arg(
-            long,
-            long_help = "Remove a previously set version pin and resume auto-updates."
-        )]
+        #[arg(long, long_help = "Remove a previously set version pin and resume auto-updates.")]
         unpin: bool,
         /// Set release channel (stable, beta, nightly)
         #[arg(
@@ -1398,8 +1375,7 @@ pub struct LoggingConfig {
 #[cfg(test)]
 mod exec_command_tests {
     use super::{
-        CheckSubcommand, Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency,
-        PodsCommands,
+        CheckSubcommand, Cli, Commands, DependenciesSubcommand, ExecSubcommand, ManagedDependency, PodsCommands,
     };
     use clap::Parser;
     use std::path::PathBuf;
@@ -1436,9 +1412,7 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_parses_last_flag() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "continue"]);
-        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
-            cli.command
-        else {
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) = cli.command else {
             panic!("expected exec resume command");
         };
 
@@ -1450,9 +1424,7 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_parses_all_flag() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "--all", "continue"]);
-        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
-            cli.command
-        else {
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) = cli.command else {
             panic!("expected exec resume command");
         };
 
@@ -1464,9 +1436,7 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_allows_last_without_positional_for_stdin_prompt() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last"]);
-        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
-            cli.command
-        else {
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) = cli.command else {
             panic!("expected exec resume command");
         };
 
@@ -1519,14 +1489,7 @@ mod exec_command_tests {
 
     #[test]
     fn review_parses_target_and_style_flags() {
-        let cli = Cli::parse_from([
-            "vtcode",
-            "review",
-            "--target",
-            "HEAD~1..HEAD",
-            "--style",
-            "security",
-        ]);
+        let cli = Cli::parse_from(["vtcode", "review", "--target", "HEAD~1..HEAD", "--style", "security"]);
         let Some(Commands::Review(review)) = cli.command else {
             panic!("expected review command");
         };
@@ -1538,14 +1501,7 @@ mod exec_command_tests {
 
     #[test]
     fn review_parses_files() {
-        let cli = Cli::parse_from([
-            "vtcode",
-            "review",
-            "--file",
-            "src/main.rs",
-            "--file",
-            "src/lib.rs",
-        ]);
+        let cli = Cli::parse_from(["vtcode", "review", "--file", "src/main.rs", "--file", "src/lib.rs"]);
         let Some(Commands::Review(review)) = cli.command else {
             panic!("expected review command");
         };
@@ -1558,9 +1514,7 @@ mod exec_command_tests {
     #[test]
     fn dependencies_install_parses_ast_grep() {
         let cli = Cli::parse_from(["vtcode", "dependencies", "install", "ast-grep"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) = cli.command else {
             panic!("expected dependencies install command");
         };
 
@@ -1570,9 +1524,7 @@ mod exec_command_tests {
     #[test]
     fn dependencies_install_parses_ripgrep() {
         let cli = Cli::parse_from(["vtcode", "dependencies", "install", "ripgrep"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) = cli.command else {
             panic!("expected dependencies install command");
         };
 
@@ -1582,9 +1534,7 @@ mod exec_command_tests {
     #[test]
     fn dependencies_install_parses_search_tools() {
         let cli = Cli::parse_from(["vtcode", "dependencies", "install", "search-tools"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Install { dependency })) = cli.command else {
             panic!("expected dependencies install command");
         };
 
@@ -1594,9 +1544,7 @@ mod exec_command_tests {
     #[test]
     fn deps_alias_parses_status_command() {
         let cli = Cli::parse_from(["vtcode", "deps", "status", "ast-grep"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) = cli.command else {
             panic!("expected deps status command");
         };
 
@@ -1606,9 +1554,7 @@ mod exec_command_tests {
     #[test]
     fn deps_alias_parses_ripgrep_status_command() {
         let cli = Cli::parse_from(["vtcode", "deps", "status", "ripgrep"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) = cli.command else {
             panic!("expected deps status command");
         };
 
@@ -1618,9 +1564,7 @@ mod exec_command_tests {
     #[test]
     fn deps_alias_parses_search_tools_status_command() {
         let cli = Cli::parse_from(["vtcode", "deps", "status", "search-tools"]);
-        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) =
-            cli.command
-        else {
+        let Some(Commands::Dependencies(DependenciesSubcommand::Status { dependency })) = cli.command else {
             panic!("expected deps status command");
         };
 
@@ -1860,9 +1804,7 @@ impl Cli {
             // Remove surrounding quotes if present
             let unquote = |s: &str| -> String {
                 let s = s.trim();
-                if (s.starts_with('"') && s.ends_with('"'))
-                    || (s.starts_with('\'') && s.ends_with('\''))
-                {
+                if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
                     s[1..s.len() - 1].to_owned()
                 } else {
                     s.to_owned()
@@ -1980,13 +1922,7 @@ mod tests {
 
     #[test]
     fn config_file_api_key_env_preserves_explicit_override() {
-        let cli = Cli::parse_from([
-            "vtcode",
-            "--provider",
-            "openai",
-            "--api-key-env",
-            "CUSTOM_OPENAI_KEY",
-        ]);
+        let cli = Cli::parse_from(["vtcode", "--provider", "openai", "--api-key-env", "CUSTOM_OPENAI_KEY"]);
 
         assert_eq!(cli.get_api_key_env(), "CUSTOM_OPENAI_KEY");
     }
@@ -2032,8 +1968,7 @@ mod tests {
 
     #[test]
     fn codex_experimental_flags_conflict() {
-        let result =
-            Cli::try_parse_from(["vtcode", "--codex-experimental", "--no-codex-experimental"]);
+        let result = Cli::try_parse_from(["vtcode", "--codex-experimental", "--no-codex-experimental"]);
 
         result.unwrap_err();
     }

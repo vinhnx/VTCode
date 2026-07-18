@@ -24,10 +24,7 @@ fn assert_header_contains_badge(session: &mut Session, badge_text: &str) {
 }
 
 fn setup_shimmer_session(session: &mut Session, left_status: &str) {
-    session.handle_command(InlineCommand::SetInputStatus {
-        left: Some(left_status.to_string()),
-        right: None,
-    });
+    session.handle_command(InlineCommand::SetInputStatus { left: Some(left_status.to_string()), right: None });
 }
 
 fn clear_shimmer_session(session: &mut Session) {
@@ -66,8 +63,7 @@ fn copy_notification_renders_in_input_status_line() {
 fn copy_notification_expires_after_five_seconds() {
     let mut session = fresh_session();
     session.show_copy_notification();
-    session.copy_notification_until =
-        Some(Instant::now().checked_sub(Duration::from_secs(1)).unwrap());
+    session.copy_notification_until = Some(Instant::now().checked_sub(Duration::from_secs(1)).unwrap());
     session.handle_tick();
 
     let rendered = session
@@ -89,8 +85,7 @@ fn cursor_visible_while_scrolling() {
     assert!(during_scroll.cursor_should_be_visible);
     assert!(session.use_steady_cursor());
 
-    session.scroll_cursor_steady_until =
-        Some(Instant::now().checked_sub(Duration::from_millis(1)).unwrap());
+    session.scroll_cursor_steady_until = Some(Instant::now().checked_sub(Duration::from_millis(1)).unwrap());
     session.handle_tick();
 
     assert!(!session.use_steady_cursor());
@@ -179,10 +174,7 @@ fn header_meta_line_renders_active_primary_agent() {
 fn set_primary_agent_command_updates_header_badge() {
     let mut session = fresh_session();
 
-    session.handle_command(InlineCommand::SetPrimaryAgent {
-        name: Some("reviewer".to_string()),
-        color: None,
-    });
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: Some("reviewer".to_string()), color: None });
     assert_header_contains_badge(&mut session, "Reviewer");
 
     session.handle_command(InlineCommand::SetPrimaryAgent { name: None, color: None });
@@ -201,10 +193,7 @@ fn bottom_status_excludes_primary_agent() {
         left: None,
         right: Some("gpt-5.5 | 98% context left".to_string()),
     });
-    session.handle_command(InlineCommand::SetPrimaryAgent {
-        name: Some("reviewer".to_string()),
-        color: None,
-    });
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: Some("reviewer".to_string()), color: None });
 
     assert_eq!(session.status_right_text(), Some("gpt-5.5 | 98% context left"));
 }
@@ -212,10 +201,7 @@ fn bottom_status_excludes_primary_agent() {
 #[test]
 fn header_context_updates_preserve_active_primary_agent() {
     let mut session = fresh_session();
-    session.handle_command(InlineCommand::SetPrimaryAgent {
-        name: Some("planner".to_string()),
-        color: None,
-    });
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: Some("planner".to_string()), color: None });
 
     let mut replacement = session.header_context.clone();
     replacement.primary_agent = None;
@@ -377,8 +363,7 @@ fn header_omits_auto_permission_badge() {
 #[test]
 fn header_meta_line_excludes_editor_context() {
     let mut session = fresh_session();
-    session.header_context.editor_context =
-        Some("File: src/main.rs · Rust · Sel 120-148".to_string());
+    session.header_context.editor_context = Some("File: src/main.rs · Rust · Sel 120-148".to_string());
 
     let line = session.header_meta_line();
     let summary = line_text(&line);
@@ -486,10 +471,7 @@ fn header_highlights_collapse_to_single_line() {
     let mut session = session_with_highlights(vec![
         InlineHeaderHighlight {
             title: "Keyboard Shortcuts".to_string(),
-            lines: vec![
-                "/help Show help".to_string(),
-                "Enter Submit message".to_string(),
-            ],
+            lines: vec!["/help Show help".to_string(), "Enter Submit message".to_string()],
         },
         InlineHeaderHighlight {
             title: "Usage Tips".to_string(),
@@ -500,8 +482,7 @@ fn header_highlights_collapse_to_single_line() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String =
-        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
+    let summary: String = lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
     assert!(summary.contains("Keyboard Shortcuts"));
     assert!(summary.contains("/help Show help"));
@@ -523,11 +504,9 @@ fn header_highlight_summary_truncates_long_entries() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String =
-        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
+    let summary: String = lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
-    let expected_preview =
-        format!("{}{}", "A".repeat(limit.saturating_sub(1)), ui::INLINE_PREVIEW_ELLIPSIS);
+    let expected_preview = format!("{}{}", "A".repeat(limit.saturating_sub(1)), ui::INLINE_PREVIEW_ELLIPSIS);
 
     assert!(summary.contains("Details"));
     assert!(summary.contains(&expected_preview));
@@ -549,8 +528,7 @@ fn header_highlight_summary_hides_truncated_command_segments() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String =
-        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
+    let summary: String = lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
     assert!(summary.contains("/{command}"));
     assert!(summary.contains("(+3 more)"));
@@ -561,10 +539,8 @@ fn header_highlight_summary_hides_truncated_command_segments() {
 #[test]
 fn header_height_expands_when_wrapping_required() {
     let mut session = fresh_session();
-    session.header_context.provider =
-        format!("{}Example Provider With Extended Label", ui::HEADER_PROVIDER_PREFIX);
-    session.header_context.model =
-        format!("{}ExampleModelIdentifierWithDetail", ui::HEADER_MODEL_PREFIX);
+    session.header_context.provider = format!("{}Example Provider With Extended Label", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}ExampleModelIdentifierWithDetail", ui::HEADER_MODEL_PREFIX);
     session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
     session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
     session.header_context.tools =
@@ -616,8 +592,7 @@ fn agent_label_uses_accent_color_without_border() {
     let label_span = &spans[label_index];
     assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 
-    let padding_span =
-        spans.get(label_index + 1).expect("agent label should be followed by padding");
+    let padding_span = spans.get(label_index + 1).expect("agent label should be followed by padding");
     assert_eq!(padding_span.content.clone().into_owned(), ui::INLINE_AGENT_MESSAGE_LEFT_PADDING);
 
     assert!(

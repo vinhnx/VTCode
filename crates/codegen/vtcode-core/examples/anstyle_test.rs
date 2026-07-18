@@ -13,11 +13,7 @@ fn main() {
 
     // Test bold styles
     println!("{}This is bold text{}", Styles::bold().render(), Styles::bold().render_reset());
-    println!(
-        "{}This is bold error text{}",
-        Styles::bold_error().render(),
-        Styles::bold_error().render_reset()
-    );
+    println!("{}This is bold error text{}", Styles::bold_error().render(), Styles::bold_error().render_reset());
     println!(
         "{}This is bold success text{}",
         Styles::bold_success().render(),

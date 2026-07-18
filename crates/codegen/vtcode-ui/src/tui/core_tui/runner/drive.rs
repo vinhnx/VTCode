@@ -22,10 +22,7 @@ fn has_active_navigation_ui<S: TuiSessionDriver>(session: &S) -> bool {
     session.has_active_navigation_ui()
 }
 
-fn handle_focus_change_event(
-    event: &crossterm::event::Event,
-    focus_callback: Option<&FocusChangeCallback>,
-) {
+fn handle_focus_change_event(event: &crossterm::event::Event, focus_callback: Option<&FocusChangeCallback>) {
     let Some(callback) = focus_callback else {
         return;
     };
@@ -64,9 +61,8 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
 ) -> Result<()> {
     use ratatui::crossterm::{
         event::{
-            DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-            EnableFocusChange, EnableMouseCapture, PopKeyboardEnhancementFlags,
-            PushKeyboardEnhancementFlags,
+            DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange,
+            EnableMouseCapture, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
         },
         terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
     };
@@ -83,8 +79,7 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
             tracing::debug!(%error, "failed to suspend keyboard enhancement flags");
         }
         if use_alternate_screen {
-            execute!(stderr, LeaveAlternateScreen)
-                .context("failed to leave alternate screen before suspend")?;
+            execute!(stderr, LeaveAlternateScreen).context("failed to leave alternate screen before suspend")?;
         }
 
         if let Err(error) = execute!(stderr, DisableFocusChange, DisableBracketedPaste) {
@@ -115,11 +110,10 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
             tracing::debug!(%error, "failed to restore mouse capture after resume");
         }
         if use_alternate_screen {
-            execute!(stderr, EnterAlternateScreen)
-                .context("failed to re-enter alternate screen after resume")?;
-            terminal.clear().map_err(|error| {
-                anyhow::anyhow!("failed to clear terminal after resume: {error}")
-            })?;
+            execute!(stderr, EnterAlternateScreen).context("failed to re-enter alternate screen after resume")?;
+            terminal
+                .clear()
+                .map_err(|error| anyhow::anyhow!("failed to clear terminal after resume: {error}"))?;
         }
         if !keyboard_flags.is_empty()
             && let Err(error) = execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags))
@@ -239,8 +233,7 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
         } else {
             SetCursorStyle::DefaultUserShape
         };
-        execute!(io::stderr(), style)
-            .context("failed to update cursor style for inline session")?;
+        execute!(io::stderr(), style).context("failed to update cursor style for inline session")?;
         *cursor_steady = desired_steady;
     }
 
@@ -263,9 +256,7 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
     let draw_elapsed = draw_started_at.elapsed();
     if let Some(input_started_at) = input_started_at {
         let input_to_draw_elapsed = input_started_at.elapsed();
-        if input_to_draw_elapsed.as_millis() >= INPUT_TO_DRAW_WARN_MS
-            || draw_elapsed.as_millis() >= DRAW_WARN_MS
-        {
+        if input_to_draw_elapsed.as_millis() >= INPUT_TO_DRAW_WARN_MS || draw_elapsed.as_millis() >= DRAW_WARN_MS {
             tracing::debug!(
                 target: "vtcode.tui.latency",
                 input_to_draw_ms = input_to_draw_elapsed.as_millis(),
@@ -299,9 +290,7 @@ pub(super) struct DriveRuntimeOptions<E> {
 fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {
     matches!(
         event,
-        crossterm::event::Event::Key(_)
-            | crossterm::event::Event::Mouse(_)
-            | crossterm::event::Event::Paste(_)
+        crossterm::event::Event::Key(_) | crossterm::event::Event::Mouse(_) | crossterm::event::Event::Paste(_)
     )
 }
 
@@ -316,11 +305,7 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     event_stream: &mut super::EventStreamController,
 ) -> Result<()> {
     #[cfg(not(unix))]
-    let _ = (
-        runtime_options.use_alternate_screen,
-        runtime_options.keyboard_flags,
-        &runtime_options.fullscreen,
-    );
+    let _ = (runtime_options.use_alternate_screen, runtime_options.keyboard_flags, &runtime_options.fullscreen);
 
     let mut cursor_steady = false;
     let mut mouse_pointer = MousePointerShape::Default;
@@ -330,10 +315,8 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
         for _ in 0..MAX_COMMANDS_PER_TURN {
             match commands.try_recv() {
                 Ok(command) => {
-                    let action =
-                        handle_inline_command(terminal, session, inputs, &event_channels, command)?;
-                    process_event_stream_action(action, &event_channels, inputs, event_stream)
-                        .await;
+                    let action = handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+                    process_event_stream_action(action, &event_channels, inputs, event_stream).await;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -346,22 +329,12 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
         // Update terminal title based on current activity state
         session.update_terminal_title();
 
-        if session.thinking_spinner_active()
-            || session.is_running_activity()
-            || session.has_status_spinner()
-        {
+        if session.thinking_spinner_active() || session.is_running_activity() || session.has_status_spinner() {
             event_channels.record_input();
         }
 
         // Render if dirty (catches command-driven changes)
-        render_if_dirty(
-            terminal,
-            session,
-            &event_channels,
-            &mut cursor_steady,
-            &mut mouse_pointer,
-            None,
-        )?;
+        render_if_dirty(terminal, session, &event_channels, &mut cursor_steady, &mut mouse_pointer, None)?;
 
         if session.should_exit() {
             break 'main;

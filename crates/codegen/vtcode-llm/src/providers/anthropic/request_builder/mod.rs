@@ -6,13 +6,13 @@ mod thinking;
 pub mod tools;
 
 use crate::provider::{
-    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicThinkingConfig,
-    LLMError, LLMRequest, PromptCacheProfile,
+    AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicThinkingConfig, LLMError, LLMRequest,
+    PromptCacheProfile,
 };
 use crate::providers::anthropic_types::{
     AnthropicAdvisorCaching, AnthropicAdvisorTool, AnthropicFallbackParam, AnthropicOutputConfig,
-    AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget, AnthropicTool, CacheControl,
-    ThinkingConfig, ThinkingDisplay,
+    AnthropicOutputFormat, AnthropicRequest, AnthropicTaskBudget, AnthropicTool, CacheControl, ThinkingConfig,
+    ThinkingDisplay,
 };
 use serde_json::{Value, json};
 use vtcode_config::constants::reasoning;
@@ -20,8 +20,7 @@ use vtcode_config::core::{AdvisorConfig, AnthropicConfig, AnthropicPromptCacheSe
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
-    default_effort_for_model, effort_allowed_for_model, resolve_model_name, supports_effort,
-    supports_task_budget,
+    default_effort_for_model, effort_allowed_for_model, resolve_model_name, supports_effort, supports_task_budget,
 };
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
@@ -50,10 +49,7 @@ fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -
     }
 }
 
-pub fn convert_to_anthropic_format(
-    request: &LLMRequest,
-    ctx: &RequestBuilderContext,
-) -> Result<Value, LLMError> {
+pub fn convert_to_anthropic_format(request: &LLMRequest, ctx: &RequestBuilderContext) -> Result<Value, LLMError> {
     let resolved_model = resolve_model_name(&request.model, ctx.model);
     let tools_ttl = if ctx.prompt_cache_enabled {
         get_tools_cache_ttl(ctx.prompt_cache_settings)
@@ -63,25 +59,23 @@ pub fn convert_to_anthropic_format(
 
     let messages_ttl = resolve_messages_ttl(request, ctx);
 
-    let tools_cache_control =
-        if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_tool_definitions {
-            Some(CacheControl {
-                control_type: "ephemeral".to_string(),
-                ttl: Some(tools_ttl.to_string()),
-            })
-        } else {
-            None
-        };
+    let tools_cache_control = if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_tool_definitions {
+        Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some(tools_ttl.to_string()),
+        })
+    } else {
+        None
+    };
 
-    let system_cache_control =
-        if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_system_messages {
-            Some(CacheControl {
-                control_type: "ephemeral".to_string(),
-                ttl: Some(tools_ttl.to_string()),
-            })
-        } else {
-            None
-        };
+    let system_cache_control = if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_system_messages {
+        Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some(tools_ttl.to_string()),
+        })
+    } else {
+        None
+    };
 
     let max_breakpoints = if ctx.prompt_cache_enabled {
         ctx.prompt_cache_settings.max_breakpoints as usize
@@ -96,16 +90,15 @@ pub fn convert_to_anthropic_format(
 
     // Inject the Anthropic server-side advisor tool when enabled and the executor
     // model forms a valid pair with the configured advisor model.
-    let advisor_injected = if let Some(advisor_tool) =
-        resolve_advisor_tool(resolved_model, &ctx.anthropic_config.advisor)
-    {
-        let mut built = tools.unwrap_or_default();
-        built.push(advisor_tool);
-        tools = Some(built);
-        true
-    } else {
-        false
-    };
+    let advisor_injected =
+        if let Some(advisor_tool) = resolve_advisor_tool(resolved_model, &ctx.anthropic_config.advisor) {
+            let mut built = tools.unwrap_or_default();
+            built.push(advisor_tool);
+            tools = Some(built);
+            true
+        } else {
+            false
+        };
 
     let SystemPromptBuildResult {
         mut system_value,
@@ -139,10 +132,7 @@ pub fn convert_to_anthropic_format(
             }
             Some(Value::String(text)) => {
                 let existing = std::mem::take(text);
-                system_value = Some(Value::Array(vec![
-                    json!({ "type": "text", "text": existing }),
-                    guidance_block,
-                ]));
+                system_value = Some(Value::Array(vec![json!({ "type": "text", "text": existing }), guidance_block]));
             }
             // build_system_prompt only produces String, Array, or None —
             // this arm is defensive for forward-compatibility.
@@ -152,15 +142,14 @@ pub fn convert_to_anthropic_format(
         }
     }
 
-    let messages_cache_control =
-        if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_user_messages {
-            Some(CacheControl {
-                control_type: "ephemeral".to_string(),
-                ttl: Some(messages_ttl.to_string()),
-            })
-        } else {
-            None
-        };
+    let messages_cache_control = if ctx.prompt_cache_enabled && ctx.prompt_cache_settings.cache_user_messages {
+        Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some(messages_ttl.to_string()),
+        })
+    } else {
+        None
+    };
 
     let mut messages_to_process = request.messages.as_ref().clone();
 
@@ -179,12 +168,10 @@ pub fn convert_to_anthropic_format(
         ctx.prompt_cache_settings,
         &mut breakpoints_remaining,
     )?;
-    let messages_breakpoints_used =
-        messages_breakpoints_before.saturating_sub(breakpoints_remaining);
+    let messages_breakpoints_used = messages_breakpoints_before.saturating_sub(breakpoints_remaining);
     let explicit_breakpoints_used = max_breakpoints.saturating_sub(breakpoints_remaining);
 
-    let (thinking_val, reasoning_val) =
-        build_thinking_config(request, ctx.anthropic_config, ctx.model);
+    let (thinking_val, reasoning_val) = build_thinking_config(request, ctx.anthropic_config, ctx.model);
 
     let final_tool_choice = build_tool_choice(request, &thinking_val);
     let anthropic_overrides = request.anthropic_request_overrides.as_ref();
@@ -199,9 +186,7 @@ pub fn convert_to_anthropic_format(
     };
     let effort_value = if supports_effort(resolved_model, ctx.model) && thinking_is_adaptive {
         match anthropic_overrides.map(|overrides| &overrides.effort) {
-            Some(AnthropicOptionalStringOverride::Explicit(effort)) => {
-                Some(effort.to_ascii_lowercase())
-            }
+            Some(AnthropicOptionalStringOverride::Explicit(effort)) => Some(effort.to_ascii_lowercase()),
             Some(AnthropicOptionalStringOverride::Omit) => None,
             _ => request
                 .effort
@@ -240,44 +225,40 @@ pub fn convert_to_anthropic_format(
         .output_format
         .as_ref()
         .map(|schema| AnthropicOutputFormat::JsonSchema { schema: schema.clone() });
-    let output_config =
-        if effort_value.is_some() || task_budget.is_some() || output_format.is_some() {
-            Some(AnthropicOutputConfig {
-                effort: effort_value,
-                task_budget,
-                format: output_format,
-            })
-        } else {
-            None
-        };
-
-    let effective_temperature = if thinking_val.is_some()
-        || resolved_model == vtcode_config::constants::models::anthropic::CLAUDE_OPUS_4_8
-    {
-        None
-    } else {
-        request.temperature
-    };
-
-    let top_level_cache_control = if ctx.prompt_cache_enabled
-        && explicit_breakpoints_used < max_breakpoints
-        && !has_uncached_runtime_context
-    {
-        let ttl = if messages_breakpoints_used > 0 {
-            messages_ttl
-        } else if breakpoints_used > 0 || tools_breakpoints_used > 0 {
-            tools_ttl
-        } else {
-            messages_ttl
-        };
-
-        Some(CacheControl {
-            control_type: "ephemeral".to_string(),
-            ttl: Some(ttl.to_string()),
+    let output_config = if effort_value.is_some() || task_budget.is_some() || output_format.is_some() {
+        Some(AnthropicOutputConfig {
+            effort: effort_value,
+            task_budget,
+            format: output_format,
         })
     } else {
         None
     };
+
+    let effective_temperature =
+        if thinking_val.is_some() || resolved_model == vtcode_config::constants::models::anthropic::CLAUDE_OPUS_4_8 {
+            None
+        } else {
+            request.temperature
+        };
+
+    let top_level_cache_control =
+        if ctx.prompt_cache_enabled && explicit_breakpoints_used < max_breakpoints && !has_uncached_runtime_context {
+            let ttl = if messages_breakpoints_used > 0 {
+                messages_ttl
+            } else if breakpoints_used > 0 || tools_breakpoints_used > 0 {
+                tools_ttl
+            } else {
+                messages_ttl
+            };
+
+            Some(CacheControl {
+                control_type: "ephemeral".to_string(),
+                ttl: Some(ttl.to_string()),
+            })
+        } else {
+            None
+        };
 
     let anthropic_request = AnthropicRequest {
         model: resolved_model.to_string(),
@@ -300,16 +281,14 @@ pub fn convert_to_anthropic_format(
                     max_tokens: fb.max_tokens,
                     thinking: fb.thinking.as_ref().map(|t| match t {
                         AnthropicThinkingConfig::Disabled => ThinkingConfig::Disabled,
-                        AnthropicThinkingConfig::Enabled { budget_tokens, display } => {
-                            ThinkingConfig::Enabled {
-                                budget_tokens: *budget_tokens,
-                                display: display.as_ref().and_then(|d| match d.as_str() {
-                                    "summarized" => Some(ThinkingDisplay::Summarized),
-                                    "omitted" => Some(ThinkingDisplay::Omitted),
-                                    _ => None,
-                                }),
-                            }
-                        }
+                        AnthropicThinkingConfig::Enabled { budget_tokens, display } => ThinkingConfig::Enabled {
+                            budget_tokens: *budget_tokens,
+                            display: display.as_ref().and_then(|d| match d.as_str() {
+                                "summarized" => Some(ThinkingDisplay::Summarized),
+                                "omitted" => Some(ThinkingDisplay::Omitted),
+                                _ => None,
+                            }),
+                        },
                         AnthropicThinkingConfig::Adaptive { display } => ThinkingConfig::Adaptive {
                             display: display.as_ref().and_then(|d| match d.as_str() {
                                 "summarized" => Some(ThinkingDisplay::Summarized),
@@ -333,9 +312,7 @@ pub fn convert_to_anthropic_format(
 
 fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static str {
     match effort {
-        ReasoningEffortLevel::None | ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
-            reasoning::LOW
-        }
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => reasoning::LOW,
         _ => effort.as_str(),
     }
 }
@@ -360,10 +337,7 @@ pub(crate) fn is_anthropic_executor_model(model: &str) -> bool {
 /// executor/advisor model pair fails `validate_advisor_pair`. Both the request
 /// builder (tool injection) and the provider (beta-header gating) call this so
 /// the two can never disagree.
-pub(crate) fn resolve_advisor_tool(
-    executor: &str,
-    advisor: &AdvisorConfig,
-) -> Option<AnthropicTool> {
+pub(crate) fn resolve_advisor_tool(executor: &str, advisor: &AdvisorConfig) -> Option<AnthropicTool> {
     if !advisor.enabled {
         return None;
     }
@@ -378,9 +352,7 @@ pub(crate) fn resolve_advisor_tool(
         advisor.model.clone()
     };
 
-    if let Err(reason) =
-        vtcode_config::constants::models::anthropic::validate_advisor_pair(executor, &advisor_model)
-    {
+    if let Err(reason) = vtcode_config::constants::models::anthropic::validate_advisor_pair(executor, &advisor_model) {
         tracing::warn!(%reason, "advisor tool disabled: invalid model pair");
         return None;
     }

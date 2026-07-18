@@ -98,10 +98,7 @@ async fn run_interactive_local_manager(ctx: &mut SlashCommandContext<'_>) -> Res
     }
 }
 
-async fn run_provider_action_loop(
-    ctx: &mut SlashCommandContext<'_>,
-    provider: LocalProvider,
-) -> Result<()> {
+async fn run_provider_action_loop(ctx: &mut SlashCommandContext<'_>, provider: LocalProvider) -> Result<()> {
     loop {
         let status = local_server::probe(provider).await;
         show_local_actions_modal(ctx, provider, &status);
@@ -142,22 +139,14 @@ async fn run_provider_action_loop(
             }
             "configure" => {
                 let lines = format_provider_config(provider);
-                show_local_detail_modal(
-                    ctx,
-                    &format!("{} Configure", provider.display_name()),
-                    lines,
-                );
+                show_local_detail_modal(ctx, &format!("{} Configure", provider.display_name()), lines);
                 wait_for_list_modal_selection(ctx).await;
             }
             "troubleshoot" => {
                 let status = local_server::probe(provider).await;
                 let caps = local_server::capabilities(provider);
                 let guidance = local_server::troubleshoot(&status, &caps);
-                show_local_detail_modal(
-                    ctx,
-                    &format!("{} Troubleshoot", provider.display_name()),
-                    guidance,
-                );
+                show_local_detail_modal(ctx, &format!("{} Troubleshoot", provider.display_name()), guidance);
                 wait_for_list_modal_selection(ctx).await;
             }
             _ => continue,
@@ -224,11 +213,7 @@ fn show_local_providers_modal(ctx: &mut SlashCommandContext<'_>, statuses: &[Loc
     );
 }
 
-fn show_local_actions_modal(
-    ctx: &mut SlashCommandContext<'_>,
-    provider: LocalProvider,
-    status: &LocalServerStatus,
-) {
+fn show_local_actions_modal(ctx: &mut SlashCommandContext<'_>, provider: LocalProvider, status: &LocalServerStatus) {
     let header = if status.running {
         let model_info = if status.available_models.is_empty() {
             "no models loaded".to_string()
@@ -340,10 +325,8 @@ fn resolve_provider<'a>(
     match LocalProvider::from_key(key) {
         Some(p) => Ok(Some((key, p))),
         None => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Unknown provider '{key}'. Use: ollama, lmstudio, llamacpp"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Unknown provider '{key}'. Use: ollama, lmstudio, llamacpp"))?;
             Ok(None)
         }
     }
@@ -367,11 +350,7 @@ async fn execute_status(ctx: &mut SlashCommandContext<'_>, provider: Option<&str
 }
 
 async fn execute_start(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>) -> Result<()> {
-    let Some((_, p)) = resolve_provider(
-        ctx,
-        provider,
-        "Usage: /local start <provider> (ollama, lmstudio, llamacpp)",
-    )?
+    let Some((_, p)) = resolve_provider(ctx, provider, "Usage: /local start <provider> (ollama, lmstudio, llamacpp)")?
     else {
         return Ok(());
     };
@@ -387,11 +366,7 @@ async fn execute_start(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>
 }
 
 async fn execute_stop(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>) -> Result<()> {
-    let Some((_, p)) = resolve_provider(
-        ctx,
-        provider,
-        "Usage: /local stop <provider> (ollama, lmstudio, llamacpp)",
-    )?
+    let Some((_, p)) = resolve_provider(ctx, provider, "Usage: /local stop <provider> (ollama, lmstudio, llamacpp)")?
     else {
         return Ok(());
     };
@@ -403,10 +378,7 @@ async fn execute_stop(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>)
     Ok(())
 }
 
-async fn execute_configure(
-    ctx: &mut SlashCommandContext<'_>,
-    provider: Option<&str>,
-) -> Result<()> {
+async fn execute_configure(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>) -> Result<()> {
     if let Some((_, p)) = resolve_provider(ctx, provider, "")? {
         render_provider_config_text(ctx, p)?;
     } else if provider.is_none() {
@@ -418,10 +390,7 @@ async fn execute_configure(
     Ok(())
 }
 
-async fn execute_troubleshoot(
-    ctx: &mut SlashCommandContext<'_>,
-    provider: Option<&str>,
-) -> Result<()> {
+async fn execute_troubleshoot(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>) -> Result<()> {
     if let Some((_, p)) = resolve_provider(ctx, provider, "")? {
         let status = local_server::probe(p).await;
         let caps = local_server::capabilities(p);
@@ -447,10 +416,7 @@ async fn execute_troubleshoot(
 // Text rendering helpers
 // ---------------------------------------------------------------------------
 
-fn render_provider_status_text(
-    ctx: &mut SlashCommandContext<'_>,
-    status: &LocalServerStatus,
-) -> Result<()> {
+fn render_provider_status_text(ctx: &mut SlashCommandContext<'_>, status: &LocalServerStatus) -> Result<()> {
     let name = status.provider.display_name();
     if status.running {
         let ver = status.version.as_deref().map(|v| format!(" v{v}")).unwrap_or_default();
@@ -465,29 +431,19 @@ fn render_provider_status_text(
             ),
         )?;
         if !status.running_models.is_empty() {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("  Running: {}", status.running_models.join(", ")),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("  Running: {}", status.running_models.join(", ")))?;
         }
     } else {
         ctx.renderer.line(
             MessageStyle::Info,
-            &format!(
-                "{} ({}) - {}",
-                name,
-                status.endpoint,
-                status.error.as_deref().unwrap_or("Not running")
-            ),
+            &format!("{} ({}) - {}", name, status.endpoint, status.error.as_deref().unwrap_or("Not running")),
         )?;
     }
     Ok(())
 }
 
-fn render_provider_config_text(
-    ctx: &mut SlashCommandContext<'_>,
-    provider: LocalProvider,
-) -> Result<()> {
+fn render_provider_config_text(ctx: &mut SlashCommandContext<'_>, provider: LocalProvider) -> Result<()> {
     ctx.renderer
         .line(MessageStyle::Info, &format!("{}:", provider.display_name()))?;
     for line in format_provider_config(provider) {
@@ -534,11 +490,7 @@ fn format_provider_status(status: &LocalServerStatus) -> Vec<String> {
 fn format_result(label: &str, result: &Result<String>) -> Vec<String> {
     match result {
         Ok(msg) => vec![format!("{}: {}", label, msg)],
-        Err(err) => vec![
-            format!("{}: Failed", label),
-            String::new(),
-            format!("Error: {}", err),
-        ],
+        Err(err) => vec![format!("{}: Failed", label), String::new(), format!("Error: {}", err)],
     }
 }
 

@@ -61,10 +61,7 @@ pub(super) fn describe_shell_command(args: &Value) -> Option<(String, HashSet<St
     Some((truncate_middle(&command, 70), used))
 }
 
-pub(super) fn describe_list_files(
-    args: &Value,
-    workspace_root: Option<&Path>,
-) -> Option<(String, HashSet<String>)> {
+pub(super) fn describe_list_files(args: &Value, workspace_root: Option<&Path>) -> Option<(String, HashSet<String>)> {
     if let Some(path) = lookup_string(args, "path") {
         let mut used = HashSet::new();
         used.insert("path".to_string());
@@ -89,10 +86,7 @@ pub(super) fn describe_list_files(
     None
 }
 
-pub(super) fn describe_grep_file(
-    args: &Value,
-    workspace_root: Option<&Path>,
-) -> Option<(String, HashSet<String>)> {
+pub(super) fn describe_grep_file(args: &Value, workspace_root: Option<&Path>) -> Option<(String, HashSet<String>)> {
     let pattern = lookup_string(args, "pattern");
     let path = lookup_string(args, "path");
     match (pattern, path) {
@@ -177,10 +171,7 @@ fn is_path_key(key: &str) -> bool {
 ///
 /// Returns the path unchanged when `workspace_root` is `None`, the path is not
 /// absolute, or it does not lie within the workspace root.
-pub(super) fn relativize_to_workspace<'a>(
-    path: &'a str,
-    workspace_root: Option<&Path>,
-) -> Cow<'a, str> {
+pub(super) fn relativize_to_workspace<'a>(path: &'a str, workspace_root: Option<&Path>) -> Cow<'a, str> {
     let Some(root) = workspace_root else {
         return Cow::Borrowed(path);
     };
@@ -288,11 +279,7 @@ pub(super) fn collect_param_details(
                 let strings: Vec<String> =
                     items.iter().filter_map(|item| item.as_str().map(|s| s.to_string())).collect();
                 if !strings.is_empty() {
-                    details.push(format!(
-                        "{}: {}",
-                        humanize_key(key),
-                        summarize_list(&strings, 2, 60)
-                    ));
+                    details.push(format!("{}: {}", humanize_key(key), summarize_list(&strings, 2, 60)));
                 }
             }
             Value::Number(num) => {
@@ -392,8 +379,7 @@ pub(super) fn summarize_list(items: &[String], max_items: usize, max_len: usize)
     if items.is_empty() {
         return String::new();
     }
-    let shown: Vec<String> =
-        items.iter().take(max_items).map(|s| truncate_middle(s, max_len)).collect();
+    let shown: Vec<String> = items.iter().take(max_items).map(|s| truncate_middle(s, max_len)).collect();
     if items.len() > max_items {
         format!("{} +{} more", shown.join(", "), items.len() - max_items)
     } else {

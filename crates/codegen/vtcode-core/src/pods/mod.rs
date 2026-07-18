@@ -8,8 +8,7 @@ mod transport;
 
 pub use catalog::{PodCatalog, PodProfile};
 pub use manager::{
-    KnownModelsReport, PodListEntry, PodManager, PodStartRequest, PodStartResult, PodStatusDetail,
-    PodStatusReport,
+    KnownModelsReport, PodListEntry, PodManager, PodStartRequest, PodStartResult, PodStatusDetail, PodStatusReport,
 };
 pub use state::{PodGpu, PodHealth, PodState, PodsState, RunningModel};
 pub use store::PodsStore;

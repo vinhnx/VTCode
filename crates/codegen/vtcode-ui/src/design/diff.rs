@@ -9,8 +9,7 @@ use std::fmt::Write;
 
 // Re-export the core diff types from vtcode-commons.
 pub use vtcode_commons::diff::{
-    Chunk, DiffBundle, DiffHunk, DiffLine, DiffLineKind, DiffOptions, compute_diff,
-    compute_diff_chunks,
+    Chunk, DiffBundle, DiffHunk, DiffLine, DiffLineKind, DiffOptions, compute_diff, compute_diff_chunks,
 };
 
 /// Format a unified diff without ANSI color codes.

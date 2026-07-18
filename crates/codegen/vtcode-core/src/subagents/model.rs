@@ -54,12 +54,7 @@ fn resolve_inherit_model(
         return Ok(fallback);
     }
 
-    finalize_subagent_model(
-        &RuntimeModelSources::from_config(vt_cfg),
-        parent_model,
-        parent_provider,
-        agent_name,
-    )
+    finalize_subagent_model(&RuntimeModelSources::from_config(vt_cfg), parent_model, parent_provider, agent_name)
 }
 
 /// Narrow, read-only view of the config-defined runtime model sources that are
@@ -94,9 +89,8 @@ fn finalize_subagent_model(
     agent_name: &str,
 ) -> Result<ModelId> {
     let normalized = normalize_subagent_model_alias(raw_model);
-    parse_model_or_custom(sources, normalized, provider_hint).with_context(|| {
-        format!("Failed to resolve model '{normalized}' for subagent {agent_name}")
-    })
+    parse_model_or_custom(sources, normalized, provider_hint)
+        .with_context(|| format!("Failed to resolve model '{normalized}' for subagent {agent_name}"))
 }
 
 /// Parses `model` into a [`ModelId`], falling back to a runtime [`ModelId::Custom`]
@@ -111,11 +105,7 @@ fn finalize_subagent_model(
 /// Config-defined models are only honored when they belong to the active
 /// provider (`provider_hint`); this preserves the invalid-override fallback for
 /// unrelated providers and avoids mis-routing a model to the wrong endpoint.
-fn parse_model_or_custom(
-    sources: &RuntimeModelSources<'_>,
-    model: &str,
-    provider_hint: &str,
-) -> Result<ModelId> {
+fn parse_model_or_custom(sources: &RuntimeModelSources<'_>, model: &str, provider_hint: &str) -> Result<ModelId> {
     let trimmed = model.trim();
     if let Ok(parsed) = trimmed.parse::<ModelId>() {
         return Ok(parsed);
@@ -137,9 +127,7 @@ fn parse_model_or_custom(
 
     // Custom OpenAI-compatible providers (`[[custom_providers]]`), matched by key.
     for custom in sources.custom_providers {
-        if custom.name.eq_ignore_ascii_case(provider_hint)
-            && custom.effective_models().iter().any(|m| m == trimmed)
-        {
+        if custom.name.eq_ignore_ascii_case(provider_hint) && custom.effective_models().iter().any(|m| m == trimmed) {
             return Ok(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_string()));
         }
     }
@@ -168,12 +156,7 @@ fn resolve_explicit_model(
         requested.to_string()
     };
 
-    finalize_subagent_model(
-        &RuntimeModelSources::from_config(vt_cfg),
-        resolved.as_str(),
-        parent_provider,
-        agent_name,
-    )
+    finalize_subagent_model(&RuntimeModelSources::from_config(vt_cfg), resolved.as_str(), parent_provider, agent_name)
 }
 
 fn resolve_lightweight_model(
@@ -188,8 +171,7 @@ fn resolve_lightweight_model(
 
     let configured = vt_cfg.agent.small_model.model.trim();
     let active_provider = infer_provider(Some(parent_provider), parent_model);
-    let configured_provider =
-        infer_provider_from_model(configured).or_else(|| infer_provider(None, configured));
+    let configured_provider = infer_provider_from_model(configured).or_else(|| infer_provider(None, configured));
 
     if configured_provider.is_some() && configured_provider != active_provider {
         tracing::warn!(
@@ -217,13 +199,7 @@ pub fn resolve_effective_subagent_model(
     agent_name: &str,
 ) -> Result<ModelId> {
     if let Some(requested) = model_override {
-        match resolve_subagent_model(
-            vt_cfg,
-            parent_model,
-            parent_provider,
-            Some(requested),
-            agent_name,
-        ) {
+        match resolve_subagent_model(vt_cfg, parent_model, parent_provider, Some(requested), agent_name) {
             Ok(model) => return Ok(model),
             Err(err) => {
                 return handle_model_override_failure(
@@ -247,13 +223,7 @@ pub fn resolve_effective_subagent_model(
                 error = %err,
                 "Failed to resolve lightweight subagent model from spec; falling back to parent model"
             );
-            resolve_subagent_model(
-                vt_cfg,
-                parent_model,
-                parent_provider,
-                Some("inherit"),
-                agent_name,
-            )
+            resolve_subagent_model(vt_cfg, parent_model, parent_provider, Some("inherit"), agent_name)
         }
         Err(err) => Err(err),
     }
@@ -275,13 +245,7 @@ fn handle_model_override_failure(
             error = %err,
             "Failed to bootstrap lightweight subagent model; falling back to parent model"
         );
-        return resolve_subagent_model(
-            vt_cfg,
-            parent_model,
-            parent_provider,
-            Some("inherit"),
-            agent_name,
-        );
+        return resolve_subagent_model(vt_cfg, parent_model, parent_provider, Some("inherit"), agent_name);
     }
     let fallback = spec_model.map(str::trim).filter(|v| !v.is_empty()).unwrap_or("inherit");
     tracing::warn!(
@@ -291,17 +255,8 @@ fn handle_model_override_failure(
         error = %err,
         "Failed to resolve subagent model override; falling back"
     );
-    let model =
-        resolve_subagent_model(vt_cfg, parent_model, parent_provider, spec_model, agent_name)
-            .or_else(|_| {
-                resolve_subagent_model(
-                    vt_cfg,
-                    parent_model,
-                    parent_provider,
-                    Some("inherit"),
-                    agent_name,
-                )
-            })?;
+    let model = resolve_subagent_model(vt_cfg, parent_model, parent_provider, spec_model, agent_name)
+        .or_else(|_| resolve_subagent_model(vt_cfg, parent_model, parent_provider, Some("inherit"), agent_name))?;
     Ok(model)
 }
 
@@ -346,9 +301,7 @@ pub fn agent_type_for_spec(spec: &SubagentSpec) -> AgentType {
 
 // ─── Memory Appendix ────────────────────────────────────────────────────────
 
-use super::constants::{
-    SUBAGENT_MEMORY_BYTES_LIMIT, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT, SUBAGENT_MEMORY_LINE_LIMIT,
-};
+use super::constants::{SUBAGENT_MEMORY_BYTES_LIMIT, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT, SUBAGENT_MEMORY_LINE_LIMIT};
 use crate::persistent_memory::extract_memory_highlights;
 use vtcode_config::SubagentMemoryScope;
 
@@ -366,9 +319,8 @@ pub fn load_memory_appendix(
     };
 
     let memory_dir = agent_memory_dir(workspace_root, agent_name, scope);
-    std::fs::create_dir_all(&memory_dir).with_context(|| {
-        format!("Failed to create subagent memory directory {}", memory_dir.display())
-    })?;
+    std::fs::create_dir_all(&memory_dir)
+        .with_context(|| format!("Failed to create subagent memory directory {}", memory_dir.display()))?;
     let memory_file = memory_dir.join("MEMORY.md");
     if !memory_file.exists() {
         return Ok(Some(format!(
@@ -377,8 +329,8 @@ pub fn load_memory_appendix(
         )));
     }
 
-    let content = std::fs::read_to_string(&memory_file)
-        .with_context(|| format!("Failed to read {}", memory_file.display()))?;
+    let content =
+        std::fs::read_to_string(&memory_file).with_context(|| format!("Failed to read {}", memory_file.display()))?;
     let (excerpt, truncated) = memory_excerpt(&content);
     let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
     let mut appendix = String::new();
@@ -421,8 +373,8 @@ pub fn load_primary_memory_appendix(
         return Ok(None);
     }
 
-    let content = std::fs::read_to_string(&memory_file)
-        .with_context(|| format!("Failed to read {}", memory_file.display()))?;
+    let content =
+        std::fs::read_to_string(&memory_file).with_context(|| format!("Failed to read {}", memory_file.display()))?;
     let (excerpt, truncated) = memory_excerpt(&content);
     let highlights = extract_memory_highlights(&excerpt, SUBAGENT_MEMORY_HIGHLIGHT_LIMIT);
     let mut appendix = String::new();
@@ -447,18 +399,10 @@ pub fn load_primary_memory_appendix(
     Ok(Some(appendix))
 }
 
-fn agent_memory_dir(
-    workspace_root: &Path,
-    agent_name: &str,
-    scope: SubagentMemoryScope,
-) -> PathBuf {
+fn agent_memory_dir(workspace_root: &Path, agent_name: &str, scope: SubagentMemoryScope) -> PathBuf {
     match scope {
-        SubagentMemoryScope::Project => {
-            workspace_root.join(".vtcode/agent-memory").join(agent_name)
-        }
-        SubagentMemoryScope::Local => {
-            workspace_root.join(".vtcode/agent-memory-local").join(agent_name)
-        }
+        SubagentMemoryScope::Project => workspace_root.join(".vtcode/agent-memory").join(agent_name),
+        SubagentMemoryScope::Local => workspace_root.join(".vtcode/agent-memory-local").join(agent_name),
         SubagentMemoryScope::User => dirs::home_dir()
             .unwrap_or_default()
             .join(".vtcode/agent-memory")

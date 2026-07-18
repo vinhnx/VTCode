@@ -8,9 +8,7 @@ use serde_json::Value;
 use tokio::sync::{Notify, RwLock};
 use vtcode_config::core::PromptCachingConfig;
 use vtcode_core::acp::ToolPermissionCache;
-use vtcode_core::config::types::{
-    AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
-};
+use vtcode_core::config::types::{AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
@@ -25,16 +23,13 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::run_loop_context::{
-    HarnessTurnState, RecoveryMode, TurnId, TurnRunId,
-};
+use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RecoveryMode, TurnId, TurnRunId};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::turn::context::{
-    LLMContext, ToolContext, TurnProcessingContext, TurnProcessingContextParts,
-    TurnProcessingState, UIContext,
+    LLMContext, ToolContext, TurnProcessingContext, TurnProcessingContextParts, TurnProcessingState, UIContext,
 };
 
 #[derive(Clone)]
@@ -94,8 +89,7 @@ pub(crate) struct TestTurnProcessingBacking {
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     approval_recorder: Arc<ApprovalRecorder>,
     session_stats: SessionStats,
-    plan_session:
-        crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
+    plan_session: crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState,
     mcp_panel_state: McpPanelState,
     context_manager: ContextManager,
     last_forced_redraw: Instant,
@@ -134,8 +128,7 @@ impl TestTurnProcessingBacking {
         let tools = Arc::new(RwLock::new(Vec::new()));
         let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state =
-            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+        let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
@@ -143,17 +136,13 @@ impl TestTurnProcessingBacking {
             crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
         let mcp_panel_state = McpPanelState::default();
         let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
-        let context_manager =
-            ContextManager::new("You are VT Code.".to_string(), (), loaded_skills, None);
+        let context_manager = ContextManager::new("You are VT Code.".to_string(), (), loaded_skills, None);
         let last_forced_redraw = Instant::now();
         let input_status_state = InputStatusState::default();
         let mut session = create_headless_session();
         session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
-        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(
-            handle.clone(),
-            Default::default(),
-        );
+        let renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
         let safety_validator = Arc::new(ToolCallSafetyValidator::new());
@@ -162,11 +151,9 @@ impl TestTurnProcessingBacking {
         let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
         let rate_limiter = Arc::new(AdaptiveRateLimiter::default());
         let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
-        let autonomous_executor =
-            Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
-        let error_recovery = Arc::new(RwLock::new(
-            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
-        ));
+        let autonomous_executor = Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
+        let error_recovery =
+            Arc::new(RwLock::new(vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default()));
         let harness_state = HarnessTurnState::new(
             TurnRunId("run-test".to_string()),
             TurnId("turn-test".to_string()),
@@ -247,20 +234,13 @@ impl TestTurnProcessingBacking {
         self._temp.path()
     }
 
-    pub(crate) fn select_primary_agent_from_specs(
-        &mut self,
-        specs: &[vtcode_config::SubagentSpec],
-        requested: &str,
-    ) {
+    pub(crate) fn select_primary_agent_from_specs(&mut self, specs: &[vtcode_config::SubagentSpec], requested: &str) {
         self.active_primary_agent
             .select_from_specs(specs, requested)
             .expect("test primary agent should resolve");
     }
 
-    pub(crate) fn set_steering_receiver(
-        &mut self,
-        receiver: tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>,
-    ) {
+    pub(crate) fn set_steering_receiver(&mut self, receiver: tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>) {
         self.runtime_steering.set_receiver(Some(receiver));
     }
 
@@ -317,9 +297,7 @@ impl TestTurnProcessingBacking {
             .is_some_and(|message| message.content.as_text().contains(needle))
     }
 
-    pub(crate) fn turn_loop_context(
-        &mut self,
-    ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
+    pub(crate) fn turn_loop_context(&mut self) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
         crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext::new(
             &mut self.renderer,
             &self.handle,

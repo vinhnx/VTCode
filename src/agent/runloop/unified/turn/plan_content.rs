@@ -47,25 +47,14 @@ pub(crate) fn parse_plan_content_from_json(json: &Value) -> PlanContent {
                                 .iter()
                                 .filter_map(|step| {
                                     step_number += 1;
-                                    let step_desc =
-                                        step.get("description").and_then(|v| v.as_str())?;
-                                    let details = step
-                                        .get("details")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s.to_string());
+                                    let step_desc = step.get("description").and_then(|v| v.as_str())?;
+                                    let details = step.get("details").and_then(|v| v.as_str()).map(|s| s.to_string());
                                     let files = step
                                         .get("files")
                                         .and_then(|v| v.as_array())
-                                        .map(|f| {
-                                            f.iter()
-                                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                                .collect()
-                                        })
+                                        .map(|f| f.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
                                         .unwrap_or_default();
-                                    let completed = step
-                                        .get("completed")
-                                        .and_then(|v| v.as_bool())
-                                        .unwrap_or(false);
+                                    let completed = step.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
 
                                     Some(PlanStep {
                                         number: step_number,

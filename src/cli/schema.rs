@@ -24,14 +24,9 @@ struct ToolsSchemaDocument {
     tools: Vec<ToolSchemaEntry>,
 }
 
-pub async fn handle_schema_command(
-    command: SchemaCommands,
-    config: &VTCodeConfig,
-) -> Result<String> {
+pub async fn handle_schema_command(command: SchemaCommands, config: &VTCodeConfig) -> Result<String> {
     match command {
-        SchemaCommands::Tools { mode, format, names } => {
-            render_tools_schema(mode, format, &names, config).await
-        }
+        SchemaCommands::Tools { mode, format, names } => render_tools_schema(mode, format, &names, config).await,
     }
 }
 
@@ -55,15 +50,13 @@ async fn render_tools_schema(
                 mode: schema_mode_label(mode),
                 tools,
             };
-            let payload = serde_json::to_string_pretty(&payload)
-                .context("failed to serialize tool schema document")?;
+            let payload = serde_json::to_string_pretty(&payload).context("failed to serialize tool schema document")?;
             Ok(format!("{payload}\n"))
         }
         SchemaOutputFormat::Ndjson => {
             let mut output = String::new();
             for tool in tools {
-                let row =
-                    serde_json::to_string(&tool).context("failed to serialize tool schema row")?;
+                let row = serde_json::to_string(&tool).context("failed to serialize tool schema row")?;
                 output.push_str(&row);
                 output.push('\n');
             }
@@ -129,9 +122,7 @@ fn schema_mode_label(mode: SchemaMode) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ToolSchemaEntry, collect_tools_schema, filter_tools_by_name, to_tool_documentation_mode,
-    };
+    use super::{ToolSchemaEntry, collect_tools_schema, filter_tools_by_name, to_tool_documentation_mode};
     use vtcode_core::cli::args::SchemaMode;
     use vtcode_core::config::{ToolDocumentationMode, ToolProfile, VTCodeConfig};
 
@@ -155,10 +146,7 @@ mod tests {
     #[test]
     fn schema_mode_maps_to_tool_documentation_mode() {
         assert_eq!(to_tool_documentation_mode(SchemaMode::Minimal), ToolDocumentationMode::Minimal);
-        assert_eq!(
-            to_tool_documentation_mode(SchemaMode::Progressive),
-            ToolDocumentationMode::Progressive
-        );
+        assert_eq!(to_tool_documentation_mode(SchemaMode::Progressive), ToolDocumentationMode::Progressive);
         assert_eq!(to_tool_documentation_mode(SchemaMode::Full), ToolDocumentationMode::Full);
     }
 

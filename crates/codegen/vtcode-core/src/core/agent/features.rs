@@ -66,33 +66,20 @@ impl FeatureSet {
         };
 
         Self {
-            request_user_input: FeatureGate::new(
-                cfg.chat.ask_questions.enabled,
-                FeatureStage::Stable,
-            ),
-            auto_compaction: FeatureGate::new(
-                cfg.agent.harness.auto_compaction_enabled,
-                FeatureStage::Beta,
-            ),
+            request_user_input: FeatureGate::new(cfg.chat.ask_questions.enabled, FeatureStage::Stable),
+            auto_compaction: FeatureGate::new(cfg.agent.harness.auto_compaction_enabled, FeatureStage::Beta),
             open_responses: OpenResponsesFeature {
                 enabled: cfg.agent.open_responses.enabled,
-                emit_events: cfg.agent.open_responses.enabled
-                    && cfg.agent.open_responses.emit_events,
-                map_tool_calls: cfg.agent.open_responses.enabled
-                    && cfg.agent.open_responses.map_tool_calls,
-                include_reasoning: cfg.agent.open_responses.enabled
-                    && cfg.agent.open_responses.include_reasoning,
+                emit_events: cfg.agent.open_responses.enabled && cfg.agent.open_responses.emit_events,
+                map_tool_calls: cfg.agent.open_responses.enabled && cfg.agent.open_responses.map_tool_calls,
+                include_reasoning: cfg.agent.open_responses.enabled && cfg.agent.open_responses.include_reasoning,
                 stage: FeatureStage::Beta,
             },
         }
     }
 
     /// Whether the `request_user_input` tool is available in the current context.
-    pub fn request_user_input_enabled(
-        &self,
-        _planning_active: bool,
-        interactive_session: bool,
-    ) -> bool {
+    pub fn request_user_input_enabled(&self, _planning_active: bool, interactive_session: bool) -> bool {
         interactive_session && self.request_user_input.enabled
     }
 
@@ -102,11 +89,7 @@ impl FeatureSet {
     }
 
     /// Whether a specific tool is allowed in the current planning mode.
-    pub fn tool_enabled_for_mode(
-        tool_name: &str,
-        planning_active: bool,
-        request_user_input_enabled: bool,
-    ) -> bool {
+    pub fn tool_enabled_for_mode(tool_name: &str, planning_active: bool, request_user_input_enabled: bool) -> bool {
         match tool_name {
             tools::REQUEST_USER_INPUT => request_user_input_enabled,
             _ if !planning_active => true,
@@ -119,12 +102,7 @@ impl FeatureSet {
     }
 
     /// Whether a tool name is allowed given the current feature gates and session state.
-    pub fn allows_tool_name(
-        &self,
-        tool_name: &str,
-        planning_active: bool,
-        interactive_session: bool,
-    ) -> bool {
+    pub fn allows_tool_name(&self, tool_name: &str, planning_active: bool, interactive_session: bool) -> bool {
         Self::tool_enabled_for_mode(
             tool_name,
             planning_active,

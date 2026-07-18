@@ -60,18 +60,12 @@ pub(super) fn resolve_bottom_panel_spec(
             BottomPanelKind::HistoryPicker,
             render::split_inline_history_picker_area,
         ),
-        Some(TransientSurface::SlashPalette) => panel_from_split(
-            session,
-            split_context,
-            BottomPanelKind::SlashPalette,
-            slash::split_inline_slash_area,
-        ),
-        Some(TransientSurface::TaskPanel) => panel_from_split(
-            session,
-            split_context,
-            BottomPanelKind::TaskPanel,
-            split_inline_task_panel_area,
-        ),
+        Some(TransientSurface::SlashPalette) => {
+            panel_from_split(session, split_context, BottomPanelKind::SlashPalette, slash::split_inline_slash_area)
+        }
+        Some(TransientSurface::TaskPanel) => {
+            panel_from_split(session, split_context, BottomPanelKind::TaskPanel, split_inline_task_panel_area)
+        }
         Some(TransientSurface::LocalAgents) => panel_from_split(
             session,
             split_context,
@@ -79,9 +73,7 @@ pub(super) fn resolve_bottom_panel_spec(
             render::split_inline_local_agents_area,
         ),
         Some(
-            TransientSurface::FloatingOverlay
-            | TransientSurface::DiffPreview
-            | TransientSurface::TranscriptReview,
+            TransientSurface::FloatingOverlay | TransientSurface::DiffPreview | TransientSurface::TranscriptReview,
         )
         | None => None,
     };
@@ -127,8 +119,7 @@ fn normalize_panel_height(raw_height: u16, max_panel_height: u16) -> u16 {
 
 fn split_inline_task_panel_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     let visible_lines = session.task_panel_lines.len().max(1);
-    let desired_list_rows =
-        list_panel::rows_to_u16(visible_lines.min(ui::INLINE_LIST_MAX_ROWS_MULTILINE));
+    let desired_list_rows = list_panel::rows_to_u16(visible_lines.min(ui::INLINE_LIST_MAX_ROWS_MULTILINE));
     let fixed_rows = list_panel::fixed_section_rows(1, 1, false);
     list_panel::split_bottom_list_panel(area, fixed_rows, desired_list_rows)
 }
@@ -147,10 +138,7 @@ fn probe_panel_height(
     panel_area.map(|area| area.height).unwrap_or(0)
 }
 
-pub(super) fn split_input_and_bottom_panel_area(
-    area: Rect,
-    panel_height: u16,
-) -> (Rect, Option<Rect>) {
+pub(super) fn split_input_and_bottom_panel_area(area: Rect, panel_height: u16) -> (Rect, Option<Rect>) {
     if area.height == 0 || panel_height == 0 || area.height <= 1 {
         return (area, None);
     }

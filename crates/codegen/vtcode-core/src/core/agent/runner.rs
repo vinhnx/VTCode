@@ -220,9 +220,7 @@ impl AgentRunner {
             match ResolvedSessionConfig::load_from_workspace(&workspace) {
                 Ok(session_config) => session_config,
                 Err(err) => {
-                    warn!(
-                        "Failed to load vtcode configuration for system prompt composition: {err:#}"
-                    );
+                    warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
                     ResolvedSessionConfig::from_config(VTCodeConfig::default())
                 }
             }
@@ -267,22 +265,17 @@ impl AgentRunner {
                 model
             );
         }
-        let max_repeated_tool_calls =
-            session_config.effective().tools.max_repeated_tool_calls.max(1);
+        let max_repeated_tool_calls = session_config.effective().tools.max_repeated_tool_calls.max(1);
         let deferred_tool_policy = crate::tools::handlers::deferred_tool_policy_for_runtime(
-            crate::llm::factory::infer_provider(
-                Some(&session_config.effective().agent.provider),
-                &model.as_str(),
-            ),
+            crate::llm::factory::infer_provider(Some(&session_config.effective().agent.provider), &model.as_str()),
             provider_client.supports_responses_compaction(&model.as_str()),
             Some(session_config.effective()),
         );
-        let anthropic_native_memory_enabled =
-            crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
-                Provider::from_str(provider_client.name()).ok(),
-                &model.as_str(),
-                Some(session_config.effective()),
-            );
+        let anthropic_native_memory_enabled = crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+            Provider::from_str(provider_client.name()).ok(),
+            &model.as_str(),
+            Some(session_config.effective()),
+        );
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
@@ -306,11 +299,9 @@ impl AgentRunner {
             info!("Deferring MCP client initialization to on-demand activation");
         }
         if session_config.effective().context.dynamic.enabled
-            && let Err(err) = crate::context::initialize_dynamic_context(
-                &workspace,
-                &session_config.effective().context.dynamic,
-            )
-            .await
+            && let Err(err) =
+                crate::context::initialize_dynamic_context(&workspace, &session_config.effective().context.dynamic)
+                    .await
         {
             warn!("Failed to initialize dynamic context directories: {}", err);
         }
@@ -320,9 +311,7 @@ impl AgentRunner {
             documentation_mode: session_config.effective().agent.tool_documentation_mode,
             planning_active: tool_registry.is_planning_active(),
             request_user_input_enabled: false,
-            model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(
-                &model.as_str(),
-            ),
+            model_capabilities: crate::tools::handlers::ToolModelCapabilities::for_model_name(&model.as_str()),
             deferred_tool_policy,
             anthropic_native_memory_enabled,
             tool_profile: session_config.effective().tools.profile,
@@ -356,8 +345,8 @@ impl AgentRunner {
                     .as_str(),
             ));
         }
-        let thread_handle = crate::core::threads::ThreadManager::new()
-            .start_thread_with_identifier(session_id.clone(), bootstrap);
+        let thread_handle =
+            crate::core::threads::ThreadManager::new().start_thread_with_identifier(session_id.clone(), bootstrap);
         let max_turns = session_config.effective().automation.full_auto.max_turns.max(1);
 
         Ok(Self {
@@ -456,10 +445,7 @@ impl AgentRunner {
     }
 
     /// Override the tool definitions used for LLM requests instead of the default registry projection.
-    pub fn set_tool_definitions_override(
-        &mut self,
-        definitions: Vec<uni_provider::ToolDefinition>,
-    ) {
+    pub fn set_tool_definitions_override(&mut self, definitions: Vec<uni_provider::ToolDefinition>) {
         *self.tool_definitions_override.write() = Some(definitions);
     }
 
@@ -486,9 +472,9 @@ impl AgentRunner {
     /// Enable full-auto execution with the provided allow-list.
     pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
         let mut permission_catalog_config = self.session_tools_config.clone();
-        permission_catalog_config.planning_active = allowed_tools.iter().any(|tool_name| {
-            crate::tools::names::canonical_tool_name(tool_name) == tools::CODE_SEARCH
-        });
+        permission_catalog_config.planning_active = allowed_tools
+            .iter()
+            .any(|tool_name| crate::tools::names::canonical_tool_name(tool_name) == tools::CODE_SEARCH);
         self.tool_registry
             .enable_full_auto_permission_for_session(allowed_tools, permission_catalog_config)
             .await;
@@ -496,16 +482,15 @@ impl AgentRunner {
 
     /// Restrict an allow-list to tools suitable for strict review-only runs.
     pub async fn review_tool_allowlist(&self, allowed_tools: &[String]) -> Vec<String> {
-        let review_candidates =
-            if allowed_tools.iter().any(|tool| tool.trim() == tools::WILDCARD_ALL) {
-                let mut candidates = self.tool_registry.available_tools().await;
-                if !candidates.iter().any(|tool| tool == tools::CODE_SEARCH) {
-                    candidates.push(tools::CODE_SEARCH.to_string());
-                }
-                candidates
-            } else {
-                allowed_tools.to_vec()
-            };
+        let review_candidates = if allowed_tools.iter().any(|tool| tool.trim() == tools::WILDCARD_ALL) {
+            let mut candidates = self.tool_registry.available_tools().await;
+            if !candidates.iter().any(|tool| tool == tools::CODE_SEARCH) {
+                candidates.push(tools::CODE_SEARCH.to_string());
+            }
+            candidates
+        } else {
+            allowed_tools.to_vec()
+        };
 
         review_candidates
             .iter()
@@ -514,10 +499,7 @@ impl AgentRunner {
 
                 !matches!(
                     canonical,
-                    tools::REQUEST_USER_INPUT
-                        | tools::TASK_TRACKER
-                        | tools::START_PLANNING
-                        | tools::FINISH_PLANNING
+                    tools::REQUEST_USER_INPUT | tools::TASK_TRACKER | tools::START_PLANNING | tools::FINISH_PLANNING
                 ) && !self.tool_registry.is_mutating_tool(tool_name)
             })
             .cloned()

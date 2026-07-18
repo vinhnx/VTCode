@@ -106,9 +106,7 @@ pub(crate) struct SessionUISetup {
     pub startup_update_task_guard: Option<BackgroundTaskGuard>,
 }
 
-pub(crate) async fn build_conversation_history_from_resume(
-    resume: Option<&ResumeSession>,
-) -> Vec<uni::Message> {
+pub(crate) async fn build_conversation_history_from_resume(resume: Option<&ResumeSession>) -> Vec<uni::Message> {
     let Some(session) = resume else {
         return Vec::new();
     };
@@ -187,9 +185,9 @@ mod tests {
         assert_eq!(history[1].role, MessageRole::Assistant);
         assert_eq!(history[1].content.as_text(), "saved answer");
         assert!(
-            history.iter().all(|message| {
-                !message.content.as_text().contains("[Session Memory Envelope]")
-            })
+            history
+                .iter()
+                .all(|message| { !message.content.as_text().contains("[Session Memory Envelope]") })
         );
     }
 }

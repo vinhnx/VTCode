@@ -120,8 +120,8 @@ pub(crate) fn sanitize_recovery_answer(text: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        RECOVERY_NOISE_FALLBACK, contains_provider_noise, noise_token_partial_suffix,
-        sanitize_recovery_answer, strip_provider_noise,
+        RECOVERY_NOISE_FALLBACK, contains_provider_noise, noise_token_partial_suffix, sanitize_recovery_answer,
+        strip_provider_noise,
     };
 
     #[test]
@@ -159,10 +159,7 @@ mod tests {
 
     #[test]
     fn recovery_strips_and_keeps_content() {
-        assert_eq!(
-            sanitize_recovery_answer("]<]minimax[>[Here is my summary.".to_string()),
-            "Here is my summary."
-        );
+        assert_eq!(sanitize_recovery_answer("]<]minimax[>[Here is my summary.".to_string()), "Here is my summary.");
     }
 
     #[test]
@@ -187,10 +184,7 @@ mod tests {
 
     #[test]
     fn recovery_strips_repeated_noise() {
-        assert_eq!(
-            sanitize_recovery_answer("]<]minimax[>[]<]minimax[>[Real answer".to_string()),
-            "Real answer"
-        );
+        assert_eq!(sanitize_recovery_answer("]<]minimax[>[]<]minimax[>[Real answer".to_string()), "Real answer");
     }
 
     #[test]

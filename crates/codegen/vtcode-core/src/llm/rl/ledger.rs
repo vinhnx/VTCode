@@ -77,9 +77,6 @@ mod tests {
         assert_eq!(ledger.total(), 1);
         assert!(ledger.mean_score("a").is_some());
         // Untried action still yields a finite UCB (INFINITY) for selection.
-        assert!(
-            ledger.ucb_for("b", 1.0, 0.1).is_finite()
-                || ledger.ucb_for("b", 1.0, 0.1) == f64::INFINITY
-        );
+        assert!(ledger.ucb_for("b", 1.0, 0.1).is_finite() || ledger.ucb_for("b", 1.0, 0.1) == f64::INFINITY);
     }
 }

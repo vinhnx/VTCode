@@ -3,9 +3,7 @@ use super::*;
 use crate::error_display;
 use crate::provider::LLMError;
 use crate::provider::{ContentPart, MessageContent, ToolDefinition};
-use crate::providers::common::{
-    collect_history_system_directives, merge_system_prompt_with_history_directives,
-};
+use crate::providers::common::{collect_history_system_directives, merge_system_prompt_with_history_directives};
 use crate::system_prompt::default_system_prompt;
 use serde_json::Map;
 use std::collections::BTreeMap;
@@ -137,13 +135,8 @@ impl GeminiProvider {
         Some(chunk.to_string())
     }
 
-    pub(super) fn convert_to_gemini_request(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<GenerateContentRequest, LLMError> {
-        if self.prompt_cache_enabled
-            && matches!(self.prompt_cache_settings.mode, GeminiPromptCacheMode::Explicit)
-        {
+    pub(super) fn convert_to_gemini_request(&self, request: &LLMRequest) -> Result<GenerateContentRequest, LLMError> {
+        if self.prompt_cache_enabled && matches!(self.prompt_cache_settings.mode, GeminiPromptCacheMode::Explicit) {
             // Explicit cache handling requires separate cache lifecycle APIs which are
             // coordinated outside of the request payload. Placeholder ensures we surface
             // configuration usage even when implicit mode is active.
@@ -174,8 +167,7 @@ impl GeminiProvider {
 
             if message.role == MessageRole::Tool {
                 if let Some(tool_call_id) = &message.tool_call_id {
-                    let func_name =
-                        call_map.get(tool_call_id).cloned().unwrap_or_else(|| tool_call_id.clone());
+                    let func_name = call_map.get(tool_call_id).cloned().unwrap_or_else(|| tool_call_id.clone());
                     let response_text = serde_json::from_str::<Value>(&message.content.as_text())
                         .map(|value| {
                             serde_json::to_string_pretty(&value)
@@ -316,14 +308,10 @@ impl GeminiProvider {
         }
 
         request.model.contains("gemini-3")
-            && collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()))
-                .uses_server_side_tools
+            && collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice())).uses_server_side_tools
     }
 
-    pub(super) fn convert_to_interaction_request(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<InteractionRequest, LLMError> {
+    pub(super) fn convert_to_interaction_request(&self, request: &LLMRequest) -> Result<InteractionRequest, LLMError> {
         let history_system_directives = collect_history_system_directives(request);
         let owned_prompt;
         let base_system_prompt = if self.prompt_cache_enabled {
@@ -352,10 +340,7 @@ impl GeminiProvider {
             tools: tool_spec.interaction_tools,
             system_instruction: merged_system_prompt,
             response_format: request.output_format.clone(),
-            response_mime_type: request
-                .output_format
-                .as_ref()
-                .map(|_| "application/json".to_string()),
+            response_mime_type: request.output_format.as_ref().map(|_| "application/json".to_string()),
             stream: request.stream.then_some(true),
             store: request.response_store,
             generation_config: Some(generation_config.into()),
@@ -374,8 +359,7 @@ impl GeminiProvider {
     ) -> Result<LLMResponse, LLMError> {
         let mut candidates = response.candidates.into_iter();
         let candidate = candidates.next().ok_or_else(|| {
-            let formatted_error =
-                error_display::format_llm_error("Gemini", "No candidate in response");
+            let formatted_error = error_display::format_llm_error("Gemini", "No candidate in response");
             LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 
@@ -419,8 +403,7 @@ impl GeminiProvider {
                         .unwrap_or_else(crate::providers::shared::generate_tool_call_id);
 
                     // Use the signature from the function call, or fall back to the one from preceding text
-                    let effective_signature =
-                        thought_signature.or(last_text_thought_signature.clone());
+                    let effective_signature = thought_signature.or(last_text_thought_signature.clone());
 
                     tool_calls.push(ToolCall {
                         id: call_id,
@@ -428,8 +411,7 @@ impl GeminiProvider {
                         function: Some(FunctionCall {
                             namespace: None,
                             name: function_call.name,
-                            arguments: serde_json::to_string(&function_call.args)
-                                .unwrap_or_else(|_| "{}".to_string()),
+                            arguments: serde_json::to_string(&function_call.args).unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
                         thought_signature: effective_signature,
@@ -454,13 +436,11 @@ impl GeminiProvider {
         };
 
         let (cleaned_content, extracted_reasoning) = if !text_content.is_empty() {
-            let (reasoning_segments, cleaned) =
-                crate::providers::split_reasoning_from_text(&text_content);
+            let (reasoning_segments, cleaned) = crate::providers::split_reasoning_from_text(&text_content);
             let final_reasoning = if reasoning_segments.is_empty() {
                 None
             } else {
-                let combined_reasoning: Vec<String> =
-                    reasoning_segments.into_iter().map(|s| s.text).collect();
+                let combined_reasoning: Vec<String> = reasoning_segments.into_iter().map(|s| s.text).collect();
                 let combined_reasoning = combined_reasoning.join("\n");
                 if combined_reasoning.trim().is_empty() {
                     None
@@ -483,11 +463,7 @@ impl GeminiProvider {
 
         Ok(LLMResponse {
             content: cleaned_content,
-            tool_calls: if tool_calls.is_empty() {
-                None
-            } else {
-                Some(tool_calls)
-            },
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             model,
             usage: None,
             finish_reason,
@@ -531,25 +507,23 @@ impl GeminiProvider {
                     );
                 }
                 "function_call" => {
-                    let (name, arguments, id, signature) =
-                        if let Some(function_call) = output.function_call {
-                            (
-                                function_call.name,
-                                function_call.arguments,
-                                function_call.id.or(output.id),
-                                function_call.signature.or(output.signature),
-                            )
-                        } else {
-                            (
-                                output.name.unwrap_or_default(),
-                                output.arguments.unwrap_or(Value::Null),
-                                output.id,
-                                output.signature,
-                            )
-                        };
+                    let (name, arguments, id, signature) = if let Some(function_call) = output.function_call {
+                        (
+                            function_call.name,
+                            function_call.arguments,
+                            function_call.id.or(output.id),
+                            function_call.signature.or(output.signature),
+                        )
+                    } else {
+                        (
+                            output.name.unwrap_or_default(),
+                            output.arguments.unwrap_or(Value::Null),
+                            output.id,
+                            output.signature,
+                        )
+                    };
 
-                    let call_id =
-                        id.unwrap_or_else(crate::providers::shared::generate_tool_call_id);
+                    let call_id = id.unwrap_or_else(crate::providers::shared::generate_tool_call_id);
 
                     tool_calls.push(ToolCall {
                         id: call_id,
@@ -557,8 +531,7 @@ impl GeminiProvider {
                         function: Some(FunctionCall {
                             namespace: None,
                             name,
-                            arguments: serde_json::to_string(&arguments)
-                                .unwrap_or_else(|_| "{}".to_string()),
+                            arguments: serde_json::to_string(&arguments).unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
                         thought_signature: signature,
@@ -573,8 +546,7 @@ impl GeminiProvider {
         } else {
             FinishReason::ToolCalls
         };
-        let (reasoning_segments, cleaned) =
-            crate::providers::split_reasoning_from_text(&text_content);
+        let (reasoning_segments, cleaned) = crate::providers::split_reasoning_from_text(&text_content);
         let extracted_reasoning = if reasoning_segments.is_empty() {
             None
         } else {
@@ -652,8 +624,7 @@ impl GeminiProvider {
                 }
             }
             "content.start" => {
-                let index =
-                    payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
+                let index = payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
                 let builder = state.outputs.entry(index).or_default();
                 if let Some(output_type) = payload
                     .get("content")
@@ -665,8 +636,7 @@ impl GeminiProvider {
                 }
             }
             "content.delta" => {
-                let index =
-                    payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
+                let index = payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
                 let Some(delta) = payload.get("delta").and_then(Value::as_object) else {
                     return Ok(events);
                 };
@@ -735,30 +705,24 @@ impl GeminiProvider {
     pub(super) fn map_streaming_error(error: StreamingError) -> LLMError {
         match error {
             StreamingError::NetworkError { message, .. } => {
-                let formatted =
-                    error_display::format_llm_error("Gemini", &format!("Network error: {message}"));
+                let formatted = error_display::format_llm_error("Gemini", &format!("Network error: {message}"));
                 LLMError::Network { message: formatted, metadata: None }
             }
             StreamingError::ApiError { status_code, message, .. } => {
                 if status_code == 401 || status_code == 403 {
-                    let formatted = error_display::format_llm_error(
-                        "Gemini",
-                        &format!("HTTP {status_code}: {message}"),
-                    );
+                    let formatted =
+                        error_display::format_llm_error("Gemini", &format!("HTTP {status_code}: {message}"));
                     LLMError::Authentication { message: formatted, metadata: None }
                 } else if status_code == 429 {
                     LLMError::RateLimit { metadata: None }
                 } else {
-                    let formatted = error_display::format_llm_error(
-                        "Gemini",
-                        &format!("API error ({status_code}): {message}"),
-                    );
+                    let formatted =
+                        error_display::format_llm_error("Gemini", &format!("API error ({status_code}): {message}"));
                     LLMError::Provider { message: formatted, metadata: None }
                 }
             }
             StreamingError::ParseError { message, .. } => {
-                let formatted =
-                    error_display::format_llm_error("Gemini", &format!("Parse error: {message}"));
+                let formatted = error_display::format_llm_error("Gemini", &format!("Parse error: {message}"));
                 LLMError::Provider { message: formatted, metadata: None }
             }
             StreamingError::TimeoutError { operation, duration } => {
@@ -769,15 +733,11 @@ impl GeminiProvider {
                 LLMError::Network { message: formatted, metadata: None }
             }
             StreamingError::ContentError { message } => {
-                let formatted =
-                    error_display::format_llm_error("Gemini", &format!("Content error: {message}"));
+                let formatted = error_display::format_llm_error("Gemini", &format!("Content error: {message}"));
                 LLMError::Provider { message: formatted, metadata: None }
             }
             StreamingError::StreamingError { message, .. } => {
-                let formatted = error_display::format_llm_error(
-                    "Gemini",
-                    &format!("Streaming error: {message}"),
-                );
+                let formatted = error_display::format_llm_error("Gemini", &format!("Streaming error: {message}"));
                 LLMError::Provider { message: formatted, metadata: None }
             }
         }
@@ -799,16 +759,12 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                 match part {
                     ContentPart::Text { text } => {
                         if !text.is_empty() {
-                            converted
-                                .push(Part::Text { text: text.clone(), thought_signature: None });
+                            converted.push(Part::Text { text: text.clone(), thought_signature: None });
                         }
                     }
                     ContentPart::Image { data, mime_type, .. } => {
                         converted.push(Part::InlineData {
-                            inline_data: InlineData {
-                                mime_type: mime_type.clone(),
-                                data: data.clone(),
-                            },
+                            inline_data: InlineData { mime_type: mime_type.clone(), data: data.clone() },
                         });
                     }
                     ContentPart::File { filename, file_id, file_url, .. } => {
@@ -848,10 +804,7 @@ fn build_interaction_content(content: &MessageContent) -> Vec<InteractionContent
                         }
                     }
                     ContentPart::Image { data, mime_type, .. } => {
-                        converted.push(InteractionContent::Image {
-                            data: data.clone(),
-                            mime_type: mime_type.clone(),
-                        })
+                        converted.push(InteractionContent::Image { data: data.clone(), mime_type: mime_type.clone() })
                     }
                     ContentPart::File { filename, file_id, file_url, .. } => {
                         let fallback = filename
@@ -1099,14 +1052,11 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
                     Some("high")
                 }
             }
-            ReasoningEffortLevel::High
-            | ReasoningEffortLevel::XHigh
-            | ReasoningEffortLevel::Max => Some("high"),
+            ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh | ReasoningEffortLevel::Max => Some("high"),
         };
 
         if let Some(level) = thinking_level {
-            generation_config.thinking_config =
-                Some(ThinkingConfig { thinking_level: Some(level.to_string()) });
+            generation_config.thinking_config = Some(ThinkingConfig { thinking_level: Some(level.to_string()) });
         }
     }
 
@@ -1162,9 +1112,7 @@ fn build_interaction_input(request: &LLMRequest) -> Result<InteractionInput, LLM
         {
             return Ok(match &turn.content {
                 InteractionTurnContent::Text(text) => InteractionInput::Text(text.clone()),
-                InteractionTurnContent::Content(content) => {
-                    InteractionInput::Content(content.clone())
-                }
+                InteractionTurnContent::Content(content) => InteractionInput::Content(content.clone()),
             });
         }
         return Ok(InteractionInput::Turns(turns));
@@ -1188,17 +1136,10 @@ fn interaction_delta_messages(messages: &[Message]) -> Vec<Message> {
         .rposition(|message| message.role == MessageRole::Assistant)
         .map_or(0, |index| index.saturating_add(1));
     let delta = messages[start..].to_vec();
-    if delta.is_empty() {
-        messages.to_vec()
-    } else {
-        delta
-    }
+    if delta.is_empty() { messages.to_vec() } else { delta }
 }
 
-fn build_interaction_turns(
-    messages: &[Message],
-    full_messages: &[Message],
-) -> Result<Vec<InteractionTurn>, LLMError> {
+fn build_interaction_turns(messages: &[Message], full_messages: &[Message]) -> Result<Vec<InteractionTurn>, LLMError> {
     let mut call_map: HashMap<String, String> = HashMap::with_capacity(full_messages.len());
     for message in full_messages {
         if message.role == MessageRole::Assistant
@@ -1238,12 +1179,10 @@ fn build_interaction_turns(
             }
         }
         if message.role == MessageRole::Tool {
-            let tool_call_id =
-                message.tool_call_id.clone().ok_or_else(|| LLMError::InvalidRequest {
-                    message: "Gemini interactions require tool_call_id for tool messages"
-                        .to_string(),
-                    metadata: None,
-                })?;
+            let tool_call_id = message.tool_call_id.clone().ok_or_else(|| LLMError::InvalidRequest {
+                message: "Gemini interactions require tool_call_id for tool messages".to_string(),
+                metadata: None,
+            })?;
             content.push(InteractionContent::FunctionResult {
                 call_id: tool_call_id.clone(),
                 name: call_map.get(&tool_call_id).cloned(),
@@ -1309,8 +1248,7 @@ fn interaction_result_content_array(value: &Value) -> Option<Vec<InteractionCont
     for item in items {
         let item_type = item.get("type")?.as_str()?;
         match item_type {
-            "text" => content
-                .push(InteractionContent::Text { text: item.get("text")?.as_str()?.to_string() }),
+            "text" => content.push(InteractionContent::Text { text: item.get("text")?.as_str()?.to_string() }),
             "image" => {
                 let mime_type = item.get("mime_type")?.as_str()?.to_string();
                 let data = item.get("data")?.as_str()?.to_string();
@@ -1484,16 +1422,12 @@ mod fabricated_id_tests {
 
     #[test]
     fn convert_from_interaction_response_fabricates_unique_ids_when_missing() {
-        let first = GeminiProvider::convert_from_interaction_response(
-            id_less_interaction("foo"),
-            "gemini-test".to_string(),
-        )
-        .expect("conversion should succeed");
-        let second = GeminiProvider::convert_from_interaction_response(
-            id_less_interaction("bar"),
-            "gemini-test".to_string(),
-        )
-        .expect("conversion should succeed");
+        let first =
+            GeminiProvider::convert_from_interaction_response(id_less_interaction("foo"), "gemini-test".to_string())
+                .expect("conversion should succeed");
+        let second =
+            GeminiProvider::convert_from_interaction_response(id_less_interaction("bar"), "gemini-test".to_string())
+                .expect("conversion should succeed");
 
         let first_id = first.tool_calls.expect("tool call expected")[0].id.clone();
         let second_id = second.tool_calls.expect("tool call expected")[0].id.clone();

@@ -153,18 +153,13 @@ impl MatchContext {
                 project_root.join(raw_path)
             };
 
-            let normalized =
-                tokio::fs::canonicalize(&candidate).await.unwrap_or_else(|_| candidate.clone());
+            let normalized = tokio::fs::canonicalize(&candidate).await.unwrap_or_else(|_| candidate.clone());
             let relative = normalized
                 .strip_prefix(project_root)
                 .ok()
-                .or_else(|| {
-                    canonical_root.as_ref().and_then(|root| normalized.strip_prefix(root).ok())
-                })
+                .or_else(|| canonical_root.as_ref().and_then(|root| normalized.strip_prefix(root).ok()))
                 .or_else(|| candidate.strip_prefix(project_root).ok())
-                .or_else(|| {
-                    canonical_root.as_ref().and_then(|root| candidate.strip_prefix(root).ok())
-                });
+                .or_else(|| canonical_root.as_ref().and_then(|root| candidate.strip_prefix(root).ok()));
             let Some(relative) = relative else {
                 continue;
             };
@@ -214,11 +209,7 @@ struct ExclusionMatcher {
 }
 
 impl ExclusionMatcher {
-    fn compile(
-        project_root: &Path,
-        home_dir: Option<&Path>,
-        raw_patterns: &[String],
-    ) -> Result<Self> {
+    fn compile(project_root: &Path, home_dir: Option<&Path>, raw_patterns: &[String]) -> Result<Self> {
         let mut patterns = Vec::with_capacity(raw_patterns.len());
         for raw in raw_patterns {
             let trimmed = raw.trim();
@@ -226,9 +217,8 @@ impl ExclusionMatcher {
                 continue;
             }
             let resolved = resolve_pattern(trimmed, project_root, home_dir)?;
-            let pattern = Pattern::new(&resolved).with_context(|| {
-                format!("Failed to compile instruction exclude pattern `{trimmed}`")
-            })?;
+            let pattern = Pattern::new(&resolved)
+                .with_context(|| format!("Failed to compile instruction exclude pattern `{trimmed}`"))?;
             patterns.push(pattern);
         }
 
@@ -250,10 +240,7 @@ impl ExclusionMatcher {
     }
 }
 
-pub fn extract_instruction_highlights(
-    segments: &[InstructionSegment],
-    limit: usize,
-) -> Vec<String> {
+pub fn extract_instruction_highlights(segments: &[InstructionSegment], limit: usize) -> Vec<String> {
     if limit == 0 {
         return Vec::new();
     }
@@ -424,11 +411,9 @@ pub fn instruction_scope_label(scope: &InstructionScope) -> &'static str {
 
 pub fn instruction_source_label(source: &InstructionSource) -> String {
     match source.kind {
-        InstructionSourceKind::Agents => format!(
-            "{} {}",
-            instruction_scope_label(&source.scope),
-            instruction_file_label(&source.path),
-        ),
+        InstructionSourceKind::Agents => {
+            format!("{} {}", instruction_scope_label(&source.scope), instruction_file_label(&source.path),)
+        }
         InstructionSourceKind::Extra => {
             format!("{} extra instructions", instruction_scope_label(&source.scope))
         }
@@ -453,11 +438,7 @@ fn instruction_file_label(path: &Path) -> &'static str {
     }
 }
 
-pub fn format_instruction_path(
-    path: &Path,
-    project_root: &Path,
-    home_dir: Option<&Path>,
-) -> String {
+pub fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&Path>) -> String {
     if let Ok(relative) = path.strip_prefix(project_root) {
         let display = relative.display().to_string();
         if !display.is_empty() {
@@ -483,16 +464,10 @@ pub fn format_instruction_path(
     path.display().to_string()
 }
 
-pub async fn discover_instruction_sources(
-    options: &InstructionDiscoveryOptions<'_>,
-) -> Result<Vec<InstructionSource>> {
+pub async fn discover_instruction_sources(options: &InstructionDiscoveryOptions<'_>) -> Result<Vec<InstructionSource>> {
     let mut sources = Vec::with_capacity(16);
     let mut seen_paths = HashSet::new();
-    let excludes = ExclusionMatcher::compile(
-        options.project_root,
-        options.home_dir,
-        options.exclude_patterns,
-    )?;
+    let excludes = ExclusionMatcher::compile(options.project_root, options.home_dir, options.exclude_patterns)?;
     let match_context = MatchContext::new(options.project_root, options.match_paths).await;
 
     if let Some(home) = options.home_dir {
@@ -509,13 +484,8 @@ pub async fn discover_instruction_sources(
             }
         }
 
-        let (user_unconditional_rules, user_matched_rules) = discover_rule_sources(
-            user_rules_roots(home),
-            InstructionScope::User,
-            &match_context,
-            &excludes,
-        )
-        .await?;
+        let (user_unconditional_rules, user_matched_rules) =
+            discover_rule_sources(user_rules_roots(home), InstructionScope::User, &match_context, &excludes).await?;
         for source in user_unconditional_rules.into_iter().chain(user_matched_rules.into_iter()) {
             if seen_paths.insert(source.path.clone()) {
                 sources.push(source);
@@ -523,13 +493,8 @@ pub async fn discover_instruction_sources(
         }
     }
 
-    let extra_paths = expand_instruction_patterns(
-        options.project_root,
-        options.home_dir,
-        options.extra_patterns,
-        &excludes,
-    )
-    .await?;
+    let extra_paths =
+        expand_instruction_patterns(options.project_root, options.home_dir, options.extra_patterns, &excludes).await?;
     for path in extra_paths {
         if seen_paths.insert(path.clone()) {
             sources.push(InstructionSource {
@@ -550,8 +515,7 @@ pub async fn discover_instruction_sources(
     let mut workspace_levels = Vec::with_capacity(4);
     loop {
         let chosen_paths =
-            select_workspace_instruction_candidates(&cursor, options.fallback_filenames, &excludes)
-                .await?;
+            select_workspace_instruction_candidates(&cursor, options.fallback_filenames, &excludes).await?;
 
         let mut level_sources = Vec::with_capacity(chosen_paths.len());
         for path in chosen_paths {
@@ -581,13 +545,9 @@ pub async fn discover_instruction_sources(
     workspace_levels.reverse();
     sources.extend(workspace_levels.into_iter().flatten());
 
-    let (workspace_unconditional_rules, workspace_matched_rules) = discover_rule_sources(
-        vec![root.join(RULES_DIRECTORY)],
-        InstructionScope::Workspace,
-        &match_context,
-        &excludes,
-    )
-    .await?;
+    let (workspace_unconditional_rules, workspace_matched_rules) =
+        discover_rule_sources(vec![root.join(RULES_DIRECTORY)], InstructionScope::Workspace, &match_context, &excludes)
+            .await?;
     for source in workspace_unconditional_rules
         .into_iter()
         .chain(workspace_matched_rules.into_iter())
@@ -729,14 +689,11 @@ async fn select_workspace_instruction_candidates(
     excludes: &ExclusionMatcher,
 ) -> Result<Vec<PathBuf>> {
     let mut selected = Vec::with_capacity(2);
-    if let Some(path) =
-        select_workspace_instruction_candidate(dir, fallback_filenames, excludes).await?
-    {
+    if let Some(path) = select_workspace_instruction_candidate(dir, fallback_filenames, excludes).await? {
         selected.push(path);
     }
 
-    if let Some(path) =
-        normalize_instruction_candidate(&dir.join(CLAUDE_FILENAME), excludes).await?
+    if let Some(path) = normalize_instruction_candidate(&dir.join(CLAUDE_FILENAME), excludes).await?
         && !selected.iter().any(|existing_path| existing_path == &path)
     {
         selected.push(path);
@@ -745,10 +702,7 @@ async fn select_workspace_instruction_candidates(
     Ok(selected)
 }
 
-async fn normalize_instruction_candidate(
-    candidate: &Path,
-    excludes: &ExclusionMatcher,
-) -> Result<Option<PathBuf>> {
+async fn normalize_instruction_candidate(candidate: &Path, excludes: &ExclusionMatcher) -> Result<Option<PathBuf>> {
     if !instruction_exists(candidate).await? {
         return Ok(None);
     }
@@ -912,9 +866,8 @@ async fn expand_instruction_patterns(
 
 fn resolve_pattern(pattern: &str, project_root: &Path, home_dir: Option<&Path>) -> Result<String> {
     if let Some(stripped) = pattern.strip_prefix("~/") {
-        let home = home_dir.ok_or_else(|| {
-            anyhow!("Cannot expand `~` in instruction pattern `{pattern}` without a home directory")
-        })?;
+        let home = home_dir
+            .ok_or_else(|| anyhow!("Cannot expand `~` in instruction pattern `{pattern}` without a home directory"))?;
         let resolved = home.join(stripped);
         if !contains_glob_meta(stripped) && resolved.exists() {
             return Ok(canonicalize_with_context(&resolved, "instruction pattern")?
@@ -944,8 +897,7 @@ async fn instruction_exists(path: &Path) -> Result<bool> {
     match tokio::fs::symlink_metadata(path).await {
         Ok(metadata) => Ok(metadata.file_type().is_file() || metadata.file_type().is_symlink()),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(err) => Err(err)
-            .with_context(|| format!("Failed to inspect instruction candidate {}", path.display())),
+        Err(err) => Err(err).with_context(|| format!("Failed to inspect instruction candidate {}", path.display())),
     }
 }
 
@@ -961,11 +913,7 @@ fn expand_instruction_contents(
     let canonical = canonicalize_with_context(path, "instruction source")?;
     if depth > 0 {
         if stack.contains(&canonical) {
-            warn!(
-                "Skipping cyclic instruction import `{}` while expanding `{}`",
-                canonical.display(),
-                path.display()
-            );
+            warn!("Skipping cyclic instruction import `{}` while expanding `{}`", canonical.display(), path.display());
             return Ok(None);
         }
         if depth > max_depth {
@@ -991,9 +939,7 @@ fn expand_instruction_contents(
         }
         Err(err) => {
             stack.pop();
-            return Err(err).with_context(|| {
-                format!("Failed to open instruction file {}", canonical.display())
-            });
+            return Err(err).with_context(|| format!("Failed to open instruction file {}", canonical.display()));
         }
     };
     let contents_without_frontmatter = match kind {
@@ -1001,15 +947,7 @@ fn expand_instruction_contents(
         InstructionSourceKind::Agents | InstructionSourceKind::Extra => raw,
     };
     let sanitized = strip_html_comments(&contents_without_frontmatter);
-    let output = expand_inline_imports(
-        &sanitized,
-        &canonical,
-        allowed_roots,
-        max_depth,
-        seen_imports,
-        depth,
-        stack,
-    )?;
+    let output = expand_inline_imports(&sanitized, &canonical, allowed_roots, max_depth, seen_imports, depth, stack)?;
 
     stack.pop();
 
@@ -1050,8 +988,7 @@ fn expand_inline_imports(
 
         let imports = collect_imports(line);
         for import in imports {
-            let Some(import_path) = resolve_import_path(&import, containing_file, allowed_roots)?
-            else {
+            let Some(import_path) = resolve_import_path(&import, containing_file, allowed_roots)? else {
                 continue;
             };
 
@@ -1099,9 +1036,8 @@ fn parse_rule_frontmatter(contents: &str, path: &Path) -> Result<RuleFrontmatter
         return Ok(RuleFrontmatter::default());
     };
 
-    serde_saphyr::from_str(frontmatter).with_context(|| {
-        format!("Failed to parse YAML frontmatter for instruction rule {}", path.display())
-    })
+    serde_saphyr::from_str(frontmatter)
+        .with_context(|| format!("Failed to parse YAML frontmatter for instruction rule {}", path.display()))
 }
 
 fn strip_rule_frontmatter(contents: &str) -> String {
@@ -1165,11 +1101,7 @@ fn zero_directory_pattern_variants(pattern: &str) -> Vec<String> {
     variants
 }
 
-fn collect_zero_directory_variants(
-    pattern: &str,
-    seen: &mut HashSet<String>,
-    variants: &mut Vec<String>,
-) {
+fn collect_zero_directory_variants(pattern: &str, seen: &mut HashSet<String>, variants: &mut Vec<String>) {
     let mut search_start = 0usize;
     while let Some(relative_index) = pattern[search_start..].find("**/") {
         let index = search_start + relative_index;
@@ -1276,9 +1208,8 @@ fn collect_imports(contents: &str) -> Vec<String> {
             let Some(candidate) = token.strip_prefix('@') else {
                 continue;
             };
-            let trimmed = candidate.trim_matches(|ch: char| {
-                matches!(ch, ')' | '(' | '[' | ']' | '{' | '}' | ',' | ';' | ':')
-            });
+            let trimmed =
+                candidate.trim_matches(|ch: char| matches!(ch, ')' | '(' | '[' | ']' | '{' | '}' | ',' | ';' | ':'));
             let trimmed = trimmed.trim_end_matches('.');
             if trimmed.is_empty() {
                 continue;
@@ -1290,11 +1221,7 @@ fn collect_imports(contents: &str) -> Vec<String> {
     imports
 }
 
-fn resolve_import_path(
-    import: &str,
-    containing_file: &Path,
-    allowed_roots: &[PathBuf],
-) -> Result<Option<PathBuf>> {
+fn resolve_import_path(import: &str, containing_file: &Path, allowed_roots: &[PathBuf]) -> Result<Option<PathBuf>> {
     let parent = containing_file
         .parent()
         .ok_or_else(|| anyhow!("Instruction file {} has no parent", containing_file.display()))?;
@@ -1302,9 +1229,7 @@ fn resolve_import_path(
 
     let candidate = if let Some(stripped) = import.strip_prefix("~/") {
         let Some(home_dir) = home_dir else {
-            warn!(
-                "Skipping instruction import `@{import}` because the home directory is unavailable"
-            );
+            warn!("Skipping instruction import `@{import}` because the home directory is unavailable");
             return Ok(None);
         };
         home_dir.join(stripped)
@@ -1320,30 +1245,19 @@ fn resolve_import_path(
     let canonical = match std::fs::canonicalize(&candidate) {
         Ok(path) => path,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            warn!(
-                "Skipping missing instruction import `@{}` referenced from {}",
-                import,
-                containing_file.display()
-            );
+            warn!("Skipping missing instruction import `@{}` referenced from {}", import, containing_file.display());
             return Ok(None);
         }
         Err(err) => {
             return Err(err).with_context(|| {
-                format!(
-                    "Failed to resolve instruction import `@{}` from {}",
-                    import,
-                    containing_file.display()
-                )
+                format!("Failed to resolve instruction import `@{}` from {}", import, containing_file.display())
             });
         }
     };
 
     let allowed = allowed_roots.iter().any(|root| canonical.starts_with(root));
     if !allowed {
-        warn!(
-            "Skipping instruction import `{}` because it is outside the allowed roots",
-            canonical.display()
-        );
+        warn!("Skipping instruction import `{}` because it is outside the allowed roots", canonical.display());
         return Ok(None);
     }
 
@@ -1426,11 +1340,7 @@ mod tests {
 
         let home = tempdir()?;
         write_doc(&home.path().join(".vtcode"), "user agents")?;
-        write_rule(
-            &home.path().join(".vtcode/rules"),
-            "shared.md",
-            "# Shared\n- user shared rule\n",
-        )?;
+        write_rule(&home.path().join(".vtcode/rules"), "shared.md", "# Shared\n- user shared rule\n")?;
         write_rule(
             &home.path().join(".vtcode/rules"),
             "matched.md",
@@ -1439,11 +1349,7 @@ mod tests {
 
         write_doc(project_root, "root agents")?;
         write_doc(&project_root.join("src"), "nested agents")?;
-        write_rule(
-            &project_root.join(".vtcode/rules"),
-            "workspace.md",
-            "# Workspace\n- workspace rule\n",
-        )?;
+        write_rule(&project_root.join(".vtcode/rules"), "workspace.md", "# Workspace\n- workspace rule\n")?;
         write_rule(
             &project_root.join(".vtcode/rules"),
             "workspace-matched.md",
@@ -1451,13 +1357,9 @@ mod tests {
         )?;
 
         let match_paths = vec![project_root.join("src/main.rs")];
-        let sources = discover_instruction_sources(&default_options(
-            &nested,
-            project_root,
-            Some(home.path()),
-            &match_paths,
-        ))
-        .await?;
+        let sources =
+            discover_instruction_sources(&default_options(&nested, project_root, Some(home.path()), &match_paths))
+                .await?;
 
         let labels = sources.iter().map(instruction_source_label).collect::<Vec<_>>();
 
@@ -1485,13 +1387,8 @@ mod tests {
         let home = tempdir()?;
         let user_agents_path = write_doc(&home.path().join(".vtcode"), "user agents")?;
 
-        let sources = discover_instruction_sources(&default_options(
-            project_root,
-            project_root,
-            Some(home.path()),
-            &[],
-        ))
-        .await?;
+        let sources =
+            discover_instruction_sources(&default_options(project_root, project_root, Some(home.path()), &[])).await?;
 
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].path, std::fs::canonicalize(user_agents_path)?);
@@ -1513,19 +1410,14 @@ mod tests {
         write_doc(&nested, "nested agents")?;
         write_claude_doc(&nested, "nested claude")?;
 
-        let sources =
-            discover_instruction_sources(&default_options(&nested, &project_root, None, &[]))
-                .await?;
+        let sources = discover_instruction_sources(&default_options(&nested, &project_root, None, &[])).await?;
         let workspace_paths = sources
             .iter()
             .filter(|source| matches!(source.scope, InstructionScope::Workspace))
             .map(|source| format_instruction_path(&source.path, &project_root, None))
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            workspace_paths,
-            vec!["AGENTS.md", "CLAUDE.md", "src/AGENTS.md", "src/CLAUDE.md"]
-        );
+        assert_eq!(workspace_paths, vec!["AGENTS.md", "CLAUDE.md", "src/AGENTS.md", "src/CLAUDE.md"]);
 
         Ok(())
     }
@@ -1538,10 +1430,7 @@ mod tests {
         std::fs::create_dir_all(&docs_dir)?;
         std::fs::write(docs_dir.join("shared.md"), "# Shared\n- imported detail\n")?;
 
-        write_doc(
-            project_root,
-            "# Root\n<!-- hidden -->\n- visible\n\nSee @docs/shared.md\n- trailing detail\n",
-        )?;
+        write_doc(project_root, "# Root\n<!-- hidden -->\n- visible\n\nSee @docs/shared.md\n- trailing detail\n")?;
         write_rule(
             &project_root.join(".vtcode/rules"),
             "rust.md",
@@ -1549,12 +1438,10 @@ mod tests {
         )?;
 
         let match_paths = vec![project_root.join("src/lib.rs")];
-        let bundle = read_instruction_bundle(
-            &default_options(project_root, project_root, None, &match_paths),
-            16 * 1024,
-        )
-        .await?
-        .expect("instruction bundle");
+        let bundle =
+            read_instruction_bundle(&default_options(project_root, project_root, None, &match_paths), 16 * 1024)
+                .await?
+                .expect("instruction bundle");
 
         assert_eq!(bundle.segments.len(), 2);
         let combined = bundle.combined_text();
@@ -1585,10 +1472,7 @@ mod tests {
         let sources = discover_instruction_sources(&options).await?;
 
         assert_eq!(sources.len(), 1);
-        assert_eq!(
-            sources[0].path.file_name().and_then(|value| value.to_str()).unwrap_or_default(),
-            "AGENTS.md"
-        );
+        assert_eq!(sources[0].path.file_name().and_then(|value| value.to_str()).unwrap_or_default(), "AGENTS.md");
 
         Ok(())
     }
@@ -1625,20 +1509,10 @@ mod tests {
         let workspace = tempdir()?;
         let project_root = workspace.path();
         std::fs::create_dir_all(project_root.join(".vtcode/rules"))?;
-        write_rule(
-            &project_root.join(".vtcode/rules"),
-            "README.md",
-            "# Rules\n- should stay out of prompt memory\n",
-        )?;
-        write_rule(
-            &project_root.join(".vtcode/rules"),
-            "rust.md",
-            "# Rust\n- keep changes surgical\n",
-        )?;
+        write_rule(&project_root.join(".vtcode/rules"), "README.md", "# Rules\n- should stay out of prompt memory\n")?;
+        write_rule(&project_root.join(".vtcode/rules"), "rust.md", "# Rust\n- keep changes surgical\n")?;
 
-        let sources =
-            discover_instruction_sources(&default_options(project_root, project_root, None, &[]))
-                .await?;
+        let sources = discover_instruction_sources(&default_options(project_root, project_root, None, &[])).await?;
 
         assert_eq!(sources.len(), 1);
         assert!(

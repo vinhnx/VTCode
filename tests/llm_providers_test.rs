@@ -10,8 +10,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model, infer_provider},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
-        OpenAIProvider, OpenRouterProvider,
+        AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
+        OpenRouterProvider,
     },
 };
 
@@ -47,32 +47,17 @@ fn test_provider_auto_detection() {
     assert_eq!(factory.provider_from_model("o4-mini"), Some("openai".to_string()));
 
     // Test Anthropic models
-    assert_eq!(
-        factory.provider_from_model(models::CLAUDE_SONNET_4_6),
-        Some("anthropic".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("claude-sonnet-4-20250514"),
-        Some("anthropic".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("claude-opus-4-1-20250805"),
-        Some("anthropic".to_string())
-    );
+    assert_eq!(factory.provider_from_model(models::CLAUDE_SONNET_4_6), Some("anthropic".to_string()));
+    assert_eq!(factory.provider_from_model("claude-sonnet-4-20250514"), Some("anthropic".to_string()));
+    assert_eq!(factory.provider_from_model("claude-opus-4-1-20250805"), Some("anthropic".to_string()));
 
     // Test Gemini models
     assert_eq!(factory.provider_from_model("gemini-3-flash-preview"), Some("gemini".to_string()));
     assert_eq!(factory.provider_from_model("gemini-3.1-pro-preview"), Some("gemini".to_string()));
 
     // Test OpenRouter models
-    assert_eq!(
-        factory.provider_from_model(models::openrouter::DEEPSEEK_V4_PRO),
-        Some("openrouter".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("anthropic/claude-sonnet-4.6"),
-        Some("openrouter".to_string())
-    );
+    assert_eq!(factory.provider_from_model(models::openrouter::DEEPSEEK_V4_PRO), Some("openrouter".to_string()));
+    assert_eq!(factory.provider_from_model("anthropic/claude-sonnet-4.6"), Some("openrouter".to_string()));
 
     // Test LM Studio models
     assert_eq!(
@@ -81,14 +66,8 @@ fn test_provider_auto_detection() {
     );
 
     // Test Moonshot models
-    assert_eq!(
-        factory.provider_from_model(models::moonshot::KIMI_K2_6),
-        Some("moonshot".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model(models::moonshot::KIMI_K2_5),
-        Some("moonshot".to_string())
-    );
+    assert_eq!(factory.provider_from_model(models::moonshot::KIMI_K2_6), Some("moonshot".to_string()));
+    assert_eq!(factory.provider_from_model(models::moonshot::KIMI_K2_5), Some("moonshot".to_string()));
 
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
@@ -109,8 +88,7 @@ fn infer_provider_respects_override_and_model() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers directly
-    let gemini =
-        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
+    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     gemini.unwrap();
 
     let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
@@ -119,28 +97,16 @@ fn test_provider_creation() {
     let openai_reasoning = create_provider_for_model("o4-mini", "test_key".to_string(), None, None);
     openai_reasoning.unwrap();
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
+    let anthropic = create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     anthropic.unwrap();
 
-    let openrouter = create_provider_for_model(
-        models::openrouter::DEEPSEEK_V4_PRO,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let openrouter = create_provider_for_model(models::openrouter::DEEPSEEK_V4_PRO, "test_key".to_string(), None, None);
     openrouter.unwrap();
 
-    let moonshot = create_provider_for_model(
-        models::moonshot::DEFAULT_MODEL,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let moonshot = create_provider_for_model(models::moonshot::DEFAULT_MODEL, "test_key".to_string(), None, None);
     moonshot.unwrap();
 
-    let ollama =
-        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
+    let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     ollama.unwrap();
 
     // Test invalid model
@@ -151,72 +117,57 @@ fn test_provider_creation() {
 #[test]
 fn test_unified_client_creation() {
     // Test creating unified clients for different providers
-    let gemini_client =
-        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
+    let gemini_client = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini_client.is_ok());
     if let Ok(client) = gemini_client {
         assert_eq!(client.name(), "gemini");
     }
 
-    let openai_client =
-        create_provider_for_model("gpt-oss-20b", "test_key".to_string(), None, None);
+    let openai_client = create_provider_for_model("gpt-oss-20b", "test_key".to_string(), None, None);
     assert!(openai_client.is_ok());
     if let Ok(client) = openai_client {
         assert_eq!(client.name(), "openai");
     }
 
-    let anthropic_client =
-        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
+    let anthropic_client = create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
     }
 
-    let openrouter_client = create_provider_for_model(
-        models::openrouter::DEEPSEEK_V4_PRO,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let openrouter_client =
+        create_provider_for_model(models::openrouter::DEEPSEEK_V4_PRO, "test_key".to_string(), None, None);
     assert!(openrouter_client.is_ok());
     if let Ok(client) = openrouter_client {
         assert_eq!(client.name(), "openrouter");
     }
 
-    let moonshot_client = create_provider_for_model(
-        models::moonshot::DEFAULT_MODEL,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let moonshot_client =
+        create_provider_for_model(models::moonshot::DEFAULT_MODEL, "test_key".to_string(), None, None);
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
     }
 
-    let opencode_zen_client =
-        create_provider_for_model("opencode/gpt-5.4", "test_key".to_string(), None, None);
+    let opencode_zen_client = create_provider_for_model("opencode/gpt-5.4", "test_key".to_string(), None, None);
     assert!(opencode_zen_client.is_ok());
     if let Ok(client) = opencode_zen_client {
         assert_eq!(client.name(), "opencode-zen");
     }
 
-    let opencode_go_client =
-        create_provider_for_model("opencode-go/kimi-k2.5", "test_key".to_string(), None, None);
+    let opencode_go_client = create_provider_for_model("opencode-go/kimi-k2.5", "test_key".to_string(), None, None);
     assert!(opencode_go_client.is_ok());
     if let Ok(client) = opencode_go_client {
         assert_eq!(client.name(), "opencode-go");
     }
 
-    let ollama_client =
-        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
+    let ollama_client = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     assert!(ollama_client.is_ok());
     if let Ok(client) = ollama_client {
         assert_eq!(client.name(), "ollama");
     }
 
-    let lmstudio_client =
-        create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None, None);
+    let lmstudio_client = create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None, None);
     assert!(lmstudio_client.is_ok());
     if let Ok(client) = lmstudio_client {
         assert_eq!(client.name(), "lmstudio");
@@ -303,8 +254,8 @@ fn test_provider_names() {
 #[ignore = "requires provider configuration"]
 fn test_request_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
-    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None)
-        .expect("openai provider");
+    let openai =
+        create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None).expect("openai provider");
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let _openrouter = OpenRouterProvider::new("test_key".to_string());
 
@@ -358,8 +309,7 @@ fn test_anthropic_tool_message_handling() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
 
     // Test tool message conversion
-    let tool_message =
-        Message::tool_response("tool_123".to_string(), "Tool result content".to_string());
+    let tool_message = Message::tool_response("tool_123".to_string(), "Tool result content".to_string());
 
     let request = LLMRequest {
         messages: Arc::new(vec![tool_message]),

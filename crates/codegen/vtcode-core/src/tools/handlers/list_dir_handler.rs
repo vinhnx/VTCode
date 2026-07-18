@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::sandboxing::{Sandboxable, SandboxablePreference};
-use super::tool_handler::{
-    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
-};
+use super::tool_handler::{ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload};
 
 use crate::utils::formatting::format_size;
 
@@ -124,11 +122,9 @@ impl ListDirHandler {
                 is_dir,
                 size: metadata.as_ref().map(|m| m.len()),
                 modified: metadata.as_ref().and_then(|m| {
-                    m.modified().ok().map(|t| {
-                        chrono::DateTime::<chrono::Utc>::from(t)
-                            .format("%Y-%m-%d %H:%M:%S")
-                            .to_string()
-                    })
+                    m.modified()
+                        .ok()
+                        .map(|t| chrono::DateTime::<chrono::Utc>::from(t).format("%Y-%m-%d %H:%M:%S").to_string())
                 }),
             };
 
@@ -136,8 +132,7 @@ impl ListDirHandler {
 
             // Recurse into subdirectories
             if args.recursive && is_dir && entries.len() < self.max_entries {
-                let sub_entries =
-                    Box::pin(self.list_directory(&entry_path, args, depth + 1)).await?;
+                let sub_entries = Box::pin(self.list_directory(&entry_path, args, depth + 1)).await?;
                 entries.extend(sub_entries);
             }
         }
@@ -191,13 +186,7 @@ impl ToolHandler for ListDirHandler {
 
             if let Some(size) = entry.size {
                 if !entry.is_dir {
-                    output.push_str(&format!(
-                        "{}{}{} ({})\n",
-                        prefix,
-                        entry.name,
-                        suffix,
-                        format_size(size)
-                    ));
+                    output.push_str(&format!("{}{}{} ({})\n", prefix, entry.name, suffix, format_size(size)));
                 } else {
                     output.push_str(&format!("{}{}{}\n", prefix, entry.name, suffix));
                 }

@@ -153,8 +153,7 @@ pub fn looks_like_diff_content(content: &str) -> bool {
     if has_apply_patch {
         return true;
     }
-    if has_git_header && (has_hunk || has_old_marker || has_new_marker || has_binary_or_mode_header)
-    {
+    if has_git_header && (has_hunk || has_old_marker || has_new_marker || has_binary_or_mode_header) {
         return true;
     }
     if has_hunk && (has_old_marker || has_new_marker || has_add || has_del) {
@@ -192,10 +191,9 @@ pub fn format_start_only_hunk_header(line: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_start_only_hunk_header, is_apply_patch_header_line, is_diff_addition_line,
-        is_diff_deletion_line, is_diff_header_line, is_diff_new_file_marker_line,
-        is_diff_old_file_marker_line, language_hint_from_path, looks_like_diff_content,
-        parse_diff_git_path, parse_diff_marker_path, parse_hunk_starts,
+        format_start_only_hunk_header, is_apply_patch_header_line, is_diff_addition_line, is_diff_deletion_line,
+        is_diff_header_line, is_diff_new_file_marker_line, is_diff_old_file_marker_line, language_hint_from_path,
+        looks_like_diff_content, parse_diff_git_path, parse_diff_marker_path, parse_hunk_starts,
     };
 
     #[test]
@@ -224,10 +222,7 @@ mod tests {
 
     #[test]
     fn formats_start_only_hunk_header() {
-        assert_eq!(
-            format_start_only_hunk_header("@@ -536,4 +540,5 @@"),
-            Some("@@ -536 +540 @@".to_string())
-        );
+        assert_eq!(format_start_only_hunk_header("@@ -536,4 +540,5 @@"), Some("@@ -536 +540 @@".to_string()));
     }
 
     #[test]
@@ -268,8 +263,7 @@ mod tests {
 
     #[test]
     fn avoids_false_positive_for_regular_code() {
-        let code =
-            "fn delta(x: i32) -> i32 {\n    let y = x + 1;\n    let z = x - 1;\n    y + z\n}\n";
+        let code = "fn delta(x: i32) -> i32 {\n    let y = x + 1;\n    let z = x - 1;\n    y + z\n}\n";
         assert!(!looks_like_diff_content(code));
     }
 

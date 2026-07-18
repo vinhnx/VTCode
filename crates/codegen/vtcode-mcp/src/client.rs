@@ -10,14 +10,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 use vtcode_commons::fs::{ensure_dir_exists, write_file_with_context};
-use vtcode_config::mcp::{
-    McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
-};
+use vtcode_config::mcp::{McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig};
 
 use super::{
-    McpClientStatus, McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpProvider,
-    McpResourceData, McpResourceInfo, McpToolExecutor, McpToolInfo, format_tool_markdown,
-    sanitize_filename,
+    McpClientStatus, McpElicitationHandler, McpPromptDetail, McpPromptInfo, McpProvider, McpResourceData,
+    McpResourceInfo, McpToolExecutor, McpToolInfo, format_tool_markdown, sanitize_filename,
 };
 use crate::connection_pool::McpConnectionPool;
 
@@ -92,10 +89,7 @@ impl McpClient {
         }
 
         self.state.write().providers = initialized;
-        info!(
-            "MCP client initialization complete. Active providers: {}",
-            self.state.read().providers.len()
-        );
+        info!("MCP client initialization complete. Active providers: {}", self.state.read().providers.len());
 
         Ok(())
     }
@@ -117,10 +111,7 @@ impl McpClient {
         // Check for path traversal in file-related arguments
         if self.config.security.validation.path_traversal_protection
             && let Some(path) = args.get("path").and_then(|v| v.as_str())
-            && (path.contains("../")
-                || path.starts_with("../")
-                || path.contains("..\\")
-                || path.starts_with("..\\"))
+            && (path.contains("../") || path.starts_with("../") || path.contains("..\\") || path.starts_with("..\\"))
         {
             return Err(anyhow::anyhow!("Path traversal detected in arguments"));
         }
@@ -133,20 +124,12 @@ impl McpClient {
     /// Public-facing version that takes ownership of `args` for compatibility
     /// with existing callers. Delegates to the reference-taking implementation
     /// to avoid unnecessary cloning when the caller already has a reference.
-    pub async fn execute_tool_with_validation(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> Result<Value> {
+    pub async fn execute_tool_with_validation(&self, tool_name: &str, args: Value) -> Result<Value> {
         self.execute_tool_with_validation_ref(tool_name, &args).await
     }
 
     // Internal reference-taking implementation to avoid cloning when not necessary.
-    async fn execute_tool_with_validation_ref(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> Result<Value> {
+    async fn execute_tool_with_validation_ref(&self, tool_name: &str, args: &Value) -> Result<Value> {
         if !self.config.enabled {
             return Err(anyhow!("MCP support is disabled in the current configuration"));
         }
@@ -248,12 +231,7 @@ impl McpClient {
         let provider_name = provider.name.clone();
         let allowlist_snapshot = self.state.read().allowlist.clone();
         let prompt = provider
-            .get_prompt(
-                prompt_name,
-                arguments.unwrap_or_default(),
-                self.request_timeout(),
-                &allowlist_snapshot,
-            )
+            .get_prompt(prompt_name, arguments.unwrap_or_default(), self.request_timeout(), &allowlist_snapshot)
             .await?;
         self.state
             .write()
@@ -311,12 +289,8 @@ impl McpClient {
             .map(|provider_config| {
                 let connected = state.providers.contains_key(&provider_config.name);
                 let (transport, target) = match &provider_config.transport {
-                    McpTransportConfig::Stdio(stdio) => {
-                        ("stdio", Value::String(stdio.command.clone()))
-                    }
-                    McpTransportConfig::Http(http) => {
-                        ("http", Value::String(http.endpoint.clone()))
-                    }
+                    McpTransportConfig::Stdio(stdio) => ("stdio", Value::String(stdio.command.clone())),
+                    McpTransportConfig::Http(http) => ("http", Value::String(http.endpoint.clone())),
                 };
 
                 json!({
@@ -362,8 +336,7 @@ impl McpClient {
             bail!("Cannot connect MCP server '{}': {}", provider_config.name, reason);
         }
 
-        if matches!(provider_config.transport, McpTransportConfig::Http(_))
-            && !self.config.experimental_use_rmcp_client
+        if matches!(provider_config.transport, McpTransportConfig::Http(_)) && !self.config.experimental_use_rmcp_client
         {
             bail!(
                 "Cannot connect MCP HTTP server '{}' while experimental_use_rmcp_client is disabled",
@@ -377,8 +350,7 @@ impl McpClient {
             .connect_and_initialize_provider(&provider_config, &allowlist_snapshot, tool_timeout)
             .await?;
 
-        if let Err(err) = provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout).await
-        {
+        if let Err(err) = provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout).await {
             warn!("Connected MCP server '{}' but failed to refresh tools: {err}", server_name);
         } else if let Some(cache) = provider.cached_tools().await {
             self.record_tool_provider(&provider.name, &cache);
@@ -426,9 +398,9 @@ impl McpClient {
         let tools_dir = mcp_dir.join("tools");
 
         // Create directories
-        ensure_dir_exists(&tools_dir).await.with_context(|| {
-            format!("Failed to create MCP tools directory: {}", tools_dir.display())
-        })?;
+        ensure_dir_exists(&tools_dir)
+            .await
+            .with_context(|| format!("Failed to create MCP tools directory: {}", tools_dir.display()))?;
 
         // Group tools by provider
         let mut by_provider: FxHashMap<String, Vec<&McpToolInfo>> = FxHashMap::default();
@@ -439,18 +411,16 @@ impl McpClient {
         // Write tool files per provider
         for (provider, provider_tools) in &by_provider {
             let provider_dir = tools_dir.join(sanitize_filename(provider));
-            ensure_dir_exists(&provider_dir).await.with_context(|| {
-                format!("Failed to create provider directory: {}", provider_dir.display())
-            })?;
+            ensure_dir_exists(&provider_dir)
+                .await
+                .with_context(|| format!("Failed to create provider directory: {}", provider_dir.display()))?;
 
             for tool in provider_tools {
                 let tool_content = format_tool_markdown(tool);
                 let tool_path = provider_dir.join(format!("{}.md", sanitize_filename(&tool.name)));
                 write_file_with_context(&tool_path, &tool_content, "MCP tool file")
                     .await
-                    .with_context(|| {
-                        format!("Failed to write tool file: {}", tool_path.display())
-                    })?;
+                    .with_context(|| format!("Failed to write tool file: {}", tool_path.display()))?;
             }
         }
 
@@ -459,9 +429,7 @@ impl McpClient {
         let index_path = tools_dir.join("INDEX.md");
         write_file_with_context(&index_path, &index_content, "MCP tools index")
             .await
-            .with_context(|| {
-                format!("Failed to write MCP tools index: {}", index_path.display())
-            })?;
+            .with_context(|| format!("Failed to write MCP tools index: {}", index_path.display()))?;
 
         // Write status file
         let status = self.generate_status_json();
@@ -505,8 +473,7 @@ impl McpClient {
 
             for tool in tools {
                 let desc = tool.description.lines().next().unwrap_or(&tool.description);
-                let desc_truncated =
-                    vtcode_commons::formatting::truncate_byte_budget(desc, 57, "...");
+                let desc_truncated = vtcode_commons::formatting::truncate_byte_budget(desc, 57, "...");
                 content.push_str(&format!(
                     "| {} | `{}` | {} |\n",
                     tool.provider,
@@ -563,8 +530,7 @@ impl McpClient {
 
         let timeout = self.tool_timeout();
         let mut all_tools = Vec::with_capacity(128);
-        let mut index_updates: FxHashMap<String, String> =
-            FxHashMap::with_capacity_and_hasher(128, Default::default());
+        let mut index_updates: FxHashMap<String, String> = FxHashMap::with_capacity_and_hasher(128, Default::default());
 
         for provider in providers {
             let provider_name = provider.name.clone();
@@ -723,10 +689,7 @@ impl McpClient {
                 }
                 Ok(false) => continue,
                 Err(err) => {
-                    warn!(
-                        "Error checking tool '{}' on provider '{}': {err}",
-                        tool_name, provider.name
-                    );
+                    warn!("Error checking tool '{}' on provider '{}': {err}", tool_name, provider.name);
                 }
             }
         }
@@ -782,10 +745,7 @@ impl McpClient {
                 }
                 Ok(false) => continue,
                 Err(err) => {
-                    warn!(
-                        "Error checking resource '{}' on provider '{}': {err}",
-                        uri, provider.name
-                    );
+                    warn!("Error checking resource '{}' on provider '{}': {err}", uri, provider.name);
                 }
             }
         }
@@ -817,10 +777,7 @@ impl McpClient {
                 }
                 Ok(false) => continue,
                 Err(err) => {
-                    warn!(
-                        "Error checking prompt '{}' on provider '{}': {err}",
-                        prompt_name, provider.name
-                    );
+                    warn!("Error checking prompt '{}' on provider '{}': {err}", prompt_name, provider.name);
                 }
             }
         }
@@ -848,11 +805,7 @@ impl McpClient {
         for attempt_idx in 0..total_attempts {
             let attempt_number = attempt_idx + 1;
             match self
-                .connect_and_initialize_provider_once(
-                    provider_config,
-                    allowlist_snapshot,
-                    tool_timeout,
-                )
+                .connect_and_initialize_provider_once(provider_config, allowlist_snapshot, tool_timeout)
                 .await
             {
                 Ok(provider) => return Ok(provider),
@@ -875,9 +828,7 @@ impl McpClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            anyhow!("Failed to initialize MCP provider '{}'", provider_config.name)
-        }))
+        Err(last_error.unwrap_or_else(|| anyhow!("Failed to initialize MCP provider '{}'", provider_config.name)))
     }
 
     async fn connect_and_initialize_provider_once(
@@ -886,12 +837,9 @@ impl McpClient {
         allowlist_snapshot: &McpAllowListConfig,
         tool_timeout: Option<Duration>,
     ) -> Result<McpProvider> {
-        let provider =
-            McpProvider::connect(provider_config.clone(), self.elicitation_handler.clone())
-                .await
-                .with_context(|| {
-                    format!("Failed to connect to MCP provider '{}'", provider_config.name)
-                })?;
+        let provider = McpProvider::connect(provider_config.clone(), self.elicitation_handler.clone())
+            .await
+            .with_context(|| format!("Failed to connect to MCP provider '{}'", provider_config.name))?;
         let provider_startup_timeout = self.resolve_startup_timeout(provider_config);
         provider
             .initialize(
@@ -901,9 +849,7 @@ impl McpClient {
                 allowlist_snapshot,
             )
             .await
-            .with_context(|| {
-                format!("Failed to initialize MCP provider '{}'", provider_config.name)
-            })?;
+            .with_context(|| format!("Failed to initialize MCP provider '{}'", provider_config.name))?;
         Ok(provider)
     }
 
@@ -997,9 +943,10 @@ impl McpClient {
 
         if self.elicitation_handler.is_some() {
             // Elicitation is now a first-class capability in rmcp
-            capabilities.elicitation = Some(rmcp::model::ElicitationCapability::new().with_form(
-                rmcp::model::FormElicitationCapability::new().with_schema_validation(true),
-            ));
+            capabilities.elicitation = Some(
+                rmcp::model::ElicitationCapability::new()
+                    .with_form(rmcp::model::FormElicitationCapability::new().with_schema_validation(true)),
+            );
         }
 
         InitializeRequestParams::new(capabilities, super::utils::build_client_implementation())
@@ -1018,11 +965,7 @@ impl McpClient {
         }
     }
 
-    fn format_tool_result(
-        provider_name: &str,
-        tool_name: &str,
-        result: CallToolResult,
-    ) -> Result<Value> {
+    fn format_tool_result(provider_name: &str, tool_name: &str, result: CallToolResult) -> Result<Value> {
         // Convert result to JSON to access fields flexibly
         let result_json = serde_json::to_value(&result)?;
         let result_obj = result_json.as_object();
@@ -1044,8 +987,7 @@ impl McpClient {
 
             // Try to find text content in the content array
             if message.is_none()
-                && let Some(content) =
-                    result_obj.and_then(|o| o.get("content")).and_then(Value::as_array)
+                && let Some(content) = result_obj.and_then(|o| o.get("content")).and_then(Value::as_array)
             {
                 message = content
                     .iter()
@@ -1053,9 +995,7 @@ impl McpClient {
             }
 
             let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_owned());
-            return Err(anyhow!(
-                "MCP tool '{tool_name}' on provider '{provider_name}' reported an error: {message}"
-            ));
+            return Err(anyhow!("MCP tool '{tool_name}' on provider '{provider_name}' reported an error: {message}"));
         }
 
         let mut payload = Map::new();
@@ -1108,9 +1048,7 @@ impl McpToolExecutor for McpClient {
                 return Ok(false);
             }
 
-            bail!(
-                "No MCP providers are currently connected. Ensure MCP initialization completed successfully."
-            );
+            bail!("No MCP providers are currently connected. Ensure MCP initialization completed successfully.");
         }
 
         let tools = self.collect_tools(false).await?;
@@ -1126,8 +1064,8 @@ impl McpToolExecutor for McpClient {
 mod tests {
     use super::McpClient;
     use vtcode_config::mcp::{
-        McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpRequirementsConfig,
-        McpStdioServerConfig, McpTransportConfig,
+        McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpRequirementsConfig, McpStdioServerConfig,
+        McpTransportConfig,
     };
 
     fn base_config() -> McpClientConfig {

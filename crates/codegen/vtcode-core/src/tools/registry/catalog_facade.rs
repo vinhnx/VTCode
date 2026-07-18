@@ -18,11 +18,7 @@ impl ToolRegistry {
         *self.tool_assembly.write().unwrap_or_else(std::sync::PoisonError::into_inner) = next;
     }
 
-    pub async fn public_tool_names(
-        &self,
-        surface: SessionSurface,
-        capability_level: CapabilityLevel,
-    ) -> Vec<String> {
+    pub async fn public_tool_names(&self, surface: SessionSurface, capability_level: CapabilityLevel) -> Vec<String> {
         let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut names = assembly.catalog().public_tool_names(
             SessionToolsConfig::full_public(
@@ -54,10 +50,7 @@ impl ToolRegistry {
         entries
     }
 
-    pub async fn function_declarations(
-        &self,
-        config: SessionToolsConfig,
-    ) -> Vec<FunctionDeclaration> {
+    pub async fn function_declarations(&self, config: SessionToolsConfig) -> Vec<FunctionDeclaration> {
         let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut declarations = assembly.catalog().function_declarations(config);
         if !self.has_subagent_controller() {
@@ -75,11 +68,7 @@ impl ToolRegistry {
         tools
     }
 
-    pub async fn schema_for_public_name(
-        &self,
-        name: &str,
-        config: SessionToolsConfig,
-    ) -> Option<ToolSchemaEntry> {
+    pub async fn schema_for_public_name(&self, name: &str, config: SessionToolsConfig) -> Option<ToolSchemaEntry> {
         let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         if !self.has_subagent_controller() && is_subagent_tool(name) {
             return None;
@@ -87,10 +76,7 @@ impl ToolRegistry {
         assembly.catalog().schema_for_name(name, config)
     }
 
-    pub(crate) fn resolve_public_tool_name_sync(
-        &self,
-        name: &str,
-    ) -> Result<String, ToolCallError> {
+    pub(crate) fn resolve_public_tool_name_sync(&self, name: &str) -> Result<String, ToolCallError> {
         let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         assembly
             .resolve_public_tool(name)

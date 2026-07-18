@@ -25,8 +25,8 @@ use async_trait::async_trait;
 use crate::tools::tool_intent;
 
 use super::tool_handler::{
-    ConfiguredToolSpec, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
-    ToolPayload, ToolSession, ToolSpec, TurnContext,
+    ConfiguredToolSpec, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSession,
+    ToolSpec, TurnContext,
 };
 
 /// A parsed tool call ready for dispatch.
@@ -59,9 +59,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
     let normalized = lowered.replace([' ', '-'], "_").replace(['(', ')', '\'', '"'], "");
 
     let mapped = match normalized.as_str() {
-        alias if tool_intent::canonical_command_session_tool_name(alias).is_some() => {
-            tools::UNIFIED_EXEC
-        }
+        alias if tool_intent::canonical_command_session_tool_name(alias).is_some() => tools::UNIFIED_EXEC,
         "exec_code" | "run_code" | "run_command" | "run_command_pty" => tools::UNIFIED_EXEC,
         "search_text" | "search" | "find" => tools::GREP_FILE,
         "applypatch" | "apply_patch" => tools::APPLY_PATCH,
@@ -85,10 +83,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
     }
 }
 
-fn suggest_similar_tool_names(
-    requested_tool_name: &str,
-    handlers: &HashMap<CompactStr, DispatchEntry>,
-) -> Vec<String> {
+fn suggest_similar_tool_names(requested_tool_name: &str, handlers: &HashMap<CompactStr, DispatchEntry>) -> Vec<String> {
     let requested_lower = requested_tool_name.to_ascii_lowercase();
     let normalized = normalize_router_tool_name(requested_tool_name).unwrap_or_default();
 
@@ -112,9 +107,7 @@ impl DispatchRegistry {
     pub fn new(handlers: HashMap<String, Arc<dyn ToolHandler>>) -> Self {
         let handlers: HashMap<CompactStr, DispatchEntry> = handlers
             .into_iter()
-            .map(|(name, handler)| {
-                (CompactStr::from(name.clone()), DispatchEntry { canonical_name: name, handler })
-            })
+            .map(|(name, handler)| (CompactStr::from(name.clone()), DispatchEntry { canonical_name: name, handler }))
             .collect();
         Self { handlers }
     }
@@ -146,9 +139,7 @@ impl DispatchRegistry {
         let normalized_name = normalize_router_tool_name(requested_name);
         self.handlers
             .get(requested_name)
-            .or_else(|| {
-                normalized_name.as_deref().and_then(|candidate| self.handlers.get(candidate))
-            })
+            .or_else(|| normalized_name.as_deref().and_then(|candidate| self.handlers.get(candidate)))
             .ok_or_else(|| {
                 let suggested = suggest_similar_tool_names(requested_name, &self.handlers);
                 let normalized_hint = normalized_name
@@ -161,9 +152,7 @@ impl DispatchRegistry {
                 } else {
                     format!(" Did you mean: {}?", suggested.join(", "))
                 };
-                ToolCallError::respond(format!(
-                    "Unknown tool: {requested_name}.{normalized_hint}{suggestion_hint}"
-                ))
+                ToolCallError::respond(format!("Unknown tool: {requested_name}.{normalized_hint}{suggestion_hint}"))
             })
     }
 }
@@ -191,21 +180,13 @@ impl DispatchRegistryBuilder {
     }
 
     /// Add a tool spec with parallel support flag.
-    pub fn push_spec_with_parallel_support(
-        &mut self,
-        spec: ToolSpec,
-        supports_parallel_tool_calls: bool,
-    ) -> &mut Self {
+    pub fn push_spec_with_parallel_support(&mut self, spec: ToolSpec, supports_parallel_tool_calls: bool) -> &mut Self {
         self.specs.push(ConfiguredToolSpec::new(spec, supports_parallel_tool_calls));
         self
     }
 
     /// Register a handler for a tool name.
-    pub fn register_handler(
-        &mut self,
-        name: impl Into<String>,
-        handler: Arc<dyn ToolHandler>,
-    ) -> &mut Self {
+    pub fn register_handler(&mut self, name: impl Into<String>, handler: Arc<dyn ToolHandler>) -> &mut Self {
         let name = name.into();
         self.register_route(name.clone(), name, handler)
     }
@@ -473,15 +454,9 @@ mod tests {
     #[test]
     fn test_normalize_router_tool_name_exec_code_label() {
         assert_eq!(normalize_router_tool_name("Exec code").as_deref(), Some(tools::UNIFIED_EXEC));
-        assert_eq!(
-            normalize_router_tool_name("run command (PTY)").as_deref(),
-            Some(tools::UNIFIED_EXEC)
-        );
+        assert_eq!(normalize_router_tool_name("run command (PTY)").as_deref(), Some(tools::UNIFIED_EXEC));
         assert_eq!(normalize_router_tool_name("bash").as_deref(), Some(tools::UNIFIED_EXEC));
-        assert_eq!(
-            normalize_router_tool_name("container.exec").as_deref(),
-            Some(tools::UNIFIED_EXEC)
-        );
+        assert_eq!(normalize_router_tool_name("container.exec").as_deref(), Some(tools::UNIFIED_EXEC));
     }
 
     #[test]

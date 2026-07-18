@@ -57,8 +57,7 @@ pub fn is_safe_colors_only() -> bool {
 /// Activate a built-in theme by identifier.
 pub fn set_active_theme(theme_id: &str) -> Result<()> {
     let id_lc = theme_id.trim().to_lowercase();
-    let theme =
-        theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
+    let theme = theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
 
     let styles = theme.palette.build_styles_with_accessibility(&current_color_config());
     let mut guard = ACTIVE.write();
@@ -90,8 +89,7 @@ pub fn active_styles() -> ThemeStyles {
 /// `active_styles()` until `clear_preview_theme()` is called.
 pub fn set_preview_theme(theme_id: &str) -> Result<()> {
     let id_lc = theme_id.trim().to_lowercase();
-    let theme =
-        theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
+    let theme = theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
     let styles = theme.palette.build_styles_with_accessibility(&current_color_config());
     *PREVIEW.write() = Some(ActiveTheme { definition: theme, styles });
     Ok(())

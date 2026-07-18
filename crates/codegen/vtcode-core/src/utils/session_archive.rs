@@ -62,8 +62,7 @@ pub fn apply_session_history_config_from_vtcode(config: &VTCodeConfig) {
         persistence: config.history.persistence,
         max_bytes: config.history.max_bytes,
     };
-    let cell =
-        SESSION_HISTORY_SETTINGS.get_or_init(|| Mutex::new(SessionHistorySettings::default()));
+    let cell = SESSION_HISTORY_SETTINGS.get_or_init(|| Mutex::new(SessionHistorySettings::default()));
     if let Ok(mut guard) = cell.lock() {
         *guard = settings;
     }
@@ -79,8 +78,7 @@ mod test_env_overrides {
     use std::ffi::OsString;
     use std::sync::{LazyLock, Mutex};
 
-    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<OsString>>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<OsString>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
     pub(super) fn get(key: &str) -> Option<Option<OsString>> {
         OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
@@ -199,11 +197,7 @@ pub struct SessionContinuationMetadata {
 }
 
 impl SessionContinuationMetadata {
-    pub fn budget_limit(
-        max_budget_usd: f64,
-        actual_cost_usd: f64,
-        summary_available: bool,
-    ) -> Self {
+    pub fn budget_limit(max_budget_usd: f64, actual_cost_usd: f64, summary_available: bool) -> Self {
         Self {
             exhaustion_reason: SessionContinuationExhaustionReason::MaxBudgetUsd,
             max_budget_usd_micros: usd_to_micros(max_budget_usd),
@@ -310,10 +304,7 @@ impl SessionArchiveMetadata {
         self
     }
 
-    pub fn with_continuation_metadata(
-        mut self,
-        continuation_metadata: Option<SessionContinuationMetadata>,
-    ) -> Self {
+    pub fn with_continuation_metadata(mut self, continuation_metadata: Option<SessionContinuationMetadata>) -> Self {
         self.continuation_metadata = continuation_metadata;
         self
     }
@@ -412,8 +403,7 @@ fn deserialize_boxed_metadata_opt<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    crate::core::message_metadata::MessageMetadata::deserialize(deserializer)
-        .map(|m| Some(Box::new(m)))
+    crate::core::message_metadata::MessageMetadata::deserialize(deserializer).map(|m| Some(Box::new(m)))
 }
 
 #[expect(clippy::box_collection)]
@@ -422,9 +412,7 @@ fn clone_non_empty_boxed_vec<T: Clone>(value: &Option<Box<Vec<T>>>) -> Option<Ve
 }
 
 #[expect(clippy::box_collection)]
-fn deserialize_boxed_non_empty_string_opt<'de, D>(
-    deserializer: D,
-) -> Result<Option<Box<String>>, D::Error>
+fn deserialize_boxed_non_empty_string_opt<'de, D>(deserializer: D) -> Result<Option<Box<String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -432,9 +420,7 @@ where
 }
 
 #[expect(clippy::box_collection)]
-fn deserialize_boxed_non_empty_vec_opt<'de, D, T>(
-    deserializer: D,
-) -> Result<Option<Box<Vec<T>>>, D::Error>
+fn deserialize_boxed_non_empty_vec_opt<'de, D, T>(deserializer: D) -> Result<Option<Box<Vec<T>>>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
@@ -465,19 +451,11 @@ impl SessionMessage {
         Self::base(role, content)
     }
 
-    pub fn with_tool_call_id(
-        role: MessageRole,
-        content: impl Into<String>,
-        tool_call_id: Option<String>,
-    ) -> Self {
+    pub fn with_tool_call_id(role: MessageRole, content: impl Into<String>, tool_call_id: Option<String>) -> Self {
         Self::with_tool_call_id_content(role, MessageContent::Text(content.into()), tool_call_id)
     }
 
-    pub fn with_tool_call_id_content(
-        role: MessageRole,
-        content: MessageContent,
-        tool_call_id: Option<String>,
-    ) -> Self {
+    pub fn with_tool_call_id_content(role: MessageRole, content: MessageContent, tool_call_id: Option<String>) -> Self {
         let mut message = Self::base(role, content);
         message.tool_call_id = boxed_non_empty_string(tool_call_id);
         message
@@ -620,11 +598,7 @@ fn normalize_workspace_for_match(path: &Path) -> PathBuf {
 
 pub fn session_workspace_path(listing: &SessionListing) -> Option<PathBuf> {
     let raw = listing.snapshot.metadata.workspace_path.trim();
-    if raw.is_empty() {
-        None
-    } else {
-        Some(PathBuf::from(raw))
-    }
+    if raw.is_empty() { None } else { Some(PathBuf::from(raw)) }
 }
 
 pub fn session_listing_matches_workspace(listing: &SessionListing, workspace: &Path) -> bool {
@@ -641,12 +615,7 @@ fn generate_unique_archive_path(
     started_at: DateTime<Utc>,
     custom_suffix: Option<&str>,
 ) -> PathBuf {
-    generate_unique_archive_path_for_label(
-        sessions_dir,
-        &metadata.workspace_label,
-        started_at,
-        custom_suffix,
-    )
+    generate_unique_archive_path_for_label(sessions_dir, &metadata.workspace_label, started_at, custom_suffix)
 }
 
 fn generate_unique_archive_path_for_label(
@@ -656,22 +625,13 @@ fn generate_unique_archive_path_for_label(
     custom_suffix: Option<&str>,
 ) -> PathBuf {
     if custom_suffix.is_some() {
-        return sessions_dir.join(archive_file_name_for_label(
-            workspace_label,
-            started_at,
-            custom_suffix,
-            None,
-        ));
+        return sessions_dir.join(archive_file_name_for_label(workspace_label, started_at, custom_suffix, None));
     }
 
     let mut attempt = 0u32;
     loop {
-        let candidate = sessions_dir.join(archive_file_name_for_label(
-            workspace_label,
-            started_at,
-            None,
-            Some(attempt),
-        ));
+        let candidate =
+            sessions_dir.join(archive_file_name_for_label(workspace_label, started_at, None, Some(attempt)));
         if !candidate.exists() {
             return candidate;
         }
@@ -710,19 +670,13 @@ fn archive_file_name_for_label(
     )
 }
 
-pub fn generate_session_archive_identifier(
-    workspace_label: &str,
-    custom_suffix: Option<String>,
-) -> String {
-    let file_name =
-        archive_file_name_for_label(workspace_label, Utc::now(), custom_suffix.as_deref(), Some(0));
+pub fn generate_session_archive_identifier(workspace_label: &str, custom_suffix: Option<String>) -> String {
+    let file_name = archive_file_name_for_label(workspace_label, Utc::now(), custom_suffix.as_deref(), Some(0));
     Path::new(&file_name)
         .file_stem()
         .and_then(|stem| stem.to_str())
         .map(str::to_owned)
-        .unwrap_or_else(|| {
-            format!("session-{}-{}", sanitize_component(workspace_label), process::id())
-        })
+        .unwrap_or_else(|| format!("session-{}-{}", sanitize_component(workspace_label), process::id()))
 }
 
 fn session_identifier_from_archive_path(path: &Path) -> Result<String> {
@@ -748,23 +702,15 @@ fn validate_session_identifier(session_identifier: &str) -> Result<()> {
     ))
 }
 
-fn session_archive_path_for_identifier(
-    sessions_dir: &Path,
-    session_identifier: &str,
-) -> Result<PathBuf> {
+fn session_archive_path_for_identifier(sessions_dir: &Path, session_identifier: &str) -> Result<PathBuf> {
     validate_session_identifier(session_identifier)?;
     Ok(sessions_dir.join(format!("{session_identifier}.{SESSION_FILE_EXTENSION}")))
 }
 
-fn reserve_new_session_archive_path(
-    sessions_dir: &Path,
-    session_identifier: &str,
-) -> Result<PathBuf> {
+fn reserve_new_session_archive_path(sessions_dir: &Path, session_identifier: &str) -> Result<PathBuf> {
     let path = session_archive_path_for_identifier(sessions_dir, session_identifier)?;
     if path.exists() {
-        return Err(anyhow::anyhow!(
-            "Session archive identifier '{session_identifier}' already exists"
-        ));
+        return Err(anyhow::anyhow!("Session archive identifier '{session_identifier}' already exists"));
     }
 
     Ok(path)
@@ -786,12 +732,8 @@ pub async fn reserve_session_archive_identifier(
 ) -> Result<String> {
     let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
     let started_at = Utc::now();
-    let path = generate_unique_archive_path_for_label(
-        &sessions_dir,
-        workspace_label,
-        started_at,
-        custom_suffix.as_deref(),
-    );
+    let path =
+        generate_unique_archive_path_for_label(&sessions_dir, workspace_label, started_at, custom_suffix.as_deref());
     session_identifier_from_archive_path(&path)
 }
 
@@ -805,9 +747,7 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
 
         let content = message.content.trim();
         let content: &str = content.as_ref();
-        if !content.is_empty()
-            && transcript.last().is_none_or(|last: &String| last.as_str() != content)
-        {
+        if !content.is_empty() && transcript.last().is_none_or(|last: &String| last.as_str() != content) {
             transcript.push(content.to_string());
         }
     }
@@ -842,9 +782,7 @@ fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
             let (summary, next_index) = summarize_tool_block(lines, index);
             let signature = normalized_transcript_key(&summary);
 
-            if let Some((first_index, repeats, original_line)) =
-                seen_tool_blocks.get_mut(&signature)
-            {
+            if let Some((first_index, repeats, original_line)) = seen_tool_blocks.get_mut(&signature) {
                 *repeats += 1;
                 if let Some(existing) = cleaned.get_mut(*first_index) {
                     *existing = format_repeated_summary(original_line, *repeats);
@@ -853,8 +791,7 @@ fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
                 let insertion_index = cleaned.len();
                 push_clean_transcript_line(&mut cleaned, summary);
                 if cleaned.len() > insertion_index {
-                    seen_tool_blocks
-                        .insert(signature, (insertion_index, 1, cleaned[insertion_index].clone()));
+                    seen_tool_blocks.insert(signature, (insertion_index, 1, cleaned[insertion_index].clone()));
                 }
             }
             index = next_index;
@@ -874,10 +811,7 @@ fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
 
 fn should_reset_tool_dedupe_scope(line: &str) -> bool {
     let trimmed = line.trim();
-    !trimmed.is_empty()
-        && !line.starts_with(' ')
-        && !trimmed.starts_with("• ")
-        && !trimmed.starts_with("[!]")
+    !trimmed.is_empty() && !line.starts_with(' ') && !trimmed.starts_with("• ") && !trimmed.starts_with("[!]")
 }
 
 fn should_drop_transcript_line(line: &str) -> bool {
@@ -899,7 +833,8 @@ fn normalize_recovery_line(line: &str) -> Option<String> {
         return Some("Repeated low-signal tool churn triggered recovery.".to_string());
     }
 
-    if trimmed.contains("I couldn't produce a final synthesis because the model returned no answer on the recovery pass.")
+    if trimmed
+        .contains("I couldn't produce a final synthesis because the model returned no answer on the recovery pass.")
     {
         return Some("Recovery pass failed to produce a final synthesis.".to_string());
     }
@@ -917,8 +852,7 @@ fn summarize_tool_block(lines: &[String], start: usize) -> (String, usize) {
     while index < lines.len() {
         let raw = lines[index].trim_end();
         let trimmed = raw.trim_start();
-        if trimmed.starts_with("• ") || trimmed.starts_with("[!]") || !is_tool_detail_line(trimmed)
-        {
+        if trimmed.starts_with("• ") || trimmed.starts_with("[!]") || !is_tool_detail_line(trimmed) {
             break;
         }
 
@@ -1077,19 +1011,14 @@ struct ProgressThrottle {
 
 impl ProgressThrottle {
     fn new() -> Self {
-        let min_interval =
-            Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
+        let min_interval = Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
         let last_written = Instant::now().checked_sub(min_interval).unwrap_or_else(Instant::now);
         Self { last_written, last_turn: 0 }
     }
 }
 
 impl SessionArchive {
-    fn from_path(
-        path: PathBuf,
-        metadata: SessionArchiveMetadata,
-        started_at: DateTime<Utc>,
-    ) -> Self {
+    fn from_path(path: PathBuf, metadata: SessionArchiveMetadata, started_at: DateTime<Utc>) -> Self {
         Self {
             path,
             metadata,
@@ -1180,27 +1109,16 @@ impl SessionArchive {
         )
     }
 
-    pub async fn new(
-        metadata: SessionArchiveMetadata,
-        custom_suffix: Option<String>,
-    ) -> Result<Self> {
+    pub async fn new(metadata: SessionArchiveMetadata, custom_suffix: Option<String>) -> Result<Self> {
         let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
         let started_at = Utc::now();
-        let path = generate_unique_archive_path(
-            &sessions_dir,
-            &metadata,
-            started_at,
-            custom_suffix.as_deref(),
-        );
+        let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at, custom_suffix.as_deref());
 
         Ok(Self::from_path(path, metadata, started_at))
     }
 
     /// Create a session archive using an explicitly reserved session identifier.
-    pub async fn new_with_identifier(
-        metadata: SessionArchiveMetadata,
-        session_identifier: String,
-    ) -> Result<Self> {
+    pub async fn new_with_identifier(metadata: SessionArchiveMetadata, session_identifier: String) -> Result<Self> {
         let sessions_dir = resolve_sessions_dir_for_archive_writes().await?;
         let path = reserve_new_session_archive_path(&sessions_dir, &session_identifier)?;
 
@@ -1219,8 +1137,7 @@ impl SessionArchive {
         distinct_tools: Vec<String>,
         messages: Vec<SessionMessage>,
     ) -> Result<PathBuf> {
-        let snapshot =
-            self.build_final_snapshot(transcript, total_messages, distinct_tools, messages);
+        let snapshot = self.build_final_snapshot(transcript, total_messages, distinct_tools, messages);
 
         let path = self.write_snapshot(snapshot)?;
         if let Some(parent) = path.parent() {
@@ -1270,8 +1187,7 @@ impl SessionArchive {
     }
 
     fn should_persist_progress(&self, turn_number: usize) -> Result<bool> {
-        let min_interval =
-            Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
+        let min_interval = Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
         let min_turns = defaults::DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA;
 
         let mut throttle = self
@@ -1282,8 +1198,7 @@ impl SessionArchive {
         if turn_number <= throttle.last_turn {
             return Ok(false);
         }
-        if throttle.last_written.elapsed() < min_interval
-            && turn_number.saturating_sub(throttle.last_turn) < min_turns
+        if throttle.last_written.elapsed() < min_interval && turn_number.saturating_sub(throttle.last_turn) < min_turns
         {
             return Ok(false);
         }
@@ -1298,10 +1213,7 @@ impl SessionArchive {
     }
 
     /// Update continuation metadata in the archive metadata.
-    pub fn set_continuation_metadata(
-        &mut self,
-        continuation_metadata: Option<SessionContinuationMetadata>,
-    ) {
+    pub fn set_continuation_metadata(&mut self, continuation_metadata: Option<SessionContinuationMetadata>) {
         self.metadata.continuation_metadata = continuation_metadata;
     }
 
@@ -1321,10 +1233,7 @@ impl SessionArchive {
     ///
     /// # Returns
     /// A new SessionArchive instance for the forked session
-    pub async fn fork(
-        source_snapshot: &SessionSnapshot,
-        custom_suffix: Option<String>,
-    ) -> Result<Self> {
+    pub async fn fork(source_snapshot: &SessionSnapshot, custom_suffix: Option<String>) -> Result<Self> {
         create_fork_archive(source_snapshot, custom_suffix, None).await
     }
 }
@@ -1342,12 +1251,7 @@ async fn create_fork_archive(
     let path = if let Some(session_identifier) = explicit_identifier {
         reserve_new_session_archive_path(&sessions_dir, &session_identifier)?
     } else {
-        generate_unique_archive_path(
-            &sessions_dir,
-            &forked_metadata,
-            started_at,
-            custom_suffix.as_deref(),
-        )
+        generate_unique_archive_path(&sessions_dir, &forked_metadata, started_at, custom_suffix.as_deref())
     };
 
     Ok(SessionArchive::from_path(path, forked_metadata, started_at))
@@ -1368,9 +1272,7 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     for entry in fs::read_dir(&sessions_dir)
         .with_context(|| format!("failed to read session directory: {}", sessions_dir.display()))?
     {
-        let entry = entry.with_context(|| {
-            format!("failed to read session entry in {}", sessions_dir.display())
-        })?;
+        let entry = entry.with_context(|| format!("failed to read session entry in {}", sessions_dir.display()))?;
         let path = entry.path();
         if is_session_file(&path) {
             session_paths.push(path);
@@ -1477,11 +1379,7 @@ pub struct SearchResult {
 
 /// Search for a query string across recent sessions.
 /// Returns a list of `SearchResult` sorted by relevance (or recency).
-pub async fn search_sessions(
-    query: &str,
-    session_limit: usize,
-    max_results: usize,
-) -> Result<Vec<SearchResult>> {
+pub async fn search_sessions(query: &str, session_limit: usize, max_results: usize) -> Result<Vec<SearchResult>> {
     if query.trim().is_empty() || max_results == 0 {
         return Ok(Vec::new());
     }
@@ -1603,8 +1501,7 @@ impl SessionRetentionLimits {
         let defaults = Self::default();
         Self {
             max_files: parse_env_value(SESSION_MAX_FILES_ENV).unwrap_or(defaults.max_files),
-            max_age_days: parse_env_value(SESSION_MAX_AGE_DAYS_ENV)
-                .unwrap_or(defaults.max_age_days),
+            max_age_days: parse_env_value(SESSION_MAX_AGE_DAYS_ENV).unwrap_or(defaults.max_age_days),
             max_total_size_bytes: parse_env_value::<u64>(SESSION_MAX_SIZE_MB_ENV)
                 .map(|value| value.saturating_mul(BYTES_PER_MB))
                 .unwrap_or(defaults.max_total_size_bytes),
@@ -1637,10 +1534,7 @@ fn apply_session_retention(sessions_dir: &Path) -> Result<()> {
     apply_session_retention_with_limits(sessions_dir, session_retention_limits())
 }
 
-fn apply_session_retention_with_limits(
-    sessions_dir: &Path,
-    limits: SessionRetentionLimits,
-) -> Result<()> {
+fn apply_session_retention_with_limits(sessions_dir: &Path, limits: SessionRetentionLimits) -> Result<()> {
     let mut entries = collect_session_entries(sessions_dir)?;
 
     if entries.is_empty() {
@@ -1655,8 +1549,7 @@ fn apply_session_retention_with_limits(
             .unwrap_or(UNIX_EPOCH)
     };
 
-    let (expired, retained): (Vec<_>, Vec<_>) =
-        entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
+    let (expired, retained): (Vec<_>, Vec<_>) = entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
     remove_session_files(expired);
     entries = retained;
 
@@ -1695,9 +1588,9 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
     }
 
     let mut entries = Vec::new();
-    for entry in fs::read_dir(sessions_dir).with_context(|| {
-        format!("failed to read session directory for retention: {}", sessions_dir.display())
-    })? {
+    for entry in fs::read_dir(sessions_dir)
+        .with_context(|| format!("failed to read session directory for retention: {}", sessions_dir.display()))?
+    {
         let entry = match entry {
             Ok(value) => value,
             Err(err) => {
@@ -1750,10 +1643,7 @@ fn truncate_preview(input: &str, max_chars: usize) -> String {
     vtcode_commons::formatting::truncate_within(input, max_chars, "…")
 }
 
-fn compact_snapshot_to_max_bytes(
-    mut snapshot: SessionSnapshot,
-    max_bytes: usize,
-) -> Result<SessionSnapshot> {
+fn compact_snapshot_to_max_bytes(mut snapshot: SessionSnapshot, max_bytes: usize) -> Result<SessionSnapshot> {
     if max_bytes == 0 {
         minimize_snapshot_payload(&mut snapshot);
         return Ok(snapshot);
@@ -1959,8 +1849,7 @@ fn shrink_snapshot_metadata(metadata: &mut SessionArchiveMetadata) -> bool {
             changed = true;
         }
         if !continuation.summary_available
-            && continuation.recommended_action
-                == Some(SessionContinuationRecommendedAction::ContinueFromSummary)
+            && continuation.recommended_action == Some(SessionContinuationRecommendedAction::ContinueFromSummary)
         {
             continuation.recommended_action = None;
             changed = true;
@@ -1981,13 +1870,7 @@ fn shrink_message_content(content: &mut MessageContent) -> bool {
                     crate::llm::provider::ContentPart::Image { data, mime_type, .. } => {
                         shrink_string(data) | shrink_string(mime_type)
                     }
-                    crate::llm::provider::ContentPart::File {
-                        filename,
-                        file_id,
-                        file_data,
-                        file_url,
-                        ..
-                    } => {
+                    crate::llm::provider::ContentPart::File { filename, file_id, file_data, file_url, .. } => {
                         shrink_optional_string(filename)
                             | shrink_optional_string(file_id)
                             | shrink_optional_string(file_data)
@@ -2079,8 +1962,7 @@ mod metadata_compat_tests {
 
     #[test]
     fn set_primary_agent_records_mode_on_archive() {
-        let metadata =
-            SessionArchiveMetadata::new("ws", "/tmp/ws", "gpt-5.4", "openai", "test", "low");
+        let metadata = SessionArchiveMetadata::new("ws", "/tmp/ws", "gpt-5.4", "openai", "test", "low");
         let mut archive = tokio::runtime::Runtime::new()
             .expect("runtime")
             .block_on(SessionArchive::new_with_identifier(metadata, "ws-0000".to_string()))

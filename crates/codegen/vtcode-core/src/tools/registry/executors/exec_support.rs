@@ -1,6 +1,5 @@
 use super::cargo_failure_diagnostics::{
-    attach_exec_recovery_guidance, attach_failure_diagnostics_metadata,
-    cargo_test_failure_diagnostics,
+    attach_exec_recovery_guidance, attach_failure_diagnostics_metadata, cargo_test_failure_diagnostics,
 };
 use crate::exec::code_executor::Language;
 use crate::tools::continuation::PtyContinuationArgs;
@@ -137,10 +136,7 @@ pub(super) fn is_valid_pty_session_id(session_id: &str) -> bool {
         && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-pub(super) fn validate_exec_session_id<'a>(
-    raw_session_id: &'a str,
-    context: &str,
-) -> Result<&'a str> {
+pub(super) fn validate_exec_session_id<'a>(raw_session_id: &'a str, context: &str) -> Result<&'a str> {
     let session_id = raw_session_id.trim();
     if is_valid_pty_session_id(session_id) {
         Ok(session_id)
@@ -152,8 +148,7 @@ pub(super) fn validate_exec_session_id<'a>(
 }
 
 fn build_session_command_display_parts(command: &str, args: &[String]) -> String {
-    if let Some(flag_index) =
-        args.iter().position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
+    if let Some(flag_index) = args.iter().position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
         && let Some(command) = args.get(flag_index + 1)
         && !command.trim().is_empty()
     {
@@ -243,9 +238,7 @@ pub(super) fn clamp_peek_yield_ms(value: Option<u64>) -> u64 {
     value.unwrap_or(0).min(MAX_EXEC_YIELD_MS)
 }
 
-pub(super) fn max_output_tokens_from_payload(
-    payload: &serde_json::Map<String, Value>,
-) -> Option<usize> {
+pub(super) fn max_output_tokens_from_payload(payload: &serde_json::Map<String, Value>) -> Option<usize> {
     payload
         .get("max_output_tokens")
         .or_else(|| payload.get("max_tokens"))
@@ -265,10 +258,7 @@ fn floor_exec_char_boundary(text: &str, index: usize) -> usize {
     boundary
 }
 
-pub(super) fn build_exec_output_preview(
-    raw_output: String,
-    max_tokens: usize,
-) -> ExecOutputPreview {
+pub(super) fn build_exec_output_preview(raw_output: String, max_tokens: usize) -> ExecOutputPreview {
     let max_output_len = max_tokens.saturating_mul(4);
     if max_tokens == 0 || raw_output.len() <= max_output_len {
         return ExecOutputPreview {
@@ -295,8 +285,7 @@ pub(super) fn build_exec_response(
     running_process_id: Option<&str>,
 ) -> Value {
     let ExecOutputPreview { raw_output, output, truncated } = output_preview;
-    let cargo_test_diagnostics =
-        cargo_test_failure_diagnostics(command, &raw_output, capture.exit_code);
+    let cargo_test_diagnostics = cargo_test_failure_diagnostics(command, &raw_output, capture.exit_code);
     let mut response = json!({
         "success": true,
         "output": output,
@@ -360,12 +349,8 @@ pub(super) fn build_exec_filtered_response(
     let mut matched_count = None;
     let mut query_truncated = false;
     let filtered_output = if let Some(query) = output_config.inspect_query.as_deref() {
-        let (filtered, count, truncated_matches) = filter_lines(
-            &raw_output,
-            query,
-            output_config.inspect_literal,
-            output_config.inspect_max_matches,
-        )?;
+        let (filtered, count, truncated_matches) =
+            filter_lines(&raw_output, query, output_config.inspect_literal, output_config.inspect_max_matches)?;
         matched_count = Some(count);
         query_truncated = truncated_matches;
         filtered
@@ -411,15 +396,7 @@ pub(super) fn build_exec_passthrough_response(
         }
     };
 
-    build_exec_response(
-        session_metadata,
-        command_display,
-        capture,
-        output_preview,
-        None,
-        false,
-        None,
-    )
+    build_exec_response(session_metadata, command_display, capture, output_preview, None, false, None)
 }
 
 pub(super) fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
@@ -433,11 +410,7 @@ pub(super) fn clamp_max_matches(value: Option<u64>) -> usize {
         .clamp(1, 10_000)
 }
 
-pub(super) fn build_head_tail_preview(
-    content: &str,
-    head_lines: usize,
-    tail_lines: usize,
-) -> (String, bool) {
+pub(super) fn build_head_tail_preview(content: &str, head_lines: usize, tail_lines: usize) -> (String, bool) {
     let preview = excerpt_text_lines(content, head_lines.max(1), tail_lines.max(1));
     if preview.total == 0 {
         return (String::new(), false);
@@ -469,14 +442,12 @@ pub(super) fn filter_lines(
     } else {
         // Reuse the previously compiled regex when the query is unchanged.
         let compiled = {
-            let guard =
-                FILTER_LINES_REGEX.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let guard = FILTER_LINES_REGEX.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             match &*guard {
                 Some((q, re)) if q == query => re.clone(),
                 _ => {
                     drop(guard);
-                    let re = Regex::new(query)
-                        .with_context(|| format!("Invalid regex query: {query}"))?;
+                    let re = Regex::new(query).with_context(|| format!("Invalid regex query: {query}"))?;
                     *FILTER_LINES_REGEX.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
                         Some((query.to_string(), re.clone()));
                     re
@@ -512,10 +483,7 @@ pub(super) fn filter_lines(
     Ok((matches.join("\n"), total_matches, truncated))
 }
 
-pub(super) fn resolve_workspace_scoped_path(
-    workspace_root: &Path,
-    raw_path: &str,
-) -> Result<PathBuf> {
+pub(super) fn resolve_workspace_scoped_path(workspace_root: &Path, raw_path: &str) -> Result<PathBuf> {
     let path = Path::new(raw_path.trim());
     if path.as_os_str().is_empty() {
         return Err(anyhow!("spool_path cannot be empty"));
@@ -601,9 +569,7 @@ pub(super) fn parse_command_parts(
                 .collect::<Result<Vec<_>>>()?;
             (parts, None)
         }
-        _ => match crate::tools::command_args::parse_indexed_command_parts(payload)
-            .map_err(|error| anyhow!(error))?
-        {
+        _ => match crate::tools::command_args::parse_indexed_command_parts(payload).map_err(|error| anyhow!(error))? {
             Some(indexed_parts) => (indexed_parts, None),
             None => return Err(anyhow!("{missing_error}")),
         },
@@ -626,9 +592,7 @@ pub(super) fn parse_command_parts(
     Ok((parts, raw_command))
 }
 
-pub(super) fn parse_exec_env_overrides(
-    payload: &serde_json::Map<String, Value>,
-) -> Result<HashMap<String, String>> {
+pub(super) fn parse_exec_env_overrides(payload: &serde_json::Map<String, Value>) -> Result<HashMap<String, String>> {
     let Some(env_value) = payload.get("env") else {
         return Ok(HashMap::new());
     };
@@ -644,8 +608,7 @@ pub(super) fn parse_exec_env_overrides(
         Value::Array(entries) => {
             let mut env = HashMap::new();
             for entry in entries {
-                let object =
-                    entry.as_object().ok_or_else(|| anyhow!("env entries must be objects"))?;
+                let object = entry.as_object().ok_or_else(|| anyhow!("env entries must be objects"))?;
                 let name = object
                     .get("name")
                     .and_then(Value::as_str)
@@ -679,10 +642,7 @@ pub(super) fn is_git_diff_command(parts: &[String]) -> bool {
     parts.iter().skip(1).any(|part| part == "diff")
 }
 
-pub(super) fn resolve_shell_preference(
-    pref: Option<&str>,
-    config: &crate::config::PtyConfig,
-) -> String {
+pub(super) fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
     pref.map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
@@ -778,8 +738,7 @@ pub(super) fn prepare_exec_command(
             .map(|value| value.to_string())
             .or(auto_raw_command);
 
-        let command_string =
-            build_shell_command_string(raw_command.as_deref(), &command, shell_program);
+        let command_string = build_shell_command_string(raw_command.as_deref(), &command, shell_program);
 
         let mut shell_invocation = Vec::with_capacity(4);
         shell_invocation.push(shell_program.to_string());
@@ -864,9 +823,7 @@ fn generate_session_id(prefix: &str) -> String {
     format!("{}-{}", prefix, &uuid::Uuid::new_v4().to_string()[..8])
 }
 
-pub(super) fn resolve_exec_run_session_id(
-    payload: &serde_json::Map<String, Value>,
-) -> Result<String> {
+pub(super) fn resolve_exec_run_session_id(payload: &serde_json::Map<String, Value>) -> Result<String> {
     crate::tools::command_args::session_id_text_from_payload(payload)
         .map(|session_id| validate_exec_session_id(session_id, "exec_command run"))
         .transpose()?

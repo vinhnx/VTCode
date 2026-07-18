@@ -19,12 +19,11 @@ pub(crate) mod recovery;
 // --- Stable interface (the only planning symbols the runloop should name) ---
 
 pub(crate) use confirmation::{
-    PlanConfirmationOutcome, StartPlanningDecision, execute_plan_confirmation,
-    plan_confirmation_outcome_to_json, present_start_planning_confirmation,
+    PlanConfirmationOutcome, StartPlanningDecision, execute_plan_confirmation, plan_confirmation_outcome_to_json,
+    present_start_planning_confirmation,
 };
 pub(crate) use execution::{handle_finish_planning, handle_start_planning};
 pub(crate) use intent::{
-    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent,
-    detect_planning_intent,
+    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent, detect_planning_intent,
 };
 pub(crate) use recovery::maybe_condense_truncated_plan;

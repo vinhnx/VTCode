@@ -15,13 +15,7 @@ pub(crate) async fn handle_ask_single_command(
 ) -> Result<()> {
     let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
     if core_cfg.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
-        crate::codex_app_server::handle_codex_ask_command(
-            core_cfg,
-            prompt_vec,
-            vt_cfg.as_ref(),
-            options,
-        )
-        .await
+        crate::codex_app_server::handle_codex_ask_command(core_cfg, prompt_vec, vt_cfg.as_ref(), options).await
     } else {
         vtcode_core::commands::ask::handle_ask_command(core_cfg, prompt_vec, options).await
     }

@@ -68,10 +68,7 @@ pub(crate) async fn run_preflight_check() {
     let latest_is_newer = latest.version > *current;
 
     if latest_is_newer {
-        debug!(
-            "Preflight update check: new version {latest} > current {current}",
-            latest = latest.version,
-        );
+        debug!("Preflight update check: new version {latest} > current {current}", latest = latest.version,);
     } else {
         debug!("Preflight update check: versions match ({current}), no update available",);
     }

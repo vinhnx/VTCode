@@ -28,11 +28,7 @@ fn pty_session_guard_auto_cleanup() {
     }
 
     // After guard is dropped, count should be back to 0
-    assert_eq!(
-        manager.active_sessions(),
-        0,
-        "session count should auto-decrement when guard is dropped"
-    );
+    assert_eq!(manager.active_sessions(), 0, "session count should auto-decrement when guard is dropped");
 }
 
 /// Test that multiple sessions can be tracked

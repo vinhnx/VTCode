@@ -24,8 +24,7 @@ pub const REASONING_MODELS: &[&str] = &[
 
 /// Models that support Gemini 3 extended thinking levels (minimal, medium)
 /// Only Gemini 3 Flash supports these additional levels beyond low/high
-pub const EXTENDED_THINKING_MODELS: &[&str] =
-    &["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+pub const EXTENDED_THINKING_MODELS: &[&str] = &["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
 
 /// Models supporting image generation
 pub const IMAGE_GENERATION_MODELS: &[&str] = &["gemini-3-pro-image-preview"];

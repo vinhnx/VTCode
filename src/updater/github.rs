@@ -18,8 +18,8 @@ fn github_client() -> Result<reqwest::Client> {
     // requests get 5,000/hour. Check the two conventional env var names.
     if let Some(token) = github_token() {
         let mut headers = reqwest::header::HeaderMap::new();
-        let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-            .context("Invalid GITHUB_TOKEN value")?;
+        let mut value =
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).context("Invalid GITHUB_TOKEN value")?;
         value.set_sensitive(true);
         headers.insert(reqwest::header::AUTHORIZATION, value);
         builder = builder.default_headers(headers);
@@ -47,10 +47,7 @@ fn unauthenticated_client() -> Result<reqwest::Client> {
 /// Fetch JSON from `url` using the configured (possibly authenticated) client.
 /// If the request fails with a 401, retry without authentication -- public
 /// repos work fine unauthenticated.
-async fn try_fetch_json_with_auth_fallback(
-    url: &str,
-    timeout: Duration,
-) -> Result<serde_json::Value> {
+async fn try_fetch_json_with_auth_fallback(url: &str, timeout: Duration) -> Result<serde_json::Value> {
     let response = github_client()?
         .get(url)
         .timeout(timeout)
@@ -59,10 +56,7 @@ async fn try_fetch_json_with_auth_fallback(
         .context("Failed to fetch from GitHub API");
 
     let response = match response {
-        Ok(response)
-            if response.status() == reqwest::StatusCode::UNAUTHORIZED
-                && github_token().is_some() =>
-        {
+        Ok(response) if response.status() == reqwest::StatusCode::UNAUTHORIZED && github_token().is_some() => {
             unauthenticated_client()?
                 .get(url)
                 .timeout(timeout)
@@ -96,17 +90,10 @@ pub(super) fn release_url(version: &Version) -> String {
 ///
 /// Dispatches to the stable latest-release endpoint or the pre-release
 /// listing endpoint depending on the channel.
-pub(super) async fn fetch_latest_for_channel(
-    timeout_secs: u64,
-    channel: &ReleaseChannel,
-) -> Result<UpdateInfo> {
+pub(super) async fn fetch_latest_for_channel(timeout_secs: u64, channel: &ReleaseChannel) -> Result<UpdateInfo> {
     match channel {
-        ReleaseChannel::Stable | ReleaseChannel::Unknown => {
-            fetch_latest_release_info(timeout_secs).await
-        }
-        ReleaseChannel::Beta | ReleaseChannel::Nightly => {
-            fetch_latest_prerelease_info(timeout_secs, channel).await
-        }
+        ReleaseChannel::Stable | ReleaseChannel::Unknown => fetch_latest_release_info(timeout_secs).await,
+        ReleaseChannel::Beta | ReleaseChannel::Nightly => fetch_latest_prerelease_info(timeout_secs, channel).await,
     }
 }
 
@@ -134,8 +121,8 @@ pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<Updat
         .context("Missing tag_name in GitHub response")?;
 
     let version_str = tag_name.trim_start_matches('v');
-    let version = Version::parse(version_str)
-        .with_context(|| format!("Invalid version in GitHub release: {tag_name}"))?;
+    let version =
+        Version::parse(version_str).with_context(|| format!("Invalid version in GitHub release: {tag_name}"))?;
 
     Ok(UpdateInfo {
         version,
@@ -155,10 +142,7 @@ pub(super) async fn fetch_latest_release_info(timeout_secs: u64) -> Result<Updat
 ///   pre-release identifier starts with "nightly"
 ///
 /// Returns the highest-versioned match.
-async fn fetch_latest_prerelease_info(
-    timeout_secs: u64,
-    channel: &ReleaseChannel,
-) -> Result<UpdateInfo> {
+async fn fetch_latest_prerelease_info(timeout_secs: u64, channel: &ReleaseChannel) -> Result<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page=20");
     let timeout = effective_timeout(timeout_secs);
 
@@ -203,8 +187,7 @@ async fn fetch_latest_prerelease_info(
         }
     }
 
-    let (version, release_notes) =
-        best.context(format!("No {channel} releases found on GitHub for {REPO_SLUG}"))?;
+    let (version, release_notes) = best.context(format!("No {channel} releases found on GitHub for {REPO_SLUG}"))?;
 
     Ok(UpdateInfo { version, release_notes })
 }
@@ -222,10 +205,8 @@ pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec
             let tag_name = release.get("tag_name")?.as_str()?;
             let version_str = tag_name.trim_start_matches('v');
             let version = Version::parse(version_str).ok()?;
-            let is_prerelease =
-                release.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
-            let published_at =
-                release.get("published_at").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let is_prerelease = release.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
+            let published_at = release.get("published_at").and_then(|v| v.as_str()).map(|s| s.to_string());
 
             Some(VersionInfo {
                 version,

@@ -1,9 +1,7 @@
 //! CLI commands for GPU pod management.
 
 use crate::cli::PodsCommands;
-use crate::pods::{
-    PodGpu, PodManager, PodStartRequest, PodState, PodStatusDetail, PodStatusReport,
-};
+use crate::pods::{PodGpu, PodManager, PodStartRequest, PodState, PodStatusDetail, PodStatusReport};
 use crate::utils::colors::{bold, cyan, green, underline, yellow};
 use anyhow::{Result, anyhow};
 
@@ -92,10 +90,7 @@ fn print_start_result(result: &crate::pods::PodStartResult) {
     println!("  Profile: {}", cyan(&result.entry.profile));
     println!("  PID: {}", cyan(&result.entry.pid.to_string()));
     println!("  Port: {}", cyan(&result.entry.port.to_string()));
-    println!(
-        "  GPUs: {}",
-        cyan(&result.entry.gpu_ids.iter().map(u32::to_string).collect::<Vec<_>>().join(", "))
-    );
+    println!("  GPUs: {}", cyan(&result.entry.gpu_ids.iter().map(u32::to_string).collect::<Vec<_>>().join(", ")));
     println!("  Launch: {}", yellow(&result.launch_command));
 }
 

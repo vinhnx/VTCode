@@ -8,20 +8,18 @@ mod style;
 pub use content::ContentPart;
 pub use local_agents::{LocalAgentEntry, LocalAgentKind};
 pub use overlay::{
-    ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
-    OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission,
-    WizardOverlayRequest,
+    ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
+    OverlayRequest, OverlaySelectionChange, OverlaySubmission, WizardOverlayRequest,
 };
 pub use protocol::{
-    FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
-    InlineMessageKind, InlineSession, PreviewCallback, SubmittedInput,
+    FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineMessageKind,
+    InlineSession, PreviewCallback, SubmittedInput,
 };
 pub use selection::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, OpenAIServiceTierChoice,
-    RewindAction, SecurePromptConfig, WizardModalMode, WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, OpenAIServiceTierChoice, RewindAction,
+    SecurePromptConfig, WizardModalMode, WizardStep,
 };
 pub use style::{
-    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
-    InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle,
-    InlineTheme,
+    InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone,
+    InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle, InlineTheme,
 };

@@ -108,11 +108,7 @@ mod memory_integration {
             "Parse cache exceeded bounds: {actual_memory} bytes vs {max_with_overshoot} bytes max"
         );
 
-        println!(
-            "v Parse cache bounded: {} entries, {:.1}MB memory",
-            cache.len(),
-            actual_memory as f64 / 1_000_000.0
-        );
+        println!("v Parse cache bounded: {} entries, {:.1}MB memory", cache.len(), actual_memory as f64 / 1_000_000.0);
     }
 
     /// Test: Verify cache eviction happens before memory explosion
@@ -183,10 +179,7 @@ mod memory_integration {
         println!("After TTL: {final_size} entries, {final_memory:.1}MB");
 
         // Should have cleaned up significantly
-        assert!(
-            final_size < initial_size,
-            "TTL-based cleanup didn't work: {final_size} vs {initial_size}"
-        );
+        assert!(final_size < initial_size, "TTL-based cleanup didn't work: {final_size} vs {initial_size}");
     }
 
     /// Test: Memory stability over time
@@ -233,15 +226,12 @@ mod memory_integration {
         );
 
         // After initial fill (first 10 cycles), memory should stay relatively stable
-        let stable_period_readings: Vec<f64> =
-            memory_readings[20..].iter().map(|&v| v as f64).collect();
+        let stable_period_readings: Vec<f64> = memory_readings[20..].iter().map(|&v| v as f64).collect();
 
         if stable_period_readings.len() > 2 {
-            let stable_avg: f64 =
-                stable_period_readings.iter().sum::<f64>() / stable_period_readings.len() as f64;
-            let stable_variance =
-                stable_period_readings.iter().map(|&v| (v - stable_avg).abs()).sum::<f64>()
-                    / stable_period_readings.len() as f64;
+            let stable_avg: f64 = stable_period_readings.iter().sum::<f64>() / stable_period_readings.len() as f64;
+            let stable_variance = stable_period_readings.iter().map(|&v| (v - stable_avg).abs()).sum::<f64>()
+                / stable_period_readings.len() as f64;
 
             println!("Stable period: avg={stable_avg:.0}B, variance={stable_variance:.0}B");
 
@@ -330,9 +320,7 @@ mod memory_integration {
         }
         let after_insert = start.elapsed();
 
-        println!(
-            "Insertion performance (5000 items):\n  Before: {before_insert:?}\n  After: {after_insert:?}"
-        );
+        println!("Insertion performance (5000 items):\n  Before: {before_insert:?}\n  After: {after_insert:?}");
 
         // Memory comparison
         let mem_before = cache_before.stats().total_memory_bytes;

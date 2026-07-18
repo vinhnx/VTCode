@@ -4,16 +4,14 @@ use chrono::{DateTime, Utc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::overlay::{
-    AgentPaletteItem, AgentPaletteTransientRequest, FilePaletteTransientRequest,
-    ListOverlayRequest, LocalAgentsTransientRequest, ModalOverlayRequest,
-    TaskPanelTransientRequest, TransientEvent, TransientRequest,
+    AgentPaletteItem, AgentPaletteTransientRequest, FilePaletteTransientRequest, ListOverlayRequest,
+    LocalAgentsTransientRequest, ModalOverlayRequest, TaskPanelTransientRequest, TransientEvent, TransientRequest,
 };
 use crate::tui::core_tui::session::config::AppearanceConfig;
 pub use crate::tui::core_tui::types::SubmittedInput;
 use crate::tui::core_tui::types::{
-    InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    LocalAgentEntry, SecurePromptConfig,
+    InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry, SecurePromptConfig,
 };
 
 /// A user prompt from a previous session archive, used to populate the history picker.
@@ -179,45 +177,29 @@ impl From<crate::tui::core_tui::types::InlineEvent> for InlineEvent {
             crate::tui::core_tui::types::InlineEvent::Submit(text) => Self::Submit(text),
             crate::tui::core_tui::types::InlineEvent::QueueSubmit(text) => Self::QueueSubmit(text),
             crate::tui::core_tui::types::InlineEvent::Steer(text) => Self::Steer(text),
-            crate::tui::core_tui::types::InlineEvent::ProcessLatestQueued => {
-                Self::ProcessLatestQueued
-            }
+            crate::tui::core_tui::types::InlineEvent::ProcessLatestQueued => Self::ProcessLatestQueued,
             crate::tui::core_tui::types::InlineEvent::EditQueue => Self::EditQueue,
-            crate::tui::core_tui::types::InlineEvent::Overlay(event) => {
-                Self::Transient(event.into())
-            }
+            crate::tui::core_tui::types::InlineEvent::Overlay(event) => Self::Transient(event.into()),
             crate::tui::core_tui::types::InlineEvent::Cancel => Self::Cancel,
             crate::tui::core_tui::types::InlineEvent::Exit => Self::Exit,
             crate::tui::core_tui::types::InlineEvent::Interrupt => Self::Interrupt,
             crate::tui::core_tui::types::InlineEvent::Pause => Self::Pause,
             crate::tui::core_tui::types::InlineEvent::Resume => Self::Resume,
-            crate::tui::core_tui::types::InlineEvent::BackgroundOperation => {
-                Self::BackgroundOperation
-            }
+            crate::tui::core_tui::types::InlineEvent::BackgroundOperation => Self::BackgroundOperation,
             crate::tui::core_tui::types::InlineEvent::ScrollLineUp => Self::ScrollLineUp,
             crate::tui::core_tui::types::InlineEvent::ScrollLineDown => Self::ScrollLineDown,
             crate::tui::core_tui::types::InlineEvent::ScrollPageUp => Self::ScrollPageUp,
             crate::tui::core_tui::types::InlineEvent::ScrollPageDown => Self::ScrollPageDown,
-            crate::tui::core_tui::types::InlineEvent::OpenFileInEditor(path) => {
-                Self::OpenFileInEditor(path)
-            }
+            crate::tui::core_tui::types::InlineEvent::OpenFileInEditor(path) => Self::OpenFileInEditor(path),
             crate::tui::core_tui::types::InlineEvent::OpenUrl(url) => Self::OpenUrl(url),
-            crate::tui::core_tui::types::InlineEvent::LaunchEditor { draft } => {
-                Self::LaunchEditor { draft }
-            }
-            crate::tui::core_tui::types::InlineEvent::ForceCancelPtySession => {
-                Self::ForceCancelPtySession
-            }
+            crate::tui::core_tui::types::InlineEvent::LaunchEditor { draft } => Self::LaunchEditor { draft },
+            crate::tui::core_tui::types::InlineEvent::ForceCancelPtySession => Self::ForceCancelPtySession,
             crate::tui::core_tui::types::InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 Self::RequestInlinePromptSuggestion(draft)
             }
             crate::tui::core_tui::types::InlineEvent::CyclePrimaryAgent => Self::CyclePrimaryAgent,
-            crate::tui::core_tui::types::InlineEvent::CyclePrimaryAgentPrevious => {
-                Self::CyclePrimaryAgentPrevious
-            }
-            crate::tui::core_tui::types::InlineEvent::SelectPrimaryAgent { name } => {
-                Self::SelectPrimaryAgent { name }
-            }
+            crate::tui::core_tui::types::InlineEvent::CyclePrimaryAgentPrevious => Self::CyclePrimaryAgentPrevious,
+            crate::tui::core_tui::types::InlineEvent::SelectPrimaryAgent { name } => Self::SelectPrimaryAgent { name },
             crate::tui::core_tui::types::InlineEvent::HistoryPrevious => Self::HistoryPrevious,
             crate::tui::core_tui::types::InlineEvent::HistoryNext => Self::HistoryNext,
         }
@@ -253,12 +235,7 @@ impl InlineHandle {
         self.send_command(InlineCommand::Inline { kind, segment });
     }
 
-    pub fn replace_last(
-        &self,
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-    ) {
+    pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
         self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
     }
 
@@ -269,12 +246,7 @@ impl InlineHandle {
         lines: Vec<Vec<InlineSegment>>,
         link_ranges: Vec<Vec<InlineLinkRange>>,
     ) {
-        self.send_command(InlineCommand::ReplaceLast {
-            count,
-            kind,
-            lines,
-            link_ranges: Some(link_ranges),
-        });
+        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: Some(link_ranges) });
     }
 
     pub fn suspend_event_loop(&self) {
@@ -417,17 +389,8 @@ impl InlineHandle {
         self.send_command(InlineCommand::ShowTransient { request: Box::new(request) });
     }
 
-    pub fn show_modal(
-        &self,
-        title: String,
-        lines: Vec<String>,
-        secure_prompt: Option<SecurePromptConfig>,
-    ) {
-        self.show_transient(TransientRequest::Modal(ModalOverlayRequest {
-            title,
-            lines,
-            secure_prompt,
-        }));
+    pub fn show_modal(&self, title: String, lines: Vec<String>, secure_prompt: Option<SecurePromptConfig>) {
+        self.show_transient(TransientRequest::Modal(ModalOverlayRequest { title, lines, secure_prompt }));
     }
 
     pub fn show_list_modal(
@@ -468,10 +431,7 @@ impl InlineHandle {
     }
 
     pub fn configure_agent_palette(&self, agents: Vec<AgentPaletteItem>) {
-        self.show_transient(TransientRequest::AgentPalette(AgentPaletteTransientRequest {
-            agents,
-            visible: None,
-        }));
+        self.show_transient(TransientRequest::AgentPalette(AgentPaletteTransientRequest { agents, visible: None }));
     }
 
     pub fn show_history_picker(&self) {
@@ -486,15 +446,11 @@ impl InlineHandle {
     }
 
     pub fn show_local_agents(&self) {
-        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest {
-            visible: Some(true),
-        }));
+        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest { visible: Some(true) }));
     }
 
     pub fn hide_local_agents(&self) {
-        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest {
-            visible: Some(false),
-        }));
+        self.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest { visible: Some(false) }));
     }
 
     pub fn hide_task_panel(&self) {
@@ -505,10 +461,7 @@ impl InlineHandle {
     }
 
     pub fn update_task_panel(&self, lines: Vec<String>) {
-        self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest {
-            lines,
-            visible: None,
-        }));
+        self.show_transient(TransientRequest::TaskPanel(TaskPanelTransientRequest { lines, visible: None }));
     }
 
     pub fn close_transient(&self) {

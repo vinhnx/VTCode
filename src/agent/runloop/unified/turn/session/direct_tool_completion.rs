@@ -14,10 +14,7 @@ struct DirectToolCompletion<'a> {
     payload: Option<Value>,
 }
 
-fn completion_base_text(
-    history: &[uni::Message],
-    reply_kind: ReplyKind,
-) -> Option<(String, DirectToolCompletion<'_>)> {
+fn completion_base_text(history: &[uni::Message], reply_kind: ReplyKind) -> Option<(String, DirectToolCompletion<'_>)> {
     let completion = latest_direct_tool_completion(history)?;
     if completion.has_pending_follow_up() {
         return None;
@@ -64,15 +61,8 @@ pub(crate) async fn generate_completion_reply_with_suggestions(
     let has_error = completion.has_error();
     let output_snippet = completion.output_snippet();
 
-    let llm_steps = generate_suggestions_via_llm(
-        provider,
-        model,
-        &label,
-        exit_code,
-        has_error,
-        output_snippet.as_deref(),
-    )
-    .await;
+    let llm_steps =
+        generate_suggestions_via_llm(provider, model, &label, exit_code, has_error, output_snippet.as_deref()).await;
 
     let steps = if llm_steps.is_empty() {
         completion.fallback_next_steps()
@@ -86,9 +76,7 @@ fn append_next_steps(base: &str, next_steps: &[String]) -> String {
     if next_steps.is_empty() {
         return base.to_string();
     }
-    let mut out = String::with_capacity(
-        base.len() + 32 + next_steps.iter().map(|s| s.len() + 4).sum::<usize>(),
-    );
+    let mut out = String::with_capacity(base.len() + 32 + next_steps.iter().map(|s| s.len() + 4).sum::<usize>());
     out.push_str(base);
     out.push_str("\n\nSuggested next steps:");
     for step in next_steps {
@@ -176,13 +164,10 @@ fn latest_direct_tool_completion(history: &[uni::Message]) -> Option<DirectToolC
             continue;
         }
 
-        let Some(tool_call_id) =
-            tool_message.tool_call_id.as_deref().filter(|id| id.starts_with("direct_"))
-        else {
+        let Some(tool_call_id) = tool_message.tool_call_id.as_deref().filter(|id| id.starts_with("direct_")) else {
             continue;
         };
-        let Some(assistant_message) = index.checked_sub(1).and_then(|prev| history.get(prev))
-        else {
+        let Some(assistant_message) = index.checked_sub(1).and_then(|prev| history.get(prev)) else {
             continue;
         };
         let Some(tool_call) = assistant_message
@@ -204,10 +189,7 @@ fn latest_direct_tool_completion(history: &[uni::Message]) -> Option<DirectToolC
 impl DirectToolCompletion<'_> {
     fn is_spawn_tool(&self) -> bool {
         self.tool_call.function.as_ref().is_some_and(|function| {
-            matches!(
-                function.name.as_str(),
-                tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS
-            )
+            matches!(function.name.as_str(), tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS)
         })
     }
 
@@ -230,9 +212,7 @@ impl DirectToolCompletion<'_> {
                 .as_ref()
                 .and_then(|value| value.get("agent_name"))
                 .and_then(Value::as_str)
-                .or_else(|| {
-                    args.as_ref().and_then(|value| value.get("agent_type")).and_then(Value::as_str)
-                })
+                .or_else(|| args.as_ref().and_then(|value| value.get("agent_type")).and_then(Value::as_str))
                 .map(|agent| format!("{agent} subagent"))
                 .unwrap_or_else(|| function.name.clone()),
             tool_names::UNIFIED_EXEC => args
@@ -340,17 +320,16 @@ impl DirectToolCompletion<'_> {
         let payload = self.payload.as_ref()?;
         if self.has_error() {
             if self.is_spawn_tool() {
-                return Some(
-                    "The subagent did not start. Failure details are shown above.".to_string(),
-                );
+                return Some("The subagent did not start. Failure details are shown above.".to_string());
             }
             return Some("Failure details are shown above.".to_string());
         }
         if self.is_spawn_tool() {
-            let background = payload.get("background").and_then(Value::as_bool).unwrap_or(false)
-                || self.is_background_spawn_tool();
+            let background =
+                payload.get("background").and_then(Value::as_bool).unwrap_or(false) || self.is_background_spawn_tool();
             return Some(if background {
-                "The subagent is running without blocking this turn. Use `/agent` to inspect or continue it.".to_string()
+                "The subagent is running without blocking this turn. Use `/agent` to inspect or continue it."
+                    .to_string()
             } else {
                 "The subagent was started. Use `/agent` to inspect or continue it.".to_string()
             });
@@ -428,12 +407,10 @@ impl DirectToolCompletion<'_> {
                         "Run tests with `cargo nextest run`.".to_string(),
                         "Check lint warnings with `cargo clippy --workspace --all-targets -- -D warnings`.".to_string(),
                     ],
-                    Some(command)
-                        if command.starts_with("cargo nextest")
-                            || command.starts_with("cargo test") =>
-                    {
+                    Some(command) if command.starts_with("cargo nextest") || command.starts_with("cargo test") => {
                         vec![
-                            "Check lint warnings with `cargo clippy --workspace --all-targets -- -D warnings`.".to_string(),
+                            "Check lint warnings with `cargo clippy --workspace --all-targets -- -D warnings`."
+                                .to_string(),
                             "Ask me to investigate any failing tests or summarize the output.".to_string(),
                         ]
                     }
@@ -446,11 +423,14 @@ impl DirectToolCompletion<'_> {
             }
             tool_names::SPAWN_AGENT | tool_names::SPAWN_BACKGROUND_SUBPROCESS => {
                 if self.has_error() {
-                    if self.error_message().as_deref().is_some_and(|message| {
-                        message.contains("Background subagents are disabled by configuration")
-                    }) {
+                    if self
+                        .error_message()
+                        .as_deref()
+                        .is_some_and(|message| message.contains("Background subagents are disabled by configuration"))
+                    {
                         return vec![
-                            "Enable `[subagents.background] enabled = true` to use managed background subprocesses.".to_string(),
+                            "Enable `[subagents.background] enabled = true` to use managed background subprocesses."
+                                .to_string(),
                             "Ask me to launch the subagent in the foreground instead.".to_string(),
                         ];
                     }
@@ -463,8 +443,7 @@ impl DirectToolCompletion<'_> {
                     {
                         return vec![
                             "Retry the subagent with `spawn_background_subprocess`.".to_string(),
-                            "Ask me to inspect or patch the direct subagent launch path."
-                                .to_string(),
+                            "Ask me to inspect or patch the direct subagent launch path.".to_string(),
                         ];
                     }
                     vec![
@@ -607,8 +586,7 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`rust-engineer subagent` started in the background."));
         assert!(text.contains("Use `/agent` to inspect or continue it."));
     }
@@ -639,8 +617,7 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`background-demo subagent` started in the background."));
         assert!(text.contains("Use `/agent` to inspect or continue it."));
     }
@@ -673,14 +650,11 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`rust-engineer subagent` failed to start."));
         assert!(text.contains("The subagent did not start. Failure details are shown above."));
         assert!(!text.contains("Use `/agent` to inspect or continue it."));
-        assert!(
-            text.contains("Retry the subagent with a supported model or provider configuration.")
-        );
+        assert!(text.contains("Retry the subagent with a supported model or provider configuration."));
     }
 
     #[test]
@@ -715,8 +689,7 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`background-demo subagent` failed to start."));
         assert!(text.contains("Retry the subagent with `spawn_background_subprocess`."));
         assert!(!text.contains("supported model or provider configuration"));
@@ -748,8 +721,7 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`background-demo subagent` failed to start."));
         assert!(text.contains("Enable `[subagents.background] enabled = true`"));
         assert!(text.contains("launch the subagent in the foreground instead"));
@@ -786,8 +758,7 @@ mod tests {
             ),
         ];
 
-        let text =
-            completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
+        let text = completion_reply_text(&history, ReplyKind::Immediate).expect("direct completion reply");
         assert!(text.contains("`cargo fmt` completed successfully (exit code 0)."));
         assert!(text.contains("No terminal output was produced."));
         assert!(text.contains("cargo check"));

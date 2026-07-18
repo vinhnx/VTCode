@@ -8,10 +8,7 @@ use super::tool_summary::{describe_tool_action, is_file_modification_tool};
 fn test_describe_tool_action_exec_command_shows_command_text() {
     let args = json!({"command": "cargo check"});
     let (desc, _) = describe_tool_action(tools::EXEC_COMMAND, &args, None::<&Path>);
-    assert!(
-        desc.contains("cargo check"),
-        "exec_command summary must show the command text, got: {desc}"
-    );
+    assert!(desc.contains("cargo check"), "exec_command summary must show the command text, got: {desc}");
     assert!(
         !desc.contains("exec_command"),
         "exec_command summary must not fall back to the bare tool name, got: {desc}"

@@ -44,26 +44,17 @@ fn impl_string_newtype(input: &DeriveInput) -> syn::Result<TokenStream> {
                 &field.ty
             }
             _ => {
-                return Err(syn::Error::new_spanned(
-                    name,
-                    "StringNewtype can only be derived for tuple structs",
-                ));
+                return Err(syn::Error::new_spanned(name, "StringNewtype can only be derived for tuple structs"));
             }
         },
         _ => {
-            return Err(syn::Error::new_spanned(
-                name,
-                "StringNewtype can only be derived for structs",
-            ));
+            return Err(syn::Error::new_spanned(name, "StringNewtype can only be derived for structs"));
         }
     };
 
     // Verify the inner type is String.
     if !is_string_type(field_type) {
-        return Err(syn::Error::new_spanned(
-            field_type,
-            "StringNewtype requires the inner type to be String",
-        ));
+        return Err(syn::Error::new_spanned(field_type, "StringNewtype requires the inner type to be String"));
     }
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();

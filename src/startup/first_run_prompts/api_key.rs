@@ -17,24 +17,17 @@ pub(crate) fn prompt_api_key_interactive(
     workspace: &Path,
 ) -> Result<Option<String>> {
     if provider.is_local() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("No API key required for {} (local provider).", provider.label()),
-        )?;
+        renderer
+            .line(MessageStyle::Info, &format!("No API key required for {} (local provider).", provider.label()))?;
         return Ok(None);
     }
 
     let env_key = provider.default_api_key_env();
     let env_path = workspace.join(".env");
 
-    renderer.line(
-        MessageStyle::Status,
-        &format!("Set up your {} API key (env: {}).", provider.label(), env_key),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("The key will be saved to {} for this workspace.", env_path.display()),
-    )?;
+    renderer.line(MessageStyle::Status, &format!("Set up your {} API key (env: {}).", provider.label(), env_key))?;
+    renderer
+        .line(MessageStyle::Info, &format!("The key will be saved to {} for this workspace.", env_path.display()))?;
     renderer.line(MessageStyle::Info, "It will NOT be stored in vtcode.toml.")?;
     renderer.line(
         MessageStyle::Info,
@@ -55,23 +48,17 @@ pub(crate) fn prompt_api_key_interactive(
     if trimmed.is_empty() {
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "Skipped. Set {env_key} in your environment or .env file before starting a chat."
-            ),
+            &format!("Skipped. Set {env_key} in your environment or .env file before starting a chat."),
         )?;
         return Ok(None);
     }
 
     // Basic validation: reject keys with internal whitespace (common paste mistake)
     if trimmed.chars().any(|c| c.is_whitespace()) {
-        renderer.line(
-            MessageStyle::Warning,
-            "API key contains whitespace characters -- this is likely a paste error.",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "Please re-enter the key without spaces or newlines, or press Enter to skip.",
-        )?;
+        renderer
+            .line(MessageStyle::Warning, "API key contains whitespace characters -- this is likely a paste error.")?;
+        renderer
+            .line(MessageStyle::Info, "Please re-enter the key without spaces or newlines, or press Enter to skip.")?;
         return Ok(None);
     }
 

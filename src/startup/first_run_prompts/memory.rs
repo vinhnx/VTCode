@@ -9,10 +9,7 @@ pub(crate) fn resolve_initial_persistent_memory_enabled(config: &VTCodeConfig) -
     config.persistent_memory_enabled()
 }
 
-pub(crate) fn prompt_persistent_memory(
-    renderer: &mut AnsiRenderer,
-    default_enabled: bool,
-) -> Result<bool> {
+pub(crate) fn prompt_persistent_memory(renderer: &mut AnsiRenderer, default_enabled: bool) -> Result<bool> {
     renderer.line(
         MessageStyle::Status,
         "Persistent memory controls whether VT Code keeps durable repository notes between sessions.",
@@ -25,8 +22,7 @@ pub(crate) fn prompt_persistent_memory(
     match select_persistent_memory_with_ratatui(default_enabled) {
         Ok(enabled) => Ok(enabled),
         Err(error) => {
-            renderer
-                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_persistent_memory_text(renderer, default_enabled)
         }
     }
@@ -54,22 +50,17 @@ fn persistent_memory_entries() -> [(bool, SelectionEntry); 2] {
 fn select_persistent_memory_with_ratatui(default_enabled: bool) -> Result<bool> {
     let entries = persistent_memory_entries();
     let default_index = usize::from(default_enabled);
-    let selection_entries: Vec<SelectionEntry> =
-        entries.iter().map(|(_enabled, entry)| entry.clone()).collect();
+    let selection_entries: Vec<SelectionEntry> = entries.iter().map(|(_enabled, entry)| entry.clone()).collect();
     let instructions = if default_enabled {
         "Default: On. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default."
     } else {
         "Default: Off. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default."
     };
-    let selected_index =
-        run_selection("Persistent memory", instructions, &selection_entries, default_index)?;
+    let selected_index = run_selection("Persistent memory", instructions, &selection_entries, default_index)?;
     Ok(entries[selected_index].0)
 }
 
-fn prompt_persistent_memory_text(
-    renderer: &mut AnsiRenderer,
-    default_enabled: bool,
-) -> Result<bool> {
+fn prompt_persistent_memory_text(renderer: &mut AnsiRenderer, default_enabled: bool) -> Result<bool> {
     let entries = persistent_memory_entries();
     for (index, (enabled, _entry)) in entries.iter().enumerate() {
         renderer.line(
@@ -89,8 +80,7 @@ fn prompt_persistent_memory_text(
         match trimmed.to_ascii_lowercase().as_str() {
             "1" | "off" | "disable" | "disabled" | "no" | "n" => return Ok(false),
             "2" | "on" | "enable" | "enabled" | "yes" | "y" => return Ok(true),
-            _ => renderer
-                .line(MessageStyle::Error, "Please choose Off or On for persistent memory.")?,
+            _ => renderer.line(MessageStyle::Error, "Please choose Off or On for persistent memory.")?,
         }
     }
 }

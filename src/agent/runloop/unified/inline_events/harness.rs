@@ -12,17 +12,16 @@ use vtcode_core::core::agent::events::{
     tool_invocation_completed_event as shared_tool_invocation_completed_event,
     tool_output_completed_event as shared_tool_output_completed_event,
     tool_output_started_event as shared_tool_output_started_event,
-    tool_output_updated_event as shared_tool_output_updated_event,
-    tool_started_event as shared_tool_started_event,
+    tool_output_updated_event as shared_tool_output_updated_event, tool_started_event as shared_tool_started_event,
 };
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::atif::{AtifAgent, AtifTrajectoryBuilder};
 use vtcode_core::exec::events::{
     CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
-    ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent,
-    TurnStartedEvent, Usage, VersionedThreadEvent,
+    ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem,
+    ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
@@ -45,8 +44,7 @@ pub(crate) fn prune_old_harness_logs(log_dir: &Path, max_age_days: u64) {
         return;
     }
 
-    let cutoff = match SystemTime::now()
-        .checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
+    let cutoff = match SystemTime::now().checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
     {
         Some(t) => t,
         None => return,
@@ -112,9 +110,8 @@ struct OpenResponsesState {
 impl HarnessEventEmitter {
     pub(crate) fn new(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            ensure_dir_exists_sync(parent).with_context(|| {
-                format!("Failed to create harness log dir {}", parent.display())
-            })?;
+            ensure_dir_exists_sync(parent)
+                .with_context(|| format!("Failed to create harness log dir {}", parent.display()))?;
         }
         let file = OpenOptions::new()
             .create(true)
@@ -176,8 +173,7 @@ impl HarnessEventEmitter {
         let agent = AtifAgent::vtcode().with_model(model);
         let builder = AtifTrajectoryBuilder::new(agent);
 
-        let mut guard =
-            self.inner.atif.lock().map_err(|e| anyhow::anyhow!("ATIF lock poisoned: {e}"))?;
+        let mut guard = self.inner.atif.lock().map_err(|e| anyhow::anyhow!("ATIF lock poisoned: {e}"))?;
         *guard = Some(AtifState { builder, output_path });
         Ok(())
     }
@@ -233,8 +229,7 @@ impl HarnessEventEmitter {
                 .writer
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Harness log lock poisoned: {e}"))?;
-            let serialized =
-                serde_json::to_string(&payload).context("Failed to serialize harness event")?;
+            let serialized = serde_json::to_string(&payload).context("Failed to serialize harness event")?;
             writer
                 .write_all(serialized.as_bytes())
                 .context("Failed to write harness event")?;
@@ -344,10 +339,7 @@ pub(crate) fn tool_invocation_completed_event(
     shared_tool_invocation_completed_event(item_id, tool_name, args, tool_call_id, status)
 }
 
-pub(crate) fn tool_output_started_event(
-    call_item_id: String,
-    tool_call_id: Option<&str>,
-) -> ThreadEvent {
+pub(crate) fn tool_output_started_event(call_item_id: String, tool_call_id: Option<&str>) -> ThreadEvent {
     shared_tool_output_started_event(call_item_id, tool_call_id)
 }
 
@@ -359,14 +351,7 @@ pub(crate) fn tool_output_completed_event(
     spool_path: Option<&str>,
     output: impl Into<String>,
 ) -> ThreadEvent {
-    shared_tool_output_completed_event(
-        call_item_id,
-        tool_call_id,
-        status,
-        exit_code,
-        spool_path,
-        output,
-    )
+    shared_tool_output_completed_event(call_item_id, tool_call_id, status, exit_code, spool_path, output)
 }
 
 pub(crate) fn tool_updated_event(
@@ -492,10 +477,7 @@ mod tests {
             value.get("schema_version").and_then(|v| v.as_str()),
             Some(vtcode_core::exec::events::EVENT_SCHEMA_VERSION)
         );
-        assert_eq!(
-            value.get("event").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
-            Some("turn.started")
-        );
+        assert_eq!(value.get("event").and_then(|v| v.get("type")).and_then(|v| v.as_str()), Some("turn.started"));
     }
 
     #[test]
@@ -520,9 +502,7 @@ mod tests {
 
         // Emit events
         emitter
-            .emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "test-thread".to_string(),
-            }))
+            .emit(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "test-thread".to_string() }))
             .expect("emit");
         emitter.emit(turn_started_event()).expect("emit turn");
         emitter
@@ -569,8 +549,7 @@ mod tests {
     #[test]
     fn tool_started_event_captures_arguments() {
         let args = json!({ "path": "README.md" });
-        let event =
-            tool_started_event("tool-1".to_string(), "read_file", Some(&args), Some("tool_call_0"));
+        let event = tool_started_event("tool-1".to_string(), "read_file", Some(&args), Some("tool_call_0"));
 
         let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
             panic!("expected item.started");
@@ -659,8 +638,7 @@ mod tests {
     fn tool_updated_event_captures_streamed_output() {
         let event = tool_updated_event("tool-1".to_string(), Some("tool_call_0"), "On branch main");
 
-        let ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent { item }) = event
-        else {
+        let ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent { item }) = event else {
             panic!("expected item.updated");
         };
         assert_eq!(item.id, "tool-1:output");

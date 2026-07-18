@@ -37,17 +37,9 @@ pub fn clean_reasoning_text(text: &str) -> String {
     vtcode_commons::formatting::clean_reasoning_text(text)
 }
 
-const PRIMARY_TEXT_KEYS: &[&str] = &[
-    "text",
-    "content",
-    "reasoning",
-    "thought",
-    "thinking",
-    "value",
-];
+const PRIMARY_TEXT_KEYS: &[&str] = &["text", "content", "reasoning", "thought", "thinking", "value"];
 const SECONDARY_COLLECTION_KEYS: &[&str] = &[
-    "messages", "parts", "items", "entries", "steps", "segments", "records", "output", "outputs",
-    "logs",
+    "messages", "parts", "items", "entries", "steps", "segments", "records", "output", "outputs", "logs",
 ];
 
 const REASONING_TAGS: &[&str] = &["think", "thinking", "reasoning", "analysis", "thought"];
@@ -309,11 +301,7 @@ pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<S
         return (segments, None);
     }
 
-    let output = if cleaned.trim().is_empty() {
-        None
-    } else {
-        Some(cleaned)
-    };
+    let output = if cleaned.trim().is_empty() { None } else { Some(cleaned) };
 
     (segments, output)
 }
@@ -370,13 +358,7 @@ mod tests {
     fn extracts_reasoning_from_think_markup() {
         let source = "<think>first step</think>\n<answer>final output</answer>";
         let (segments, cleaned) = split_reasoning_from_text(source);
-        assert_eq!(
-            segments,
-            vec![ReasoningSegment::new(
-                "first step",
-                Some("think".to_string())
-            )]
-        );
+        assert_eq!(segments, vec![ReasoningSegment::new("first step", Some("think".to_string()))]);
         assert_eq!(cleaned, Some("\nfinal output".to_string()));
     }
 

@@ -118,9 +118,7 @@ fn is_dangerous_cmd_invocation(command: &[String]) -> bool {
             // Look for URL arguments after 'start'
             if iter.any(|s| {
                 let s_lower = s.to_lowercase();
-                (s_lower.contains("http://")
-                    || s_lower.contains("https://")
-                    || s_lower.contains("ftp://"))
+                (s_lower.contains("http://") || s_lower.contains("https://") || s_lower.contains("ftp://"))
                     && !s_lower.starts_with('/')
             }) {
                 return true;
@@ -152,10 +150,7 @@ mod tests {
 
     #[test]
     fn powershell_invoke_item_with_url_is_dangerous() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "ii 'https://example.com'".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "ii 'https://example.com'".to_string()];
         assert!(is_dangerous_powershell_invocation(&cmd));
     }
 
@@ -183,10 +178,7 @@ mod tests {
 
     #[test]
     fn firefox_with_url_is_dangerous() {
-        let cmd = vec![
-            "powershell".to_string(),
-            "firefox https://example.com".to_string(),
-        ];
+        let cmd = vec!["powershell".to_string(), "firefox https://example.com".to_string()];
         assert!(is_dangerous_powershell_invocation(&cmd));
     }
 

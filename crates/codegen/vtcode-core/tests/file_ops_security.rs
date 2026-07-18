@@ -23,10 +23,7 @@ async fn create_file_rejects_workspace_escape() {
     let value = file_tool.create_file(args).await.expect_err("tool should reject escapes");
 
     let message = value.to_string();
-    assert!(
-        message.contains("outside the workspace"),
-        "expected workspace guard in error, got: {message}"
-    );
+    assert!(message.contains("outside the workspace"), "expected workspace guard in error, got: {message}");
     assert!(!outside.exists(), "create_file must not materialize escaped paths");
 }
 
@@ -57,10 +54,7 @@ async fn move_file_rejects_workspace_escape_source() {
 
     assert!(error.contains("outside the workspace"));
     assert!(outside.exists(), "source file outside workspace should remain untouched");
-    assert!(
-        !workspace.path().join("moved.txt").exists(),
-        "destination should not be created for blocked move"
-    );
+    assert!(!workspace.path().join("moved.txt").exists(), "destination should not be created for blocked move");
 }
 
 #[tokio::test]
@@ -161,9 +155,6 @@ async fn copy_file_rejects_workspace_escape_source() {
         .to_string();
 
     assert!(error.contains("outside the workspace"));
-    assert!(
-        !inside_destination.exists(),
-        "blocked copy should not create destination in workspace"
-    );
+    assert!(!inside_destination.exists(), "blocked copy should not create destination in workspace");
     assert!(outside.exists(), "outside source file should remain untouched after blocked copy");
 }

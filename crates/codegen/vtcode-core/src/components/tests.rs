@@ -339,10 +339,7 @@ async fn tool_facade_executes_via_cgp() {
         .await
         .expect("should succeed");
 
-    assert_eq!(
-        result.get("echoed").and_then(|v| v.get("msg")).and_then(|v| v.as_str()),
-        Some("hello")
-    );
+    assert_eq!(result.get("echoed").and_then(|v| v.get("msg")).and_then(|v| v.as_str()), Some("hello"));
 }
 
 #[tokio::test]
@@ -384,15 +381,12 @@ async fn handler_facade_executes_via_cgp() {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
         sub_id: None,
-        shell_environment_policy:
-            crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
+        shell_environment_policy: crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
         approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
             crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
         ),
         codex_linux_sandbox_exe: None,
-        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-            Default::default(),
-        ),
+        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(Default::default()),
     });
     let invocation = ToolInvocation {
         session,
@@ -418,15 +412,12 @@ async fn handler_facade_denied_by_ctx() {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
         sub_id: None,
-        shell_environment_policy:
-            crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
+        shell_environment_policy: crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
         approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
             crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
         ),
         codex_linux_sandbox_exe: None,
-        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-            Default::default(),
-        ),
+        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(Default::default()),
     });
     let invocation = ToolInvocation {
         session,
@@ -461,15 +452,12 @@ async fn same_context_both_facades() {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
         sub_id: None,
-        shell_environment_policy:
-            crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
+        shell_environment_policy: crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
         approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
             crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
         ),
         codex_linux_sandbox_exe: None,
-        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-            Default::default(),
-        ),
+        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(Default::default()),
     });
     let invocation = ToolInvocation {
         session,
@@ -649,10 +637,7 @@ async fn bridge_interactive_passthrough() {
         .expect("should succeed");
 
     assert_eq!(result.get("result").and_then(|v| v.as_str()), Some("ok"));
-    assert_eq!(
-        result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()),
-        Some("test")
-    );
+    assert_eq!(result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()), Some("test"));
 }
 
 #[tokio::test]
@@ -694,10 +679,7 @@ async fn native_typed_tool_preserves_metadata_and_execution() {
         .execute(serde_json::json!({"query": "native"}))
         .await
         .expect("should succeed");
-    assert_eq!(
-        result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()),
-        Some("native")
-    );
+    assert_eq!(result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()), Some("native"));
 }
 
 #[tokio::test]
@@ -726,15 +708,12 @@ async fn bridge_handler_facade() {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
         sub_id: None,
-        shell_environment_policy:
-            crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
+        shell_environment_policy: crate::tools::handlers::tool_handler::ShellEnvironmentPolicy::default(),
         approval_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
             crate::tools::handlers::tool_handler::ApprovalPolicy::default(),
         ),
         codex_linux_sandbox_exe: None,
-        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(
-            Default::default(),
-        ),
+        sandbox_policy: crate::tools::handlers::tool_handler::Constrained::allow_any(Default::default()),
     });
     let invocation = ToolInvocation {
         session,

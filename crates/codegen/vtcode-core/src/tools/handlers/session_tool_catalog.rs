@@ -111,10 +111,7 @@ pub struct DeferredToolPolicy {
 impl DeferredToolPolicy {
     /// Creates a policy for Anthropic's tool search.
     #[must_use]
-    pub fn anthropic(
-        algorithm: ToolSearchAlgorithm,
-        always_available_tools: impl IntoIterator<Item = String>,
-    ) -> Self {
+    pub fn anthropic(algorithm: ToolSearchAlgorithm, always_available_tools: impl IntoIterator<Item = String>) -> Self {
         Self {
             search_kind: Some(DeferredToolSearchKind::Anthropic(algorithm)),
             always_available_tools: always_available_tools.into_iter().collect(),
@@ -166,12 +163,8 @@ impl DeferredToolPolicy {
 
     fn tool_search_definition(&self) -> Option<ToolDefinition> {
         match self.search_kind {
-            Some(DeferredToolSearchKind::Anthropic(algorithm)) => {
-                Some(ToolDefinition::tool_search(algorithm))
-            }
-            Some(DeferredToolSearchKind::OpenAIHosted) => {
-                Some(ToolDefinition::hosted_tool_search())
-            }
+            Some(DeferredToolSearchKind::Anthropic(algorithm)) => Some(ToolDefinition::tool_search(algorithm)),
+            Some(DeferredToolSearchKind::OpenAIHosted) => Some(ToolDefinition::hosted_tool_search()),
             // Client-local discovery is a core capability; there is
             // no separate wire-level tool to inject for client-local
             // deferral.
@@ -189,10 +182,8 @@ pub fn deferred_tool_policy_for_runtime(
 ) -> DeferredToolPolicy {
     match provider {
         Some(Provider::Anthropic) => {
-            let enabled =
-                vtcode_config.is_none_or(|cfg| cfg.provider.anthropic.tool_search.enabled);
-            let defer_by_default =
-                vtcode_config.is_none_or(|cfg| cfg.provider.anthropic.tool_search.defer_by_default);
+            let enabled = vtcode_config.is_none_or(|cfg| cfg.provider.anthropic.tool_search.enabled);
+            let defer_by_default = vtcode_config.is_none_or(|cfg| cfg.provider.anthropic.tool_search.defer_by_default);
             if !enabled || !defer_by_default {
                 return DeferredToolPolicy::default();
             }
@@ -207,8 +198,7 @@ pub fn deferred_tool_policy_for_runtime(
         }
         Some(Provider::OpenAI) if model_supports_responses_compaction => {
             let enabled = vtcode_config.is_none_or(|cfg| cfg.provider.openai.tool_search.enabled);
-            let defer_by_default =
-                vtcode_config.is_none_or(|cfg| cfg.provider.openai.tool_search.defer_by_default);
+            let defer_by_default = vtcode_config.is_none_or(|cfg| cfg.provider.openai.tool_search.defer_by_default);
             if !enabled || !defer_by_default {
                 return DeferredToolPolicy::default();
             }
@@ -229,8 +219,7 @@ pub fn deferred_tool_policy_for_runtime(
             // hosted arms above -- this function only decides whether deferral is
             // *possible* for the runtime, not whether it is *used* for the
             // current catalog.
-            let client_tool_search_enabled =
-                vtcode_config.is_some_and(|cfg| cfg.tools.client_tool_search);
+            let client_tool_search_enabled = vtcode_config.is_some_and(|cfg| cfg.tools.client_tool_search);
             if client_tool_search_enabled {
                 DeferredToolPolicy::client_local(Vec::new())
             } else {
@@ -403,8 +392,7 @@ fn estimate_schema_tokens(entries: &[&ToolCatalogEntry], config: &SessionToolsCo
                 config.documentation_mode,
                 entry.max_description_length,
             );
-            let parameters =
-                compact_parameters(entry.parameters.clone(), config.documentation_mode);
+            let parameters = compact_parameters(entry.parameters.clone(), config.documentation_mode);
             let entry = ToolSchemaEntry {
                 name: entry.public_name.clone(),
                 description,
@@ -491,11 +479,7 @@ impl SessionToolCatalog {
         // (The system-prompt-exceeds-budget warning is emitted separately in
         // `prompts::system::apply_token_budget`; this covers the tool side.)
         if !config.deferred_tool_policy.is_enabled()
-            && catalog_would_benefit_from_deferral(
-                has_mcp_tools,
-                deferable_tool_count,
-                estimated_schema_tokens,
-            )
+            && catalog_would_benefit_from_deferral(has_mcp_tools, deferable_tool_count, estimated_schema_tokens)
         {
             static DEFERRAL_DISABLED_WARNING: OnceLock<()> = OnceLock::new();
             if DEFERRAL_DISABLED_WARNING.set(()).is_ok() {
@@ -520,9 +504,7 @@ impl SessionToolCatalog {
         for entry in filtered_entries {
             let defer_loading = should_defer_tool_loading(entry, &config);
             match entry.kind {
-                CatalogToolKind::ApplyPatch
-                    if config.model_capabilities.supports_apply_patch_tool =>
-                {
+                CatalogToolKind::ApplyPatch if config.model_capabilities.supports_apply_patch_tool => {
                     let mut tool = ToolDefinition::apply_patch(compact_tool_description(
                         entry.description.as_str(),
                         config.documentation_mode,
@@ -568,9 +550,7 @@ impl SessionToolCatalog {
             }
         }
 
-        if has_deferred_tools
-            && let Some(search_tool) = config.deferred_tool_policy.tool_search_definition()
-        {
+        if has_deferred_tools && let Some(search_tool) = config.deferred_tool_policy.tool_search_definition() {
             tools.push(search_tool);
         }
 
@@ -578,11 +558,7 @@ impl SessionToolCatalog {
     }
 
     /// Returns the schema entry for a tool by name.
-    pub fn schema_for_name(
-        &self,
-        name: &str,
-        config: SessionToolsConfig,
-    ) -> Option<ToolSchemaEntry> {
+    pub fn schema_for_name(&self, name: &str, config: SessionToolsConfig) -> Option<ToolSchemaEntry> {
         self.schema_entries(config).into_iter().find(|entry| entry.name == name)
     }
 
@@ -590,10 +566,7 @@ impl SessionToolCatalog {
         &self.entries
     }
 
-    fn filtered_entries(
-        &self,
-        config: &SessionToolsConfig,
-    ) -> impl Iterator<Item = &ToolCatalogEntry> {
+    fn filtered_entries(&self, config: &SessionToolsConfig) -> impl Iterator<Item = &ToolCatalogEntry> {
         self.entries.iter().filter(move |entry| entry.is_visible(config))
     }
 }
@@ -602,8 +575,7 @@ impl ToolCatalogEntry {
     fn from_registration(registration: &ToolRegistration) -> Option<Self> {
         let metadata = registration.metadata();
         let description = metadata.description()?.to_string();
-        let parameters =
-            metadata.parameter_schema().cloned().unwrap_or_else(default_parameter_schema);
+        let parameters = metadata.parameter_schema().cloned().unwrap_or_else(default_parameter_schema);
         let default_permission = metadata.default_permission().unwrap_or(ToolPolicy::Prompt);
         let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
         let aliases = metadata.aliases().to_vec();
@@ -723,11 +695,7 @@ impl ToolCatalogEntry {
             return false;
         }
 
-        if !profile_allows_tool(
-            config.tool_profile,
-            self.public_name.as_str(),
-            config.planning_active,
-        ) {
+        if !profile_allows_tool(config.tool_profile, self.public_name.as_str(), config.planning_active) {
             return false;
         }
 
@@ -747,8 +715,7 @@ fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: b
     match profile {
         ToolProfile::CodexDefault => {
             matches!(tool_name, tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH)
-                || (planning_active
-                    && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
+                || (planning_active && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
         }
         ToolProfile::AdvancedVtCode => !matches!(
             tool_name,
@@ -769,10 +736,7 @@ fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: b
     }
 }
 
-fn registration_catalog_source(
-    registration: &ToolRegistration,
-    kind: CatalogToolKind,
-) -> ToolCatalogSource {
+fn registration_catalog_source(registration: &ToolRegistration, kind: CatalogToolKind) -> ToolCatalogSource {
     if matches!(kind, CatalogToolKind::ApplyPatch) {
         return ToolCatalogSource::Builtin;
     }
@@ -789,8 +753,7 @@ fn should_defer_tool_loading(entry: &ToolCatalogEntry, config: &SessionToolsConf
         return false;
     }
 
-    if config.deferred_tool_policy.keeps_entry_available(entry) || is_core_tool_entry(entry, config)
-    {
+    if config.deferred_tool_policy.keeps_entry_available(entry) || is_core_tool_entry(entry, config) {
         return false;
     }
 
@@ -830,10 +793,9 @@ fn surface_allows_tool(surface: SessionSurface, tool_name: &str) -> bool {
     match surface {
         SessionSurface::Interactive => !matches!(tool_name, tools::READ_FILE | tools::LIST_FILES),
         SessionSurface::AgentRunner => true,
-        SessionSurface::Acp => matches!(
-            tool_name,
-            tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH | tools::CODE_SEARCH
-        ),
+        SessionSurface::Acp => {
+            matches!(tool_name, tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH | tools::CODE_SEARCH)
+        }
     }
 }
 
@@ -872,11 +834,7 @@ fn default_parameter_schema() -> Value {
 /// capping them prevents token inflation.
 const MCP_TOOL_DESCRIPTION_MAX_LEN: usize = 512;
 
-fn compact_tool_description(
-    original: &str,
-    mode: ToolDocumentationMode,
-    per_tool_max: Option<usize>,
-) -> String {
+fn compact_tool_description(original: &str, mode: ToolDocumentationMode, per_tool_max: Option<usize>) -> String {
     let mode_max = match mode {
         ToolDocumentationMode::Minimal => 64,
         ToolDocumentationMode::Progressive => 120,
@@ -940,9 +898,7 @@ fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: boo
 }
 
 #[cfg(test)]
-pub(crate) use vtcode_utility_tool_specs::{
-    apply_patch_parameters, exec_command_parameters, list_files_parameters,
-};
+pub(crate) use vtcode_utility_tool_specs::{apply_patch_parameters, exec_command_parameters, list_files_parameters};
 
 #[cfg(test)]
 mod tests {
@@ -956,9 +912,7 @@ mod tests {
     use serde_json::json;
 
     fn registration(name: &'static str) -> ToolRegistration {
-        ToolRegistration::new(name, CapabilityLevel::CodeSearch, false, |_, _| {
-            Box::pin(async { Ok(Value::Null) })
-        })
+        ToolRegistration::new(name, CapabilityLevel::CodeSearch, false, |_, _| Box::pin(async { Ok(Value::Null) }))
     }
 
     #[test]
@@ -1047,10 +1001,7 @@ mod tests {
             tools::COPY_FILE,
             tools::UNIFIED_FILE,
         ] {
-            assert!(
-                !names.contains(&file_tool.to_string()),
-                "{file_tool} must stay out of the default file surface"
-            );
+            assert!(!names.contains(&file_tool.to_string()), "{file_tool} must stay out of the default file surface");
         }
     }
 
@@ -1076,13 +1027,7 @@ mod tests {
             .with_planning_active(true),
         );
 
-        assert_eq!(
-            names,
-            vec![
-                tools::CODE_SEARCH.to_string(),
-                tools::REQUEST_USER_INPUT.to_string(),
-            ]
-        );
+        assert_eq!(names, vec![tools::CODE_SEARCH.to_string(), tools::REQUEST_USER_INPUT.to_string(),]);
     }
 
     #[test]
@@ -1111,10 +1056,7 @@ mod tests {
         }));
         assert_eq!(properties["tty"]["type"], "boolean");
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
-            assert!(
-                properties.get(command).is_none(),
-                "{command} must not be modelled as a separate schema property"
-            );
+            assert!(properties.get(command).is_none(), "{command} must not be modelled as a separate schema property");
         }
     }
 
@@ -1499,8 +1441,8 @@ mod tests {
         let schema = RequestUserInputTool.parameter_schema().expect("request_user_input schema");
 
         let compacted = compact_parameters(schema, ToolDocumentationMode::Progressive);
-        let description_property = &compacted["properties"]["questions"]["items"]["properties"]["options"]
-            ["items"]["properties"]["description"];
+        let description_property = &compacted["properties"]["questions"]["items"]["properties"]["options"]["items"]["properties"]
+            ["description"];
 
         assert!(description_property.is_object());
         assert_eq!(
@@ -1528,8 +1470,7 @@ mod tests {
 
         let mut registrations = vec![exec_command, apply_patch, mcp_tool];
         for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
-            let name: &'static str =
-                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let name: &'static str = Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
             let alias = format!("mcp__context7__resolve_{index}");
             registrations.push(
                 registration(name)
@@ -1550,10 +1491,7 @@ mod tests {
                 ToolModelCapabilities::default(),
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
-            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
-                ToolSearchAlgorithm::Regex,
-                Vec::new(),
-            )),
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(ToolSearchAlgorithm::Regex, Vec::new())),
         );
 
         assert!(
@@ -1635,8 +1573,7 @@ mod tests {
 
         let mut registrations = vec![exec_command, mcp_tool];
         for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
-            let name: &'static str =
-                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let name: &'static str = Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
             let alias = format!("mcp__context7__resolve_{index}");
             registrations.push(
                 registration(name)
@@ -1657,10 +1594,7 @@ mod tests {
                 ToolModelCapabilities::default(),
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
-            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
-                ToolSearchAlgorithm::Regex,
-                Vec::new(),
-            )),
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(ToolSearchAlgorithm::Regex, Vec::new())),
         );
 
         let core_tool = definitions
@@ -1668,10 +1602,7 @@ mod tests {
             .find(|tool| tool.function_name() == tools::EXEC_COMMAND)
             .expect("exec_command should be present");
         assert_eq!(core_tool.defer_loading, None);
-        assert!(
-            core_tool.namespace.is_none(),
-            "non-deferred core tools should never carry namespace metadata"
-        );
+        assert!(core_tool.namespace.is_none(), "non-deferred core tools should never carry namespace metadata");
 
         let deferred_mcp_tool = definitions
             .iter()
@@ -1706,10 +1637,7 @@ mod tests {
                 ToolModelCapabilities::default(),
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
-            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(
-                ToolSearchAlgorithm::Regex,
-                Vec::new(),
-            )),
+            .with_deferred_tool_policy(DeferredToolPolicy::anthropic(ToolSearchAlgorithm::Regex, Vec::new())),
         );
 
         let mcp_definition = definitions
@@ -1738,11 +1666,7 @@ mod tests {
             .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__search"]);
 
-        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![
-            exec_command,
-            mcp_search_tools,
-            mcp_tool,
-        ]);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![exec_command, mcp_search_tools, mcp_tool]);
         let definitions = catalog.model_tools(
             SessionToolsConfig::full_public(
                 SessionSurface::Interactive,
@@ -1812,11 +1736,7 @@ mod tests {
     /// Build a simulated MCP tool registration for `server`/`tool` with a
     /// realistic one-line description and a two-parameter schema, so the eager
     /// schema tax is pronounced enough to assert on.
-    fn mcp_server_tool_registration(
-        server: &str,
-        tool: &str,
-        description: &str,
-    ) -> ToolRegistration {
+    fn mcp_server_tool_registration(server: &str, tool: &str, description: &str) -> ToolRegistration {
         let name: &'static str = Box::leak(format!("mcp::{server}::{tool}").into_boxed_str());
         let alias = format!("mcp__{server}__{tool}");
         registration(name)
@@ -1850,11 +1770,7 @@ mod tests {
                     .with_llm_visibility(false)
                     .with_description("Apply a structured patch to files.")
                     .with_parameter_schema(apply_patch_parameters())
-                    .with_behavior(ToolBehavior::apply_patch(
-                        ToolMutationModel::Mutating,
-                        false,
-                        true,
-                    )),
+                    .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true)),
                 registration(tools::MCP_SEARCH_TOOLS)
                     .with_description("Search across deferred MCP tools by keyword.")
                     .with_parameter_schema(empty_object_schema()),
@@ -1869,9 +1785,8 @@ mod tests {
         for server in ["context7", "filesystem", "github", "slack", "postgres"] {
             for index in 0..4 {
                 let tool = format!("op_{index}");
-                let description = format!(
-                    "{server} operation {index}: query and mutate {server} resources with paging and filters."
-                );
+                let description =
+                    format!("{server} operation {index}: query and mutate {server} resources with paging and filters.");
                 registrations.push(mcp_server_tool_registration(server, &tool, &description));
             }
         }
@@ -1889,19 +1804,14 @@ mod tests {
         };
 
         // Eager: no deferral, so all 20 MCP schemas travel on the first request.
-        let eager_tokens =
-            on_wire_schema_tokens(&catalog, make_config(DeferredToolPolicy::default()));
+        let eager_tokens = on_wire_schema_tokens(&catalog, make_config(DeferredToolPolicy::default()));
         // Client-local deferral: MCP tools are omitted from the wire payload.
-        let deferred_tokens = on_wire_schema_tokens(
-            &catalog,
-            make_config(DeferredToolPolicy::client_local(Vec::new())),
-        );
+        let deferred_tokens =
+            on_wire_schema_tokens(&catalog, make_config(DeferredToolPolicy::client_local(Vec::new())));
         // Baseline: the same core tools, no MCP servers, under deferral.
         let baseline_catalog = SessionToolCatalog::rebuild_from_registrations(core_registrations());
-        let baseline_tokens = on_wire_schema_tokens(
-            &baseline_catalog,
-            make_config(DeferredToolPolicy::client_local(Vec::new())),
-        );
+        let baseline_tokens =
+            on_wire_schema_tokens(&baseline_catalog, make_config(DeferredToolPolicy::client_local(Vec::new())));
 
         assert!(
             eager_tokens >= deferred_tokens * 3,
@@ -1935,10 +1845,7 @@ mod tests {
             "a small builtin-only catalog does not benefit from deferral"
         );
         // Any MCP tool present -> benefit (MCP schemas are the dominant cost).
-        assert!(
-            catalog_would_benefit_from_deferral(true, 1, 100),
-            "any MCP tool means deferral would engage"
-        );
+        assert!(catalog_would_benefit_from_deferral(true, 1, 100), "any MCP tool means deferral would engage");
         // At the count threshold -> benefit.
         assert!(
             catalog_would_benefit_from_deferral(false, DIRECT_TOOL_EXPOSURE_THRESHOLD, 500),
@@ -1981,8 +1888,7 @@ mod tests {
 
         let mut registrations = vec![exec_command, mcp_tool];
         for index in 0..DIRECT_TOOL_EXPOSURE_THRESHOLD {
-            let name: &'static str =
-                Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
+            let name: &'static str = Box::leak(format!("mcp::context7::resolve_{index}").into_boxed_str());
             let alias = format!("mcp__context7__resolve_{index}");
             registrations.push(
                 registration(name)
@@ -2003,9 +1909,7 @@ mod tests {
                 ToolModelCapabilities { supports_apply_patch_tool: true },
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
-            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec![
-                "mcp__context7__search".to_string(),
-            ])),
+            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec!["mcp__context7__search".to_string()])),
         );
 
         assert!(
@@ -2040,8 +1944,7 @@ mod tests {
             .with_parameter_schema(empty_object_schema())
             .with_aliases(["mcp__context7__resolve"]);
 
-        let catalog =
-            SessionToolCatalog::rebuild_from_registrations(vec![mcp_tool, second_mcp_tool]);
+        let catalog = SessionToolCatalog::rebuild_from_registrations(vec![mcp_tool, second_mcp_tool]);
         let definitions = catalog.model_tools(
             SessionToolsConfig::full_public(
                 SessionSurface::Interactive,
@@ -2050,9 +1953,7 @@ mod tests {
                 ToolModelCapabilities::default(),
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
-            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec![
-                "mcp__context7__search".to_string(),
-            ])),
+            .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec!["mcp__context7__search".to_string()])),
         );
 
         assert!(
@@ -2069,11 +1970,7 @@ mod tests {
             .iter()
             .find(|tool| tool.function_name() == "mcp__context7__resolve")
             .expect("deferred mcp tool should be present");
-        assert_eq!(
-            direct_mcp_tool.defer_loading,
-            Some(true),
-            "non-always-available MCP tool should be deferred"
-        );
+        assert_eq!(direct_mcp_tool.defer_loading, Some(true), "non-always-available MCP tool should be deferred");
     }
 
     #[test]
@@ -2150,8 +2047,7 @@ mod tests {
     fn deferred_tool_policy_uses_provider_defaults() {
         let config = VTCodeConfig::default();
 
-        let anthropic =
-            deferred_tool_policy_for_runtime(Some(Provider::Anthropic), false, Some(&config));
+        let anthropic = deferred_tool_policy_for_runtime(Some(Provider::Anthropic), false, Some(&config));
         assert!(anthropic.is_enabled());
         assert_eq!(
             anthropic.tool_search_definition().map(|tool| tool.tool_type),
@@ -2160,16 +2056,12 @@ mod tests {
 
         let openai = deferred_tool_policy_for_runtime(Some(Provider::OpenAI), true, Some(&config));
         assert!(openai.is_enabled());
-        assert_eq!(
-            openai.tool_search_definition().map(|tool| tool.tool_type),
-            Some("tool_search".to_string())
-        );
+        assert_eq!(openai.tool_search_definition().map(|tool| tool.tool_type), Some("tool_search".to_string()));
 
         // OpenAI without Responses compaction, and no explicit provider-hosted
         // tool search, falls through to client-local deferral now that
         // `client_tool_search` defaults to `true`.
-        let unsupported =
-            deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
+        let unsupported = deferred_tool_policy_for_runtime(Some(Provider::OpenAI), false, Some(&config));
         assert!(unsupported.is_enabled());
         assert!(unsupported.is_client_local());
     }
@@ -2222,11 +2114,7 @@ mod tests {
             "claude-sonnet-4-6",
             Some(&config),
         ));
-        assert!(!anthropic_native_memory_enabled_for_runtime(
-            Some(Provider::Anthropic),
-            "gpt-5",
-            Some(&config),
-        ));
+        assert!(!anthropic_native_memory_enabled_for_runtime(Some(Provider::Anthropic), "gpt-5", Some(&config),));
         assert!(anthropic_native_memory_enabled_for_runtime(
             Some(Provider::Anthropic),
             "my-private-claude-build",

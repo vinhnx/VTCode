@@ -4,14 +4,11 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
-};
+use ratatui::widgets::{Block, BorderType, List, ListDirection, ListItem, ListState, Paragraph, Wrap};
 
 use super::SelectionEntry;
 
-const CONTROLS_HINT: &str =
-    "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
+const CONTROLS_HINT: &str = "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
 const NUMBER_JUMP_HINT: &str = "Tip: Type number to jump";
 
 mod styles {
@@ -41,9 +38,7 @@ pub(super) fn draw_selection_ui(
             let [instructions_area, list_area, footer_area] = area
                 .try_layout(
                     &Layout::vertical([
-                        Constraint::Length(
-                            instruction_height.min(area.height.saturating_sub(footer_height + 5)),
-                        ),
+                        Constraint::Length(instruction_height.min(area.height.saturating_sub(footer_height + 5))),
                         Constraint::Min(5),
                         Constraint::Length(footer_height),
                     ])
@@ -70,10 +65,7 @@ pub(super) fn draw_selection_ui(
                         && !description.is_empty()
                         && description != &entry.title
                     {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {description}"),
-                            styles::DESCRIPTION,
-                        )));
+                        lines.push(Line::from(Span::styled(format!("    {description}"), styles::DESCRIPTION)));
                     }
                     ListItem::new(lines)
                 })
@@ -105,10 +97,7 @@ pub(super) fn draw_selection_ui(
                 && !description.is_empty()
                 && description != &current.title
             {
-                summary_lines.push(Line::from(Span::styled(
-                    format!("  {description}"),
-                    styles::DESCRIPTION,
-                )));
+                summary_lines.push(Line::from(Span::styled(format!("  {description}"), styles::DESCRIPTION)));
             }
 
             summary_lines.push(Line::from(""));

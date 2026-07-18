@@ -15,12 +15,10 @@ use ratatui::{
 use tokio::sync::mpsc;
 use vtcode_ui::tui::{
     app::{
-        InlineCommand as AppInlineCommand, InlineEvent, InlineMessageKind, InlineSegment,
-        InlineTextStyle, InlineTheme,
+        InlineCommand as AppInlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     },
     core_tui::{
-        InlineCommand as CoreInlineCommand, app::AppSession, session::Session as CoreSession,
-        widgets::TranscriptWidget,
+        InlineCommand as CoreInlineCommand, app::AppSession, session::Session as CoreSession, widgets::TranscriptWidget,
     },
 };
 
@@ -40,9 +38,7 @@ fn build_core_session(message_count: usize, link_heavy: bool) -> CoreSession {
     let mut session = CoreSession::new(InlineTheme::default(), None, 40);
     for index in 0..message_count {
         let text = if link_heavy {
-            format!(
-                "line {index}: inspect /tmp/project/src/file_{index}.rs:42 or https://example.com/item/{index}"
-            )
+            format!("line {index}: inspect /tmp/project/src/file_{index}.rs:42 or https://example.com/item/{index}")
         } else {
             format!("plain transcript line {index} with steady-state viewport rendering")
         };
@@ -71,35 +67,15 @@ fn build_app_session(message_count: usize, match_heavy: bool) -> AppSession {
 }
 
 fn open_review(session: &mut AppSession, tx: &mpsc::UnboundedSender<InlineEvent>) {
-    session.handle_event(
-        CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)),
-        tx,
-        None,
-    );
+    session.handle_event(CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)), tx, None);
 }
 
-fn set_review_search(
-    session: &mut AppSession,
-    tx: &mpsc::UnboundedSender<InlineEvent>,
-    query: &str,
-) {
-    session.handle_event(
-        CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)),
-        tx,
-        None,
-    );
+fn set_review_search(session: &mut AppSession, tx: &mpsc::UnboundedSender<InlineEvent>, query: &str) {
+    session.handle_event(CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)), tx, None);
     for ch in query.chars() {
-        session.handle_event(
-            CrosstermEvent::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)),
-            tx,
-            None,
-        );
+        session.handle_event(CrosstermEvent::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)), tx, None);
     }
-    session.handle_event(
-        CrosstermEvent::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        tx,
-        None,
-    );
+    session.handle_event(CrosstermEvent::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), tx, None);
 }
 
 fn draw_app_session(session: &mut AppSession, terminal: &mut Terminal<TestBackend>) {
@@ -139,8 +115,7 @@ fn transcript_review_benchmark(c: &mut Criterion) {
                 let (tx, _rx) = mpsc::unbounded_channel();
                 let mut session = build_app_session(MESSAGE_COUNT, false);
                 open_review(&mut session, &tx);
-                let mut terminal =
-                    Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
+                let mut terminal = Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
                 draw_app_session(&mut session, &mut terminal);
                 (session, terminal, tx)
             },
@@ -162,8 +137,7 @@ fn transcript_review_benchmark(c: &mut Criterion) {
                 let (tx, _rx) = mpsc::unbounded_channel();
                 let mut session = build_app_session(MESSAGE_COUNT, false);
                 open_review(&mut session, &tx);
-                let mut terminal =
-                    Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
+                let mut terminal = Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
                 draw_app_session(&mut session, &mut terminal);
                 (session, terminal, tx)
             },
@@ -196,8 +170,7 @@ fn transcript_review_benchmark(c: &mut Criterion) {
                 let mut session = build_app_session(MESSAGE_COUNT, true);
                 open_review(&mut session, &tx);
                 set_review_search(&mut session, &tx, "alpha");
-                let mut terminal =
-                    Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
+                let mut terminal = Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
                 draw_app_session(&mut session, &mut terminal);
                 (session, terminal, tx)
             },

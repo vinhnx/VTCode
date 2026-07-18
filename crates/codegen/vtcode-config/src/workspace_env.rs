@@ -48,8 +48,7 @@ pub fn write_workspace_env_value(workspace: &Path, key: &str, value: &str) -> Re
     upsert_env_line(&mut lines, key, value);
 
     let parent = env_path.parent().unwrap_or(workspace);
-    fs::create_dir_all(parent)
-        .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("Failed to create directory {}", parent.display()))?;
 
     let temp = Builder::new()
         .prefix(".env.")
@@ -62,8 +61,7 @@ pub fn write_workspace_env_value(workspace: &Path, key: &str, value: &str) -> Re
     {
         let mut writer = BufWriter::new(temp.as_file());
         for line in &lines {
-            writeln!(writer, "{line}")
-                .with_context(|| format!("Failed to write .env entry for {key}"))?;
+            writeln!(writer, "{line}").with_context(|| format!("Failed to write .env entry for {key}"))?;
         }
         writer
             .flush()
@@ -87,8 +85,7 @@ fn read_existing_lines(env_path: &Path) -> Result<Vec<String>> {
         return Ok(Vec::new());
     }
 
-    let contents = fs::read_to_string(env_path)
-        .with_context(|| format!("Failed to read {}", env_path.display()))?;
+    let contents = fs::read_to_string(env_path).with_context(|| format!("Failed to read {}", env_path.display()))?;
     Ok(contents.lines().map(|line| line.to_string()).collect())
 }
 

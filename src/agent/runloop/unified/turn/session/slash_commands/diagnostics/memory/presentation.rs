@@ -6,9 +6,7 @@ use vtcode_core::persistent_memory::PersistentMemoryStatus;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
-use super::{
-    MEMORY_ACTION_BACK, MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX, SlashCommandContext,
-};
+use super::{MEMORY_ACTION_BACK, MEMORY_ACTION_PREFIX, MEMORY_LIGHTWEIGHT_MODEL_PREFIX, SlashCommandContext};
 
 pub(super) struct MemoryLightweightRouteInfo {
     pub(super) configured_label: String,
@@ -26,22 +24,12 @@ pub(super) fn render_common_memory_status(
         MessageStyle::Info,
         &format!(
             "Persistent memory: {} (auto-write: {})",
-            if memory_status.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            },
-            if memory_status.auto_write {
-                "on"
-            } else {
-                "off"
-            }
+            if memory_status.enabled { "enabled" } else { "disabled" },
+            if memory_status.auto_write { "on" } else { "off" }
         ),
     )?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Memory directory: {}", memory_status.directory.display()),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Memory directory: {}", memory_status.directory.display()))?;
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
@@ -103,8 +91,7 @@ pub(super) fn memory_lightweight_route_info(
     runtime_config: &vtcode_core::config::types::AgentConfig,
     vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
 ) -> MemoryLightweightRouteInfo {
-    let resolution =
-        resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
+    let resolution = resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, None);
     let configured_label = vt_cfg
         .map(|cfg| {
             if !cfg.agent.small_model.enabled || !cfg.agent.small_model.use_for_memory {
@@ -177,11 +164,7 @@ pub(super) fn show_memory_actions_modal(
     lines.push(format!(
         "Memory {} • auto-write {} • triage {} • pending rollouts {} • cleanup {}",
         if memory_status.enabled { "on" } else { "off" },
-        if memory_status.auto_write {
-            "on"
-        } else {
-            "off"
-        },
+        if memory_status.auto_write { "on" } else { "off" },
         lightweight_route.configured_label,
         memory_status.pending_rollout_summaries,
         if memory_status.cleanup_status.needed {
@@ -198,42 +181,29 @@ pub(super) fn show_memory_actions_modal(
     let mut items = vec![];
     items.push(InlineListItem {
         title: toggle_title("Persistent memory", memory_status.enabled),
-        subtitle: Some(
-            "Toggle per-repo memory summary injection and learned memory files.".to_string(),
-        ),
+        subtitle: Some("Toggle per-repo memory summary injection and learned memory files.".to_string()),
         badge: Some("Toggle".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{MEMORY_ACTION_PREFIX}toggle_enabled"
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_enabled"))),
         search_value: Some("memory enabled disable toggle".to_string()),
     });
     items.push(InlineListItem {
         title: toggle_title("Auto-write", memory_status.auto_write),
-        subtitle: Some(
-            "Write one rollout summary at session finalization, then consolidate it.".to_string(),
-        ),
+        subtitle: Some("Write one rollout summary at session finalization, then consolidate it.".to_string()),
         badge: Some("Toggle".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{MEMORY_ACTION_PREFIX}toggle_auto_write"
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_auto_write"))),
         search_value: Some("memory auto write toggle".to_string()),
     });
     items.push(InlineListItem {
-        title: toggle_title(
-            "Lightweight Model For Memory",
-            agent_config.small_model.use_for_memory,
-        ),
+        title: toggle_title("Lightweight Model For Memory", agent_config.small_model.use_for_memory),
         subtitle: Some(
             "Allow VT Code to use the shared lightweight route for memory classification and summary refresh."
                 .to_string(),
         ),
         badge: Some("Toggle".to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{MEMORY_ACTION_PREFIX}toggle_small_model"
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_small_model"))),
         search_value: Some("memory lightweight model toggle".to_string()),
     });
     items.push(InlineListItem {

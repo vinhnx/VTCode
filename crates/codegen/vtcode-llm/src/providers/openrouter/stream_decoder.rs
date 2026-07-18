@@ -11,12 +11,9 @@ use serde_json::Value;
 
 #[cfg(test)]
 pub(crate) fn parse_usage_value(value: &Value) -> Usage {
-    let prompt_tokens =
-        value.get("prompt_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
-    let completion_tokens =
-        value.get("completion_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
-    let total_tokens =
-        value.get("total_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
+    let prompt_tokens = value.get("prompt_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
+    let completion_tokens = value.get("completion_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
+    let total_tokens = value.get("total_tokens").and_then(|token| token.as_u64()).unwrap_or(0) as u32;
     let cache_read_tokens = value
         .get("prompt_cache_read_tokens")
         .and_then(|token| token.as_u64())
@@ -103,17 +100,14 @@ pub(crate) fn parse_stream_payload(
                 }
             }
 
-            if let Some(reasoning_value) =
-                delta_value.get("reasoning_content").and_then(|value| value.as_str())
+            if let Some(reasoning_value) = delta_value.get("reasoning_content").and_then(|value| value.as_str())
                 && let Some(reasoning_delta) = reasoning.push(reasoning_value)
             {
                 telemetry.on_reasoning_delta(&reasoning_delta);
                 delta.push_reasoning(&reasoning_delta);
             }
 
-            if let Some(tool_calls) =
-                delta_value.get("tool_calls").and_then(|value| value.as_array())
-            {
+            if let Some(tool_calls) = delta_value.get("tool_calls").and_then(|value| value.as_array()) {
                 for (index, tool_delta) in tool_calls.iter().enumerate() {
                     if builders.len() <= index {
                         builders.resize_with(index + 1, ToolCallBuilder::default);

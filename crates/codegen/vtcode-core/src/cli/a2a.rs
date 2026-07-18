@@ -18,24 +18,15 @@ pub async fn execute_a2a_command(command: A2aCommands) -> anyhow::Result<()> {
         A2aCommands::SendTask { agent_url, message, stream, context_id } => {
             send_task_to_agent(agent_url, message, stream, context_id).await
         }
-        A2aCommands::ListTasks { agent_url, context_id, limit } => {
-            list_agent_tasks(agent_url, context_id, limit).await
-        }
+        A2aCommands::ListTasks { agent_url, context_id, limit } => list_agent_tasks(agent_url, context_id, limit).await,
         A2aCommands::GetTask { agent_url, task_id } => get_agent_task(agent_url, task_id).await,
-        A2aCommands::CancelTask { agent_url, task_id } => {
-            cancel_agent_task(agent_url, task_id).await
-        }
+        A2aCommands::CancelTask { agent_url, task_id } => cancel_agent_task(agent_url, task_id).await,
     }
 }
 
 /// Serve VT Code as an A2A agent
 #[cfg(feature = "a2a-server")]
-async fn serve_a2a_agent(
-    host: String,
-    port: u16,
-    base_url: Option<String>,
-    _enable_push: bool,
-) -> anyhow::Result<()> {
+async fn serve_a2a_agent(host: String, port: u16, base_url: Option<String>, _enable_push: bool) -> anyhow::Result<()> {
     use crate::a2a::server::{A2aServerState, create_router};
     use crate::a2a::{AgentCard, TaskManager};
     use std::net::SocketAddr;
@@ -212,11 +203,7 @@ async fn send_task_to_agent(
 }
 
 /// List tasks from a remote A2A agent
-async fn list_agent_tasks(
-    agent_url: String,
-    context_id: Option<String>,
-    limit: u32,
-) -> anyhow::Result<()> {
+async fn list_agent_tasks(agent_url: String, context_id: Option<String>, limit: u32) -> anyhow::Result<()> {
     use crate::a2a::{A2aClient, rpc::ListTasksParams};
     use serde_json::Value;
 
@@ -305,15 +292,13 @@ async fn get_agent_task(agent_url: String, task_id: String) -> anyhow::Result<()
             for part in &artifact.parts {
                 match part {
                     crate::a2a::types::Part::Text { text } => {
-                        let preview =
-                            vtcode_commons::formatting::truncate_byte_budget(text, 60, "...");
+                        let preview = vtcode_commons::formatting::truncate_byte_budget(text, 60, "...");
                         println!("    Text: {preview}");
                     }
                     crate::a2a::types::Part::File { file } => println!("    File: {file:?}"),
                     crate::a2a::types::Part::Data { data } => {
                         let s = data.to_string();
-                        let preview =
-                            vtcode_commons::formatting::truncate_byte_budget(&s, 60, "...");
+                        let preview = vtcode_commons::formatting::truncate_byte_budget(&s, 60, "...");
                         println!("    Data: {preview}");
                     }
                     crate::a2a::types::Part::Unknown => {}

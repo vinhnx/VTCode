@@ -13,8 +13,8 @@ use anyhow::{Context, Result, bail};
 
 use self::archive::{ast_grep_version, install_archive};
 use self::release::{
-    current_platform_asset_spec, download_release_asset, fetch_latest_release,
-    select_release_asset, verify_checksum_if_available,
+    current_platform_asset_spec, download_release_asset, fetch_latest_release, select_release_asset,
+    verify_checksum_if_available,
 };
 use self::state::{InstallLockGuard, InstallPaths, InstallationCache};
 
@@ -66,9 +66,7 @@ impl AstGrepStatus {
             && !cache.failure_reason.as_deref().is_some_and(should_retry_without_cooldown)
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
-            bail!(
-                "Previous ast-grep installation attempt failed ({reason}). Not retrying for 24 hours."
-            );
+            bail!("Previous ast-grep installation attempt failed ({reason}). Not retrying for 24 hours.");
         }
 
         let install_result: Result<AstGrepInstallOutcome> = async {
@@ -81,13 +79,10 @@ impl AstGrepStatus {
             let platform = current_platform_asset_spec()?;
             let selected_asset = select_release_asset(&release, &platform)?;
             let archive_bytes = download_release_asset(&client, &selected_asset.asset).await?;
-            let warning =
-                verify_checksum_if_available(&client, &release, &selected_asset, &archive_bytes)
-                    .await?;
+            let warning = verify_checksum_if_available(&client, &release, &selected_asset, &archive_bytes).await?;
 
             install_archive(&paths, &selected_asset.asset.name, &archive_bytes)?;
-            let version = ast_grep_version(&paths.binary_path)
-                .context("Installed ast-grep failed version check")?;
+            let version = ast_grep_version(&paths.binary_path).context("Installed ast-grep failed version check")?;
             InstallationCache::mark_success(&paths, &selected_asset.tag_name);
 
             Ok(AstGrepInstallOutcome {
@@ -133,9 +128,7 @@ impl AstGrepStatus {
         // No binary available. If the user opted out of auto-install, surface
         // the missing-binary error immediately without attempting a download.
         if std::env::var_os(AST_GREP_NO_INSTALL_ENV).is_some() {
-            return Err(missing_ast_grep_message(
-                "Auto-install disabled via VTCODE_AST_GREP_NO_INSTALL.",
-            ));
+            return Err(missing_ast_grep_message("Auto-install disabled via VTCODE_AST_GREP_NO_INSTALL."));
         }
 
         // Skip auto-install in test mode when either override registry forces
@@ -145,17 +138,15 @@ impl AstGrepStatus {
         if crate::tools::ast_grep_binary::is_binary_override_missing()
             || crate::tools::editing::patch::is_binary_override_missing()
         {
-            return Err(missing_ast_grep_message(
-                "Auto-install skipped: test override forces missing binary.",
-            ));
+            return Err(missing_ast_grep_message("Auto-install skipped: test override forces missing binary."));
         }
 
         match Self::install().await {
             Ok(_) => match resolve_ast_grep_binary_from_env_and_fs() {
                 Some(path) => Ok(path),
-                None => Err(missing_ast_grep_message(
-                    "Auto-install reported success but the binary could not be resolved.",
-                )),
+                None => {
+                    Err(missing_ast_grep_message("Auto-install reported success but the binary could not be resolved."))
+                }
             },
             Err(err) => Err(format!(
                 "ast-grep is not available; auto-install failed: {err}. Run `{}` manually.",
@@ -183,9 +174,7 @@ mod tests {
         assert!(should_retry_without_cooldown(
             "No ast-grep release asset matched the current platform (aarch64-apple-darwin)"
         ));
-        assert!(should_retry_without_cooldown(
-            "Unsupported platform for VT Code-managed ast-grep install"
-        ));
+        assert!(should_retry_without_cooldown("Unsupported platform for VT Code-managed ast-grep install"));
     }
 
     #[test]
@@ -220,9 +209,6 @@ mod tests {
             .await
             .expect_err("should not install when env opt-out is set");
         env.remove_var("VTCODE_AST_GREP_NO_INSTALL");
-        assert!(
-            err.contains("VTCODE_AST_GREP_NO_INSTALL"),
-            "error should mention the env var: {err}"
-        );
+        assert!(err.contains("VTCODE_AST_GREP_NO_INSTALL"), "error should mention the env var: {err}");
     }
 }

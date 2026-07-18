@@ -28,11 +28,8 @@ pub(super) async fn record_approval_blocking(
     approved: bool,
 ) {
     for (key, label) in approval_target.iter_keys() {
-        match tokio::time::timeout(
-            APPROVAL_RECORD_TIMEOUT,
-            recorder.record_approval(key, Some(label), approved, None),
-        )
-        .await
+        match tokio::time::timeout(APPROVAL_RECORD_TIMEOUT, recorder.record_approval(key, Some(label), approved, None))
+            .await
         {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -73,9 +70,7 @@ pub(super) fn web_fetch_domain(tool_args: Option<&Value>) -> Option<String> {
 pub(super) fn cache_key(tool_name: &str, tool_args: Option<&Value>) -> String {
     // For non-shell tools, the shell suffix is None, so the key normally
     // degrades to the bare tool name.
-    if let Some(suffix) =
-        super::permission_prompt::shell_permission_cache_suffix(tool_name, tool_args)
-    {
+    if let Some(suffix) = super::permission_prompt::shell_permission_cache_suffix(tool_name, tool_args) {
         return format!("{tool_name}:{suffix}");
     }
 

@@ -82,11 +82,8 @@ fn build_stats_line(data: &ExitData<'_>) -> String {
     stats.push(format!("Session {}", format_duration(data.session_duration)));
 
     if data.prompt_tokens > 0 || data.completion_tokens > 0 {
-        stats.push(format!(
-            "{} in / {} out",
-            format_number(data.prompt_tokens),
-            format_number(data.completion_tokens),
-        ));
+        stats
+            .push(format!("{} in / {} out", format_number(data.prompt_tokens), format_number(data.completion_tokens),));
     }
 
     if data.cached_tokens > 0 {
@@ -95,8 +92,7 @@ fn build_stats_line(data: &ExitData<'_>) -> String {
             cache_stat.push_str(&format!(" ({hit_rate:.1}% hit rate)"));
         }
         if data.cache_creation_tokens > 0 {
-            cache_stat
-                .push_str(&format!(", {} creation", format_number(data.cache_creation_tokens)));
+            cache_stat.push_str(&format!(", {} creation", format_number(data.cache_creation_tokens)));
         }
         stats.push(cache_stat);
     }

@@ -32,13 +32,8 @@ fn resolve_full_auto_primary_agent_runtime_from_specs(
     vt_cfg: &VTCodeConfig,
     primary_agent_explicitly_configured: bool,
 ) -> Result<FullAutoPrimaryAgentRuntime> {
-    let active = active_primary_agent_from_specs_for_mode(
-        specs,
-        Some(vt_cfg),
-        true,
-        primary_agent_explicitly_configured,
-        None,
-    )?;
+    let active =
+        active_primary_agent_from_specs_for_mode(specs, Some(vt_cfg), true, primary_agent_explicitly_configured, None)?;
     let active_primary_agent = active.active().clone();
     let mut runtime_vt_cfg = build_primary_agent_runtime_config(vt_cfg, &active_primary_agent);
     runtime_vt_cfg.runtime_agent_permissions = Some(active_primary_agent.permissions.clone());
@@ -63,12 +58,8 @@ mod tests {
         auto.reasoning_effort = Some(ReasoningEffortLevel::High);
         auto.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
 
-        let resolved = resolve_full_auto_primary_agent_runtime_from_specs(
-            &[auto],
-            &VTCodeConfig::default(),
-            false,
-        )
-        .expect("defaulted auto should resolve");
+        let resolved = resolve_full_auto_primary_agent_runtime_from_specs(&[auto], &VTCodeConfig::default(), false)
+            .expect("defaulted auto should resolve");
 
         assert_eq!(resolved.active_primary_agent.identity.name, "auto");
         assert_eq!(resolved.active_primary_agent.instructions, "Custom auto instructions");
@@ -92,12 +83,8 @@ mod tests {
             ..VTCodeConfig::default()
         };
 
-        let resolved = resolve_full_auto_primary_agent_runtime_from_specs(
-            &[builtin_primary_auto_agent()],
-            &cfg,
-            true,
-        )
-        .expect("explicit duck should resolve");
+        let resolved = resolve_full_auto_primary_agent_runtime_from_specs(&[builtin_primary_auto_agent()], &cfg, true)
+            .expect("explicit duck should resolve");
 
         // "duck" is not in the provided specs, so the resolver falls back to
         // the built-in "build" agent. Unlike the previously silent behaviour,

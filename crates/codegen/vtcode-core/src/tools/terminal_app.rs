@@ -9,8 +9,8 @@ use anyhow::{Context, Result, anyhow};
 use ratatui::crossterm::ExecutableCommand;
 use ratatui::crossterm::event;
 use ratatui::crossterm::terminal::{
-    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-    enable_raw_mode, is_raw_mode_enabled,
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    is_raw_mode_enabled,
 };
 use tempfile::NamedTempFile;
 use tracing::debug;
@@ -98,8 +98,7 @@ impl TerminalAppLauncher {
             (target, false)
         } else {
             // Create temp file for editing
-            let temp =
-                NamedTempFile::new().context("failed to create temporary file for editing")?;
+            let temp = NamedTempFile::new().context("failed to create temporary file for editing")?;
             // Keep temp file alive by persisting it
             let (_, path) = temp.keep().context("failed to persist temporary file")?;
             (EditorTarget::new(path, None), true)
@@ -122,9 +121,7 @@ impl TerminalAppLauncher {
         let mut cmd = if let Some(preferred) = preferred_editor.as_deref() {
             debug!("using configured preferred editor command: {}", preferred);
             Self::build_editor_command_from_string(preferred, &target, wait_for_editor)
-                .with_context(|| {
-                    format!("failed to parse tools.editor.preferred_editor '{preferred}'")
-                })?
+                .with_context(|| format!("failed to parse tools.editor.preferred_editor '{preferred}'"))?
         } else if let Some(env_command) = Self::editor_command_from_env() {
             debug!("using editor command from environment: {}", env_command);
             Self::build_editor_command_from_string(&env_command, &target, wait_for_editor)
@@ -157,10 +154,7 @@ impl TerminalAppLauncher {
                     .context("failed to spawn editor")?;
 
                 if !status.success() {
-                    return Err(anyhow!(
-                        "editor exited with non-zero status: {}",
-                        status.code().unwrap_or(-1)
-                    ));
+                    return Err(anyhow!("editor exited with non-zero status: {}", status.code().unwrap_or(-1)));
                 }
 
                 Ok(())
@@ -192,10 +186,8 @@ impl TerminalAppLauncher {
         target: &EditorTarget,
         wait_for_editor: bool,
     ) -> Result<Command> {
-        let tokens = shell_words::split(command)
-            .with_context(|| format!("invalid editor command: {command}"))?;
-        let (program, args) =
-            tokens.split_first().ok_or_else(|| anyhow!("editor command cannot be empty"))?;
+        let tokens = shell_words::split(command).with_context(|| format!("invalid editor command: {command}"))?;
+        let (program, args) = tokens.split_first().ok_or_else(|| anyhow!("editor command cannot be empty"))?;
         let adapter = EditorAdapter::from_program(program);
         let mut cmd = Command::new(program);
         cmd.args(filtered_editor_args(adapter, args, wait_for_editor));
@@ -286,10 +278,7 @@ impl TerminalAppLauncher {
             .unwrap_or(program)
             .to_ascii_lowercase();
 
-        matches!(
-            normalized.as_str(),
-            "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix"
-        )
+        matches!(normalized.as_str(), "vi" | "vim" | "nvim" | "nano" | "emacs" | "pico" | "hx" | "helix")
     }
 
     fn append_editor_target_args(cmd: &mut Command, program: &str, target: &EditorTarget) {
@@ -395,8 +384,9 @@ impl TerminalAppLauncher {
             if !restore_errors.is_empty() {
                 return match result {
                     Ok(_) => Err(anyhow!("terminal restore failed: {restore_errors}")),
-                    Err(command_error) => Err(command_error
-                        .context(format!("terminal restore also failed: {restore_errors}"))),
+                    Err(command_error) => {
+                        Err(command_error.context(format!("terminal restore also failed: {restore_errors}")))
+                    }
                 };
             }
         }
@@ -470,11 +460,7 @@ impl TerminalAppLauncher {
                 .with_context(|| format!("failed to spawn {git_cmd}"))?;
 
             if !status.success() {
-                return Err(anyhow!(
-                    "{} exited with non-zero status: {}",
-                    git_cmd,
-                    status.code().unwrap_or(-1)
-                ));
+                return Err(anyhow!("{} exited with non-zero status: {}", git_cmd, status.code().unwrap_or(-1)));
             }
 
             Ok(())
@@ -521,11 +507,7 @@ impl EditorAdapter {
     }
 }
 
-fn filtered_editor_args(
-    adapter: EditorAdapter,
-    args: &[String],
-    wait_for_editor: bool,
-) -> Vec<String> {
+fn filtered_editor_args(adapter: EditorAdapter, args: &[String], wait_for_editor: bool) -> Vec<String> {
     if wait_for_editor {
         return args.to_vec();
     }
@@ -567,8 +549,7 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(command.get_program(), OsStr::new("code"));
         assert_eq!(args, vec!["--wait".to_string(), "/tmp/test.rs".to_string()]);
@@ -592,17 +573,9 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
-        assert_eq!(
-            args,
-            vec![
-                "--wait".to_string(),
-                "-g".to_string(),
-                "/tmp/test.rs:12:4".to_string()
-            ]
-        );
+        assert_eq!(args, vec!["--wait".to_string(), "-g".to_string(), "/tmp/test.rs:12:4".to_string()]);
     }
 
     #[test]
@@ -613,8 +586,7 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["/tmp/test.rs:12:1".to_string()]);
     }
@@ -627,8 +599,7 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["+call cursor(12,4)".to_string(), "/tmp/test.rs".to_string()]);
     }
@@ -641,8 +612,7 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["--flag".to_string(), "/tmp/test.rs".to_string()]);
     }
@@ -655,8 +625,7 @@ mod tests {
             false,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["-g".to_string(), "/tmp/test.rs:12:4".to_string()]);
     }
@@ -669,8 +638,7 @@ mod tests {
             false,
         )
         .expect("command should parse");
-        let args: Vec<String> =
-            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
+        let args: Vec<String> = command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["/tmp/test.rs".to_string()]);
     }

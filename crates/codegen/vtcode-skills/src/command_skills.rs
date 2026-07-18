@@ -119,9 +119,7 @@ macro_rules! built_in_command_spec {
             usage: $usage,
             category: $category,
             aliases: &[],
-            backend: CommandSkillBackend::BuiltInCommand {
-                executor: BuiltInCommandExecutor::SlashAlias,
-            },
+            backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
         }
     };
 }
@@ -174,12 +172,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/memory",
         "configuration"
     ),
-    built_in_command_spec!(
-        "model",
-        "Launch the interactive model picker",
-        "/model",
-        "configuration"
-    ),
+    built_in_command_spec!("model", "Launch the interactive model picker", "/model", "configuration"),
     built_in_command_spec!(
         "mode",
         "Switch the active agent mode (usage: /mode [build|auto|duck|plan])",
@@ -193,12 +186,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "configuration"
     ),
     built_in_command_spec!("ide", "Toggle IDE context for this session", "/ide", "configuration"),
-    built_in_command_spec!(
-        "theme",
-        "Switch UI theme (usage: /theme <theme-id>)",
-        "/theme [theme-id]",
-        "configuration"
-    ),
+    built_in_command_spec!("theme", "Switch UI theme (usage: /theme <theme-id>)", "/theme [theme-id]", "configuration"),
     traditional_command_spec!(
         "command",
         "Run a terminal command (usage: /command <program> [args...])",
@@ -232,24 +220,14 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/files [filter]",
         "tools"
     ),
-    built_in_command_spec!(
-        "copy",
-        "Copy the latest complete assistant reply to clipboard",
-        "/copy",
-        "tools"
-    ),
+    built_in_command_spec!("copy", "Copy the latest complete assistant reply to clipboard", "/copy", "tools"),
     built_in_command_spec!(
         "suggest",
         "Suggest follow-up prompts from the current session context",
         "/suggest",
         "tools"
     ),
-    built_in_command_spec!(
-        "tasks",
-        "Toggle the dedicated TODO panel fed by task_tracker output",
-        "/tasks",
-        "tools"
-    ),
+    built_in_command_spec!("tasks", "Toggle the dedicated TODO panel fed by task_tracker output", "/tasks", "tools"),
     built_in_command_spec!("jobs", "Inspect active/background command sessions", "/jobs", "tools"),
     built_in_command_spec!(
         "skills",
@@ -275,12 +253,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]",
         "tools"
     ),
-    built_in_command_spec!(
-        "status",
-        "Show model, provider, workspace, and tool status",
-        "/status",
-        "status"
-    ),
+    built_in_command_spec!("status", "Show model, provider, workspace, and tool status", "/status", "status"),
     built_in_command_spec!(
         "notify",
         "Send a VT Code notification immediately (usage: /notify [message])",
@@ -288,12 +261,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "status"
     ),
     built_in_command_spec!("stop", "Stop the active turn immediately", "/stop", "status"),
-    built_in_command_spec!(
-        "pause",
-        "Pause the active turn at the next safe boundary",
-        "/pause",
-        "status"
-    ),
+    built_in_command_spec!("pause", "Pause the active turn at the next safe boundary", "/pause", "status"),
     CommandSkillSpec {
         slash_name: "checkup",
         skill_name: "cmd-checkup",
@@ -301,9 +269,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         usage: "/checkup [--quick|--full]",
         category: "status",
         aliases: &["doctor"],
-        backend: CommandSkillBackend::BuiltInCommand {
-            executor: BuiltInCommandExecutor::SlashAlias,
-        },
+        backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
     },
     built_in_command_spec!(
         "update",
@@ -347,12 +313,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/history",
         "session"
     ),
-    built_in_command_spec!(
-        "clear",
-        "Clear visible screen (usage: /clear [new])",
-        "/clear [new]",
-        "session"
-    ),
+    built_in_command_spec!("clear", "Clear visible screen (usage: /clear [new])", "/clear [new]", "session"),
     built_in_command_spec!(
         "compact",
         "Compact the current conversation immediately or manage the saved manual compaction prompt",
@@ -381,12 +342,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!("docs", "Open vtcode documentation in web browser", "/docs", "support"),
     built_in_command_spec!("help", "Show slash command help", "/help [command]", "support"),
     built_in_command_spec!("exit", "Exit the session", "/exit", "session"),
-    built_in_command_spec!(
-        "donate",
-        "Support the project by buying the author a coffee",
-        "/donate",
-        "support"
-    ),
+    built_in_command_spec!("donate", "Support the project by buying the author a coffee", "/donate", "support"),
     built_in_command_spec!(
         "terminal-setup",
         "Configure terminal for VT Code (multiline, copy/paste, shell, themes)",
@@ -399,12 +355,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/statusline [instructions...]",
         "terminal"
     ),
-    built_in_command_spec!(
-        "title",
-        "Configure the terminal title items interactively",
-        "/title",
-        "terminal"
-    ),
+    built_in_command_spec!("title", "Configure the terminal title items interactively", "/title", "terminal"),
     built_in_command_spec!(
         "login",
         "Authenticate with OpenAI, OpenRouter, or GitHub Copilot (usage: /login [provider])",
@@ -467,9 +418,7 @@ pub fn built_in_command_skill_contexts() -> Vec<SkillContext> {
         .iter()
         .copied()
         .filter(|spec| spec.is_built_in())
-        .map(|spec| {
-            SkillContext::MetadataOnly(built_in_manifest(&spec), built_in_path(spec.skill_name))
-        })
+        .map(|spec| SkillContext::MetadataOnly(built_in_manifest(&spec), built_in_path(spec.skill_name)))
         .collect()
 }
 

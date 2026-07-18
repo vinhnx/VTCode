@@ -103,9 +103,8 @@ impl ToolRegistryImprovement {
                 entry.successful_calls += 1;
             }
             entry.total_duration_ms += duration_ms;
-            entry.avg_quality = (entry.avg_quality * (entry.total_calls as f32 - 1.0)
-                + quality_score)
-                / entry.total_calls as f32;
+            entry.avg_quality =
+                (entry.avg_quality * (entry.total_calls as f32 - 1.0) + quality_score) / entry.total_calls as f32;
         }
 
         // Record pattern event
@@ -180,8 +179,7 @@ impl ToolRegistryImprovement {
         let mut tools: Vec<_> = metrics
             .values()
             .map(|m| {
-                let score = (m.success_rate() * 0.6)
-                    + ((1.0 - (m.avg_duration_ms() as f32 / 5000.0).min(1.0)) * 0.4);
+                let score = (m.success_rate() * 0.6) + ((1.0 - (m.avg_duration_ms() as f32 / 5000.0).min(1.0)) * 0.4);
                 (&m.name, score)
             })
             .collect();

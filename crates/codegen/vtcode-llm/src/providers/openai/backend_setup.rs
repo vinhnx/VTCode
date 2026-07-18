@@ -118,9 +118,7 @@ impl OpenAIRequestAuth {
     }
 
     fn chatgpt_bearer_and_account(&self) -> (&str, Option<&str>) {
-        if let Some(RigChatGptAuth::AccessToken { access_token, account_id }) =
-            &self.rig_chatgpt_auth
-        {
+        if let Some(RigChatGptAuth::AccessToken { access_token, account_id }) = &self.rig_chatgpt_auth {
             return (access_token, account_id.as_deref());
         }
 
@@ -130,14 +128,12 @@ impl OpenAIRequestAuth {
 
 impl OpenAIBackendSetup {
     pub(crate) fn from_api_key_config(base_url: Option<String>) -> Self {
-        let base_url =
-            override_base_url(urls::OPENAI_API_BASE, base_url, Some(env_vars::OPENAI_BASE_URL));
+        let base_url = override_base_url(urls::OPENAI_API_BASE, base_url, Some(env_vars::OPENAI_BASE_URL));
         Self::api_key(base_url)
     }
 
     pub(crate) fn from_chatgpt_subscription_config(base_url: Option<String>) -> Self {
-        let base_url =
-            override_base_url(CHATGPT_CODEX_BASE, base_url, Some(env_vars::OPENAI_BASE_URL));
+        let base_url = override_base_url(CHATGPT_CODEX_BASE, base_url, Some(env_vars::OPENAI_BASE_URL));
         Self::chatgpt_subscription_rig(base_url)
     }
 
@@ -156,9 +152,7 @@ impl OpenAIBackendSetup {
     #[allow(dead_code)]
     pub(crate) fn chatgpt_subscription_compatibility(base_url: String) -> Self {
         Self::new(
-            OpenAIBackendKind::ChatGptSubscription(
-                ChatGptSubscriptionAuthSource::CodexAppServerCompatibility,
-            ),
+            OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::CodexAppServerCompatibility),
             base_url,
             OpenAIBackendRefreshBehaviour::RefreshableChatGptSession,
         )
@@ -170,11 +164,7 @@ impl OpenAIBackendSetup {
         self
     }
 
-    fn new(
-        kind: OpenAIBackendKind,
-        base_url: String,
-        refresh_behaviour: OpenAIBackendRefreshBehaviour,
-    ) -> Self {
+    fn new(kind: OpenAIBackendKind, base_url: String, refresh_behaviour: OpenAIBackendRefreshBehaviour) -> Self {
         let is_chatgpt_codex_backend = matches!(kind, OpenAIBackendKind::ChatGptSubscription(_));
         Self {
             kind,
@@ -233,26 +223,19 @@ impl OpenAIBackendSetup {
         !matches!(self.refresh_behaviour(), OpenAIBackendRefreshBehaviour::StaticBearer)
     }
 
-    pub(crate) fn request_auth_from_session(
-        &self,
-        session: OpenAIChatGptSession,
-    ) -> OpenAIRequestAuth {
-        if matches!(
-            self.kind(),
-            OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
-        ) {
+    pub(crate) fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
+        if matches!(self.kind(), OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)) {
             return OpenAIRequestAuth::from_rig_chatgpt_auth(RigChatGptAuth::AccessToken {
                 access_token: session.access_token,
                 account_id: session.account_id,
             });
         }
 
-        let bearer_token =
-            if self.is_chatgpt_codex_backend() || session.openai_api_key.trim().is_empty() {
-                session.access_token
-            } else {
-                session.openai_api_key
-            };
+        let bearer_token = if self.is_chatgpt_codex_backend() || session.openai_api_key.trim().is_empty() {
+            session.access_token
+        } else {
+            session.openai_api_key
+        };
 
         OpenAIRequestAuth {
             bearer_token,
@@ -261,11 +244,7 @@ impl OpenAIBackendSetup {
         }
     }
 
-    pub(crate) fn authorize_request(
-        &self,
-        builder: RequestBuilder,
-        auth: &OpenAIRequestAuth,
-    ) -> RequestBuilder {
+    pub(crate) fn authorize_request(&self, builder: RequestBuilder, auth: &OpenAIRequestAuth) -> RequestBuilder {
         let (bearer_token, chatgpt_account_id) = if self.is_chatgpt_codex_backend() {
             auth.chatgpt_bearer_and_account()
         } else {
@@ -279,9 +258,7 @@ impl OpenAIBackendSetup {
         };
 
         if self.is_chatgpt_codex_backend() {
-            if let Some(account_id) =
-                chatgpt_account_id.map(str::trim).filter(|value| !value.is_empty())
-            {
+            if let Some(account_id) = chatgpt_account_id.map(str::trim).filter(|value| !value.is_empty()) {
                 builder = builder.header(CHATGPT_ACCOUNT_HEADER, account_id);
             }
             builder = builder

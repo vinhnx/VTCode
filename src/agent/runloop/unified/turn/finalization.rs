@@ -4,9 +4,7 @@ use std::io;
 use std::path::PathBuf;
 use vtcode_core::hooks::{LifecycleHookEngine, SessionEndReason};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::notifications::{
-    set_global_notification_hook_engine, set_global_terminal_focused,
-};
+use vtcode_core::notifications::{set_global_notification_hook_engine, set_global_terminal_focused};
 use vtcode_core::ui::set_tui_mode;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
@@ -50,8 +48,7 @@ pub(super) async fn finalize_session(
     if let Some(archive) = session_archive.take() {
         let distinct_tools = session_stats.sorted_tools();
         let total_messages = conversation_history.len();
-        let session_messages: Vec<SessionMessage> =
-            conversation_history.iter().map(SessionMessage::from).collect();
+        let session_messages: Vec<SessionMessage> = conversation_history.iter().map(SessionMessage::from).collect();
 
         match archive.finalize(transcript_lines, total_messages, distinct_tools, session_messages) {
             Ok(path) => {
@@ -59,8 +56,7 @@ pub(super) async fn finalize_session(
                 if let Some(hooks) = lifecycle_hooks {
                     hooks.update_transcript_path(Some(path.clone())).await;
                 }
-                renderer
-                    .line(MessageStyle::Info, &format!("Session saved to {}", path.display()))?;
+                renderer.line(MessageStyle::Info, &format!("Session saved to {}", path.display()))?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
             }
             Err(err) => {
@@ -72,11 +68,7 @@ pub(super) async fn finalize_session(
 
     for linked in linked_directories {
         if let Err(err) = remove_directory_symlink(&linked.link_path).await {
-            tracing::warn!(
-                "Failed to remove linked directory {}: {}",
-                linked.link_path.display(),
-                err
-            );
+            tracing::warn!("Failed to remove linked directory {}: {}", linked.link_path.display(), err);
         }
     }
 
@@ -91,10 +83,7 @@ pub(super) async fn finalize_session(
                 render_hook_messages(renderer, &messages)?;
             }
             Ok(Err(err)) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to run session end hooks: {err}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("Failed to run session end hooks: {err}"))?;
             }
             Err(_elapsed) => {
                 tracing::warn!("Session end hooks timed out, skipping");
@@ -103,13 +92,10 @@ pub(super) async fn finalize_session(
     }
 
     if let Some(mcp_manager) = async_mcp_manager {
-        match tokio::time::timeout(std::time::Duration::from_secs(2), mcp_manager.shutdown()).await
-        {
+        match tokio::time::timeout(std::time::Duration::from_secs(2), mcp_manager.shutdown()).await {
             Ok(Err(e)) => {
                 let error_msg = e.to_string();
-                if error_msg.contains("EPIPE")
-                    || error_msg.contains("Broken pipe")
-                    || error_msg.contains("write EPIPE")
+                if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") || error_msg.contains("write EPIPE")
                 {
                     tracing::debug!("MCP client shutdown encountered pipe errors (normal): {}", e);
                 } else {
@@ -142,10 +128,7 @@ pub(super) async fn finalize_session(
     // Phase 4 Telemetry: Report Resilience Metrics
     let open_circuits = session_stats.circuit_breaker.get_open_circuits();
     if !open_circuits.is_empty() {
-        renderer.line(
-            MessageStyle::Warning,
-            &format!("Open Circuit Breakers ({}):", open_circuits.len()),
-        )?;
+        renderer.line(MessageStyle::Warning, &format!("Open Circuit Breakers ({}):", open_circuits.len()))?;
         for tool in &open_circuits {
             renderer.line(MessageStyle::Warning, &format!("  - {tool}"))?;
         }
@@ -162,10 +145,7 @@ pub(super) async fn finalize_session(
     unhealthy_tools.sort_by(|a, b| a.0.cmp(&b.0));
 
     if !unhealthy_tools.is_empty() {
-        renderer.line(
-            MessageStyle::Warning,
-            &format!("Unhealthy Tools ({}):", unhealthy_tools.len()),
-        )?;
+        renderer.line(MessageStyle::Warning, &format!("Unhealthy Tools ({}):", unhealthy_tools.len()))?;
         for (name, _) in unhealthy_tools {
             let (_, reason) = session_stats.tool_health_tracker.check_health(name);
             if let Some(r) = reason {

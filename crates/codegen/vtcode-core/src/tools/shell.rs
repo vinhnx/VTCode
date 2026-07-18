@@ -18,9 +18,7 @@ use tokio::process::Command;
 use tracing::debug;
 
 use crate::telemetry::perf;
-use crate::tools::command_cache::{
-    InFlightState, cache_output, enter_inflight, finish_inflight, get_cached_output,
-};
+use crate::tools::command_cache::{InFlightState, cache_output, enter_inflight, finish_inflight, get_cached_output};
 use crate::utils::path::{canonicalize_workspace, ensure_path_within_workspace};
 use crate::utils::validation::validate_path_exists;
 
@@ -212,10 +210,7 @@ impl ShellRunner<SnapshotExecutor> {
     }
 
     /// Create a new shell runner with a pre-captured snapshot.
-    pub fn with_existing_snapshot(
-        workspace_root: PathBuf,
-        snapshot: std::sync::Arc<ShellSnapshot>,
-    ) -> Self {
+    pub fn with_existing_snapshot(workspace_root: PathBuf, snapshot: std::sync::Arc<ShellSnapshot>) -> Self {
         let canonical_root = canonicalize_workspace(&workspace_root);
         Self {
             workspace_root: canonical_root.clone(),
@@ -250,9 +245,9 @@ impl<E: CommandExecutor> ShellRunner<E> {
         let target = self.resolve_path(path);
 
         // Single metadata call avoids TOCTOU between exists() and is_dir()
-        let meta = target.metadata().map_err(|e| {
-            anyhow::anyhow!("directory `{path}` does not exist or is not accessible: {e}")
-        })?;
+        let meta = target
+            .metadata()
+            .map_err(|e| anyhow::anyhow!("directory `{path}` does not exist or is not accessible: {e}"))?;
         if !meta.is_dir() {
             bail!("path `{path}` is not a directory");
         }

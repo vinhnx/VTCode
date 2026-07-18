@@ -90,8 +90,7 @@ impl StreamingProgressTracker {
         }
 
         let elapsed_progress = elapsed.as_secs_f32() / self.total_timeout.as_secs_f32();
-        let reported_progress =
-            f32::from(self.last_reported_progress.load(Ordering::Relaxed)) / 100.0;
+        let reported_progress = f32::from(self.last_reported_progress.load(Ordering::Relaxed)) / 100.0;
         elapsed_progress.max(reported_progress) >= self.warning_threshold
     }
 
@@ -200,8 +199,7 @@ mod tests {
 
     #[test]
     fn test_warning_threshold() {
-        let tracker =
-            StreamingProgressTracker::new(Duration::from_secs(100)).with_warning_threshold(0.8);
+        let tracker = StreamingProgressTracker::new(Duration::from_secs(100)).with_warning_threshold(0.8);
 
         tracker.report_progress_with_elapsed(Duration::from_secs(50));
         assert!(!tracker.is_approaching_timeout());
@@ -215,11 +213,10 @@ mod tests {
         let progress_log = Arc::new(Mutex::new(Vec::new()));
         let progress_clone = progress_log.clone();
 
-        let tracker = StreamingProgressTracker::new(Duration::from_secs(100)).with_callback(
-            Box::new(move |progress: f32| {
+        let tracker =
+            StreamingProgressTracker::new(Duration::from_secs(100)).with_callback(Box::new(move |progress: f32| {
                 progress_clone.lock().unwrap().push(progress);
-            }),
-        );
+            }));
 
         tracker.report_progress_with_elapsed(Duration::from_secs(30));
         tracker.report_progress_with_elapsed(Duration::from_secs(60));

@@ -2,10 +2,7 @@ use std::path::{Component, Path};
 
 use super::error::PatchError;
 
-pub(crate) fn validate_patch_path(
-    operation: &'static str,
-    raw_path: &str,
-) -> Result<(), PatchError> {
+pub(crate) fn validate_patch_path(operation: &'static str, raw_path: &str) -> Result<(), PatchError> {
     if raw_path.is_empty() {
         return Err(PatchError::InvalidPath {
             operation,

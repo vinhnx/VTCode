@@ -34,15 +34,13 @@ mod tests {
 
     #[test]
     fn rejects_nul() {
-        let err =
-            validate_agent_safe_text("prompt", "hello\0world").expect_err("nul should be rejected");
+        let err = validate_agent_safe_text("prompt", "hello\0world").expect_err("nul should be rejected");
         assert!(err.to_string().contains("U+0000"));
     }
 
     #[test]
     fn rejects_other_control_characters() {
-        let err = validate_agent_safe_text("prompt", "hello\u{0007}world")
-            .expect_err("bell should be rejected");
+        let err = validate_agent_safe_text("prompt", "hello\u{0007}world").expect_err("bell should be rejected");
         assert!(err.to_string().contains("U+0007"));
     }
 }

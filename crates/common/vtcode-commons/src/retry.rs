@@ -27,12 +27,7 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    pub fn new(
-        max_attempts: u32,
-        initial_delay: Duration,
-        max_delay: Duration,
-        multiplier: f64,
-    ) -> Self {
+    pub fn new(max_attempts: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self {
             max_attempts: max_attempts.max(1),
             initial_delay,
@@ -42,12 +37,7 @@ impl RetryPolicy {
         }
     }
 
-    pub fn from_retries(
-        max_retries: u32,
-        initial_delay: Duration,
-        max_delay: Duration,
-        multiplier: f64,
-    ) -> Self {
+    pub fn from_retries(max_retries: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self::new(max_retries.saturating_add(1), initial_delay, max_delay, multiplier)
     }
 
@@ -57,12 +47,7 @@ impl RetryPolicy {
     /// [`Self::delay_for_attempt`] reproduces the classic
     /// `base_ms << attempt` doubling curve capped at `max_delay_ms`.
     pub fn simple(max_retries: u32, base_delay_ms: u64, max_delay_ms: u64) -> Self {
-        Self::from_retries(
-            max_retries,
-            Duration::from_millis(base_delay_ms),
-            Duration::from_millis(max_delay_ms),
-            2.0,
-        )
+        Self::from_retries(max_retries, Duration::from_millis(base_delay_ms), Duration::from_millis(max_delay_ms), 2.0)
     }
 
     pub fn delay_for_attempt(&self, attempt_index: u32) -> Duration {
@@ -212,8 +197,7 @@ mod tests {
         // Parity with the historical `base_ms << attempt` curve used by
         // wire clients before consolidation.
         let policy = RetryPolicy::simple(10, 1000, 5000);
-        let legacy =
-            |attempt: u32| -> u64 { 1000u64.saturating_mul(1u64 << attempt.min(16)).min(5000) };
+        let legacy = |attempt: u32| -> u64 { 1000u64.saturating_mul(1u64 << attempt.min(16)).min(5000) };
         for attempt in 0..6 {
             assert_eq!(
                 policy.delay_for_attempt(attempt),
@@ -225,16 +209,14 @@ mod tests {
 
     #[test]
     fn delay_for_attempt_clamps_overflowing_backoff_to_max_delay() {
-        let policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), f64::MAX);
+        let policy = RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), f64::MAX);
 
         assert_eq!(policy.delay_for_attempt(2), Duration::from_secs(8));
     }
 
     #[test]
     fn delay_for_attempt_ignores_non_finite_jitter() {
-        let mut policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        let mut policy = RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
         policy.jitter = f64::INFINITY;
 
         assert_eq!(policy.delay_for_attempt(1), Duration::from_secs(2));
@@ -242,8 +224,7 @@ mod tests {
 
     #[test]
     fn delay_for_attempt_handles_huge_finite_jitter() {
-        let mut policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        let mut policy = RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
         policy.jitter = f64::MAX;
 
         assert!(policy.delay_for_attempt(1) >= Duration::from_secs(2));
@@ -251,8 +232,7 @@ mod tests {
 
     #[test]
     fn decision_for_category_respects_attempt_budget() {
-        let policy =
-            RetryPolicy::from_retries(1, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        let policy = RetryPolicy::from_retries(1, Duration::from_secs(1), Duration::from_secs(8), 2.0);
 
         let first = policy.decision_for_category(ErrorCategory::Network, 0, None);
         assert!(first.retryable);
@@ -265,11 +245,9 @@ mod tests {
 
     #[test]
     fn decision_for_category_prefers_retry_after() {
-        let policy =
-            RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
+        let policy = RetryPolicy::from_retries(3, Duration::from_secs(1), Duration::from_secs(8), 2.0);
 
-        let decision =
-            policy.decision_for_category(ErrorCategory::RateLimit, 0, Some(Duration::from_secs(7)));
+        let decision = policy.decision_for_category(ErrorCategory::RateLimit, 0, Some(Duration::from_secs(7)));
         assert!(decision.retryable);
         assert_eq!(decision.delay, Some(Duration::from_secs(7)));
         assert_eq!(decision.retry_after, Some(Duration::from_secs(7)));

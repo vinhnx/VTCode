@@ -97,7 +97,8 @@ pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
     "Continue… Tab switch agent • @files /commands • Ctrl+Enter run • Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_INTERRUPTED: &str =
     "Interrupted · What should VT Code do instead? • Esc cancel • Ctrl+C interrupt • Ctrl+D exit";
-pub const HEADER_SHORTCUT_HINT: &str = "? help • / command • @ file • Tab agent • Ctrl+Enter run • Enter queue • Esc cancel • Ctrl+C interrupt";
+pub const HEADER_SHORTCUT_HINT: &str =
+    "? help • / command • @ file • Tab agent • Ctrl+Enter run • Enter queue • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
@@ -338,11 +339,7 @@ mod tests {
     fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f32 {
         let l_fg = relative_luminance(fg);
         let l_bg = relative_luminance(bg);
-        let (hi, lo) = if l_fg > l_bg {
-            (l_fg, l_bg)
-        } else {
-            (l_bg, l_fg)
-        };
+        let (hi, lo) = if l_fg > l_bg { (l_fg, l_bg) } else { (l_bg, l_fg) };
         (hi + 0.05) / (lo + 0.05)
     }
 
@@ -356,14 +353,10 @@ mod tests {
     const MIN_CONTRAST_LIGHT: f32 = 2.0;
 
     fn assert_agent_hue_readable(name: &str, hue: &str, light: bool, bg: (u8, u8, u8)) {
-        let fg = hue_rgb_on(hue, light)
-            .unwrap_or_else(|| panic!("{name} ({hue}) is not a supported standard ANSI hue"));
+        let fg =
+            hue_rgb_on(hue, light).unwrap_or_else(|| panic!("{name} ({hue}) is not a supported standard ANSI hue"));
         let cr = contrast_ratio(fg, bg);
-        let min = if light {
-            MIN_CONTRAST_LIGHT
-        } else {
-            MIN_CONTRAST_DARK
-        };
+        let min = if light { MIN_CONTRAST_LIGHT } else { MIN_CONTRAST_DARK };
         assert!(
             cr >= min,
             "{name} ({hue}) on {} bg contrast {cr:.2} below {min}",
@@ -374,10 +367,7 @@ mod tests {
     #[test]
     fn agent_mode_colors_are_standard_ansi_hues() {
         for (_, hue) in AGENT_MODE_HUE {
-            assert!(
-                AGENT_HUE_NAMES.contains(hue),
-                "mode hue {hue} is not in the supported standard ANSI hue list"
-            );
+            assert!(AGENT_HUE_NAMES.contains(hue), "mode hue {hue} is not in the supported standard ANSI hue list");
         }
     }
 

@@ -88,13 +88,7 @@ async fn test_prompt_omits_runtime_context_sections() {
     };
     let context = test_context();
     let prompt = prompt_builder
-        .get_system_prompt(
-            "You are a helpful assistant.",
-            1,
-            context.hash(),
-            &context,
-            Some(&agent_config),
-        )
+        .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, Some(&agent_config))
         .await;
 
     assert!(!prompt.contains("[Context]"));
@@ -140,12 +134,8 @@ async fn test_planning_workflow_uses_noninteractive_notice_when_request_user_inp
         .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, None)
         .await;
 
-    assert!(prompt.contains(
-        vtcode_core::prompts::system::PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE
-    ));
-    assert!(
-        !prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE)
-    );
+    assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE));
+    assert!(!prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE));
 }
 
 #[tokio::test]
@@ -161,9 +151,9 @@ async fn test_full_auto_is_constrained_in_planning_workflow() {
         .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, None)
         .await;
 
-    assert!(prompt.contains(
-        "# FULL-AUTO (PLANNING WORKFLOW): Work autonomously within planning workflow constraints."
-    ));
+    assert!(
+        prompt.contains("# FULL-AUTO (PLANNING WORKFLOW): Work autonomously within planning workflow constraints.")
+    );
     assert!(!prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
 }
 

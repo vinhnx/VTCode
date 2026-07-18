@@ -74,8 +74,7 @@ impl Session {
         }
 
         let styles = render::modal_render_styles(self);
-        let content_width =
-            area.width.saturating_sub(inline_list::selection_padding_width() as u16) as usize;
+        let content_width = area.width.saturating_sub(inline_list::selection_padding_width() as u16) as usize;
         let relative_row = usize::from(row.saturating_sub(area.y));
 
         if let Some(wizard) = self.wizard_overlay() {
@@ -110,15 +109,8 @@ impl Session {
         let offset = list.list_state.offset();
         let mut consumed_rows = 0usize;
         for (visible_index, &item_index) in list.visible_indices.iter().enumerate().skip(offset) {
-            let lines = modal::modal_list_item_lines(
-                list,
-                visible_index,
-                item_index,
-                &styles,
-                content_width,
-                None,
-                false,
-            );
+            let lines =
+                modal::modal_list_item_lines(list, visible_index, item_index, &styles, content_width, None, false);
             let height = usize::from(inline_list::row_height(&lines));
             if relative_row < consumed_rows + height {
                 return Some(visible_index);
@@ -234,8 +226,7 @@ impl Session {
             }
             CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
                 MouseEventKind::Moved
-                    if self
-                        .update_transcript_file_link_hover(mouse_event.column, mouse_event.row) =>
+                    if self.update_transcript_file_link_hover(mouse_event.column, mouse_event.row) =>
                 {
                     self.mark_visual_dirty();
                 }
@@ -271,8 +262,7 @@ impl Session {
                     }
 
                     if self.has_active_overlay() {
-                        let in_modal_list =
-                            self.mouse_in_modal_area(mouse_event.column, mouse_event.row);
+                        let in_modal_list = self.mouse_in_modal_area(mouse_event.column, mouse_event.row);
                         if self.queue_link_click_action(self.modal_link_click_action(
                             mouse_event.column,
                             mouse_event.row,
@@ -282,9 +272,7 @@ impl Session {
                             return;
                         }
 
-                        if self.modal_text_area_contains(mouse_event.column, mouse_event.row)
-                            && !in_modal_list
-                        {
+                        if self.modal_text_area_contains(mouse_event.column, mouse_event.row) && !in_modal_list {
                             let is_double_click = self.mouse_selection.register_click(
                                 mouse_event.column,
                                 mouse_event.row,
@@ -292,38 +280,24 @@ impl Session {
                             );
                             if is_double_click {
                                 let modal_double_click_action = self.throttle_link_click_action(
-                                    self.modal_link_double_click_action(
-                                        mouse_event.column,
-                                        mouse_event.row,
-                                    ),
+                                    self.modal_link_double_click_action(mouse_event.column, mouse_event.row),
                                 );
-                                if !matches!(
-                                    modal_double_click_action,
-                                    TranscriptLinkClickAction::Ignore
-                                ) {
+                                if !matches!(modal_double_click_action, TranscriptLinkClickAction::Ignore) {
                                     self.clear_pending_link_click();
                                 }
-                                if self.handle_link_click_action(
-                                    modal_double_click_action,
-                                    true,
-                                    events,
-                                    callback,
-                                ) {
+                                if self.handle_link_click_action(modal_double_click_action, true, events, callback) {
                                     return;
                                 }
                             }
 
                             self.mouse_drag_target = MouseDragTarget::ModalText;
-                            self.mouse_selection
-                                .start_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection.start_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                             return;
                         }
                     }
 
-                    if self.has_active_overlay()
-                        && self.handle_active_overlay_click(mouse_event, events, callback)
-                    {
+                    if self.has_active_overlay() && self.handle_active_overlay_click(mouse_event, events, callback) {
                         self.mouse_selection.clear_click_history();
                         return;
                     }
@@ -339,30 +313,17 @@ impl Session {
                         return;
                     }
 
-                    let is_double_click = self.mouse_selection.register_click(
-                        mouse_event.column,
-                        mouse_event.row,
-                        Instant::now(),
-                    );
+                    let is_double_click =
+                        self.mouse_selection
+                            .register_click(mouse_event.column, mouse_event.row, Instant::now());
                     if is_double_click {
                         let transcript_double_click_action = self.throttle_link_click_action(
-                            self.transcript_file_link_double_click_action(
-                                mouse_event.column,
-                                mouse_event.row,
-                            ),
+                            self.transcript_file_link_double_click_action(mouse_event.column, mouse_event.row),
                         );
-                        if !matches!(
-                            transcript_double_click_action,
-                            TranscriptLinkClickAction::Ignore
-                        ) {
+                        if !matches!(transcript_double_click_action, TranscriptLinkClickAction::Ignore) {
                             self.clear_pending_link_click();
                         }
-                        if self.handle_link_click_action(
-                            transcript_double_click_action,
-                            true,
-                            events,
-                            callback,
-                        ) {
+                        if self.handle_link_click_action(transcript_double_click_action, true, events, callback) {
                             return;
                         }
 
@@ -386,8 +347,7 @@ impl Session {
                     self.clear_pending_link_click();
                     match self.mouse_drag_target {
                         MouseDragTarget::Input => {
-                            if let Some(cursor) = self
-                                .cursor_index_for_input_point(mouse_event.column, mouse_event.row)
+                            if let Some(cursor) = self.cursor_index_for_input_point(mouse_event.column, mouse_event.row)
                                 && self.input_manager.cursor() != cursor
                             {
                                 self.input_manager.set_cursor_with_selection(cursor);
@@ -395,13 +355,11 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
-                            self.mouse_selection
-                                .update_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection.update_selection(mouse_event.column, mouse_event.row);
                             self.mark_visual_dirty();
                         }
                         MouseDragTarget::ModalText => {
-                            self.mouse_selection
-                                .update_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection.update_selection(mouse_event.column, mouse_event.row);
                             self.mark_visual_dirty();
                         }
                         MouseDragTarget::None => {}
@@ -414,16 +372,14 @@ impl Session {
                             mouse_event.row,
                             mouse_event.modifiers,
                         ));
-                    let modal_link_action =
-                        self.pending_link_click_action(self.modal_link_click_action(
-                            mouse_event.column,
-                            mouse_event.row,
-                            mouse_event.modifiers,
-                        ));
+                    let modal_link_action = self.pending_link_click_action(self.modal_link_click_action(
+                        mouse_event.column,
+                        mouse_event.row,
+                        mouse_event.modifiers,
+                    ));
                     match self.mouse_drag_target {
                         MouseDragTarget::Input => {
-                            if let Some(cursor) = self
-                                .cursor_index_for_input_point(mouse_event.column, mouse_event.row)
+                            if let Some(cursor) = self.cursor_index_for_input_point(mouse_event.column, mouse_event.row)
                                 && self.input_manager.cursor() != cursor
                             {
                                 self.input_manager.set_cursor_with_selection(cursor);
@@ -431,25 +387,18 @@ impl Session {
                             }
                         }
                         MouseDragTarget::Transcript => {
-                            self.mouse_selection
-                                .finish_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection.finish_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
                         MouseDragTarget::ModalText => {
-                            self.mouse_selection
-                                .finish_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection.finish_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                         }
                         MouseDragTarget::None => {}
                     }
                     self.mouse_drag_target = MouseDragTarget::None;
                     self.clear_pending_link_click();
-                    if self.handle_link_click_action(
-                        transcript_link_action,
-                        false,
-                        events,
-                        callback,
-                    ) {
+                    if self.handle_link_click_action(transcript_link_action, false, events, callback) {
                         return;
                     }
                     if self.handle_link_click_action(modal_link_action, false, events, callback) {}
@@ -502,8 +451,7 @@ impl Session {
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
-        let (top_offset, _clamped_total_rows) =
-            self.prepare_transcript_scroll(total_rows, viewport_rows);
+        let (top_offset, _clamped_total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let view_top = top_offset.min(self.scroll_manager.max_offset());
         self.transcript_view_top = view_top;
 
@@ -544,11 +492,8 @@ impl Session {
         }
 
         let viewport_rows = self.transcript_rows.max(1) as usize;
-        let visible_lines = self.collect_transcript_window_cached(
-            self.transcript_width,
-            self.transcript_view_top,
-            viewport_rows,
-        );
+        let visible_lines =
+            self.collect_transcript_window_cached(self.transcript_width, self.transcript_view_top, viewport_rows);
         let line = visible_lines.get(row_in_view)?;
 
         let text = transcript_links::transcript_line_text(&line.line);
@@ -585,8 +530,7 @@ impl Session {
             return true;
         }
 
-        if let Some(cursor) = self.cursor_index_for_input_point(mouse_event.column, mouse_event.row)
-        {
+        if let Some(cursor) = self.cursor_index_for_input_point(mouse_event.column, mouse_event.row) {
             if self.input_manager.cursor() != cursor {
                 self.input_manager.set_cursor(cursor);
                 self.mark_dirty();

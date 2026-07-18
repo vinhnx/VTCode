@@ -36,15 +36,9 @@ impl OutputStatus {
 #[derive(Debug, Clone)]
 pub enum PairableHistoryItem {
     /// Tool call without output (yet)
-    ToolCall {
-        call_id: ToolCallId,
-        tool_name: String,
-    },
+    ToolCall { call_id: ToolCallId, tool_name: String },
     /// Tool output for a previous call
-    ToolOutput {
-        call_id: ToolCallId,
-        status: OutputStatus,
-    },
+    ToolOutput { call_id: ToolCallId, status: OutputStatus },
 }
 
 /// Record of a missing output in conversation history
@@ -74,11 +68,7 @@ impl HistoryValidationReport {
         if self.is_valid() {
             "History invariants are valid".to_string()
         } else {
-            format!(
-                "{} missing outputs, {} orphan outputs",
-                self.missing_outputs.len(),
-                self.orphan_outputs.len()
-            )
+            format!("{} missing outputs, {} orphan outputs", self.missing_outputs.len(), self.orphan_outputs.len())
         }
     }
 
@@ -212,11 +202,7 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
 }
 
 /// Find a split point that keeps tool-call outputs paired with their calls.
-pub fn safe_history_split_point(
-    messages: &[Message],
-    conversation_len: usize,
-    preferred_split_at: usize,
-) -> usize {
+pub fn safe_history_split_point(messages: &[Message], conversation_len: usize, preferred_split_at: usize) -> usize {
     if preferred_split_at == 0 || preferred_split_at >= conversation_len {
         return preferred_split_at;
     }
@@ -267,18 +253,15 @@ pub fn ensure_call_outputs_present(messages: &mut Vec<Message>) {
                 .to_string(),
         );
 
-        tracing::warn!(
-            "Creating synthetic output for call {} due to missing execution result",
-            missing.call_id
-        );
+        tracing::warn!("Creating synthetic output for call {} due to missing execution result", missing.call_id);
 
         // Find the position to insert: right after the corresponding call
         let insert_pos = messages
             .iter()
             .position(|msg| {
-                msg.tool_calls.as_ref().is_some_and(|calls| {
-                    calls.iter().any(|call| call.id == missing.call_id.as_str())
-                })
+                msg.tool_calls
+                    .as_ref()
+                    .is_some_and(|calls| calls.iter().any(|call| call.id == missing.call_id.as_str()))
             })
             .map(|pos| pos + 1);
 
@@ -299,8 +282,7 @@ pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
         return;
     }
 
-    let orphan_ids: HashSet<String> =
-        report.orphan_outputs.iter().map(|id| id.as_str().to_string()).collect();
+    let orphan_ids: HashSet<String> = report.orphan_outputs.iter().map(|id| id.as_str().to_string()).collect();
 
     let initial_len = messages.len();
 

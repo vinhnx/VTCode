@@ -31,20 +31,18 @@ pub(crate) mod acp {
 }
 
 pub use capabilities::{
-    AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials, AuthMethod,
-    AuthRequirements, AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo,
-    FilesystemCapabilities, InitializeParams, InitializeResult, PROTOCOL_VERSION,
-    SUPPORTED_VERSIONS, TerminalCapabilities, ToolCapability, UiCapabilities,
+    AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials, AuthMethod, AuthRequirements,
+    AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo, FilesystemCapabilities, InitializeParams,
+    InitializeResult, PROTOCOL_VERSION, SUPPORTED_VERSIONS, TerminalCapabilities, ToolCapability, UiCapabilities,
 };
 pub use client_v2::{AcpClientV2, AcpClientV2Builder};
 pub use discovery::{AgentInfo, AgentRegistry};
 pub use error::{AcpError, AcpResult};
 pub use jsonrpc::{JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 pub use session::{
-    AcpSession, ConversationTurn, PermissionOption, PromptContent, RequestPermissionParams,
-    RequestPermissionResult, SessionCancelParams, SessionLoadParams, SessionLoadResult,
-    SessionNewParams, SessionNewResult, SessionPromptParams, SessionPromptResult, SessionState,
-    SessionUpdate, SessionUpdateNotification, ToolCallRecord, TurnStatus,
+    AcpSession, ConversationTurn, PermissionOption, PromptContent, RequestPermissionParams, RequestPermissionResult,
+    SessionCancelParams, SessionLoadParams, SessionLoadResult, SessionNewParams, SessionNewResult, SessionPromptParams,
+    SessionPromptResult, SessionState, SessionUpdate, SessionUpdateNotification, ToolCallRecord, TurnStatus,
 };
 pub use transport::{StdioTransport, StdioTransportOptions};
 pub use zed::{StandardAcpAdapter, ZedAcpAdapter};

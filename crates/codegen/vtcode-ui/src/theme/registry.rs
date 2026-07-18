@@ -899,11 +899,7 @@ fn catppuccin_palette(kind: CatppuccinFlavorKind, flavor: catppuccin::Flavor) ->
     let colors = flavor.colors;
     if matches!(kind, CatppuccinFlavorKind::Latte) {
         let darken = |c: catppuccin::Color| -> RgbColor {
-            RgbColor(
-                c.rgb.r.saturating_sub(32),
-                c.rgb.g.saturating_sub(32),
-                c.rgb.b.saturating_sub(32),
-            )
+            RgbColor(c.rgb.r.saturating_sub(32), c.rgb.g.saturating_sub(32), c.rgb.b.saturating_sub(32))
         };
         // Latte (light): use darker accents for WCAG AA contrast on light background
         ThemePalette {

@@ -28,9 +28,7 @@ pub(crate) enum TransientSurface {
 impl TransientSurface {
     pub(crate) fn placement(self) -> TransientPlacement {
         match self {
-            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => {
-                TransientPlacement::FloatingModal
-            }
+            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => TransientPlacement::FloatingModal,
             Self::SlashPalette
             | Self::HistoryPicker
             | Self::AgentPalette
@@ -42,13 +40,9 @@ impl TransientSurface {
 
     pub(crate) fn focus_policy(self) -> TransientFocusPolicy {
         match self {
-            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => {
-                TransientFocusPolicy::Modal
-            }
+            Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => TransientFocusPolicy::Modal,
             Self::HistoryPicker | Self::LocalAgents => TransientFocusPolicy::CapturedInput,
-            Self::SlashPalette | Self::AgentPalette | Self::FilePalette => {
-                TransientFocusPolicy::SharedInput
-            }
+            Self::SlashPalette | Self::AgentPalette | Self::FilePalette => TransientFocusPolicy::SharedInput,
             Self::TaskPanel => TransientFocusPolicy::Passive,
         }
     }
@@ -185,19 +179,12 @@ mod tests {
         let second = host.show(TransientSurface::DiffPreview);
 
         assert!(first.changed());
-        assert_change(
-            second,
-            Some(TransientSurface::TaskPanel),
-            Some(TransientSurface::DiffPreview),
-        );
+        assert_change(second, Some(TransientSurface::TaskPanel), Some(TransientSurface::DiffPreview));
         assert_eq!(host.top(), Some(TransientSurface::DiffPreview));
         assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Suspended));
         assert_eq!(host.status(TransientSurface::DiffPreview), Some(TransientStatus::Active));
         assert_eq!(host.visible_bottom_docked(), None);
-        assert_eq!(
-            host.top().map(TransientSurface::focus_policy),
-            Some(TransientFocusPolicy::Modal)
-        );
+        assert_eq!(host.top().map(TransientSurface::focus_policy), Some(TransientFocusPolicy::Modal));
     }
 
     #[test]
@@ -208,18 +195,11 @@ mod tests {
 
         let change = host.hide(TransientSurface::DiffPreview);
 
-        assert_change(
-            change,
-            Some(TransientSurface::DiffPreview),
-            Some(TransientSurface::TaskPanel),
-        );
+        assert_change(change, Some(TransientSurface::DiffPreview), Some(TransientSurface::TaskPanel));
         assert_eq!(host.top(), Some(TransientSurface::TaskPanel));
         assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Active));
         assert_eq!(host.visible_bottom_docked(), Some(TransientSurface::TaskPanel));
-        assert_eq!(
-            host.top().map(TransientSurface::focus_policy),
-            Some(TransientFocusPolicy::Passive)
-        );
+        assert_eq!(host.top().map(TransientSurface::focus_policy), Some(TransientFocusPolicy::Passive));
     }
 
     #[test]
@@ -230,11 +210,7 @@ mod tests {
 
         let change = host.show(TransientSurface::TaskPanel);
 
-        assert_change(
-            change,
-            Some(TransientSurface::SlashPalette),
-            Some(TransientSurface::TaskPanel),
-        );
+        assert_change(change, Some(TransientSurface::SlashPalette), Some(TransientSurface::TaskPanel));
         assert_eq!(host.top(), Some(TransientSurface::TaskPanel));
         assert_eq!(host.status(TransientSurface::SlashPalette), Some(TransientStatus::Suspended));
         assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Active));

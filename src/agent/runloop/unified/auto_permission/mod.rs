@@ -16,8 +16,7 @@ use vtcode_core::llm::{LightweightFeature, provider as uni, resolve_lightweight_
 use vtcode_core::permissions::{PermissionRequest, build_permission_request};
 use vtcode_core::tools::command_args;
 
-const AUTO_PERMISSION_SYSTEM_PROMPT: &str =
-    include_str!("prompts/system-prompt-auto-permission-review.md");
+const AUTO_PERMISSION_SYSTEM_PROMPT: &str = include_str!("prompts/system-prompt-auto-permission-review.md");
 const REVIEWER_PROMPT: &str = include_str!("prompts/agent-prompt-auto-permission-rule-reviewer.md");
 
 const PROBE_PROMPT: &str = r#"
@@ -105,8 +104,7 @@ pub(crate) async fn review_tool_call(
         return Ok(AutoPermissionReviewDecision::Allow { stage: "stage1" });
     }
 
-    let script_context =
-        prior_script_context(workspace_root, history, permission_request, tool_args);
+    let script_context = prior_script_context(workspace_root, history, permission_request, tool_args);
     let stage_two_prompt = review_prompt(
         permissions,
         workspace_root,
@@ -331,14 +329,12 @@ fn build_classifier_transcript(workspace_root: &Path, history: &[uni::Message]) 
                         .as_ref()
                         .map(|function| function.name.as_str())
                         .unwrap_or(tool_call.call_type.as_str());
-                    let args = tool_call.function.as_ref().and_then(|function| {
-                        serde_json::from_str::<Value>(&function.arguments).ok()
-                    });
+                    let args = tool_call
+                        .function
+                        .as_ref()
+                        .and_then(|function| serde_json::from_str::<Value>(&function.arguments).ok());
                     let payload = normalized_tool_payload(workspace_root, tool_name, args.as_ref());
-                    entries.push(format!(
-                        "ACTION: {}",
-                        truncate_text(payload.as_str(), MAX_ENTRY_CHARS)
-                    ));
+                    entries.push(format!("ACTION: {}", truncate_text(payload.as_str(), MAX_ENTRY_CHARS)));
                 }
             }
             uni::MessageRole::System | uni::MessageRole::Tool => {}
@@ -351,14 +347,9 @@ fn build_classifier_transcript(workspace_root: &Path, history: &[uni::Message]) 
     entries
 }
 
-fn normalized_tool_payload(
-    workspace_root: &Path,
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> String {
+fn normalized_tool_payload(workspace_root: &Path, tool_name: &str, tool_args: Option<&Value>) -> String {
     let current_dir = workspace_root;
-    let permission_request =
-        build_permission_request(workspace_root, current_dir, tool_name, tool_args);
+    let permission_request = build_permission_request(workspace_root, current_dir, tool_name, tool_args);
     match &permission_request.kind {
         vtcode_core::permissions::PermissionRequestKind::Bash { command } => {
             normalize_shell_payload(command, tool_args)
@@ -396,8 +387,7 @@ fn normalized_tool_payload(
 }
 
 fn normalize_shell_payload(command: &str, tool_args: Option<&Value>) -> String {
-    if let Some(command_words) =
-        tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
+    if let Some(command_words) = tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
         && let Some(segments) = parse_bash_lc_commands(&command_words)
     {
         let rendered = segments
@@ -452,8 +442,7 @@ fn prior_script_context(
                 .function
                 .as_ref()
                 .and_then(|function| serde_json::from_str::<Value>(&function.arguments).ok());
-            let request =
-                build_permission_request(workspace_root, workspace_root, tool_name, args.as_ref());
+            let request = build_permission_request(workspace_root, workspace_root, tool_name, args.as_ref());
             let writes_path = match &request.kind {
                 vtcode_core::permissions::PermissionRequestKind::Edit { paths }
                 | vtcode_core::permissions::PermissionRequestKind::Write { paths } => paths
@@ -481,9 +470,7 @@ fn referenced_script_path(
     permission_request: &PermissionRequest,
     tool_args: Option<&Value>,
 ) -> Option<PathBuf> {
-    let vtcode_core::permissions::PermissionRequestKind::Bash { command } =
-        &permission_request.kind
-    else {
+    let vtcode_core::permissions::PermissionRequestKind::Bash { command } = &permission_request.kind else {
         return None;
     };
 
@@ -494,8 +481,7 @@ fn referenced_script_path(
 }
 
 fn normalized_shell_segments(command: &str, tool_args: Option<&Value>) -> Vec<Vec<String>> {
-    if let Some(command_words) =
-        tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
+    if let Some(command_words) = tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
         && let Some(segments) = parse_bash_lc_commands(&command_words)
     {
         return segments;
@@ -581,8 +567,7 @@ async fn raw_completion(
     match provider.generate(request.clone()).await.map_err(|err| anyhow!(err)) {
         Ok(response) => Ok(response.content_text().trim().to_string()),
         Err(primary_err) => {
-            let Some(fallback_model) = fallback_model.filter(|candidate| *candidate != model)
-            else {
+            let Some(fallback_model) = fallback_model.filter(|candidate| *candidate != model) else {
                 return Err(primary_err);
             };
             tracing::warn!(
@@ -619,8 +604,7 @@ fn selected_models(
     configured_model: &str,
     feature: LightweightFeature,
 ) -> AutoPermissionModels {
-    let resolution =
-        resolve_lightweight_route(agent_config, vt_cfg, feature, Some(configured_model));
+    let resolution = resolve_lightweight_route(agent_config, vt_cfg, feature, Some(configured_model));
     if let Some(warning) = &resolution.warning {
         tracing::warn!(warning = %warning, "auto permission review route adjusted");
     }
@@ -695,9 +679,7 @@ mod tests {
     use std::collections::BTreeMap;
     use vtcode_config::core::PromptCachingConfig;
     use vtcode_core::config::constants::models;
-    use vtcode_core::config::types::{
-        ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
-    };
+    use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
@@ -826,16 +808,11 @@ mod tests {
             "action": "run",
             "command": ["/bin/zsh", "-lc", "./scripts/cleanup.sh"],
         });
-        let permission_request = build_permission_request(
-            workspace_root,
-            workspace_root,
-            tool_names::UNIFIED_EXEC,
-            Some(&args),
-        );
+        let permission_request =
+            build_permission_request(workspace_root, workspace_root, tool_names::UNIFIED_EXEC, Some(&args));
 
         let context =
-            prior_script_context(workspace_root, &history, &permission_request, Some(&args))
-                .expect("script context");
+            prior_script_context(workspace_root, &history, &permission_request, Some(&args)).expect("script context");
 
         assert!(context.contains("scripts/cleanup.sh"));
         assert!(context.contains("rm -rf /tmp/demo"));

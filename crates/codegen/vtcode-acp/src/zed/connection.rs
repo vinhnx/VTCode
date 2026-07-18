@@ -60,10 +60,7 @@ impl ConnectionHandle {
     ///
     /// Notifications do not block the dispatch loop, so this is safe in
     /// any context (handler, spawned task, or synchronous setup).
-    pub fn send_session_notification(
-        &self,
-        notification: SessionNotification,
-    ) -> Result<(), Error> {
+    pub fn send_session_notification(&self, notification: SessionNotification) -> Result<(), Error> {
         self.cx.send_notification(notification)
     }
 
@@ -82,10 +79,7 @@ impl ConnectionHandle {
     ///
     /// **Only call from a `cx.spawn` task** — see
     /// [`ConnectionHandle::request_permission`].
-    pub async fn read_text_file(
-        &self,
-        request: ReadTextFileRequest,
-    ) -> Result<ReadTextFileResponse, Error> {
+    pub async fn read_text_file(&self, request: ReadTextFileRequest) -> Result<ReadTextFileResponse, Error> {
         self.cx.send_request(request).block_task().await
     }
 
@@ -93,10 +87,7 @@ impl ConnectionHandle {
     ///
     /// **Only call from a `cx.spawn` task** — see
     /// [`ConnectionHandle::request_permission`].
-    pub async fn create_terminal(
-        &self,
-        request: CreateTerminalRequest,
-    ) -> Result<CreateTerminalResponse, Error> {
+    pub async fn create_terminal(&self, request: CreateTerminalRequest) -> Result<CreateTerminalResponse, Error> {
         self.cx.send_request(request).block_task().await
     }
 }

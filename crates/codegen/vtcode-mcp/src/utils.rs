@@ -59,16 +59,12 @@ pub const TZ_ENV_VAR: &str = "TZ";
 pub const TIMEZONE_ARGUMENT: &str = "timezone";
 
 /// Ensure a timezone argument is present when required by the schema.
-pub fn ensure_timezone_argument(
-    arguments: &mut Map<String, Value>,
-    requires_timezone: bool,
-) -> Result<()> {
+pub fn ensure_timezone_argument(arguments: &mut Map<String, Value>, requires_timezone: bool) -> Result<()> {
     if !requires_timezone {
         return Ok(());
     }
 
-    let timezone = detect_local_timezone()
-        .context("failed to determine a default timezone for MCP tool invocation")?;
+    let timezone = detect_local_timezone().context("failed to determine a default timezone for MCP tool invocation")?;
     debug!("Injecting local timezone '{timezone}' for MCP tool call");
     arguments
         .entry(TIMEZONE_ARGUMENT.to_string())
@@ -96,9 +92,7 @@ pub fn detect_local_timezone() -> Result<String> {
         Ok(timezone) => Ok(timezone),
         Err(err) => {
             let fallback = Local::now().format("%:z").to_string();
-            warn!(
-                "Falling back to numeric offset '{fallback}' after failing to resolve IANA timezone: {err}"
-            );
+            warn!("Falling back to numeric offset '{fallback}' after failing to resolve IANA timezone: {err}");
             Ok(fallback)
         }
     }
@@ -145,10 +139,7 @@ pub fn schema_requires_field(schema: &Value, field: &str) -> bool {
 }
 
 /// Build HTTP headers from static and environment-based configuration.
-pub fn build_headers(
-    static_headers: &HashMap<String, String>,
-    env_headers: &HashMap<String, String>,
-) -> HeaderMap {
+pub fn build_headers(static_headers: &HashMap<String, String>, env_headers: &HashMap<String, String>) -> HeaderMap {
     let mut map = HeaderMap::new();
 
     for (key, value) in static_headers {
@@ -177,8 +168,7 @@ pub fn build_headers(
 
     for (key, env_var) in env_headers {
         match read_env_var(env_var) {
-            Some(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes())
-            {
+            Some(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes()) {
                 Ok(name) => match HeaderValue::from_str(&value) {
                     Ok(header_value) => {
                         map.insert(name, header_value);

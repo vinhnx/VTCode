@@ -18,10 +18,7 @@ use crate::design::constants::ELLIPSIS_CHAR as ELLIPSIS;
 /// # Returns
 ///
 /// The original line if it fits, or a truncated line with ellipsis appended
-pub(crate) fn truncate_line_with_ellipsis_if_overflow(
-    line: Line<'static>,
-    max_width: usize,
-) -> Line<'static> {
+pub(crate) fn truncate_line_with_ellipsis_if_overflow(line: Line<'static>, max_width: usize) -> Line<'static> {
     let total_width: usize = line.spans.iter().map(|s| s.width()).sum();
     if total_width <= max_width {
         // Fast path: no truncation needed

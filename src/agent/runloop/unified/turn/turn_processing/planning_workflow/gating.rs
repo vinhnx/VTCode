@@ -46,14 +46,11 @@ pub(crate) fn planning_workflow_interview_ready(
     // once `request_user_input` has been permanently denied (policy/capability
     // failure, not a user cancellation), re-forcing it would just repeat the
     // same denial every turn (checkpoint turn_655/turn_660).
-    if plan_session.is_budget_exhausted()
-        || plan_session.is_recovery_exhausted()
-        || plan_session.is_interview_denied()
+    if plan_session.is_budget_exhausted() || plan_session.is_recovery_exhausted() || plan_session.is_interview_denied()
     {
         return false;
     }
-    has_discovery_tool(session_stats)
-        && plan_session.turns() >= MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW
+    has_discovery_tool(session_stats) && plan_session.turns() >= MIN_PLANNING_WORKFLOW_TURNS_BEFORE_INTERVIEW
 }
 
 /// Whether the planning session still needs an interview cycle, and whether
@@ -62,8 +59,7 @@ pub(super) fn interview_need_state(
     response_text: Option<&str>,
     plan_session: &PlanningWorkflowSessionState,
 ) -> InterviewNeedState {
-    let response_has_plan =
-        response_text.map(|text| text.contains("<proposed_plan>")).unwrap_or(false);
+    let response_has_plan = response_text.map(|text| text.contains("<proposed_plan>")).unwrap_or(false);
     let has_open_decisions = response_text.map(has_open_decision_markers).unwrap_or(false);
     let has_completed_interview = plan_session.interview_cycles_completed() > 0;
     let interview_cancelled = plan_session.last_interview_cancelled();

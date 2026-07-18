@@ -99,22 +99,12 @@ pub(super) fn extract_embedded_tracker(plan_content: &str) -> Option<String> {
     }
 }
 
-pub(super) fn render_plan_with_tracker(
-    plan_markdown: &str,
-    tracker_markdown: Option<&str>,
-) -> String {
+pub(super) fn render_plan_with_tracker(plan_markdown: &str, tracker_markdown: Option<&str>) -> String {
     let base_plan = strip_embedded_tracker(plan_markdown);
-    let Some(tracker_markdown) = tracker_markdown.map(str::trim).filter(|value| !value.is_empty())
-    else {
+    let Some(tracker_markdown) = tracker_markdown.map(str::trim).filter(|value| !value.is_empty()) else {
         return format!("{}\n", base_plan.trim_end());
     };
-    format!(
-        "{}\n\n{}\n{}\n{}\n",
-        base_plan.trim_end(),
-        PLAN_TRACKER_START,
-        tracker_markdown,
-        PLAN_TRACKER_END
-    )
+    format!("{}\n\n{}\n{}\n{}\n", base_plan.trim_end(), PLAN_TRACKER_START, tracker_markdown, PLAN_TRACKER_END)
 }
 
 /// Merge plan markdown with an optional tracker sidecar into the canonical
@@ -126,10 +116,7 @@ pub(super) fn render_plan_with_tracker(
 /// Previously this module appended the tracker as a bare trailing block, which
 /// produced a *different* serialization than `persist_plan_draft` and could
 /// double-embed the tracker when the plan file was already persisted.
-pub fn merge_plan_content(
-    plan_content: Option<String>,
-    tracker_content: Option<String>,
-) -> Option<String> {
+pub fn merge_plan_content(plan_content: Option<String>, tracker_content: Option<String>) -> Option<String> {
     match (plan_content, tracker_content) {
         (Some(plan), Some(tracker)) => Some(render_plan_with_tracker(&plan, Some(&tracker))),
         (Some(plan), None) => Some(render_plan_with_tracker(&plan, None)),
@@ -248,9 +235,7 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .filter(|line| is_numbered_line(line))
             .count();
     }
-    if report.implementation_step_count == 0
-        && !report.missing_sections.iter().any(|s| s == "Implementation Steps")
-    {
+    if report.implementation_step_count == 0 && !report.missing_sections.iter().any(|s| s == "Implementation Steps") {
         report.missing_sections.push("Implementation Steps".to_string());
     }
 
@@ -260,9 +245,7 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .filter(|line| is_numbered_line(line) || line.starts_with("- "))
             .count();
     }
-    if report.validation_item_count == 0
-        && !report.missing_sections.iter().any(|s| s == "Test Cases and Validation")
-    {
+    if report.validation_item_count == 0 && !report.missing_sections.iter().any(|s| s == "Test Cases and Validation") {
         report.missing_sections.push("Test Cases and Validation".to_string());
     }
 
@@ -272,9 +255,7 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .filter(|line| is_numbered_line(line) || line.starts_with("- "))
             .count();
     }
-    if report.assumption_count == 0
-        && !report.missing_sections.iter().any(|s| s == "Assumptions and Defaults")
-    {
+    if report.assumption_count == 0 && !report.missing_sections.iter().any(|s| s == "Assumptions and Defaults") {
         report.missing_sections.push("Assumptions and Defaults".to_string());
     }
 

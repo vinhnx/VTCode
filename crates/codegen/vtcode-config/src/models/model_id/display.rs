@@ -18,9 +18,7 @@ impl ModelId {
             // OpenRouter models without generated metadata
             ModelId::OpenRouterMoonshotaiKimiK3 => Cow::Borrowed("Kimi K3 (OpenRouter)"),
             ModelId::OpenRouterMoonshotaiKimiK26 => Cow::Borrowed("Kimi K2.6 (OpenRouter)"),
-            ModelId::OpenRouterMoonshotaiKimiK27Code => {
-                Cow::Borrowed("Kimi K2.7 Code (OpenRouter)")
-            }
+            ModelId::OpenRouterMoonshotaiKimiK27Code => Cow::Borrowed("Kimi K2.7 Code (OpenRouter)"),
             ModelId::OpenRouterZaiGlm51 => Cow::Borrowed("GLM-5.1 (OpenRouter)"),
             ModelId::OpenRouterZaiGlm52 => Cow::Borrowed("GLM-5.2 (OpenRouter)"),
             ModelId::OpenRouterOpenAIGpt55 => Cow::Borrowed("OpenAI GPT-5.5 (OpenRouter)"),

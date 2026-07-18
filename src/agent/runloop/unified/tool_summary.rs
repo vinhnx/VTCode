@@ -16,10 +16,9 @@ use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
 use crate::agent::runloop::tool_output::render_tree_detail;
 use crate::agent::runloop::unified::tool_summary_helpers::{
-    collect_param_details, command_line_for_args, describe_fetch_action, describe_grep_file,
-    describe_list_files, describe_path_action, describe_shell_command, highlight_texts_for_summary,
-    relativize_command_paths, relativize_to_workspace, should_render_command_line,
-    truncate_path_middle,
+    collect_param_details, command_line_for_args, describe_fetch_action, describe_grep_file, describe_list_files,
+    describe_path_action, describe_shell_command, highlight_texts_for_summary, relativize_command_paths,
+    relativize_to_workspace, should_render_command_line, truncate_path_middle,
 };
 
 /// Ambient context required to render tool-call summaries.
@@ -75,9 +74,7 @@ pub(crate) fn render_file_operation_indicator(
 
     // Only show indicators for file modification tools
     let (indicator_icon, action_verb) = match tool_name {
-        name if name == tool_names::WRITE_FILE || name == tool_names::CREATE_FILE => {
-            ("❋", "Writing")
-        }
+        name if name == tool_names::WRITE_FILE || name == tool_names::CREATE_FILE => ("❋", "Writing"),
         name if name == tool_names::EDIT_FILE => ("❋", "Editing"),
         name if name == tool_names::APPLY_PATCH => ("❋", "Applying patch to"),
         name if name == tool_names::SEARCH_REPLACE => ("❋", "Search/replace in"),
@@ -147,10 +144,7 @@ pub(crate) fn is_file_modification_tool(tool_name: &str, args: &Value) -> bool {
         name if name == tool_names::UNIFIED_FILE || name == "file_operation" => {
             let action = file_operation_action(args);
 
-            matches!(
-                action,
-                "write" | "create" | "edit" | "patch" | "apply_patch" | "delete" | "move"
-            )
+            matches!(action, "write" | "create" | "edit" | "patch" | "apply_patch" | "delete" | "move")
         }
         _ => false,
     }
@@ -176,8 +170,7 @@ pub(crate) fn render_tool_call_summary(
     line.push_str(&render_styled("•", palette.muted, Some("dim".to_string())));
     line.push(' ');
 
-    let wrapped_run_segments =
-        render_bullet_line(&mut line, &data, stream_label, main_color, &palette);
+    let wrapped_run_segments = render_bullet_line(&mut line, &data, stream_label, main_color, &palette);
 
     renderer.line(MessageStyle::Info, &line)?;
 
@@ -195,14 +188,9 @@ struct SummaryData {
     details: Vec<String>,
 }
 
-fn prepare_summary_data(
-    tool_name: &str,
-    args: &Value,
-    workspace_root: Option<&Path>,
-) -> SummaryData {
+fn prepare_summary_data(tool_name: &str, args: &Value, workspace_root: Option<&Path>) -> SummaryData {
     let (headline, highlights) = describe_tool_action(tool_name, args, workspace_root);
-    let command_line_candidate =
-        command_line_for_args(args).map(|cmd| relativize_command_paths(&cmd, workspace_root));
+    let command_line_candidate = command_line_for_args(args).map(|cmd| relativize_command_paths(&cmd, workspace_root));
     let summary_highlights = highlight_texts_for_summary(args, &highlights, workspace_root);
     let action_label = tool_action_label(tool_name, args);
     let is_run_command = action_label == "Run command";
@@ -242,8 +230,7 @@ fn render_bullet_line(
 ) -> Option<Vec<String>> {
     let mut wrapped_run_segments: Option<Vec<String>> = None;
     if let Some(command) = data.summary.strip_prefix("Ran ") {
-        let wrapped =
-            wrap_text_words(command, RUN_SUMMARY_FIRST_WIDTH, RUN_SUMMARY_CONTINUATION_WIDTH);
+        let wrapped = wrap_text_words(command, RUN_SUMMARY_FIRST_WIDTH, RUN_SUMMARY_CONTINUATION_WIDTH);
         let first_segment = wrapped.first().cloned().unwrap_or_else(|| "command".to_string());
         wrapped_run_segments = Some(wrapped);
         line.push_str(&render_styled("Ran", palette.accent, Some("bold".to_string())));
@@ -423,20 +410,11 @@ fn run_summary_is_placeholder(summary: &str) -> bool {
     let normalized = command.trim().to_ascii_lowercase();
     matches!(
         normalized.as_str(),
-        "command"
-            | "bash"
-            | "run pty cmd"
-            | "unified exec"
-            | "use unified exec"
-            | "use run pty cmd"
-            | "use bash"
+        "command" | "bash" | "run pty cmd" | "unified exec" | "use unified exec" | "use run pty cmd" | "use bash"
     )
 }
 
-pub(crate) fn stream_label_from_output(
-    output: &Value,
-    command_success: bool,
-) -> Option<&'static str> {
+pub(crate) fn stream_label_from_output(output: &Value, command_success: bool) -> Option<&'static str> {
     let has_output = output.get("output").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
     let has_stdout = output.get("stdout").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
     let has_stderr = output.get("stderr").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
@@ -489,16 +467,13 @@ pub(crate) fn describe_tool_action(
     let with_mcp = |desc: String, used: HashSet<String>| -> (String, HashSet<String>) {
         (format!("{}{}", mcp_label(is_mcp_tool), desc), used)
     };
-    let fallback = |label: &str| -> (String, HashSet<String>) {
-        (format!("{}{}", mcp_label(is_mcp_tool), label), HashSet::new())
-    };
+    let fallback =
+        |label: &str| -> (String, HashSet<String>) { (format!("{}{}", mcp_label(is_mcp_tool), label), HashSet::new()) };
 
     match actual_tool_name {
-        actual_name if tool_intent::is_command_run_tool(actual_name) => {
-            describe_shell_command(args)
-                .map(|(desc, used)| with_mcp(desc, used))
-                .unwrap_or_else(|| fallback("command"))
-        }
+        actual_name if tool_intent::is_command_run_tool(actual_name) => describe_shell_command(args)
+            .map(|(desc, used)| with_mcp(desc, used))
+            .unwrap_or_else(|| fallback("command")),
         actual_name if actual_name == tool_names::UNIFIED_EXEC => {
             match tool_intent::command_session_action(args).unwrap_or("run") {
                 "run" => describe_shell_command(args)
@@ -514,16 +489,12 @@ pub(crate) fn describe_tool_action(
                 _ => with_mcp("exec_command".into(), HashSet::new()),
             }
         }
-        actual_name if actual_name == tool_names::LIST_FILES => {
-            describe_list_files(args, workspace_root)
-                .map(|(desc, used)| with_mcp(desc, used))
-                .unwrap_or_else(|| fallback("List files"))
-        }
-        actual_name if actual_name == tool_names::GREP_FILE => {
-            describe_grep_file(args, workspace_root)
-                .map(|(desc, used)| with_mcp(desc, used))
-                .unwrap_or_else(|| fallback("Search with grep"))
-        }
+        actual_name if actual_name == tool_names::LIST_FILES => describe_list_files(args, workspace_root)
+            .map(|(desc, used)| with_mcp(desc, used))
+            .unwrap_or_else(|| fallback("List files")),
+        actual_name if actual_name == tool_names::GREP_FILE => describe_grep_file(args, workspace_root)
+            .map(|(desc, used)| with_mcp(desc, used))
+            .unwrap_or_else(|| fallback("Search with grep")),
         actual_name if actual_name == tool_names::READ_FILE => {
             describe_path_action(args, "Read file", &["path"], workspace_root)
                 .map(|(desc, used)| with_mcp(desc, used))
@@ -570,9 +541,7 @@ pub(crate) fn describe_tool_action(
         actual_name if actual_name == tool_names::APPLY_PATCH => {
             let prefix = mcp_label(is_mcp_tool);
             match extract_first_patch_file_path(args) {
-                Some(path) => {
-                    (format!("{prefix}Apply patch to {path}"), HashSet::from(["path".to_string()]))
-                }
+                Some(path) => (format!("{prefix}Apply patch to {path}"), HashSet::from(["path".to_string()])),
                 None => with_mcp("Apply workspace patch".into(), HashSet::new()),
             }
         }
@@ -620,10 +589,7 @@ mod tests {
 
     #[test]
     fn build_tool_summary_formats_run_command_as_ran() {
-        assert_eq!(
-            build_tool_summary("Run command", "cargo check -p vtcode"),
-            "Ran cargo check -p vtcode"
-        );
+        assert_eq!(build_tool_summary("Run command", "cargo check -p vtcode"), "Ran cargo check -p vtcode");
     }
 
     #[test]
@@ -666,10 +632,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(
-            description,
-            "Read file skills/code-review-skill/SKILL.md (code-review-skill skill)"
-        );
+        assert_eq!(description, "Read file skills/code-review-skill/SKILL.md (code-review-skill skill)");
         assert!(used_keys.contains("path"));
     }
 

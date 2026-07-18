@@ -7,9 +7,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
+use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 
 use super::{config_action_item, ensure_selection_ui_available, wait_for_list_modal_selection};
 
@@ -70,9 +68,7 @@ enum TerminalTitleSetupAction {
     Cancel,
 }
 
-pub(crate) async fn handle_start_terminal_title_setup(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_terminal_title_setup(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         ctx.renderer
             .line(MessageStyle::Info, "Terminal title setup is available in inline UI only.")?;
@@ -132,16 +128,10 @@ pub(crate) async fn handle_start_terminal_title_setup(
                 ctx.handle.set_terminal_title_items(Some(draft_items.clone()));
             }
             TerminalTitleSetupAction::Save => {
-                persist_terminal_title_items(
-                    &ctx.config.workspace,
-                    ctx.vt_cfg,
-                    draft_items.clone(),
-                )?;
+                persist_terminal_title_items(&ctx.config.workspace, ctx.vt_cfg, draft_items.clone())?;
                 ctx.handle.set_terminal_title_items(Some(draft_items.clone()));
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Saved terminal title configuration to vtcode.toml.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, "Saved terminal title configuration to vtcode.toml.")?;
                 return Ok(SlashCommandControl::Continue);
             }
             TerminalTitleSetupAction::Cancel => {
@@ -224,10 +214,7 @@ fn build_terminal_title_setup_items(draft_items: &[String]) -> Vec<InlineListIte
     items
 }
 
-fn apply_terminal_title_action(
-    action: &str,
-    draft_items: &mut Vec<String>,
-) -> Result<TerminalTitleSetupAction> {
+fn apply_terminal_title_action(action: &str, draft_items: &mut Vec<String>) -> Result<TerminalTitleSetupAction> {
     match action {
         "title:save" => return Ok(TerminalTitleSetupAction::Save),
         "title:cancel" => return Ok(TerminalTitleSetupAction::Cancel),
@@ -372,11 +359,7 @@ fn build_terminal_title_preview(
     for (index, (text, spinner_part)) in parts.iter().enumerate() {
         if index > 0 {
             let previous_spinner = parts[index - 1].1;
-            preview.push_str(if previous_spinner || *spinner_part {
-                " "
-            } else {
-                " | "
-            });
+            preview.push_str(if previous_spinner || *spinner_part { " " } else { " | " });
         }
         preview.push_str(text);
     }
@@ -387,10 +370,7 @@ fn preview_status_label(status_left: Option<&str>) -> &'static str {
     let normalized = status_left.unwrap_or("").trim().to_ascii_lowercase();
     if normalized.contains("action required") || normalized.contains("approval") {
         "Action Required"
-    } else if normalized.contains("undo")
-        || normalized.contains("rewind")
-        || normalized.contains("revert")
-    {
+    } else if normalized.contains("undo") || normalized.contains("rewind") || normalized.contains("revert") {
         "Undoing"
     } else if normalized.contains("waiting") || normalized.contains("queued") {
         "Waiting"
@@ -414,16 +394,12 @@ mod tests {
 
     #[test]
     fn effective_items_default_to_spinner_and_project() {
-        assert_eq!(
-            effective_terminal_title_items(None),
-            vec!["spinner".to_string(), "project".to_string()]
-        );
+        assert_eq!(effective_terminal_title_items(None), vec!["spinner".to_string(), "project".to_string()]);
     }
 
     #[test]
     fn setup_items_preserve_current_order() {
-        let items =
-            build_terminal_title_setup_items(&["spinner".to_string(), "project".to_string()]);
+        let items = build_terminal_title_setup_items(&["spinner".to_string(), "project".to_string()]);
 
         assert_eq!(items[0].title, "Remove Spinner");
         assert_eq!(items[1].title, "Move Spinner down");
@@ -439,11 +415,7 @@ mod tests {
             Some("feature/title"),
             "gpt-5.4",
             Some("Thinking"),
-            &[
-                "project".to_string(),
-                "spinner".to_string(),
-                "status".to_string(),
-            ],
+            &["project".to_string(), "spinner".to_string(), "status".to_string()],
         );
 
         assert_eq!(preview, "demo-project ... Thinking");
@@ -468,8 +440,7 @@ mod tests {
         let mut items = vec!["spinner".to_string(), "project".to_string()];
         let original = items.clone();
 
-        let action =
-            apply_terminal_title_action("title:cancel", &mut items).expect("cancel should parse");
+        let action = apply_terminal_title_action("title:cancel", &mut items).expect("cancel should parse");
 
         assert_eq!(action, TerminalTitleSetupAction::Cancel);
         assert_eq!(items, original);
@@ -479,8 +450,7 @@ mod tests {
     fn save_action_is_supported() {
         let mut items = vec!["spinner".to_string(), "project".to_string()];
 
-        let action =
-            apply_terminal_title_action("title:save", &mut items).expect("save should parse");
+        let action = apply_terminal_title_action("title:save", &mut items).expect("save should parse");
 
         assert_eq!(action, TerminalTitleSetupAction::Save);
         assert_eq!(items, vec!["spinner".to_string(), "project".to_string()]);

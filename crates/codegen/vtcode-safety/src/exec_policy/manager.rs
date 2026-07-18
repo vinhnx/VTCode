@@ -17,17 +17,12 @@ use std::{
 };
 use tokio::sync::RwLock;
 
-const PROMPT_CONFLICT_REASON: &str =
-    "approval required by policy, but AskForApproval is set to Never";
+const PROMPT_CONFLICT_REASON: &str = "approval required by policy, but AskForApproval is set to Never";
 const REJECT_SANDBOX_APPROVAL_REASON: &str =
     "approval required by policy, but AskForApproval::Reject.sandbox_approval is set";
-const REJECT_RULES_APPROVAL_REASON: &str =
-    "approval required by policy rule, but AskForApproval::Reject.rules is set";
+const REJECT_RULES_APPROVAL_REASON: &str = "approval required by policy rule, but AskForApproval::Reject.rules is set";
 
-fn prompt_is_rejected_by_policy(
-    approval_policy: AskForApproval,
-    prompt_is_rule: bool,
-) -> Option<&'static str> {
+fn prompt_is_rejected_by_policy(approval_policy: AskForApproval, prompt_is_rule: bool) -> Option<&'static str> {
     if prompt_is_rule {
         if !approval_policy.rejects_rule_prompt() {
             return None;
@@ -185,21 +180,17 @@ impl ExecPolicyManager {
         match decision {
             Decision::Allow => ExecApprovalRequirement::skip(),
             Decision::Prompt => {
-                let prompt_is_rule = matches!(
-                    rule_match,
-                    RuleMatch::PrefixRuleMatch { decision: Decision::Prompt, .. }
-                );
+                let prompt_is_rule =
+                    matches!(rule_match, RuleMatch::PrefixRuleMatch { decision: Decision::Prompt, .. });
 
                 match prompt_is_rejected_by_policy(self.config.default_approval, prompt_is_rule) {
                     Some(reason) => ExecApprovalRequirement::forbidden(reason),
-                    None => ExecApprovalRequirement::needs_approval(
-                        self.format_approval_reason(command, &rule_match),
-                    ),
+                    None => ExecApprovalRequirement::needs_approval(self.format_approval_reason(command, &rule_match)),
                 }
             }
-            Decision::Forbidden => ExecApprovalRequirement::forbidden(
-                self.format_forbidden_reason(command, &rule_match),
-            ),
+            Decision::Forbidden => {
+                ExecApprovalRequirement::forbidden(self.format_forbidden_reason(command, &rule_match))
+            }
         }
     }
 
@@ -264,9 +255,9 @@ impl ExecPolicyManager {
 
         // Known safe read-only commands that can proceed without approval
         let safe_commands = [
-            "ls", "cat", "head", "tail", "grep", "find", "echo", "pwd", "which", "type", "less",
-            "more", "wc", "sort", "uniq", "diff", "env", "printenv", "hostname", "uname", "date",
-            "whoami", "id", "file", "stat", "tree", "df", "du", "uptime",
+            "ls", "cat", "head", "tail", "grep", "find", "echo", "pwd", "which", "type", "less", "more", "wc", "sort",
+            "uniq", "diff", "env", "printenv", "hostname", "uname", "date", "whoami", "id", "file", "stat", "tree",
+            "df", "du", "uptime",
         ];
 
         if safe_commands.contains(&cmd.as_str()) {
@@ -297,10 +288,7 @@ impl ExecPolicyManager {
                 )
             }
             RuleMatch::HeuristicsRuleMatch { .. } => {
-                format!(
-                    "Command '{}' requires confirmation (no explicit policy rule)",
-                    command.join(" ")
-                )
+                format!("Command '{}' requires confirmation (no explicit policy rule)", command.join(" "))
             }
         }
     }
@@ -309,11 +297,7 @@ impl ExecPolicyManager {
     fn format_forbidden_reason(&self, command: &[String], rule_match: &RuleMatch) -> String {
         match rule_match {
             RuleMatch::PrefixRuleMatch { rule, .. } => {
-                format!(
-                    "Command '{}' is forbidden by rule '{}'",
-                    command.join(" "),
-                    rule.pattern.join(" ")
-                )
+                format!("Command '{}' is forbidden by rule '{}'", command.join(" "), rule.pattern.join(" "))
             }
             RuleMatch::HeuristicsRuleMatch { .. } => {
                 format!("Command '{}' is forbidden by safety heuristics", command.join(" "))

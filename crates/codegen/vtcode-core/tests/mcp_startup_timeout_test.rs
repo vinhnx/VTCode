@@ -116,10 +116,7 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
 
     let script_path = mock_mcp_server_path();
     if !script_path.exists() {
-        eprintln!(
-            "mock MCP server fixture not available at {}, skipping test",
-            script_path.display()
-        );
+        eprintln!("mock MCP server fixture not available at {}, skipping test", script_path.display());
         return;
     }
 
@@ -162,10 +159,7 @@ async fn test_partial_provider_failures_still_keep_healthy_provider() {
     client.initialize().await.unwrap();
 
     let status = client.get_status();
-    assert_eq!(
-        status.provider_count, 1,
-        "healthy providers should remain active when another provider fails"
-    );
+    assert_eq!(status.provider_count, 1, "healthy providers should remain active when another provider fails");
     assert_eq!(status.active_connections, 1);
     assert_eq!(status.configured_providers, vec!["mock".to_string()]);
 

@@ -18,8 +18,7 @@ use crate::agent::runloop::unified::tool_summary_helpers::relativize_command_pat
 const LIVE_PREVIEW_HEAD_LINES: usize = 3;
 const MAX_BUFFERED_TAIL_LINES: usize = 64;
 
-type RenderedPtyPreview =
-    (usize, Vec<Vec<InlineSegment>>, Vec<Vec<InlineLinkRange>>, Option<String>);
+type RenderedPtyPreview = (usize, Vec<Vec<InlineSegment>>, Vec<Vec<InlineLinkRange>>, Option<String>);
 
 struct RenderedPtyOutput {
     lines: Vec<String>,
@@ -108,8 +107,7 @@ impl LegacyPtyStreamState {
 
         let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
         let head_count = head_count.min(head_len);
-        let mut tail_preview: Vec<_> =
-            self.tail_lines.iter().rev().take(tail_count).rev().cloned().collect();
+        let mut tail_preview: Vec<_> = self.tail_lines.iter().rev().take(tail_count).rev().cloned().collect();
         if has_current {
             tail_preview.push(self.current_line.clone());
         }
@@ -117,11 +115,7 @@ impl LegacyPtyStreamState {
         let hidden_lines = total.saturating_sub(head_count + tail_preview.len());
 
         RenderedPtyOutput {
-            lines: render_head_tail_lines(
-                &self.head_lines[..head_count],
-                hidden_lines,
-                &tail_preview,
-            ),
+            lines: render_head_tail_lines(&self.head_lines[..head_count], hidden_lines, &tail_preview),
             last_line,
         }
     }
@@ -143,11 +137,7 @@ pub(super) struct PtyStreamState {
 }
 
 impl PtyStreamState {
-    pub(super) fn new(
-        command_prompt: Option<String>,
-        pty_config: PtyConfig,
-        workspace_root: Option<&Path>,
-    ) -> Self {
+    pub(super) fn new(command_prompt: Option<String>, pty_config: PtyConfig, workspace_root: Option<&Path>) -> Self {
         let preview = PtyPreviewRenderer::from_config(&pty_config);
         Self {
             pty_config,
@@ -247,11 +237,7 @@ impl PtyStreamState {
     }
 }
 
-fn should_use_legacy_output(
-    legacy: &RenderedPtyOutput,
-    preview: &RenderedPtyOutput,
-    input_has_ansi: bool,
-) -> bool {
+fn should_use_legacy_output(legacy: &RenderedPtyOutput, preview: &RenderedPtyOutput, input_has_ansi: bool) -> bool {
     if preview.lines.is_empty() {
         return true;
     }
@@ -319,11 +305,7 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
 fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {
     command_prompt.and_then(|value| {
         let collapsed = vtcode_commons::formatting::collapse_whitespace(&value);
-        if collapsed.is_empty() {
-            None
-        } else {
-            Some(collapsed)
-        }
+        if collapsed.is_empty() { None } else { Some(collapsed) }
     })
 }
 

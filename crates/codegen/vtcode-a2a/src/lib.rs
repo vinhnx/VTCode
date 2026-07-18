@@ -28,9 +28,7 @@ pub async fn shutdown_signal_logged(context: &'static str) {
                     }
                 }
                 Err(err) => {
-                    tracing::warn!(
-                        "Failed to register SIGTERM handler: {err}; falling back to Ctrl-C only"
-                    );
+                    tracing::warn!("Failed to register SIGTERM handler: {err}; falling back to Ctrl-C only");
                     tokio::signal::ctrl_c().await
                 }
             }

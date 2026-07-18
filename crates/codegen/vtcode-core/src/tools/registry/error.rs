@@ -65,17 +65,8 @@ impl ToolErrorType {
 impl ToolExecutionError {
     #[inline]
     #[must_use]
-    pub fn new(
-        tool_name: impl Into<String>,
-        error_type: ToolErrorType,
-        message: impl Into<String>,
-    ) -> Self {
-        Self::from_parts(
-            tool_name.into(),
-            ErrorCategory::from(error_type),
-            error_type,
-            message.into(),
-        )
+    pub fn new(tool_name: impl Into<String>, error_type: ToolErrorType, message: impl Into<String>) -> Self {
+        Self::from_parts(tool_name.into(), ErrorCategory::from(error_type), error_type, message.into())
     }
 
     /// Construct from a full-fidelity `ErrorCategory`, deriving the lossy
@@ -84,20 +75,11 @@ impl ToolExecutionError {
     /// `classify_error_message`, so distinctions such as `RateLimit` vs
     /// `Network` are preserved on the struct.
     #[must_use]
-    fn from_category(
-        tool_name: impl Into<String>,
-        category: ErrorCategory,
-        message: impl Into<String>,
-    ) -> Self {
+    fn from_category(tool_name: impl Into<String>, category: ErrorCategory, message: impl Into<String>) -> Self {
         Self::from_parts(tool_name.into(), category, ToolErrorType::from(category), message.into())
     }
 
-    fn from_parts(
-        tool_name: String,
-        category: ErrorCategory,
-        error_type: ToolErrorType,
-        message: String,
-    ) -> Self {
+    fn from_parts(tool_name: String, category: ErrorCategory, error_type: ToolErrorType, message: String) -> Self {
         let (retryable, is_recoverable, recovery_suggestions) =
             generate_recovery_info(tool_name.as_str(), category, error_type);
 
@@ -147,11 +129,8 @@ impl ToolExecutionError {
         let category = vtcode_commons::classify_anyhow_error(error);
         let mut structured = Self::from_category(tool_name.clone(), category, error.to_string());
         structured.original_error = Some(format!("{error:#}"));
-        structured = RetryPolicy::default().apply_to_tool_execution_error(
-            structured,
-            attempt_index,
-            Some(tool_name.as_str()),
-        );
+        structured =
+            RetryPolicy::default().apply_to_tool_execution_error(structured, attempt_index, Some(tool_name.as_str()));
         structured.partial_state_possible = partial_state_possible;
         structured.rollback_performed = rollback_performed;
         structured = apply_explicit_error_state(structured, tool_name.as_str(), error);
@@ -182,11 +161,7 @@ impl ToolExecutionError {
     }
 
     #[must_use]
-    pub fn with_partial_state(
-        mut self,
-        partial_state_possible: bool,
-        rollback_performed: bool,
-    ) -> Self {
+    pub fn with_partial_state(mut self, partial_state_possible: bool, rollback_performed: bool) -> Self {
         self.partial_state_possible = partial_state_possible;
         self.rollback_performed = rollback_performed;
         self
@@ -243,8 +218,7 @@ impl ToolExecutionError {
 
     #[must_use]
     pub fn retry_summary(&self) -> Option<String> {
-        let retry_count =
-            self.attempts_made().map(|attempts| attempts.saturating_sub(1)).unwrap_or(0);
+        let retry_count = self.attempts_made().map(|attempts| attempts.saturating_sub(1)).unwrap_or(0);
 
         let mut summary = if matches!(self.category, ErrorCategory::CircuitOpen) {
             Some("The service is pausing new calls after repeated transient failures.".to_string())
@@ -334,8 +308,7 @@ impl ToolExecutionError {
             // Last-resort fallback: pull out the minimum fields needed to
             // construct a usable error. This branch only fires when the
             // payload is malformed (e.g. wrong type for `category`).
-            let tool_name =
-                error_payload.get("tool_name").and_then(Value::as_str).unwrap_or("tool");
+            let tool_name = error_payload.get("tool_name").and_then(Value::as_str).unwrap_or("tool");
             let message = error_payload
                 .get("message")
                 .and_then(Value::as_str)
@@ -406,12 +379,10 @@ fn generate_recovery_info(
     let is_recoverable = category.is_retryable()
         || matches!(
             error_type,
-            ToolErrorType::InvalidParameters
-                | ToolErrorType::PermissionDenied
-                | ToolErrorType::ResourceNotFound
+            ToolErrorType::InvalidParameters | ToolErrorType::PermissionDenied | ToolErrorType::ResourceNotFound
         );
-    let retryable = category.is_retryable()
-        && !crate::retry::is_non_retryable_command_timeout(category, Some(tool_name));
+    let retryable =
+        category.is_retryable() && !crate::retry::is_non_retryable_command_timeout(category, Some(tool_name));
     (retryable, is_recoverable, category.recovery_suggestions())
 }
 
@@ -437,11 +408,7 @@ fn format_retry_delay(delay_ms: u64) -> String {
     }
 }
 
-fn apply_explicit_error_state(
-    mut error: ToolExecutionError,
-    tool_name: &str,
-    source: &Error,
-) -> ToolExecutionError {
+fn apply_explicit_error_state(mut error: ToolExecutionError, tool_name: &str, source: &Error) -> ToolExecutionError {
     if tool_name != crate::config::constants::tools::APPLY_PATCH {
         return error;
     }
@@ -470,13 +437,9 @@ impl From<ErrorCategory> for ToolErrorType {
             ErrorCategory::ToolNotFound => ToolErrorType::ToolNotFound,
             ErrorCategory::ResourceNotFound => ToolErrorType::ResourceNotFound,
             ErrorCategory::PermissionDenied => ToolErrorType::PermissionDenied,
-            ErrorCategory::Network | ErrorCategory::ServiceUnavailable => {
-                ToolErrorType::NetworkError
-            }
+            ErrorCategory::Network | ErrorCategory::ServiceUnavailable => ToolErrorType::NetworkError,
             ErrorCategory::Timeout => ToolErrorType::Timeout,
-            ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => {
-                ToolErrorType::PolicyViolation
-            }
+            ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => ToolErrorType::PolicyViolation,
             ErrorCategory::RateLimit => ToolErrorType::NetworkError,
             ErrorCategory::CircuitOpen => ToolErrorType::ExecutionError,
             ErrorCategory::Authentication => ToolErrorType::PermissionDenied,
@@ -572,8 +535,7 @@ mod tests {
     #[test]
     fn from_anyhow_derives_error_type_from_category() {
         let err = anyhow!("provider returned 429 Too Many Requests");
-        let structured =
-            ToolExecutionError::from_anyhow("grep_search", &err, 0, false, false, None);
+        let structured = ToolExecutionError::from_anyhow("grep_search", &err, 0, false, false, None);
         assert_eq!(structured.category, ErrorCategory::RateLimit);
         assert_eq!(structured.error_type, ToolErrorType::from(structured.category));
     }
@@ -582,13 +544,8 @@ mod tests {
     fn retryable_matches_error_category_predicate() {
         for error_type in ALL_TOOL_ERROR_TYPES {
             let category = ErrorCategory::from(error_type);
-            let structured =
-                ToolExecutionError::new("grep_search".to_string(), error_type, "boom".to_string());
-            assert_eq!(
-                structured.retryable,
-                category.is_retryable(),
-                "retryable mismatch for {error_type:?}"
-            );
+            let structured = ToolExecutionError::new("grep_search".to_string(), error_type, "boom".to_string());
+            assert_eq!(structured.retryable, category.is_retryable(), "retryable mismatch for {error_type:?}");
         }
     }
 

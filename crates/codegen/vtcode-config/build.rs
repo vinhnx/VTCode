@@ -209,24 +209,21 @@ fn load_provider_metadata(manifest_dir: &Path) -> Result<Provider> {
     let docs_path = manifest_dir.join("../../../docs/models.json");
     if docs_path.exists() {
         println!("cargo:rerun-if-changed={}", docs_path.display());
-        let models_source = fs::read_to_string(&docs_path)
-            .with_context(|| format!("Failed to read {}", docs_path.display()))?;
+        let models_source =
+            fs::read_to_string(&docs_path).with_context(|| format!("Failed to read {}", docs_path.display()))?;
 
-        let root: Value = serde_json::from_str(&models_source)
-            .context("Failed to parse docs/models.json as JSON")?;
+        let root: Value = serde_json::from_str(&models_source).context("Failed to parse docs/models.json as JSON")?;
         let openrouter_value = root
             .get("openrouter")
             .cloned()
             .context("docs/models.json is missing the openrouter provider section")?;
 
-        serde_json::from_value(openrouter_value)
-            .context("Failed to deserialize openrouter provider metadata")
+        serde_json::from_value(openrouter_value).context("Failed to deserialize openrouter provider metadata")
     } else {
         // Fallback to embedded models if docs/models.json is unavailable.
         // If docs/models.json exists but contains entries that we don't have enum variants for
         // (e.g., experimental listings), prefer the embedded set by returning an error early.
-        serde_json::from_str(EMBEDDED_OPENROUTER_MODELS)
-            .context("Failed to parse embedded OpenRouter model metadata")
+        serde_json::from_str(EMBEDDED_OPENROUTER_MODELS).context("Failed to parse embedded OpenRouter model metadata")
     }
 }
 
@@ -357,9 +354,7 @@ impl Provider {
 
         for (model_id, spec) in &self.models {
             let Some(vtcode) = spec.vtcode.as_ref() else {
-                println!(
-                    "cargo:warning=Skipping openrouter model '{model_id}' without vtcode metadata"
-                );
+                println!("cargo:warning=Skipping openrouter model '{model_id}' without vtcode metadata");
                 continue;
             };
 
@@ -368,9 +363,7 @@ impl Provider {
                 anyhow::bail!("vtcode constant name missing for model '{model_id}'");
             }
             if let Some(existing_id) = seen_constants.insert(const_name.clone(), model_id) {
-                anyhow::bail!(
-                    "Duplicate constant '{const_name}' for models '{existing_id}' and '{model_id}'"
-                );
+                anyhow::bail!("Duplicate constant '{const_name}' for models '{existing_id}' and '{model_id}'");
             }
 
             entries.push(EntryData {
@@ -399,10 +392,10 @@ fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEn
     }
 
     println!("cargo:rerun-if-changed={}", docs_path.display());
-    let models_source = fs::read_to_string(&docs_path)
-        .with_context(|| format!("Failed to read {}", docs_path.display()))?;
-    let providers: IndexMap<String, ProviderCatalog> = serde_json::from_str(&models_source)
-        .context("Failed to deserialize docs/models.json providers")?;
+    let models_source =
+        fs::read_to_string(&docs_path).with_context(|| format!("Failed to read {}", docs_path.display()))?;
+    let providers: IndexMap<String, ProviderCatalog> =
+        serde_json::from_str(&models_source).context("Failed to deserialize docs/models.json providers")?;
 
     let mut entries = Vec::new();
     for (provider_key, provider) in providers {
@@ -444,8 +437,7 @@ fn write_constants(out_dir: &Path, provider: &Provider, entries: &[EntryData]) -
 
 fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
     let content = build_codegen::generate_openrouter_metadata(entries);
-    fs::write(out_dir.join("openrouter_metadata.rs"), content)
-        .context("Failed to write generated OpenRouter metadata")
+    fs::write(out_dir.join("openrouter_metadata.rs"), content).context("Failed to write generated OpenRouter metadata")
 }
 
 fn write_model_capabilities(out_dir: &Path, entries: &[CapabilityEntry]) -> Result<()> {

@@ -13,16 +13,8 @@ pub struct EvalMetric {
 pub fn compute_metric(task_id: &str, results: &[EvalRunResult]) -> EvalMetric {
     let total = results.len() as u32;
     let passed = results.iter().filter(|r| r.outcome == RunOutcome::Pass).count() as u32;
-    let pass_at_k = if total > 0 {
-        passed as f64 / total as f64
-    } else {
-        0.0
-    };
-    let pass_all_k = if total > 0 && passed == total {
-        1.0
-    } else {
-        0.0
-    };
+    let pass_at_k = if total > 0 { passed as f64 / total as f64 } else { 0.0 };
+    let pass_all_k = if total > 0 && passed == total { 1.0 } else { 0.0 };
     EvalMetric {
         pass_at_k,
         pass_all_k,
@@ -102,11 +94,7 @@ mod tests {
 
     #[test]
     fn compute_metric_pass_at_k() {
-        let results = vec![
-            r(RunOutcome::Pass),
-            r(RunOutcome::Fail),
-            r(RunOutcome::Error),
-        ];
+        let results = vec![r(RunOutcome::Pass), r(RunOutcome::Fail), r(RunOutcome::Error)];
         let m = compute_metric("t", &results);
         assert_eq!(m.total_runs, 3);
         assert_eq!(m.passed_runs, 1);

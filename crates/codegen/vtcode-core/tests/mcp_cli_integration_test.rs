@@ -2,8 +2,7 @@
 use assert_fs::TempDir;
 use std::fs;
 use vtcode_core::mcp::cli::{
-    LoginArgs, LogoutArgs, McpCommands, handle_mcp_command,
-    set_global_config_path_override_for_tests,
+    LoginArgs, LogoutArgs, McpCommands, handle_mcp_command, set_global_config_path_override_for_tests,
 };
 
 struct ConfigOverrideGuard;

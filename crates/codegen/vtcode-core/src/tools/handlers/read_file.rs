@@ -45,24 +45,13 @@ pub(crate) struct ReadFileOutcome {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ReadFileArgs {
     /// Absolute path to the file that will be read.
-    #[serde(
-        alias = "path",
-        alias = "filepath",
-        alias = "target_path",
-        alias = "file"
-    )]
+    #[serde(alias = "path", alias = "filepath", alias = "target_path", alias = "file")]
     pub file_path: String,
     /// 1-indexed line number to start reading from; defaults to 1.
-    #[serde(
-        default = "defaults::offset",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::offset", deserialize_with = "deserialize_maybe_quoted")]
     pub offset: usize,
     /// Maximum number of lines to return; defaults to 400.
-    #[serde(
-        default = "defaults::limit",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::limit", deserialize_with = "deserialize_maybe_quoted")]
     pub limit: usize,
     /// Determines whether the handler reads a simple slice or indentation-aware block.
     #[serde(default, deserialize_with = "deserialize_read_mode")]
@@ -74,20 +63,13 @@ pub struct ReadFileArgs {
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub max_tokens: Option<usize>,
     /// Whether to condense long outputs to head/tail.
-    #[serde(
-        default = "defaults::condense",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::condense", deserialize_with = "deserialize_maybe_quoted")]
     pub condense: bool,
     /// Byte offset (0-indexed) to start reading from. When present, enables byte-range read mode.
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub offset_bytes: Option<u64>,
     /// Number of bytes to read. Accepts alias `length`. When present with `offset_bytes`, enables byte-range read mode.
-    #[serde(
-        default,
-        alias = "length",
-        deserialize_with = "deserialize_opt_maybe_quoted"
-    )]
+    #[serde(default, alias = "length", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page_size_bytes: Option<usize>,
 }
 
@@ -121,16 +103,10 @@ pub struct BatchReadRequest {
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct ReadRange {
     /// 1-indexed line number to start reading from; defaults to 1.
-    #[serde(
-        default = "defaults::offset",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::offset", deserialize_with = "deserialize_maybe_quoted")]
     pub offset: usize,
     /// Maximum number of lines to return; defaults to 500 for batch.
-    #[serde(
-        default = "defaults::batch_limit",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::batch_limit", deserialize_with = "deserialize_maybe_quoted")]
     pub limit: usize,
     /// Read mode: slice or indentation.
     #[serde(default, deserialize_with = "deserialize_read_mode")]
@@ -247,10 +223,7 @@ pub struct IndentationArgs {
     #[serde(default, deserialize_with = "deserialize_opt_maybe_quoted")]
     pub anchor_line: Option<usize>,
     /// Maximum indentation depth to collect; `0` means unlimited.
-    #[serde(
-        default = "defaults::max_levels",
-        deserialize_with = "deserialize_maybe_quoted"
-    )]
+    #[serde(default = "defaults::max_levels", deserialize_with = "deserialize_maybe_quoted")]
     pub max_levels: usize,
     /// Whether to include sibling blocks at the same indentation level.
     #[serde(default = "defaults::include_siblings")]
@@ -387,11 +360,8 @@ impl ReadFileHandler {
                 for range in &result.ranges {
                     let end_line = range.offset + range.lines_read.saturating_sub(1);
                     buf.clear();
-                    let _ = write!(
-                        buf,
-                        "== {} (L{}..L{})\n{}",
-                        result.file_path, range.offset, end_line, range.content
-                    );
+                    let _ =
+                        write!(buf, "== {} (L{}..L{})\n{}", result.file_path, range.offset, end_line, range.content);
                     content_parts.push(std::mem::take(&mut buf));
                 }
             }
@@ -528,18 +498,16 @@ impl ReadFileHandler {
 
         let absolute_max = crate::tools::read_limits::absolute_line_cap();
 
-        let effective_limit =
-            if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
-                MIN_BATCH_LIMIT
-            } else {
-                limit
-            };
+        let effective_limit = if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
+            MIN_BATCH_LIMIT
+        } else {
+            limit
+        };
 
         // Absolute hard cap: no single line-based read may return more than
         // `absolute_max` lines, even when the caller requests a larger `limit`.
         // Byte-range reads are unaffected (they use `page_size_bytes`).
-        let (applied_limit, capped_by_limit) =
-            Self::clamp_to_absolute_cap(effective_limit, absolute_max);
+        let (applied_limit, capped_by_limit) = Self::clamp_to_absolute_cap(effective_limit, absolute_max);
 
         let (mut collected, has_more) = match mode {
             ReadMode::Slice => {
@@ -783,8 +751,7 @@ mod slice {
 
         loop {
             buffer.clear();
-            let bytes_read =
-                reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
+            let bytes_read = reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
 
             if bytes_read == 0 {
                 reached_eof = true;
@@ -824,12 +791,7 @@ mod slice {
 mod indentation {
     use super::*;
 
-    pub async fn read_block(
-        path: &Path,
-        offset: usize,
-        limit: usize,
-        options: IndentationArgs,
-    ) -> Result<Vec<String>> {
+    pub async fn read_block(path: &Path, offset: usize, limit: usize, options: IndentationArgs) -> Result<Vec<String>> {
         let anchor_line = options.anchor_line.unwrap_or(offset);
         anyhow::ensure!(anchor_line > 0, "anchor_line must be a 1-indexed line number");
 
@@ -837,10 +799,7 @@ mod indentation {
         anyhow::ensure!(guard_limit > 0, "max_lines must be greater than zero");
 
         let collected = collect_file_lines(path).await?;
-        anyhow::ensure!(
-            !collected.is_empty() && anchor_line <= collected.len(),
-            "anchor_line exceeds file length"
-        );
+        anyhow::ensure!(!collected.is_empty() && anchor_line <= collected.len(), "anchor_line exceeds file length");
 
         let anchor_index = anchor_line - 1;
         let effective_indents = compute_effective_indents(&collected);
@@ -886,8 +845,7 @@ mod indentation {
 
                     // Control sibling inclusion
                     if effective_indents[iu] == min_indent && !options.include_siblings {
-                        let allow_header_comment =
-                            options.include_header && collected[iu].is_comment();
+                        let allow_header_comment = options.include_header && collected[iu].is_comment();
                         let can_take_line = allow_header_comment || i_counter_min_indent == 0;
 
                         if can_take_line {
@@ -954,8 +912,7 @@ mod indentation {
 
         loop {
             buffer.clear();
-            let bytes_read =
-                reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
+            let bytes_read = reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
 
             if bytes_read == 0 {
                 break;
@@ -1254,10 +1211,7 @@ mod tests {
         let content = handler.handle(args).await?;
 
         // No re-condensation: the requested slice is returned verbatim.
-        assert!(
-            !content.contains("lines omitted"),
-            "paginated read must not be re-condensed; got: {content}"
-        );
+        assert!(!content.contains("lines omitted"), "paginated read must not be re-condensed; got: {content}");
         // The slice starts at line 81 (1-indexed), so line-81 must be present.
         assert!(
             content.contains("line-81"),

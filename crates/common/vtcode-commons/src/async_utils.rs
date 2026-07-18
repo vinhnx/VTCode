@@ -82,11 +82,7 @@ pub async fn sleep_with_context(duration: Duration, _context: &str) {
 }
 
 /// Run multiple futures and wait for all with a timeout
-pub async fn join_all_with_timeout<F, T>(
-    futs: Vec<F>,
-    duration: Duration,
-    context: &str,
-) -> Result<Vec<T>>
+pub async fn join_all_with_timeout<F, T>(futs: Vec<F>, duration: Duration, context: &str) -> Result<Vec<T>>
 where
     F: Future<Output = T>,
 {

@@ -25,10 +25,7 @@ use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 /// `notify_one()` stores a permit even when no task is waiting. The next task
 /// that calls `.notified()` will immediately receive the notification. This
 /// ensures Ctrl+C is always responsive.
-pub(crate) fn request_local_stop(
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-) -> CtrlCSignal {
+pub(crate) fn request_local_stop(ctrl_c_state: &Arc<CtrlCState>, ctrl_c_notify: &Arc<Notify>) -> CtrlCSignal {
     let signal = ctrl_c_state.register_signal();
     // Use notify_one instead of notify_waiters to store a permit.
     // This ensures the notification is not lost when no task is waiting.

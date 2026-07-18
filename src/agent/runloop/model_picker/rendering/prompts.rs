@@ -4,18 +4,14 @@ use anyhow::Result;
 use vtcode_config::OpenAIServiceTier;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{
-    InlineListItem, InlineListSelection, OpenAIServiceTierChoice, reasoning_to_selection_string,
-};
+use vtcode_core::ui::{InlineListItem, InlineListSelection, OpenAIServiceTierChoice, reasoning_to_selection_string};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
     SelectionDetail, reasoning_level_description, reasoning_level_label, service_tier_label,
     supports_gpt5_none_reasoning, supports_max_reasoning, supports_xhigh_reasoning,
 };
-use super::{
-    CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_THREE_TITLE, STEP_TWO_TITLE,
-};
+use super::{CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_THREE_TITLE, STEP_TWO_TITLE};
 
 pub(crate) fn render_reasoning_inline(
     renderer: &mut AnsiRenderer,
@@ -40,9 +36,7 @@ pub(crate) fn render_reasoning_inline(
             subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
             badge: Some("GPT-5.x".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(
-                ReasoningEffortLevel::None,
-            ))),
+            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(ReasoningEffortLevel::None))),
             search_value: None,
         });
     }
@@ -113,15 +107,13 @@ pub(crate) fn prompt_reasoning_plain(
     current: ReasoningEffortLevel,
 ) -> Result<()> {
     let is_responses_flagship = supports_gpt5_none_reasoning(&selection.model_id);
-    let reasoning_suffix = match (
-        supports_xhigh_reasoning(&selection.model_id),
-        supports_max_reasoning(&selection.model_id),
-    ) {
-        (true, true) => "/xhigh/max",
-        (true, false) => "/xhigh",
-        (false, true) => "/max",
-        (false, false) => "",
-    };
+    let reasoning_suffix =
+        match (supports_xhigh_reasoning(&selection.model_id), supports_max_reasoning(&selection.model_id)) {
+            (true, true) => "/xhigh/max",
+            (true, false) => "/xhigh",
+            (false, true) => "/max",
+            (false, false) => "",
+        };
 
     if selection.reasoning_optional {
         let prefix = if is_responses_flagship {
@@ -174,12 +166,7 @@ pub(crate) fn prompt_reasoning_plain(
             MessageStyle::Info,
             &format!(
                 "Step 2 – select reasoning effort for {} ({}{}). Type 'skip' to keep {}. Current: {}.{}",
-                selection.model_display,
-                prefix,
-                reasoning_suffix,
-                current,
-                current,
-                gpt5_hint
+                selection.model_display, prefix, reasoning_suffix, current, current, gpt5_hint
             ),
         )?;
     }
@@ -209,15 +196,9 @@ pub(crate) fn prompt_api_key_plain(
 
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "API key – enter a key for {} (env: {}).",
-            selection.provider_label, selection.env_key
-        ),
+        &format!("API key – enter a key for {} (env: {}).", selection.provider_label, selection.env_key),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("The key will be saved to {env_path_display} and OS keyring."),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("The key will be saved to {env_path_display} and OS keyring."))?;
     renderer.line(MessageStyle::Info, "The key will NOT be stored in vtcode.toml for security.")?;
 
     if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
@@ -226,10 +207,7 @@ pub(crate) fn prompt_api_key_plain(
             "Optional: override base URL with HUGGINGFACE_BASE_URL (default https://router.huggingface.co/v1).",
         )?;
     }
-    renderer.line(
-        MessageStyle::Info,
-        "Paste the API key now or type 'skip' to reuse a stored credential.",
-    )?;
+    renderer.line(MessageStyle::Info, "Paste the API key now or type 'skip' to reuse a stored credential.")?;
     Ok(())
 }
 
@@ -253,21 +231,15 @@ pub(crate) fn render_service_tier_inline(
         },
         InlineListItem {
             title: "Project default".to_string(),
-            subtitle: Some(
-                "Do not send service_tier; inherit the OpenAI Project setting.".to_string(),
-            ),
+            subtitle: Some("Do not send service_tier; inherit the OpenAI Project setting.".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(
-                OpenAIServiceTierChoice::ProjectDefault,
-            )),
+            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::ProjectDefault)),
             search_value: None,
         },
         InlineListItem {
             title: "Flex".to_string(),
-            subtitle: Some(
-                "Send service_tier=flex for lower-cost, lower-priority processing.".to_string(),
-            ),
+            subtitle: Some("Send service_tier=flex for lower-cost, lower-priority processing.".to_string()),
             badge: Some("OpenAI".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::Flex)),
@@ -275,14 +247,10 @@ pub(crate) fn render_service_tier_inline(
         },
         InlineListItem {
             title: "Priority".to_string(),
-            subtitle: Some(
-                "Send service_tier=priority for lower and more consistent latency.".to_string(),
-            ),
+            subtitle: Some("Send service_tier=priority for lower and more consistent latency.".to_string()),
             badge: Some("OpenAI".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(
-                OpenAIServiceTierChoice::Priority,
-            )),
+            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::Priority)),
             search_value: None,
         },
     ];
@@ -317,10 +285,8 @@ pub(crate) fn prompt_service_tier_plain(
             service_tier_label(current)
         ),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "This applies only to native OpenAI models that support OpenAI service tiers.",
-    )?;
+    renderer
+        .line(MessageStyle::Info, "This applies only to native OpenAI models that support OpenAI service tiers.")?;
     Ok(())
 }
 
@@ -358,8 +324,7 @@ pub(crate) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<(
         "For Ollama, you can use any locally available model like 'llama3:8b', 'mistral:7b', etc.",
     )?;
     renderer.line(MessageStyle::Info, "Type 'cancel' to exit the picker at any time.")?;
-    renderer
-        .line(MessageStyle::Info, "Type 'refresh' to reload LM Studio and Ollama model lists.")?;
+    renderer.line(MessageStyle::Info, "Type 'refresh' to reload LM Studio and Ollama model lists.")?;
     Ok(())
 }
 
@@ -370,16 +335,13 @@ pub(crate) fn render_mimo_auth_method_inline(renderer: &mut AnsiRenderer) -> Res
             subtitle: Some("Standard API access. Uses sk- key with api-key header.".to_string()),
             badge: Some("Default".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "mimo-auth:pay-as-you-go".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("mimo-auth:pay-as-you-go".to_string())),
             search_value: Some("mimo payg pay-as-you-go sk api key".to_string()),
         },
         InlineListItem {
             title: "Token Plan".to_string(),
             subtitle: Some(
-                "Subscription-based access. Uses tp- key with Bearer token. Includes more models."
-                    .to_string(),
+                "Subscription-based access. Uses tp- key with Bearer token. Includes more models.".to_string(),
             ),
             badge: Some("Subscription".to_string()),
             indent: 0,
@@ -392,7 +354,8 @@ pub(crate) fn render_mimo_auth_method_inline(renderer: &mut AnsiRenderer) -> Res
         "MiMo Auth Method",
         vec![
             "Choose an authentication method for Xiaomi MiMo.".to_string(),
-            "Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to override region.".to_string(),
+            "Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to override region."
+                .to_string(),
         ],
         items,
         None,
@@ -407,10 +370,7 @@ pub(crate) fn prompt_mimo_auth_method_plain(renderer: &mut AnsiRenderer) -> Resu
         "MiMo auth method - choose 'pay-as-you-go' or 'token-plan'. Type 'skip' for default (pay-as-you-go).",
     )?;
     renderer.line(MessageStyle::Info, "Pay-as-you-go: standard API access with sk- key.")?;
-    renderer.line(
-        MessageStyle::Info,
-        "Token Plan: subscription-based access with tp- key. Includes more models.",
-    )?;
+    renderer.line(MessageStyle::Info, "Token Plan: subscription-based access with tp- key. Includes more models.")?;
     renderer.line(
         MessageStyle::Info,
         "Note: Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to use China (token-plan-cn) or Singapore (token-plan-sgp).",

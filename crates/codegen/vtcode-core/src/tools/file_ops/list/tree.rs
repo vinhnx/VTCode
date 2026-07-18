@@ -13,8 +13,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
     let search_path = tool.workspace_root.join(&input.path);
 
     if !search_path.exists() {
-        let suggestion =
-            tool.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+        let suggestion = tool.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
         return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
     }
 
@@ -51,11 +50,9 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
                     if tool.should_exclude(&file_entry.path()).await {
                         continue;
                     }
-                    let is_dir =
-                        file_entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
+                    let is_dir = file_entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
 
-                    entries_list
-                        .push((entry_name, if is_dir { "directory" } else { "file" }.to_string()));
+                    entries_list.push((entry_name, if is_dir { "directory" } else { "file" }.to_string()));
                 }
                 children = entries_list;
             }
@@ -70,8 +67,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
     }
 
     // Build tree structure
-    let tree_structure =
-        build_tree_structure(tool, &search_path, &dir_contents, input.include_hidden).await;
+    let tree_structure = build_tree_structure(tool, &search_path, &dir_contents, input.include_hidden).await;
 
     Ok(json!({
         "success": true,
@@ -94,8 +90,7 @@ async fn build_tree_structure(
         .to_string_lossy()
         .to_string();
 
-    let mut items =
-        Vec::with_capacity(dir_contents.get(&relative_path as &str).map_or(0, |c| c.len()));
+    let mut items = Vec::with_capacity(dir_contents.get(&relative_path as &str).map_or(0, |c| c.len()));
 
     if let Some(contents) = dir_contents.get(&relative_path) {
         for (name, entry_type) in contents {
@@ -112,8 +107,7 @@ async fn build_tree_structure(
                     .to_string_lossy()
                     .to_string();
 
-                let sub_children = if let Some(sub_contents) = dir_contents.get(&sub_relative_path)
-                {
+                let sub_children = if let Some(sub_contents) = dir_contents.get(&sub_relative_path) {
                     let mut sub_items = Vec::new();
                     for (sub_name, sub_type) in sub_contents {
                         if !include_hidden && sub_name.starts_with('.') {

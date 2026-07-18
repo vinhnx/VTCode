@@ -11,14 +11,9 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 /// Shows two lines for LLM errors:
 /// 1. Human-friendly error message (extracted from the JSON body)
 /// 2. Full JSON response body for debugging
-pub(crate) fn display_error(
-    renderer: &mut AnsiRenderer,
-    category: &str,
-    error: &anyhow::Error,
-) -> Result<()> {
+pub(crate) fn display_error(renderer: &mut AnsiRenderer, category: &str, error: &anyhow::Error) -> Result<()> {
     renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer
-        .line(MessageStyle::Error, &format!("{}: {}", category, error_message_for_user(error)))?;
+    renderer.line(MessageStyle::Error, &format!("{}: {}", category, error_message_for_user(error)))?;
     // For local-inference readiness failures, surface the managed recovery path
     // (the error message already contains the exact `ollama pull`/`lms load`/
     // `/local start` command — this adds the interactive `/local` entrypoint).
@@ -26,10 +21,8 @@ pub(crate) fn display_error(
         && let Some(code) = local_readiness_code(llm_err)
         && (code == "local_server_down" || code == "local_model_missing")
     {
-        renderer.line(
-            MessageStyle::Info,
-            "Use /local to manage local inference servers (status, start, troubleshoot).",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "Use /local to manage local inference servers (status, start, troubleshoot).")?;
     }
     // Show full JSON body for LLM errors when available and different from the message
     if let Some(llm_err) = error.downcast_ref::<LLMError>()
@@ -78,8 +71,7 @@ fn llm_error_human_message(error: &LLMError) -> String {
             if let Some(meta) = metadata
                 && let Some(raw) = &meta.message
             {
-                let human =
-                    vtcode_core::llm::providers::error_handling::extract_human_error_message(raw);
+                let human = vtcode_core::llm::providers::error_handling::extract_human_error_message(raw);
                 if human != *raw {
                     return human;
                 }
@@ -96,9 +88,9 @@ fn llm_error_human_message(error: &LLMError) -> String {
         LLMError::RateLimit { metadata } => metadata
             .as_ref()
             .and_then(|meta| {
-                meta.message.as_ref().map(|raw| {
-                    vtcode_core::llm::providers::error_handling::extract_human_error_message(raw)
-                })
+                meta.message
+                    .as_ref()
+                    .map(|raw| vtcode_core::llm::providers::error_handling::extract_human_error_message(raw))
             })
             .unwrap_or_else(|| error.to_string()),
     }
@@ -205,10 +197,7 @@ mod tests {
             )),
         });
 
-        assert_eq!(
-            error_message_for_user(&error),
-            "Project rate limit exceeded for model gpt-5.2."
-        );
+        assert_eq!(error_message_for_user(&error), "Project rate limit exceeded for model gpt-5.2.");
     }
 
     #[test]
@@ -227,10 +216,7 @@ mod tests {
             )),
         });
 
-        assert_eq!(
-            error_message_for_user(&error),
-            "The 'gpt-5.4' model is not supported with this method."
-        );
+        assert_eq!(error_message_for_user(&error), "The 'gpt-5.4' model is not supported with this method.");
     }
 
     #[test]

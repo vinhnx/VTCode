@@ -16,9 +16,7 @@ use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
 use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolProfile, ToolsConfig};
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use vtcode_core::llm::provider::{MessageRole, ToolDefinition};
 
 async fn build_agent(workspace: &Path) -> ZedAgent {
@@ -56,8 +54,7 @@ async fn build_agent_with_tools_config(workspace: &Path, tools_config: ToolsConf
     let mut discovery_input = SubagentDiscoveryInput::new(workspace.to_path_buf());
     discovery_input.include_user_agents = false;
     let discovered = discover_subagents(&discovery_input).expect("discover primary agents");
-    let primary_agents =
-        PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, "duck");
+    let primary_agents = PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, "duck");
 
     ZedAgent::new(
         core_config,
@@ -232,12 +229,9 @@ async fn read_only_primary_agents_hide_local_tools() {
         })
         .collect();
 
-    let duck_names =
-        definition_names(agent.tool_definitions(true, &enabled_tools, "duck").unwrap());
-    let plan_names =
-        definition_names(agent.tool_definitions(true, &enabled_tools, "plan").unwrap());
-    let build_names =
-        definition_names(agent.tool_definitions(true, &enabled_tools, "build").unwrap());
+    let duck_names = definition_names(agent.tool_definitions(true, &enabled_tools, "duck").unwrap());
+    let plan_names = definition_names(agent.tool_definitions(true, &enabled_tools, "plan").unwrap());
+    let build_names = definition_names(agent.tool_definitions(true, &enabled_tools, "build").unwrap());
 
     assert_eq!(duck_names, vec![tools::LIST_FILES.to_string()]);
     assert_eq!(plan_names, duck_names);
@@ -306,10 +300,8 @@ Reader prompt."#,
         })
         .collect();
 
-    let sheller_names =
-        definition_names(agent.tool_definitions(true, &enabled_tools, "sheller").unwrap());
-    let reader_names =
-        definition_names(agent.tool_definitions(true, &enabled_tools, "reader").unwrap());
+    let sheller_names = definition_names(agent.tool_definitions(true, &enabled_tools, "sheller").unwrap());
+    let reader_names = definition_names(agent.tool_definitions(true, &enabled_tools, "reader").unwrap());
 
     assert!(sheller_names.contains(&tools::EXEC_COMMAND.to_string()));
     assert!(!sheller_names.contains(&tools::APPLY_PATCH.to_string()));
@@ -331,10 +323,8 @@ async fn allows_tool_gates_deny_default_agent_by_tool_category() {
     // This exercises `allows_tool` for every local tool name so name drift that
     // would silently over-permit (an unrecognized name falling through to an
     // always-permitted `Other` request) is caught.
-    let catalog = PrimaryAgentCatalog::from_specs_with_default(
-        &[deny_default_agent_allowing("exec_command")],
-        "sheller",
-    );
+    let catalog =
+        PrimaryAgentCatalog::from_specs_with_default(&[deny_default_agent_allowing("exec_command")], "sheller");
     let workspace = temp.path();
 
     for name in &local_names {
@@ -418,11 +408,9 @@ async fn local_tool_metadata_uses_core_labels_and_kinds() {
     let patch_args = json!({});
 
     assert_eq!(
-        agent.acp_tool_registry.render_title(
-            ToolDescriptor::Local,
-            tools::EXEC_COMMAND,
-            &exec_args
-        ),
+        agent
+            .acp_tool_registry
+            .render_title(ToolDescriptor::Local, tools::EXEC_COMMAND, &exec_args),
         "Run command"
     );
     assert_eq!(
@@ -432,11 +420,9 @@ async fn local_tool_metadata_uses_core_labels_and_kinds() {
         crate::acp::ToolKind::Execute
     );
     assert_eq!(
-        agent.acp_tool_registry.render_title(
-            ToolDescriptor::Local,
-            tools::CODE_SEARCH,
-            &search_args
-        ),
+        agent
+            .acp_tool_registry
+            .render_title(ToolDescriptor::Local, tools::CODE_SEARCH, &search_args),
         "Search code"
     );
     assert_eq!(
@@ -446,11 +432,9 @@ async fn local_tool_metadata_uses_core_labels_and_kinds() {
         crate::acp::ToolKind::Search
     );
     assert_eq!(
-        agent.acp_tool_registry.render_title(
-            ToolDescriptor::Local,
-            tools::APPLY_PATCH,
-            &patch_args
-        ),
+        agent
+            .acp_tool_registry
+            .render_title(ToolDescriptor::Local, tools::APPLY_PATCH, &patch_args),
         "Apply patch"
     );
     assert_eq!(

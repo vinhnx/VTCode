@@ -334,15 +334,14 @@ mod tests {
 
     #[test]
     fn legacy_provider_config_create_provider_routes_through_factory() {
-        let provider =
-            <OpenAIProviderConfig as crate::llm::provider_builder::ProviderConfig>::create_provider(
-                "test-key".to_string(),
-                crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
-                crate::config::constants::urls::OPENAI_API_BASE.to_string(),
-                false,
-                (),
-                TimeoutsConfig::default(),
-            );
+        let provider = <OpenAIProviderConfig as crate::llm::provider_builder::ProviderConfig>::create_provider(
+            "test-key".to_string(),
+            crate::config::constants::models::openai::DEFAULT_MODEL.to_string(),
+            crate::config::constants::urls::OPENAI_API_BASE.to_string(),
+            false,
+            (),
+            TimeoutsConfig::default(),
+        );
 
         assert_eq!(provider.name(), "openai");
     }

@@ -82,9 +82,8 @@ impl Usage {
 
     #[inline]
     pub fn is_cache_miss(&self) -> Option<bool> {
-        self.has_any_cache_metrics().then(|| {
-            self.cache_creation_tokens_or_zero() > 0 && self.cache_read_tokens_or_fallback() == 0
-        })
+        self.has_any_cache_metrics()
+            .then(|| self.cache_creation_tokens_or_zero() > 0 && self.cache_read_tokens_or_fallback() == 0)
     }
 
     #[inline]
@@ -101,11 +100,7 @@ impl Usage {
         }
         let read = self.cache_read_tokens_or_fallback() as f64;
         let prompt = self.prompt_tokens as f64;
-        if prompt > 0.0 {
-            Some(read / prompt)
-        } else {
-            None
-        }
+        if prompt > 0.0 { Some(read / prompt) } else { None }
     }
 }
 
@@ -254,12 +249,7 @@ impl ToolCall {
     }
 
     /// Create a new function tool call with an optional namespace.
-    pub fn function_with_namespace(
-        id: String,
-        namespace: Option<String>,
-        name: String,
-        arguments: String,
-    ) -> Self {
+    pub fn function_with_namespace(id: String, namespace: Option<String>, name: String, arguments: String) -> Self {
         Self {
             id,
             call_type: "function".to_owned(),
@@ -620,9 +610,7 @@ pub enum LLMError {
         metadata: Option<Box<LLMErrorMetadata>>,
     },
     #[error("Rate limit exceeded")]
-    RateLimit {
-        metadata: Option<Box<LLMErrorMetadata>>,
-    },
+    RateLimit { metadata: Option<Box<LLMErrorMetadata>> },
     #[error("Invalid request: {message}")]
     InvalidRequest {
         message: String,
@@ -742,16 +730,12 @@ mod tests {
     #[test]
     fn custom_tool_call_exposes_raw_execution_arguments() {
         let patch = "*** Begin Patch\n*** End Patch\n".to_string();
-        let call =
-            ToolCall::custom("call_patch".to_string(), "apply_patch".to_string(), patch.clone());
+        let call = ToolCall::custom("call_patch".to_string(), "apply_patch".to_string(), patch.clone());
 
         assert!(call.is_custom());
         assert_eq!(call.tool_name(), Some("apply_patch"));
         assert_eq!(call.raw_input(), Some(patch.as_str()));
         assert_eq!(call.execution_arguments().expect("custom arguments"), json!(patch));
-        assert!(
-            call.parsed_arguments().is_err(),
-            "custom tool payload should stay freeform rather than JSON"
-        );
+        assert!(call.parsed_arguments().is_err(), "custom tool payload should stay freeform rather than JSON");
     }
 }

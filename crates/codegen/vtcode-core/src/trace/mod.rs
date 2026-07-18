@@ -35,8 +35,7 @@ pub use store::*;
 
 // Re-export core types from vtcode-exec-events for convenience
 pub use vtcode_exec_events::trace::{
-    AGENT_TRACE_MIME_TYPE, AGENT_TRACE_VERSION, Contributor, ContributorType, HashAlgorithm,
-    RelatedResource, ToolInfo, TraceConversation, TraceFile, TraceMetadata, TraceRange,
-    TraceRecord, TraceRecordBuilder, VcsInfo, VcsType, VtCodeMetadata, compute_content_hash,
-    compute_content_hash_with, normalize_model_id,
+    AGENT_TRACE_MIME_TYPE, AGENT_TRACE_VERSION, Contributor, ContributorType, HashAlgorithm, RelatedResource, ToolInfo,
+    TraceConversation, TraceFile, TraceMetadata, TraceRange, TraceRecord, TraceRecordBuilder, VcsInfo, VcsType,
+    VtCodeMetadata, compute_content_hash, compute_content_hash_with, normalize_model_id,
 };

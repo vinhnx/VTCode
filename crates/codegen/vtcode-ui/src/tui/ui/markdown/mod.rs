@@ -8,12 +8,10 @@ mod tables;
 use crate::tui::config::loader::SyntaxHighlightingConfig;
 use crate::tui::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
-use code_blocks::{
-    CodeBlockRenderEnv, CodeBlockState, finalize_unclosed_code_block, handle_code_block_event,
-};
+use code_blocks::{CodeBlockRenderEnv, CodeBlockState, finalize_unclosed_code_block, handle_code_block_event};
 use parsing::{
-    LinkState, ListState, MarkdownContext, append_text, handle_end_tag, handle_start_tag,
-    inline_code_style, push_blank_line, trim_trailing_blank_lines,
+    LinkState, ListState, MarkdownContext, append_text, handle_end_tag, handle_start_tag, inline_code_style,
+    push_blank_line, trim_trailing_blank_lines,
 };
 use pulldown_cmark::{Event, Options, Parser};
 use tables::TableBuffer;
@@ -40,11 +38,7 @@ impl MarkdownSegment {
         Self { style, text: text.into(), link_target: None }
     }
 
-    pub(crate) fn with_link(
-        style: Style,
-        text: impl Into<String>,
-        link_target: Option<String>,
-    ) -> Self {
+    pub(crate) fn with_link(style: Style, text: impl Into<String>, link_target: Option<String>) -> Self {
         Self { style, text: text.into(), link_target }
     }
 }
@@ -60,12 +54,7 @@ impl MarkdownLine {
         self.push_segment_with_link(style, text, None);
     }
 
-    pub(crate) fn push_segment_with_link(
-        &mut self,
-        style: Style,
-        text: &str,
-        link_target: Option<String>,
-    ) {
+    pub(crate) fn push_segment_with_link(&mut self, style: Style, text: &str, link_target: Option<String>) {
         if text.is_empty() {
             return;
         }
@@ -120,10 +109,8 @@ pub fn render_markdown_to_lines_with_options(
     highlight_config: Option<&SyntaxHighlightingConfig>,
     render_options: RenderMarkdownOptions,
 ) -> Vec<MarkdownLine> {
-    let parser_options = Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TABLES
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES;
+    let parser_options =
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_FOOTNOTES;
 
     let parser = Parser::new_ext(source, parser_options);
 

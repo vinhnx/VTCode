@@ -42,10 +42,7 @@ fn collapsed_by_default_renders_summary_line() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let joined = all_text(&transcript);
 
-    assert!(
-        joined.contains("Thinking"),
-        "collapsed summary should mention Thinking, got: {joined:?}"
-    );
+    assert!(joined.contains("Thinking"), "collapsed summary should mention Thinking, got: {joined:?}");
     assert!(
         !joined.contains("reasoning step one"),
         "collapsed render must not include the body, got: {joined:?}"
@@ -62,14 +59,8 @@ fn extended_config_renders_full_body() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let joined = all_text(&transcript);
 
-    assert!(
-        joined.contains("reasoning step one"),
-        "extended render should include the body, got: {joined:?}"
-    );
-    assert!(
-        joined.starts_with("Thinking"),
-        "expanded render must have a Thinking header, got: {joined:?}"
-    );
+    assert!(joined.contains("reasoning step one"), "extended render should include the body, got: {joined:?}");
+    assert!(joined.starts_with("Thinking"), "expanded render must have a Thinking header, got: {joined:?}");
 }
 
 #[test]
@@ -94,10 +85,7 @@ fn toggle_flips_collapse_state() {
 
     // Now expanded.
     let expanded = session.reflow_message_lines(start, 100, true);
-    assert!(
-        all_text(&expanded).contains("reasoning step one"),
-        "after toggle the body should be visible"
-    );
+    assert!(all_text(&expanded).contains("reasoning step one"), "after toggle the body should be visible");
 
     // Toggle back to collapsed.
     let toggled_again = session.toggle_thinking_block_at_row(100, summary_row);
@@ -116,10 +104,7 @@ fn toggle_updates_reflow_cache() {
     // Prime the reflow cache (collapsed by default).
     let pre = session.ensure_reflow_cache(100);
     let pre_text = all_text(&pre.messages[start].lines);
-    assert!(
-        pre_text.contains("Thinking"),
-        "cache should hold the collapsed summary, got: {pre_text:?}"
-    );
+    assert!(pre_text.contains("Thinking"), "cache should hold the collapsed summary, got: {pre_text:?}");
 
     // Resolve the summary row and toggle.
     let summary_row = pre.row_offsets[start];
@@ -318,8 +303,7 @@ fn trailing_empty_policy_line_removed_when_non_policy_arrives_via_append_inline(
 
     // Verify the empty Policy line was removed.
     for (i, line) in session.lines.iter().enumerate() {
-        if line.kind == InlineMessageKind::Policy && line.segments.iter().all(|s| s.text.is_empty())
-        {
+        if line.kind == InlineMessageKind::Policy && line.segments.iter().all(|s| s.text.is_empty()) {
             panic!("trailing empty Policy line still present at index {i} after Agent append");
         }
     }
@@ -347,16 +331,10 @@ fn expanded_view_skips_trailing_empty_policy_line() {
     assert_eq!(body[0], "Thinking", "header should be Thinking");
     // The two content lines should be rendered.
     assert!(body.iter().any(|l| l.contains("reasoning one")), "first reasoning line should appear");
-    assert!(
-        body.iter().any(|l| l.contains("reasoning two")),
-        "second reasoning line should appear"
-    );
+    assert!(body.iter().any(|l| l.contains("reasoning two")), "second reasoning line should appear");
     // The empty line must produce no additional rendered line.
     let rendered_count = body.iter().skip(1).filter(|l| !l.trim().is_empty()).count();
-    assert!(
-        rendered_count >= 1,
-        "both non-empty reasoning lines should be rendered, got {rendered_count}"
-    );
+    assert!(rendered_count >= 1, "both non-empty reasoning lines should be rendered, got {rendered_count}");
 }
 
 #[test]
@@ -429,16 +407,9 @@ fn expanded_thinking_continuation_lines_match_first_line_width() {
 
     let narrow = session.reflow_message_lines(start, 40, true);
     let narrow_text: Vec<String> = narrow.iter().map(line_text).collect();
-    let body_widths: Vec<usize> =
-        narrow_text.iter().skip(1).map(|line| display_width(line)).collect();
-    assert!(
-        body_widths.iter().all(|&w| w <= 40),
-        "no body line must exceed viewport width: {body_widths:?}"
-    );
-    assert!(
-        body_widths.len() >= 2,
-        "wrapped text should produce multiple body lines: {body_widths:?}"
-    );
+    let body_widths: Vec<usize> = narrow_text.iter().skip(1).map(|line| display_width(line)).collect();
+    assert!(body_widths.iter().all(|&w| w <= 40), "no body line must exceed viewport width: {body_widths:?}");
+    assert!(body_widths.len() >= 2, "wrapped text should produce multiple body lines: {body_widths:?}");
 }
 
 #[test]
@@ -452,10 +423,7 @@ fn expanded_thinking_numbered_list_preserves_structural_indent() {
     let narrow = session.reflow_message_lines(start, 30, true);
     let narrow_text: Vec<String> = narrow.iter().map(line_text).collect();
     let body_text: String = narrow_text.iter().skip(1).cloned().collect();
-    assert!(
-        body_text.contains("1. first"),
-        "numbered list marker must be preserved: {body_text:?}"
-    );
+    assert!(body_text.contains("1. first"), "numbered list marker must be preserved: {body_text:?}");
 }
 
 #[test]
@@ -469,9 +437,6 @@ fn expanded_thinking_strips_leading_whitespace_for_consistent_indent() {
     let transcript = session.reflow_message_lines(start, 40, true);
     let body_lines: Vec<String> = transcript.iter().skip(1).map(line_text).collect();
     for line in &body_lines {
-        assert!(
-            !line.starts_with(' '),
-            "body line must not have leading whitespace, got: {line:?}"
-        );
+        assert!(!line.starts_with(' '), "body line must not have leading whitespace, got: {line:?}");
     }
 }

@@ -142,22 +142,15 @@ impl EvaluatorResponse {
         append_clause(&missing_criteria, "Scorecard incomplete: missing");
         append_clause(&invalid_criteria, "Scorecard invalid (scores must be 1-5)");
         if !failing_criteria.is_empty() {
-            let prefix =
-                format!("Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required)");
+            let prefix = format!("Scorecard below threshold (>= {EVALUATOR_SCORE_THRESHOLD}/5 required)");
             append_clause(&failing_criteria, &prefix);
         }
 
         if summary.is_empty() {
             if self.high_severity_findings > 0 {
-                return format!(
-                    "Evaluator reported {} high-severity finding(s).",
-                    self.high_severity_findings
-                );
+                return format!("Evaluator reported {} high-severity finding(s).", self.high_severity_findings);
             }
-            if missing_criteria.is_empty()
-                && invalid_criteria.is_empty()
-                && failing_criteria.is_empty()
-            {
+            if missing_criteria.is_empty() && invalid_criteria.is_empty() && failing_criteria.is_empty() {
                 return "Evaluator returned no summary.".to_string();
             }
         }

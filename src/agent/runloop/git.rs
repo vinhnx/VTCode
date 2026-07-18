@@ -100,9 +100,7 @@ pub(crate) fn workspace_relative_display(workspace: &Path, path: &Path) -> Strin
     path.display().to_string()
 }
 
-pub(crate) fn git_dirty_worktree_entries(
-    workspace: &Path,
-) -> Result<Option<Vec<DirtyWorktreeEntry>>> {
+pub(crate) fn git_dirty_worktree_entries(workspace: &Path) -> Result<Option<Vec<DirtyWorktreeEntry>>> {
     if !is_git_repo_at(workspace) {
         return Ok(None);
     }
@@ -119,9 +117,7 @@ pub(crate) fn git_dirty_worktree_entries(
         ])
         .current_dir(workspace)
         .output()
-        .with_context(|| {
-            format!("Failed to read git worktree state for {}", workspace.display())
-        })?;
+        .with_context(|| format!("Failed to read git worktree state for {}", workspace.display()))?;
 
     if !output.status.success() {
         return Ok(None);
@@ -159,27 +155,16 @@ pub(crate) fn git_dirty_worktree_entries(
     Ok(Some(entries))
 }
 
-pub(crate) fn git_working_tree_numstat_snapshot(
-    workspace: &Path,
-) -> Result<Option<HashMap<PathBuf, FileStat>>> {
+pub(crate) fn git_working_tree_numstat_snapshot(workspace: &Path) -> Result<Option<HashMap<PathBuf, FileStat>>> {
     if !is_git_repo_at(workspace) {
         return Ok(None);
     }
 
     let output = std::process::Command::new("git")
-        .args([
-            "-c",
-            "core.quotepath=off",
-            "diff",
-            "--numstat",
-            "HEAD",
-            "--",
-        ])
+        .args(["-c", "core.quotepath=off", "diff", "--numstat", "HEAD", "--"])
         .current_dir(workspace)
         .output()
-        .with_context(|| {
-            format!("Failed to read git working tree numstat for {}", workspace.display())
-        })?;
+        .with_context(|| format!("Failed to read git working tree numstat for {}", workspace.display()))?;
 
     if !output.status.success() {
         return Ok(None);
@@ -263,10 +248,7 @@ pub(crate) fn git_status_summary(workspace: &Path) -> Result<Option<GitStatusSum
     Ok(Some(GitStatusSummary { branch, dirty }))
 }
 
-pub(crate) async fn confirm_changes_with_git_diff(
-    modified_files: &[String],
-    skip_confirmations: bool,
-) -> Result<bool> {
+pub(crate) async fn confirm_changes_with_git_diff(modified_files: &[String], skip_confirmations: bool) -> Result<bool> {
     if skip_confirmations {
         return Ok(true);
     }
@@ -328,8 +310,8 @@ pub(crate) async fn confirm_changes_with_git_diff(
 #[cfg(test)]
 mod tests {
     use super::{
-        CodeChangeDelta, DirtyWorktreeStatus, FileStat, compute_session_code_change_delta,
-        git_dirty_worktree_entries, normalize_workspace_path, workspace_relative_display,
+        CodeChangeDelta, DirtyWorktreeStatus, FileStat, compute_session_code_change_delta, git_dirty_worktree_entries,
+        normalize_workspace_path, workspace_relative_display,
     };
     use hashbrown::HashMap;
     use std::fs;
@@ -352,8 +334,7 @@ mod tests {
     #[test]
     fn session_code_change_delta_handles_new_and_reduced_files() {
         let mut start = HashMap::new();
-        start
-            .insert(PathBuf::from("src/preexisting.rs"), FileStat { additions: 20, deletions: 10 });
+        start.insert(PathBuf::from("src/preexisting.rs"), FileStat { additions: 20, deletions: 10 });
 
         let mut end = HashMap::new();
         end.insert(PathBuf::from("src/preexisting.rs"), FileStat { additions: 5, deletions: 2 });
@@ -421,10 +402,7 @@ mod tests {
         let entries = git_dirty_worktree_entries(repo.path()).expect("entries").expect("git repo");
 
         assert_eq!(entries.len(), 1);
-        assert_eq!(
-            workspace_relative_display(repo.path(), &entries[0].path),
-            "docs/project/TODO.md"
-        );
+        assert_eq!(workspace_relative_display(repo.path(), &entries[0].path), "docs/project/TODO.md");
         assert_eq!(entries[0].status, DirtyWorktreeStatus::Modified);
     }
 }

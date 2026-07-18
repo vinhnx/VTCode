@@ -1,7 +1,6 @@
 use super::{
-    DEFAULT_AGENT_TOOL_IDS, active_subagent_entries, background_subprocess_summary,
-    scaffold_agent_markdown, subprocess_action_prompt, summarize_thread_event_preview,
-    visible_subagent_entries,
+    DEFAULT_AGENT_TOOL_IDS, active_subagent_entries, background_subprocess_summary, scaffold_agent_markdown,
+    subprocess_action_prompt, summarize_thread_event_preview, visible_subagent_entries,
 };
 use chrono::Utc;
 use std::path::PathBuf;
@@ -12,8 +11,8 @@ use vtcode_core::subagents::{
     BackgroundSubprocessEntry, BackgroundSubprocessStatus, SubagentStatus, SubagentStatusEntry,
 };
 use vtcode_core::{
-    ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ToolCallStatus, ToolOutputItem,
+    ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ToolCallStatus,
+    ToolOutputItem,
 };
 
 fn test_subagent_entry(id: &str, status: SubagentStatus) -> SubagentStatusEntry {
@@ -79,14 +78,12 @@ fn visible_subagent_entries_keep_recent_terminal_runs_inspectable() {
 
 #[test]
 fn subprocess_action_prompt_matches_requested_action() {
-    let (graceful_title, graceful_message, graceful_confirm) =
-        subprocess_action_prompt("Rust Engineer", false);
+    let (graceful_title, graceful_message, graceful_confirm) = subprocess_action_prompt("Rust Engineer", false);
     assert_eq!(graceful_title, "Graceful stop subprocess");
     assert_eq!(graceful_message, "Request a graceful shutdown for `Rust Engineer`?");
     assert_eq!(graceful_confirm, "Graceful stop");
 
-    let (force_title, force_message, force_confirm) =
-        subprocess_action_prompt("Rust Engineer", true);
+    let (force_title, force_message, force_confirm) = subprocess_action_prompt("Rust Engineer", true);
     assert_eq!(force_title, "Force cancel subprocess");
     assert_eq!(force_message, "Force cancel `Rust Engineer` immediately?");
     assert_eq!(force_confirm, "Force cancel");
@@ -169,8 +166,7 @@ fn scaffold_agent_markdown_generates_valid_permission_rules() {
     let path = temp.path().join("reviewer.md");
     std::fs::write(&path, rendered).expect("write scaffold");
 
-    let spec =
-        load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load scaffold");
+    let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load scaffold");
     assert_eq!(spec.permissions.default, PermissionDefault::Deny);
     assert_eq!(spec.permissions.allow, DEFAULT_AGENT_TOOL_IDS);
 }

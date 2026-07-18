@@ -40,10 +40,7 @@ fn canonicalize_json(value: &Value) -> Result<String> {
             }
             Value::Number(number) => output.push_str(&number.to_string()),
             Value::String(string) => {
-                output.push_str(
-                    &serde_json::to_string(string)
-                        .context("Failed to serialize JSON string canonically")?,
-                );
+                output.push_str(&serde_json::to_string(string).context("Failed to serialize JSON string canonically")?);
             }
             Value::Array(values) => {
                 output.push('[');
@@ -65,8 +62,7 @@ fn canonicalize_json(value: &Value) -> Result<String> {
                         output.push(',');
                     }
                     output.push_str(
-                        &serde_json::to_string(key)
-                            .context("Failed to serialize JSON object key canonically")?,
+                        &serde_json::to_string(key).context("Failed to serialize JSON object key canonically")?,
                     );
                     output.push(':');
                     write_canonical_json(item, output)?;
@@ -88,12 +84,10 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
     use tempfile::TempDir;
     use vtcode_core::tools::ToolRegistry;
 
-    let temp_dir =
-        TempDir::new().context("Failed to create temporary directory for tool registry")?;
+    let temp_dir = TempDir::new().context("Failed to create temporary directory for tool registry")?;
 
     // Create a tool registry instance to access registered tools
-    let runtime = tokio::runtime::Runtime::new()
-        .context("Failed to create tokio runtime for tool registry")?;
+    let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime for tool registry")?;
 
     let schemas = runtime.block_on(async {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
@@ -418,14 +412,8 @@ mod tests {
 
         for (tool_name, schema) in &schemas {
             assert!(schema.get("name").is_some(), "Tool {tool_name} missing 'name' field");
-            assert!(
-                schema.get("description").is_some(),
-                "Tool {tool_name} missing 'description' field"
-            );
-            assert!(
-                schema.get("parameters").is_some(),
-                "Tool {tool_name} missing 'parameters' field"
-            );
+            assert!(schema.get("description").is_some(), "Tool {tool_name} missing 'description' field");
+            assert!(schema.get("parameters").is_some(), "Tool {tool_name} missing 'parameters' field");
         }
     }
 
@@ -436,10 +424,7 @@ mod tests {
         for (tool_name, schema) in &schemas {
             let params = schema.get("parameters").expect("missing parameters");
             assert!(params.get("type").is_some(), "Tool {tool_name} parameters missing 'type'");
-            assert!(
-                params.get("properties").is_some(),
-                "Tool {tool_name} parameters missing 'properties'"
-            );
+            assert!(params.get("properties").is_some(), "Tool {tool_name} parameters missing 'properties'");
         }
     }
 }
@@ -476,9 +461,7 @@ mod ci_tests {
             let snapshot_file = snapshot_path.join(format!("{tool_name}.json"));
 
             if !snapshot_file.exists() {
-                panic!(
-                    "No snapshot found for tool '{tool_name}' - run with --update-snapshots to create"
-                );
+                panic!("No snapshot found for tool '{tool_name}' - run with --update-snapshots to create");
             }
 
             let baseline_content = fs::read_to_string(&snapshot_file).unwrap();
@@ -565,10 +548,7 @@ mod integration_tests {
 
             assert!(params.get("type").is_some(), "Tool '{tool_name}' parameters missing type");
 
-            assert!(
-                params.get("properties").is_some(),
-                "Tool '{tool_name}' parameters missing properties"
-            );
+            assert!(params.get("properties").is_some(), "Tool '{tool_name}' parameters missing properties");
 
             // Validate encoding
             validate_encoding_invariants(&schema)

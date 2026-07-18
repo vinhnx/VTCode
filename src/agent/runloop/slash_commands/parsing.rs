@@ -9,10 +9,7 @@ use vtcode_core::review::{ReviewSpec, build_review_spec};
 ///
 /// This is the single place that encodes the "split on whitespace, lowercase,
 /// then match" idiom shared by every simple flag-parsing function.
-pub(super) fn for_each_token(
-    args: &str,
-    mut f: impl FnMut(&str) -> Result<(), String>,
-) -> Result<(), String> {
+pub(super) fn for_each_token(args: &str, mut f: impl FnMut(&str) -> Result<(), String>) -> Result<(), String> {
     for raw in args.split_whitespace() {
         f(&raw.to_ascii_lowercase())?;
     }
@@ -46,8 +43,7 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
         });
     }
 
-    let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
+    let tokens = shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
     if tokens.len() == 1 {
         match tokens[0].as_str() {
             "edit-prompt" => return Ok(CompactConversationCommand::EditDefaultPrompt),
@@ -76,10 +72,11 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
             }
             "--max-output-tokens" => {
                 let value = next_value("--max-output-tokens", &mut index)?;
-                options.max_output_tokens =
-                    Some(value.parse::<u32>().map_err(|e| {
-                        format!("Invalid value for --max-output-tokens: {value}: {e}")
-                    })?);
+                options.max_output_tokens = Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|e| format!("Invalid value for --max-output-tokens: {value}: {e}"))?,
+                );
             }
             "--reasoning-effort" => {
                 let value = next_value("--reasoning-effort", &mut index)?;
@@ -91,8 +88,7 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
             "--verbosity" => {
                 let value = next_value("--verbosity", &mut index)?;
                 options.verbosity = Some(
-                    VerbosityLevel::parse(&value)
-                        .ok_or_else(|| format!("Invalid value for --verbosity: {value}"))?,
+                    VerbosityLevel::parse(&value).ok_or_else(|| format!("Invalid value for --verbosity: {value}"))?,
                 );
             }
             "--native-only" => {
@@ -116,15 +112,17 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
                     options.instructions = Some(value.to_string());
                     index += 1;
                 } else if let Some(value) = token.strip_prefix("--max-output-tokens=") {
-                    options.max_output_tokens = Some(value.parse::<u32>().map_err(|e| {
-                        format!("Invalid value for --max-output-tokens: {value}: {e}")
-                    })?);
+                    options.max_output_tokens = Some(
+                        value
+                            .parse::<u32>()
+                            .map_err(|e| format!("Invalid value for --max-output-tokens: {value}: {e}"))?,
+                    );
                     index += 1;
                 } else if let Some(value) = token.strip_prefix("--reasoning-effort=") {
-                    options.reasoning_effort =
-                        Some(ReasoningEffortLevel::parse(value).ok_or_else(|| {
-                            format!("Invalid value for --reasoning-effort: {value}")
-                        })?);
+                    options.reasoning_effort = Some(
+                        ReasoningEffortLevel::parse(value)
+                            .ok_or_else(|| format!("Invalid value for --reasoning-effort: {value}"))?,
+                    );
                     index += 1;
                 } else if let Some(value) = token.strip_prefix("--verbosity=") {
                     options.verbosity = Some(
@@ -144,16 +142,13 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
     Ok(CompactConversationCommand::Run { options, native_only })
 }
 
-pub(super) fn parse_session_log_export_format(
-    args: &str,
-) -> Result<SessionLogExportFormat, String> {
+pub(super) fn parse_session_log_export_format(args: &str) -> Result<SessionLogExportFormat, String> {
     let trimmed = args.trim();
     if trimmed.is_empty() {
         return Ok(SessionLogExportFormat::Both);
     }
 
-    let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
+    let tokens = shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     if tokens.is_empty() {
         return Ok(SessionLogExportFormat::Both);
@@ -185,8 +180,7 @@ pub(super) fn parse_review_spec(args: &str) -> Result<ReviewSpec, String> {
         return build_review_spec(false, None, Vec::new(), None).map_err(|err| err.to_string());
     }
 
-    let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
+    let tokens = shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     let mut last_diff = false;
     let mut target: Option<String> = None;
@@ -257,8 +251,7 @@ pub(super) fn parse_analyze_scope(args: &str) -> Result<Option<String>, String> 
         return Ok(None);
     }
 
-    let tokens =
-        shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
+    let tokens = shell_words::split(trimmed).map_err(|err| format!("Failed to parse arguments: {err}"))?;
 
     if tokens.len() != 1 {
         return Err("Usage: /analyze [full|security|performance]".to_string());
@@ -267,18 +260,15 @@ pub(super) fn parse_analyze_scope(args: &str) -> Result<Option<String>, String> 
     let scope = tokens[0].to_ascii_lowercase();
     match scope.as_str() {
         "full" | "security" | "performance" => Ok(Some(scope)),
-        _ => Err(format!(
-            "Unknown analysis scope '{}'. Use full, security, or performance.",
-            tokens[0]
-        )),
+        _ => Err(format!("Unknown analysis scope '{}'. Use full, security, or performance.", tokens[0])),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        CompactConversationCommand, SessionLogExportFormat, parse_analyze_scope,
-        parse_compact_command, parse_review_spec, parse_session_log_export_format,
+        CompactConversationCommand, SessionLogExportFormat, parse_analyze_scope, parse_compact_command,
+        parse_review_spec, parse_session_log_export_format,
     };
     use vtcode_core::compaction::ManualCompactionOptions;
     use vtcode_core::config::{ReasoningEffortLevel, VerbosityLevel};
@@ -364,35 +354,20 @@ mod tests {
             "--prompt-cache-key lineage-1",
         ] {
             let err = parse_compact_command(dropped).unwrap_err();
-            assert!(
-                err.contains("no longer supported"),
-                "expected deprecation message for `{dropped}`, got: {err}"
-            );
+            assert!(err.contains("no longer supported"), "expected deprecation message for `{dropped}`, got: {err}");
         }
     }
 
     #[test]
     fn share_log_defaults_to_json_and_html() {
-        assert_eq!(
-            parse_session_log_export_format("").expect("format"),
-            SessionLogExportFormat::Both
-        );
+        assert_eq!(parse_session_log_export_format("").expect("format"), SessionLogExportFormat::Both);
     }
 
     #[test]
     fn share_log_supports_markdown_aliases() {
-        assert_eq!(
-            parse_session_log_export_format("markdown").expect("format"),
-            SessionLogExportFormat::Markdown
-        );
-        assert_eq!(
-            parse_session_log_export_format("md").expect("format"),
-            SessionLogExportFormat::Markdown
-        );
-        assert_eq!(
-            parse_session_log_export_format("--format=md").expect("format"),
-            SessionLogExportFormat::Markdown
-        );
+        assert_eq!(parse_session_log_export_format("markdown").expect("format"), SessionLogExportFormat::Markdown);
+        assert_eq!(parse_session_log_export_format("md").expect("format"), SessionLogExportFormat::Markdown);
+        assert_eq!(parse_session_log_export_format("--format=md").expect("format"), SessionLogExportFormat::Markdown);
         assert_eq!(
             parse_session_log_export_format("--format markdown").expect("format"),
             SessionLogExportFormat::Markdown
@@ -401,14 +376,8 @@ mod tests {
 
     #[test]
     fn share_log_supports_html() {
-        assert_eq!(
-            parse_session_log_export_format("html").expect("format"),
-            SessionLogExportFormat::Html
-        );
-        assert_eq!(
-            parse_session_log_export_format("--format=html").expect("format"),
-            SessionLogExportFormat::Html
-        );
+        assert_eq!(parse_session_log_export_format("html").expect("format"), SessionLogExportFormat::Html);
+        assert_eq!(parse_session_log_export_format("--format=html").expect("format"), SessionLogExportFormat::Html);
     }
 
     #[test]
@@ -433,9 +402,7 @@ mod tests {
     #[test]
     fn review_accepts_file_flag() {
         let spec = parse_review_spec("--file src/main.rs").expect("spec");
-        assert!(
-            matches!(spec.target, ReviewTarget::Files(ref files) if files == &["src/main.rs".to_string()])
-        );
+        assert!(matches!(spec.target, ReviewTarget::Files(ref files) if files == &["src/main.rs".to_string()]));
     }
 
     #[test]
@@ -449,8 +416,8 @@ mod tests {
 
     #[test]
     fn review_rejects_conflicting_target_selectors() {
-        let err = parse_review_spec("--last-diff --target HEAD~1..HEAD")
-            .expect_err("conflicting selectors should fail");
+        let err =
+            parse_review_spec("--last-diff --target HEAD~1..HEAD").expect_err("conflicting selectors should fail");
         assert!(err.contains("--last-diff"));
     }
 
@@ -473,14 +440,8 @@ mod tests {
 
     #[test]
     fn analyze_accepts_known_scopes() {
-        assert_eq!(
-            parse_analyze_scope("security").expect("analyze scope"),
-            Some("security".to_string())
-        );
-        assert_eq!(
-            parse_analyze_scope("PERFORMANCE").expect("analyze scope"),
-            Some("performance".to_string())
-        );
+        assert_eq!(parse_analyze_scope("security").expect("analyze scope"), Some("security".to_string()));
+        assert_eq!(parse_analyze_scope("PERFORMANCE").expect("analyze scope"), Some("performance".to_string()));
     }
 
     #[test]

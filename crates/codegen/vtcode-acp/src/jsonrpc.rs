@@ -267,10 +267,7 @@ impl JsonRpcError {
 
     /// Create a session not found error
     pub fn session_not_found(session_id: impl Into<String>) -> Self {
-        Self::new(
-            error_codes::SESSION_NOT_FOUND,
-            format!("Session not found: {}", session_id.into()),
-        )
+        Self::new(error_codes::SESSION_NOT_FOUND, format!("Session not found: {}", session_id.into()))
     }
 
     /// Create a rate limited error
@@ -280,10 +277,7 @@ impl JsonRpcError {
 
     /// Create a resource not found error
     pub fn resource_not_found(resource: impl Into<String>) -> Self {
-        Self::new(
-            error_codes::RESOURCE_NOT_FOUND,
-            format!("Resource not found: {}", resource.into()),
-        )
+        Self::new(error_codes::RESOURCE_NOT_FOUND, format!("Resource not found: {}", resource.into()))
     }
 }
 
@@ -309,10 +303,7 @@ mod tests {
 
     #[test]
     fn test_response_success() {
-        let resp = JsonRpcResponse::success(
-            json!({"session_id": "sess-123"}),
-            Some(JsonRpcId::string("req-1")),
-        );
+        let resp = JsonRpcResponse::success(json!({"session_id": "sess-123"}), Some(JsonRpcId::string("req-1")));
 
         assert!(resp.is_success());
         assert!(!resp.is_error());
@@ -320,10 +311,7 @@ mod tests {
 
     #[test]
     fn test_response_error() {
-        let resp = JsonRpcResponse::error(
-            JsonRpcError::method_not_found("unknown"),
-            Some(JsonRpcId::string("req-1")),
-        );
+        let resp = JsonRpcResponse::error(JsonRpcError::method_not_found("unknown"), Some(JsonRpcId::string("req-1")));
 
         assert!(resp.is_error());
         assert!(!resp.is_success());

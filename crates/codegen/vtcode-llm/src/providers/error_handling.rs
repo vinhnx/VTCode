@@ -106,16 +106,14 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 /// Handle network errors with consistent formatting
 #[cold]
 pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
-    let formatted_error =
-        error_display::format_llm_error(provider, &format!("network error: {error}"));
+    let formatted_error = error_display::format_llm_error(provider, &format!("network error: {error}"));
     LLMError::Network { message: formatted_error, metadata: None }
 }
 
 /// Handle JSON parsing errors with consistent formatting
 #[cold]
 pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
-    let formatted_error =
-        error_display::format_llm_error(provider, &format!("failed to parse response: {error}"));
+    let formatted_error = error_display::format_llm_error(provider, &format!("failed to parse response: {error}"));
     LLMError::Provider { message: formatted_error, metadata: None }
 }
 
@@ -135,11 +133,7 @@ pub fn format_http_error(provider: &str, status: reqwest::StatusCode, error_text
 ///
 /// Falls back to raw body if JSON parsing fails.
 #[cold]
-pub fn parse_api_error(
-    provider_name: &'static str,
-    status: reqwest::StatusCode,
-    body: &str,
-) -> LLMError {
+pub fn parse_api_error(provider_name: &'static str, status: reqwest::StatusCode, body: &str) -> LLMError {
     parse_api_error_with_metadata(provider_name, status, body, ApiResponseMetadata::default())
 }
 
@@ -173,10 +167,7 @@ fn parse_api_error_with_metadata(
             )),
         },
         402 => LLMError::InvalidRequest {
-            message: error_display::format_llm_error(
-                provider_name,
-                &format!("insufficient balance: {error_message}"),
-            ),
+            message: error_display::format_llm_error(provider_name, &format!("insufficient balance: {error_message}")),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
                 Some(status_code),
@@ -188,10 +179,7 @@ fn parse_api_error_with_metadata(
             )),
         },
         422 => LLMError::InvalidRequest {
-            message: error_display::format_llm_error(
-                provider_name,
-                &format!("invalid parameters: {error_message}"),
-            ),
+            message: error_display::format_llm_error(provider_name, &format!("invalid parameters: {error_message}")),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
                 Some(status_code),
@@ -225,10 +213,7 @@ fn parse_api_error_with_metadata(
             )),
         },
         400 => LLMError::InvalidRequest {
-            message: error_display::format_llm_error(
-                provider_name,
-                &format!("invalid request: {error_message}"),
-            ),
+            message: error_display::format_llm_error(provider_name, &format!("invalid request: {error_message}")),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
                 Some(status_code),
@@ -240,10 +225,7 @@ fn parse_api_error_with_metadata(
             )),
         },
         _ => LLMError::Provider {
-            message: error_display::format_llm_error(
-                provider_name,
-                &format!("http {status}: {error_message}"),
-            ),
+            message: error_display::format_llm_error(provider_name, &format!("http {status}: {error_message}")),
             metadata: Some(LLMErrorMetadata::new(
                 provider_name,
                 Some(status_code),
@@ -299,8 +281,7 @@ pub fn extract_human_error_message(body: &str) -> String {
         return msg.to_string();
     }
     // Mistral: {"object":"error","message":{"detail":[{"msg":"..."}]}}
-    if let Some(detail) =
-        json.get("message").and_then(|m| m.get("detail")).and_then(|d| d.as_array())
+    if let Some(detail) = json.get("message").and_then(|m| m.get("detail")).and_then(|d| d.as_array())
         && let Some(first) = detail.first().and_then(|d| d.get("msg")).and_then(|m| m.as_str())
     {
         return first.to_string();
@@ -310,8 +291,7 @@ pub fn extract_human_error_message(body: &str) -> String {
         return msg.to_string();
     }
     // FastAPI / OpenAI alternate: {"detail": "..."}
-    if let Some(msg) = json.get("detail").and_then(|d| d.as_str()).filter(|s| !s.trim().is_empty())
-    {
+    if let Some(msg) = json.get("detail").and_then(|d| d.as_str()).filter(|s| !s.trim().is_empty()) {
         return msg.to_string();
     }
     // Gemini: {"error": {"status": "..."}}
@@ -324,8 +304,7 @@ pub fn extract_human_error_message(body: &str) -> String {
         return msg.to_string();
     }
     // Top-level message: {"message": "..."}
-    if let Some(msg) = json.get("message").and_then(|m| m.as_str()).filter(|s| !s.trim().is_empty())
-    {
+    if let Some(msg) = json.get("message").and_then(|m| m.as_str()).filter(|s| !s.trim().is_empty()) {
         return msg.to_string();
     }
 
@@ -338,11 +317,7 @@ fn extract_response_metadata(response: &Response) -> ApiResponseMetadata {
         request_id: extract_header(headers, &["request-id", "x-request-id", "openai-request-id"]),
         organization_id: extract_header(
             headers,
-            &[
-                "anthropic-organization-id",
-                "openai-organization",
-                "x-organization-id",
-            ],
+            &["anthropic-organization-id", "openai-organization", "x-organization-id"],
         ),
         retry_after: extract_header(headers, &["retry-after"]),
     }
@@ -402,10 +377,7 @@ mod tests {
                 assert!(message.contains("Invalid Authentication"));
                 assert!(message.contains("MOONSHOT_API_KEY"));
                 assert!(message.contains("platform.kimi.ai/console/api-keys"));
-                assert_eq!(
-                    metadata.as_ref().and_then(|meta| meta.code.as_deref()),
-                    Some("authentication_error")
-                );
+                assert_eq!(metadata.as_ref().and_then(|meta| meta.code.as_deref()), Some("authentication_error"));
             }
             other => panic!("expected authentication error, got {other:?}"),
         }
@@ -420,10 +392,7 @@ mod tests {
     #[test]
     fn extract_detail_field() {
         let body = r#"{"detail":"The 'gpt-5.4' model is not supported with this method."}"#;
-        assert_eq!(
-            extract_human_error_message(body),
-            "The 'gpt-5.4' model is not supported with this method."
-        );
+        assert_eq!(extract_human_error_message(body), "The 'gpt-5.4' model is not supported with this method.");
     }
 
     #[test]

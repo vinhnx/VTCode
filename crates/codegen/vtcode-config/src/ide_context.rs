@@ -87,9 +87,7 @@ impl IdeContextConfig {
 
         match self.provider_mode {
             IdeContextProviderMode::Auto => true,
-            IdeContextProviderMode::VscodeCompatible => {
-                family == IdeContextProviderFamily::VscodeCompatible
-            }
+            IdeContextProviderMode::VscodeCompatible => family == IdeContextProviderFamily::VscodeCompatible,
             IdeContextProviderMode::Zed => family == IdeContextProviderFamily::Zed,
             IdeContextProviderMode::Generic => family == IdeContextProviderFamily::Generic,
             IdeContextProviderMode::Unknown => false,
@@ -128,10 +126,7 @@ const fn default_include_selection_text() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        IdeContextConfig, IdeContextProviderFamily, IdeContextProviderMode,
-        IdeContextProvidersConfig,
-    };
+    use super::{IdeContextConfig, IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig};
 
     #[test]
     fn default_config_allows_enabled_providers_in_auto_permission() {

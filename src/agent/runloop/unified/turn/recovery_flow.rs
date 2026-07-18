@@ -8,8 +8,8 @@ use tokio::sync::Notify;
 
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
-    ListOverlayRequest, TransientRequest, TransientSubmission,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession, ListOverlayRequest,
+    TransientRequest, TransientSubmission,
 };
 
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
@@ -77,10 +77,7 @@ fn resolve_current_step(tabs: &[RecoveryTabArgs], default_tab_id: Option<&str>) 
         .unwrap_or(0)
 }
 
-fn find_default_choice_selection(
-    items: &[InlineListItem],
-    default_choice_id: &str,
-) -> Option<InlineListSelection> {
+fn find_default_choice_selection(items: &[InlineListItem], default_choice_id: &str) -> Option<InlineListSelection> {
     items.iter().find_map(|item| {
         if let Some(InlineListSelection::AskUserChoice { choice_id, .. }) = &item.selection
             && choice_id == default_choice_id
@@ -98,11 +95,7 @@ fn split_question_lines(question: &str) -> Vec<String> {
         lines.pop();
     }
 
-    if lines.is_empty() {
-        vec![String::new()]
-    } else {
-        lines
-    }
+    if lines.is_empty() { vec![String::new()] } else { lines }
 }
 
 impl RecoveryPromptBuilder {
@@ -255,11 +248,9 @@ pub(crate) async fn execute_recovery_prompt(
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::AskUserChoice {
-                tab_id,
-                choice_id,
-                ..
-            }) => Some((tab_id, choice_id)),
+            TransientSubmission::Selection(InlineListSelection::AskUserChoice { tab_id, choice_id, .. }) => {
+                Some((tab_id, choice_id))
+            }
             _ => None,
         },
     )
@@ -276,9 +267,7 @@ pub(crate) async fn execute_recovery_prompt(
     })
 }
 
-pub(crate) fn build_recovery_prompt_from_diagnostics(
-    diagnostics: &RecoveryDiagnostics,
-) -> RecoveryPromptBuilder {
+pub(crate) fn build_recovery_prompt_from_diagnostics(diagnostics: &RecoveryDiagnostics) -> RecoveryPromptBuilder {
     let summary = format!(
         "Multiple tools are experiencing failures:\n\n\
          Open Circuits ({}): {}\n\n\
@@ -289,8 +278,7 @@ pub(crate) fn build_recovery_prompt_from_diagnostics(
         build_error_summary(diagnostics)
     );
 
-    let mut builder =
-        RecoveryPromptBuilder::new("Circuit Breaker Activated".to_string()).with_summary(summary);
+    let mut builder = RecoveryPromptBuilder::new("Circuit Breaker Activated".to_string()).with_summary(summary);
 
     if !diagnostics.open_circuits.is_empty() {
         builder = builder.add_recommendation(RecoveryOption {
@@ -338,14 +326,7 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
             ErrorType::Validation => "Validation Error",
             ErrorType::Other => "Other",
         };
-        let _ = writeln!(
-            summary,
-            "{}. {} ({}) - {}",
-            i + 1,
-            error.tool_name,
-            error_type,
-            error.error_message
-        );
+        let _ = writeln!(summary, "{}. {} ({}) - {}", i + 1, error.tool_name, error_type, error.error_message);
     }
 
     if diagnostics.recent_errors.len() > 5 {

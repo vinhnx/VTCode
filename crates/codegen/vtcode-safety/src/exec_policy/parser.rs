@@ -131,24 +131,14 @@ impl PolicyParser {
                 let file = self.parse_toml(content)?;
                 file.rules
                     .into_iter()
-                    .map(|r| {
-                        PrefixRule::new(
-                            r.pattern.split_whitespace().map(String::from).collect(),
-                            r.decision,
-                        )
-                    })
+                    .map(|r| PrefixRule::new(r.pattern.split_whitespace().map(String::from).collect(), r.decision))
                     .collect()
             }
             "json" => {
                 let file = self.parse_json(content)?;
                 file.rules
                     .into_iter()
-                    .map(|r| {
-                        PrefixRule::new(
-                            r.pattern.split_whitespace().map(String::from).collect(),
-                            r.decision,
-                        )
-                    })
+                    .map(|r| PrefixRule::new(r.pattern.split_whitespace().map(String::from).collect(), r.decision))
                     .collect()
             }
             _ => self.parse_simple(content)?,

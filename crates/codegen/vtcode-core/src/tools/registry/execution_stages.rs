@@ -54,16 +54,9 @@ impl ToolRegistry {
     /// Check if a tool call should be denied due to an active planning workflow.
     ///
     /// Returns `None` if the call is allowed, or `Some(denial_message)` if denied.
-    pub fn check_planning_workflow_for(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        display_name: &str,
-    ) -> Option<String> {
+    pub fn check_planning_workflow_for(&self, tool_name: &str, args: &Value, display_name: &str) -> Option<String> {
         if self.is_planning_active() && !self.is_planning_active_allowed(tool_name, args) {
-            Some(crate::tools::error_messages::agent_execution::planning_workflow_denial_message(
-                display_name,
-            ))
+            Some(crate::tools::error_messages::agent_execution::planning_workflow_denial_message(display_name))
         } else {
             None
         }
@@ -109,8 +102,7 @@ impl ToolRegistry {
         }
 
         // Check canonical MCP format
-        if let Some((provider, remote_tool)) =
-            crate::utils::tool_name_parsing::parse_canonical_mcp_tool_name(tool_name)
+        if let Some((provider, remote_tool)) = crate::utils::tool_name_parsing::parse_canonical_mcp_tool_name(tool_name)
         {
             route.needs_pty = true;
             route.tool_exists = true;
@@ -125,18 +117,12 @@ impl ToolRegistry {
     /// Check if a full-auto policy denies this tool.
     ///
     /// Returns `None` if allowed, or `Some(error_message)` if denied.
-    pub async fn check_full_auto_denied(
-        &self,
-        tool_name: &str,
-        display_name: &str,
-    ) -> Option<String> {
+    pub async fn check_full_auto_denied(&self, tool_name: &str, display_name: &str) -> Option<String> {
         // Delegate to the existing method on ToolSecurity (implemented via trait_impls).
         if self.is_allowed_in_full_auto(tool_name).await {
             None
         } else {
-            Some(format!(
-                "Tool '{display_name}' is not permitted while full-auto permission review is active"
-            ))
+            Some(format!("Tool '{display_name}' is not permitted while full-auto permission review is active"))
         }
     }
 }

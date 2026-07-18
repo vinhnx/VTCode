@@ -30,9 +30,8 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
         return Ok(UpdateCacheSnapshot::default());
     }
 
-    let metadata = std::fs::metadata(&cache_file).with_context(|| {
-        format!("Failed to read update cache metadata {}", cache_file.display())
-    })?;
+    let metadata = std::fs::metadata(&cache_file)
+        .with_context(|| format!("Failed to read update cache metadata {}", cache_file.display()))?;
     let modified = metadata.modified().ok();
 
     let Ok(content) = std::fs::read_to_string(&cache_file) else {
@@ -64,14 +63,8 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
     };
 
     Ok(UpdateCacheSnapshot {
-        last_checked: Some(
-            UNIX_EPOCH + std::time::Duration::from_secs(payload.last_checked_unix_secs),
-        )
-        .or(modified),
-        latest_version: payload
-            .latest_version
-            .as_deref()
-            .and_then(|value| Version::parse(value).ok()),
+        last_checked: Some(UNIX_EPOCH + std::time::Duration::from_secs(payload.last_checked_unix_secs)).or(modified),
+        latest_version: payload.latest_version.as_deref().and_then(|value| Version::parse(value).ok()),
         latest_was_newer: payload.latest_was_newer,
         last_seen_version: payload
             .last_seen_version
@@ -80,10 +73,7 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
     })
 }
 
-pub(super) fn record_successful_check(
-    latest_version: Option<&Version>,
-    latest_was_newer: bool,
-) -> Result<()> {
+pub(super) fn record_successful_check(latest_version: Option<&Version>, latest_was_newer: bool) -> Result<()> {
     let existing = read_snapshot().unwrap_or_default();
     write_snapshot(UpdateCacheSnapshot {
         last_checked: Some(SystemTime::now()),
@@ -107,16 +97,14 @@ pub(super) fn record_seen_version(version: &Version) -> Result<()> {
 
 fn write_snapshot(snapshot: UpdateCacheSnapshot) -> Result<()> {
     let last_checked = snapshot.last_checked.unwrap_or_else(SystemTime::now);
-    let last_checked_unix_secs =
-        last_checked.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let last_checked_unix_secs = last_checked.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     let payload = UpdateCachePayload {
         last_checked_unix_secs,
         latest_version: snapshot.latest_version.map(|version| version.to_string()),
         latest_was_newer: snapshot.latest_was_newer,
         last_seen_version: snapshot.last_seen_version.map(|version| version.to_string()),
     };
-    let serialized =
-        serde_json::to_string(&payload).context("Failed to serialize update cache payload")?;
+    let serialized = serde_json::to_string(&payload).context("Failed to serialize update cache payload")?;
     write_file_with_context_sync(&cache_file_path()?, &serialized, "update cache")
         .context("Failed to write update cache")?;
     Ok(())

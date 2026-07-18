@@ -12,17 +12,12 @@ use crate::agent::runloop::unified::settings_interactive::{
 };
 use crate::agent::runloop::unified::state::{CtrlCSignal, SessionStats};
 use crate::agent::runloop::unified::stop_requests::request_local_stop;
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
+use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 
 use super::apps::handle_configure_editor;
 use super::ui;
 
-pub(crate) async fn handle_notify(
-    ctx: SlashCommandContext<'_>,
-    message: String,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_notify(ctx: SlashCommandContext<'_>, message: String) -> Result<SlashCommandControl> {
     send_global_notification_force(NotificationEvent::Custom {
         title: "VT Code".to_string(),
         message: message.clone(),
@@ -33,16 +28,12 @@ pub(crate) async fn handle_notify(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_show_settings(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_settings(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let mut ctx = ctx;
     show_settings_at_path_from_context(&mut ctx, None).await
 }
 
-pub(crate) async fn handle_show_permissions(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_permissions(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let mut ctx = ctx;
     show_settings_at_path_from_context(&mut ctx, Some("permissions")).await
 }
@@ -80,8 +71,7 @@ pub(crate) async fn show_settings_at_path_from_context(
     }
 
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
-        *ctx.palette_state =
-            Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
+        *ctx.palette_state = Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
     }
 
     Ok(SlashCommandControl::Continue)
@@ -98,19 +88,15 @@ pub(crate) async fn handle_stop_agent(ctx: SlashCommandContext<'_>) -> Result<Sl
 
     match request_local_stop(ctx.ctrl_c_state, ctx.ctrl_c_notify) {
         CtrlCSignal::Cancel => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Stop requested. VT Code is cancelling the current turn.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Stop requested. VT Code is cancelling the current turn.")?;
             Ok(SlashCommandControl::Continue)
         }
         CtrlCSignal::Exit => Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit)),
     }
 }
 
-pub(crate) async fn handle_clear_conversation(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_clear_conversation(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let vim_mode_enabled = ctx.session_stats.vim_mode_enabled;
     ctx.conversation_history.clear();
     *ctx.session_stats = SessionStats::default();
@@ -128,9 +114,7 @@ pub(crate) async fn handle_clear_conversation(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_clear_screen(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.clear_screen();
     ctx.renderer
         .line(MessageStyle::Info, "Cleared screen. Conversation context is preserved.")?;
@@ -138,9 +122,7 @@ pub(crate) async fn handle_clear_screen(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_copy_latest_assistant_reply(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_copy_latest_assistant_reply(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let latest_reply = ctx.conversation_history.iter().rev().find_map(|message| {
         if message.role != MessageRole::Assistant {
             return None;

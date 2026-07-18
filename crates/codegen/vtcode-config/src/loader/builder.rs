@@ -69,8 +69,7 @@ impl ConfigBuilder {
                 Self::insert_dotted_key(&mut runtime_toml, &key, value);
             }
 
-            let runtime_layer =
-                ConfigLayerEntry::new(ConfigLayerSource::Runtime, toml::Value::Table(runtime_toml));
+            let runtime_layer = ConfigLayerEntry::new(ConfigLayerSource::Runtime, toml::Value::Table(runtime_toml));
 
             manager.layer_stack.push(runtime_layer);
 

@@ -13,8 +13,7 @@ mod provider;
 mod table;
 
 pub use capabilities::{
-    ModelCatalogEntry, ModelPricing, catalog_provider_keys, model_catalog_entry,
-    supported_models_for_provider,
+    ModelCatalogEntry, ModelPricing, catalog_provider_keys, model_catalog_entry, supported_models_for_provider,
 };
 
 /// Centralized enum for all supported model identifiers

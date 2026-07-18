@@ -245,10 +245,7 @@ pub struct McpUiConfig {
 
     /// Custom renderer profiles for provider-specific output formatting
     #[serde(default)]
-    #[cfg_attr(
-        feature = "schema",
-        schemars(with = "BTreeMap<String, McpRendererProfile>")
-    )]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, McpRendererProfile>"))]
     pub renderers: HashMap<String, McpRendererProfile>,
 }
 
@@ -444,12 +441,7 @@ impl McpAllowListConfig {
     }
 
     /// Determine whether a configuration key can be modified
-    pub fn is_configuration_allowed(
-        &self,
-        provider: Option<&str>,
-        category: &str,
-        key: &str,
-    ) -> bool {
+    pub fn is_configuration_allowed(&self, provider: Option<&str>, category: &str, key: &str) -> bool {
         if !self.enforce {
             return true;
         }
@@ -906,11 +898,7 @@ mod tests {
 
         assert!(config.is_configuration_allowed(None, "ui", "mode"));
         assert!(!config.is_configuration_allowed(None, "ui", "show_provider_names"));
-        assert!(config.is_configuration_allowed(
-            Some("time"),
-            "provider",
-            "max_concurrent_requests"
-        ));
+        assert!(config.is_configuration_allowed(Some("time"), "provider", "max_concurrent_requests"));
         assert!(!config.is_configuration_allowed(Some("time"), "provider", "retry_attempts"));
     }
 
@@ -966,19 +954,12 @@ mod tests {
         config
             .renderers
             .insert(mcp_constants::RENDERER_CONTEXT7.to_string(), McpRendererProfile::Context7);
-        config.renderers.insert(
-            mcp_constants::RENDERER_SEQUENTIAL_THINKING.to_string(),
-            McpRendererProfile::SequentialThinking,
-        );
+        config
+            .renderers
+            .insert(mcp_constants::RENDERER_SEQUENTIAL_THINKING.to_string(), McpRendererProfile::SequentialThinking);
 
-        assert_eq!(
-            config.renderer_for_tool("mcp_context7_lookup"),
-            Some(McpRendererProfile::Context7)
-        );
-        assert_eq!(
-            config.renderer_for_tool("mcp_context7lookup"),
-            Some(McpRendererProfile::Context7)
-        );
+        assert_eq!(config.renderer_for_tool("mcp_context7_lookup"), Some(McpRendererProfile::Context7));
+        assert_eq!(config.renderer_for_tool("mcp_context7lookup"), Some(McpRendererProfile::Context7));
         assert_eq!(
             config.renderer_for_tool("mcp_sequentialthinking_run"),
             Some(McpRendererProfile::SequentialThinking)

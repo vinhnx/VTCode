@@ -21,13 +21,11 @@ static RUSHING_PATTERNS: Lazy<Regex> = Lazy::new(|| {
 });
 
 static UNCERTAIN_PATTERNS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(not sure|i.?m not certain|might be wrong|could be|sorry|apologies)")
-        .expect("valid regex pattern")
+    Regex::new(r"(?i)(not sure|i.?m not certain|might be wrong|could be|sorry|apologies)").expect("valid regex pattern")
 });
 
 static COMPLEXITY_AVOIDANCE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(too complex|too many|let.?s skip|for now|we can worry about|later)")
-        .expect("valid regex pattern")
+    Regex::new(r"(?i)(too complex|too many|let.?s skip|for now|we can worry about|later)").expect("valid regex pattern")
 });
 
 /// Matches reasoning lines that announce a decision, plan, or tool invocation.
@@ -49,10 +47,7 @@ pub(crate) fn model_supports_reasoning(provider: &dyn uni::LLMProvider, model: &
 /// Resolve runtime reasoning visibility with provider/model capability gating.
 ///
 /// Reasoning output is always hidden when the model does not support reasoning traces.
-pub(crate) fn resolve_reasoning_visibility(
-    config: Option<&VTCodeConfig>,
-    supports_reasoning: bool,
-) -> bool {
+pub(crate) fn resolve_reasoning_visibility(config: Option<&VTCodeConfig>, supports_reasoning: bool) -> bool {
     if !supports_reasoning {
         return false;
     }
@@ -64,9 +59,7 @@ pub(crate) fn resolve_reasoning_visibility(
     match cfg.ui.reasoning_display_mode {
         ReasoningDisplayMode::Always => true,
         ReasoningDisplayMode::Hidden => false,
-        ReasoningDisplayMode::Toggle | ReasoningDisplayMode::Unknown => {
-            cfg.ui.reasoning_visible_default
-        }
+        ReasoningDisplayMode::Toggle | ReasoningDisplayMode::Unknown => cfg.ui.reasoning_visible_default,
     }
 }
 

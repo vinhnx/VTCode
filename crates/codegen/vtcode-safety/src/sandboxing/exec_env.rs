@@ -242,14 +242,7 @@ mod tests {
     fn test_full_command() {
         let spec = CommandSpec::new("echo").with_args(vec!["hello", "world"]);
 
-        assert_eq!(
-            spec.full_command(),
-            vec![
-                OsString::from("echo"),
-                OsString::from("hello"),
-                OsString::from("world")
-            ]
-        );
+        assert_eq!(spec.full_command(), vec![OsString::from("echo"), OsString::from("hello"), OsString::from("world")]);
     }
 
     #[test]

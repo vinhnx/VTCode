@@ -5,9 +5,8 @@ use crate::tui::config::constants::ui;
 use crate::tui::core_tui::app::session::transient::TransientSurface;
 use crate::tui::core_tui::session::inline_list::{InlineListRow, selection_padding};
 use crate::tui::core_tui::session::list_panel::{
-    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField,
-    StaticRowsListPanelModel, fixed_section_rows_with_divider, input_styles_from_theme,
-    render_shared_list_panel, rows_to_u16,
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, SharedSearchField, StaticRowsListPanelModel,
+    fixed_section_rows_with_divider, input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
 use crate::tui::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 
@@ -36,11 +35,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
 }
 
 pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if area.height == 0
-        || area.width == 0
-        || !session.slash_palette_visible()
-        || !session.inline_lists_visible()
-    {
+    if area.height == 0 || area.width == 0 || !session.slash_palette_visible() || !session.inline_lists_visible() {
         session.slash_palette.clear_visible_rows();
         return;
     }
@@ -73,11 +68,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             } else {
                 blank_gutter.clone()
             };
-            let cursor_style = if is_selected {
-                highlight_style
-            } else {
-                dim_style
-            };
+            let cursor_style = if is_selected { highlight_style } else { dim_style };
             let row_name_style = if is_selected {
                 highlight_style
             } else {
@@ -104,15 +95,14 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         .collect::<Vec<_>>();
     let offset = session.slash_palette.scroll_offset();
     let search_line =
-        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
-            .map(|prefix| {
-                let filter = prefix.trim_start_matches('/');
-                SharedSearchField {
-                    label: "Search commands".to_owned(),
-                    placeholder: Some("command name or description".to_owned()),
-                    query: filter.to_owned(),
-                }
-            });
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()).map(|prefix| {
+            let filter = prefix.trim_start_matches('/');
+            SharedSearchField {
+                label: "Search commands".to_owned(),
+                placeholder: Some("command name or description".to_owned()),
+                query: filter.to_owned(),
+            }
+        });
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "Slash Commands".to_owned(),
@@ -157,17 +147,13 @@ fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
 }
 
 pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
-    if !session.slash_palette_visible()
-        || !session.inline_lists_visible()
-        || session.slash_palette.is_empty()
-    {
+    if !session.slash_palette_visible() || !session.inline_lists_visible() || session.slash_palette.is_empty() {
         return None;
     }
 
     let info_rows = slash_palette_instructions(session).len();
     let has_search_row =
-        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
-            .is_some();
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()).is_some();
     let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_search_row, true);
     let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
@@ -192,9 +178,7 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
         return;
     }
 
-    let Some(prefix) =
-        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
-    else {
+    let Some(prefix) = command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()) else {
         clear_slash_suggestions(session);
         return;
     };
@@ -215,12 +199,8 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
 
 pub(crate) fn slash_navigation_available(session: &Session) -> bool {
     let has_prefix =
-        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
-            .is_some();
-    session.core.input_enabled()
-        && session.inline_lists_visible()
-        && session.slash_palette_visible()
-        && has_prefix
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()).is_some();
+    session.core.input_enabled() && session.inline_lists_visible() && session.slash_palette_visible() && has_prefix
 }
 
 pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {
@@ -274,9 +254,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     let Some(command) = session.slash_palette.selected_command() else {
         return;
     };
-    let Some(range) =
-        command_range(session.core.input_manager.content(), session.core.input_manager.cursor())
-    else {
+    let Some(range) = command_range(session.core.input_manager.content(), session.core.input_manager.cursor()) else {
         return;
     };
 

@@ -128,11 +128,7 @@ impl HistoryFileManager {
     }
 
     /// Create a new history file manager with custom config
-    pub fn with_config(
-        workspace_root: &Path,
-        session_id: impl Into<String>,
-        config: HistoryConfig,
-    ) -> Self {
+    pub fn with_config(workspace_root: &Path, session_id: impl Into<String>, config: HistoryConfig) -> Self {
         let history_dir = workspace_root.join(".vtcode").join("history");
         Self {
             workspace_root: workspace_root.to_path_buf(),
@@ -169,19 +165,13 @@ impl HistoryFileManager {
         }
 
         // Ensure directory exists
-        fs::create_dir_all(&self.history_dir).with_context(|| {
-            format!("Failed to create history directory: {}", self.history_dir.display())
-        })?;
+        fs::create_dir_all(&self.history_dir)
+            .with_context(|| format!("Failed to create history directory: {}", self.history_dir.display()))?;
 
         // Generate filename
         self.file_counter += 1;
         let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-        let filename = format!(
-            "{}_{:04}_{}.jsonl",
-            sanitize_session_id(&self.session_id),
-            turn_number,
-            timestamp
-        );
+        let filename = format!("{}_{:04}_{}.jsonl", sanitize_session_id(&self.session_id), turn_number, timestamp);
         let file_path = self.history_dir.join(&filename);
 
         // Build metadata
@@ -216,8 +206,7 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path =
-            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
+        let relative_path = file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             session = %self.session_id,
@@ -253,19 +242,14 @@ impl HistoryFileManager {
         }
 
         // Ensure directory exists
-        async_fs::create_dir_all(&self.history_dir).await.with_context(|| {
-            format!("Failed to create history directory: {}", self.history_dir.display())
-        })?;
+        async_fs::create_dir_all(&self.history_dir)
+            .await
+            .with_context(|| format!("Failed to create history directory: {}", self.history_dir.display()))?;
 
         // Generate filename
         self.file_counter += 1;
         let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-        let filename = format!(
-            "{}_{:04}_{}.jsonl",
-            sanitize_session_id(&self.session_id),
-            turn_number,
-            timestamp
-        );
+        let filename = format!("{}_{:04}_{}.jsonl", sanitize_session_id(&self.session_id), turn_number, timestamp);
         let file_path = self.history_dir.join(&filename);
 
         // Build metadata
@@ -301,8 +285,7 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path =
-            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
+        let relative_path = file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             session = %self.session_id,
@@ -433,10 +416,7 @@ fn history_text_from_message_content(content: &MessageContent) -> String {
 }
 
 /// Convert provider-agnostic messages into persisted history messages.
-pub fn messages_to_history_messages(
-    messages: &[Message],
-    start_turn: usize,
-) -> Vec<HistoryMessage> {
+pub fn messages_to_history_messages(messages: &[Message], start_turn: usize) -> Vec<HistoryMessage> {
     let mut history_messages = Vec::with_capacity(messages.len());
     let now = Utc::now();
     let mut tool_names_by_call_id = HashMap::new();
@@ -464,11 +444,7 @@ pub fn messages_to_history_messages(
                         .and_then(|id| tool_names_by_call_id.get(id).cloned())
                 })
                 .unwrap_or_else(|| "tool".to_string());
-            format!(
-                "[Tool response from {}: {}]",
-                tool_name,
-                history_text_from_message_content(&message.content)
-            )
+            format!("[Tool response from {}: {}]", tool_name, history_text_from_message_content(&message.content))
         } else {
             let mut text_parts = Vec::new();
             let content_text = history_text_from_message_content(&message.content);
@@ -485,10 +461,7 @@ pub fn messages_to_history_messages(
             if let Some(tool_calls) = &message.tool_calls {
                 for tool_call in tool_calls {
                     if let Some(function) = &tool_call.function {
-                        text_parts.push(format!(
-                            "[Tool call: {} with args: {}]",
-                            function.name, function.arguments
-                        ));
+                        text_parts.push(format!("[Tool call: {} with args: {}]", function.name, function.arguments));
                     }
                 }
             }
@@ -552,13 +525,7 @@ mod tests {
         ];
 
         let result = manager
-            .write_history(
-                &messages,
-                5,
-                "summarization",
-                &["file.rs".to_string()],
-                &["cargo build".to_string()],
-            )
+            .write_history(&messages, 5, "summarization", &["file.rs".to_string()], &["cargo build".to_string()])
             .await
             .unwrap();
 
@@ -599,10 +566,8 @@ mod tests {
         let temp = tempdir().unwrap();
         let manager = HistoryFileManager::new(temp.path(), "test");
 
-        let summary = manager.format_summary_with_reference(
-            "Summarized 10 turns.",
-            Path::new(".vtcode/history/test.jsonl"),
-        );
+        let summary =
+            manager.format_summary_with_reference("Summarized 10 turns.", Path::new(".vtcode/history/test.jsonl"));
 
         assert!(summary.contains("Summarized 10 turns"));
         assert!(summary.contains(".vtcode/history/test.jsonl"));

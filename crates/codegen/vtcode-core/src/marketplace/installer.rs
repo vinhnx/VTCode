@@ -113,11 +113,7 @@ impl PluginInstaller {
 
         // Copy the file from source to destination
         fs::copy(&source_path, &dest_path).await.with_context(|| {
-            format!(
-                "Failed to copy plugin from {} to {}",
-                source_path.display(),
-                dest_path.display()
-            )
+            format!("Failed to copy plugin from {} to {}", source_path.display(), dest_path.display())
         })?;
 
         tracing::info!(plugin_id = %manifest.id, "local file copy completed");
@@ -125,11 +121,7 @@ impl PluginInstaller {
     }
 
     /// Download plugin from local path
-    async fn download_from_local(
-        &self,
-        manifest: &PluginManifest,
-        plugin_dir: &Path,
-    ) -> Result<()> {
+    async fn download_from_local(&self, manifest: &PluginManifest, plugin_dir: &Path) -> Result<()> {
         let source_path = PathBuf::from(&manifest.source);
         validate_path_exists(&source_path, "Local source path")?;
 
@@ -140,11 +132,7 @@ impl PluginInstaller {
 
         // Copy the file from source to destination
         fs::copy(&source_path, &dest_path).await.with_context(|| {
-            format!(
-                "Failed to copy plugin from {} to {}",
-                source_path.display(),
-                dest_path.display()
-            )
+            format!("Failed to copy plugin from {} to {}", source_path.display(), dest_path.display())
         })?;
 
         tracing::info!(plugin_id = %manifest.id, "local path copy completed");
@@ -204,9 +192,9 @@ impl PluginInstaller {
         // Remove from VT Code's plugin system before filesystem removal
         self.remove_from_core_plugin_system(plugin_id).await?;
 
-        fs::remove_dir_all(&plugin_dir).await.with_context(|| {
-            format!("Failed to remove plugin directory: {}", plugin_dir.display())
-        })?;
+        fs::remove_dir_all(&plugin_dir)
+            .await
+            .with_context(|| format!("Failed to remove plugin directory: {}", plugin_dir.display()))?;
 
         Ok(())
     }

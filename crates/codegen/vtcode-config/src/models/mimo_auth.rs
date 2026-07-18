@@ -15,12 +15,7 @@ const MIMO_API_KEY: &str = "MIMO_API_KEY";
 pub enum MiMoAuthMethod {
     /// Pay-as-you-go: uses api-key header, sk- prefix, api.xiaomimimo.com/v1
     #[default]
-    #[serde(
-        alias = "payg",
-        alias = "pay_as_you_go",
-        alias = "apikey",
-        alias = "api_key"
-    )]
+    #[serde(alias = "payg", alias = "pay_as_you_go", alias = "apikey", alias = "api_key")]
     PayAsYouGo,
     /// Token Plan: uses Authorization Bearer header, tp- prefix, token-plan-cn.xiaomimimo.com/v1
     #[serde(alias = "token_plan", alias = "tokenplan", alias = "tp")]
@@ -85,11 +80,10 @@ impl FromStr for MiMoAuthMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
-            "payg" | "pay-as-you-go" | "pay_as_you_go" | "apikey" | "api-key"
-            | "api-usage-billing" => Ok(Self::PayAsYouGo),
-            "token-plan" | "token_plan" | "tokenplan" | "tp" | "subscription-plan" => {
-                Ok(Self::TokenPlan)
+            "payg" | "pay-as-you-go" | "pay_as_you_go" | "apikey" | "api-key" | "api-usage-billing" => {
+                Ok(Self::PayAsYouGo)
             }
+            "token-plan" | "token_plan" | "tokenplan" | "tp" | "subscription-plan" => Ok(Self::TokenPlan),
             _ => Err(format!("Unknown MiMo auth method: {s}")),
         }
     }
@@ -137,10 +131,7 @@ mod tests {
             detect_mimo_auth_method("abc", Some("https://token-plan-cn.xiaomimimo.com/v1")),
             MiMoAuthMethod::TokenPlan
         );
-        assert_eq!(
-            detect_mimo_auth_method("abc", Some("https://api.xiaomimimo.com/v1")),
-            MiMoAuthMethod::PayAsYouGo
-        );
+        assert_eq!(detect_mimo_auth_method("abc", Some("https://api.xiaomimimo.com/v1")), MiMoAuthMethod::PayAsYouGo);
     }
 
     #[test]

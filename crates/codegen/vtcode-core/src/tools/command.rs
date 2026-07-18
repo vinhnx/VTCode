@@ -81,10 +81,8 @@ impl CommandTool {
         // in prepare_invocation which is async.
         let policy = CommandPolicyEvaluator::from_config(&commands_config);
         let unified_evaluator = UnifiedCommandEvaluator::new();
-        let extra_path_entries = path_env::compute_extra_search_paths(
-            &commands_config.extra_path_entries,
-            &workspace_root,
-        );
+        let extra_path_entries =
+            path_env::compute_extra_search_paths(&commands_config.extra_path_entries, &workspace_root);
         Self {
             workspace_root,
             policy,
@@ -96,17 +94,12 @@ impl CommandTool {
     pub fn update_commands_config(&mut self, commands_config: &CommandsConfig) {
         self.policy = CommandPolicyEvaluator::from_config(commands_config);
         self.unified_evaluator = UnifiedCommandEvaluator::new();
-        self.extra_path_entries = path_env::compute_extra_search_paths(
-            &commands_config.extra_path_entries,
-            &self.workspace_root,
-        );
+        self.extra_path_entries =
+            path_env::compute_extra_search_paths(&commands_config.extra_path_entries, &self.workspace_root);
     }
 
     #[cfg_attr(not(test), expect(dead_code))]
-    pub(crate) async fn prepare_invocation(
-        &self,
-        input: &EnhancedTerminalInput,
-    ) -> Result<CommandInvocation> {
+    pub(crate) async fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
         let command = &input.command;
         if command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
@@ -121,16 +114,13 @@ impl CommandTool {
             return Err(anyhow!("Program name cannot contain whitespace: {program}"));
         }
 
-        let working_dir =
-            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
+        let working_dir = sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
         // Unified command evaluation: combines safety rules + policy rules
         let confirm_ok = input.confirm.unwrap_or(false);
         let risky_command = is_risky_command(command);
         if risky_command && !confirm_ok {
-            return Err(anyhow!(
-                "Command appears destructive; set the `confirm` field to true to proceed."
-            ));
+            return Err(anyhow!("Command appears destructive; set the `confirm` field to true to proceed."));
         }
 
         let policy_allowed = self.policy.allows(command);
@@ -143,9 +133,7 @@ impl CommandTool {
 
         if !eval_result.allowed {
             if !policy_allowed {
-                return Err(anyhow!(
-                    "command '{program}' is not permitted by the execution policy"
-                ));
+                return Err(anyhow!("command '{program}' is not permitted by the execution policy"));
             }
             // If unified evaluator denied, still allow explicitly confirmed risky commands
             // when they are permitted by the configured policy.
@@ -161,51 +149,43 @@ impl CommandTool {
 
         if risky_command && confirm_ok {
             // Record audit for the explicitly confirmed destructive command
-            log_audit_for_command(
-                &format_command(command),
-                "Confirmed destructive operation by agent",
-            );
+            log_audit_for_command(&format_command(command), "Confirmed destructive operation by agent");
         }
 
         // If the program name includes a path separator or is absolute, execute it directly as provided
         // (unless the caller explicitly requested a shell override). Otherwise, always use the
         // user's login shell in `-lc` mode so PATH and environment are initialized consistently.
-        let resolved_invocation =
-            if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
-                // Program provided as absolute/relative path: run directly
-                CommandInvocation {
-                    program: program.to_owned(),
-                    args: command[1..].to_vec(),
-                    display: input.raw_command.clone().unwrap_or_else(|| format_command(command)),
-                }
-            } else {
-                // Honor explicit shell override provided in the input. If the caller set `login` to
-                // false, use `-c` (no login). Otherwise use `-lc` to force login shell semantics.
-                let shell = if let Some(ref shell_override) = input.shell {
-                    if !shell_override.trim().is_empty() {
-                        // Validate the shell override against the safe list
-                        validate_shell_override(shell_override)?
-                    } else {
-                        resolve_fallback_shell()
-                    }
+        let resolved_invocation = if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
+            // Program provided as absolute/relative path: run directly
+            CommandInvocation {
+                program: program.to_owned(),
+                args: command[1..].to_vec(),
+                display: input.raw_command.clone().unwrap_or_else(|| format_command(command)),
+            }
+        } else {
+            // Honor explicit shell override provided in the input. If the caller set `login` to
+            // false, use `-c` (no login). Otherwise use `-lc` to force login shell semantics.
+            let shell = if let Some(ref shell_override) = input.shell {
+                if !shell_override.trim().is_empty() {
+                    // Validate the shell override against the safe list
+                    validate_shell_override(shell_override)?
                 } else {
                     resolve_fallback_shell()
-                };
-                let use_login = input.login.unwrap_or(true);
-                let full_command = format_command(command);
-                CommandInvocation {
-                    program: shell,
-                    args: vec![
-                        if use_login {
-                            "-lc".to_owned()
-                        } else {
-                            "-c".to_owned()
-                        },
-                        full_command.clone(),
-                    ],
-                    display: full_command,
                 }
+            } else {
+                resolve_fallback_shell()
             };
+            let use_login = input.login.unwrap_or(true);
+            let full_command = format_command(command);
+            CommandInvocation {
+                program: shell,
+                args: vec![
+                    if use_login { "-lc".to_owned() } else { "-c".to_owned() },
+                    full_command.clone(),
+                ],
+                display: full_command,
+            }
+        };
 
         Ok(resolved_invocation)
     }
@@ -255,9 +235,7 @@ fn is_risky_command(command: &[String]) -> bool {
         return true;
     }
 
-    if program == "docker"
-        && args.iter().any(|a| a == "run" && args.iter().any(|b| b == "--privileged"))
-    {
+    if program == "docker" && args.iter().any(|a| a == "run" && args.iter().any(|b| b == "--privileged")) {
         return true;
     }
 
@@ -336,8 +314,7 @@ mod tests {
     async fn prepare_invocation_allows_cargo_via_policy() {
         let tool = make_tool();
         let input = make_input(vec!["cargo", "check"]);
-        let invocation =
-            tool.prepare_invocation(&input).await.expect("cargo check should be allowed");
+        let invocation = tool.prepare_invocation(&input).await.expect("cargo check should be allowed");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
         assert_eq!(invocation.args, vec!["-lc".to_owned(), "cargo check".to_owned()]);
@@ -422,12 +399,8 @@ mod tests {
             std::fs::set_permissions(&fake_tool_path, perms).expect("set perms");
         }
 
-        let custom_paths = vec![
-            noise_dir.path().to_path_buf(),
-            target_dir.path().to_path_buf(),
-        ];
-        let resolved =
-            path_env::resolve_program_path_from_paths("fake-tool", custom_paths.into_iter());
+        let custom_paths = vec![noise_dir.path().to_path_buf(), target_dir.path().to_path_buf()];
+        let resolved = path_env::resolve_program_path_from_paths("fake-tool", custom_paths.into_iter());
         let expected = fake_tool_path.to_string_lossy().into_owned();
         assert_eq!(resolved, Some(expected));
     }
@@ -439,8 +412,7 @@ mod tests {
         config.deny_list.push("cargo".to_string());
         let tool = CommandTool::with_commands_config(cwd, config);
         let input = make_input(vec!["cargo", "check"]);
-        let error =
-            tool.prepare_invocation(&input).await.expect_err("deny list should block cargo");
+        let error = tool.prepare_invocation(&input).await.expect_err("deny list should block cargo");
         assert!(error.to_string().contains("is not permitted"));
     }
 
@@ -471,20 +443,15 @@ mod tests {
 
         let mut config = CommandsConfig::default();
         config.allow_list.push("fake-extra".to_owned());
-        config.extra_path_entries =
-            vec![binary_path.parent().expect("parent").to_string_lossy().into_owned()];
+        config.extra_path_entries = vec![binary_path.parent().expect("parent").to_string_lossy().into_owned()];
 
         let tool = CommandTool::with_commands_config(cwd, config);
         let input = make_input(vec!["fake-extra"]);
-        let invocation =
-            tool.prepare_invocation(&input).await.expect("extra path should allow command");
+        let invocation = tool.prepare_invocation(&input).await.expect("extra path should allow command");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
         assert_eq!(invocation.args, vec!["-lc".to_owned(), "fake-extra".to_owned()]);
-        assert_eq!(
-            tool.extra_path_entries,
-            vec![binary_path.parent().expect("parent").to_path_buf()]
-        );
+        assert_eq!(tool.extra_path_entries, vec![binary_path.parent().expect("parent").to_path_buf()]);
     }
 
     #[tokio::test]

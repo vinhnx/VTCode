@@ -66,19 +66,17 @@ pub mod walk;
 pub mod workspace_snapshot;
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
 pub use editor::{
-    EditorPoint, EditorTarget, normalize_editor_hash_fragment, parse_editor_target,
-    resolve_editor_path, resolve_editor_target,
+    EditorPoint, EditorTarget, normalize_editor_hash_fragment, parse_editor_target, resolve_editor_path,
+    resolve_editor_target,
 };
 pub use error_category::{
     BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,
     is_retryable_llm_error_message,
 };
-pub use errors::{
-    DisplayErrorFormatter, ErrorFormatter, ErrorReporter, MultiErrors, NoopErrorReporter,
-};
+pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, MultiErrors, NoopErrorReporter};
 pub use paths::{
-    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, file_name_from_path,
-    is_safe_relative_path, normalize_ascii_identifier, resolve_workspace_path,
+    PathExt, PathResolver, PathScope, StrPathExt, WorkspacePaths, file_name_from_path, is_safe_relative_path,
+    normalize_ascii_identifier, resolve_workspace_path,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};

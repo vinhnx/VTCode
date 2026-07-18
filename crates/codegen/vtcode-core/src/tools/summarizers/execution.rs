@@ -89,9 +89,7 @@ impl Summarizer for BashSummarizer {
                 }
 
                 if result.total_lines > self.max_head_lines {
-                    let omitted = result
-                        .total_lines
-                        .saturating_sub(self.max_head_lines + self.max_tail_lines);
+                    let omitted = result.total_lines.saturating_sub(self.max_head_lines + self.max_tail_lines);
                     if omitted > 0 {
                         summary.push_str(&format!("[...{omitted} more lines]\n"));
                     }
@@ -149,8 +147,7 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
             .and_then(|e| e.as_i64())
             .unwrap_or(0) as i32;
 
-        result.success =
-            json.get("success").and_then(|s| s.as_bool()).unwrap_or(result.exit_code == 0);
+        result.success = json.get("success").and_then(|s| s.as_bool()).unwrap_or(result.exit_code == 0);
 
         result.duration_ms = json
             .get("duration_ms")
@@ -253,11 +250,7 @@ mod tests {
 
         // Verify some savings (small test input has lower percentage with BPE tokenizer)
         let savings = summarizer.estimate_savings(full_output, &summary);
-        assert!(
-            savings.savings_percent > 10.0,
-            "Should save >10% (got {:.1}%)",
-            savings.savings_percent
-        );
+        assert!(savings.savings_percent > 10.0, "Should save >10% (got {:.1}%)", savings.savings_percent);
     }
 
     #[test]

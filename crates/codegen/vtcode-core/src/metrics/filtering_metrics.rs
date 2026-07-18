@@ -32,13 +32,7 @@ impl FilteringMetrics {
         }
     }
 
-    pub fn record_operation(
-        &mut self,
-        operation: String,
-        input_size: u64,
-        output_size: u64,
-        duration_ms: u64,
-    ) {
+    pub fn record_operation(&mut self, operation: String, input_size: u64, output_size: u64, duration_ms: u64) {
         self.total_operations += 1;
         self.total_input_bytes += input_size;
         self.total_output_bytes += output_size;

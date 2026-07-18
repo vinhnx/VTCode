@@ -123,8 +123,7 @@ impl StreamingProcessor {
         // Get the response stream
         let mut stream = response.bytes_stream();
 
-        let mut accumulated_response =
-            StreamingResponse { candidates: Vec::new(), usage_metadata: None };
+        let mut accumulated_response = StreamingResponse { candidates: Vec::new(), usage_metadata: None };
 
         let mut _has_valid_content = false;
         // Optimize: Pre-allocate buffer with typical SSE line size to reduce reallocations
@@ -198,8 +197,7 @@ impl StreamingProcessor {
                     buffer.push_str(&decoder.push(&bytes));
 
                     // Process buffer
-                    match self.process_buffer(&mut buffer, &mut accumulated_response, &mut on_chunk)
-                    {
+                    match self.process_buffer(&mut buffer, &mut accumulated_response, &mut on_chunk) {
                         Ok(valid) => {
                             if valid {
                                 _has_valid_content = true;
@@ -223,11 +221,7 @@ impl StreamingProcessor {
 
         // Process any remaining data in the buffer
         if !buffer.is_empty() {
-            match self.process_remaining_buffer(
-                &mut buffer,
-                &mut accumulated_response,
-                &mut on_chunk,
-            ) {
+            match self.process_remaining_buffer(&mut buffer, &mut accumulated_response, &mut on_chunk) {
                 Ok(valid) => {
                     if valid {
                         _has_valid_content = true;
@@ -513,11 +507,7 @@ impl StreamingProcessor {
     }
 
     /// Process a streaming candidate and extract content
-    fn process_candidate<F>(
-        &self,
-        candidate: &StreamingCandidate,
-        on_chunk: &mut F,
-    ) -> Result<bool, StreamingError>
+    fn process_candidate<F>(&self, candidate: &StreamingCandidate, on_chunk: &mut F) -> Result<bool, StreamingError>
     where
         F: FnMut(&str) -> Result<(), StreamingError>,
     {
@@ -586,8 +576,7 @@ impl StreamingProcessor {
                         .unwrap_or("Gemini streaming error")
                         .to_owned();
                     #[allow(clippy::cast_sign_loss)]
-                    let code =
-                        error_value.get("code").and_then(Value::as_i64).unwrap_or(500) as u16;
+                    let code = error_value.get("code").and_then(Value::as_i64).unwrap_or(500) as u16;
                     return Err(StreamingError::ApiError {
                         status_code: code,
                         message,
@@ -609,8 +598,7 @@ impl StreamingProcessor {
                     };
 
                     for candidate_value in candidate_values {
-                        match serde_json::from_value::<StreamingCandidate>(candidate_value.clone())
-                        {
+                        match serde_json::from_value::<StreamingCandidate>(candidate_value.clone()) {
                             Ok(candidate) => {
                                 if self.process_candidate(&candidate, on_chunk)? {
                                     has_valid = true;
@@ -618,8 +606,7 @@ impl StreamingProcessor {
                                 self.merge_candidate(accumulated_response, candidate);
                             }
                             Err(err) => {
-                                if let Some(text) = Self::extract_text_from_value(&candidate_value)
-                                {
+                                if let Some(text) = Self::extract_text_from_value(&candidate_value) {
                                     if !text.trim().is_empty() {
                                         on_chunk(&text)?;
                                         self.append_text_candidate(accumulated_response, &text);
@@ -636,8 +623,7 @@ impl StreamingProcessor {
                     }
                 }
 
-                if let Some(text_value) =
-                    map.remove("text").and_then(|v| v.as_str().map(|s| s.to_owned()))
+                if let Some(text_value) = map.remove("text").and_then(|v| v.as_str().map(|s| s.to_owned()))
                     && !text_value.trim().is_empty()
                 {
                     on_chunk(&text_value)?;
@@ -660,11 +646,7 @@ impl StreamingProcessor {
         }
     }
 
-    fn merge_candidate(
-        &mut self,
-        accumulated_response: &mut StreamingResponse,
-        mut candidate: StreamingCandidate,
-    ) {
+    fn merge_candidate(&mut self, accumulated_response: &mut StreamingResponse, mut candidate: StreamingCandidate) {
         let index = candidate.index.unwrap_or(accumulated_response.candidates.len());
 
         if let Some(existing) = accumulated_response
@@ -726,11 +708,7 @@ impl StreamingProcessor {
                         collected.push_str(&fragment);
                     }
                 }
-                if collected.is_empty() {
-                    None
-                } else {
-                    Some(collected)
-                }
+                if collected.is_empty() { None } else { Some(collected) }
             }
             Value::Object(map) => {
                 if let Some(text) = map.get("text").and_then(Value::as_str)
@@ -740,8 +718,7 @@ impl StreamingProcessor {
                 }
 
                 if let Some(parts) = map.get("parts").and_then(Value::as_array)
-                    && let Some(parts_text) =
-                        Self::extract_text_from_value(&Value::Array(parts.clone()))
+                    && let Some(parts_text) = Self::extract_text_from_value(&Value::Array(parts.clone()))
                 {
                     return Some(parts_text);
                 }

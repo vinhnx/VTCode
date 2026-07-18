@@ -9,12 +9,10 @@ use vtcode_core::config::constants::{model_helpers, models};
 #[test]
 #[ignore = "requires models.json to match constants"]
 fn constants_cover_models_json() {
-    let json = fs::read_to_string("docs/models.json").expect(
-        "Failed to read docs/models.json. Make sure you're running tests from the project root.",
-    );
+    let json = fs::read_to_string("docs/models.json")
+        .expect("Failed to read docs/models.json. Make sure you're running tests from the project root.");
 
-    let models_data: Value =
-        serde_json::from_str(&json).expect("Failed to parse docs/models.json as valid JSON");
+    let models_data: Value = serde_json::from_str(&json).expect("Failed to parse docs/models.json as valid JSON");
 
     let providers = models_data.as_object().expect("docs/models.json should be a JSON object");
 
@@ -29,8 +27,7 @@ fn constants_cover_models_json() {
         }
 
         let provider_models = provider_models.unwrap();
-        let model_ids_from_json: HashSet<&str> =
-            provider_models.keys().map(|s| s.as_str()).collect();
+        let model_ids_from_json: HashSet<&str> = provider_models.keys().map(|s| s.as_str()).collect();
 
         // Check our supported providers
         let constants_models = match provider_name.as_str() {
@@ -62,16 +59,13 @@ fn constants_cover_models_json() {
         };
 
         if let Some(constants_models) = constants_models {
-            let model_ids_from_constants: HashSet<&str> =
-                constants_models.iter().copied().collect();
+            let model_ids_from_constants: HashSet<&str> = constants_models.iter().copied().collect();
 
             // Check for missing models in constants
-            let missing_in_constants: Vec<_> =
-                model_ids_from_json.difference(&model_ids_from_constants).collect();
+            let missing_in_constants: Vec<_> = model_ids_from_json.difference(&model_ids_from_constants).collect();
 
             // Check for extra models in constants (not in JSON)
-            let extra_in_constants: Vec<_> =
-                model_ids_from_constants.difference(&model_ids_from_json).collect();
+            let extra_in_constants: Vec<_> = model_ids_from_constants.difference(&model_ids_from_json).collect();
 
             assert!(
                 missing_in_constants.is_empty(),
@@ -107,23 +101,12 @@ fn constants_cover_models_json() {
                 "Default model '{default_model}' for provider '{provider_name}' is not in SUPPORTED_MODELS"
             );
 
-            println!(
-                "[SUCCESS] Provider '{}': {} models validated",
-                provider_name,
-                constants_models.len()
-            );
+            println!("[SUCCESS] Provider '{}': {} models validated", provider_name, constants_models.len());
         }
     }
 
     // Ensure we validated the expected providers
-    let expected_providers = [
-        "openai",
-        "anthropic",
-        "google",
-        "openrouter",
-        "deepseek",
-        "zai",
-    ];
+    let expected_providers = ["openai", "anthropic", "google", "openrouter", "deepseek", "zai"];
     for expected in &expected_providers {
         assert!(
             validated_providers.contains(expected),
@@ -131,10 +114,7 @@ fn constants_cover_models_json() {
         );
     }
 
-    println!(
-        "[SUCCESS] All {} providers validated against docs/models.json",
-        validated_providers.len()
-    );
+    println!("[SUCCESS] All {} providers validated against docs/models.json", validated_providers.len());
 }
 
 #[test]

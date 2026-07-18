@@ -69,11 +69,7 @@ impl ProtectionDecision {
 
     /// Check if any form of confirmation is required.
     pub fn requires_confirmation(&self) -> bool {
-        matches!(
-            self,
-            ProtectionDecision::RequiresConfirmation(_)
-                | ProtectionDecision::RequiresSecondaryAuth(_)
-        )
+        matches!(self, ProtectionDecision::RequiresConfirmation(_) | ProtectionDecision::RequiresSecondaryAuth(_))
     }
 
     /// Check if access is blocked or denied.
@@ -293,8 +289,7 @@ impl DotfileGuardian {
                         .map(|p| p.to_string_lossy().into_owned())
                         .unwrap_or_else(|| "unknown".to_string())
                 ),
-                suggestion: "Modify each dotfile independently with explicit confirmation."
-                    .to_string(),
+                suggestion: "Modify each dotfile independently with explicit confirmation.".to_string(),
             };
             self.log_access(context, AuditOutcome::Blocked).await?;
             return Ok(ProtectionDecision::Blocked(violation));
@@ -305,10 +300,7 @@ impl DotfileGuardian {
             let violation = ProtectionViolation {
                 file_path: context.file_path.to_string_lossy().into_owned(),
                 access_type: context.access_type.to_string(),
-                reason: format!(
-                    "Dotfile modification blocked during automated operation ({})",
-                    context.initiator
-                ),
+                reason: format!("Dotfile modification blocked during automated operation ({})", context.initiator),
                 suggestion: "Modify dotfiles manually or use explicit commands.".to_string(),
             };
             self.log_access(context, AuditOutcome::Blocked).await?;
@@ -335,9 +327,7 @@ impl DotfileGuardian {
             state.pending_modifications.insert(context.file_path.clone());
         }
 
-        if self.is_whitelisted(&context.file_path)
-            && self.config.require_secondary_auth_for_whitelist
-        {
+        if self.is_whitelisted(&context.file_path) && self.config.require_secondary_auth_for_whitelist {
             Ok(ProtectionDecision::RequiresSecondaryAuth(request))
         } else if self.config.require_explicit_confirmation {
             Ok(ProtectionDecision::RequiresConfirmation(request))
@@ -349,11 +339,7 @@ impl DotfileGuardian {
     }
 
     /// Record that user confirmed the modification.
-    pub async fn confirm_modification(
-        &self,
-        context: &AccessContext,
-        is_whitelisted: bool,
-    ) -> Result<()> {
+    pub async fn confirm_modification(&self, context: &AccessContext, is_whitelisted: bool) -> Result<()> {
         // Create backup before modification
         if let Some(ref backup_manager) = self.backup_manager
             && context.file_path.exists()
@@ -411,10 +397,7 @@ impl DotfileGuardian {
     }
 
     /// Get the most recent backup for a file.
-    pub async fn get_latest_backup(
-        &self,
-        file_path: &Path,
-    ) -> Result<Option<super::backup::DotfileBackup>> {
+    pub async fn get_latest_backup(&self, file_path: &Path) -> Result<Option<super::backup::DotfileBackup>> {
         match &self.backup_manager {
             Some(manager) => manager.get_latest_backup(file_path).await,
             None => Ok(None),
@@ -483,8 +466,7 @@ impl DotfileGuardian {
             if context.is_cascading
                 && let Some(ref triggered_by) = context.triggered_by
             {
-                entry = entry
-                    .with_context(format!("Cascading from: {}", triggered_by.to_string_lossy()));
+                entry = entry.with_context(format!("Cascading from: {}", triggered_by.to_string_lossy()));
             }
 
             log.log(entry).await?;
@@ -562,9 +544,8 @@ mod tests {
     async fn test_requires_confirmation() {
         let (guardian, _dir) = create_test_guardian().await;
 
-        let context =
-            AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session")
-                .with_proposed_changes("Adding node_modules to ignore list");
+        let context = AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session")
+            .with_proposed_changes("Adding node_modules to ignore list");
 
         let decision = guardian.request_access(&context).await.unwrap();
 
@@ -581,9 +562,7 @@ mod tests {
     async fn test_blocks_during_automation() {
         let (guardian, _dir) = create_test_guardian().await;
 
-        let context =
-            AccessContext::new(".npmrc", AccessType::Write, "npm_install", "test-session")
-                .as_automated();
+        let context = AccessContext::new(".npmrc", AccessType::Write, "npm_install", "test-session").as_automated();
 
         let decision = guardian.request_access(&context).await.unwrap();
 
@@ -601,8 +580,7 @@ mod tests {
 
         // Cascading modification
         let context2 =
-            AccessContext::new(".gitattributes", AccessType::Write, "test", "test-session")
-                .as_cascading(".gitignore");
+            AccessContext::new(".gitattributes", AccessType::Write, "test", "test-session").as_cascading(".gitignore");
 
         let decision = guardian.request_access(&context2).await.unwrap();
         assert!(decision.is_blocked());
@@ -612,8 +590,7 @@ mod tests {
     async fn test_non_dotfile_allowed() {
         let (guardian, _dir) = create_test_guardian().await;
 
-        let context =
-            AccessContext::new("README.md", AccessType::Write, "write_file", "test-session");
+        let context = AccessContext::new("README.md", AccessType::Write, "write_file", "test-session");
 
         let decision = guardian.request_access(&context).await.unwrap();
         assert!(decision.is_allowed());
@@ -631,8 +608,7 @@ mod tests {
 
         let guardian = DotfileGuardian::new(config).await.unwrap();
 
-        let context =
-            AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session");
+        let context = AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session");
 
         let decision = guardian.request_access(&context).await.unwrap();
         assert!(decision.is_allowed());

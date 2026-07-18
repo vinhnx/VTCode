@@ -8,12 +8,10 @@ use serde_json::Value;
 use tracing::{error, warn};
 
 use crate::reports::{
-    TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID,
-    TOOL_PERMISSION_ALLOW_PREFIX, TOOL_PERMISSION_CANCELLED_MESSAGE,
-    TOOL_PERMISSION_DENIED_MESSAGE, TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,
-    TOOL_PERMISSION_DENY_OPTION_ID, TOOL_PERMISSION_DENY_PREFIX,
-    TOOL_PERMISSION_REQUEST_FAILURE_LOG, TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
-    TOOL_PERMISSION_UNKNOWN_OPTION_LOG, ToolExecutionReport,
+    TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID, TOOL_PERMISSION_ALLOW_OPTION_ID, TOOL_PERMISSION_ALLOW_PREFIX,
+    TOOL_PERMISSION_CANCELLED_MESSAGE, TOOL_PERMISSION_DENIED_MESSAGE, TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID,
+    TOOL_PERMISSION_DENY_OPTION_ID, TOOL_PERMISSION_DENY_PREFIX, TOOL_PERMISSION_REQUEST_FAILURE_LOG,
+    TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE, TOOL_PERMISSION_UNKNOWN_OPTION_LOG, ToolExecutionReport,
 };
 
 use super::tooling::{SupportedTool, ToolDescriptor, ToolRegistryProvider};
@@ -39,11 +37,7 @@ impl<'a> PermissionToolContext<'a> {
 /// SACP `cx.spawn` tasks along with the agent itself.
 #[async_trait]
 pub trait AcpPermissionPrompter: Send + Sync {
-    fn permission_options(
-        &self,
-        tool: SupportedTool,
-        args: Option<&Value>,
-    ) -> Vec<acp::PermissionOption>;
+    fn permission_options(&self, tool: SupportedTool, args: Option<&Value>) -> Vec<acp::PermissionOption>;
 
     async fn request_tool_permission(
         &self,
@@ -124,11 +118,7 @@ impl<P> AcpPermissionPrompter for DefaultPermissionPrompter<P>
 where
     P: ToolRegistryProvider + Send + Sync,
 {
-    fn permission_options(
-        &self,
-        tool: SupportedTool,
-        args: Option<&Value>,
-    ) -> Vec<acp::PermissionOption> {
+    fn permission_options(&self, tool: SupportedTool, args: Option<&Value>) -> Vec<acp::PermissionOption> {
         let action_label = self.render_action_label(tool, args);
         self.permission_options_for_action(&action_label)
     }
@@ -174,10 +164,9 @@ where
 
         match client.request_permission(request).await {
             Ok(response) => match response.outcome {
-                acp::RequestPermissionOutcome::Cancelled => Ok(Some(ToolExecutionReport::failure(
-                    tool.name,
-                    TOOL_PERMISSION_CANCELLED_MESSAGE,
-                ))),
+                acp::RequestPermissionOutcome::Cancelled => {
+                    Ok(Some(ToolExecutionReport::failure(tool.name, TOOL_PERMISSION_CANCELLED_MESSAGE)))
+                }
                 acp::RequestPermissionOutcome::Selected(outcome) => {
                     let option_id_str = outcome.option_id.0.as_ref();
                     if option_id_str == TOOL_PERMISSION_ALLOW_OPTION_ID
@@ -187,29 +176,17 @@ where
                     } else if option_id_str == TOOL_PERMISSION_DENY_OPTION_ID
                         || option_id_str == TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID
                     {
-                        Ok(Some(ToolExecutionReport::failure(
-                            tool.name,
-                            TOOL_PERMISSION_DENIED_MESSAGE,
-                        )))
+                        Ok(Some(ToolExecutionReport::failure(tool.name, TOOL_PERMISSION_DENIED_MESSAGE)))
                     } else {
                         warn!("{}", TOOL_PERMISSION_UNKNOWN_OPTION_LOG);
-                        Ok(Some(ToolExecutionReport::failure(
-                            tool.name,
-                            TOOL_PERMISSION_DENIED_MESSAGE,
-                        )))
+                        Ok(Some(ToolExecutionReport::failure(tool.name, TOOL_PERMISSION_DENIED_MESSAGE)))
                     }
                 }
-                _ => Ok(Some(ToolExecutionReport::failure(
-                    tool.name,
-                    TOOL_PERMISSION_DENIED_MESSAGE,
-                ))),
+                _ => Ok(Some(ToolExecutionReport::failure(tool.name, TOOL_PERMISSION_DENIED_MESSAGE))),
             },
             Err(error) => {
                 error!(%error, "{}", TOOL_PERMISSION_REQUEST_FAILURE_LOG);
-                Ok(Some(ToolExecutionReport::failure(
-                    tool.name,
-                    TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
-                )))
+                Ok(Some(ToolExecutionReport::failure(tool.name, TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE)))
             }
         }
     }

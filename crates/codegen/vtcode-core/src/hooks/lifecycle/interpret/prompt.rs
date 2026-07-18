@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::{HookMessage, UserPromptHookOutcome};
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
-    handle_timeout, looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
+    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_user_prompt(
@@ -69,9 +69,7 @@ pub(crate) fn interpret_user_prompt(
         if let Some(decision) = common.decision.as_deref()
             && decision.eq_ignore_ascii_case("block")
         {
-            if let Some(reason) =
-                common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason))
-            {
+            if let Some(reason) = common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason)) {
                 outcome.allow_prompt = false;
                 outcome.block_reason = Some(reason);
             } else {

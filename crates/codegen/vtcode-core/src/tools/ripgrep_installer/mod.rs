@@ -77,9 +77,7 @@ impl RipgrepStatus {
 
         if std::env::var("VTCODE_RIPGREP_NO_INSTALL").is_ok() {
             debug_log("Auto-install disabled via VTCODE_RIPGREP_NO_INSTALL");
-            return Err(anyhow!(
-                "Ripgrep auto-installation disabled via VTCODE_RIPGREP_NO_INSTALL"
-            ));
+            return Err(anyhow!("Ripgrep auto-installation disabled via VTCODE_RIPGREP_NO_INSTALL"));
         }
 
         if InstallLockGuard::is_install_in_progress() {
@@ -96,9 +94,7 @@ impl RipgrepStatus {
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
             debug_log(&format!("Cache shows previous failure: {reason}"));
-            return Err(anyhow!(
-                "Previous installation attempt failed ({reason}). Not retrying for 24 hours."
-            ));
+            return Err(anyhow!("Previous installation attempt failed ({reason}). Not retrying for 24 hours."));
         }
 
         let result = install_with_smart_detection();

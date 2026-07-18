@@ -189,9 +189,11 @@ impl CliToolBridge {
             let entry = entry?;
             let path = entry.path();
 
-            if let Some(_name) = path.file_name().and_then(|n| n.to_str()).filter(|n| {
-                path.is_file() && n.to_lowercase().starts_with("readme") && n.ends_with(".md")
-            }) {
+            if let Some(_name) = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .filter(|n| path.is_file() && n.to_lowercase().starts_with("readme") && n.ends_with(".md"))
+            {
                 readmes.push(path);
             }
         }
@@ -256,9 +258,7 @@ impl CliToolBridge {
 
         // Execute with timeout
         let timeout_duration = Duration::from_secs(self.config.timeout_seconds.unwrap_or(30));
-        let output_result =
-            async_utils::with_timeout(cmd.output(), timeout_duration, "CLI tool execution")
-                .await??;
+        let output_result = async_utils::with_timeout(cmd.output(), timeout_duration, "CLI tool execution").await??;
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -488,11 +488,7 @@ fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
                 name: stem.to_string(),
                 description: format!("CLI tool: {}", path.display()),
                 executable_path: path.clone(),
-                readme_path: if readme_path.exists() {
-                    Some(readme_path)
-                } else {
-                    None
-                },
+                readme_path: if readme_path.exists() { Some(readme_path) } else { None },
                 schema_path: None,
                 timeout_seconds: Some(30),
                 supports_json: false,
@@ -561,8 +557,7 @@ mod tests {
         };
 
         let bridge = CliToolBridge::new(config).unwrap();
-        let result =
-            bridge.execute_internal(Value::String("hello world".to_string())).await.unwrap();
+        let result = bridge.execute_internal(Value::String("hello world".to_string())).await.unwrap();
 
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("hello world"));

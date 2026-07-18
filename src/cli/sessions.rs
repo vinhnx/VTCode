@@ -4,13 +4,10 @@ use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
-use vtcode_core::core::threads::{
-    ArchivedSessionIntent, SessionQueryScope, list_recent_sessions_in_scope,
-};
+use vtcode_core::core::threads::{ArchivedSessionIntent, SessionQueryScope, list_recent_sessions_in_scope};
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::session_archive::{
-    SessionContinuationMetadata, SessionContinuationRecommendedAction, SessionListing,
-    session_workspace_path,
+    SessionContinuationMetadata, SessionContinuationRecommendedAction, SessionListing, session_workspace_path,
 };
 
 use crate::agent::agents::{ResumeSession, SessionContinuation};
@@ -63,15 +60,11 @@ pub async fn handle_resume_session_command(
     };
 
     let resume = match mode {
-        SessionResumeMode::Latest => {
-            select_latest_session(&scope, interactive_intent.clone()).await?
-        }
+        SessionResumeMode::Latest => select_latest_session(&scope, interactive_intent.clone()).await?,
         SessionResumeMode::Specific(identifier) => {
             Some(load_specific_session(&identifier, interactive_intent.clone()).await?)
         }
-        SessionResumeMode::Interactive => {
-            select_session_interactively(&scope, interactive_intent.clone()).await?
-        }
+        SessionResumeMode::Interactive => select_session_interactively(&scope, interactive_intent.clone()).await?,
         SessionResumeMode::Fork(identifier) => {
             if identifier == "__latest__" {
                 select_latest_session(&scope, interactive_intent.clone()).await?
@@ -131,10 +124,7 @@ async fn select_latest_session(
     }
 }
 
-async fn load_specific_session(
-    identifier: &str,
-    intent: ArchivedSessionIntent,
-) -> Result<SessionContinuation> {
+async fn load_specific_session(identifier: &str, intent: ArchivedSessionIntent) -> Result<SessionContinuation> {
     crate::agent::agents::load_resume_session(identifier, intent)
         .await?
         .ok_or_else(|| anyhow!("No session with identifier '{identifier}' was found."))
@@ -208,9 +198,7 @@ fn maybe_choose_fork_mode(intent: ArchivedSessionIntent) -> Result<Option<Archiv
     }
 }
 
-fn maybe_choose_budget_limited_resume_mode(
-    resume: ResumeSession,
-) -> Result<Option<ResumeExecutionMode>> {
+fn maybe_choose_budget_limited_resume_mode(resume: ResumeSession) -> Result<Option<ResumeExecutionMode>> {
     let Some(continuation) = resume.budget_limit_continuation() else {
         return Ok(Some(ResumeExecutionMode::Resume(Box::new(resume))));
     };
@@ -224,10 +212,7 @@ fn maybe_choose_budget_limited_resume_mode(
     {
         println!(
             "{}",
-            style(format!(
-                "Prior spend: ${actual_cost_usd:.2} on a ${max_budget_usd:.2} session budget."
-            ))
-            .yellow()
+            style(format!("Prior spend: ${actual_cost_usd:.2} on a ${max_budget_usd:.2} session budget.")).yellow()
         );
     }
 
@@ -270,38 +255,25 @@ fn build_budget_resume_menu(continuation: &SessionContinuationMetadata) -> Budge
     BudgetResumeMenu { actions, options, default_index }
 }
 
-fn preferred_budget_resume_action(
-    continuation: &SessionContinuationMetadata,
-) -> BudgetResumeAction {
+fn preferred_budget_resume_action(continuation: &SessionContinuationMetadata) -> BudgetResumeAction {
     match continuation.recommended_action {
-        Some(SessionContinuationRecommendedAction::ContinueFromSummary)
-            if continuation.summary_available =>
-        {
+        Some(SessionContinuationRecommendedAction::ContinueFromSummary) if continuation.summary_available => {
             BudgetResumeAction::ContinueFromSummary
         }
         Some(SessionContinuationRecommendedAction::StartFresh) => BudgetResumeAction::StartFresh,
-        Some(SessionContinuationRecommendedAction::ContinueFullHistory) => {
-            BudgetResumeAction::ContinueFullHistory
-        }
+        Some(SessionContinuationRecommendedAction::ContinueFullHistory) => BudgetResumeAction::ContinueFullHistory,
         _ if continuation.summary_available => BudgetResumeAction::ContinueFromSummary,
         _ => BudgetResumeAction::ContinueFullHistory,
     }
 }
 
-fn resolve_budget_resume_action(
-    resume: ResumeSession,
-    action: BudgetResumeAction,
-) -> Option<ResumeExecutionMode> {
+fn resolve_budget_resume_action(resume: ResumeSession, action: BudgetResumeAction) -> Option<ResumeExecutionMode> {
     match action {
-        BudgetResumeAction::ContinueFromSummary => {
-            Some(ResumeExecutionMode::Resume(Box::new(convert_listing(
-                resume.listing(),
-                ArchivedSessionIntent::ForkNewArchive { custom_suffix: None, summarize: true },
-            ))))
-        }
-        BudgetResumeAction::ContinueFullHistory => {
-            Some(ResumeExecutionMode::Resume(Box::new(resume)))
-        }
+        BudgetResumeAction::ContinueFromSummary => Some(ResumeExecutionMode::Resume(Box::new(convert_listing(
+            resume.listing(),
+            ArchivedSessionIntent::ForkNewArchive { custom_suffix: None, summarize: true },
+        )))),
+        BudgetResumeAction::ContinueFullHistory => Some(ResumeExecutionMode::Resume(Box::new(resume))),
         BudgetResumeAction::StartFresh => Some(ResumeExecutionMode::StartFresh),
         BudgetResumeAction::Cancel => None,
     }
@@ -313,10 +285,8 @@ fn convert_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> R
 
 fn format_listing(listing: &SessionListing) -> String {
     let ended = listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
-    let mut summary = format!(
-        "{} · {} · {} msgs",
-        ended, listing.snapshot.metadata.model, listing.snapshot.total_messages
-    );
+    let mut summary =
+        format!("{} · {} · {} msgs", ended, listing.snapshot.metadata.model, listing.snapshot.total_messages);
     if let Some(prompt) = listing.first_prompt_preview() {
         summary.push_str(&format!("\n  prompt: {prompt}"));
     }
@@ -345,12 +315,7 @@ fn print_fork_summary(resume: &ResumeSession) {
     let ended = resume.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     println!(
         "{}",
-        style(format!(
-            "Forking session with {} messages (original ended {})",
-            resume.message_count(),
-            ended
-        ))
-        .green()
+        style(format!("Forking session with {} messages (original ended {})", resume.message_count(), ended)).green()
     );
     println!("{}", style(format!("Original archive: {}", resume.path().display())).green());
     if resume.summarize_fork() {
@@ -375,8 +340,7 @@ async fn run_single_agent_loop(
         ParsedWorkspace::Missing => {
             println!(
                 "{}",
-                style("Archived session is missing workspace metadata; continuing with the current workspace.")
-                    .red()
+                style("Archived session is missing workspace metadata; continuing with the current workspace.").red()
             );
         }
         ParsedWorkspace::Provided { path } => {
@@ -402,19 +366,13 @@ enum ParsedWorkspace {
     Provided { path: PathBuf },
 }
 
-fn resolve_resume_workspace(
-    resume: &ResumeSession,
-    config: &CoreAgentConfig,
-) -> Result<ParsedWorkspace> {
+fn resolve_resume_workspace(resume: &ResumeSession, config: &CoreAgentConfig) -> Result<ParsedWorkspace> {
     let Some(archived_path) = session_workspace_path(resume.listing()) else {
         return Ok(ParsedWorkspace::Missing);
     };
 
     if !archived_path.exists() {
-        return Err(anyhow!(
-            "Archived workspace '{}' could not be found on disk.",
-            archived_path.display()
-        ));
+        return Err(anyhow!("Archived workspace '{}' could not be found on disk.", archived_path.display()));
     }
 
     if archived_path == config.workspace {
@@ -451,17 +409,14 @@ mod tests {
     use chrono::Utc;
     use vtcode_core::llm::provider::MessageRole;
     use vtcode_core::utils::session_archive::{
-        SessionArchiveMetadata, SessionContinuationMetadata, SessionMessage, SessionProgress,
-        SessionSnapshot,
+        SessionArchiveMetadata, SessionContinuationMetadata, SessionMessage, SessionProgress, SessionSnapshot,
     };
 
     #[test]
     fn convert_listing_prefers_full_messages_over_progress_tail() {
         let progress_msg = SessionMessage::new(MessageRole::Assistant, "progress");
         let snapshot = SessionSnapshot {
-            metadata: SessionArchiveMetadata::new(
-                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
-            ),
+            metadata: SessionArchiveMetadata::new("ws", "/tmp/ws", "model", "provider", "theme", "medium"),
             started_at: Utc::now(),
             ended_at: Utc::now(),
             total_messages: 2,
@@ -491,9 +446,7 @@ mod tests {
     fn convert_listing_falls_back_to_progress_messages_for_legacy_archives() {
         let progress_msg = SessionMessage::new(MessageRole::Assistant, "progress");
         let snapshot = SessionSnapshot {
-            metadata: SessionArchiveMetadata::new(
-                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
-            ),
+            metadata: SessionArchiveMetadata::new("ws", "/tmp/ws", "model", "provider", "theme", "medium"),
             started_at: Utc::now(),
             ended_at: Utc::now(),
             total_messages: 2,
@@ -521,8 +474,7 @@ mod tests {
 
     #[test]
     fn budget_resume_menu_prefers_saved_summary_when_available() {
-        let menu =
-            build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, true));
+        let menu = build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, true));
 
         assert_eq!(menu.default_index, 0);
         assert_eq!(
@@ -538,8 +490,7 @@ mod tests {
 
     #[test]
     fn budget_resume_menu_falls_back_to_full_history_without_saved_summary() {
-        let menu =
-            build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, false));
+        let menu = build_budget_resume_menu(&SessionContinuationMetadata::budget_limit(2.5, 2.7, false));
 
         assert_eq!(menu.default_index, 0);
         assert_eq!(
@@ -557,12 +508,8 @@ mod tests {
         let listing = SessionListing {
             path: PathBuf::new(),
             snapshot: SessionSnapshot {
-                metadata: SessionArchiveMetadata::new(
-                    "ws", "/tmp/ws", "model", "provider", "theme", "medium",
-                )
-                .with_continuation_metadata(Some(
-                    SessionContinuationMetadata::budget_limit(2.5, 2.7, true),
-                )),
+                metadata: SessionArchiveMetadata::new("ws", "/tmp/ws", "model", "provider", "theme", "medium")
+                    .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(2.5, 2.7, true))),
                 started_at: Utc::now(),
                 ended_at: Utc::now(),
                 total_messages: 1,

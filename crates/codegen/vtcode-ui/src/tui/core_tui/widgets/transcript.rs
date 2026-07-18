@@ -94,8 +94,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.session.total_transcript_rows(content_width) + effective_padding;
-        let (top_offset, _clamped_total_rows) =
-            self.session.prepare_transcript_scroll(total_rows, viewport_rows);
+        let (top_offset, _clamped_total_rows) = self.session.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.session.scroll_manager.max_offset());
         self.session.transcript_view_top = vertical_offset;
 
@@ -103,11 +102,9 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let scroll_area = inner;
 
         // Use cached visible lines to avoid rebuilding on every frame
-        let cached_lines = self.session.collect_transcript_window_cached(
-            content_width,
-            visible_start,
-            viewport_rows,
-        );
+        let cached_lines = self
+            .session
+            .collect_transcript_window_cached(content_width, visible_start, viewport_rows);
 
         // Check if we need to mutate the lines (fill empty space or add overlays)
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
@@ -241,9 +238,7 @@ fn apply_full_width_line_backgrounds(buf: &mut Buffer, area: Rect, lines: &[Line
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::core_tui::types::{
-        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    };
+    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
     use std::sync::Arc;
 
     fn segment(text: &str) -> InlineSegment {
@@ -273,10 +268,7 @@ mod tests {
         let inner = Rect::new(1, 1, 12, 4);
         let mut buf = Buffer::empty(area);
         let mut session = Session::new(InlineTheme::default(), None, 12);
-        session.push_line(
-            InlineMessageKind::Agent,
-            vec![segment("this line wraps across several rows")],
-        );
+        session.push_line(InlineMessageKind::Agent, vec![segment("this line wraps across several rows")]);
 
         TranscriptWidget::new(&mut session).render(area, &mut buf);
 
@@ -293,9 +285,7 @@ mod tests {
 
         TranscriptWidget::new(&mut session).render(area, &mut buf);
 
-        assert!(
-            (inner.y + 1..inner.bottom()).all(|row| row_text(&buf, inner, row).trim().is_empty())
-        );
+        assert!((inner.y + 1..inner.bottom()).all(|row| row_text(&buf, inner, row).trim().is_empty()));
     }
 
     #[test]

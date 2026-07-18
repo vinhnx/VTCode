@@ -29,8 +29,7 @@ pub fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
     }
 
     // Use jsonschema for full JSON Schema 2020-12 validation
-    jsonschema::validate(schema, input)
-        .map_err(|err| anyhow::anyhow!("Schema validation failed: {err}"))
+    jsonschema::validate(schema, input).map_err(|err| anyhow::anyhow!("Schema validation failed: {err}"))
 }
 
 /// Validate tool input parameters (Phase 2 - Full validation)

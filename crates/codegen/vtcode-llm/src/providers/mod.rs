@@ -42,9 +42,7 @@ pub use vtcode_commons::tool_types::{
 };
 
 pub use reasoning::clean_reasoning_text;
-pub use reasoning::{
-    ReasoningBuffer, ReasoningSegment, extract_reasoning_trace, split_reasoning_from_text,
-};
+pub use reasoning::{ReasoningBuffer, ReasoningSegment, extract_reasoning_trace, split_reasoning_from_text};
 
 pub use anthropic::AnthropicProvider;
 #[cfg(feature = "copilot")]
@@ -68,7 +66,5 @@ pub use openrouter::OpenRouterProvider;
 pub use poolside::PoolsideProvider;
 pub use qwen::QwenProvider;
 pub use stepfun::StepFunProvider;
-pub use streaming_progress::{
-    StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
-};
+pub use streaming_progress::{StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker};
 pub use zai::ZAIProvider;

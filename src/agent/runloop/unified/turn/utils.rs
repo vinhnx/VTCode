@@ -4,10 +4,7 @@ use vtcode_core::hooks::{HookMessage, HookMessageLevel};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-pub(crate) fn render_hook_messages(
-    renderer: &mut AnsiRenderer,
-    messages: &[HookMessage],
-) -> Result<()> {
+pub(crate) fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
     for message in messages {
         let text = message.text.trim();
         if text.is_empty() {
@@ -26,10 +23,7 @@ pub(crate) fn render_hook_messages(
     Ok(())
 }
 
-pub(crate) fn append_additional_context(
-    history: &mut Vec<uni::Message>,
-    additional_context: Vec<String>,
-) {
+pub(crate) fn append_additional_context(history: &mut Vec<uni::Message>, additional_context: Vec<String>) {
     for context in additional_context {
         if !context.trim().is_empty() {
             history.push(uni::Message::system(context));
@@ -38,8 +32,7 @@ pub(crate) fn append_additional_context(
 }
 
 pub(crate) fn truncate_message_content(content: &str) -> String {
-    let mut result =
-        String::with_capacity(content.len().min(output_limits::MAX_AGENT_MESSAGES_SIZE));
+    let mut result = String::with_capacity(content.len().min(output_limits::MAX_AGENT_MESSAGES_SIZE));
     let mut truncated = false;
 
     for line in content.lines() {
@@ -168,11 +161,7 @@ mod tests {
 
         append_additional_context(
             &mut history,
-            vec![
-                "keep me".to_string(),
-                "   ".to_string(),
-                "also keep me".to_string(),
-            ],
+            vec!["keep me".to_string(), "   ".to_string(), "also keep me".to_string()],
         );
 
         assert_eq!(history.len(), 3);

@@ -235,16 +235,13 @@ pub use exec_session_id::ExecSessionId;
 pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
 pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, ExecutionTracker};
 pub use file_search_rpc::{
-    FileMatchRpc, FileSearchRpcHandler, ListFilesRequest, ListFilesResponse, RpcError, RpcRequest,
-    RpcResponse, SearchFilesRequest, SearchFilesResponse,
+    FileMatchRpc, FileSearchRpcHandler, ListFilesRequest, ListFilesResponse, RpcError, RpcRequest, RpcResponse,
+    SearchFilesRequest, SearchFilesResponse,
 };
 pub use grep_file::GrepSearchManager;
-pub use invocation::{
-    InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId,
-};
+pub use invocation::{InvocationBuilder, ToolInvocation as UnifiedToolInvocation, ToolInvocationId};
 pub use search_runtime::{
-    SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language,
-    search_tool_bundle_status,
+    SearchToolBundleStatus, SearchToolReadiness, dominant_workspace_language, search_tool_bundle_status,
 };
 
 pub use defuddle::DefuddleTool;
@@ -252,36 +249,32 @@ pub use optimized_registry::{CachedToolMetadata as OptimizedToolMetadata, Optimi
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{
-    ApprovalPattern, ApprovalRecorder, CgpRuntimeMode, JustificationExtractor,
-    JustificationManager, RiskLevel, ToolJustification, ToolRegistration, ToolRegistry,
-    ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust, native_cgp_tool_factory,
-    wrap_registered_native_tool,
+    ApprovalPattern, ApprovalRecorder, CgpRuntimeMode, JustificationExtractor, JustificationManager, RiskLevel,
+    ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
+    native_cgp_tool_factory, wrap_registered_native_tool,
 };
 pub use request_response::{ToolCallRequest, ToolCallResponse};
 pub use result::{TokenCounts, ToolMetadata, ToolMetadataBuilder, ToolResult as SplitToolResult};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
-pub use result_metadata::{
-    EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
-};
+pub use result_metadata::{EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry};
 pub use ripgrep_installer::RipgrepStatus;
 pub use safety_gateway::{
-    SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway,
-    SafetyGatewayConfig, SafetyStats, SafetyTrustLevel,
+    SafetyCheckResult, SafetyContext, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
+    SafetyTrustLevel,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use shell_snapshot::{
-    FileFingerprint, ShellKind, ShellSnapshot, ShellSnapshotManager, SnapshotStats,
-    apply_snapshot_env, global_snapshot_manager,
+    FileFingerprint, ShellKind, ShellSnapshot, ShellSnapshotManager, SnapshotStats, apply_snapshot_env,
+    global_snapshot_manager,
 };
 pub use tool_effectiveness::{
-    AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode,
-    ToolSelectionContext, ToolSelector,
+    AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode, ToolSelectionContext,
+    ToolSelector,
 };
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use unified_error::{
-    DebugContext as UnifiedToolDebugContext, ErrorSeverity as UnifiedErrorSeverity,
-    UnifiedErrorKind, UnifiedToolError,
+    DebugContext as UnifiedToolDebugContext, ErrorSeverity as UnifiedErrorSeverity, UnifiedErrorKind, UnifiedToolError,
 };
 pub use web_fetch::WebFetchTool;
 pub use web_search::WebSearchTool;
@@ -291,8 +284,8 @@ pub use output_spooler::{SpoolResult, SpoolerConfig, ToolOutputSpooler};
 
 // Production-grade improvements re-exports
 pub use async_middleware::{
-    AsyncCachingMiddleware, AsyncLoggingMiddleware, AsyncMiddleware, AsyncMiddlewareChain,
-    AsyncRetryMiddleware, MiddlewareToolResult, ToolRequest as MiddlewareToolRequest,
+    AsyncCachingMiddleware, AsyncLoggingMiddleware, AsyncMiddleware, AsyncMiddlewareChain, AsyncRetryMiddleware,
+    MiddlewareToolResult, ToolRequest as MiddlewareToolRequest,
 };
 pub use cached_executor::{CachedToolExecutor, ExecutorStats};
 pub use handlers::{
@@ -369,17 +362,14 @@ pub use handlers::{
     new_shared_tracker,
 };
 pub use improvement_algorithms::{
-    MLScoreComponents, PatternState, TimeDecayedScore, ToolCallRecord, detect_pattern,
-    jaro_winkler_similarity,
+    MLScoreComponents, PatternState, TimeDecayedScore, ToolCallRecord, detect_pattern, jaro_winkler_similarity,
 };
 pub use improvements_config::{
-    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,
-    SimilarityConfig, TimeDecayConfig,
+    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig, SimilarityConfig, TimeDecayConfig,
 };
 pub use improvements_errors::{
-    ErrorKind, EventType, ImprovementError, ImprovementEvent, ImprovementResult,
-    ImprovementSeverity, ImprovementSeverity as ErrorSeverity, ObservabilityContext,
-    ObservabilitySink,
+    ErrorKind, EventType, ImprovementError, ImprovementEvent, ImprovementResult, ImprovementSeverity,
+    ImprovementSeverity as ErrorSeverity, ObservabilityContext, ObservabilitySink,
 };
 pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
 pub use lru_cache::{CacheObserver, CacheStats, LruCache};

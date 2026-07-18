@@ -26,10 +26,7 @@ fn optional_f64_tokens(value: Option<f64>) -> TokenStream {
 // 1. openrouter_constants.rs
 // ---------------------------------------------------------------------------
 
-pub fn generate_openrouter_constants(
-    entries: &[EntryData],
-    provider: &Provider,
-) -> anyhow::Result<String> {
+pub fn generate_openrouter_constants(entries: &[EntryData], provider: &Provider) -> anyhow::Result<String> {
     // Per-model constants
     let const_defs: TokenStream = entries
         .iter()
@@ -43,14 +40,14 @@ pub fn generate_openrouter_constants(
         .collect();
 
     // DEFAULT_MODEL
-    let default_id = provider.default_model.as_ref().ok_or_else(|| {
-        anyhow::anyhow!("openrouter.default_model is missing in docs/models.json")
-    })?;
-    let default_entry = entries.iter().find(|e| &e.id == default_id).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Default OpenRouter model '{default_id}' is not declared in vtcode metadata"
-        )
-    })?;
+    let default_id = provider
+        .default_model
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("openrouter.default_model is missing in docs/models.json"))?;
+    let default_entry = entries
+        .iter()
+        .find(|e| &e.id == default_id)
+        .ok_or_else(|| anyhow::anyhow!("Default OpenRouter model '{default_id}' is not declared in vtcode metadata"))?;
     let default_const = ident(&default_entry.const_name);
 
     // SUPPORTED_MODELS

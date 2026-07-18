@@ -4,8 +4,7 @@ use super::*;
 #[tokio::test]
 async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output")).await;
     runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let response = tool_call_response(
@@ -18,11 +17,8 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let provider = QueuedProvider::new(vec![response]);
     let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-denied".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-denied".to_string(), 16, 4, 128_000), None, None);
     let request = LLMRequest {
         model: "gpt-5.3-codex".to_string(),
         ..Default::default()
@@ -38,31 +34,19 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     recorder.record_thread_events(runtime.take_emitted_events());
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[single]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[single]", false, false)
         .await
         .expect("tool execution should finish");
 
     let events = recorder.into_events();
-    let call_item_id =
-        completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
-    assert_eq!(
-        completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id),
-        1
-    );
+    let call_item_id = completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
+    assert_eq!(completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id), 1);
 }
 
 #[tokio::test]
 async fn denied_parallel_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel")).await;
     runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let tool_calls = tool_call_response(
@@ -75,23 +59,13 @@ async fn denied_parallel_tool_halt_returns_promptly() {
     .tool_calls
     .expect("tool call response");
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-denied-parallel".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-denied-parallel".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-denied-parallel", None, None);
 
     let start = Instant::now();
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[parallel]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[parallel]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -101,8 +75,7 @@ async fn denied_parallel_tool_halt_returns_promptly() {
 #[tokio::test]
 async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel")).await;
     runner.enable_full_auto(&[tools::EXEC_COMMAND.to_string()]).await;
 
     let tool_calls = vec![
@@ -124,11 +97,8 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
         ),
     ];
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-duplicate-parallel".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-duplicate-parallel".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-duplicate-parallel", None, None);
 
     runner
@@ -142,29 +112,23 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
         .iter()
         .filter_map(|message| {
             let id = message.tool_call_id.as_ref()?;
-            let output =
-                serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
+            let output = serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
             Some((id.as_str(), output))
         })
         .collect::<Vec<_>>();
     assert_eq!(tool_outputs.len(), 2);
     assert!(tool_outputs.iter().any(|(id, output)| {
-        *id == "call-echo-a"
-            && output["success"].as_bool() == Some(true)
-            && output["output"].as_str() == Some("hello")
+        *id == "call-echo-a" && output["success"].as_bool() == Some(true) && output["output"].as_str() == Some("hello")
     }));
     assert!(tool_outputs.iter().any(|(id, output)| {
-        *id == "call-echo-b"
-            && output["success"].as_bool() == Some(true)
-            && output["output"].as_str() == Some("world")
+        *id == "call-echo-b" && output["success"].as_bool() == Some(true) && output["output"].as_str() == Some("world")
     }));
 }
 
 #[tokio::test]
 async fn removed_public_tool_names_are_rejected() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-removed-public-tools")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-removed-public-tools")).await;
     assert!(!runner.is_valid_tool(tools::LIST_FILES).await);
     assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
 
@@ -207,8 +171,7 @@ async fn removed_public_tool_names_are_rejected() {
         .iter()
         .filter_map(|message| {
             let id = message.tool_call_id.as_ref()?;
-            let output =
-                serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
+            let output = serde_json::from_str::<serde_json::Value>(&message.content.as_text()).ok()?;
             Some((id.as_str(), output))
         })
         .collect::<Vec<_>>();
@@ -228,30 +191,16 @@ async fn removed_public_tool_names_are_rejected() {
     assert_eq!(search_output.as_str(), Some(expected_search_denial.as_str()));
 
     let events = recorder.into_events();
-    let list_item_id =
-        completed_tool_invocation_item_id(&events, "call-list").expect("list invocation");
-    let search_item_id =
-        completed_tool_invocation_item_id(&events, "call-search").expect("search invocation");
-    assert_eq!(
-        completed_tool_output_count(&events, "call-list", ToolCallStatus::Failed, &list_item_id),
-        1
-    );
-    assert_eq!(
-        completed_tool_output_count(
-            &events,
-            "call-search",
-            ToolCallStatus::Failed,
-            &search_item_id
-        ),
-        1
-    );
+    let list_item_id = completed_tool_invocation_item_id(&events, "call-list").expect("list invocation");
+    let search_item_id = completed_tool_invocation_item_id(&events, "call-search").expect("search invocation");
+    assert_eq!(completed_tool_output_count(&events, "call-list", ToolCallStatus::Failed, &list_item_id), 1);
+    assert_eq!(completed_tool_output_count(&events, "call-search", ToolCallStatus::Failed, &search_item_id), 1);
 }
 
 #[tokio::test]
 async fn denied_sequential_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential")).await;
     runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let tool_calls = tool_call_response(
@@ -264,23 +213,13 @@ async fn denied_sequential_tool_halt_returns_promptly() {
     .tool_calls
     .expect("tool call response");
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-denied-sequential".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-denied-sequential".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-denied-sequential", None, None);
 
     let start = Instant::now();
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[sequential]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[sequential]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -299,10 +238,7 @@ async fn execute_tool_internal_retries_open_circuit_breaker() {
         ..CircuitBreakerConfig::default()
     }));
     runner.tool_registry.set_shared_circuit_breaker(breaker.clone());
-    breaker.record_failure_category_for_tool(
-        tools::EXEC_COMMAND,
-        vtcode_commons::ErrorCategory::ExecutionError,
-    );
+    breaker.record_failure_category_for_tool(tools::EXEC_COMMAND, vtcode_commons::ErrorCategory::ExecutionError);
 
     let start = Instant::now();
     let result = runner
@@ -323,10 +259,7 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-halt")).await;
     runner
-        .enable_full_auto(&[
-            tools::EXEC_COMMAND.to_string(),
-            tools::APPLY_PATCH.to_string(),
-        ])
+        .enable_full_auto(&[tools::EXEC_COMMAND.to_string(), tools::APPLY_PATCH.to_string()])
         .await;
     assert!(runner.is_valid_tool(tools::EXEC_COMMAND).await);
     assert!(runner.is_valid_tool(tools::APPLY_PATCH).await);
@@ -352,29 +285,21 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
         ),
     ];
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-policy-halt".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-policy-halt".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-halt", None, None);
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[single]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[single]", false, false)
         .await
         .expect("tool execution should finish");
 
     assert!(
-        runtime.state.warnings.iter().any(
-            |warning| warning == "Tool denied by policy; halting further tool calls this turn."
-        ),
+        runtime
+            .state
+            .warnings
+            .iter()
+            .any(|warning| warning == "Tool denied by policy; halting further tool calls this turn."),
         "warnings: {:?}",
         runtime.state.warnings
     );
@@ -404,22 +329,12 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         .to_string(),
     )];
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-policy-message".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-policy-message".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-message", None, None);
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[single]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[single]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -429,22 +344,17 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         .last()
         .map(|message| message.content.as_text().into_owned())
         .expect("tool error recorded");
-    let tool_error: serde_json::Value =
-        serde_json::from_str(&tool_error).expect("structured tool error");
+    let tool_error: serde_json::Value = serde_json::from_str(&tool_error).expect("structured tool error");
     assert_eq!(tool_error["error"]["category"].as_str(), Some("PolicyViolation"), "{tool_error}");
     assert!(
         tool_error["error"]["recovery_suggestions"]
             .as_array()
-            .is_some_and(|suggestions| suggestions.iter().any(|value| {
-                value.as_str() == Some("Review workspace policies and restrictions")
-            })),
+            .is_some_and(|suggestions| suggestions
+                .iter()
+                .any(|value| { value.as_str() == Some("Review workspace policies and restrictions") })),
         "{tool_error}"
     );
-    assert_eq!(
-        tool_error["error"]["partial_state_possible"].as_bool(),
-        Some(false),
-        "{tool_error}"
-    );
+    assert_eq!(tool_error["error"]["partial_state_possible"].as_bool(), Some(false), "{tool_error}");
 }
 
 #[tokio::test]
@@ -465,22 +375,12 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
         .to_string(),
     )];
 
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-policy-guard".to_string(), 16, 4, 128_000),
-        None,
-        None,
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-policy-guard".to_string(), 16, 4, 128_000), None, None);
     let mut recorder = ExecEventRecorder::new("thread-policy-guard", None, None);
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[single]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[single]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -493,8 +393,7 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
 #[tokio::test]
 async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner =
-        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output")).await;
+    let mut runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output")).await;
 
     let response = tool_call_response(
         tools::EXEC_COMMAND,
@@ -506,11 +405,8 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
 
     let (steering_tx, steering_rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut runtime = AgentRuntime::new(
-        AgentSessionState::new("session-stop".to_string(), 16, 4, 128_000),
-        None,
-        Some(steering_rx),
-    );
+    let mut runtime =
+        AgentRuntime::new(AgentSessionState::new("session-stop".to_string(), 16, 4, 128_000), None, Some(steering_rx));
     let request = LLMRequest {
         model: "gpt-5.3-codex".to_string(),
         ..Default::default()
@@ -527,22 +423,11 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     steering_tx.send(SteeringMessage::SteerStop).expect("steer stop should queue");
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[single]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[single]", false, false)
         .await
         .expect("tool execution should finish");
 
     let events = recorder.into_events();
-    let call_item_id =
-        completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
-    assert_eq!(
-        completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id),
-        1
-    );
+    let call_item_id = completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
+    assert_eq!(completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id), 1);
 }

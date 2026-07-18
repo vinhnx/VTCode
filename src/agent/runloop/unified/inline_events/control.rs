@@ -30,10 +30,9 @@ impl<'a, 'state> InlineControlProcessor<'a, 'state> {
 
     pub(crate) fn force_cancel_pty_session(self) -> Result<InlineLoopAction> {
         self.state.reset_interrupt_state();
-        self.state.renderer().line(
-            MessageStyle::Status,
-            "⚠ Force-cancelling active PTY session (double-escape detected)",
-        )?;
+        self.state
+            .renderer()
+            .line(MessageStyle::Status, "⚠ Force-cancelling active PTY session (double-escape detected)")?;
         Ok(InlineLoopAction::Continue)
     }
 }

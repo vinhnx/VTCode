@@ -25,9 +25,7 @@ use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
-use crate::llm::provider::{
-    Message, ToolCall, ToolChoice, ToolDefinition, supports_responses_chaining,
-};
+use crate::llm::provider::{Message, ToolCall, ToolChoice, ToolDefinition, supports_responses_chaining};
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections,
@@ -90,20 +88,14 @@ impl AgentRunner {
         );
         prompt_context.load_available_skills();
 
-        let (prompt, report) = super::helpers::compose_system_prompt_with_appendix(
-            self._workspace.as_path(),
-            &config,
-            &prompt_context,
-        )
-        .await?;
+        let (prompt, report) =
+            super::helpers::compose_system_prompt_with_appendix(self._workspace.as_path(), &config, &prompt_context)
+                .await?;
 
         Ok((prompt, report))
     }
 
-    async fn build_runtime_prompt_bundle(
-        &self,
-        is_simple_task: bool,
-    ) -> Result<RuntimePromptBundle> {
+    async fn build_runtime_prompt_bundle(&self, is_simple_task: bool) -> Result<RuntimePromptBundle> {
         let tool_snapshot = self.build_universal_tool_snapshot().await?;
         let request_tools = tool_snapshot.snapshot.clone();
         let prompt_tools = request_tools.clone().unwrap_or_else(|| Arc::new(Vec::new()));
@@ -112,8 +104,7 @@ impl AgentRunner {
         self.append_active_primary_agent_context(&mut system_prompt);
 
         let planning_active = self.tool_registry.is_planning_active();
-        let request_user_input_enabled =
-            self.features().request_user_input_enabled(planning_active, false);
+        let request_user_input_enabled = self.features().request_user_input_enabled(planning_active, false);
         let full_auto_active = self.tool_registry.current_full_auto_allowlist().await.is_some();
 
         append_runtime_mode_sections(
@@ -131,12 +122,7 @@ impl AgentRunner {
             self.config().agent.harness.max_tool_retries,
         );
         let shell_profile = self.config().agent.shell_prompt_profile.resolve_for_current_platform();
-        append_runtime_tool_prompt_sections_for_profile(
-            &mut system_prompt,
-            &tool_snapshot,
-            true,
-            shell_profile,
-        );
+        append_runtime_tool_prompt_sections_for_profile(&mut system_prompt, &tool_snapshot, true, shell_profile);
 
         let tool_def_tokens = request_tools
             .as_deref()
@@ -178,9 +164,7 @@ impl AgentRunner {
             system_prompt.push_str("\n- Agent model: ");
             system_prompt.push_str(model);
         }
-        if let Some(reasoning_effort) =
-            active_primary_agent.reasoning_effort.as_ref().map(|e| e.as_str())
-        {
+        if let Some(reasoning_effort) = active_primary_agent.reasoning_effort.as_ref().map(|e| e.as_str()) {
             system_prompt.push_str("\n- Agent reasoning effort: ");
             system_prompt.push_str(reasoning_effort);
         }
@@ -200,8 +184,7 @@ impl AgentRunner {
             |runner| Box::pin((*runner).build_runtime_prompt_bundle(is_simple_task)),
             |runner, bundle| {
                 let planning_active = runner.tool_registry.is_planning_active();
-                let request_user_input_enabled =
-                    runner.features().request_user_input_enabled(planning_active, false);
+                let request_user_input_enabled = runner.features().request_user_input_enabled(planning_active, false);
                 prompt_alignment::validate_prompt_catalog_alignment(
                     &bundle.system_instruction,
                     &bundle.tool_snapshot,
@@ -398,15 +381,7 @@ impl AgentRunner {
     /// assessment. Centralizes the (reason-only) event shape used by both the
     /// pre- and post-verification continuation paths.
     fn emit_continuation_started(&self, event_recorder: &mut ExecEventRecorder, reason: String) {
-        event_recorder.harness_event(
-            HarnessEventKind::ContinuationStarted,
-            Some(reason),
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        event_recorder.harness_event(HarnessEventKind::ContinuationStarted, Some(reason), None, None, None, None, None);
     }
 
     /// Emit `VerificationFailed` (for the first failing command) or
@@ -443,11 +418,7 @@ impl AgentRunner {
     }
 
     /// Execute a task with this agent
-    pub async fn execute_task(
-        &mut self,
-        task: &Task,
-        contexts: &[ContextItem],
-    ) -> Result<TaskResults> {
+    pub async fn execute_task(&mut self, task: &Task, contexts: &[ContextItem]) -> Result<TaskResults> {
         // Phase 1: Setup — harness alignment, conversation building, session init,
         // orchestration planning. Extracted to `prepare_task_execution` for testability.
         let setup = self.prepare_task_execution(task, contexts).await?;
@@ -496,15 +467,13 @@ impl AgentRunner {
                         RESERVED_OUTPUT_TOKENS,
                     );
                     if !fits {
-                        warn!(
-                            estimated,
-                            budget, "Pre-flight token check failed: prompt exceeds context budget"
-                        );
+                        warn!(estimated, budget, "Pre-flight token check failed: prompt exceeds context budget");
                         #[allow(clippy::cast_sign_loss)]
                         let pct = (estimated as f64 / budget as f64 * 100.0) as u32;
-                        runtime.state.warnings.push(format!(
-                            "Pre-flight check: {pct}% of context budget used before LLM call"
-                        ));
+                        runtime
+                            .state
+                            .warnings
+                            .push(format!("Pre-flight check: {pct}% of context budget used before LLM call"));
                     }
                 }
 
@@ -522,9 +491,10 @@ impl AgentRunner {
                     warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
                     #[allow(clippy::cast_sign_loss)]
                     let warning_pct = (utilization * 100.0) as u32;
-                    runtime.state.warnings.push(format!(
-                        "Token budget at {warning_pct}% - approaching context limit"
-                    ));
+                    runtime
+                        .state
+                        .warnings
+                        .push(format!("Token budget at {warning_pct}% - approaching context limit"));
                 }
 
                 if runtime.state.is_completed {
@@ -558,19 +528,10 @@ impl AgentRunner {
                 } else {
                     self.verbosity
                 };
-                let max_tokens = if is_simple_task {
-                    Some(800)
-                } else {
-                    Some(2000)
-                };
+                let max_tokens = if is_simple_task { Some(800) } else { Some(2000) };
 
-                self.maybe_auto_compact(
-                    &mut runtime.state,
-                    &mut event_recorder,
-                    &turn_model,
-                    preserve_recent_turns,
-                )
-                .await;
+                self.maybe_auto_compact(&mut runtime.state, &mut event_recorder, &turn_model, preserve_recent_turns)
+                    .await;
 
                 let parallel_tool_config = if self.model.len() < 20 {
                     None
@@ -610,19 +571,17 @@ impl AgentRunner {
                             }
                         })
                         .collect();
-                    let batch_tokens: usize =
-                        new_messages.iter().map(|m| m.estimate_tokens()).sum();
+                    let batch_tokens: usize = new_messages.iter().map(|m| m.estimate_tokens()).sum();
                     runtime.state.adjust_token_count(batch_tokens as isize);
                     runtime.state.messages_mut().extend(new_messages);
                     runtime.state.last_processed_message_idx = runtime.state.conversation.len();
                 }
 
-                let reasoning_effort =
-                    if self.provider_client.supports_reasoning_effort(&turn_model) {
-                        turn_reasoning
-                    } else {
-                        None
-                    };
+                let reasoning_effort = if self.provider_client.supports_reasoning_effort(&turn_model) {
+                    turn_reasoning
+                } else {
+                    None
+                };
 
                 // Reasoning-effort-change advisory (Phase E4): a mid-task
                 // change to the reasoning effort alters the request prefix,
@@ -670,9 +629,7 @@ impl AgentRunner {
                     tool_choice: (provider_name.eq_ignore_ascii_case("openai")
                         && !prompt_bundle.tool_snapshot.active_tool_names.is_empty())
                     .then(|| {
-                        ToolChoice::allowed_tools_auto(
-                            prompt_bundle.tool_snapshot.active_tool_names.as_ref().clone(),
-                        )
+                        ToolChoice::allowed_tools_auto(prompt_bundle.tool_snapshot.active_tool_names.as_ref().clone())
                     }),
                     parallel_tool_config,
                     reasoning_effort,
@@ -735,20 +692,14 @@ impl AgentRunner {
                 let turn_output = runtime
                     .run_turn_once(&mut self.provider_client, request, streaming_timeout)
                     .await?;
-                super::tool_dispatch_common::drain_and_record_runtime_events(
-                    &mut runtime,
-                    &mut event_recorder,
-                );
+                super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
                 let response = turn_output.response;
-                runtime.state.stop_reason =
-                    Some(stop_reason_from_finish_reason(&response.finish_reason));
+                runtime.state.stop_reason = Some(stop_reason_from_finish_reason(&response.finish_reason));
 
                 // --- Progress stagnation detection ---
                 // If the assistant produces near-identical responses across consecutive
                 // turns (no tool calls, no progress), inject a nudge to break the loop.
-                if !runtime.state.is_completed
-                    && runtime.state.record_progress_hash_and_check_stagnation()
-                {
+                if !runtime.state.is_completed && runtime.state.record_progress_hash_and_check_stagnation() {
                     let nudge = "It looks like you're repeating the same response. \
                                  If you're stuck, try a different approach: break the \
                                  problem into smaller steps, use different tools, or \
@@ -785,13 +736,10 @@ impl AgentRunner {
                             threshold,
                         ) {
                             crate::llm::usage_cost::BudgetStatus::Exceeded { max, .. } => {
-                                runtime.state.outcome =
-                                    TaskOutcome::budget_limit_reached(max, estimate.raw_usd);
+                                runtime.state.outcome = TaskOutcome::budget_limit_reached(max, estimate.raw_usd);
                                 break;
                             }
-                            crate::llm::usage_cost::BudgetStatus::Warning { max, .. }
-                                if !budget_warning_emitted =>
-                            {
+                            crate::llm::usage_cost::BudgetStatus::Warning { max, .. } if !budget_warning_emitted => {
                                 budget_warning_emitted = true;
                                 warn!(
                                     provider = %self.config().agent.provider,
@@ -948,8 +896,7 @@ impl AgentRunner {
                             );
                             runtime.state.add_user_message(user_msg);
                             should_write_blocked_handoff = true;
-                            runtime.state.outcome =
-                                TaskOutcome::escalated(summary, "multi_tool".to_string());
+                            runtime.state.outcome = TaskOutcome::escalated(summary, "multi_tool".to_string());
                             break;
                         }
                         // --- Step 5: Abort with partial results ---
@@ -993,11 +940,9 @@ impl AgentRunner {
                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
-                            style(
-                                "Repetitive assistant response detected. Breaking potential loop."
-                            )
-                            .red()
-                            .bold()
+                            style("Repetitive assistant response detected. Breaking potential loop.")
+                                .red()
+                                .bold()
                         ));
                         runtime.state.outcome = TaskOutcome::LoopDetected;
                         break;
@@ -1028,18 +973,12 @@ impl AgentRunner {
                                 None,
                                 None,
                             );
-                            let verification_results = self
-                                .run_verification_commands(commands, &mut event_recorder)
-                                .await?;
-                            self.emit_verification_outcome(
-                                &mut event_recorder,
-                                commands,
-                                &verification_results,
-                            );
+                            let verification_results =
+                                self.run_verification_commands(commands, &mut event_recorder).await?;
+                            self.emit_verification_outcome(&mut event_recorder, commands, &verification_results);
 
-                            let post_verification = continuation_controller
-                                .after_verification(&verification_results)
-                                .await?;
+                            let post_verification =
+                                continuation_controller.after_verification(&verification_results).await?;
                             match self
                                 .resolve_completion_assessment(
                                     post_verification,
@@ -1083,9 +1022,7 @@ impl AgentRunner {
                                 AssessmentResolution::VerifyNotHandled => {
                                     // Verify is handled in the if-branch above;
                                     // the helper only returns this for Verify.
-                                    return Err(anyhow::anyhow!(
-                                        "unexpected VerifyNotHandled from assess_completion"
-                                    ));
+                                    return Err(anyhow::anyhow!("unexpected VerifyNotHandled from assess_completion"));
                                 }
                             }
                         }
@@ -1106,19 +1043,13 @@ impl AgentRunner {
                         previous_response_chain_present,
                     )
                     .await?;
-                    super::tool_dispatch_common::drain_and_record_runtime_events(
-                        &mut runtime,
-                        &mut event_recorder,
-                    );
+                    super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
                 }
 
                 // Refresh tool definitions if the catalog was mutated during tool
                 // execution (e.g. tools.load / tools.unload / skill activation).
                 let _ = self
-                    .refresh_runtime_prompt_bundle_if_catalog_changed(
-                        &mut prompt_bundle,
-                        is_simple_task,
-                    )
+                    .refresh_runtime_prompt_bundle_if_catalog_changed(&mut prompt_bundle, is_simple_task)
                     .await?;
 
                 // --- Emit tool latency events ---
@@ -1129,16 +1060,13 @@ impl AgentRunner {
                     }
                 }
 
-                let had_effective_shell_tool_call =
-                    effective_tool_calls.as_ref().is_some_and(|calls| {
-                        calls.iter().any(|call| {
-                            call.function.as_ref().map(|function| function.name.as_str())
-                                == Some(tools::UNIFIED_EXEC)
-                        })
-                    });
-                let had_tool_call =
-                    response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty())
-                        || had_effective_shell_tool_call;
+                let had_effective_shell_tool_call = effective_tool_calls.as_ref().is_some_and(|calls| {
+                    calls.iter().any(|call| {
+                        call.function.as_ref().map(|function| function.name.as_str()) == Some(tools::UNIFIED_EXEC)
+                    })
+                });
+                let had_tool_call = response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty())
+                    || had_effective_shell_tool_call;
 
                 if had_tool_call {
                     let loops = runtime.state.register_tool_loop();
@@ -1171,8 +1099,7 @@ impl AgentRunner {
                     if forced_continuation {
                         runtime.state.consecutive_idle_turns = 0;
                     } else if !runtime.state.is_completed {
-                        runtime.state.consecutive_idle_turns =
-                            runtime.state.consecutive_idle_turns.saturating_add(1);
+                        runtime.state.consecutive_idle_turns = runtime.state.consecutive_idle_turns.saturating_add(1);
                         let idle_turn_limit = self.config().agent.idle_turn_limit;
                         if runtime.state.consecutive_idle_turns >= idle_turn_limit {
                             let warning_message = format!(
@@ -1207,8 +1134,7 @@ impl AgentRunner {
                     if runtime.state.is_completed {
                         runtime.state.outcome = TaskOutcome::Success;
                     } else if (turn + 1) >= self.max_turns {
-                        runtime.state.outcome =
-                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
+                        runtime.state.outcome = TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                     } else {
                         runtime.state.outcome = TaskOutcome::StoppedNoAction;
                     }
@@ -1303,11 +1229,7 @@ impl AgentRunner {
             }
 
             let total_usage = runtime.state.stats.total_usage.clone();
-            record_terminal_turn_event(
-                &mut event_recorder,
-                &runtime.state.outcome,
-                total_usage.clone(),
-            );
+            record_terminal_turn_event(&mut event_recorder, &runtime.state.outcome, total_usage.clone());
             event_recorder.thread_completed(
                 &self.session_id,
                 runtime.state.outcome.thread_completion_subtype(),
@@ -1322,12 +1244,7 @@ impl AgentRunner {
             let steering_receiver = runtime.take_steering_receiver();
             let state = std::mem::replace(
                 &mut runtime.state,
-                AgentSessionState::new(
-                    self.session_id.clone(),
-                    self.max_turns,
-                    max_tool_loops,
-                    max_context_tokens,
-                ),
+                AgentSessionState::new(self.session_id.clone(), self.max_turns, max_tool_loops, max_context_tokens),
             );
 
             Ok((state.into_results(summary, thread_events, total_duration_ms), steering_receiver))
@@ -1351,9 +1268,7 @@ impl AgentRunner {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        prepare_responses_request_messages, record_terminal_turn_event, tool_loop_limit_reached,
-    };
+    use super::{prepare_responses_request_messages, record_terminal_turn_event, tool_loop_limit_reached};
     use crate::core::agent::events::ExecEventRecorder;
     use crate::core::agent::session::AgentSessionState;
     use crate::core::agent::task::TaskOutcome;
@@ -1427,12 +1342,7 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain(
-            "openai",
-            "gpt-5.4",
-            Some("resp_123"),
-            Arc::new(prior_messages),
-        );
+        state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), Arc::new(prior_messages));
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
             &mut state.previous_response_chains,
@@ -1452,12 +1362,7 @@ mod tests {
         let messages = vec![Message::user("hello".to_string())];
 
         if records_responses_continuation_state("openai", true) {
-            state.set_previous_response_chain(
-                "openai",
-                "gpt-5.4",
-                Some("resp_123"),
-                Arc::new(messages),
-            );
+            state.set_previous_response_chain("openai", "gpt-5.4", Some("resp_123"), Arc::new(messages));
         }
 
         assert_eq!(state.previous_response_chain_for("openai", "gpt-5.4"), None);
@@ -1469,12 +1374,7 @@ mod tests {
         let messages = vec![Message::user("hello".to_string())];
 
         if records_responses_continuation_state("mycorp", true) {
-            state.set_previous_response_chain(
-                "mycorp",
-                "gpt-5.4",
-                Some("resp_123"),
-                Arc::new(messages),
-            );
+            state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), Arc::new(messages));
         }
 
         assert_eq!(state.previous_response_chain_for("mycorp", "gpt-5.4"), None);
@@ -1488,12 +1388,7 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain(
-            "gemini",
-            "gemini-2.5-pro",
-            Some("resp_123"),
-            Arc::new(prior_messages),
-        );
+        state.set_previous_response_chain("gemini", "gemini-2.5-pro", Some("resp_123"), Arc::new(prior_messages));
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
             &mut state.previous_response_chains,
@@ -1515,12 +1410,7 @@ mod tests {
             Message::user("hello".to_string()),
             Message::user("continue".to_string()),
         ];
-        state.set_previous_response_chain(
-            "mycorp",
-            "gpt-5.4",
-            Some("resp_123"),
-            Arc::new(prior_messages),
-        );
+        state.set_previous_response_chain("mycorp", "gpt-5.4", Some("resp_123"), Arc::new(prior_messages));
 
         let (request_messages, previous_response_id) = prepare_responses_request_messages(
             &mut state.previous_response_chains,

@@ -96,11 +96,7 @@ impl TextualToolParserRegistry {
                     return Some((call, parser.should_validate_tool_name()));
                 }
                 ParseResult::Reject(reason) => {
-                    tracing::debug!(
-                        parser = parser.name(),
-                        reason,
-                        "Parser rejected textual tool call"
-                    );
+                    tracing::debug!(parser = parser.name(), reason, "Parser rejected textual tool call");
                 }
             }
         }

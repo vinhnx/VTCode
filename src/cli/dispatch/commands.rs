@@ -4,8 +4,7 @@ use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::mcp::cli::handle_mcp_command;
 
 use super::run::{
-    handle_analyze_command, handle_ask_single_command, handle_chat_command,
-    handle_resume_session_command,
+    handle_analyze_command, handle_ask_single_command, handle_chat_command, handle_resume_session_command,
 };
 use super::skills::dispatch_skills_command;
 use crate::cli::acp::handle_acp_command;
@@ -15,15 +14,11 @@ use crate::cli::app_server::handle_app_server_command;
 use crate::cli::bench_allocator::handle_bench_allocator_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::{
-    analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man,
-    notify, revert, review, schedule, schema, skills, snapshots, trajectory, update,
+    analyze, benchmark, check, config, create_project, dependencies, exec, init, init_project, man, notify, revert,
+    review, schedule, schema, skills, snapshots, trajectory, update,
 };
 
-pub(crate) async fn dispatch_command(
-    args: &Cli,
-    startup: &StartupContext,
-    command: Commands,
-) -> Result<()> {
+pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, command: Commands) -> Result<()> {
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;
     let skip_confirmations = startup.skip_confirmations;
@@ -117,12 +112,10 @@ pub(crate) async fn dispatch_command(
             schedule::handle_schedule_command(startup, command).await?;
         }
         Commands::BackgroundSubagent(args) => {
-            crate::cli::background_subagent::handle_background_subagent_command(startup, args)
-                .await?;
+            crate::cli::background_subagent::handle_background_subagent_command(startup, args).await?;
         }
         Commands::Review(review) => {
-            let files =
-                review.files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
+            let files = review.files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
             let spec = vtcode_core::review::build_review_spec(
                 review.last_diff,
                 review.target.clone(),
@@ -189,14 +182,8 @@ pub(crate) async fn dispatch_command(
             init_project::handle_init_project_command(name, force, migrate).await?;
         }
         Commands::Benchmark { task_file, task, output, max_tasks } => {
-            let options = benchmark::BenchmarkCommandOptions {
-                task_file,
-                inline_task: task,
-                output,
-                max_tasks,
-            };
-            benchmark::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested)
-                .await?;
+            let options = benchmark::BenchmarkCommandOptions { task_file, inline_task: task, output, max_tasks };
+            benchmark::handle_benchmark_command(core_cfg, cfg, options, full_auto_requested).await?;
         }
         Commands::Man { command, output } => {
             man::handle_man_command(command, output).await?;

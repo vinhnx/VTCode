@@ -289,8 +289,7 @@ mod tests {
         let read_rate = 0.01 * 0.10;
         let write_rate = 0.01 * 1.25;
         let uncached = 1_000.0 - 50.0 - 500.0;
-        let expected_effective =
-            uncached * 0.01 + 50.0 * read_rate + 500.0 * write_rate + 50.0 * 0.02;
+        let expected_effective = uncached * 0.01 + 50.0 * read_rate + 500.0 * write_rate + 50.0 * 0.02;
         approx_eq(estimate.effective_usd, expected_effective);
         approx_eq(estimate.raw_usd, 1_000.0 * 0.01 + 50.0 * 0.02);
         // Cache-creation tokens dominate here (500 vs. 50 cache-read tokens),
@@ -347,19 +346,13 @@ mod tests {
         // Under warning.
         assert_eq!(BudgetStatus::classify(0.5, Some(1.0), 0.75), BudgetStatus::Ok);
         // At/above warning, within cap.
-        assert_eq!(
-            BudgetStatus::classify(0.8, Some(1.0), 0.75),
-            BudgetStatus::Warning { spent: 0.8, max: 1.0 }
-        );
+        assert_eq!(BudgetStatus::classify(0.8, Some(1.0), 0.75), BudgetStatus::Warning { spent: 0.8, max: 1.0 });
         // Exactly at cap is NOT exceeded (strict `>`), matching runner semantics.
         assert!(!BudgetStatus::classify(1.0, Some(1.0), 0.75).is_exceeded());
         // Over cap.
         assert!(BudgetStatus::classify(1.01, Some(1.0), 0.75).is_exceeded());
         // Configurable threshold.
-        assert_eq!(
-            BudgetStatus::classify(0.6, Some(1.0), 0.5),
-            BudgetStatus::Warning { spent: 0.6, max: 1.0 }
-        );
+        assert_eq!(BudgetStatus::classify(0.6, Some(1.0), 0.5), BudgetStatus::Warning { spent: 0.6, max: 1.0 });
     }
 }
 

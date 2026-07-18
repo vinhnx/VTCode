@@ -9,9 +9,7 @@ use crate::terminal_setup::features::shell_integration;
 use anyhow::Result;
 
 /// Generate complete Ghostty configuration with all features
-pub fn generate_config(
-    features: &[crate::terminal_setup::detector::TerminalFeature],
-) -> Result<String> {
+pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
     let mut config_lines = Vec::new();
 
     // Add header comment
@@ -37,9 +35,7 @@ pub fn generate_config(
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
                 config_lines.push("# Theme synchronization".to_string());
-                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
-                    TerminalType::Ghostty,
-                )?;
+                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(TerminalType::Ghostty)?;
                 config_lines.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {

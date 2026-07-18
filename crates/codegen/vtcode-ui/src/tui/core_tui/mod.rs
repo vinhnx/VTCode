@@ -19,14 +19,12 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    ContentPart, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback,
-    InlineHandle, InlineHeaderBadge, InlineHeaderContext, InlineHeaderHighlight,
-    InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget,
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest,
-    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
-    OverlaySelectionChange, OverlaySubmission, PreviewCallback, RewindAction, SecurePromptConfig,
-    SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
+    ContentPart, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderBadge,
+    InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge, InlineHeaderStatusTone, InlineLinkRange,
+    InlineLinkTarget, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey,
+    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange, OverlaySubmission, PreviewCallback,
+    RewindAction, SecurePromptConfig, SubmittedInput, WizardModalMode, WizardOverlayRequest, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};
@@ -139,16 +137,7 @@ pub fn spawn_session_with_prompts_and_options(
                 workspace_root,
                 preview_callback,
             },
-            move |rows| {
-                session::Session::new_with_logs(
-                    theme,
-                    placeholder,
-                    rows,
-                    show_logs,
-                    appearance,
-                    app_name,
-                )
-            },
+            move |rows| session::Session::new_with_logs(theme, placeholder, rows, show_logs, appearance, app_name),
         )
         .await
         {

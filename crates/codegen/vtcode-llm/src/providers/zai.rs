@@ -2,9 +2,7 @@ use reqwest::RequestBuilder;
 use serde_json::{Map, Value};
 use vtcode_config::constants::{env_vars, models, urls};
 
-use super::openai_compat::{
-    OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider,
-};
+use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement, impl_openai_compat_provider};
 use crate::provider::{LLMError, LLMRequest};
 
 pub struct ZaiSpec;
@@ -42,23 +40,17 @@ impl OpenAiCompatSpec for ZaiSpec {
     const DEFAULT_BASE_URL: &'static str = urls::ZAI_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::ZAI_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::zai::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::zai::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::zai::SUPPORTED_MODELS);
 
     const SYSTEM_PROMPT: SystemPromptPlacement = SystemPromptPlacement::Omitted;
     const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
-    const DELTA_ORDER: super::shared::OpenAiDeltaOrder =
-        super::shared::OpenAiDeltaOrder::ContentFirst;
+    const DELTA_ORDER: super::shared::OpenAiDeltaOrder = super::shared::OpenAiDeltaOrder::ContentFirst;
 
     fn resolve_base_url(_api_key: &str, base_url: Option<String>) -> String {
         resolve_zai_base_url(base_url)
     }
 
-    fn insert_tool_choice(
-        _core: &OpenAiCompatCore<Self>,
-        request: &LLMRequest,
-        payload: &mut Map<String, Value>,
-    ) {
+    fn insert_tool_choice(_core: &OpenAiCompatCore<Self>, request: &LLMRequest, payload: &mut Map<String, Value>) {
         if let Some(choice) = &request.tool_choice {
             // Z.AI only supports "auto"; any other requested mode is coerced.
             let tool_choice_value = match choice {
@@ -90,8 +82,7 @@ impl OpenAiCompatSpec for ZaiSpec {
             use crate::rig_adapter::RigProviderCapabilities;
             use vtcode_config::models::Provider;
             if let Some(reasoning_params) =
-                RigProviderCapabilities::new(Provider::ZAI, &request.model)
-                    .reasoning_parameters(effort)
+                RigProviderCapabilities::new(Provider::ZAI, &request.model).reasoning_parameters(effort)
                 && let Some(params_obj) = reasoning_params.as_object()
             {
                 for (k, v) in params_obj {
@@ -131,8 +122,7 @@ impl OpenAiCompatSpec for ZaiSpec {
         }
 
         if request.output_format.is_some() {
-            payload
-                .insert("response_format".to_owned(), serde_json::json!({ "type": "json_object" }));
+            payload.insert("response_format".to_owned(), serde_json::json!({ "type": "json_object" }));
         }
 
         Ok(())
@@ -234,8 +224,7 @@ mod tests {
 
     #[test]
     fn zai_base_url_uses_explicit_override() {
-        let resolved =
-            resolve_zai_base_url(Some("https://api.z.ai/api/coding/paas/v4".to_string()));
+        let resolved = resolve_zai_base_url(Some("https://api.z.ai/api/coding/paas/v4".to_string()));
         assert_eq!(resolved, "https://api.z.ai/api/coding/paas/v4");
     }
 
@@ -264,10 +253,7 @@ mod tests {
         };
 
         let payload = provider.core.convert_request(&request).expect("payload should be valid");
-        assert_eq!(
-            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
-            Some("disabled")
-        );
+        assert_eq!(payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()), Some("disabled"));
     }
 
     #[test]
@@ -281,10 +267,7 @@ mod tests {
         };
 
         let payload = provider.core.convert_request(&request).expect("payload should be valid");
-        assert_eq!(
-            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
-            Some("enabled")
-        );
+        assert_eq!(payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()), Some("enabled"));
         assert_eq!(payload.get("thinking_effort").and_then(|v| v.as_str()), Some("low"));
     }
 
@@ -301,10 +284,7 @@ mod tests {
         };
 
         let payload = provider.core.convert_request(&request).expect("payload should be valid");
-        assert_eq!(
-            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
-            Some("enabled")
-        );
+        assert_eq!(payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()), Some("enabled"));
         assert_eq!(
             payload
                 .get("thinking")
@@ -466,9 +446,6 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some("json_object")
         );
-        assert_eq!(
-            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
-            Some("disabled")
-        );
+        assert_eq!(payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()), Some("disabled"));
     }
 }

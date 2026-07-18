@@ -45,9 +45,7 @@ impl GatekeeperPolicy {
             warn_on_quarantine: config.warn_on_quarantine,
             auto_clear_quarantine: config.auto_clear_quarantine,
             auto_clear_paths,
-            cache: Arc::new(Mutex::new(LruCache::new(
-                NonZeroUsize::new(GATEKEEPER_CACHE_MAX_ENTRIES).unwrap(),
-            ))),
+            cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(GATEKEEPER_CACHE_MAX_ENTRIES).unwrap()))),
         }
     }
 
@@ -111,8 +109,7 @@ pub fn check_quarantine(path: &Path) {
 
         match read_quarantine_xattr(&canonical) {
             Ok(Some(_)) => {
-                let should_auto_clear =
-                    policy.auto_clear_quarantine && policy.should_auto_clear(&canonical);
+                let should_auto_clear = policy.auto_clear_quarantine && policy.should_auto_clear(&canonical);
 
                 if policy.warn_on_quarantine {
                     tracing::warn!(
@@ -131,10 +128,7 @@ pub fn check_quarantine(path: &Path) {
                                 path = %canonical.display(),
                                 "Cleared Gatekeeper quarantine attribute"
                             );
-                            policy.update_cache(
-                                canonical,
-                                GatekeeperCacheEntry { quarantined: false, warned: false },
-                            );
+                            policy.update_cache(canonical, GatekeeperCacheEntry { quarantined: false, warned: false });
                             return;
                         }
                         Err(err) => {
@@ -150,10 +144,7 @@ pub fn check_quarantine(path: &Path) {
                 policy.update_cache(canonical, GatekeeperCacheEntry { quarantined: true, warned });
             }
             Ok(None) => {
-                policy.update_cache(
-                    canonical,
-                    GatekeeperCacheEntry { quarantined: false, warned: false },
-                );
+                policy.update_cache(canonical, GatekeeperCacheEntry { quarantined: false, warned: false });
             }
             Err(err) => {
                 tracing::debug!(

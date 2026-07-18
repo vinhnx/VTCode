@@ -107,8 +107,7 @@ impl RetryManager {
         // The `RetryObserver` centralises the bookkeeping so the loop
         // stays DRY at the observability layer.
         for attempt in 0..policy.max_attempts {
-            observer
-                .observe(RetryEvent::AttemptStart { attempt, max_attempts: policy.max_attempts });
+            observer.observe(RetryEvent::AttemptStart { attempt, max_attempts: policy.max_attempts });
 
             let err = match operation(primary_model.clone()).await {
                 Ok(result) => {
@@ -166,9 +165,8 @@ impl RetryManager {
                 }
                 Err(err) => {
                     let err: VtCodeError = err.into();
-                    let fallback_err = err.with_context(format!(
-                        "fallback model '{fallback}' failed for operation '{operation_name}'"
-                    ));
+                    let fallback_err = err
+                        .with_context(format!("fallback model '{fallback}' failed for operation '{operation_name}'"));
                     warn!(
                         operation = operation_name,
                         model = ?fallback,
@@ -193,14 +191,9 @@ impl RetryManager {
         Err(last_error.unwrap_or_else(|| {
             VtCodeError::execution(
                 ErrorCode::ToolExecutionFailed,
-                format!(
-                    "operation '{operation_name}' failed after {} attempts",
-                    policy.max_attempts
-                ),
+                format!("operation '{operation_name}' failed after {} attempts", policy.max_attempts),
             )
-            .with_context(format!(
-                "primary model: {primary_model}, fallback model: {fallback_model:?}"
-            ))
+            .with_context(format!("primary model: {primary_model}, fallback model: {fallback_model:?}"))
         }))
     }
 }
@@ -391,10 +384,7 @@ mod tests {
                         let mut count = attempt_count.lock().unwrap();
                         *count += 1;
                         if *count < 2 {
-                            Err(VtCodeError::network(
-                                ErrorCode::ConnectionFailed,
-                                "temporary failure",
-                            ))
+                            Err(VtCodeError::network(ErrorCode::ConnectionFailed, "temporary failure"))
                         } else {
                             Ok::<String, VtCodeError>("success".to_owned())
                         }

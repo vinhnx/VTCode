@@ -4,8 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::super::types::{
-    ContentPart, DiffPreviewMode, InlineTextStyle, TransientEvent, TransientSelectionChange,
-    TransientSubmission,
+    ContentPart, DiffPreviewMode, InlineTextStyle, TransientEvent, TransientSelectionChange, TransientSubmission,
 };
 use crate::tui::core_tui::app::session::transient::TransientSurface;
 use crate::tui::core_tui::app::types::InlineMessageKind;
@@ -21,9 +20,7 @@ use crate::tui::core_tui::types::{
 };
 use crate::tui::ui::theme;
 
-fn input_history_entries(
-    session: &Session,
-) -> Vec<(String, Vec<ContentPart>, chrono::DateTime<chrono::Utc>)> {
+fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>, chrono::DateTime<chrono::Utc>)> {
     session
         .core
         .input_manager
@@ -83,11 +80,7 @@ pub(super) fn handle_paste(session: &mut Session, content: &str) -> Option<Inlin
     None
 }
 
-fn copy_selected_input_if_requested(
-    session: &mut Session,
-    key: &KeyEvent,
-    has_command: bool,
-) -> bool {
+fn copy_selected_input_if_requested(session: &mut Session, key: &KeyEvent, has_command: bool) -> bool {
     if has_command && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C')) {
         if session.core.copy_input_selection_to_clipboard() {
             session.mark_dirty();
@@ -120,9 +113,7 @@ fn image_paste_warning(error: ClipboardImageError) -> &'static str {
             "Clipboard image paste is unavailable in this terminal or desktop session."
         }
         ClipboardImageError::UnsupportedModel => "The selected model does not support image input.",
-        ClipboardImageError::WslFallbackFailure => {
-            "Could not read a clipboard image from Windows via PowerShell."
-        }
+        ClipboardImageError::WslFallbackFailure => "Could not read a clipboard image from Windows via PowerShell.",
     }
 }
 
@@ -138,12 +129,7 @@ fn push_warning_line(session: &mut Session, text: &'static str) {
     session.mark_dirty();
 }
 
-fn is_image_paste_shortcut(
-    key: &KeyEvent,
-    has_control: bool,
-    has_alt: bool,
-    has_command: bool,
-) -> bool {
+fn is_image_paste_shortcut(key: &KeyEvent, has_control: bool, has_alt: bool, has_command: bool) -> bool {
     matches!(key.code, KeyCode::Char('v') | KeyCode::Char('V'))
         && !has_command
         && ((has_control && !has_alt) || (has_alt && !has_control))
@@ -214,9 +200,7 @@ pub(super) fn process_key_with_clipboard_image_reader(
         if let Some(action) = modal.hotkey_action(&key, modal_modifiers) {
             session.close_overlay();
             session.mark_dirty();
-            return Some(InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Hotkey(action.into()),
-            )));
+            return Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(action.into()))));
         }
 
         // Text-only modals (no list): close on Esc or any keypress.
@@ -247,9 +231,9 @@ pub(super) fn process_key_with_clipboard_image_reader(
                 // before returning so the render picks up the preview in the
                 // same frame as the cursor movement.
                 if let Some(ref cb) = session.preview_callback
-                    && let CoreInlineEvent::Overlay(OverlayEvent::SelectionChanged(
-                        OverlaySelectionChange::List(ref selection),
-                    )) = event
+                    && let CoreInlineEvent::Overlay(OverlayEvent::SelectionChanged(OverlaySelectionChange::List(
+                        ref selection,
+                    ))) = event
                 {
                     let _ = cb(Some(selection));
                     if theme::has_preview_theme() {
@@ -335,19 +319,13 @@ pub(super) fn process_key_with_clipboard_image_reader(
     }
 
     // Handle history picker (Ctrl+R) - Visual fuzzy search for command history
-    if has_control
-        && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
-        && !session.history_picker_visible()
-    {
+    if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) && !session.history_picker_visible() {
         open_history_picker(session);
         return None;
     }
 
     // Handle forward search (Ctrl+S) - Readline forward search
-    if has_control
-        && matches!(key.code, KeyCode::Char('s') | KeyCode::Char('S'))
-        && !session.history_picker_visible()
-    {
+    if has_control && matches!(key.code, KeyCode::Char('s') | KeyCode::Char('S')) && !session.history_picker_visible() {
         open_history_picker(session);
         return None;
     }
@@ -916,11 +894,7 @@ pub(super) fn process_key_with_clipboard_image_reader(
                 ));
             }
 
-            if ch == '?'
-                && !has_control
-                && !has_alt
-                && !has_command
-                && session.core.input_manager.content().is_empty()
+            if ch == '?' && !has_control && !has_alt && !has_command && session.core.input_manager.content().is_empty()
             {
                 session.show_help_modal();
                 return None;
@@ -1074,23 +1048,14 @@ pub(super) fn open_history_picker(session: &mut Session) {
     session.mark_dirty();
 }
 
-fn is_inline_lists_toggle_shortcut(
-    key: &KeyEvent,
-    has_control: bool,
-    has_alt: bool,
-    has_command: bool,
-) -> bool {
+fn is_inline_lists_toggle_shortcut(key: &KeyEvent, has_control: bool, has_alt: bool, has_command: bool) -> bool {
     if !has_control || has_alt || has_command {
         return false;
     }
 
     matches!(
         key.code,
-        KeyCode::Char('i')
-            | KeyCode::Char('I')
-            | KeyCode::Char('/')
-            | KeyCode::Char('?')
-            | KeyCode::Char('\u{1f}')
+        KeyCode::Char('i') | KeyCode::Char('I') | KeyCode::Char('/') | KeyCode::Char('?') | KeyCode::Char('\u{1f}')
     )
 }
 
@@ -1117,10 +1082,8 @@ fn handle_transcript_review_key(
     has_alt: bool,
     has_command: bool,
 ) -> TranscriptReviewKeyResult {
-    let open_shortcut = has_alt
-        && !has_control
-        && !has_command
-        && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'));
+    let open_shortcut =
+        has_alt && !has_control && !has_command && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'));
     if session.transcript_review_state().is_none() {
         if !session.core.fullscreen.active || !open_shortcut {
             return TranscriptReviewKeyResult::NotHandled;
@@ -1138,8 +1101,7 @@ fn handle_transcript_review_key(
     }
 
     let review_copy_shortcut =
-        matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('\u{3}'))
-            && has_control;
+        matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('\u{3}')) && has_control;
     if review_copy_shortcut && session.core.mouse_selection.has_selection {
         session.core.mouse_selection.request_copy();
         session.mark_dirty();
@@ -1255,21 +1217,13 @@ fn handle_transcript_review_key(
             TranscriptReviewKeyResult::Handled
         }
         KeyCode::Char('[') if !has_control && !has_alt && !has_command => {
-            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewScrollback(
-                review.export_text(),
-            ))
+            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewScrollback(review.export_text()))
         }
         KeyCode::Char('v') | KeyCode::Char('V') if !has_control && !has_alt && !has_command => {
-            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewInEditor(
-                review.export_text(),
-            ))
+            TranscriptReviewKeyResult::Emit(InlineEvent::OpenTranscriptReviewInEditor(review.export_text()))
         }
         // Let Ctrl+O (copy response) pass through to the main key handler
-        _ if has_control
-            && !has_alt
-            && !has_command
-            && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')) =>
-        {
+        _ if has_control && !has_alt && !has_command && matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O')) => {
             TranscriptReviewKeyResult::NotHandled
         }
         _ => TranscriptReviewKeyResult::Handled,
@@ -1390,11 +1344,7 @@ fn extract_slash_command_name(input: &str) -> Option<&str> {
     let trimmed = input.trim_start();
     let command_input = trimmed.strip_prefix('/')?;
     let command = command_input.split_whitespace().next()?;
-    if command.is_empty() {
-        None
-    } else {
-        Some(command)
-    }
+    if command.is_empty() { None } else { Some(command) }
 }
 
 /// Emits an InlineEvent through the event channel and callback
@@ -1437,10 +1387,7 @@ pub(super) fn handle_scroll_up(
 }
 
 #[expect(dead_code)]
-pub(super) fn handle_diff_preview_key(
-    session: &mut Session,
-    key: &KeyEvent,
-) -> Option<InlineEvent> {
+pub(super) fn handle_diff_preview_key(session: &mut Session, key: &KeyEvent) -> Option<InlineEvent> {
     let mode = session.diff_preview_state()?.mode;
 
     match key.code {
@@ -1469,9 +1416,7 @@ pub(super) fn handle_diff_preview_key(
                 DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
             })))
         }
-        KeyCode::Char('r') | KeyCode::Char('R')
-            if matches!(mode, DiffPreviewMode::FileConflict) =>
-        {
+        KeyCode::Char('r') | KeyCode::Char('R') if matches!(mode, DiffPreviewMode::FileConflict) => {
             session.close_diff_overlay();
             session.mark_dirty();
             Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::DiffReload)))
@@ -1490,36 +1435,36 @@ pub(super) fn handle_diff_preview_key(
             diff_state.trust_mode = crate::tui::core_tui::app::types::TrustMode::Once;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
-                TransientSelectionChange::DiffTrustMode { mode },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
+                mode,
+            })))
         }
         KeyCode::Char('2') if matches!(mode, DiffPreviewMode::EditApproval) => {
             let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::tui::core_tui::app::types::TrustMode::Session;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
-                TransientSelectionChange::DiffTrustMode { mode },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
+                mode,
+            })))
         }
         KeyCode::Char('3') if matches!(mode, DiffPreviewMode::EditApproval) => {
             let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::tui::core_tui::app::types::TrustMode::Always;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
-                TransientSelectionChange::DiffTrustMode { mode },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
+                mode,
+            })))
         }
         KeyCode::Char('4') if matches!(mode, DiffPreviewMode::EditApproval) => {
             let diff_state = session.diff_preview_state_mut()?;
             diff_state.trust_mode = crate::tui::core_tui::app::types::TrustMode::AutoTrust;
             let mode = diff_state.trust_mode;
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(
-                TransientSelectionChange::DiffTrustMode { mode },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
+                mode,
+            })))
         }
         _ => None,
     }
@@ -1529,9 +1474,7 @@ pub(super) fn handle_diff_preview_key(
 mod tests {
     use super::*;
     use crate::tui::config::constants::ui;
-    use crate::tui::core_tui::types::{
-        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    };
+    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
     use std::sync::Arc;
 
     fn build_session() -> Session {

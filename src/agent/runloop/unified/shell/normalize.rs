@@ -47,8 +47,7 @@ pub(super) fn normalize_for_shell_detection(command_part: &str) -> String {
 
 fn normalize_cargo_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> =
-        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
+    let lowered_tokens: Vec<String> = tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 || lowered_tokens.first()? != "cargo" {
         return None;
     }
@@ -111,8 +110,7 @@ fn normalize_cargo_check_phrase(tokens: &[&str], lowered_tokens: &[String]) -> O
 
 fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> =
-        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
+    let lowered_tokens: Vec<String> = tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 {
         return None;
     }
@@ -126,10 +124,7 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
         Some("test")
             if lowered_tokens.len() >= 5
                 && lowered_tokens[2] == "on"
-                && matches!(
-                    lowered_tokens[4].as_str(),
-                    "workspace" | "package" | "pkg" | "project"
-                ) =>
+                && matches!(lowered_tokens[4].as_str(), "workspace" | "package" | "pkg" | "project") =>
         {
             let target = trim_token(tokens[3]);
             if target.is_empty() {
@@ -140,10 +135,7 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
         Some("run")
             if lowered_tokens.len() >= 6
                 && lowered_tokens[3] == "on"
-                && matches!(
-                    lowered_tokens[5].as_str(),
-                    "workspace" | "package" | "pkg" | "project"
-                ) =>
+                && matches!(lowered_tokens[5].as_str(), "workspace" | "package" | "pkg" | "project") =>
         {
             let script = trim_token(tokens[2]);
             let target = trim_token(tokens[4]);
@@ -158,8 +150,7 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
 
 fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> =
-        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
+    let lowered_tokens: Vec<String> = tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 || lowered_tokens.first()? != "pytest" {
         return None;
     }
@@ -204,17 +195,16 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
 
 fn normalize_unix_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> =
-        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
+    let lowered_tokens: Vec<String> = tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 {
         return None;
     }
 
     let cmd = lowered_tokens.first()?.as_str();
     let on_compatible_commands = [
-        "ls", "cat", "head", "tail", "wc", "du", "df", "tree", "stat", "file", "bat", "less",
-        "more", "git", "cargo", "pytest", "npm", "pnpm", "node", "python", "python3", "go", "java",
-        "javac", "rustc", "make", "cmake", "docker", "kubectl",
+        "ls", "cat", "head", "tail", "wc", "du", "df", "tree", "stat", "file", "bat", "less", "more", "git", "cargo",
+        "pytest", "npm", "pnpm", "node", "python", "python3", "go", "java", "javac", "rustc", "make", "cmake",
+        "docker", "kubectl",
     ];
     if lowered_tokens[1] == "on" && on_compatible_commands.contains(&cmd) {
         let target_joined = tokens[2..].join(" ");

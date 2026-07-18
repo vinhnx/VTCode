@@ -223,10 +223,7 @@ impl ExecApprovalRequirement {
     }
 
     /// Create a needs approval requirement with an amendment.
-    pub fn needs_approval_with_amendment(
-        reason: Option<String>,
-        amendment: ExecPolicyAmendment,
-    ) -> Self {
+    pub fn needs_approval_with_amendment(reason: Option<String>, amendment: ExecPolicyAmendment) -> Self {
         Self::NeedsApproval {
             reason,
             proposed_execpolicy_amendment: Some(amendment),
@@ -256,12 +253,8 @@ impl ExecApprovalRequirement {
     /// Get the proposed amendment, if any.
     pub fn get_amendment(&self) -> Option<&ExecPolicyAmendment> {
         match self {
-            Self::Skip { proposed_execpolicy_amendment, .. } => {
-                proposed_execpolicy_amendment.as_ref()
-            }
-            Self::NeedsApproval { proposed_execpolicy_amendment, .. } => {
-                proposed_execpolicy_amendment.as_ref()
-            }
+            Self::Skip { proposed_execpolicy_amendment, .. } => proposed_execpolicy_amendment.as_ref(),
+            Self::NeedsApproval { proposed_execpolicy_amendment, .. } => proposed_execpolicy_amendment.as_ref(),
             Self::Forbidden { .. } => None,
         }
     }
@@ -435,10 +428,7 @@ mod tests {
 
         assert_eq!(
             requirement,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
+            ExecApprovalRequirement::NeedsApproval { reason: None, proposed_execpolicy_amendment: None }
         );
     }
 
@@ -455,10 +445,7 @@ mod tests {
 
         assert_eq!(
             requirement,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
+            ExecApprovalRequirement::NeedsApproval { reason: None, proposed_execpolicy_amendment: None }
         );
     }
 
@@ -508,10 +495,7 @@ mod tests {
 
         assert_eq!(
             requirement,
-            ExecApprovalRequirement::NeedsApproval {
-                reason: None,
-                proposed_execpolicy_amendment: None,
-            }
+            ExecApprovalRequirement::NeedsApproval { reason: None, proposed_execpolicy_amendment: None }
         );
     }
 }

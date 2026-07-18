@@ -10,10 +10,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::task::EvalTask;
-use crate::{
-    EvalReport, EvalRunResult, EvalSuite, SuiteReport, aggregate_metrics, build_task_report,
-    compute_metric,
-};
+use crate::{EvalReport, EvalRunResult, EvalSuite, SuiteReport, aggregate_metrics, build_task_report, compute_metric};
 
 /// Executes a single eval task attempt and returns the verified outcome.
 ///
@@ -130,12 +127,7 @@ mod tests {
     async fn run_suite_aggregates_capability_and_regression() {
         // t1 gets [Pass, Fail]; t2 gets [Pass, Pass]
         let exec = FakeExecutor {
-            outcomes: vec![
-                RunOutcome::Pass,
-                RunOutcome::Fail,
-                RunOutcome::Pass,
-                RunOutcome::Pass,
-            ],
+            outcomes: vec![RunOutcome::Pass, RunOutcome::Fail, RunOutcome::Pass, RunOutcome::Pass],
             calls: AtomicUsize::new(0),
         };
         let report = run_suite(&exec, &suite(2)).await.unwrap();

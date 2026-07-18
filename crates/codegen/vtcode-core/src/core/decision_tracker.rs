@@ -122,12 +122,7 @@ impl DecisionTracker {
 
     /// Record a decision
     /// Note: Takes ownership of action to avoid cloning when possible
-    pub fn record_decision(
-        &mut self,
-        reasoning: String,
-        action: Action,
-        confidence_score: Option<f64>,
-    ) -> String {
+    pub fn record_decision(&mut self, reasoning: String, action: Action, confidence_score: Option<f64>) -> String {
         let decision_id = format!("decision_{}_{}", self.session_start, self.decisions.len());
 
         // Generate action summary before moving action into decision
@@ -195,11 +190,7 @@ impl DecisionTracker {
             .filter_map(|d| d.confidence_score)
             .fold((0.0, 0usize), |(s, c), v| (s + v, c + 1));
 
-        let avg_confidence = if count == 0 {
-            None
-        } else {
-            Some(sum / count as f64)
-        };
+        let avg_confidence = if count == 0 { None } else { Some(sum / count as f64) };
 
         TransparencyReport {
             session_duration: current_timestamp().saturating_sub(self.session_start),
@@ -263,14 +254,11 @@ impl DecisionTracker {
                     format!("- [turn {turn}] tool:{name} args={arg_preview} (t={ts})")
                 }
                 Action::Response { response_type, content } => {
-                    let preview =
-                        vtcode_commons::formatting::truncate_byte_budget(content, 120, "…");
+                    let preview = vtcode_commons::formatting::truncate_byte_budget(content, 120, "…");
                     format!("- [turn {turn}] response:{response_type:?} {preview} (t={ts})")
                 }
                 Action::ErrorRecovery { error_type, recovery_strategy } => {
-                    format!(
-                        "- [turn {turn}] recovery {error_type} via {recovery_strategy} (t={ts})"
-                    )
+                    format!("- [turn {turn}] recovery {error_type} via {recovery_strategy} (t={ts})")
                 }
             };
             out.push_str(&line);

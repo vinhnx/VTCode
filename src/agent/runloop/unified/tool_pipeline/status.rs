@@ -33,9 +33,7 @@ pub(crate) enum ToolExecutionStatus {
 impl ToolExecutionStatus {
     pub(crate) fn error(&self) -> Option<&ToolExecutionError> {
         match self {
-            ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => {
-                Some(error)
-            }
+            ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => Some(error),
             ToolExecutionStatus::Success { .. } | ToolExecutionStatus::Cancelled => None,
         }
     }
@@ -80,9 +78,7 @@ impl ToolPipelineOutcome {
 
     pub(crate) fn set_command_success(&mut self, command_success: bool) {
         self.command_success = command_success;
-        if let ToolExecutionStatus::Success { command_success: status_success, .. } =
-            &mut self.status
-        {
+        if let ToolExecutionStatus::Success { command_success: status_success, .. } = &mut self.status {
             *status_success = command_success;
         }
     }

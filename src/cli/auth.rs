@@ -5,36 +5,32 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_auth::{
-    AuthCallbackOutcome, AuthCodeCallbackServer, AuthCredentialsStoreMode, AuthStatus,
-    OAuthCallbackPage, OAuthProvider, OpenAIChatGptAuthStatus, OpenAIChatGptSession,
-    OpenRouterToken, PkceChallenge, clear_oauth_token_with_mode, clear_openai_chatgpt_session,
-    exchange_code_for_token, exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state,
-    generate_pkce_challenge, get_auth_status_with_mode, get_auth_url,
-    get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url,
-    load_openai_chatgpt_session_with_mode, parse_openai_chatgpt_manual_callback_input,
-    save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
-    start_auth_code_callback_server,
+    AuthCallbackOutcome, AuthCodeCallbackServer, AuthCredentialsStoreMode, AuthStatus, OAuthCallbackPage,
+    OAuthProvider, OpenAIChatGptAuthStatus, OpenAIChatGptSession, OpenRouterToken, PkceChallenge,
+    clear_oauth_token_with_mode, clear_openai_chatgpt_session, exchange_code_for_token,
+    exchange_openai_chatgpt_code_for_tokens, generate_openai_oauth_state, generate_pkce_challenge,
+    get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url,
+    load_openai_chatgpt_session_with_mode, parse_openai_chatgpt_manual_callback_input, save_oauth_token_with_mode,
+    save_openai_chatgpt_session_with_mode, start_auth_code_callback_server,
 };
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::copilot::{
-    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
-    login_with_events, logout_with_events, probe_auth_status,
+    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind, login_with_events,
+    logout_with_events, probe_auth_status,
 };
 
 use crate::agent::runloop::unified::url_guard::{UrlGuardPrompt, open_external_url};
 use crate::codex_app_server::{
-    CODEX_PROVIDER, CodexAccount, CodexAccountLoginCompleted, CodexAccountReadResponse,
-    CodexAppServerClient, CodexLoginAccountResponse, CodexMcpServerStatus, ServerEvent,
-    is_codex_cli_unavailable,
+    CODEX_PROVIDER, CodexAccount, CodexAccountLoginCompleted, CodexAccountReadResponse, CodexAppServerClient,
+    CodexLoginAccountResponse, CodexMcpServerStatus, ServerEvent, is_codex_cli_unavailable,
 };
 
 pub(crate) const OPENAI_PROVIDER: &str = "openai";
 pub(crate) const OPENROUTER_PROVIDER: &str = "openrouter";
 pub(crate) const COPILOT_PROVIDER: &str = "copilot";
 const DEFAULT_OPENROUTER_CALLBACK_PORT: u16 = 8484;
-const DEFAULT_FLOW_TIMEOUT_SECS: u64 =
-    vtcode_config::constants::execution::DEFAULT_AUTH_FLOW_TIMEOUT_SECS;
+const DEFAULT_FLOW_TIMEOUT_SECS: u64 = vtcode_config::constants::execution::DEFAULT_AUTH_FLOW_TIMEOUT_SECS;
 const OPENAI_MANUAL_PLACEHOLDER: &str = "http://localhost:1455/auth/callback?code=...&state=...";
 
 #[derive(Debug, Clone)]
@@ -76,9 +72,7 @@ pub(crate) fn supports_auth_provider(provider: &str) -> bool {
         || supports_oauth_provider(provider)
 }
 
-pub(crate) fn prepare_openrouter_login(
-    vt_cfg: Option<&VTCodeConfig>,
-) -> Result<PreparedOpenRouterLogin> {
+pub(crate) fn prepare_openrouter_login(vt_cfg: Option<&VTCodeConfig>) -> Result<PreparedOpenRouterLogin> {
     let callback_port = vt_cfg
         .map(|cfg| cfg.auth.openrouter.callback_port)
         .unwrap_or(DEFAULT_OPENROUTER_CALLBACK_PORT);
@@ -98,9 +92,7 @@ pub(crate) fn prepare_openrouter_login(
     })
 }
 
-pub(crate) async fn begin_openrouter_login(
-    prepared: PreparedOpenRouterLogin,
-) -> Result<StartedOpenRouterLogin> {
+pub(crate) async fn begin_openrouter_login(prepared: PreparedOpenRouterLogin) -> Result<StartedOpenRouterLogin> {
     let callback_server = start_auth_code_callback_server(
         prepared.callback_port,
         prepared.timeout_secs,
@@ -128,8 +120,7 @@ pub(crate) async fn complete_openrouter_login_with_tui_cancel(
 ) -> Result<String> {
     let StartedOpenRouterLogin { prepared, callback_server } = started;
 
-    let outcome =
-        wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
+    let outcome = wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
 
     match outcome {
         AuthCallbackOutcome::Code(code) => persist_openrouter_login_code(prepared, &code).await,
@@ -160,19 +151,11 @@ pub(crate) fn prepare_openai_login(vt_cfg: Option<&VTCodeConfig>) -> Result<Prep
     })
 }
 
-pub(crate) async fn complete_openai_login(
-    started: StartedOpenAiLogin,
-) -> Result<OpenAIChatGptSession> {
-    complete_openai_login_with_manual_future(
-        started,
-        None::<std::future::Ready<Result<Option<String>>>>,
-    )
-    .await
+pub(crate) async fn complete_openai_login(started: StartedOpenAiLogin) -> Result<OpenAIChatGptSession> {
+    complete_openai_login_with_manual_future(started, None::<std::future::Ready<Result<Option<String>>>>).await
 }
 
-pub(crate) async fn begin_openai_login(
-    prepared: PreparedOpenAiLogin,
-) -> Result<StartedOpenAiLogin> {
+pub(crate) async fn begin_openai_login(prepared: PreparedOpenAiLogin) -> Result<StartedOpenAiLogin> {
     let callback_server = start_auth_code_callback_server(
         prepared.callback_port,
         prepared.timeout_secs,
@@ -191,9 +174,7 @@ where
     ManualFut: Future<Output = Result<Option<String>>>,
 {
     let StartedOpenAiLogin { prepared, callback_server } = started;
-    let code =
-        resolve_openai_authorization_code(callback_server.wait(), &prepared.state, manual_input)
-            .await?;
+    let code = resolve_openai_authorization_code(callback_server.wait(), &prepared.state, manual_input).await?;
     persist_openai_login_code(prepared, &code).await
 }
 
@@ -204,8 +185,7 @@ pub(crate) async fn complete_openai_login_with_tui_cancel(
 ) -> Result<OpenAIChatGptSession> {
     let StartedOpenAiLogin { prepared, callback_server } = started;
 
-    let outcome =
-        wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
+    let outcome = wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
 
     let code = callback_outcome_to_openai_code(outcome)?;
     persist_openai_login_code(prepared, &code).await
@@ -225,14 +205,9 @@ where
     persist_openai_login_code(prepared, &code).await
 }
 
-async fn persist_openai_login_code(
-    prepared: PreparedOpenAiLogin,
-    code: &str,
-) -> Result<OpenAIChatGptSession> {
+async fn persist_openai_login_code(prepared: PreparedOpenAiLogin, code: &str) -> Result<OpenAIChatGptSession> {
     tracing::info!("received openai oauth authorization code; exchanging tokens");
-    let session =
-        exchange_openai_chatgpt_code_for_tokens(code, &prepared.pkce, prepared.callback_port)
-            .await?;
+    let session = exchange_openai_chatgpt_code_for_tokens(code, &prepared.pkce, prepared.callback_port).await?;
     tracing::info!("openai oauth token exchange completed; persisting session");
     save_openai_chatgpt_session_with_mode(&session, prepared.storage_mode)?;
     tracing::info!("openai oauth session persisted; verifying load");
@@ -240,10 +215,7 @@ async fn persist_openai_login_code(
         .ok_or_else(|| anyhow!("OpenAI ChatGPT session was not persisted correctly"))
 }
 
-async fn persist_openrouter_login_code(
-    prepared: PreparedOpenRouterLogin,
-    code: &str,
-) -> Result<String> {
+async fn persist_openrouter_login_code(prepared: PreparedOpenRouterLogin, code: &str) -> Result<String> {
     let api_key = exchange_code_for_token(code, &prepared.pkce).await?;
     let token = OpenRouterToken {
         api_key: api_key.clone(),
@@ -374,9 +346,7 @@ pub(crate) fn openai_auth_status(vt_cfg: Option<&VTCodeConfig>) -> Result<OpenAI
     get_openai_chatgpt_auth_status_with_mode(credential_storage_mode(vt_cfg))
 }
 
-pub(crate) fn load_openai_session(
-    vt_cfg: Option<&VTCodeConfig>,
-) -> Result<Option<OpenAIChatGptSession>> {
+pub(crate) fn load_openai_session(vt_cfg: Option<&VTCodeConfig>) -> Result<Option<OpenAIChatGptSession>> {
     load_openai_chatgpt_session_with_mode(credential_storage_mode(vt_cfg))
 }
 
@@ -403,9 +373,7 @@ pub(crate) async fn handle_login_command(
 ) -> Result<()> {
     let provider = provider.trim().to_ascii_lowercase();
     if device_code && provider != CODEX_PROVIDER {
-        return Err(anyhow!(
-            "`--device-code` is currently supported only for `vtcode login codex`."
-        ));
+        return Err(anyhow!("`--device-code` is currently supported only for `vtcode login codex`."));
     }
 
     if provider == CODEX_PROVIDER {
@@ -431,18 +399,11 @@ pub(crate) async fn handle_login_command(
                 open_browser_or_print_url(&auth_url)?;
                 login_id
             }
-            CodexLoginAccountResponse::ChatGptDeviceCode {
-                verification_url,
-                user_code,
-                login_id,
-            } => {
+            CodexLoginAccountResponse::ChatGptDeviceCode { verification_url, user_code, login_id } => {
                 println!("Starting Codex ChatGPT device-code authentication...");
                 println!("Enter this code after signing in:");
                 println!("{user_code}");
-                vtcode_commons::ansi_codes::notify_attention(
-                    true,
-                    Some(&format!("Codex device code: {user_code}")),
-                );
+                vtcode_commons::ansi_codes::notify_attention(true, Some(&format!("Codex device code: {user_code}")));
                 open_browser_or_print_url(&verification_url)?;
                 login_id
             }
@@ -457,12 +418,9 @@ pub(crate) async fn handle_login_command(
             }
         };
         let mut events = client.subscribe();
-        let completion =
-            wait_for_codex_account_login_completion(&mut events, Some(&login_id)).await?;
+        let completion = wait_for_codex_account_login_completion(&mut events, Some(&login_id)).await?;
         if !completion.success {
-            return Err(anyhow!(
-                completion.error.unwrap_or_else(|| "Codex ChatGPT login failed".to_string())
-            ));
+            return Err(anyhow!(completion.error.unwrap_or_else(|| "Codex ChatGPT login failed".to_string())));
         }
         let updated = client.account_read().await?;
         print_codex_login_summary(&updated);
@@ -487,10 +445,7 @@ pub(crate) async fn handle_login_command(
             open_browser_or_print_url(&auth_url)?;
             let api_key = complete_openrouter_login(started).await?;
             println!("OpenRouter authentication complete.");
-            println!(
-                "Stored secure OAuth token. Key preview: {}...",
-                &api_key[..api_key.len().min(8)]
-            );
+            println!("Stored secure OAuth token. Key preview: {}...", &api_key[..api_key.len().min(8)]);
             Ok(())
         }
         Ok(OAuthProvider::OpenAi) => {
@@ -515,10 +470,7 @@ pub(crate) async fn handle_login_command(
     }
 }
 
-pub(crate) async fn handle_logout_command(
-    vt_cfg: Option<&VTCodeConfig>,
-    provider: &str,
-) -> Result<()> {
+pub(crate) async fn handle_logout_command(vt_cfg: Option<&VTCodeConfig>, provider: &str) -> Result<()> {
     let provider = provider.trim().to_ascii_lowercase();
     if provider == CODEX_PROVIDER {
         let client = CodexAppServerClient::connect(vt_cfg).await?;
@@ -565,10 +517,7 @@ pub(crate) async fn handle_logout_command(
     }
 }
 
-pub(crate) async fn handle_show_auth_command(
-    vt_cfg: Option<&VTCodeConfig>,
-    provider: Option<&str>,
-) -> Result<()> {
+pub(crate) async fn handle_show_auth_command(vt_cfg: Option<&VTCodeConfig>, provider: Option<&str>) -> Result<()> {
     println!("Authentication Status");
     println!();
 
@@ -586,9 +535,7 @@ pub(crate) async fn handle_show_auth_command(
             render_copilot_auth_status(probe_auth_status(&auth_cfg, Some(&workspace)).await);
         }
         Some(value) => match value.parse::<OAuthProvider>() {
-            Ok(OAuthProvider::OpenRouter) => {
-                render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?)
-            }
+            Ok(OAuthProvider::OpenRouter) => render_openrouter_auth_status(openrouter_auth_status(vt_cfg)?),
             Ok(OAuthProvider::OpenAi) => render_openai_auth_status(openai_auth_status(vt_cfg)?),
             Err(()) => {
                 return Err(anyhow!(
@@ -600,10 +547,7 @@ pub(crate) async fn handle_show_auth_command(
             match CodexAppServerClient::connect(vt_cfg).await {
                 Ok(client) => {
                     let mcp_statuses = client.mcp_server_status_list().await?;
-                    render_codex_auth_status(
-                        client.account_read().await?,
-                        Some(mcp_statuses.data.as_slice()),
-                    );
+                    render_codex_auth_status(client.account_read().await?, Some(mcp_statuses.data.as_slice()));
                 }
                 Err(err) if is_codex_cli_unavailable(&err) => {
                     render_codex_unavailable_status();
@@ -656,11 +600,7 @@ async fn complete_openai_login_with_cli_fallback(
                 let Some(input) = prompt_openai_manual_input_cli_once()? else {
                     return Err(err);
                 };
-                complete_openai_login_from_manual_future(
-                    prepared,
-                    std::future::ready(Ok(Some(input))),
-                )
-                .await
+                complete_openai_login_from_manual_future(prepared, std::future::ready(Ok(Some(input)))).await
             }
             Err(err) => Err(err),
         },
@@ -668,8 +608,7 @@ async fn complete_openai_login_with_cli_fallback(
             let Some(input) = prompt_openai_manual_input_cli_once()? else {
                 return Err(err);
             };
-            complete_openai_login_from_manual_future(prepared, std::future::ready(Ok(Some(input))))
-                .await
+            complete_openai_login_from_manual_future(prepared, std::future::ready(Ok(Some(input)))).await
         }
         Err(err) => Err(err),
     }
@@ -685,8 +624,7 @@ fn prompt_openai_manual_input_cli_once() -> Result<Option<String>> {
         println!("Paste the redirected URL/query and press Enter when ready.");
         print!("Redirect URL or query: ");
         vtcode_core::ui::terminal::flush_stdout();
-        let input = vtcode_core::ui::terminal::read_line()
-            .map_err(|err| anyhow!("stdin read failed: {err}"))?;
+        let input = vtcode_core::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             Ok(None)
@@ -706,9 +644,7 @@ pub(crate) fn open_browser_or_print_url(url: &str) -> Result<()> {
     );
 
     if !confirm_cli_browser_open(url)? {
-        println!(
-            "Automatic browser launch skipped. Open the URL manually if you want to continue."
-        );
+        println!("Automatic browser launch skipped. Open the URL manually if you want to continue.");
         return Ok(());
     }
 
@@ -744,10 +680,7 @@ async fn wait_for_codex_account_login_completion(
     }
 }
 
-fn render_codex_auth_status(
-    status: CodexAccountReadResponse,
-    mcp_statuses: Option<&[CodexMcpServerStatus]>,
-) {
+fn render_codex_auth_status(status: CodexAccountReadResponse, mcp_statuses: Option<&[CodexMcpServerStatus]>) {
     println!("Codex");
     match status.account {
         Some(CodexAccount::ApiKey) => {
@@ -808,9 +741,7 @@ fn confirm_cli_browser_open(url: &str) -> Result<bool> {
     };
 
     if vtcode_core::ui::terminal::is_piped_input() || vtcode_core::ui::terminal::is_piped_output() {
-        println!(
-            "Automatic browser launch skipped because approval requires an interactive terminal."
-        );
+        println!("Automatic browser launch skipped because approval requires an interactive terminal.");
         return Ok(false);
     }
 
@@ -820,8 +751,7 @@ fn confirm_cli_browser_open(url: &str) -> Result<bool> {
 
     print!("Open in browser now? [y/N]: ");
     vtcode_core::ui::terminal::flush_stdout();
-    let input = vtcode_core::ui::terminal::read_line()
-        .map_err(|err| anyhow!("stdin read failed: {err}"))?;
+    let input = vtcode_core::ui::terminal::read_line().map_err(|err| anyhow!("stdin read failed: {err}"))?;
     Ok(cli_browser_open_approved(&input))
 }
 
@@ -890,9 +820,7 @@ fn render_copilot_auth_status(status: CopilotAuthStatus) {
     }
 
     if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
-        println!(
-            "  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}"
-        );
+        println!("  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}");
     }
 }
 
@@ -900,10 +828,7 @@ fn print_copilot_auth_event(event: CopilotAuthEvent) -> Result<()> {
     match event {
         CopilotAuthEvent::VerificationCode { url, user_code } => {
             println!("GitHub device code (copy this): {user_code}");
-            vtcode_commons::ansi_codes::notify_attention(
-                true,
-                Some(&format!("GitHub device code: {user_code}")),
-            );
+            vtcode_commons::ansi_codes::notify_attention(true, Some(&format!("GitHub device code: {user_code}")));
             println!("Open this URL to continue:");
             println!("{url}");
         }
@@ -943,8 +868,8 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_openai_login, clear_openrouter_login, cli_browser_open_approved,
-        handle_login_command, resolve_openai_authorization_code, wait_for_callback_or_cancel,
+        clear_openai_login, clear_openrouter_login, cli_browser_open_approved, handle_login_command,
+        resolve_openai_authorization_code, wait_for_callback_or_cancel,
     };
     use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
     use anyhow::anyhow;
@@ -953,11 +878,10 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Notify;
     use vtcode_auth::{
-        AuthCallbackOutcome, AuthCredentialsStoreMode, OpenAIAuthConfig, OpenAIChatGptSession,
-        OpenAIResolvedAuth, OpenRouterToken, clear_oauth_token_with_mode,
-        clear_openai_chatgpt_session, clear_openai_chatgpt_session_with_mode,
-        load_oauth_token_with_mode, load_openai_chatgpt_session_with_mode, resolve_openai_auth,
-        save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
+        AuthCallbackOutcome, AuthCredentialsStoreMode, OpenAIAuthConfig, OpenAIChatGptSession, OpenAIResolvedAuth,
+        OpenRouterToken, clear_oauth_token_with_mode, clear_openai_chatgpt_session,
+        clear_openai_chatgpt_session_with_mode, load_oauth_token_with_mode, load_openai_chatgpt_session_with_mode,
+        resolve_openai_auth, save_oauth_token_with_mode, save_openai_chatgpt_session_with_mode,
     };
     use vtcode_config::VTCodeConfig;
 
@@ -1085,18 +1009,11 @@ mod tests {
 
         let file_session = sample_openai_session("file-api-key");
         let keyring_session = sample_openai_session("keyring-api-key");
-        if save_openai_chatgpt_session_with_mode(&file_session, AuthCredentialsStoreMode::File)
-            .is_err()
-        {
+        if save_openai_chatgpt_session_with_mode(&file_session, AuthCredentialsStoreMode::File).is_err() {
             return;
         }
 
-        if save_openai_chatgpt_session_with_mode(
-            &keyring_session,
-            AuthCredentialsStoreMode::Keyring,
-        )
-        .is_err()
-        {
+        if save_openai_chatgpt_session_with_mode(&keyring_session, AuthCredentialsStoreMode::Keyring).is_err() {
             let _ = clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File);
             return;
         }
@@ -1146,8 +1063,7 @@ mod tests {
         }
 
         let Some(loaded_keyring_token) =
-            load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring)
-                .expect("load keyring token after save")
+            load_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring).expect("load keyring token after save")
         else {
             let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::File);
             let _ = clear_oauth_token_with_mode(AuthCredentialsStoreMode::Keyring);

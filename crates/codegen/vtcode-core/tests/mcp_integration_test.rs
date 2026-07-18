@@ -7,8 +7,8 @@
 use hashbrown::HashMap;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
-    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig,
-    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig, McpStdioServerConfig,
+    McpTransportConfig, McpUiConfig, McpUiMode,
 };
 use vtcode_core::mcp::{McpClient, McpToolExecutor};
 
@@ -43,11 +43,7 @@ max_concurrent_requests = 1
 
         let mcp_config: McpClientConfig = toml::from_str(toml_content).unwrap();
 
-        println!(
-            "Parsed config: enabled={}, providers={}",
-            mcp_config.enabled,
-            mcp_config.providers.len()
-        );
+        println!("Parsed config: enabled={}, providers={}", mcp_config.enabled, mcp_config.providers.len());
 
         assert!(mcp_config.enabled);
         assert_eq!(mcp_config.ui.mode, McpUiMode::Compact);

@@ -44,12 +44,7 @@ pub struct ScheduledWork {
 }
 
 impl ScheduledWork {
-    pub fn new(
-        id: impl Into<String>,
-        target: ExecutionTarget,
-        payload: Value,
-        metadata: Value,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, target: ExecutionTarget, payload: Value, metadata: Value) -> Self {
         Self { id: id.into(), target, payload, metadata }
     }
 }
@@ -70,11 +65,7 @@ impl DistributedOrchestrator {
         Self { scheduler: Scheduler::new(), executors }
     }
 
-    pub fn register_executor(
-        &mut self,
-        target: impl Into<String>,
-        executor: Arc<dyn WorkExecutor>,
-    ) {
+    pub fn register_executor(&mut self, target: impl Into<String>, executor: Arc<dyn WorkExecutor>) {
         self.executors.register(target, executor);
     }
 
@@ -86,8 +77,7 @@ impl DistributedOrchestrator {
     pub async fn tick(&self) -> Result<Option<Value>> {
         if let Some(work) = self.scheduler.next().await {
             let target_key = work.target.to_string();
-            let executor =
-                self.executors.get(&target_key).context("executor not registered for target")?;
+            let executor = self.executors.get(&target_key).context("executor not registered for target")?;
 
             // Prevent long-running executors from blocking the queue forever.
             let exec_deadline = Duration::from_secs(30);
@@ -98,9 +88,7 @@ impl DistributedOrchestrator {
                 }
                 Err(_) => {
                     warn!(target = %target_key, "executor timed out after {:?}", exec_deadline);
-                    return Err(anyhow!(
-                        "executor for target {target_key} timed out after {exec_deadline:?}"
-                    ));
+                    return Err(anyhow!("executor for target {target_key} timed out after {exec_deadline:?}"));
                 }
             }
         }

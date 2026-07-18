@@ -215,8 +215,7 @@ pub fn render_few_shot_section(examples: &[&FewShotExample]) -> String {
         if !example.summary.is_empty() {
             let _ = std::fmt::Write::write_fmt(&mut out, format_args!("_{}_\n\n", example.summary));
         }
-        let _ =
-            std::fmt::Write::write_fmt(&mut out, format_args!("{}\n\n", example.body.trim_end()));
+        let _ = std::fmt::Write::write_fmt(&mut out, format_args!("{}\n\n", example.body.trim_end()));
     }
     out
 }
@@ -284,11 +283,7 @@ fn merge_from_dir(by_id: &mut HashMap<String, FewShotExample>, dir: &Path) {
     }
 }
 
-fn parse_example(
-    fallback_id: &str,
-    raw: &str,
-    source_path: &Path,
-) -> Result<FewShotExample, String> {
+fn parse_example(fallback_id: &str, raw: &str, source_path: &Path) -> Result<FewShotExample, String> {
     let (frontmatter, body) = parse_frontmatter(raw);
     let id = frontmatter
         .id
@@ -404,11 +399,7 @@ mod tests {
 
     #[test]
     fn no_overlap_returns_empty() {
-        let store = FewShotStore::from_examples(vec![example(
-            "deploy",
-            &["deploy", "kubernetes"],
-            "a deploy example",
-        )]);
+        let store = FewShotStore::from_examples(vec![example("deploy", &["deploy", "kubernetes"], "a deploy example")]);
         let chosen = store.select("read a local file", 1000);
         assert!(chosen.is_empty());
     }
@@ -445,8 +436,7 @@ mod tests {
 
     #[test]
     fn parse_frontmatter_extracts_metadata() {
-        let raw =
-            "---\nid: read-then-edit\ntags: [read, edit]\nsummary: read first\n---\nbody here\n";
+        let raw = "---\nid: read-then-edit\ntags: [read, edit]\nsummary: read first\n---\nbody here\n";
         let (fm, body) = parse_frontmatter(raw);
         assert_eq!(fm.id.as_deref(), Some("read-then-edit"));
         assert_eq!(fm.tags, Some(vec!["read".to_string(), "edit".to_string()]));
@@ -471,11 +461,8 @@ mod tests {
 
     #[test]
     fn render_section_includes_id_and_body() {
-        let store = FewShotStore::from_examples(vec![example(
-            "demo",
-            &["hi", "demo"],
-            "user said hi\nassistant said hello",
-        )]);
+        let store =
+            FewShotStore::from_examples(vec![example("demo", &["hi", "demo"], "user said hi\nassistant said hello")]);
         let chosen = store.select("hi there", 1000);
         let rendered = render_few_shot_section(&chosen);
         assert!(rendered.contains("[Few-Shot Examples]"));
@@ -488,11 +475,8 @@ mod tests {
         let workspace = tempfile::tempdir().expect("workspace");
         let examples_dir = workspace.path().join(".vtcode/prompts/examples");
         std::fs::create_dir_all(&examples_dir).expect("mkdir");
-        std::fs::write(
-            examples_dir.join("demo.md"),
-            "---\ntags: [demo]\nsummary: a demo\n---\nDemo body\n",
-        )
-        .expect("write");
+        std::fs::write(examples_dir.join("demo.md"), "---\ntags: [demo]\nsummary: a demo\n---\nDemo body\n")
+            .expect("write");
 
         let store = FewShotStore::load(Some(workspace.path()), None);
         assert_eq!(store.len(), 1);

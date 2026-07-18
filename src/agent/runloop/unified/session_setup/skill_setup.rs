@@ -1,8 +1,6 @@
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::unified::session_setup::init::refresh_tool_snapshot;
-use crate::agent::runloop::unified::tool_catalog::{
-    ToolCatalogState, tool_catalog_change_notifier,
-};
+use crate::agent::runloop::unified::tool_catalog::{ToolCatalogState, tool_catalog_change_notifier};
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use std::sync::Arc;
@@ -21,10 +19,7 @@ pub(crate) struct SkillSetupState {
     pub active_skills_map: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
-pub(crate) async fn discover_skills(
-    config: &CoreAgentConfig,
-    resume: Option<&ResumeSession>,
-) -> SkillSetupState {
+pub(crate) async fn discover_skills(config: &CoreAgentConfig, resume: Option<&ResumeSession>) -> SkillSetupState {
     let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
 
     info!(
@@ -35,9 +30,7 @@ pub(crate) async fn discover_skills(
     if let Some(resume_session) = resume
         && !resume_session.loaded_skills().is_empty()
     {
-        warn!(
-            "Skipping loaded skill restore during startup; use /skills load to reactivate session skills"
-        );
+        warn!("Skipping loaded skill restore during startup; use /skills load to reactivate session skills");
     }
 
     SkillSetupState { active_skills_map }
@@ -75,14 +68,9 @@ pub(crate) async fn register_skill_tools(
     .with_deferred_tool_policy(deferred_tool_policy.clone());
     let runtime = runtime.with_anthropic_native_memory_enabled(anthropic_native_memory_enabled);
 
-    register_list_skills_tool(
-        tool_registry,
-        config.workspace.clone(),
-        Arc::clone(&skill_setup.active_skills_map),
-    )
-    .await?;
-    register_load_skill_resource_tool(tool_registry, Arc::clone(&skill_setup.active_skills_map))
+    register_list_skills_tool(tool_registry, config.workspace.clone(), Arc::clone(&skill_setup.active_skills_map))
         .await?;
+    register_load_skill_resource_tool(tool_registry, Arc::clone(&skill_setup.active_skills_map)).await?;
     register_load_skill_tool(
         tool_registry,
         config.workspace.clone(),
@@ -109,10 +97,8 @@ async fn register_list_skills_tool(
     workspace_root: std::path::PathBuf,
     active_skills_map: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 ) -> Result<()> {
-    let list_skills_tool = vtcode_core::tools::skills::ListSkillsTool::new(
-        workspace_root.clone(),
-        Arc::clone(&active_skills_map),
-    );
+    let list_skills_tool =
+        vtcode_core::tools::skills::ListSkillsTool::new(workspace_root.clone(), Arc::clone(&active_skills_map));
     let list_skills_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         tool_constants::LIST_SKILLS,
         vtcode_core::config::types::CapabilityLevel::Basic,
@@ -122,12 +108,7 @@ async fn register_list_skills_tool(
     .with_native_cgp_factory(native_cgp_tool_factory({
         let workspace_root = workspace_root.clone();
         let active_skills_map = Arc::clone(&active_skills_map);
-        move || {
-            vtcode_core::tools::skills::ListSkillsTool::new(
-                workspace_root.clone(),
-                Arc::clone(&active_skills_map),
-            )
-        }
+        move || vtcode_core::tools::skills::ListSkillsTool::new(workspace_root.clone(), Arc::clone(&active_skills_map))
     }));
     tool_registry
         .register_tool(list_skills_reg)
@@ -140,8 +121,7 @@ async fn register_load_skill_resource_tool(
     tool_registry: &mut ToolRegistry,
     active_skills_map: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 ) -> Result<()> {
-    let load_resource_tool =
-        vtcode_core::tools::skills::LoadSkillResourceTool::new(Arc::clone(&active_skills_map));
+    let load_resource_tool = vtcode_core::tools::skills::LoadSkillResourceTool::new(Arc::clone(&active_skills_map));
     let load_resource_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
         tool_constants::LOAD_SKILL_RESOURCE,
         vtcode_core::config::types::CapabilityLevel::Basic,
@@ -150,9 +130,7 @@ async fn register_load_skill_resource_tool(
     .with_catalog_source(ToolCatalogSource::Builtin)
     .with_native_cgp_factory(native_cgp_tool_factory({
         let active_skills_map = Arc::clone(&active_skills_map);
-        move || {
-            vtcode_core::tools::skills::LoadSkillResourceTool::new(Arc::clone(&active_skills_map))
-        }
+        move || vtcode_core::tools::skills::LoadSkillResourceTool::new(Arc::clone(&active_skills_map))
     }));
     tool_registry
         .register_tool(load_resource_reg)

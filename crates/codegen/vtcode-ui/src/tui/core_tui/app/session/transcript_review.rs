@@ -348,9 +348,9 @@ impl TranscriptReviewState {
         let needle = self.search.query.to_ascii_lowercase();
         let mut row_index = 0usize;
         for message in &mut self.messages {
-            let lowered_lines = message.lowered_lines.get_or_insert_with(|| {
-                message.lines.iter().map(|line| line.to_ascii_lowercase()).collect()
-            });
+            let lowered_lines = message
+                .lowered_lines
+                .get_or_insert_with(|| message.lines.iter().map(|line| line.to_ascii_lowercase()).collect());
             for line in lowered_lines {
                 if line.contains(&needle) {
                     self.search.matches.push(row_index);
@@ -414,10 +414,7 @@ pub(crate) fn render_transcript_review(
     }
 
     let title = Line::from(vec![
-        Span::styled(
-            " Transcript Review ",
-            session.core.section_title_style().add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(" Transcript Review ", session.core.section_title_style().add_modifier(Modifier::BOLD)),
         Span::raw(" "),
         Span::styled(state.status_label(), session.core.header_secondary_style()),
     ]);
@@ -437,8 +434,7 @@ pub(crate) fn render_transcript_review(
     };
     let content_height = chunks[0].height;
     let lines = state.visible_lines(usize::from(content_height));
-    frame
-        .render_widget(Paragraph::new(lines).style(session.core.styles.default_style()), chunks[0]);
+    frame.render_widget(Paragraph::new(lines).style(session.core.styles.default_style()), chunks[0]);
 
     if show_search && chunks.len() > 1 {
         let input_styles = input_styles_from_theme(&session.core.theme);
@@ -467,9 +463,7 @@ pub(crate) fn review_content_width(area: Rect) -> u16 {
 mod tests {
     use super::*;
     use crate::tui::core_tui::app::session::AppSession;
-    use crate::tui::core_tui::types::{
-        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    };
+    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
     use std::sync::Arc;
 
     fn test_session() -> AppSession {
@@ -508,8 +502,7 @@ mod tests {
         session.core.push_line(InlineMessageKind::Agent, vec![text_segment("gamma")]);
 
         let mut review = TranscriptReviewState::open(&session, 40, 10);
-        let old_revisions: Vec<u64> =
-            review.messages.iter().map(|message| message.revision).collect();
+        let old_revisions: Vec<u64> = review.messages.iter().map(|message| message.revision).collect();
 
         let revision = session.core.next_revision();
         session.core.lines[1].segments = vec![text_segment("beta updated")];
@@ -534,8 +527,7 @@ mod tests {
         let mut review = TranscriptReviewState::open(&session, 40, 10);
         review.search.query = "alpha".to_string();
         review.recompute_matches();
-        let lowered =
-            review.messages[0].lowered_lines.as_ref().expect("lowered lines cached")[0].clone();
+        let lowered = review.messages[0].lowered_lines.as_ref().expect("lowered lines cached")[0].clone();
 
         review.jump_next_match(10);
         review.recompute_matches();

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{
-    DateTime, Datelike, Duration as ChronoDuration, Local, LocalResult, NaiveDateTime, NaiveTime,
-    TimeZone, Timelike, Utc,
+    DateTime, Datelike, Duration as ChronoDuration, Local, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Timelike,
+    Utc,
 };
 use humantime::parse_duration as parse_human_duration;
 use regex::Regex;
@@ -56,8 +56,7 @@ mod test_env_overrides {
 mod tests;
 
 static REMIND_AT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?ix)^\s*remind\s+me\s+at\s+(?P<when>.+?)\s+to\s+(?P<prompt>.+)\s*$")
-        .expect("remind-at regex")
+    Regex::new(r"(?ix)^\s*remind\s+me\s+at\s+(?P<when>.+?)\s+to\s+(?P<prompt>.+)\s*$").expect("remind-at regex")
 });
 
 static REMIND_IN_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -76,8 +75,7 @@ static REMIND_IN_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static TIME_ONLY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?ix)^\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm)?\s*$")
-        .expect("time-only regex")
+    Regex::new(r"(?ix)^\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm)?\s*$").expect("time-only regex")
 });
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -152,10 +150,7 @@ impl ScheduleSpec {
         Ok(base_local.map(|value| value.with_timezone(&Utc)))
     }
 
-    pub fn next_base_fire_after(
-        &self,
-        last_base_fire_at: DateTime<Utc>,
-    ) -> Result<Option<DateTime<Utc>>> {
+    pub fn next_base_fire_after(&self, last_base_fire_at: DateTime<Utc>) -> Result<Option<DateTime<Utc>>> {
         let last_base_local = last_base_fire_at.with_timezone(&Local);
         let next_local = match self {
             Self::Cron5(spec) => spec.next_after(last_base_local)?,
@@ -178,11 +173,7 @@ impl ScheduleSpec {
                 #[allow(clippy::cast_sign_loss)]
                 let max_delay = (((period_secs as f64) * 0.10).floor()).max(0.0) as u64;
                 let max_delay = max_delay.min(SESSION_JITTER_CAP_SECS);
-                let delay_secs = if max_delay == 0 {
-                    0
-                } else {
-                    hash % (max_delay + 1)
-                };
+                let delay_secs = if max_delay == 0 { 0 } else { hash % (max_delay + 1) };
                 Ok(base_fire_at + ChronoDuration::seconds(delay_secs as i64))
             }
             Self::OneShot(_) if matches!(base_local.minute(), 0 | 30) => {
@@ -432,9 +423,10 @@ impl SessionScheduler {
         if let Some(record) = self.tasks.remove(query) {
             return Some(record.summary());
         }
-        let key = self.tasks.iter().find_map(|(id, record)| {
-            record.definition.name.eq_ignore_ascii_case(query).then(|| id.clone())
-        })?;
+        let key = self
+            .tasks
+            .iter()
+            .find_map(|(id, record)| record.definition.name.eq_ignore_ascii_case(query).then(|| id.clone()))?;
         self.tasks.remove(&key).map(|record| record.summary())
     }
 
@@ -475,14 +467,9 @@ impl SessionScheduler {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionLanguageCommand {
-    CreateOneShotPrompt {
-        prompt: String,
-        run_at: DateTime<Utc>,
-    },
+    CreateOneShotPrompt { prompt: String, run_at: DateTime<Utc> },
     ListTasks,
-    CancelTask {
-        query: String,
-    },
+    CancelTask { query: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -516,9 +503,7 @@ impl ScheduleCreateInput {
                 ScheduleSpec::fixed_interval(duration)?
             }
             (None, Some(expression), None) => ScheduleSpec::cron5(expression)?,
-            (None, None, Some(raw)) => {
-                ScheduleSpec::one_shot(parse_local_datetime(raw.trim(), now)?)
-            }
+            (None, None, Some(raw)) => ScheduleSpec::one_shot(parse_local_datetime(raw.trim(), now)?),
             _ => bail!("Choose exactly one of --every, --cron, or --at"),
         };
 
@@ -532,24 +517,13 @@ impl ScheduleCreateInput {
         .map(|path| resolve_scheduled_workspace_path(&path))
         .transpose()?;
 
-        if matches!(action, ScheduledTaskAction::Prompt { .. })
-            && workspace.as_ref().is_some_and(|path| !path.is_dir())
+        if matches!(action, ScheduledTaskAction::Prompt { .. }) && workspace.as_ref().is_some_and(|path| !path.is_dir())
         {
             let workspace = workspace.as_ref().context("prompt workspace should exist")?;
-            bail!(
-                "Prompt task workspace does not exist or is not a directory: {}",
-                workspace.display()
-            );
+            bail!("Prompt task workspace does not exist or is not a directory: {}", workspace.display());
         }
 
-        ScheduledTaskDefinition::new(
-            self.name,
-            schedule,
-            action,
-            workspace,
-            now.with_timezone(&Utc),
-            None,
-        )
+        ScheduledTaskDefinition::new(self.name, schedule, action, workspace, now.with_timezone(&Utc), None)
     }
 }
 
@@ -557,10 +531,7 @@ fn resolve_scheduled_workspace_path(path: &Path) -> Result<PathBuf> {
     resolve_scheduled_workspace_path_with_home(path, dirs::home_dir().as_deref())
 }
 
-fn resolve_scheduled_workspace_path_with_home(
-    path: &Path,
-    home_dir: Option<&Path>,
-) -> Result<PathBuf> {
+fn resolve_scheduled_workspace_path_with_home(path: &Path, home_dir: Option<&Path>) -> Result<PathBuf> {
     let expanded = expand_scheduled_workspace_home(path, home_dir);
     let absolute = if expanded.is_absolute() {
         expanded
@@ -636,9 +607,8 @@ impl SchedulerPaths {
             &self.claims_dir(),
             &self.runs_dir(),
         ] {
-            fs::create_dir_all(dir).with_context(|| {
-                format!("Failed to create scheduler directory {}", dir.display())
-            })?;
+            fs::create_dir_all(dir)
+                .with_context(|| format!("Failed to create scheduler directory {}", dir.display()))?;
         }
         Ok(())
     }
@@ -770,8 +740,7 @@ impl DurableTaskStore {
     }
 
     fn write_definition(&self, definition: &ScheduledTaskDefinition) -> Result<()> {
-        let serialized =
-            toml::to_string_pretty(definition).context("Failed to serialize task definition")?;
+        let serialized = toml::to_string_pretty(definition).context("Failed to serialize task definition")?;
         atomic_write(&self.paths.definition_path(&definition.id), serialized.as_bytes())
     }
 
@@ -780,16 +749,13 @@ impl DurableTaskStore {
         if !path.exists() {
             return Ok(None);
         }
-        let raw = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
-        let runtime = serde_json::from_str(&raw)
-            .with_context(|| format!("Failed to parse {}", path.display()))?;
+        let raw = fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+        let runtime = serde_json::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))?;
         Ok(Some(runtime))
     }
 
     fn write_runtime(&self, id: &str, runtime: &ScheduledTaskRuntimeState) -> Result<()> {
-        let serialized =
-            serde_json::to_vec_pretty(runtime).context("Failed to serialize runtime state")?;
+        let serialized = serde_json::to_vec_pretty(runtime).context("Failed to serialize runtime state")?;
         atomic_write(&self.paths.runtime_path(id), &serialized)
     }
 }
@@ -843,11 +809,7 @@ impl SchedulerDaemon {
         Ok(executed)
     }
 
-    async fn execute_record(
-        &self,
-        record: &ScheduledTaskRecord,
-        run_at: DateTime<Utc>,
-    ) -> Result<RunOutcome> {
+    async fn execute_record(&self, record: &ScheduledTaskRecord, run_at: DateTime<Utc>) -> Result<RunOutcome> {
         match &record.definition.action {
             ScheduledTaskAction::Reminder { message } => {
                 let notification = send_global_notification(NotificationEvent::IdlePrompt {
@@ -876,9 +838,9 @@ impl SchedulerDaemon {
                 let workspace_label = scheduled_workspace_label(&record.definition);
                 let workspace = resolve_scheduled_task_workspace(&record.definition);
                 let execution = async {
-                    tokio::fs::create_dir_all(&artifact_dir).await.with_context(|| {
-                        format!("Failed to create run artifact dir {}", artifact_dir.display())
-                    })?;
+                    tokio::fs::create_dir_all(&artifact_dir)
+                        .await
+                        .with_context(|| format!("Failed to create run artifact dir {}", artifact_dir.display()))?;
 
                     let mut command = Command::new(&self.executable_path);
                     command
@@ -977,8 +939,7 @@ pub fn render_service_install_plan(executable_path: &Path) -> Result<ServiceInst
 pub fn install_service_file(executable_path: &Path) -> Result<ServiceInstallPlan> {
     let plan = render_service_install_plan(executable_path)?;
     if let Some(parent) = plan.path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
     atomic_write(&plan.path, plan.contents.as_bytes())?;
     Ok(plan)
@@ -1058,10 +1019,7 @@ pub fn durable_task_is_overdue(
     !has_last_status && last_run_at.is_none() && next_run_at.is_some_and(|next_run| next_run <= now)
 }
 
-pub fn parse_session_language_command(
-    input: &str,
-    now: DateTime<Local>,
-) -> Option<Result<SessionLanguageCommand>> {
+pub fn parse_session_language_command(input: &str, now: DateTime<Local>) -> Option<Result<SessionLanguageCommand>> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return None;
@@ -1107,8 +1065,7 @@ pub fn parse_session_language_command(
 }
 
 pub fn parse_schedule_create_args(args: &str) -> Result<ScheduleCreateInput> {
-    let tokens =
-        shell_words::split(args).with_context(|| format!("Failed to parse arguments: {args}"))?;
+    let tokens = shell_words::split(args).with_context(|| format!("Failed to parse arguments: {args}"))?;
     parse_schedule_create_tokens(&tokens)
 }
 
@@ -1162,9 +1119,7 @@ pub fn parse_schedule_create_tokens(tokens: &[String]) -> Result<ScheduleCreateI
     Ok(ScheduleCreateInput { name, prompt, reminder, every, cron, at, workspace })
 }
 
-fn initialize_runtime_state(
-    definition: &ScheduledTaskDefinition,
-) -> Result<ScheduledTaskRuntimeState> {
+fn initialize_runtime_state(definition: &ScheduledTaskDefinition) -> Result<ScheduledTaskRuntimeState> {
     let next_base_run_at = definition.schedule.first_base_fire_at(definition.created_at)?;
     let next_run_at = next_base_run_at
         .map(|base| definition.schedule.jittered_fire_at(&definition.id, base))
@@ -1273,9 +1228,7 @@ fn scheduled_workspace_label(definition: &ScheduledTaskDefinition) -> String {
         .unwrap_or_else(|| "<none>".to_string())
 }
 
-fn resolve_scheduled_task_workspace(
-    definition: &ScheduledTaskDefinition,
-) -> Result<Option<PathBuf>> {
+fn resolve_scheduled_task_workspace(definition: &ScheduledTaskDefinition) -> Result<Option<PathBuf>> {
     definition
         .workspace
         .as_deref()
@@ -1291,15 +1244,13 @@ fn resolve_scheduled_task_workspace(
 }
 
 fn read_definition(path: &Path) -> Result<ScheduledTaskDefinition> {
-    let raw =
-        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let raw = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
     toml::from_str(&raw).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
     }
 
     let temp_name = format!(
@@ -1308,10 +1259,8 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
         NEXT_TASK_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
     let temp_path = path.with_file_name(temp_name);
-    fs::write(&temp_path, content)
-        .with_context(|| format!("Failed to write {}", temp_path.display()))?;
-    fs::rename(&temp_path, path)
-        .with_context(|| format!("Failed to replace {}", path.display()))?;
+    fs::write(&temp_path, content).with_context(|| format!("Failed to write {}", temp_path.display()))?;
+    fs::rename(&temp_path, path).with_context(|| format!("Failed to replace {}", path.display()))?;
     Ok(())
 }
 
@@ -1337,8 +1286,7 @@ fn try_acquire_claim(paths: &SchedulerPaths, id: &str) -> Result<bool> {
 }
 
 fn claim_is_stale(path: &Path) -> Result<bool> {
-    let metadata =
-        fs::metadata(path).with_context(|| format!("Failed to stat {}", path.display()))?;
+    let metadata = fs::metadata(path).with_context(|| format!("Failed to stat {}", path.display()))?;
     let modified = metadata
         .modified()
         .with_context(|| format!("Failed to read modification time for {}", path.display()))?;
@@ -1456,8 +1404,7 @@ pub fn parse_local_datetime(raw: &str, now: DateTime<Local>) -> Result<DateTime<
             bail!("Invalid 24-hour clock value");
         }
 
-        let time = NaiveTime::from_hms_opt(hour, minute, 0)
-            .ok_or_else(|| anyhow!("Invalid time value"))?;
+        let time = NaiveTime::from_hms_opt(hour, minute, 0).ok_or_else(|| anyhow!("Invalid time value"))?;
         let today = now.date_naive();
         let naive = today.and_time(time);
         let mut localized = localize_naive_datetime(naive)?;
@@ -1537,8 +1484,7 @@ impl ParsedCron {
         let hour = value.hour();
         let dow = value.weekday().num_days_from_sunday();
 
-        if !self.minute.contains(minute) || !self.hour.contains(hour) || !self.month.contains(month)
-        {
+        if !self.minute.contains(minute) || !self.hour.contains(hour) || !self.month.contains(month) {
             return false;
         }
 

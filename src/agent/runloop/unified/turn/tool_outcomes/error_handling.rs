@@ -78,10 +78,7 @@ fn push_fallback_args(
         if inline_full_args {
             obj.insert("fallback_tool_args".to_string(), args);
         } else {
-            obj.insert(
-                "fallback_tool_args_preview".to_string(),
-                serde_json::Value::String(args_preview.to_string()),
-            );
+            obj.insert("fallback_tool_args_preview".to_string(), serde_json::Value::String(args_preview.to_string()));
             obj.insert("fallback_tool_args_truncated".to_string(), serde_json::Value::Bool(true));
         }
     }
@@ -96,9 +93,7 @@ fn push_error_truncation_flag(payload: &mut serde_json::Value, error_truncated: 
     }
 }
 
-fn fallback_args_preview_and_inline(
-    fallback_tool_args: &Option<serde_json::Value>,
-) -> (Option<String>, bool) {
+fn fallback_args_preview_and_inline(fallback_tool_args: &Option<serde_json::Value>) -> (Option<String>, bool) {
     let Some(args) = fallback_tool_args else {
         return (None, false);
     };
@@ -107,10 +102,7 @@ fn fallback_args_preview_and_inline(
     (Some(preview), should_inline_fallback_args(&serialized))
 }
 
-fn failure_guidance(
-    error_msg: &str,
-    failure_kind: &'static str,
-) -> (&'static str, bool, &'static str) {
+fn failure_guidance(error_msg: &str, failure_kind: &'static str) -> (&'static str, bool, &'static str) {
     if failure_kind == "timeout" {
         return ("timeout", true, "Retry with smaller scope or higher timeout.");
     }
@@ -142,36 +134,24 @@ fn structured_failure_guidance(
         return ("timeout", true, "Retry with smaller scope or a higher timeout.");
     }
 
-    if matches!(error.category, ErrorCategory::InvalidParameters)
-        || check_is_argument_error(&error.message)
-    {
+    if matches!(error.category, ErrorCategory::InvalidParameters) || check_is_argument_error(&error.message) {
         return ("invalid_arguments", true, "Fix the tool arguments to match the schema.");
     }
 
     if matches!(error.category, ErrorCategory::Authentication) {
-        return (
-            "authentication_failed",
-            false,
-            "Verify your credentials or choose a different provider.",
-        );
+        return ("authentication_failed", false, "Verify your credentials or choose a different provider.");
     }
 
     if matches!(
         error.category,
-        ErrorCategory::PermissionDenied
-            | ErrorCategory::PolicyViolation
-            | ErrorCategory::PlanningPolicyViolation
+        ErrorCategory::PermissionDenied | ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation
     ) || is_blocked_or_denied_failure(&error.message)
     {
         return ("policy_blocked", false, "Switch to an allowed tool or mode.");
     }
 
     if matches!(error.category, ErrorCategory::CircuitOpen) {
-        return (
-            "service_temporarily_unavailable",
-            true,
-            "Wait briefly, then retry or use a different tool.",
-        );
+        return ("service_temporarily_unavailable", true, "Wait briefly, then retry or use a different tool.");
     }
 
     ("execution_failure", error.is_recoverable, "Try an alternative tool or narrower scope.")
@@ -182,11 +162,8 @@ pub(super) fn format_structured_tool_error_for_user(
     tool_name: &str,
     error: &ToolExecutionError,
 ) -> (String, Option<String>) {
-    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
-        &error.message,
-    );
-    let mut primary =
-        format!("Tool '{}' failed ({}): {}", tool_name, error.category.user_label(), sanitized);
+    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(&error.message);
+    let mut primary = format!("Tool '{}' failed ({}): {}", tool_name, error.category.user_label(), sanitized);
 
     if error.rollback_performed {
         primary.push_str(" Any partial changes were rolled back.");
@@ -223,8 +200,7 @@ pub(crate) fn build_error_content(
     fallback_tool_args: Option<serde_json::Value>,
     failure_kind: &'static str,
 ) -> serde_json::Value {
-    let (error_text, error_truncated) =
-        truncate_text_for_model(&error_msg, MAX_ERROR_MESSAGE_CHARS);
+    let (error_text, error_truncated) = truncate_text_for_model(&error_msg, MAX_ERROR_MESSAGE_CHARS);
     let (error_class, is_recoverable, next_action) = failure_guidance(&error_msg, failure_kind);
     let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
 
@@ -267,10 +243,8 @@ pub(super) fn build_structured_error_content(
     fallback_tool_args: Option<serde_json::Value>,
     failure_kind: &'static str,
 ) -> serde_json::Value {
-    let (error_summary, error_truncated) =
-        truncate_text_for_model(&error.user_message(), MAX_ERROR_MESSAGE_CHARS);
-    let (error_class, is_recoverable, default_next_action) =
-        structured_failure_guidance(error, failure_kind);
+    let (error_summary, error_truncated) = truncate_text_for_model(&error.user_message(), MAX_ERROR_MESSAGE_CHARS);
+    let (error_class, is_recoverable, default_next_action) = structured_failure_guidance(error, failure_kind);
     let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
     let retry_summary = error.retry_summary();
     let next_action = error
@@ -287,23 +261,11 @@ pub(super) fn build_structured_error_content(
         obj.insert("category".to_string(), serde_json::json!(error.category));
         obj.insert("is_recoverable".to_string(), serde_json::Value::Bool(is_recoverable));
         obj.insert("retryable".to_string(), serde_json::Value::Bool(error.retryable));
-        obj.insert(
-            "partial_state_possible".to_string(),
-            serde_json::Value::Bool(error.partial_state_possible),
-        );
-        obj.insert(
-            "rollback_performed".to_string(),
-            serde_json::Value::Bool(error.rollback_performed),
-        );
-        obj.insert(
-            "circuit_breaker_impact".to_string(),
-            serde_json::Value::Bool(error.circuit_breaker_impact),
-        );
+        obj.insert("partial_state_possible".to_string(), serde_json::Value::Bool(error.partial_state_possible));
+        obj.insert("rollback_performed".to_string(), serde_json::Value::Bool(error.rollback_performed));
+        obj.insert("circuit_breaker_impact".to_string(), serde_json::Value::Bool(error.circuit_breaker_impact));
         if is_recoverable {
-            obj.insert(
-                "next_action".to_string(),
-                serde_json::Value::String(next_action.to_string()),
-            );
+            obj.insert("next_action".to_string(), serde_json::Value::String(next_action.to_string()));
         }
         if !error.recovery_suggestions.is_empty() {
             obj.insert(
@@ -321,16 +283,10 @@ pub(super) fn build_structured_error_content(
             obj.insert("retry_summary".to_string(), serde_json::Value::String(summary));
         }
         if let Some(retry_delay_ms) = error.retry_delay_ms {
-            obj.insert(
-                "retry_delay_ms".to_string(),
-                serde_json::Value::Number(retry_delay_ms.into()),
-            );
+            obj.insert("retry_delay_ms".to_string(), serde_json::Value::Number(retry_delay_ms.into()));
         }
         if let Some(retry_after_ms) = error.retry_after_ms {
-            obj.insert(
-                "retry_after_ms".to_string(),
-                serde_json::Value::Number(retry_after_ms.into()),
-            );
+            obj.insert("retry_after_ms".to_string(), serde_json::Value::Number(retry_after_ms.into()));
         }
         if let Some(debug_context) = &error.debug_context {
             obj.insert(
@@ -410,10 +366,8 @@ pub(super) fn fallback_from_error(
     error_msg: &str,
     args_val: Option<&serde_json::Value>,
 ) -> Option<(String, serde_json::Value)> {
-    if matches!(
-        tool_name,
-        tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file"
-    ) && let Some(session_id) = extract_pty_session_id_from_error(error_msg)
+    if matches!(tool_name, tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file")
+        && let Some(session_id) = extract_pty_session_id_from_error(error_msg)
     {
         return Some((
             tool_names::UNIFIED_EXEC.to_string(),
@@ -452,11 +406,8 @@ pub(super) fn fallback_from_error(
         }
     }
 
-    if tool_name == tool_names::SPAWN_AGENT
-        && error_msg.contains("Use spawn_background_subprocess for agent '")
-    {
-        let mut fallback_args =
-            args_val.and_then(serde_json::Value::as_object).cloned().unwrap_or_default();
+    if tool_name == tool_names::SPAWN_AGENT && error_msg.contains("Use spawn_background_subprocess for agent '") {
+        let mut fallback_args = args_val.and_then(serde_json::Value::as_object).cloned().unwrap_or_default();
         fallback_args.remove("background");
         fallback_args.remove("fork_context");
 
@@ -466,10 +417,7 @@ pub(super) fn fallback_from_error(
                 .or_insert_with(|| serde_json::Value::String(agent_name));
         }
 
-        return Some((
-            tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(),
-            serde_json::Value::Object(fallback_args),
-        ));
+        return Some((tool_names::SPAWN_BACKGROUND_SUBPROCESS.to_string(), serde_json::Value::Object(fallback_args)));
     }
 
     None

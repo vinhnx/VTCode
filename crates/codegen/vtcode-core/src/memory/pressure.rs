@@ -51,12 +51,8 @@ impl MemoryPressure {
     pub fn ttl_reduction_factor(&self) -> f64 {
         match self {
             MemoryPressure::Normal => 1.0,
-            MemoryPressure::Warning => {
-                vtcode_config::constants::memory::WARNING_TTL_REDUCTION_FACTOR
-            }
-            MemoryPressure::Critical => {
-                vtcode_config::constants::memory::CRITICAL_TTL_REDUCTION_FACTOR
-            }
+            MemoryPressure::Warning => vtcode_config::constants::memory::WARNING_TTL_REDUCTION_FACTOR,
+            MemoryPressure::Critical => vtcode_config::constants::memory::CRITICAL_TTL_REDUCTION_FACTOR,
         }
     }
 }

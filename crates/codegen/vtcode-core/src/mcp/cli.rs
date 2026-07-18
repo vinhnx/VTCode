@@ -3,9 +3,7 @@
 use crate::cli::input_hardening::validate_agent_safe_text;
 use crate::config::VTCodeConfig;
 use crate::config::loader::ConfigManager;
-use crate::config::mcp::{
-    McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
-};
+use crate::config::mcp::{McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgGroup, Args, Subcommand};
 use hashbrown::HashMap;
@@ -14,12 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use tokio::fs;
 use vtcode_config::auth::{
-    AuthCallbackOutcome, McpOAuthConfig, McpOAuthService, OAuthCallbackPage,
-    start_auth_code_callback_server,
+    AuthCallbackOutcome, McpOAuthConfig, McpOAuthService, OAuthCallbackPage, start_auth_code_callback_server,
 };
 
-static GLOBAL_CONFIG_PATH_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> =
-    LazyLock::new(|| Mutex::new(None));
+static GLOBAL_CONFIG_PATH_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
 /// Subcommands exposed by the `vtcode mcp` entrypoint.
 #[derive(Debug, Clone, Subcommand)]
@@ -122,11 +118,7 @@ pub struct AddMcpStreamableHttpArgs {
     pub url: String,
 
     /// Optional environment variable containing the bearer token.
-    #[arg(
-        long = "bearer-token-env-var",
-        value_name = "ENV_VAR",
-        requires = "url"
-    )]
+    #[arg(long = "bearer-token-env-var", value_name = "ENV_VAR", requires = "url")]
     pub bearer_token_env_var: Option<String>,
 
     /// Additional headers to send with each request (KEY=VALUE form).
@@ -193,8 +185,7 @@ async fn run_add(add_args: AddArgs) -> Result<()> {
     provider.name = name.clone();
     provider.transport = transport;
     provider.enabled = !disabled;
-    provider.max_concurrent_requests =
-        max_concurrent_requests.unwrap_or(provider.max_concurrent_requests);
+    provider.max_concurrent_requests = max_concurrent_requests.unwrap_or(provider.max_concurrent_requests);
 
     if let Some(stdio) = transport_args.stdio {
         provider.env = stdio.env.into_iter().collect();
@@ -235,18 +226,14 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
     providers.sort_by(|a, b| a.name.cmp(&b.name));
 
     if list_args.json {
-        let payload: Vec<_> =
-            providers.into_iter().map(|provider| json_provider(&provider)).collect();
-        let output = serde_json::to_string_pretty(&payload)
-            .context("failed to serialize MCP providers to JSON")?;
+        let payload: Vec<_> = providers.into_iter().map(|provider| json_provider(&provider)).collect();
+        let output = serde_json::to_string_pretty(&payload).context("failed to serialize MCP providers to JSON")?;
         println!("{output}");
         return Ok(());
     }
 
     if providers.is_empty() {
-        println!(
-            "No MCP providers configured. Use `vtcode mcp add <name> --command <binary>` to register one."
-        );
+        println!("No MCP providers configured. Use `vtcode mcp add <name> --command <binary>` to register one.");
         return Ok(());
     }
 
@@ -267,29 +254,18 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
                     format_env_map(&provider.env)
                 };
                 let working_dir = stdio.working_directory.as_deref().unwrap_or("-").to_owned();
-                let status = if provider.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                };
+                let status = if provider.enabled { "enabled" } else { "disabled" };
                 stdio_rows.push([
                     provider.name.clone(),
                     stdio.command.clone(),
                     args_display,
                     env_display,
                     working_dir,
-                    format!(
-                        "{status} (max {max_requests})",
-                        max_requests = provider.max_concurrent_requests
-                    ),
+                    format!("{status} (max {max_requests})", max_requests = provider.max_concurrent_requests),
                 ]);
             }
             McpTransportConfig::Http(http) => {
-                let status = if provider.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                };
+                let status = if provider.enabled { "enabled" } else { "disabled" };
                 let protocol = http.protocol_version.clone();
                 http_rows.push([
                     provider.name.clone(),
@@ -297,10 +273,7 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
                     http_auth_label(http),
                     protocol,
                     http_oauth_status_label(&provider.name, http),
-                    format!(
-                        "{status} (max {max_requests})",
-                        max_requests = provider.max_concurrent_requests
-                    ),
+                    format!("{status} (max {max_requests})", max_requests = provider.max_concurrent_requests),
                 ]);
             }
         }
@@ -417,9 +390,7 @@ async fn run_login(login_args: LoginArgs) -> Result<()> {
     println!("Waiting for the OAuth callback on localhost:{}...", prepared.callback_port);
 
     let completion = match callback_server.wait().await? {
-        AuthCallbackOutcome::Code(code) => {
-            service.complete_login(&provider.name, oauth, &prepared, &code).await?
-        }
+        AuthCallbackOutcome::Code(code) => service.complete_login(&provider.name, oauth, &prepared, &code).await?,
         AuthCallbackOutcome::Cancelled => {
             bail!("OAuth flow was cancelled")
         }
@@ -493,9 +464,7 @@ fn build_http_transport(args: AddMcpStreamableHttpArgs) -> Result<McpTransportCo
 }
 
 fn upsert_provider(config: &mut VTCodeConfig, provider: McpProviderConfig) -> bool {
-    if let Some(existing) =
-        config.mcp.providers.iter_mut().find(|entry| entry.name == provider.name)
-    {
+    if let Some(existing) = config.mcp.providers.iter_mut().find(|entry| entry.name == provider.name) {
         *existing = provider;
         false
     } else {
@@ -534,9 +503,10 @@ fn json_provider(provider: &McpProviderConfig) -> serde_json::Value {
 
 fn provider_http_oauth_config(provider: &McpProviderConfig) -> Result<&McpOAuthConfig> {
     match &provider.transport {
-        McpTransportConfig::Http(http) => http.oauth.as_ref().ok_or_else(|| {
-            anyhow!("MCP provider '{}' does not have HTTP OAuth configured.", provider.name)
-        }),
+        McpTransportConfig::Http(http) => http
+            .oauth
+            .as_ref()
+            .ok_or_else(|| anyhow!("MCP provider '{}' does not have HTTP OAuth configured.", provider.name)),
         McpTransportConfig::Stdio(_) => Err(anyhow!(
             "MCP provider '{}' uses stdio transport and does not support HTTP OAuth login.",
             provider.name
@@ -561,12 +531,8 @@ fn http_oauth_status_label(provider_name: &str, http: &McpHttpServerConfig) -> S
     };
 
     match McpOAuthService::new().status(provider_name, oauth.credentials_store_mode) {
-        Ok(vtcode_config::auth::McpOAuthStatus::Authenticated { .. }) => {
-            "authenticated".to_string()
-        }
-        Ok(vtcode_config::auth::McpOAuthStatus::NotAuthenticated) => {
-            "not authenticated".to_string()
-        }
+        Ok(vtcode_config::auth::McpOAuthStatus::Authenticated { .. }) => "authenticated".to_string(),
+        Ok(vtcode_config::auth::McpOAuthStatus::NotAuthenticated) => "not authenticated".to_string(),
         Err(error) => format!("error: {error}"),
     }
 }
@@ -654,8 +620,7 @@ fn parse_env_pair(raw: &str) -> Result<(String, String), String> {
 
 fn validate_provider_name(name: &str) -> Result<()> {
     validate_agent_safe_text("provider name", name)?;
-    let is_valid =
-        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let is_valid = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
 
     if is_valid {
         Ok(())
@@ -773,8 +738,7 @@ mod tests {
     #[test]
     fn global_config_path_uses_test_override() {
         let override_path = PathBuf::from("/tmp/vtcode-mcp-test.toml");
-        *GLOBAL_CONFIG_PATH_OVERRIDE.lock().expect("override mutex should be available") =
-            Some(override_path.clone());
+        *GLOBAL_CONFIG_PATH_OVERRIDE.lock().expect("override mutex should be available") = Some(override_path.clone());
         let resolved = super::global_config_path().expect("global config path");
         assert_eq!(resolved, override_path);
         *GLOBAL_CONFIG_PATH_OVERRIDE.lock().expect("override mutex should be available") = None;

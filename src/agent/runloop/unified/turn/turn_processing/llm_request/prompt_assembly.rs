@@ -19,9 +19,9 @@ use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use vtcode_core::core::agent::runner::prompt_alignment;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::prompts::{
-    DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotStore, PromptContext,
-    append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections,
-    render_few_shot_section, temporal::generate_temporal_context, upsert_harness_limits_section,
+    DEFAULT_FEW_SHOT_BUDGET_TOKENS, FewShotStore, PromptContext, append_deferred_tools_prompt_section,
+    append_runtime_tool_prompt_sections, render_few_shot_section, temporal::generate_temporal_context,
+    upsert_harness_limits_section,
 };
 use vtcode_core::subagents::load_primary_memory_appendix;
 use vtcode_core::{ActivePrimaryAgent, apply_primary_agent_prompt_context};
@@ -29,9 +29,7 @@ use vtcode_core::{ActivePrimaryAgent, apply_primary_agent_prompt_context};
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 use super::snapshot::TurnRequestSnapshot;
-use super::tool_shaping::{
-    apply_primary_agent_policy_to_tool_snapshot, uses_out_of_band_copilot_tools,
-};
+use super::tool_shaping::{apply_primary_agent_policy_to_tool_snapshot, uses_out_of_band_copilot_tools};
 
 pub(super) struct PromptAssemblyInput<'a> {
     pub turn: &'a TurnRequestSnapshot,
@@ -111,12 +109,7 @@ async fn build_prompt_output(
         Some(active_primary_agent_prompt_context(ctx, agent))
     };
 
-    append_active_primary_agent_skills(
-        &mut system_prompt,
-        ctx,
-        agent,
-        agent_prompt_context.as_ref(),
-    );
+    append_active_primary_agent_skills(&mut system_prompt, ctx, agent, agent_prompt_context.as_ref());
 
     upsert_harness_limits_section(
         &mut system_prompt,
@@ -153,11 +146,7 @@ async fn build_prompt_output(
     } else {
         let base_snapshot = ctx
             .tool_catalog
-            .filtered_snapshot_with_stats(
-                ctx.tools,
-                input.turn.planning_active,
-                input.turn.request_user_input_enabled,
-            )
+            .filtered_snapshot_with_stats(ctx.tools, input.turn.planning_active, input.turn.request_user_input_enabled)
             .await;
         apply_primary_agent_policy_to_tool_snapshot(
             base_snapshot,
@@ -205,14 +194,9 @@ async fn build_prompt_output(
     Ok(PromptAssemblyOutput { system_prompt, tool_snapshot, agent_prompt_context })
 }
 
-fn active_primary_agent_prompt_context(
-    ctx: &TurnProcessingContext<'_>,
-    agent: &ActivePrimaryAgent,
-) -> PromptContext {
-    let mut prompt_context = PromptContext::from_workspace_tools(
-        ctx.config.workspace.as_path(),
-        std::iter::empty::<String>(),
-    );
+fn active_primary_agent_prompt_context(ctx: &TurnProcessingContext<'_>, agent: &ActivePrimaryAgent) -> PromptContext {
+    let mut prompt_context =
+        PromptContext::from_workspace_tools(ctx.config.workspace.as_path(), std::iter::empty::<String>());
     apply_primary_agent_prompt_context(&mut prompt_context, agent);
     prompt_context
 }
@@ -273,9 +257,7 @@ async fn validate_prompt_output_with_rebuild(
         prompt_output,
         move |ctx| {
             let turn = rebuild_turn.clone();
-            Box::pin(
-                async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &turn }).await },
-            )
+            Box::pin(async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &turn }).await })
         },
         |_, prompt_output| validate_prompt_output_alignment(prompt_output, turn),
         "prompt/catalog alignment mismatch during unified request assembly; rebuilding prompt",
@@ -326,10 +308,7 @@ pub(super) async fn render_primary_agent_runtime_context(
         lines.push(format!("- Primary-agent tool allow-list: {}", tools.join(", ")));
     }
     if !agent.disallowed_tools.is_empty() {
-        lines.push(format!(
-            "- Primary-agent disallowed tools: {}",
-            agent.disallowed_tools.join(", ")
-        ));
+        lines.push(format!("- Primary-agent disallowed tools: {}", agent.disallowed_tools.join(", ")));
     }
     if !agent.skills.is_empty() {
         if let Some(prompt_context) = agent_prompt_context {
@@ -351,8 +330,7 @@ pub(super) async fn render_primary_agent_runtime_context(
     if let Some(cfg) = ctx.vt_cfg
         && cfg.agent.include_temporal_context
     {
-        lines
-            .push(generate_temporal_context(cfg.agent.temporal_context_use_utc).trim().to_string());
+        lines.push(generate_temporal_context(cfg.agent.temporal_context_use_utc).trim().to_string());
     }
 
     lines.push("### Instructions".to_string());
@@ -364,15 +342,8 @@ pub(super) async fn render_primary_agent_runtime_context(
     lines.join("\n")
 }
 
-fn active_primary_agent_memory_appendix(
-    ctx: &TurnProcessingContext<'_>,
-    agent: &ActivePrimaryAgent,
-) -> Option<String> {
-    match load_primary_memory_appendix(
-        ctx.config.workspace.as_path(),
-        agent.identity.name.as_str(),
-        agent.memory,
-    ) {
+fn active_primary_agent_memory_appendix(ctx: &TurnProcessingContext<'_>, agent: &ActivePrimaryAgent) -> Option<String> {
+    match load_primary_memory_appendix(ctx.config.workspace.as_path(), agent.identity.name.as_str(), agent.memory) {
         Ok(appendix) => appendix,
         Err(err) => {
             tracing::warn!(
@@ -405,9 +376,7 @@ fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
         .join(", ")
 }
 
-fn permission_default_label(
-    default: vtcode_config::core::permissions::PermissionDefault,
-) -> &'static str {
+fn permission_default_label(default: vtcode_config::core::permissions::PermissionDefault) -> &'static str {
     match default {
         vtcode_config::core::permissions::PermissionDefault::Ask => "ask",
         vtcode_config::core::permissions::PermissionDefault::Allow => "allow",
@@ -466,7 +435,6 @@ mod tests {
         let err = validate_prompt_output_alignment(&misaligned_output, &turn)
             .expect_err("stale runtime metadata should be rejected");
         assert!(err.should_rebuild_runtime_prompt());
-        validate_prompt_output_alignment(&aligned_output, &turn)
-            .expect("aligned runtime metadata should pass");
+        validate_prompt_output_alignment(&aligned_output, &turn).expect("aligned runtime metadata should pass");
     }
 }

@@ -93,8 +93,7 @@ pub const HEADER_MCP_PREFIX: &str = "MCP: ";
 pub const HEADER_GIT_PREFIX: &str = "git: ";
 pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
 pub const HEADER_GIT_DIRTY_SUFFIX: &str = "*";
-pub const HEADER_UNKNOWN_PLACEHOLDER: &str =
-    vtcode_config::constants::ui::HEADER_UNKNOWN_PLACEHOLDER;
+pub const HEADER_UNKNOWN_PLACEHOLDER: &str = vtcode_config::constants::ui::HEADER_UNKNOWN_PLACEHOLDER;
 pub const HEADER_STATUS_LABEL: &str = "Status";
 pub const HEADER_STATUS_ACTIVE: &str = "Active";
 pub const HEADER_STATUS_PAUSED: &str = "Paused";
@@ -103,30 +102,20 @@ pub const HEADER_INPUT_LABEL: &str = "Input";
 pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
-pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP;
-pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
+pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP;
+pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter queue • Ctrl+Enter run • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;
-pub const WELCOME_SHORTCUT_SECTION_TITLE: &str =
-    vtcode_config::constants::ui::WELCOME_SHORTCUT_SECTION_TITLE;
-pub const WELCOME_SHORTCUT_HINT_PREFIX: &str =
-    vtcode_config::constants::ui::WELCOME_SHORTCUT_HINT_PREFIX;
-pub const WELCOME_SHORTCUT_SEPARATOR: &str =
-    vtcode_config::constants::ui::WELCOME_SHORTCUT_SEPARATOR;
+pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_SECTION_TITLE;
+pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_HINT_PREFIX;
+pub const WELCOME_SHORTCUT_SEPARATOR: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_SEPARATOR;
 pub const WELCOME_SHORTCUT_INDENT: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_INDENT;
-pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str =
-    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_SECTION_TITLE;
-pub const WELCOME_SLASH_COMMAND_LIMIT: usize =
-    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_LIMIT;
-pub const WELCOME_SLASH_COMMAND_PREFIX: &str =
-    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_PREFIX;
-pub const WELCOME_SLASH_COMMAND_INTRO: &str =
-    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INTRO;
-pub const WELCOME_SLASH_COMMAND_INDENT: &str =
-    vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INDENT;
+pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_SECTION_TITLE;
+pub const WELCOME_SLASH_COMMAND_LIMIT: usize = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_LIMIT;
+pub const WELCOME_SLASH_COMMAND_PREFIX: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_PREFIX;
+pub const WELCOME_SLASH_COMMAND_INTRO: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INTRO;
+pub const WELCOME_SLASH_COMMAND_INDENT: &str = vtcode_config::constants::ui::WELCOME_SLASH_COMMAND_INDENT;
 pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
 pub const NAVIGATION_BLOCK_SHORTCUT_NOTE: &str = "Ctrl+T";
 pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";

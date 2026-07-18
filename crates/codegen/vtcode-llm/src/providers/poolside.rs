@@ -17,19 +17,16 @@ impl OpenAiCompatSpec for PoolsideSpec {
     const DEFAULT_BASE_URL: &'static str = urls::POOLSIDE_API_BASE;
     const BASE_URL_ENV: Option<&'static str> = Some(env_vars::POOLSIDE_BASE_URL);
     const LISTED_MODELS: &'static [&'static str] = models::poolside::SUPPORTED_MODELS;
-    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> =
-        Some(models::poolside::SUPPORTED_MODELS);
+    const VALIDATION_ALLOWLIST: Option<&'static [&'static str]> = Some(models::poolside::SUPPORTED_MODELS);
 
     const SUPPRESS_SAMPLING_WHEN_REASONING: bool = false;
     const STREAM_OPTIONS_INCLUDE_USAGE: bool = true;
     const INCLUDE_USER_ID: bool = true;
     const STREAM_REASONING_FIELDS: &'static [&'static str] = &[];
-    const DELTA_ORDER: super::shared::OpenAiDeltaOrder =
-        super::shared::OpenAiDeltaOrder::ContentFirst;
+    const DELTA_ORDER: super::shared::OpenAiDeltaOrder = super::shared::OpenAiDeltaOrder::ContentFirst;
     // Poolside responses never carry reasoning text; the explicit no-op
     // extractor also disables the default reasoning_content fallback.
-    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> =
-        Some(no_reasoning);
+    const RESPONSE_REASONING_EXTRACTOR: Option<super::openai_compat::ReasoningExtractor> = Some(no_reasoning);
 
     fn resolve_api_key(api_key: Option<String>) -> String {
         api_key

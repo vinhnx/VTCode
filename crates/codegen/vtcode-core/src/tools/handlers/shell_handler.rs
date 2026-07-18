@@ -13,8 +13,7 @@ use serde_json::json;
 
 use super::sandboxing::{Sandboxable, SandboxablePreference};
 use super::tool_handler::{
-    ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
-    ToolPayload,
+    ShellToolCallParams, ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
 use crate::config::constants::tools;
 use crate::tools::shell::{ShellOutput as CoreShellOutput, ShellRunner};
@@ -52,10 +51,7 @@ impl ShellHandler {
     }
 
     /// Parse shell parameters from payload.
-    fn parse_params(
-        &self,
-        invocation: &ToolInvocation,
-    ) -> Result<ShellToolCallParams, ToolCallError> {
+    fn parse_params(&self, invocation: &ToolInvocation) -> Result<ShellToolCallParams, ToolCallError> {
         match &invocation.payload {
             ToolPayload::Function { arguments } => {
                 // Parse as simple shell command string and wrap in ShellToolCallParams
@@ -90,8 +86,7 @@ impl ShellHandler {
         let runner = ShellRunner::new(cwd.to_path_buf());
         let command = params.command.join(" ");
 
-        let timeout_ms =
-            params.timeout_ms.unwrap_or(DEFAULT_SHELL_TIMEOUT_MS).min(MAX_SHELL_TIMEOUT_MS);
+        let timeout_ms = params.timeout_ms.unwrap_or(DEFAULT_SHELL_TIMEOUT_MS).min(MAX_SHELL_TIMEOUT_MS);
 
         // Execute with timeout
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), runner.exec(&command))

@@ -10,8 +10,7 @@ use tempfile::TempDir;
 use tokio::process::Command;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
-    McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig,
-    McpTransportConfig,
+    McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
 };
 use vtcode_core::mcp::McpClient;
 use vtcode_core::tools::registry::ToolRegistry;

@@ -4,10 +4,10 @@ use url::Url;
 use crate::agent::runloop::unified::tool_summary::{describe_tool_action, humanize_tool_name};
 
 use super::permission_prompt::{
-    extract_shell_approval_command_prefix_words, extract_shell_approval_command_words,
-    extract_shell_command_text, extract_shell_permission_scope_signature,
-    extract_shell_persistent_approval_prefix_rule, render_shell_approval_command_words,
-    render_shell_persistent_approval_prefix_entry, split_command_words_on_operators,
+    extract_shell_approval_command_prefix_words, extract_shell_approval_command_words, extract_shell_command_text,
+    extract_shell_permission_scope_signature, extract_shell_persistent_approval_prefix_rule,
+    render_shell_approval_command_words, render_shell_persistent_approval_prefix_entry,
+    split_command_words_on_operators,
 };
 
 /// Secondary learning key for shell-command "families" (e.g. all safe
@@ -119,10 +119,7 @@ fn segment_readonly_pattern(segment: &[String], scope_signature: &str) -> Option
     learned_readonly_path_pattern(segment, scope_signature)
 }
 
-fn segmented_shell_learning_target(
-    command_words: &[String],
-    scope_signature: &str,
-) -> Option<ApprovalLearningTarget> {
+fn segmented_shell_learning_target(command_words: &[String], scope_signature: &str) -> Option<ApprovalLearningTarget> {
     let segments = split_command_words_on_operators(command_words).or_else(|| {
         vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
             command_words.iter().map(String::as_str),
@@ -193,17 +190,13 @@ pub(super) fn approval_learning_target(
     let pattern = learned_shell_pattern(tool_name, tool_args);
 
     if let Some(scope_signature) = extract_shell_permission_scope_signature(tool_name, tool_args) {
-        if let Some(prefix_rule) =
-            extract_shell_persistent_approval_prefix_rule(tool_name, tool_args)
+        if let Some(prefix_rule) = extract_shell_persistent_approval_prefix_rule(tool_name, tool_args)
             && let Some(rendered_rule) =
                 render_shell_persistent_approval_prefix_entry(tool_name, tool_args, &prefix_rule)
         {
             let rendered_prefix = render_shell_approval_command_words(&prefix_rule);
-            return ApprovalLearningTarget::new(
-                rendered_rule,
-                format!("commands starting with `{rendered_prefix}`"),
-            )
-            .with_pattern(pattern);
+            return ApprovalLearningTarget::new(rendered_rule, format!("commands starting with `{rendered_prefix}`"))
+                .with_pattern(pattern);
         }
 
         return exact_shell_learning_target(tool_name, tool_args, default_learning_label)
@@ -263,9 +256,7 @@ pub(super) fn persistent_approval_target(
     if (tool_name == WEB_FETCH || tool_name == FETCH_URL)
         && let Some(domain) = web_fetch_domain(tool_args)
     {
-        return PersistentApprovalTarget::ExactInvocation {
-            display_label: format!("fetch from {domain}"),
-        };
+        return PersistentApprovalTarget::ExactInvocation { display_label: format!("fetch from {domain}") };
     }
 
     if extract_shell_permission_scope_signature(tool_name, tool_args).is_some() {
@@ -319,17 +310,12 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
     segment_readonly_pattern(&command_words, &scope_signature)
 }
 
-fn learned_readonly_path_pattern(
-    command_words: &[String],
-    scope_signature: &str,
-) -> Option<LearnedPattern> {
+fn learned_readonly_path_pattern(command_words: &[String], scope_signature: &str) -> Option<LearnedPattern> {
     let program = command_words.first()?.as_str();
     if !command_looks_like_readonly_path_query(program, command_words) {
         return None;
     }
-    if command_words.len() < 2
-        || !command_words[1..].iter().any(|word| is_probable_readonly_path_arg(word))
-    {
+    if command_words.len() < 2 || !command_words[1..].iter().any(|word| is_probable_readonly_path_arg(word)) {
         return None;
     }
 
@@ -343,9 +329,8 @@ fn learned_readonly_path_pattern(
 
 fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bool {
     const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv",
-        "perl", "python", "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee",
-        "touch", "truncate", "wget",
+        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl", "python",
+        "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch", "truncate", "wget",
     ];
     const MUTATING_OPTION_HINTS: &[&str] = &[
         "--delete",
@@ -411,22 +396,11 @@ fn learned_find_pattern(command_words: &[String], scope_signature: &str) -> Opti
 fn is_destructive_find_option(word: &str) -> bool {
     matches!(
         word,
-        "-delete"
-            | "-exec"
-            | "-execdir"
-            | "-ok"
-            | "-okdir"
-            | "-fls"
-            | "-fprint"
-            | "-fprint0"
-            | "-fprintf"
+        "-delete" | "-exec" | "-execdir" | "-ok" | "-okdir" | "-fls" | "-fprint" | "-fprint0" | "-fprintf"
     )
 }
 
-fn learned_sed_print_pattern(
-    command_words: &[String],
-    scope_signature: &str,
-) -> Option<LearnedPattern> {
+fn learned_sed_print_pattern(command_words: &[String], scope_signature: &str) -> Option<LearnedPattern> {
     if command_words.first().map(String::as_str) != Some("sed") {
         return None;
     }
@@ -484,11 +458,7 @@ fn normalize_find_root(root: &str) -> Option<String> {
 
 fn normalize_workspace_file_family(path: &str) -> Option<String> {
     let trimmed = path.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with('/')
-        || trimmed.starts_with('~')
-        || trimmed.starts_with('-')
-    {
+    if trimmed.is_empty() || trimmed.starts_with('/') || trimmed.starts_with('~') || trimmed.starts_with('-') {
         return None;
     }
     let stripped = trimmed.strip_prefix("./").unwrap_or(trimmed);
@@ -584,15 +554,14 @@ mod tests {
     #[test]
     fn sed_print_under_workspace_path_yields_pattern_key() {
         let pattern =
-            pattern_for("sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs")
-                .expect("pattern");
+            pattern_for("sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs").expect("pattern");
 
         assert!(
             pattern
                 .key
-                .starts_with("shell-pattern:sed -n <range> vtcode-core|sandbox_permissions=")
+                .starts_with("shell-pattern:sed -n <range> crates|sandbox_permissions=")
         );
-        assert_eq!(pattern.label, "safe `sed -n` reads under `vtcode-core`");
+        assert_eq!(pattern.label, "safe `sed -n` reads under `crates`");
     }
 
     #[test]
@@ -619,8 +588,7 @@ mod tests {
             "action": "run",
             "command": "ls /Users/me/project/.agents/ 2>/dev/null; echo '---'; ls /Users/me/project/docs/ 2>/dev/null"
         });
-        let target = exact_shell_learning_target("exec_command", Some(&args), "Run Command")
-            .expect("target");
+        let target = exact_shell_learning_target("exec_command", Some(&args), "Run Command").expect("target");
 
         assert_eq!(
             target.approval_key,
@@ -658,8 +626,8 @@ mod tests {
 
     #[test]
     fn iter_keys_yields_pattern_after_exact_when_present() {
-        let target = ApprovalLearningTarget::new("exact".into(), "exact-label".into())
-            .with_pattern(Some(LearnedPattern {
+        let target =
+            ApprovalLearningTarget::new("exact".into(), "exact-label".into()).with_pattern(Some(LearnedPattern {
                 key: "pattern".into(),
                 label: "pattern-label".into(),
             }));
@@ -754,11 +722,8 @@ mod tests {
             "find src -type d",
             "find src -name foo",
         ] {
-            let target = approval_learning_target(
-                "exec_command",
-                Some(&json!({"action":"run","command":command})),
-                "default",
-            );
+            let target =
+                approval_learning_target("exec_command", Some(&json!({"action":"run","command":command})), "default");
             super::super::approval_cache::record_approval_blocking(&recorder, &target, true).await;
         }
 

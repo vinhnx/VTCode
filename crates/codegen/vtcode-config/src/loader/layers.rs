@@ -96,20 +96,12 @@ impl ConfigLayerEntry {
     }
 
     /// Create a disabled layer entry while retaining layer metadata.
-    pub fn disabled(
-        source: ConfigLayerSource,
-        reason: LayerDisabledReason,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn disabled(source: ConfigLayerSource, reason: LayerDisabledReason, message: impl Into<String>) -> Self {
         let message = message.into();
         let config = TomlValue::Table(toml::Table::new());
         let metadata = ConfigLayerMetadata {
             name: source.label(),
-            version: fingerprint_toml_value(&TomlValue::String(format!(
-                "{}:{}",
-                source.label(),
-                message
-            ))),
+            version: fingerprint_toml_value(&TomlValue::String(format!("{}:{}", source.label(), message))),
         };
         Self {
             source,
@@ -153,18 +145,11 @@ impl ConfigLayerStack {
     }
 
     /// Merge all layers and return an origin map (`path -> winning layer metadata`).
-    pub fn effective_config_with_origins(
-        &self,
-    ) -> (TomlValue, HashMap<String, ConfigLayerMetadata>) {
+    pub fn effective_config_with_origins(&self) -> (TomlValue, HashMap<String, ConfigLayerMetadata>) {
         let mut merged = TomlValue::Table(toml::Table::new());
         let mut origins = HashMap::new();
         for layer in self.ordered_enabled_layers() {
-            merge_toml_values_with_origins(
-                &mut merged,
-                &layer.config,
-                &mut origins,
-                &layer.metadata,
-            );
+            merge_toml_values_with_origins(&mut merged, &layer.config, &mut origins, &layer.metadata);
         }
         (merged, origins)
     }
@@ -189,8 +174,7 @@ impl ConfigLayerStack {
     }
 
     fn ordered_layers(&self) -> Vec<&ConfigLayerEntry> {
-        let mut with_index: Vec<(usize, &ConfigLayerEntry)> =
-            self.layers.iter().enumerate().collect();
+        let mut with_index: Vec<(usize, &ConfigLayerEntry)> = self.layers.iter().enumerate().collect();
         with_index.sort_by(|(left_idx, left), (right_idx, right)| {
             left.source
                 .precedence()

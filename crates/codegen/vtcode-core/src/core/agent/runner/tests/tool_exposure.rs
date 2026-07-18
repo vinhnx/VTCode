@@ -58,8 +58,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
     assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
     assert!(!runner.is_valid_tool("exec_code").await);
 
-    let mut session_state =
-        AgentSessionState::new("thread-tool-validation".to_string(), 1, 1, 8_000);
+    let mut session_state = AgentSessionState::new("thread-tool-validation".to_string(), 1, 1, 8_000);
     let exec_call = runner
         .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo hi" }), &mut session_state)
         .expect("exec_command should be admitted by public name");
@@ -67,11 +66,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
     assert_eq!(exec_call.effective_args["cmd"], "echo hi");
 
     let stdin_call = runner
-        .admit_tool_call(
-            tools::WRITE_STDIN,
-            json!({ "session_id": "exec-1", "chars": "q" }),
-            &mut session_state,
-        )
+        .admit_tool_call(tools::WRITE_STDIN, json!({ "session_id": "exec-1", "chars": "q" }), &mut session_state)
         .expect("write_stdin should be admitted by public name");
     assert_eq!(stdin_call.canonical_name, tools::WRITE_STDIN);
     assert_eq!(stdin_call.effective_args["chars"], "q");
@@ -106,22 +101,15 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             request_user_input_enabled: false,
             model_capabilities: ToolModelCapabilities::for_model_name(&runner.model),
             deferred_tool_policy: crate::tools::handlers::deferred_tool_policy_for_runtime(
-                crate::llm::factory::infer_provider(
-                    Some(&runner.config().agent.provider),
-                    &runner.model,
-                ),
+                crate::llm::factory::infer_provider(Some(&runner.config().agent.provider), &runner.model),
                 runner.provider_client.supports_responses_compaction(&runner.model),
                 Some(runner.config()),
             ),
-            anthropic_native_memory_enabled:
-                crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
-                    crate::llm::factory::infer_provider(
-                        Some(&runner.config().agent.provider),
-                        &runner.model,
-                    ),
-                    &runner.model,
-                    Some(runner.config()),
-                ),
+            anthropic_native_memory_enabled: crate::tools::handlers::anthropic_native_memory_enabled_for_runtime(
+                crate::llm::factory::infer_provider(Some(&runner.config().agent.provider), &runner.model),
+                &runner.model,
+                Some(runner.config()),
+            ),
             tool_profile: runner.config().tools.profile,
         })
         .await;
@@ -244,8 +232,7 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
     assert_provider_hides_tool(&snapshot, tools::WRITE_STDIN);
 
-    let mut session_state =
-        AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
+    let mut session_state = AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
     let denied = runner
         .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo denied" }), &mut session_state)
         .expect_err("primary-agent deny should block execution");
@@ -442,8 +429,7 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
     .expect("runner");
     runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
 
-    let before_planning =
-        runner.build_universal_tool_snapshot().await.expect("snapshot before planning");
+    let before_planning = runner.build_universal_tool_snapshot().await.expect("snapshot before planning");
     assert_provider_catalogues_inactive_tool(&before_planning, tools::CODE_SEARCH);
 
     runner.tool_registry.enable_planning();

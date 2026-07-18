@@ -96,9 +96,8 @@ impl ResponsesStreamAdapter {
             return Ok(ResponsesStreamEvent::Unknown);
         }
 
-        let raw_payload: Value = serde_json::from_str(trimmed).map_err(|err| {
-            StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
-        })?;
+        let raw_payload: Value = serde_json::from_str(trimmed)
+            .map_err(|err| StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name))?;
 
         if raw_payload.get("type").and_then(Value::as_str) == Some("error") {
             return Ok(ResponsesStreamEvent::Error {
@@ -107,8 +106,7 @@ impl ResponsesStreamAdapter {
             });
         }
 
-        let policy = response_stream_event_policy(&raw_payload)
-            .map_err(|err| err.into_llm_error(provider_name))?;
+        let policy = response_stream_event_policy(&raw_payload).map_err(|err| err.into_llm_error(provider_name))?;
 
         let parsed = match serde_json::from_str::<RigResponsesStreamingChunk>(trimmed) {
             Ok(parsed) => parsed,
@@ -116,8 +114,7 @@ impl ResponsesStreamAdapter {
                 if let Some(event) = adapt_rig_supported_envelope_fallback(&raw_payload) {
                     return Ok(event);
                 }
-                return Err(StreamAssemblyError::InvalidPayload(err.to_string())
-                    .into_llm_error(provider_name));
+                return Err(StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name));
             }
             Err(_) => return adapt_policy_payload(provider_name, raw_payload),
         };
@@ -129,9 +126,8 @@ impl ResponsesStreamAdapter {
         provider_name: &str,
         payload: Value,
     ) -> Result<ResponsesStreamEvent, LLMError> {
-        let data = serde_json::to_string(&payload).map_err(|err| {
-            StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
-        })?;
+        let data = serde_json::to_string(&payload)
+            .map_err(|err| StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name))?;
         Self::parse_sse_data_for_provider(provider_name, &data)
     }
 
@@ -144,21 +140,16 @@ impl ResponsesStreamAdapter {
             RigResponsesStreamingChunk::Response(response_chunk) => {
                 let kind = response_chunk.kind;
                 match kind {
-                    RigResponsesChunkKind::ResponseCreated => Ok(ResponsesStreamEvent::Lifecycle {
-                        kind: ResponsesLifecycleEvent::Created,
-                    }),
+                    RigResponsesChunkKind::ResponseCreated => {
+                        Ok(ResponsesStreamEvent::Lifecycle { kind: ResponsesLifecycleEvent::Created })
+                    }
                     RigResponsesChunkKind::ResponseInProgress => {
-                        Ok(ResponsesStreamEvent::Lifecycle {
-                            kind: ResponsesLifecycleEvent::InProgress,
-                        })
+                        Ok(ResponsesStreamEvent::Lifecycle { kind: ResponsesLifecycleEvent::InProgress })
                     }
-                    RigResponsesChunkKind::ResponseCompleted => {
-                        Ok(ResponsesStreamEvent::CompletedResponse {
-                            response: raw_payload.get("response").cloned().unwrap_or(Value::Null),
-                        })
-                    }
-                    RigResponsesChunkKind::ResponseFailed
-                    | RigResponsesChunkKind::ResponseIncomplete => {
+                    RigResponsesChunkKind::ResponseCompleted => Ok(ResponsesStreamEvent::CompletedResponse {
+                        response: raw_payload.get("response").cloned().unwrap_or(Value::Null),
+                    }),
+                    RigResponsesChunkKind::ResponseFailed | RigResponsesChunkKind::ResponseIncomplete => {
                         Ok(ResponsesStreamEvent::Error {
                             message: response_error_message(&raw_payload)
                                 .unwrap_or_else(|| "Unknown error from Responses API".to_string()),
@@ -182,27 +173,15 @@ impl ResponsesStreamAdapter {
                     RigResponsesItemChunkKind::ReasoningTextDelta(delta) => {
                         Ok(ResponsesStreamEvent::ReasoningDelta { delta: delta.delta })
                     }
-                    RigResponsesItemChunkKind::OutputItemAdded(output) => adapt_output_item(
-                        provider_name,
-                        output.item,
-                        output_index,
-                        true,
-                        &raw_payload,
-                    ),
-                    RigResponsesItemChunkKind::OutputItemDone(output) => adapt_output_item(
-                        provider_name,
-                        output.item,
-                        output_index,
-                        false,
-                        &raw_payload,
-                    ),
+                    RigResponsesItemChunkKind::OutputItemAdded(output) => {
+                        adapt_output_item(provider_name, output.item, output_index, true, &raw_payload)
+                    }
+                    RigResponsesItemChunkKind::OutputItemDone(output) => {
+                        adapt_output_item(provider_name, output.item, output_index, false, &raw_payload)
+                    }
                     RigResponsesItemChunkKind::FunctionCallArgsDelta(delta) => {
-                        let item_id = item_id.or_else(|| {
-                            raw_payload
-                                .get("item_id")
-                                .and_then(Value::as_str)
-                                .map(ToOwned::to_owned)
-                        });
+                        let item_id = item_id
+                            .or_else(|| raw_payload.get("item_id").and_then(Value::as_str).map(ToOwned::to_owned));
                         let call_id = raw_payload
                             .get("call_id")
                             .and_then(Value::as_str)
@@ -233,13 +212,11 @@ fn adapt_output_item(
 ) -> Result<ResponsesStreamEvent, LLMError> {
     match item {
         RigResponsesOutput::FunctionCall(function_call) => {
-            let arguments = serde_json::to_string(&function_call.arguments).map_err(|err| {
-                StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name)
-            })?;
+            let arguments = serde_json::to_string(&function_call.arguments)
+                .map_err(|err| StreamAssemblyError::InvalidPayload(err.to_string()).into_llm_error(provider_name))?;
             let item_id = Some(function_call.id);
             let call_id = function_call.call_id;
-            if function_call.status == rig::providers::openai::responses_api::ToolStatus::Completed
-            {
+            if function_call.status == rig::providers::openai::responses_api::ToolStatus::Completed {
                 let arguments = if emit_completed_arguments {
                     arguments
                 } else {
@@ -262,47 +239,33 @@ fn adapt_output_item(
                 })
             }
         }
-        RigResponsesOutput::Unknown(_) => adapt_rig_gap_output_item_envelope(raw_payload)
-            .ok_or_else(|| {
-                StreamAssemblyError::InvalidPayload(
-                    "Rig returned an unknown Responses output item without eligible raw fallback evidence"
-                        .to_string(),
-                )
-                .into_llm_error(provider_name)
-            }),
+        RigResponsesOutput::Unknown(_) => adapt_rig_gap_output_item_envelope(raw_payload).ok_or_else(|| {
+            StreamAssemblyError::InvalidPayload(
+                "Rig returned an unknown Responses output item without eligible raw fallback evidence".to_string(),
+            )
+            .into_llm_error(provider_name)
+        }),
         _ => Ok(ResponsesStreamEvent::Unknown),
     }
 }
 
-fn adapt_policy_payload(
-    provider_name: &str,
-    payload: Value,
-) -> Result<ResponsesStreamEvent, LLMError> {
-    let policy =
-        response_stream_event_policy(&payload).map_err(|err| err.into_llm_error(provider_name))?;
+fn adapt_policy_payload(provider_name: &str, payload: Value) -> Result<ResponsesStreamEvent, LLMError> {
+    let policy = response_stream_event_policy(&payload).map_err(|err| err.into_llm_error(provider_name))?;
 
     match policy {
-        ResponsesStreamEventPolicy::VtcodeOverlayConversion => {
-            adapt_overlay_conversion(provider_name, &payload)
-        }
+        ResponsesStreamEventPolicy::VtcodeOverlayConversion => adapt_overlay_conversion(provider_name, &payload),
         ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop => Ok(ResponsesStreamEvent::Unknown),
-        ResponsesStreamEventPolicy::DocumentedValueBearingRigGap => {
-            adapt_value_bearing_rig_gap(payload)
-        }
-        ResponsesStreamEventPolicy::Unsupported => {
-            Err(StreamAssemblyError::InvalidPayload(format!(
-                "unsupported Responses stream event type `{}`",
-                payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
-            ))
-            .into_llm_error(provider_name))
-        }
-        ResponsesStreamEventPolicy::RigSupportedTyped => {
-            Err(StreamAssemblyError::InvalidPayload(format!(
-                "Rig-supported Responses stream event `{}` reached overlay fallback",
-                payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
-            ))
-            .into_llm_error(provider_name))
-        }
+        ResponsesStreamEventPolicy::DocumentedValueBearingRigGap => adapt_value_bearing_rig_gap(payload),
+        ResponsesStreamEventPolicy::Unsupported => Err(StreamAssemblyError::InvalidPayload(format!(
+            "unsupported Responses stream event type `{}`",
+            payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
+        ))
+        .into_llm_error(provider_name)),
+        ResponsesStreamEventPolicy::RigSupportedTyped => Err(StreamAssemblyError::InvalidPayload(format!(
+            "Rig-supported Responses stream event `{}` reached overlay fallback",
+            payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
+        ))
+        .into_llm_error(provider_name)),
     }
 }
 
@@ -355,9 +318,7 @@ fn adapt_rig_supported_envelope_fallback(payload: &Value) -> Option<ResponsesStr
             // and the raw response is always preferable to a hard error.
             Some(ResponsesStreamEvent::CompletedResponse { response: response.clone() })
         }
-        "response.output_item.added" | "response.output_item.done" => {
-            adapt_rig_gap_output_item_envelope(payload)
-        }
+        "response.output_item.added" | "response.output_item.done" => adapt_rig_gap_output_item_envelope(payload),
         _ => None,
     }
 }
@@ -408,10 +369,7 @@ fn is_rig_modelled_output_item_type(item_type: &str) -> bool {
     matches!(item_type, "message" | "function_call" | "reasoning")
 }
 
-fn adapt_overlay_conversion(
-    provider_name: &str,
-    payload: &Value,
-) -> Result<ResponsesStreamEvent, LLMError> {
+fn adapt_overlay_conversion(provider_name: &str, payload: &Value) -> Result<ResponsesStreamEvent, LLMError> {
     match payload.get("type").and_then(Value::as_str) {
         // VTCode overlay: Rig 0.40 models `reasoning_summary_text.delta` and
         // `reasoning_text.delta` natively (routed through the typed path), but
@@ -436,18 +394,12 @@ fn adapt_overlay_conversion(
     }
 }
 
-fn response_stream_event_policy(
-    payload: &Value,
-) -> Result<ResponsesStreamEventPolicy, StreamAssemblyError> {
+fn response_stream_event_policy(payload: &Value) -> Result<ResponsesStreamEventPolicy, StreamAssemblyError> {
     let Some(event_type) = payload.get("type") else {
-        return Err(StreamAssemblyError::InvalidPayload(
-            "missing Responses stream event type".to_string(),
-        ));
+        return Err(StreamAssemblyError::InvalidPayload("missing Responses stream event type".to_string()));
     };
     let Some(event_type) = event_type.as_str() else {
-        return Err(StreamAssemblyError::InvalidPayload(
-            "Responses stream event type must be a string".to_string(),
-        ));
+        return Err(StreamAssemblyError::InvalidPayload("Responses stream event type must be a string".to_string()));
     };
 
     Ok(response_stream_event_policy_for_type(event_type))
@@ -495,9 +447,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.mcp_list_tools.completed"
         | "response.code_interpreter_call.in_progress"
         | "response.code_interpreter_call.interpreting"
-        | "response.code_interpreter_call.completed" => {
-            ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop
-        }
+        | "response.code_interpreter_call.completed" => ResponsesStreamEventPolicy::DocumentedStatusMarkerNoop,
         "response.code_interpreter_call_code.delta"
         | "response.code_interpreter_call_code.done"
         | "response.mcp_call_arguments.delta"
@@ -505,24 +455,16 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
         | "response.image_generation_call.partial_image"
         | "response.custom_tool_call_input.delta"
         | "response.custom_tool_call_input.done"
-        | "response.output_text.annotation.added" => {
-            ResponsesStreamEventPolicy::DocumentedValueBearingRigGap
-        }
+        | "response.output_text.annotation.added" => ResponsesStreamEventPolicy::DocumentedValueBearingRigGap,
         _ => ResponsesStreamEventPolicy::Unsupported,
     }
 }
 
-fn required_string_field(
-    provider_name: &str,
-    payload: &Value,
-    field: &'static str,
-) -> Result<String, LLMError> {
+fn required_string_field(provider_name: &str, payload: &Value, field: &'static str) -> Result<String, LLMError> {
     match payload.get(field) {
         Some(value) => value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
-            StreamAssemblyError::InvalidPayload(format!(
-                "field `{field}` in stream payload must be a string"
-            ))
-            .into_llm_error(provider_name)
+            StreamAssemblyError::InvalidPayload(format!("field `{field}` in stream payload must be a string"))
+                .into_llm_error(provider_name)
         }),
         None => Err(StreamAssemblyError::MissingField(field).into_llm_error(provider_name)),
     }
@@ -535,10 +477,8 @@ fn optional_string_field(
 ) -> Result<Option<String>, LLMError> {
     match payload.get(field) {
         Some(value) => value.as_str().map(|value| Some(value.to_string())).ok_or_else(|| {
-            StreamAssemblyError::InvalidPayload(format!(
-                "field `{field}` in stream payload must be a string"
-            ))
-            .into_llm_error(provider_name)
+            StreamAssemblyError::InvalidPayload(format!("field `{field}` in stream payload must be a string"))
+                .into_llm_error(provider_name)
         }),
         None => Ok(None),
     }
@@ -617,14 +557,8 @@ mod tests {
             super::response_stream_event_policy_for_type("response.reasoning_content.delta"),
             Policy::VtcodeOverlayConversion
         );
-        assert_eq!(
-            super::response_stream_event_policy_for_type("response.queued"),
-            Policy::DocumentedStatusMarkerNoop
-        );
-        assert_eq!(
-            super::response_stream_event_policy_for_type("keepalive"),
-            Policy::DocumentedStatusMarkerNoop
-        );
+        assert_eq!(super::response_stream_event_policy_for_type("response.queued"), Policy::DocumentedStatusMarkerNoop);
+        assert_eq!(super::response_stream_event_policy_for_type("keepalive"), Policy::DocumentedStatusMarkerNoop);
 
         for event_type in [
             "response.code_interpreter_call_code.delta",
@@ -645,15 +579,10 @@ mod tests {
         }
 
         assert_eq!(
-            super::response_stream_event_policy_for_type(
-                "response.code_interpreter_call_code.delta"
-            ),
+            super::response_stream_event_policy_for_type("response.code_interpreter_call_code.delta"),
             Policy::DocumentedValueBearingRigGap
         );
-        assert_eq!(
-            super::response_stream_event_policy_for_type("response.not_a_real_event"),
-            Policy::Unsupported
-        );
+        assert_eq!(super::response_stream_event_policy_for_type("response.not_a_real_event"), Policy::Unsupported);
     }
 
     #[test]
@@ -1173,9 +1102,7 @@ mod tests {
                 "output_index": 0,
                 "delta": "provider reasoning content"
             })),
-            ResponsesStreamEvent::ReasoningDelta {
-                delta: "provider reasoning content".to_string()
-            }
+            ResponsesStreamEvent::ReasoningDelta { delta: "provider reasoning content".to_string() }
         );
 
         assert_eq!(

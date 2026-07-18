@@ -183,10 +183,7 @@ impl Part {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Tool {
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        rename = "functionDeclarations"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "functionDeclarations")]
     pub function_declarations: Option<Vec<FunctionDeclaration>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "googleSearch")]
     pub google_search: Option<Value>,
@@ -216,15 +213,9 @@ pub struct FunctionDeclaration {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolConfig {
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        rename = "functionCallingConfig"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "functionCallingConfig")]
     pub function_calling_config: Option<super::function_calling::FunctionCallingConfig>,
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        rename = "includeServerSideToolInvocations"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "includeServerSideToolInvocations")]
     pub include_server_side_tool_invocations: Option<bool>,
 }
 
@@ -238,9 +229,7 @@ impl ToolConfig {
 
     pub fn validated() -> Self {
         Self {
-            function_calling_config: Some(
-                super::function_calling::FunctionCallingConfig::validated(),
-            ),
+            function_calling_config: Some(super::function_calling::FunctionCallingConfig::validated()),
             include_server_side_tool_invocations: None,
         }
     }

@@ -16,13 +16,10 @@ use vtcode_core::review::ReviewTarget;
 use vtcode_core::utils::file_utils::write_file_with_context;
 use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
-use super::event_output::{
-    ExecEventProcessor, exec_archive_transcript, lock_or_recover, open_events_writer,
-};
+use super::event_output::{ExecEventProcessor, exec_archive_transcript, lock_or_recover, open_events_writer};
 use super::{ExecCommandKind, ExecCommandOptions, prep};
 use crate::codex_app_server::{
-    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget,
-    run_codex_noninteractive_with_instructions,
+    CODEX_PROVIDER, CodexNonInteractiveRun, CodexReviewTarget, run_codex_noninteractive_with_instructions,
 };
 
 const EXEC_TASK_ID: &str = "exec-task";
@@ -123,13 +120,7 @@ pub(super) async fn handle_exec_command_impl(
 ) -> Result<()> {
     // Handle eval command separately — it runs multiple tasks, not a single one.
     if let ExecCommandKind::Eval { suite_path, output_path } = &options.command {
-        return super::eval::handle_eval_command(
-            config,
-            vt_cfg,
-            suite_path,
-            output_path.as_deref(),
-        )
-        .await;
+        return super::eval::handle_eval_command(config, vt_cfg, suite_path, output_path.as_deref()).await;
     }
 
     if config.provider.eq_ignore_ascii_case(CODEX_PROVIDER) {
@@ -175,9 +166,7 @@ pub(super) async fn handle_exec_command_impl(
     }
 
     let allowed_tools = match &options.command {
-        ExecCommandKind::Review { .. } => {
-            runner.review_tool_allowlist(&automation_cfg.allowed_tools).await
-        }
+        ExecCommandKind::Review { .. } => runner.review_tool_allowlist(&automation_cfg.allowed_tools).await,
         _ => automation_cfg.allowed_tools.clone(),
     };
     runner.enable_full_auto(&allowed_tools).await;
@@ -191,17 +180,16 @@ pub(super) async fn handle_exec_command_impl(
         &event_session_id,
     );
 
-    let processor =
-        Arc::new(Mutex::new(ExecEventProcessor::<io::Stdout, BufWriter<File>, io::Stderr>::new(
-            options.json,
-            !options.json && !run_config.quiet,
-            options.json.then(io::stdout),
-            events_path
-                .as_ref()
-                .map(|path| open_events_writer(path.as_path()))
-                .transpose()?,
-            (!options.json && !run_config.quiet).then(io::stderr),
-        )));
+    let processor = Arc::new(Mutex::new(ExecEventProcessor::<io::Stdout, BufWriter<File>, io::Stderr>::new(
+        options.json,
+        !options.json && !run_config.quiet,
+        options.json.then(io::stdout),
+        events_path
+            .as_ref()
+            .map(|path| open_events_writer(path.as_path()))
+            .transpose()?,
+        (!options.json && !run_config.quiet).then(io::stderr),
+    )));
     let event_processor = Arc::clone(&processor);
     runner.set_event_handler(move |event| {
         let mut processor = lock_or_recover(&event_processor);
@@ -238,8 +226,7 @@ pub(super) async fn handle_exec_command_impl(
     }
 
     let session_messages = runner.session_messages();
-    let session_archive_messages: Vec<SessionMessage> =
-        session_messages.iter().map(SessionMessage::from).collect();
+    let session_archive_messages: Vec<SessionMessage> = session_messages.iter().map(SessionMessage::from).collect();
     if let Some(archive) = archive {
         archive
             .finalize(
@@ -276,9 +263,7 @@ async fn handle_codex_exec_command_impl(
     let task_spec = task_spec(&options.command, options.dry_run);
 
     if options.events_path.is_some() || run_vt_cfg.agent.harness.event_log_path.is_some() {
-        tracing::warn!(
-            "provider=codex does not yet emit exec event logs; continuing without events output"
-        );
+        tracing::warn!("provider=codex does not yet emit exec event logs; continuing without events output");
     }
 
     let completed = run_codex_noninteractive_with_instructions(
@@ -291,8 +276,7 @@ async fn handle_codex_exec_command_impl(
             ephemeral: archive.is_none(),
             resume_thread_id: external_thread_id_from_bootstrap(&thread_bootstrap),
             seed_messages: thread_bootstrap.messages.iter().map(SessionMessage::from).collect(),
-            review_target: native_review_target(&options.command, run_config.workspace.as_path())
-                .await?,
+            review_target: native_review_target(&options.command, run_config.workspace.as_path()).await?,
         },
         codex_exec_turn_instructions(&active_primary_agent, task_spec.instructions),
     )
@@ -373,9 +357,7 @@ fn codex_exec_turn_instructions(
     (!sections.is_empty()).then(|| sections.join("\n\n"))
 }
 
-fn external_thread_id_from_bootstrap(
-    bootstrap: &vtcode_core::core::threads::ThreadBootstrap,
-) -> Option<String> {
+fn external_thread_id_from_bootstrap(bootstrap: &vtcode_core::core::threads::ThreadBootstrap) -> Option<String> {
     bootstrap
         .metadata
         .as_ref()
@@ -388,10 +370,7 @@ fn external_thread_id_from_bootstrap(
         })
 }
 
-async fn native_review_target(
-    command: &ExecCommandKind,
-    workspace: &Path,
-) -> Result<Option<CodexReviewTarget>> {
+async fn native_review_target(command: &ExecCommandKind, workspace: &Path) -> Result<Option<CodexReviewTarget>> {
     let ExecCommandKind::Review { spec } = command else {
         return Ok(None);
     };
@@ -405,9 +384,7 @@ async fn native_review_target(
         ReviewTarget::LastDiff => get_head_commit_hash_async(workspace.to_path_buf())
             .await?
             .map(|sha| CodexReviewTarget::Commit { sha, title: None }),
-        ReviewTarget::Custom(target) => {
-            Some(CodexReviewTarget::Custom { instructions: target.clone() })
-        }
+        ReviewTarget::Custom(target) => Some(CodexReviewTarget::Custom { instructions: target.clone() }),
         ReviewTarget::Files(_) => None,
     })
 }
@@ -425,15 +402,11 @@ mod tests {
     };
 
     #[tokio::test]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "test function, assertions are expected"
-    )]
+    #[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
     async fn checkpoint_exec_archive_writes_initial_snapshot() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("tempdir")?;
         let archive_path = temp_dir.path().join("session-vtcode-test-archive.json");
-        let metadata =
-            SessionArchiveMetadata::new("vtcode", "/tmp/vtcode", "gpt-5", "openai", "mono", "low");
+        let metadata = SessionArchiveMetadata::new("vtcode", "/tmp/vtcode", "gpt-5", "openai", "mono", "low");
         let listing = SessionListing {
             path: archive_path.clone(),
             snapshot: SessionSnapshot {
@@ -453,8 +426,7 @@ mod tests {
         let messages = vec![Message::user("hello".to_string())];
         checkpoint_exec_archive(&archive, &messages).await?;
 
-        let snapshot: SessionSnapshot =
-            serde_json::from_str(&std::fs::read_to_string(archive_path)?)?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&std::fs::read_to_string(archive_path)?)?;
         assert_eq!(snapshot.total_messages, 1);
         assert_eq!(snapshot.messages.len(), 1);
         assert!(snapshot.progress.is_some());
@@ -504,11 +476,6 @@ mod tests {
             .await
             .expect("target resolution should succeed");
 
-        assert_eq!(
-            target,
-            Some(super::CodexReviewTarget::Custom {
-                instructions: "review auth handling".to_string(),
-            })
-        );
+        assert_eq!(target, Some(super::CodexReviewTarget::Custom { instructions: "review auth handling".to_string() }));
     }
 }

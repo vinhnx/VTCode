@@ -43,18 +43,13 @@ impl SkillFileTracker {
     }
 
     /// Scan skill output for file references and verify their existence
-    pub async fn scan_and_verify_skill_output(
-        &self,
-        output: &str,
-    ) -> Result<SkillFileVerification> {
+    pub async fn scan_and_verify_skill_output(&self, output: &str) -> Result<SkillFileVerification> {
         let mut detected_files = HashSet::new();
 
         // Extract potential filenames from output
         for pattern in &self.file_patterns {
             for capture in pattern.captures_iter(output) {
-                if let Some(filename) =
-                    capture.get(1).map(|m| m.as_str()).filter(|f| !Self::is_false_positive(f))
-                {
+                if let Some(filename) = capture.get(1).map(|m| m.as_str()).filter(|f| !Self::is_false_positive(f)) {
                     detected_files.insert(filename.to_string());
                 }
             }
@@ -183,11 +178,7 @@ impl SkillFileTracker {
     }
 
     /// Generate summary of verification results
-    fn generate_verification_summary(
-        &self,
-        verified: &[VerifiedFile],
-        missing: &[MissingFile],
-    ) -> String {
+    fn generate_verification_summary(&self, verified: &[VerifiedFile], missing: &[MissingFile]) -> String {
         let mut summary = String::new();
 
         if !verified.is_empty() {
@@ -231,11 +222,7 @@ impl SkillFileTracker {
     }
 
     /// Generate user-friendly suggestion
-    fn generate_user_suggestion(
-        &self,
-        verified: &[VerifiedFile],
-        missing: &[MissingFile],
-    ) -> String {
+    fn generate_user_suggestion(&self, verified: &[VerifiedFile], missing: &[MissingFile]) -> String {
         if missing.is_empty() && verified.len() == 1 {
             format!("File generated at: {}", verified[0].absolute_path.display())
         } else if missing.is_empty() && !verified.is_empty() {
@@ -243,11 +230,7 @@ impl SkillFileTracker {
         } else if !missing.is_empty() && verified.is_empty() {
             "Some files could not be found. Please check the output above.".to_string()
         } else {
-            format!(
-                "Generated {} files, {} files missing. See summary above.",
-                verified.len(),
-                missing.len()
-            )
+            format!("Generated {} files, {} files missing. See summary above.", verified.len(), missing.len())
         }
     }
 }
@@ -324,8 +307,7 @@ Output saved to: chart.png
         assert_eq!(result.verified_files.len(), 0); // No files actually created
         assert_eq!(result.missing_files.len(), 3); // All detected but missing
 
-        let missing_names: Vec<String> =
-            result.missing_files.iter().map(|m| m.filename.clone()).collect();
+        let missing_names: Vec<String> = result.missing_files.iter().map(|m| m.filename.clone()).collect();
 
         assert!(missing_names.contains(&"quarterly_report.pdf".to_string()));
         assert!(missing_names.contains(&"summary.csv".to_string()));

@@ -845,8 +845,8 @@ mod tests {
                 continue;
             }
             let id = model.as_str();
-            let parsed = ModelId::from_str(&id)
-                .unwrap_or_else(|err| panic!("failed to parse {id} back into {model:?}: {err}"));
+            let parsed =
+                ModelId::from_str(&id).unwrap_or_else(|err| panic!("failed to parse {id} back into {model:?}: {err}"));
             assert_eq!(parsed, model, "round-trip mismatch for id {id}");
         }
     }
@@ -857,10 +857,7 @@ mod tests {
             if model.provider() == Provider::OpenRouter {
                 continue;
             }
-            assert!(
-                model.table_id().is_some(),
-                "{model:?} is missing from the model_id_table! invocation"
-            );
+            assert!(model.table_id().is_some(), "{model:?} is missing from the model_id_table! invocation");
         }
     }
 
@@ -875,8 +872,7 @@ mod tests {
             (models::huggingface::STEP_3_5_FLASH_LEGACY_FASTEST, ModelId::HuggingFaceStep35Flash),
         ];
         for (alias, expected) in cases {
-            let parsed = ModelId::from_str(alias)
-                .unwrap_or_else(|err| panic!("alias {alias} failed to parse: {err}"));
+            let parsed = ModelId::from_str(alias).unwrap_or_else(|err| panic!("alias {alias} failed to parse: {err}"));
             assert_eq!(&parsed, expected, "alias {alias} resolved incorrectly");
         }
     }
@@ -884,9 +880,6 @@ mod tests {
     #[test]
     fn shared_gpt_oss_20b_id_resolves_to_openai() {
         assert_eq!(models::openai::GPT_OSS_20B, models::llamacpp::GPT_OSS_20B);
-        assert_eq!(
-            ModelId::from_str(models::llamacpp::GPT_OSS_20B).unwrap(),
-            ModelId::OpenAIGptOss20b
-        );
+        assert_eq!(ModelId::from_str(models::llamacpp::GPT_OSS_20B).unwrap(), ModelId::OpenAIGptOss20b);
     }
 }

@@ -3,9 +3,8 @@ use std::fmt::Write as _;
 use super::system::{
     PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE, PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
     PLANNING_WORKFLOW_NO_AUTO_EXIT_LINE, PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
-    PLANNING_WORKFLOW_PLAN_QUALITY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
-    PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE, PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
-    PLANNING_WORKFLOW_TASK_TRACKER_LINE,
+    PLANNING_WORKFLOW_PLAN_QUALITY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER, PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE,
+    PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE, PLANNING_WORKFLOW_TASK_TRACKER_LINE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -37,10 +36,7 @@ fn append_full_auto_notice(prompt: &mut String, contract: RuntimePromptContract)
     }
 
     let _ = writeln!(prompt, "\n{header}");
-    let _ = writeln!(
-        prompt,
-        "- Stay within the exposed tool list and adapt when a tool is unavailable or denied."
-    );
+    let _ = writeln!(prompt, "- Stay within the exposed tool list and adapt when a tool is unavailable or denied.");
     // Checkpoint guidance is already in the operating profiles; omit here to
     // avoid token waste from duplication.
     if !contract.request_user_input_enabled {
@@ -83,9 +79,8 @@ fn append_planning_workflow_notice(prompt: &mut String, request_user_input_enabl
 mod tests {
     use super::{RuntimePromptContract, append_runtime_mode_sections};
     use crate::prompts::system::{
-        PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE,
-        PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE, PLANNING_WORKFLOW_READ_ONLY_HEADER,
-        PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
+        PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE, PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE,
+        PLANNING_WORKFLOW_READ_ONLY_HEADER, PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
     };
 
     #[test]

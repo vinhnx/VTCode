@@ -33,10 +33,7 @@ impl ZedAgent {
         self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan())).await
     }
 
-    pub(super) async fn send_available_commands_update(
-        &self,
-        session_id: &acp::SessionId,
-    ) -> Result<(), SdkError> {
+    pub(super) async fn send_available_commands_update(&self, session_id: &acp::SessionId) -> Result<(), SdkError> {
         let slash_commands = visible_commands();
         let prompt_templates = discover_prompt_templates(&self.config.workspace).await;
         let available_commands = build_available_commands(&slash_commands, &prompt_templates);
@@ -51,9 +48,7 @@ impl ZedAgent {
 
         self.send_update(
             session_id,
-            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(
-                available_commands,
-            )),
+            acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(available_commands)),
         )
         .await
     }

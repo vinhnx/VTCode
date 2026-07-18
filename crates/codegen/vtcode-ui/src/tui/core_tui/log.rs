@@ -18,8 +18,7 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
 use crate::tui::ui::syntax_highlight::{
-    default_theme_name, find_syntax_by_extension, find_syntax_by_name, find_syntax_plain_text,
-    load_theme, syntax_set,
+    default_theme_name, find_syntax_by_extension, find_syntax_by_name, find_syntax_plain_text, load_theme, syntax_set,
 };
 
 #[derive(Debug, Clone)]
@@ -298,10 +297,7 @@ fn syntect_to_ratatui_style(style: syntect::highlighting::Style) -> Style {
     Style::default().fg(Color::Rgb(fg.r, fg.g, fg.b))
 }
 
-fn highlight_lines_to_text<'a>(
-    lines: impl Iterator<Item = &'a str>,
-    syntax: &SyntaxReference,
-) -> Text<'static> {
+fn highlight_lines_to_text<'a>(lines: impl Iterator<Item = &'a str>, syntax: &SyntaxReference) -> Text<'static> {
     let theme = theme_for_current_config();
     let ss = syntax_set();
     let mut highlighter = HighlightLines::new(syntax, &theme);
@@ -312,9 +308,7 @@ fn highlight_lines_to_text<'a>(
             Ok(ranges) => {
                 let spans: Vec<Span<'static>> = ranges
                     .into_iter()
-                    .map(|(style, text)| {
-                        Span::styled(text.to_owned(), syntect_to_ratatui_style(style))
-                    })
+                    .map(|(style, text)| Span::styled(text.to_owned(), syntect_to_ratatui_style(style)))
                     .collect();
                 result_lines.push(Line::from(spans));
             }
@@ -365,15 +359,13 @@ fn select_syntax(message: &str) -> &'static SyntaxReference {
     let trimmed = message.trim_start();
     if !trimmed.is_empty() {
         if (trimmed.starts_with('{') || trimmed.starts_with('['))
-            && let Some(json) =
-                find_syntax_by_name("JSON").or_else(|| find_syntax_by_extension("json"))
+            && let Some(json) = find_syntax_by_name("JSON").or_else(|| find_syntax_by_extension("json"))
         {
             return json;
         }
 
         if (trimmed.contains('$') || trimmed.contains(';'))
-            && let Some(shell) =
-                find_syntax_by_name("Bash").or_else(|| find_syntax_by_extension("sh"))
+            && let Some(shell) = find_syntax_by_name("Bash").or_else(|| find_syntax_by_extension("sh"))
         {
             return shell;
         }

@@ -67,10 +67,7 @@ impl PodTransport for SshTransport {
         if output.status.success() {
             Ok(())
         } else {
-            Err(anyhow!(
-                "remote file write failed for {remote_path}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ))
+            Err(anyhow!("remote file write failed for {remote_path}: {}", String::from_utf8_lossy(&output.stderr)))
         }
     }
 
@@ -92,8 +89,7 @@ impl PodTransport for SshTransport {
 }
 
 fn build_ssh_command(ssh_target: &str, remote_command: &str) -> Result<Command> {
-    let parts = shell_words::split(ssh_target)
-        .with_context(|| format!("failed to parse SSH target: {ssh_target}"))?;
+    let parts = shell_words::split(ssh_target).with_context(|| format!("failed to parse SSH target: {ssh_target}"))?;
 
     let Some((program, args)) = parts.split_first() else {
         return Err(anyhow!("SSH target is empty"));

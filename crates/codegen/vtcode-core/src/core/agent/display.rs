@@ -6,15 +6,13 @@ use serde_json::Value;
 /// Limits verbose output from web_fetch to avoid overwhelming the terminal.
 #[inline]
 pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
-    let display_tool_name =
-        tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
+    let display_tool_name = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
     let is_command_session_tool = display_tool_name == tools::UNIFIED_EXEC;
 
     if is_command_session_tool {
         // Extract errors + 2 context lines for build output
         if let Some(obj) = result.as_object()
-            && let Some(stdout) =
-                obj.get("stdout").or_else(|| obj.get("output")).and_then(|v| v.as_str())
+            && let Some(stdout) = obj.get("stdout").or_else(|| obj.get("output")).and_then(|v| v.as_str())
             && stdout.len() > 2000
             && (stdout.contains("error") || stdout.contains("Error"))
         {

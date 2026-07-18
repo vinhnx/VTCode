@@ -86,8 +86,7 @@ impl OpenAIChatGptSession {
 /// Host-provided refresher for externally managed ChatGPT auth tokens.
 #[async_trait]
 pub trait OpenAIChatGptSessionRefresher: Send + Sync {
-    async fn refresh_session(&self, current: &OpenAIChatGptSession)
-    -> Result<OpenAIChatGptSession>;
+    async fn refresh_session(&self, current: &OpenAIChatGptSession) -> Result<OpenAIChatGptSession>;
 }
 
 #[derive(Clone)]
@@ -103,9 +102,7 @@ enum OpenAIChatGptAuthRefreshStrategy {
 impl fmt::Debug for OpenAIChatGptAuthRefreshStrategy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Stored { storage_mode } => {
-                f.debug_struct("Stored").field("storage_mode", storage_mode).finish()
-            }
+            Self::Stored { storage_mode } => f.debug_struct("Stored").field("storage_mode", storage_mode).finish(),
             Self::External { .. } => f.debug_struct("External").finish_non_exhaustive(),
         }
     }
@@ -197,9 +194,7 @@ impl OpenAIChatGptAuthHandle {
             OpenAIChatGptAuthRefreshStrategy::Stored { storage_mode } => {
                 refresh_openai_chatgpt_session_from_snapshot(&session, *storage_mode).await?
             }
-            OpenAIChatGptAuthRefreshStrategy::External { refresher } => {
-                refresher.refresh_session(&session).await?
-            }
+            OpenAIChatGptAuthRefreshStrategy::External { refresher } => refresher.refresh_session(&session).await?,
         };
         self.replace_session(refreshed)
     }
@@ -210,8 +205,7 @@ impl OpenAIChatGptAuthHandle {
     }
 
     fn replace_session(&self, session: OpenAIChatGptSession) -> Result<()> {
-        let mut guard =
-            self.session.lock().map_err(|_| anyhow!("openai chatgpt auth mutex poisoned"))?;
+        let mut guard = self.session.lock().map_err(|_| anyhow!("openai chatgpt auth mutex poisoned"))?;
         *guard = session;
         Ok(())
     }
@@ -285,21 +279,13 @@ pub enum OpenAIChatGptAuthStatus {
 }
 
 /// Build the OpenAI ChatGPT OAuth authorization URL.
-pub fn get_openai_chatgpt_auth_url(
-    challenge: &PkceChallenge,
-    callback_port: u16,
-    state: &str,
-) -> String {
+pub fn get_openai_chatgpt_auth_url(challenge: &PkceChallenge, callback_port: u16, state: &str) -> String {
     let redirect_uri = format!("http://localhost:{callback_port}{OPENAI_CALLBACK_PATH}");
     let query = [
         ("response_type", "code".to_string()),
         ("client_id", OPENAI_CLIENT_ID.to_string()),
         ("redirect_uri", redirect_uri),
-        (
-            "scope",
-            "openid profile email offline_access api.connectors.read api.connectors.invoke"
-                .to_string(),
-        ),
+        ("scope", "openid profile email offline_access api.connectors.read api.connectors.invoke".to_string()),
         ("code_challenge", challenge.code_challenge.clone()),
         ("code_challenge_method", challenge.code_challenge_method.clone()),
         ("id_token_add_organizations", "true".to_string()),
@@ -324,10 +310,7 @@ pub fn generate_openai_oauth_state() -> Result<String> {
     Ok(URL_SAFE_NO_PAD.encode(state_bytes))
 }
 
-pub fn parse_openai_chatgpt_manual_callback_input(
-    input: &str,
-    expected_state: &str,
-) -> Result<String> {
+pub fn parse_openai_chatgpt_manual_callback_input(input: &str, expected_state: &str) -> Result<String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         bail!("missing authorization callback input");
@@ -346,8 +329,7 @@ pub fn parse_openai_chatgpt_manual_callback_input(
 
     let code = extract_query_value(&query, "code")
         .ok_or_else(|| anyhow!("callback input did not include an authorization code"))?;
-    let state = extract_query_value(&query, "state")
-        .ok_or_else(|| anyhow!("callback input did not include state"))?;
+    let state = extract_query_value(&query, "state").ok_or_else(|| anyhow!("callback input did not include state"))?;
     if state != expected_state {
         bail!("OAuth error: state mismatch");
     }
@@ -391,8 +373,7 @@ pub fn resolve_openai_auth(
     storage_mode: AuthCredentialsStoreMode,
     api_key: Option<String>,
 ) -> Result<OpenAIResolvedAuth> {
-    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode)
-        .resolve_runtime_auth(api_key)
+    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode).resolve_runtime_auth(api_key)
 }
 
 pub fn summarize_openai_credentials(
@@ -400,8 +381,7 @@ pub fn summarize_openai_credentials(
     storage_mode: AuthCredentialsStoreMode,
     api_key: Option<String>,
 ) -> Result<OpenAICredentialOverview> {
-    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode)
-        .summarize_credentials(api_key)
+    crate::auth_service::OpenAIAccountAuthService::new(auth_config.clone(), storage_mode).summarize_credentials(api_key)
 }
 
 pub fn save_openai_chatgpt_session(session: &OpenAIChatGptSession) -> Result<()> {
@@ -412,12 +392,9 @@ pub fn save_openai_chatgpt_session_with_mode(
     session: &OpenAIChatGptSession,
     mode: AuthCredentialsStoreMode,
 ) -> Result<()> {
-    let serialized =
-        serde_json::to_string(session).context("failed to serialize openai session")?;
+    let serialized = serde_json::to_string(session).context("failed to serialize openai session")?;
     match mode.effective_mode() {
-        AuthCredentialsStoreMode::Keyring => {
-            persist_session_to_keyring_or_file(session, &serialized)?
-        }
+        AuthCredentialsStoreMode::Keyring => persist_session_to_keyring_or_file(session, &serialized)?,
         AuthCredentialsStoreMode::File => save_session_to_file(session)?,
         AuthCredentialsStoreMode::Auto => unreachable!(),
     }
@@ -428,9 +405,7 @@ pub fn load_openai_chatgpt_session() -> Result<Option<OpenAIChatGptSession>> {
     load_preferred_openai_chatgpt_session(AuthCredentialsStoreMode::Keyring)
 }
 
-pub fn load_openai_chatgpt_session_with_mode(
-    mode: AuthCredentialsStoreMode,
-) -> Result<Option<OpenAIChatGptSession>> {
+pub fn load_openai_chatgpt_session_with_mode(mode: AuthCredentialsStoreMode) -> Result<Option<OpenAIChatGptSession>> {
     load_preferred_openai_chatgpt_session(mode.effective_mode())
 }
 
@@ -450,9 +425,7 @@ pub fn get_openai_chatgpt_auth_status() -> Result<OpenAIChatGptAuthStatus> {
     get_openai_chatgpt_auth_status_with_mode(AuthCredentialsStoreMode::default())
 }
 
-pub fn get_openai_chatgpt_auth_status_with_mode(
-    mode: AuthCredentialsStoreMode,
-) -> Result<OpenAIChatGptAuthStatus> {
+pub fn get_openai_chatgpt_auth_status_with_mode(mode: AuthCredentialsStoreMode) -> Result<OpenAIChatGptAuthStatus> {
     let Some(session) = load_openai_chatgpt_session_with_mode(mode)? else {
         return Ok(OpenAIChatGptAuthStatus::NotAuthenticated);
     };
@@ -476,11 +449,8 @@ pub async fn refresh_openai_chatgpt_session_from_refresh_token(
     refresh_openai_chatgpt_session_without_lock(refresh_token, storage_mode).await
 }
 
-pub async fn refresh_openai_chatgpt_session_with_mode(
-    mode: AuthCredentialsStoreMode,
-) -> Result<OpenAIChatGptSession> {
-    let session = load_openai_chatgpt_session_with_mode(mode)?
-        .ok_or_else(|| anyhow!("Run vtcode login openai"))?;
+pub async fn refresh_openai_chatgpt_session_with_mode(mode: AuthCredentialsStoreMode) -> Result<OpenAIChatGptSession> {
+    let session = load_openai_chatgpt_session_with_mode(mode)?.ok_or_else(|| anyhow!("Run vtcode login openai"))?;
     refresh_openai_chatgpt_session_from_snapshot(&session, mode).await
 }
 
@@ -521,17 +491,13 @@ async fn refresh_openai_chatgpt_session_without_lock(
     Ok(session)
 }
 
-async fn build_session_from_token_response(
-    token_response: OpenAITokenResponse,
-) -> Result<OpenAIChatGptSession> {
+async fn build_session_from_token_response(token_response: OpenAITokenResponse) -> Result<OpenAIChatGptSession> {
     let id_claims = parse_jwt_claims(&token_response.id_token)?;
     let access_claims = parse_jwt_claims(&token_response.access_token).ok();
     let api_key = match exchange_openai_chatgpt_api_key(&token_response.id_token).await {
         Ok(api_key) => api_key,
         Err(err) => {
-            tracing::warn!(
-                "openai api-key exchange unavailable, falling back to oauth access token: {err}"
-            );
+            tracing::warn!("openai api-key exchange unavailable, falling back to oauth access token: {err}");
             String::new()
         }
     };
@@ -638,8 +604,7 @@ fn parse_jwt_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
     let payload = URL_SAFE_NO_PAD
         .decode(payload_b64)
         .context("failed to decode openai id token payload")?;
-    let claims: IdTokenClaims =
-        serde_json::from_slice(&payload).context("failed to parse openai id token payload")?;
+    let claims: IdTokenClaims = serde_json::from_slice(&payload).context("failed to parse openai id token payload")?;
 
     Ok(ParsedIdTokenClaims {
         email: claims.email.or_else(|| claims.profile.and_then(|profile| profile.email)),
@@ -661,10 +626,7 @@ fn extract_query_value(query: &str, key: &str) -> Option<String> {
         .find(|value| !value.is_empty())
 }
 
-fn session_has_newer_refresh_state(
-    current: &OpenAIChatGptSession,
-    previous: &OpenAIChatGptSession,
-) -> bool {
+fn session_has_newer_refresh_state(current: &OpenAIChatGptSession, previous: &OpenAIChatGptSession) -> bool {
     current.refresh_token != previous.refresh_token
         || current.refreshed_at > previous.refreshed_at
         || current.obtained_at > previous.obtained_at
@@ -706,9 +668,7 @@ fn classify_refresh_error(err: reqwest::Error) -> anyhow::Error {
         && (message.contains("invalid_grant") || message.contains("refresh_token"))
     {
         if let Err(clear_err) = clear_session_from_all_stores() {
-            tracing::warn!(
-                "failed to clear expired openai chatgpt session across all stores: {clear_err}"
-            );
+            tracing::warn!("failed to clear expired openai chatgpt session across all stores: {clear_err}");
         }
         anyhow!("Your ChatGPT session expired. Run `vtcode login openai` again.")
     } else {
@@ -742,10 +702,7 @@ fn save_session_to_keyring(serialized: &str) -> Result<()> {
     Ok(())
 }
 
-fn persist_session_to_keyring_or_file(
-    session: &OpenAIChatGptSession,
-    serialized: &str,
-) -> Result<()> {
+fn persist_session_to_keyring_or_file(session: &OpenAIChatGptSession, serialized: &str) -> Result<()> {
     match save_session_to_keyring(serialized) {
         Ok(()) => match load_session_from_keyring_decoded() {
             Ok(Some(_)) => Ok(()),
@@ -766,8 +723,7 @@ fn persist_session_to_keyring_or_file(
             tracing::warn!(
                 "failed to persist openai session in keyring, falling back to encrypted file storage: {err}"
             );
-            save_session_to_file(session)
-                .context("failed to persist openai session after keyring fallback")
+            save_session_to_file(session).context("failed to persist openai session after keyring fallback")
         }
     }
 }
@@ -780,17 +736,13 @@ fn load_session_from_keyring_decoded() -> Result<Option<OpenAIChatGptSession>> {
     load_session_from_keyring()?.map(decode_session_from_keyring).transpose()
 }
 
-fn load_preferred_openai_chatgpt_session(
-    mode: AuthCredentialsStoreMode,
-) -> Result<Option<OpenAIChatGptSession>> {
+fn load_preferred_openai_chatgpt_session(mode: AuthCredentialsStoreMode) -> Result<Option<OpenAIChatGptSession>> {
     match mode {
         AuthCredentialsStoreMode::Keyring => match load_session_from_keyring_decoded() {
             Ok(Some(session)) => Ok(Some(session)),
             Ok(None) => load_session_from_file(),
             Err(err) => {
-                tracing::warn!(
-                    "failed to load openai session from keyring, falling back to encrypted file: {err}"
-                );
+                tracing::warn!("failed to load openai session from keyring, falling back to encrypted file: {err}");
                 load_session_from_file()
             }
         },
@@ -845,8 +797,7 @@ fn load_session_from_file() -> Result<Option<OpenAIChatGptSession>> {
         Err(err) => return Err(anyhow!("failed to read openai session file: {err}")),
     };
 
-    let encrypted: EncryptedSession =
-        serde_json::from_slice(&data).context("failed to decode openai session file")?;
+    let encrypted: EncryptedSession = serde_json::from_slice(&data).context("failed to decode openai session file")?;
     Ok(Some(decrypt_session(&encrypted)?))
 }
 
@@ -876,8 +827,7 @@ fn encrypt_session(session: &OpenAIChatGptSession) -> Result<EncryptedSession> {
     let mut nonce_bytes = [0u8; NONCE_LEN];
     rng.fill(&mut nonce_bytes).map_err(|_| anyhow!("failed to generate nonce"))?;
 
-    let mut ciphertext =
-        serde_json::to_vec(session).context("failed to serialize openai session for encryption")?;
+    let mut ciphertext = serde_json::to_vec(session).context("failed to serialize openai session for encryption")?;
     let nonce = Nonce::assume_unique_for_key(nonce_bytes);
     key.seal_in_place_append_tag(nonce, Aad::empty(), &mut ciphertext)
         .map_err(|_| anyhow!("failed to encrypt openai session"))?;
@@ -935,8 +885,8 @@ fn derive_encryption_key() -> Result<LessSafeKey> {
     let key_bytes: &[u8; 32] = hash.as_ref()[..32]
         .try_into()
         .context("openai session encryption key was too short")?;
-    let unbound = UnboundKey::new(&aead::AES_256_GCM, key_bytes)
-        .map_err(|_| anyhow!("invalid openai session encryption key"))?;
+    let unbound =
+        UnboundKey::new(&aead::AES_256_GCM, key_bytes).map_err(|_| anyhow!("invalid openai session encryption key"))?;
     Ok(LessSafeKey::new(unbound))
 }
 
@@ -958,10 +908,7 @@ mod tests {
 
     #[async_trait]
     impl OpenAIChatGptSessionRefresher for ExternalRefresher {
-        async fn refresh_session(
-            &self,
-            current: &OpenAIChatGptSession,
-        ) -> Result<OpenAIChatGptSession> {
+        async fn refresh_session(&self, current: &OpenAIChatGptSession) -> Result<OpenAIChatGptSession> {
             let mut refreshed = current.clone();
             refreshed.access_token = "oauth-access-refreshed".to_string();
             refreshed.refreshed_at = current.refreshed_at.saturating_add(1);
@@ -978,12 +925,9 @@ mod tests {
     impl TestAuthDirGuard {
         fn new() -> Self {
             let temp_dir = TempDir::new().expect("create temp auth dir");
-            let previous = crate::storage_paths::auth_storage_dir_override_for_tests()
-                .expect("read auth dir override");
-            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(
-                temp_dir.path().to_path_buf(),
-            ))
-            .expect("set temp auth dir override");
+            let previous = crate::storage_paths::auth_storage_dir_override_for_tests().expect("read auth dir override");
+            crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(temp_dir.path().to_path_buf()))
+                .expect("set temp auth dir override");
             Self { temp_dir: Some(temp_dir), previous }
         }
     }
@@ -1060,8 +1004,7 @@ mod tests {
         let mut session = sample_session();
         session.openai_api_key.clear();
         session.expires_at = Some(now_secs().saturating_sub(1));
-        let handle =
-            OpenAIChatGptAuthHandle::new_external(session, true, Arc::new(ExternalRefresher));
+        let handle = OpenAIChatGptAuthHandle::new_external(session, true, Arc::new(ExternalRefresher));
 
         assert!(handle.using_external_tokens());
         assert!(
@@ -1086,10 +1029,7 @@ mod tests {
 
     #[async_trait]
     impl OpenAIChatGptSessionRefresher for CountingExternalRefresher {
-        async fn refresh_session(
-            &self,
-            current: &OpenAIChatGptSession,
-        ) -> Result<OpenAIChatGptSession> {
+        async fn refresh_session(&self, current: &OpenAIChatGptSession) -> Result<OpenAIChatGptSession> {
             let mut calls = self.calls.lock().expect("refresh calls mutex should lock");
             *calls += 1;
             drop(calls);
@@ -1116,8 +1056,7 @@ mod tests {
 
         let first = handle.clone();
         let second = handle.clone();
-        let (first_result, second_result) =
-            tokio::join!(first.refresh_if_needed(), second.refresh_if_needed());
+        let (first_result, second_result) = tokio::join!(first.refresh_if_needed(), second.refresh_if_needed());
 
         first_result.expect("first refresh should succeed");
         second_result.expect("second refresh should succeed");
@@ -1134,8 +1073,7 @@ mod tests {
     fn resolve_openai_auth_prefers_chatgpt_in_auto_permission() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
         let resolved = resolve_openai_auth(
             &OpenAIAuthConfig::default(),
             AuthCredentialsStoreMode::File,
@@ -1143,8 +1081,7 @@ mod tests {
         )
         .expect("resolved auth");
         assert!(resolved.using_chatgpt());
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
@@ -1157,11 +1094,9 @@ mod tests {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
 
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
 
-        let metadata =
-            fs::metadata(get_session_path().expect("session path")).expect("read session metadata");
+        let metadata = fs::metadata(get_session_path().expect("session path")).expect("read session metadata");
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
     }
 
@@ -1169,8 +1104,7 @@ mod tests {
     #[serial]
     fn resolve_openai_auth_auto_falls_back_to_api_key_without_session() {
         let _guard = TestAuthDirGuard::new();
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
         let resolved = resolve_openai_auth(
             &OpenAIAuthConfig::default(),
             AuthCredentialsStoreMode::File,
@@ -1184,14 +1118,10 @@ mod tests {
     #[serial]
     fn resolve_openai_auth_auto_rejects_blank_api_key_without_session() {
         let _guard = TestAuthDirGuard::new();
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
-        let error = resolve_openai_auth(
-            &OpenAIAuthConfig::default(),
-            AuthCredentialsStoreMode::File,
-            Some("   ".to_string()),
-        )
-        .expect_err("blank api key should fail");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
+        let error =
+            resolve_openai_auth(&OpenAIAuthConfig::default(), AuthCredentialsStoreMode::File, Some("   ".to_string()))
+                .expect_err("blank api key should fail");
         assert!(error.to_string().contains("OpenAI API key not found"));
     }
 
@@ -1200,8 +1130,7 @@ mod tests {
     fn resolve_openai_auth_api_key_mode_ignores_stored_chatgpt_session() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
         let resolved = resolve_openai_auth(
             &OpenAIAuthConfig {
                 preferred_method: OpenAIPreferredMethod::ApiKey,
@@ -1212,16 +1141,14 @@ mod tests {
         )
         .expect("resolved auth");
         assert!(matches!(resolved, OpenAIResolvedAuth::ApiKey { .. }));
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
     #[serial]
     fn resolve_openai_auth_chatgpt_mode_requires_stored_session() {
         let _guard = TestAuthDirGuard::new();
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
         let error = resolve_openai_auth(
             &OpenAIAuthConfig {
                 preferred_method: OpenAIPreferredMethod::Chatgpt,
@@ -1239,8 +1166,7 @@ mod tests {
     fn summarize_openai_credentials_reports_dual_source_notice() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
         let overview = summarize_openai_credentials(
             &OpenAIAuthConfig::default(),
             AuthCredentialsStoreMode::File,
@@ -1250,8 +1176,7 @@ mod tests {
         assert_eq!(overview.active_source, Some(OpenAIResolvedAuthSource::ChatGpt));
         assert!(overview.notice.is_some());
         assert!(overview.recommendation.is_some());
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
@@ -1259,8 +1184,7 @@ mod tests {
     fn summarize_openai_credentials_respects_api_key_preference() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
         let overview = summarize_openai_credentials(
             &OpenAIAuthConfig {
                 preferred_method: OpenAIPreferredMethod::ApiKey,
@@ -1271,8 +1195,7 @@ mod tests {
         )
         .expect("overview");
         assert_eq!(overview.active_source, Some(OpenAIResolvedAuthSource::ApiKey));
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
@@ -1290,16 +1213,14 @@ mod tests {
     fn default_loader_falls_back_to_file_session() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
 
         let loaded = load_openai_chatgpt_session()
             .expect("load session")
             .expect("stored session should be found");
 
         assert_eq!(loaded.account_id, session.account_id);
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
@@ -1307,16 +1228,14 @@ mod tests {
     fn keyring_mode_loader_falls_back_to_file_session() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save session");
 
         let loaded = load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::Keyring)
             .expect("load session")
             .expect("stored session should be found");
 
         assert_eq!(loaded.email, session.email);
-        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
-            .expect("clear session");
+        clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
     }
 
     #[test]
@@ -1324,12 +1243,9 @@ mod tests {
     fn clear_openai_chatgpt_session_removes_file_and_keyring_sessions() {
         let _guard = TestAuthDirGuard::new();
         let session = sample_session();
-        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File)
-            .expect("save file session");
+        save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::File).expect("save file session");
 
-        if save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::Keyring)
-            .is_err()
-        {
+        if save_openai_chatgpt_session_with_mode(&session, AuthCredentialsStoreMode::Keyring).is_err() {
             clear_openai_chatgpt_session().expect("clear session");
             assert!(
                 load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
@@ -1372,11 +1288,8 @@ mod tests {
 
     #[test]
     fn parse_manual_callback_input_accepts_query_string() {
-        let code = parse_openai_chatgpt_manual_callback_input(
-            "code=auth-code&state=test-state",
-            "test-state",
-        )
-        .expect("manual input should parse");
+        let code = parse_openai_chatgpt_manual_callback_input("code=auth-code&state=test-state", "test-state")
+            .expect("manual input should parse");
         assert_eq!(code, "auth-code");
     }
 
@@ -1389,11 +1302,8 @@ mod tests {
 
     #[test]
     fn parse_manual_callback_input_rejects_state_mismatch() {
-        let error = parse_openai_chatgpt_manual_callback_input(
-            "code=auth-code&state=wrong-state",
-            "test-state",
-        )
-        .expect_err("state mismatch should fail");
+        let error = parse_openai_chatgpt_manual_callback_input("code=auth-code&state=wrong-state", "test-state")
+            .expect_err("state mismatch should fail");
         assert!(error.to_string().contains("state mismatch"));
     }
 

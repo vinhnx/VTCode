@@ -7,8 +7,7 @@ pub(crate) async fn take_optional_search_tools_notice() -> Option<OptionalSearch
     let ripgrep_status = RipgrepStatus::check();
     let ast_grep_status = AstGrepStatus::check();
     let (mut config, persist_notice) = load_notice_config().await;
-    let notice =
-        OptionalSearchToolsNotice::from_snapshot(&config, ripgrep_status, ast_grep_status)?;
+    let notice = OptionalSearchToolsNotice::from_snapshot(&config, ripgrep_status, ast_grep_status)?;
 
     if persist_notice {
         notice.apply_to_config(&mut config);

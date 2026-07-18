@@ -15,10 +15,7 @@ use serde_json::{Value, json};
 
 pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
     let content = response_json.get("content").and_then(|c| c.as_array()).ok_or_else(|| {
-        let formatted = error_display::format_llm_error(
-            "Anthropic",
-            "Invalid response format: missing content",
-        );
+        let formatted = error_display::format_llm_error("Anthropic", "Invalid response format: missing content");
         LLMError::Provider { message: formatted, metadata: None }
     })?;
 
@@ -74,13 +71,11 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
 
                 if name == "structured_output" {
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
-                    let output_text =
-                        serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
+                    let output_text = serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
                     text_parts.push(output_text);
                 } else {
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
-                    let arguments =
-                        serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
+                    let arguments = serde_json::to_string(&input).unwrap_or_else(|_| "{{}}".to_string());
                     if !id.is_empty() && !name.is_empty() {
                         tool_calls.push(ToolCall::function(id, name, arguments));
                     }
@@ -89,8 +84,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             Some("server_tool_use") => {
                 // The advisor tool is the only supported server-side tool. Preserve
                 // the block verbatim so it can be round-tripped on the next turn.
-                if block.get("name").and_then(|n| n.as_str()).is_some_and(|name| name == "advisor")
-                {
+                if block.get("name").and_then(|n| n.as_str()).is_some_and(|name| name == "advisor") {
                     advisor_blocks.push(block.clone());
                 }
             }
@@ -101,14 +95,11 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             }
             Some("tool_search_tool_result") => {
                 if let Some(content_block) = block.get("content")
-                    && content_block.get("type").and_then(|t| t.as_str())
-                        == Some("tool_search_tool_search_result")
-                    && let Some(refs) =
-                        content_block.get("tool_references").and_then(|r| r.as_array())
+                    && content_block.get("type").and_then(|t| t.as_str()) == Some("tool_search_tool_search_result")
+                    && let Some(refs) = content_block.get("tool_references").and_then(|r| r.as_array())
                 {
                     for tool_ref in refs {
-                        if let Some(tool_name) = tool_ref.get("tool_name").and_then(|n| n.as_str())
-                        {
+                        if let Some(tool_name) = tool_ref.get("tool_name").and_then(|n| n.as_str()) {
                             tool_references.push(tool_name.to_string());
                         }
                     }
@@ -119,10 +110,8 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             }
             Some("fallback") => {
                 // Fallback content block marks model boundary - preserve for conversation continuity
-                if let Some(from) =
-                    block.get("from").and_then(|v| v.get("model").and_then(|m| m.as_str()))
-                    && let Some(to) =
-                        block.get("to").and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                if let Some(from) = block.get("from").and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                    && let Some(to) = block.get("to").and_then(|v| v.get("model").and_then(|m| m.as_str()))
                 {
                     let detail = json!({
                         "type": "fallback",
@@ -192,11 +181,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         } else {
             Some(text_parts.into_iter().collect())
         },
-        tool_calls: if tool_calls.is_empty() {
-            None
-        } else {
-            Some(tool_calls)
-        },
+        tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
         model,
         usage,
         finish_reason,
@@ -243,16 +228,13 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
         arr.iter()
             .filter_map(|iter| {
                 let iter_type = iter.get("type").and_then(|t| t.as_str());
-                let input_tokens =
-                    iter.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let output_tokens =
-                    iter.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let input_tokens = iter.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let output_tokens = iter.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let cache_creation = iter
                     .get("cache_creation_input_tokens")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);
-                let cache_read =
-                    iter.get("cache_read_input_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
+                let cache_read = iter.get("cache_read_input_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
                 let model = iter.get("model").and_then(|v| v.as_str()).unwrap_or("");
 
                 Some(json!({
@@ -268,13 +250,10 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
     });
 
     Usage {
-        prompt_tokens: usage_value.get("input_tokens").and_then(|it| it.as_u64()).unwrap_or(0)
-            as u32,
-        completion_tokens: usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0)
-            as u32,
+        prompt_tokens: usage_value.get("input_tokens").and_then(|it| it.as_u64()).unwrap_or(0) as u32,
+        completion_tokens: usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0) as u32,
         total_tokens: (usage_value.get("input_tokens").and_then(|it| it.as_u64()).unwrap_or(0)
-            + usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0))
-            as u32,
+            + usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0)) as u32,
         cached_prompt_tokens: cache_read_tokens,
         cache_creation_tokens,
         cache_read_tokens,

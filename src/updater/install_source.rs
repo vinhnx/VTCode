@@ -9,8 +9,7 @@ const WINDOWS_INSTALL_COMMAND: &str =
     "irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex";
 const HOMEBREW_UPDATE_COMMAND: &str = "brew upgrade vtcode";
 const CARGO_UPDATE_COMMAND: &str = "cargo install vtcode --force";
-const NPM_UPDATE_COMMAND: &str =
-    "npm install -g @vinhnx/vtcode@latest --registry=https://npm.pkg.github.com";
+const NPM_UPDATE_COMMAND: &str = "npm install -g @vinhnx/vtcode@latest --registry=https://npm.pkg.github.com";
 const SCOOP_UPDATE_COMMAND: &str = "scoop update vtcode";
 const SNAP_UPDATE_COMMAND: &str = "sudo snap refresh vtcode";
 const FLATPAK_UPDATE_COMMAND: &str = "flatpak update com.vinhnx.Vtcode";
@@ -233,9 +232,7 @@ mod tests {
     #[test]
     fn scoop_detected_on_windows_path() {
         assert_eq!(
-            detect_install_source_from_path(Path::new(
-                "C:\\Users\\dev\\scoop\\apps\\vtcode\\0.1.0\\vtcode.exe"
-            )),
+            detect_install_source_from_path(Path::new("C:\\Users\\dev\\scoop\\apps\\vtcode\\0.1.0\\vtcode.exe")),
             InstallSource::Scoop
         );
     }
@@ -250,10 +247,7 @@ mod tests {
 
     #[test]
     fn snap_detected() {
-        assert_eq!(
-            detect_install_source_from_path(Path::new("/snap/vtcode/123/bin/vtcode")),
-            InstallSource::Snap
-        );
+        assert_eq!(detect_install_source_from_path(Path::new("/snap/vtcode/123/bin/vtcode")), InstallSource::Snap);
     }
 
     #[test]
@@ -266,10 +260,7 @@ mod tests {
 
     #[test]
     fn nix_profile_detected() {
-        assert_eq!(
-            detect_install_source_from_path(Path::new("/home/dev/.nix-profile/bin/vtcode")),
-            InstallSource::Nix
-        );
+        assert_eq!(detect_install_source_from_path(Path::new("/home/dev/.nix-profile/bin/vtcode")), InstallSource::Nix);
     }
 
     #[test]

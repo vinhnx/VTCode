@@ -50,10 +50,7 @@ fn image_attachment_placeholders(content: &str) -> Vec<(usize, String)> {
     placeholders
 }
 
-fn attachment_placeholders_for_content(
-    content: &str,
-    attachment_count: usize,
-) -> Vec<Option<String>> {
+fn attachment_placeholders_for_content(content: &str, attachment_count: usize) -> Vec<Option<String>> {
     let placeholders = image_attachment_placeholders(content);
     let mut sorted_visible_placeholders = placeholders.clone();
     sorted_visible_placeholders.sort_by_key(|(number, _)| *number);
@@ -72,9 +69,7 @@ fn attachment_placeholders_for_content(
             let expected_number = index + 1;
             placeholders
                 .iter()
-                .find_map(|(number, placeholder)| {
-                    (*number == expected_number).then(|| placeholder.clone())
-                })
+                .find_map(|(number, placeholder)| (*number == expected_number).then(|| placeholder.clone()))
                 .or_else(|| {
                     if attachment_count == 1 && placeholders.len() == 1 {
                         Some(placeholders[0].1.clone())
@@ -355,22 +350,19 @@ impl InputManager {
 
             if !has_newlines {
                 // Single-line replacement: fast path.
-                let mut new_line =
-                    String::with_capacity(start_byte + replacement.len() + remaining.len());
+                let mut new_line = String::with_capacity(start_byte + replacement.len() + remaining.len());
                 new_line.push_str(&line[..start_byte]);
                 new_line.push_str(replacement);
                 new_line.push_str(remaining);
-                self.textarea = TextArea::from(lines.iter().enumerate().map(|(i, l)| {
-                    if i == start_line {
-                        new_line.as_str()
-                    } else {
-                        l.as_str()
-                    }
-                }));
+                self.textarea = TextArea::from(
+                    lines
+                        .iter()
+                        .enumerate()
+                        .map(|(i, l)| if i == start_line { new_line.as_str() } else { l.as_str() }),
+                );
             } else {
                 // Multi-line replacement: split across lines.
-                let mut new_lines: Vec<String> =
-                    Vec::with_capacity(lines.len() + rep_parts.len() - 1);
+                let mut new_lines: Vec<String> = Vec::with_capacity(lines.len() + rep_parts.len() - 1);
                 for (i, l) in lines.iter().enumerate() {
                     if i < start_line {
                         new_lines.push(l.clone());
@@ -383,9 +375,7 @@ impl InputManager {
                             new_lines.push(mid.to_string());
                         }
                         // has_newlines is true (rep_parts.len() > 1), so .last() is guaranteed Some
-                        let last = rep_parts
-                            .last()
-                            .expect("rep_parts has at least 2 elements when has_newlines");
+                        let last = rep_parts.last().expect("rep_parts has at least 2 elements when has_newlines");
                         let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);
@@ -401,16 +391,14 @@ impl InputManager {
             let end_byte = textarea_bridge::char_col_to_byte_offset(end_line_obj, end_col);
             let remaining = &end_line_obj[end_byte..];
 
-            let mut new_lines: Vec<String> =
-                Vec::with_capacity(lines.len() + rep_parts.len().saturating_sub(1));
+            let mut new_lines: Vec<String> = Vec::with_capacity(lines.len() + rep_parts.len().saturating_sub(1));
             for (i, line) in lines.iter().enumerate() {
                 if i < start_line {
                     new_lines.push(line.clone());
                 } else if i == start_line {
                     let start_byte = textarea_bridge::char_col_to_byte_offset(line, start_col);
                     if !has_newlines {
-                        let mut merged =
-                            String::with_capacity(start_byte + replacement.len() + remaining.len());
+                        let mut merged = String::with_capacity(start_byte + replacement.len() + remaining.len());
                         merged.push_str(&line[..start_byte]);
                         merged.push_str(replacement);
                         merged.push_str(remaining);
@@ -424,9 +412,7 @@ impl InputManager {
                             new_lines.push(mid.to_string());
                         }
                         // has_newlines is true (rep_parts.len() > 1), so .last() is guaranteed Some
-                        let last = rep_parts
-                            .last()
-                            .expect("rep_parts has at least 2 elements when has_newlines");
+                        let last = rep_parts.last().expect("rep_parts has at least 2 elements when has_newlines");
                         let mut last_line = String::with_capacity(last.len() + remaining.len());
                         last_line.push_str(last);
                         last_line.push_str(remaining);
@@ -441,8 +427,7 @@ impl InputManager {
 
         configure_textarea(&mut self.textarea);
         let cursor_byte = start + replacement.len();
-        let (row, col) =
-            textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), cursor_byte);
+        let (row, col) = textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), cursor_byte);
         self.set_textarea_cursor(row, col);
         self.clear_selection();
     }
@@ -654,14 +639,8 @@ impl InputManager {
         let between: String = chars[prev_end..word_start].iter().collect();
 
         // Reconstruct
-        let new_content = format!(
-            "{}{}{}{}{}",
-            &content[..prev_start],
-            curr_word,
-            between,
-            prev_word,
-            &content[word_end..]
-        );
+        let new_content =
+            format!("{}{}{}{}{}", &content[..prev_start], curr_word, between, prev_word, &content[word_end..]);
 
         self.set_content(new_content);
         self.set_cursor(cursor);
@@ -720,8 +699,7 @@ impl InputManager {
         let word: String = chars[word_start..word_end].iter().collect();
         let transformed = transform(&word);
 
-        let new_content =
-            format!("{}{}{}", &content[..word_start], transformed, &content[word_end..]);
+        let new_content = format!("{}{}{}", &content[..word_start], transformed, &content[word_end..]);
 
         self.set_content(new_content);
         self.set_cursor(cursor);
@@ -873,8 +851,7 @@ impl InputManager {
     pub fn set_attachments(&mut self, attachments: Vec<ContentPart>) {
         self.attachments = attachments.into_iter().filter(ContentPart::is_image).collect();
         let content = self.content().to_owned();
-        self.attachment_placeholders =
-            attachment_placeholders_for_content(&content, self.attachments.len());
+        self.attachment_placeholders = attachment_placeholders_for_content(&content, self.attachments.len());
     }
 
     pub fn push_attachment(&mut self, attachment: ContentPart) -> Option<usize> {
@@ -908,10 +885,7 @@ impl InputManager {
 
     pub fn current_history_entry(&self) -> InputHistoryEntry {
         let content = self.content().to_string();
-        InputHistoryEntry::from_content_and_attachments(
-            content.clone(),
-            self.attachments_for_content(&content),
-        )
+        InputHistoryEntry::from_content_and_attachments(content.clone(), self.attachments_for_content(&content))
     }
 
     fn attachments_for_content(&self, content: &str) -> Vec<ContentPart> {
@@ -940,8 +914,7 @@ impl InputManager {
         self.textarea.move_cursor(CursorMove::End);
         self.clear_selection();
         self.attachments = entry.attachment_elements();
-        self.attachment_placeholders =
-            attachment_placeholders_for_content(&entry.content, self.attachments.len());
+        self.attachment_placeholders = attachment_placeholders_for_content(&entry.content, self.attachments.len());
         self.compact_paste_range = None;
     }
 
@@ -1019,23 +992,11 @@ mod tests {
     #[test]
     fn history_navigation() {
         let mut manager = InputManager::new();
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "first".to_owned(),
-            Vec::new(),
-        ));
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "second".to_owned(),
-            Vec::new(),
-        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("first".to_owned(), Vec::new()));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("second".to_owned(), Vec::new()));
 
-        assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content.clone()),
-            Some("second".to_owned())
-        );
-        assert_eq!(
-            manager.go_to_previous_history().map(|entry| entry.content.clone()),
-            Some("first".to_owned())
-        );
+        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), Some("second".to_owned()));
+        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), Some("first".to_owned()));
         assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), None);
     }
 
@@ -1043,16 +1004,10 @@ mod tests {
     fn history_navigation_saves_draft() {
         let mut manager = InputManager::new();
         manager.set_content("current".to_owned());
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "previous".to_owned(),
-            Vec::new(),
-        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("previous".to_owned(), Vec::new()));
 
         manager.go_to_previous_history();
-        assert_eq!(
-            manager.go_to_next_history().map(|entry| entry.content.clone()),
-            Some("current".to_owned())
-        );
+        assert_eq!(manager.go_to_next_history().map(|entry| entry.content.clone()), Some("current".to_owned()));
     }
 
     #[test]
@@ -1072,10 +1027,7 @@ mod tests {
     fn history_navigation_restores_attachments() {
         let mut manager = InputManager::new();
         manager.set_content("check this".to_owned());
-        manager.set_attachments(vec![ContentPart::image(
-            "encoded".to_owned(),
-            "image/png".to_owned(),
-        )]);
+        manager.set_attachments(vec![ContentPart::image("encoded".to_owned(), "image/png".to_owned())]);
         manager.add_to_history(manager.current_history_entry());
         manager.clear();
 
@@ -1145,10 +1097,8 @@ mod tests {
     fn prepend_archived_history_inserts_at_front() {
         let mut manager = InputManager::new();
         let now = Utc::now();
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "session-prompt".to_owned(),
-            Vec::new(),
-        ));
+        manager
+            .add_to_history(InputHistoryEntry::from_content_and_attachments("session-prompt".to_owned(), Vec::new()));
 
         // Input is newest-first; archived-1 is newer than archived-2.
         manager.prepend_archived_history(vec![
@@ -1165,10 +1115,7 @@ mod tests {
     fn prepend_archived_history_deduplicates() {
         let mut manager = InputManager::new();
         let now = Utc::now();
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "duplicate".to_owned(),
-            Vec::new(),
-        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("duplicate".to_owned(), Vec::new()));
 
         manager.prepend_archived_history(vec![
             InputHistoryEntry::from_content_and_timestamp("unique".to_owned(), now),
@@ -1198,14 +1145,8 @@ mod tests {
     fn up_arrow_cycles_session_first_then_archived() {
         let mut manager = InputManager::new();
         let now = Utc::now();
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "session-2".to_owned(),
-            Vec::new(),
-        ));
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "session-1".to_owned(),
-            Vec::new(),
-        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("session-2".to_owned(), Vec::new()));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("session-1".to_owned(), Vec::new()));
 
         // archived-newer is the most recent archived entry.
         manager.prepend_archived_history(vec![
@@ -1216,22 +1157,10 @@ mod tests {
         // History: [archived-newer, archived-older, session-2, session-1]
         // Up arrow from fresh state: most recent session entry first, then
         // older session entries, then archived (newest archived first).
-        assert_eq!(
-            manager.go_to_previous_history().map(|e| e.content.clone()),
-            Some("session-1".to_owned())
-        );
-        assert_eq!(
-            manager.go_to_previous_history().map(|e| e.content.clone()),
-            Some("session-2".to_owned())
-        );
-        assert_eq!(
-            manager.go_to_previous_history().map(|e| e.content.clone()),
-            Some("archived-newer".to_owned())
-        );
-        assert_eq!(
-            manager.go_to_previous_history().map(|e| e.content.clone()),
-            Some("archived-older".to_owned())
-        );
+        assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some("session-1".to_owned()));
+        assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some("session-2".to_owned()));
+        assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some("archived-newer".to_owned()));
+        assert_eq!(manager.go_to_previous_history().map(|e| e.content.clone()), Some("archived-older".to_owned()));
         assert!(manager.go_to_previous_history().is_none());
     }
 
@@ -1240,10 +1169,7 @@ mod tests {
         let mut manager = InputManager::new();
         let now = Utc::now();
         manager.set_content("my original prompt".to_owned());
-        manager.add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "session-1".to_owned(),
-            Vec::new(),
-        ));
+        manager.add_to_history(InputHistoryEntry::from_content_and_attachments("session-1".to_owned(), Vec::new()));
 
         manager.prepend_archived_history(vec![
             InputHistoryEntry::from_content_and_timestamp("archived-1".to_owned(), now),

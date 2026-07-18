@@ -65,9 +65,7 @@ impl TagStreamSanitizer {
                         let absolute_bracket = current_pos + bracket_pos;
                         let potential_partial = &chunk_str[absolute_bracket..];
                         // If it's a prefix of any possible start tag, save it.
-                        let is_prefix = REASONING_TAGS
-                            .iter()
-                            .any(|(start, _)| start.starts_with(potential_partial));
+                        let is_prefix = REASONING_TAGS.iter().any(|(start, _)| start.starts_with(potential_partial));
 
                         if is_prefix {
                             // Yield everything before the partial tag as a regular token.
@@ -82,9 +80,7 @@ impl TagStreamSanitizer {
                     }
 
                     // No tag or partial tag found, just yield the rest as a token.
-                    events.push(LLMStreamEvent::Token {
-                        delta: chunk_str[current_pos..].to_string(),
-                    });
+                    events.push(LLMStreamEvent::Token { delta: chunk_str[current_pos..].to_string() });
                     return events;
                 }
 
@@ -146,9 +142,7 @@ impl TagStreamSanitizer {
                     }
 
                     // Yield all as reasoning.
-                    events.push(LLMStreamEvent::Reasoning {
-                        delta: chunk_str[current_pos..].to_string(),
-                    });
+                    events.push(LLMStreamEvent::Reasoning { delta: chunk_str[current_pos..].to_string() });
                     return events;
                 }
             }

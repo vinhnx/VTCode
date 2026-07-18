@@ -4,8 +4,8 @@ use serde_json::Value;
 use crate::hooks::lifecycle::types::HookMessage;
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
-    handle_timeout, looks_like_json, matches_hook_event, parse_json_output,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
+    looks_like_json, matches_hook_event, parse_json_output,
 };
 
 fn push_additional_context_value(additional_context: &mut Vec<String>, value: &Value) {
@@ -104,9 +104,7 @@ pub(crate) fn interpret_session_end(
 
     if let Some(json) = parse_json_output(&result.stdout) {
         let _ = extract_common_fields(&json, messages);
-    } else if allow_plain_success_stdout(result, quiet_success_output)
-        && !result.stdout.trim().is_empty()
-    {
+    } else if allow_plain_success_stdout(result, quiet_success_output) && !result.stdout.trim().is_empty() {
         messages.push(HookMessage::info(result.stdout.trim().to_owned()));
     }
 }

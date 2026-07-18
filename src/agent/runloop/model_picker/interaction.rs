@@ -8,13 +8,12 @@ use vtcode_ui::tui::ui::interactive_list::{SelectionEntry, run_interactive_selec
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
 use super::rendering::{
-    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION,
-    dynamic_model_subtitle, static_model_subtitle,
+    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION, dynamic_model_subtitle,
+    static_model_subtitle,
 };
 use super::selection::{
-    ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description,
-    reasoning_level_label, selection_from_option, service_tier_label, supports_max_reasoning,
-    supports_xhigh_reasoning,
+    ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description, reasoning_level_label,
+    selection_from_option, service_tier_label, supports_max_reasoning, supports_xhigh_reasoning,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh dynamic model lists";
@@ -55,8 +54,7 @@ pub(super) fn select_model_with_ratatui_list(
             let Some(option) = options.get(*option_index) else {
                 continue;
             };
-            let description =
-                format!("{} • {}", provider.label(), static_model_subtitle(option, "", ""));
+            let description = format!("{} • {}", provider.label(), static_model_subtitle(option, "", ""));
             choices.push(ModelSelectionChoice {
                 entry: SelectionEntry::new(
                     option.display.to_string(),
@@ -72,10 +70,7 @@ pub(super) fn select_model_with_ratatui_list(
                     choices.push(ModelSelectionChoice {
                         entry: SelectionEntry::new(
                             format!("{} server not running - Setup instructions", provider.label()),
-                            Some(format!(
-                                "{error}\n{}",
-                                provider.local_install_instructions().unwrap_or("")
-                            )),
+                            Some(format!("{error}\n{}", provider.local_install_instructions().unwrap_or(""))),
                         ),
                         outcome: ModelSelectionChoiceOutcome::Manual,
                     });
@@ -86,21 +81,12 @@ pub(super) fn select_model_with_ratatui_list(
                         let description = format!(
                             "{} • {}",
                             provider.label(),
-                            dynamic_model_subtitle(
-                                provider,
-                                &detail.model_id,
-                                detail.reasoning_supported,
-                                "",
-                                "",
-                            ),
+                            dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", "",),
                         );
                         choices.push(ModelSelectionChoice {
                             entry: SelectionEntry::new(
                                 detail.model_display.clone(),
-                                Some(format!(
-                                    "{description}\nLocally available {} model",
-                                    provider.label(),
-                                )),
+                                Some(format!("{description}\nLocally available {} model", provider.label(),)),
                             ),
                             outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
                         });
@@ -152,19 +138,14 @@ pub(super) fn select_model_with_ratatui_list(
     });
 
     choices.push(ModelSelectionChoice {
-        entry: SelectionEntry::new(
-            CUSTOM_PROVIDER_TITLE,
-            Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
-        ),
+        entry: SelectionEntry::new(CUSTOM_PROVIDER_TITLE, Some(CUSTOM_PROVIDER_SUBTITLE.to_string())),
         outcome: ModelSelectionChoiceOutcome::Manual,
     });
 
-    let entries: Vec<SelectionEntry> =
-        choices.iter().map(|choice| &choice.entry).cloned().collect();
+    let entries: Vec<SelectionEntry> = choices.iter().map(|choice| &choice.entry).cloned().collect();
 
     let instructions =
-        "Provider, model id, reasoning, tools, and input modalities are shown in each entry."
-            .to_string();
+        "Provider, model id, reasoning, tools, and input modalities are shown in each entry.".to_string();
 
     let selection = run_interactive_selection("Models", &instructions, &entries, 0)?;
     let selected_index = match selection {
@@ -173,9 +154,7 @@ pub(super) fn select_model_with_ratatui_list(
     };
 
     match &choices[selected_index].outcome {
-        ModelSelectionChoiceOutcome::Predefined(detail) => {
-            Ok(ModelSelectionListOutcome::Predefined(detail.clone()))
-        }
+        ModelSelectionChoiceOutcome::Predefined(detail) => Ok(ModelSelectionListOutcome::Predefined(detail.clone())),
         ModelSelectionChoiceOutcome::Manual => Ok(ModelSelectionListOutcome::Manual),
         ModelSelectionChoiceOutcome::Refresh => Ok(ModelSelectionListOutcome::Refresh),
     }
@@ -241,8 +220,7 @@ pub(super) fn select_reasoning_with_ratatui(
         ));
     }
 
-    let selection_index =
-        run_interactive_selection("Reasoning effort", &instructions, &entries, 0)?;
+    let selection_index = run_interactive_selection("Reasoning effort", &instructions, &entries, 0)?;
 
     let Some(index) = selection_index else {
         return Ok(None);

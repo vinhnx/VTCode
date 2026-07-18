@@ -303,9 +303,7 @@ fn highlight_code_to_line_segments_with_theme(
         ends_with_newline = line.ends_with('\n');
         let trimmed = line.trim_end_matches('\n');
         let segments = match highlighter.highlight_line(trimmed, syntax_set()) {
-            Ok(ranges) => {
-                ranges.into_iter().map(|(style, text)| (style, text.to_string())).collect()
-            }
+            Ok(ranges) => ranges.into_iter().map(|(style, text)| (style, text.to_string())).collect(),
             Err(_) => vec![(syntect::highlighting::Style::default(), trimmed.to_string())],
         };
         result.push(segments);
@@ -460,8 +458,7 @@ mod tests {
 
     #[test]
     fn test_highlight_code_to_segments() {
-        let segments =
-            highlight_code_to_segments("fn main() {}", Some("rust"), "base16-ocean.dark");
+        let segments = highlight_code_to_segments("fn main() {}", Some("rust"), "base16-ocean.dark");
         assert!(!segments.is_empty());
     }
 
@@ -541,8 +538,7 @@ mod tests {
             ..Theme::default()
         };
 
-        let segments =
-            highlight_code_to_anstyle_line_segments_with_theme("plain text", None, &theme, false);
+        let segments = highlight_code_to_anstyle_line_segments_with_theme("plain text", None, &theme, false);
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].len(), 1);
         assert_eq!(segments[0][0].0.get_fg_color(), Some(AnsiColor::Green.into()));

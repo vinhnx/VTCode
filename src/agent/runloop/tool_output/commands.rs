@@ -41,8 +41,7 @@ pub(crate) async fn render_terminal_command_panel(
 
     // If stdout looks like JSON with stdout/stderr/returncode, unwrap it
     let owned_inner;
-    let (stdout_raw, stderr_raw, unwrapped_payload) = if let Ok(inner_json) =
-        serde_json::from_str::<Value>(stdout_raw)
+    let (stdout_raw, stderr_raw, unwrapped_payload) = if let Ok(inner_json) = serde_json::from_str::<Value>(stdout_raw)
         && (inner_json.get("stdout").is_some()
             || inner_json.get("stderr").is_some()
             || inner_json.get("returncode").is_some())
@@ -74,8 +73,8 @@ pub(crate) async fn render_terminal_command_panel(
     };
 
     // If there's an 'output' field, this is likely a PTY session result
-    let is_pty_session = session_id.is_some()
-        && (!output_raw.is_empty() || stdout_raw.is_empty() && stderr_raw.is_empty());
+    let is_pty_session =
+        session_id.is_some() && (!output_raw.is_empty() || stdout_raw.is_empty() && stderr_raw.is_empty());
 
     let stdout = if is_pty_session {
         preprocess_terminal_stdout(command_tokens.as_deref(), output_raw)
@@ -88,8 +87,7 @@ pub(crate) async fn render_terminal_command_panel(
         .and_then(Value::as_str)
         .filter(|note| !note.trim().is_empty());
 
-    let output_mode =
-        vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
+    let output_mode = vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
     // Render stdin if available and different from command (avoid repeating the "• Ran" header)
@@ -109,11 +107,7 @@ pub(crate) async fn render_terminal_command_panel(
     let render_spool_reference_only =
         is_completed && tool_intent::should_use_spool_reference_only(None, unwrapped_payload);
 
-    if !render_spool_reference_only
-        && stdout.trim().is_empty()
-        && stderr.trim().is_empty()
-        && critical_note.is_none()
-    {
+    if !render_spool_reference_only && stdout.trim().is_empty() && stderr.trim().is_empty() && critical_note.is_none() {
         if !inline_streaming && (!is_pty_session || is_completed) {
             renderer.line(MessageStyle::ToolDetail, "(no output)")?;
         } else if is_pty_session && !is_completed {
@@ -184,10 +178,8 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     let rendered_follow_up_body = [
-        (!render_spool_reference_only && !inline_streaming && !stdout.trim().is_empty())
-            .then_some(stdout.as_ref()),
-        (!render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty())
-            .then_some(stderr.as_ref()),
+        (!render_spool_reference_only && !inline_streaming && !stdout.trim().is_empty()).then_some(stdout.as_ref()),
+        (!render_spool_reference_only && !inline_streaming && !stderr.trim().is_empty()).then_some(stderr.as_ref()),
         critical_note,
     ]
     .into_iter()

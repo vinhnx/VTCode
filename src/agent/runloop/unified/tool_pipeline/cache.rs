@@ -117,9 +117,7 @@ fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>>
     match tool_name {
         // Keep cache behavior strict for run_pty/shell: only "command" is accepted
         // (no raw_command fallback) to avoid broadening cacheability semantics.
-        tools::RUN_PTY_CMD | tools::SHELL | "bash" => {
-            collect_command_parts(args.get("command")?, args)
-        }
+        tools::RUN_PTY_CMD | tools::SHELL | "bash" => collect_command_parts(args.get("command")?, args),
         _ => stream_command_parts(tool_name, args),
     }
 }
@@ -146,11 +144,7 @@ fn command_value_to_parts(value: &Value) -> Option<Vec<String>> {
             .filter(|segment| !segment.is_empty())
             .map(ToString::to_string)
             .collect::<Vec<_>>();
-        if collected.is_empty() {
-            None
-        } else {
-            Some(collected)
-        }
+        if collected.is_empty() { None } else { Some(collected) }
     } else {
         None
     }
@@ -237,9 +231,7 @@ mod tests {
     use serde_json::json;
     use vtcode_core::config::constants::tools;
 
-    use super::{
-        cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts,
-    };
+    use super::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts};
 
     #[test]
     fn caches_path_scoped_git_diff_run_pty() {
@@ -248,10 +240,7 @@ mod tests {
         });
 
         assert!(is_tool_cacheable(tools::RUN_PTY_CMD, &args));
-        assert_eq!(
-            cache_target_path(tools::RUN_PTY_CMD, &args),
-            "vtcode-tui/src/core_tui/session/diff_preview.rs"
-        );
+        assert_eq!(cache_target_path(tools::RUN_PTY_CMD, &args), "vtcode-tui/src/core_tui/session/diff_preview.rs");
     }
 
     #[test]

@@ -150,8 +150,7 @@ impl<'de> Deserialize<'de> for OutputItem {
                             // content can be Vec<ContentPart> or String
                             let val: Value = map.next_value()?;
                             if let Value::Array(_) = &val {
-                                content =
-                                    Some(serde_json::from_value(val).map_err(de::Error::custom)?);
+                                content = Some(serde_json::from_value(val).map_err(de::Error::custom)?);
                             } else if let Value::String(s) = val {
                                 reasoning_content = Some(s);
                             }
@@ -195,14 +194,12 @@ impl<'de> Deserialize<'de> for OutputItem {
                         arguments: arguments.unwrap_or(Value::Null),
                         call_id,
                     })),
-                    "function_call_output" => {
-                        Ok(OutputItem::FunctionCallOutput(FunctionCallOutputItem {
-                            id,
-                            status,
-                            call_id,
-                            output: output.ok_or_else(|| de::Error::missing_field("output"))?,
-                        }))
-                    }
+                    "function_call_output" => Ok(OutputItem::FunctionCallOutput(FunctionCallOutputItem {
+                        id,
+                        status,
+                        call_id,
+                        output: output.ok_or_else(|| de::Error::missing_field("output"))?,
+                    })),
                     // Any other type is treated as a custom extension type
                     custom_type => Ok(OutputItem::Custom(CustomItem {
                         id,
@@ -253,11 +250,7 @@ impl OutputItem {
     }
 
     /// Creates a new message item with the given parameters (status: `InProgress`).
-    pub fn message(
-        id: impl Into<OutputItemId>,
-        role: MessageRole,
-        content: Vec<ContentPart>,
-    ) -> Self {
+    pub fn message(id: impl Into<OutputItemId>, role: MessageRole, content: Vec<ContentPart>) -> Self {
         Self::Message(MessageItem {
             id: id.into(),
             status: ItemStatus::InProgress,
@@ -267,11 +260,7 @@ impl OutputItem {
     }
 
     /// Creates a new completed message item with the given parameters.
-    pub fn completed_message(
-        id: impl Into<OutputItemId>,
-        role: MessageRole,
-        content: Vec<ContentPart>,
-    ) -> Self {
+    pub fn completed_message(id: impl Into<OutputItemId>, role: MessageRole, content: Vec<ContentPart>) -> Self {
         Self::Message(MessageItem {
             id: id.into(),
             status: ItemStatus::Completed,
@@ -292,11 +281,7 @@ impl OutputItem {
     }
 
     /// Creates a new function call item.
-    pub fn function_call(
-        id: impl Into<OutputItemId>,
-        name: impl Into<String>,
-        arguments: Value,
-    ) -> Self {
+    pub fn function_call(id: impl Into<OutputItemId>, name: impl Into<String>, arguments: Value) -> Self {
         Self::FunctionCall(FunctionCallItem {
             id: id.into(),
             status: ItemStatus::InProgress,
@@ -484,11 +469,7 @@ mod tests {
 
     #[test]
     fn test_function_call_serialization() {
-        let item = OutputItem::function_call(
-            "fc_1",
-            "exec_command",
-            serde_json::json!({"path": "/etc/passwd"}),
-        );
+        let item = OutputItem::function_call("fc_1", "exec_command", serde_json::json!({"path": "/etc/passwd"}));
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("\"type\":\"function_call\""));
         assert!(json.contains("\"name\":\"exec_command\""));
@@ -496,21 +477,15 @@ mod tests {
 
     #[test]
     fn test_custom_item_vtcode() {
-        let item = CustomItem::vtcode(
-            "custom_1",
-            "file_change",
-            serde_json::json!({"path": "test.rs", "kind": "update"}),
-        );
+        let item =
+            CustomItem::vtcode("custom_1", "file_change", serde_json::json!({"path": "test.rs", "kind": "update"}));
         assert_eq!(item.custom_type, "vtcode:file_change");
     }
 
     #[test]
     fn test_custom_item_serializes_with_custom_type_as_type() {
-        let item = OutputItem::Custom(CustomItem::vtcode(
-            "custom_1",
-            "file_change",
-            serde_json::json!({"path": "test.rs"}),
-        ));
+        let item =
+            OutputItem::Custom(CustomItem::vtcode("custom_1", "file_change", serde_json::json!({"path": "test.rs"})));
         let json = serde_json::to_string(&item).unwrap();
         // Custom type should be the type discriminator, not "custom"
         assert!(json.contains("\"type\":\"vtcode:file_change\""));
@@ -564,8 +539,7 @@ mod tests {
 
     #[test]
     fn test_completed_function_call_output_has_completed_status() {
-        let item =
-            OutputItem::completed_function_call_output("fco_1", Some("fc_1".to_string()), "result");
+        let item = OutputItem::completed_function_call_output("fco_1", Some("fc_1".to_string()), "result");
         assert_eq!(item.status(), ItemStatus::Completed);
         if let OutputItem::FunctionCallOutput(f) = item {
             assert_eq!(f.status, ItemStatus::Completed);

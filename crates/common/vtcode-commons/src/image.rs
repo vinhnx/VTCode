@@ -116,10 +116,7 @@ pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> 
     let path = file_path.as_ref();
 
     if !is_safe_relative_path(&path.to_string_lossy()) {
-        return Err(anyhow::anyhow!(
-            "Unsafe or traversal detected in image path: {}",
-            path.display()
-        ));
+        return Err(anyhow::anyhow!("Unsafe or traversal detected in image path: {}", path.display()));
     }
 
     if !has_supported_image_extension(path) {
@@ -131,10 +128,7 @@ pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> 
         .with_context(|| format!("Failed to read image file: {}", path.display()))?;
 
     if file_contents.len() > 20 * 1024 * 1024 {
-        return Err(anyhow::anyhow!(
-            "Image file too large: {} bytes (max 20MB)",
-            file_contents.len()
-        ));
+        return Err(anyhow::anyhow!("Image file too large: {} bytes (max 20MB)", file_contents.len()));
     }
 
     let mime_type = detect_mime_type_from_extension(path)?;
@@ -165,10 +159,7 @@ pub async fn read_image_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<Im
         .with_context(|| format!("Failed to read image file: {}", path.display()))?;
 
     if file_contents.len() > 20 * 1024 * 1024 {
-        return Err(anyhow::anyhow!(
-            "Image file too large: {} bytes (max 20MB)",
-            file_contents.len()
-        ));
+        return Err(anyhow::anyhow!("Image file too large: {} bytes (max 20MB)", file_contents.len()));
     }
 
     let mime_type = detect_mime_type_from_extension(path)?;

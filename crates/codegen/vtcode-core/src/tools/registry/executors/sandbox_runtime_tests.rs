@@ -1,8 +1,7 @@
 use super::{
     apply_runtime_sandbox_to_command, build_shell_execution_plan, enforce_sandbox_preflight_guards,
-    exec_run_output_config, parse_command_parts, parse_requested_sandbox_permissions,
-    prepare_exec_command, sandbox_policy_from_runtime_config,
-    sandbox_policy_with_additional_permissions,
+    exec_run_output_config, parse_command_parts, parse_requested_sandbox_permissions, prepare_exec_command,
+    sandbox_policy_from_runtime_config, sandbox_policy_with_additional_permissions,
 };
 use crate::sandboxing::{
     AdditionalPermissions, NetworkAllowlistEntry, SandboxPermissions, SandboxPolicy, SensitivePath,
@@ -18,18 +17,15 @@ fn runtime_sandbox_config_maps_workspace_policy_overrides() {
         ..Default::default()
     };
     config.network.policy = vtcode_config::NetworkPolicy::AllowlistOnly;
-    config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
-        domain: "api.github.com".to_string(),
-        port: 443,
-    }];
+    config.network.allowlist =
+        vec![vtcode_config::NetworkAllowlistEntryConfig { domain: "api.github.com".to_string(), port: 443 }];
     config.sensitive_paths.use_defaults = false;
     config.sensitive_paths.additional = vec!["/tmp/secret".to_string()];
     config.resource_limits.preset = vtcode_config::ResourceLimitsPreset::Conservative;
     config.resource_limits.max_memory_mb = 2048;
     config.seccomp.profile = vtcode_config::SeccompProfilePreset::Strict;
 
-    let policy =
-        sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
+    let policy = sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
     assert!(policy.has_network_allowlist());
     assert!(policy.is_network_allowed("api.github.com", 443));
     assert!(!policy.is_network_allowed("example.com", 443));
@@ -97,8 +93,7 @@ fn workspace_write_allow_all_network_is_not_blocked() {
     };
     config.network.policy = vtcode_config::NetworkPolicy::AllowAll;
 
-    let policy =
-        sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
+    let policy = sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
     assert!(policy.has_full_network_access());
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
@@ -115,8 +110,7 @@ fn read_only_allow_all_network_is_not_blocked() {
     };
     config.network.policy = vtcode_config::NetworkPolicy::AllowAll;
 
-    let policy =
-        sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
+    let policy = sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
     assert!(policy.has_full_network_access());
 
     let command = vec!["curl".to_string(), "https://example.com".to_string()];
@@ -132,13 +126,10 @@ fn read_only_allowlist_network_is_not_blocked() {
         ..Default::default()
     };
     config.network.policy = vtcode_config::NetworkPolicy::AllowlistOnly;
-    config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
-        domain: "api.github.com".to_string(),
-        port: 443,
-    }];
+    config.network.allowlist =
+        vec![vtcode_config::NetworkAllowlistEntryConfig { domain: "api.github.com".to_string(), port: 443 }];
 
-    let policy =
-        sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
+    let policy = sandbox_policy_from_runtime_config(&config, PathBuf::from("/tmp/ws").as_path()).unwrap();
     assert!(policy.has_network_allowlist());
     assert!(policy.is_network_allowed("api.github.com", 443));
 
@@ -162,13 +153,9 @@ fn preflight_blocks_sensitive_path_arguments() {
 #[test]
 fn preflight_blocks_writes_to_protected_workspace_metadata() {
     let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
-    let command = vec![
-        "touch".to_string(),
-        "/tmp/ws/.vtcode/session.json".to_string(),
-    ];
-    let error =
-        enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from("/tmp/ws").as_path())
-            .expect_err("protected workspace metadata should be denied");
+    let command = vec!["touch".to_string(), "/tmp/ws/.vtcode/session.json".to_string()];
+    let error = enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from("/tmp/ws").as_path())
+        .expect_err("protected workspace metadata should be denied");
     assert!(error.to_string().contains("blocked for writes"));
 }
 
@@ -299,15 +286,12 @@ fn with_additional_permissions_preserves_read_only_network_access() {
     let merged = sandbox_policy_with_additional_permissions(base_policy, &additional_permissions);
 
     assert!(merged.has_full_network_access());
-    assert!(
-        merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path())
-    );
+    assert!(merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path()));
 }
 
 #[test]
 fn with_additional_permissions_preserves_read_only_network_allowlist() {
-    let base_policy =
-        SandboxPolicy::read_only_with_network(vec![NetworkAllowlistEntry::https("api.github.com")]);
+    let base_policy = SandboxPolicy::read_only_with_network(vec![NetworkAllowlistEntry::https("api.github.com")]);
     let extra_path = PathBuf::from("/tmp/extra-write-root");
     let additional_permissions = AdditionalPermissions {
         fs_read: Vec::new(),
@@ -318,9 +302,7 @@ fn with_additional_permissions_preserves_read_only_network_allowlist() {
 
     assert!(merged.has_network_allowlist());
     assert!(merged.is_network_allowed("api.github.com", 443));
-    assert!(
-        merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path())
-    );
+    assert!(merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path()));
 }
 
 #[test]
@@ -331,8 +313,8 @@ fn parse_command_parts_accepts_cmd_alias() {
     });
     let payload = payload.as_object().expect("payload object");
 
-    let (parts, raw_command) = parse_command_parts(payload, "missing command", "empty command")
-        .expect("cmd alias should normalize");
+    let (parts, raw_command) =
+        parse_command_parts(payload, "missing command", "empty command").expect("cmd alias should normalize");
 
     assert_eq!(parts, vec!["git", "status", "--short"]);
     assert!(raw_command.is_none());
@@ -345,8 +327,8 @@ fn parse_command_parts_accepts_raw_command_alias() {
     });
     let payload = payload.as_object().expect("payload object");
 
-    let (parts, raw_command) = parse_command_parts(payload, "missing command", "empty command")
-        .expect("raw_command alias should normalize");
+    let (parts, raw_command) =
+        parse_command_parts(payload, "missing command", "empty command").expect("raw_command alias should normalize");
 
     assert_eq!(parts, vec!["cargo", "check", "-p", "vtcode-core"]);
     assert_eq!(raw_command.as_deref(), Some("cargo check -p vtcode-core"));
@@ -392,8 +374,7 @@ fn prepare_exec_command_wraps_when_shell_is_missing() {
     let payload = payload.as_object().expect("payload object");
     let command = vec!["echo".to_string(), "hi".to_string()];
 
-    let prepared =
-        prepare_exec_command(payload, "/bin/zsh", true, command.clone(), Some("echo hi".into()));
+    let prepared = prepare_exec_command(payload, "/bin/zsh", true, command.clone(), Some("echo hi".into()));
 
     assert_eq!(prepared.requested_command, command);
     assert_eq!(
@@ -413,11 +394,7 @@ fn prepare_exec_command_wraps_when_shell_is_missing() {
 fn prepare_exec_command_keeps_existing_shell_invocation() {
     let payload = json!({});
     let payload = payload.as_object().expect("payload object");
-    let command = vec![
-        "/bin/zsh".to_string(),
-        "-c".to_string(),
-        "echo hi".to_string(),
-    ];
+    let command = vec!["/bin/zsh".to_string(), "-c".to_string(), "echo hi".to_string()];
 
     let prepared = prepare_exec_command(payload, "/bin/zsh", true, command.clone(), None);
 

@@ -116,9 +116,7 @@ impl OutputStyleManager {
     pub fn list_styles(&self) -> Vec<(&str, &str)> {
         self.styles
             .iter()
-            .map(|(name, style)| {
-                (name.as_str(), style.config.description.as_deref().unwrap_or("No description"))
-            })
+            .map(|(name, style)| (name.as_str(), style.config.description.as_deref().unwrap_or("No description")))
             .collect()
     }
 

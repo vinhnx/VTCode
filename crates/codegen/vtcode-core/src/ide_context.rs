@@ -82,9 +82,8 @@ impl EditorContextSnapshot {
         let Some(content) = read_snapshot_file(path)? else {
             return Ok(None);
         };
-        let snapshot: Self = serde_json::from_str(&content).with_context(|| {
-            format!("failed to parse IDE context JSON snapshot at {}", path.display())
-        })?;
+        let snapshot: Self = serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse IDE context JSON snapshot at {}", path.display()))?;
         Ok(Some(snapshot.normalized()))
     }
 
@@ -148,9 +147,7 @@ impl EditorContextSnapshot {
             }
         }
 
-        if let Some(selection) =
-            file.selection.as_ref().filter(|selection| selection.has_explicit_selection())
-        {
+        if let Some(selection) = file.selection.as_ref().filter(|selection| selection.has_explicit_selection()) {
             parts.push(format!("Sel {}-{}", selection.range.start_line, selection.range.end_line));
         }
 
@@ -161,11 +158,7 @@ impl EditorContextSnapshot {
         }
     }
 
-    pub fn prompt_block(
-        &self,
-        workspace_root: &Path,
-        include_selection_text: bool,
-    ) -> Option<String> {
+    pub fn prompt_block(&self, workspace_root: &Path, include_selection_text: bool) -> Option<String> {
         let file = self.active_file.as_ref()?;
         let active_path = file.display_path(workspace_root, self.workspace_root.as_deref());
         let mut lines = Vec::new();
@@ -192,9 +185,7 @@ impl EditorContextSnapshot {
             lines.push(format!("- Buffer state: {}", states.join(", ")));
         }
 
-        if let Some(selection) =
-            file.selection.as_ref().filter(|selection| selection.has_explicit_selection())
-        {
+        if let Some(selection) = file.selection.as_ref().filter(|selection| selection.has_explicit_selection()) {
             lines.push(format!(
                 "- Selection: {}:{}-{}:{}",
                 selection.range.start_line,
@@ -265,11 +256,7 @@ impl EditorFileContext {
             .map(ToOwned::to_owned)
     }
 
-    pub fn display_path(
-        &self,
-        workspace_root: &Path,
-        snapshot_workspace_root: Option<&Path>,
-    ) -> String {
+    pub fn display_path(&self, workspace_root: &Path, snapshot_workspace_root: Option<&Path>) -> String {
         let raw = self.path.trim();
         if raw.is_empty() {
             return String::new();
@@ -326,9 +313,7 @@ fn read_snapshot_file(path: &Path) -> Result<Option<String>> {
         Ok(content) => content,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => {
-            return Err(err).with_context(|| {
-                format!("failed to read IDE context snapshot {}", path.display())
-            });
+            return Err(err).with_context(|| format!("failed to read IDE context snapshot {}", path.display()));
         }
     };
 
@@ -418,8 +403,7 @@ fn parse_legacy_fence_language(section: &str) -> Option<String> {
 
 fn parse_line_range_from_details(details: &str) -> Option<EditorLineRange> {
     let marker = "lines ";
-    let line_token =
-        details.split('•').map(str::trim).find_map(|entry| entry.strip_prefix(marker))?;
+    let line_token = details.split('•').map(str::trim).find_map(|entry| entry.strip_prefix(marker))?;
 
     parse_line_range(line_token)
 }
@@ -456,8 +440,8 @@ fn format_line_range(range: EditorLineRange) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
-        EditorSelectionRange, IDE_CONTEXT_SNAPSHOT_VERSION,
+        EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext, EditorSelectionRange,
+        IDE_CONTEXT_SNAPSHOT_VERSION,
     };
     use std::fs;
     use std::path::{Path, PathBuf};

@@ -30,10 +30,7 @@ fn looks_like_tool_output_spool_path(path: &str) -> bool {
     normalized.contains(".vtcode/context/tool_outputs/")
 }
 
-pub(crate) fn spool_chunk_read_path<'a>(
-    canonical_tool_name: &str,
-    args: &'a Value,
-) -> Option<&'a str> {
+pub(crate) fn spool_chunk_read_path<'a>(canonical_tool_name: &str, args: &'a Value) -> Option<&'a str> {
     if !is_read_file_style_call(canonical_tool_name, args) {
         return None;
     }
@@ -142,8 +139,7 @@ mod tests {
 
     #[test]
     fn spool_content_looks_like_error_detects_json_error_envelope() {
-        let payload =
-            r#"{"error":"Spool chunk reads exceeded","failure_kind":"spool_chunk_guard"}"#;
+        let payload = r#"{"error":"Spool chunk reads exceeded","failure_kind":"spool_chunk_guard"}"#;
         assert!(spool_content_looks_like_error(payload));
     }
 

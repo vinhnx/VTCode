@@ -43,11 +43,7 @@ pub(super) enum EvaluatorGateOutcome {
 }
 
 impl AgentRunner {
-    pub(super) fn harness_plan_build_evaluate_enabled(
-        &self,
-        full_auto_active: bool,
-        review_like: bool,
-    ) -> bool {
+    pub(super) fn harness_plan_build_evaluate_enabled(&self, full_auto_active: bool, review_like: bool) -> bool {
         full_auto_active
             && !review_like
             && !self.tool_registry.is_planning_active()
@@ -84,16 +80,12 @@ impl AgentRunner {
             .contract_markdown
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| self.render_contract_markdown(task, &tracker_items));
-        let contract_path =
-            harness_artifacts::write_contract(&self._workspace, &contract_markdown).await?;
+        let contract_path = harness_artifacts::write_contract(&self._workspace, &contract_markdown).await?;
         let tracker_title = planner_response
             .task_title
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| task.title.clone());
-        let tracker_tool = TaskTrackerTool::new(
-            self._workspace.clone(),
-            self.tool_registry.planning_workflow_state(),
-        );
+        let tracker_tool = TaskTrackerTool::new(self._workspace.clone(), self.tool_registry.planning_workflow_state());
         tracker_tool
             .execute(json!({
                 "action": "create",
@@ -111,8 +103,7 @@ impl AgentRunner {
             .feature_list_markdown
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| self.fallback_feature_list_markdown(&tracker_items));
-        let feature_list_path =
-            harness_artifacts::write_feature_list(&self._workspace, &feature_list_markdown).await?;
+        let feature_list_path = harness_artifacts::write_feature_list(&self._workspace, &feature_list_markdown).await?;
 
         event_recorder.harness_event(
             HarnessEventKind::PlanningCompleted,
@@ -166,11 +157,8 @@ impl AgentRunner {
             .await?;
         let summary = evaluator.effective_summary();
         let passed = evaluator.passed();
-        let evaluation_path = harness_artifacts::write_evaluation(
-            &self._workspace,
-            &self.render_evaluation(&evaluator),
-        )
-        .await?;
+        let evaluation_path =
+            harness_artifacts::write_evaluation(&self._workspace, &self.render_evaluation(&evaluator)).await?;
 
         Ok(EvaluationArtifacts {
             evaluation_path,
@@ -181,11 +169,7 @@ impl AgentRunner {
         })
     }
 
-    pub(super) fn evaluation_retry_prompt(
-        &self,
-        evaluation: &EvaluationArtifacts,
-        revision_round: usize,
-    ) -> String {
+    pub(super) fn evaluation_retry_prompt(&self, evaluation: &EvaluationArtifacts, revision_round: usize) -> String {
         let tracker_path = harness_artifacts::current_task_path(&self._workspace);
         format!(
             "Evaluator rejected the candidate implementation in round {}. Fix the reported issues, update `{}`, and try again.\n\nLatest evaluation summary:\n{}\n\nEvaluation artifact: {}",
@@ -243,10 +227,7 @@ impl AgentRunner {
         *revision_rounds_used += 1;
         event_recorder.harness_event(
             HarnessEventKind::RevisionStarted,
-            Some(format!(
-                "Starting revision round {} after evaluator rejection.",
-                *revision_rounds_used
-            )),
+            Some(format!("Starting revision round {} after evaluator rejection.", *revision_rounds_used)),
             None,
             Some(evaluation.evaluation_path.display().to_string()),
             None,
@@ -257,8 +238,7 @@ impl AgentRunner {
         // Re-plan from the current state using evaluator feedback.
         // Best-effort: if re-planning fails (e.g. mock provider in tests),
         // fall back to the original retry prompt without updated artifacts.
-        let revised_artifacts =
-            self.replan_from_failure(task, &evaluation, *revision_rounds_used).await;
+        let revised_artifacts = self.replan_from_failure(task, &evaluation, *revision_rounds_used).await;
 
         if let Some(ref artifacts) = revised_artifacts {
             let prompt = format!(
@@ -347,8 +327,7 @@ impl AgentRunner {
         let mut md = String::from("# Feature List\n\n");
         for item in tracker_items {
             if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
-                let outcome =
-                    item.get("outcome").and_then(|v| v.as_str()).unwrap_or("(unspecified)");
+                let outcome = item.get("outcome").and_then(|v| v.as_str()).unwrap_or("(unspecified)");
                 md.push_str(&format!("- [ ] {desc} — acceptance: {outcome}\n"));
             }
         }
@@ -371,19 +350,16 @@ impl AgentRunner {
         evaluation: &EvaluationArtifacts,
         revision_round: usize,
     ) -> Option<ReplanResponse> {
-        let spec_content =
-            tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
+        let spec_content = tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
+            .await
+            .unwrap_or_default();
+        let contract_content = tokio::fs::read_to_string(harness_artifacts::current_contract_path(&self._workspace))
+            .await
+            .unwrap_or_default();
+        let feature_list_content =
+            tokio::fs::read_to_string(harness_artifacts::current_feature_list_path(&self._workspace))
                 .await
                 .unwrap_or_default();
-        let contract_content =
-            tokio::fs::read_to_string(harness_artifacts::current_contract_path(&self._workspace))
-                .await
-                .unwrap_or_default();
-        let feature_list_content = tokio::fs::read_to_string(
-            harness_artifacts::current_feature_list_path(&self._workspace),
-        )
-        .await
-        .unwrap_or_default();
 
         const SYSTEM_PROMPT: &str = "You are the VT Code exec harness replanner. The evaluator rejected the current implementation. Revise the plan based on evaluator feedback. Return strict JSON only with keys: revised_feature_list, contract_addendum, new_tracker_items, rationale. revised_feature_list should be the complete updated feature list markdown (replacing the old one). contract_addendum should be a short markdown section appended to the contract. new_tracker_items should be an array of {description, outcome, verify} objects for newly discovered acceptance criteria. rationale should explain your changes.";
 
@@ -400,16 +376,9 @@ impl AgentRunner {
             evaluation.required_tracker_updates.join("; "),
         );
 
-        self.request_json_only(
-            SYSTEM_PROMPT,
-            user_prompt,
-            0.2,
-            4096,
-            "replan request failed",
-            "parse replan response",
-        )
-        .await
-        .ok()
+        self.request_json_only(SYSTEM_PROMPT, user_prompt, 0.2, 4096, "replan request failed", "parse replan response")
+            .await
+            .ok()
     }
 
     async fn request_evaluator_response(
@@ -418,25 +387,20 @@ impl AgentRunner {
         session_state: &AgentSessionState,
         verification_results: &[VerificationResult],
     ) -> Result<EvaluatorResponse> {
-        let spec_content =
-            tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
+        let spec_content = tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
+            .await
+            .unwrap_or_default();
+        let contract_content = tokio::fs::read_to_string(harness_artifacts::current_contract_path(&self._workspace))
+            .await
+            .unwrap_or_default();
+        let tracker_content = tokio::fs::read_to_string(harness_artifacts::current_task_path(&self._workspace))
+            .await
+            .unwrap_or_default();
+        let feature_list_content =
+            tokio::fs::read_to_string(harness_artifacts::current_feature_list_path(&self._workspace))
                 .await
                 .unwrap_or_default();
-        let contract_content =
-            tokio::fs::read_to_string(harness_artifacts::current_contract_path(&self._workspace))
-                .await
-                .unwrap_or_default();
-        let tracker_content =
-            tokio::fs::read_to_string(harness_artifacts::current_task_path(&self._workspace))
-                .await
-                .unwrap_or_default();
-        let feature_list_content = tokio::fs::read_to_string(
-            harness_artifacts::current_feature_list_path(&self._workspace),
-        )
-        .await
-        .unwrap_or_default();
-        let changed_files =
-            load_changed_file_snapshots(&self._workspace, &session_state.modified_files).await;
+        let changed_files = load_changed_file_snapshots(&self._workspace, &session_state.modified_files).await;
         let verification_summary = format_verification_results(verification_results);
         const SYSTEM_PROMPT: &str = "You are the VT Code exec harness evaluator. You are not the builder. Judge the candidate skeptically and prefer failing borderline cases. Return strict JSON only with keys verdict, summary, high_severity_findings, scorecard, findings, unmet_contract_items, residual_risks, required_tracker_updates. The scorecard must contain 1-5 scores for contract_fidelity, functionality, code_quality, and verification_integrity. Use verdict=pass only when every provided score is at least 4, the tracker/spec/contract all agree, verification evidence is credible, and there are no high-severity issues. If you discover new acceptance criteria through testing, add them to required_tracker_updates so the replanner can update the feature list.";
         let user_prompt = format!(
@@ -571,8 +535,7 @@ fn format_verification_results(results: &[VerificationResult]) -> String {
         .iter()
         .map(|result| {
             let status = if result.success { "PASS" } else { "FAIL" };
-            let exit_code =
-                result.exit_code.map(|code| code.to_string()).unwrap_or_else(|| "?".to_string());
+            let exit_code = result.exit_code.map(|code| code.to_string()).unwrap_or_else(|| "?".to_string());
             if result.output.trim().is_empty() {
                 format!("- [{status}] {} (exit {exit_code})", result.command)
             } else {

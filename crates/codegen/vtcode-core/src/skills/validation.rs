@@ -245,10 +245,7 @@ impl SkillValidator {
     }
 
     /// Validate a traditional skill from directory
-    pub async fn validate_skill_directory(
-        &mut self,
-        skill_path: &Path,
-    ) -> Result<ValidationReport> {
+    pub async fn validate_skill_directory(&mut self, skill_path: &Path) -> Result<ValidationReport> {
         let start_time = Instant::now();
         let mut checks = HashMap::new();
         // Performance tracking initialized at end
@@ -408,10 +405,7 @@ impl SkillValidator {
                 if let Err(err) = manifest.validate() {
                     let mut details = serde_json::Map::new();
                     details.insert("name".to_string(), Value::String(manifest.name.clone()));
-                    details.insert(
-                        "description".to_string(),
-                        Value::String(manifest.description.clone()),
-                    );
+                    details.insert("description".to_string(), Value::String(manifest.description.clone()));
                     return CheckResult {
                         name: "skill_file_valid".to_string(),
                         status: CheckStatus::Failed,
@@ -454,8 +448,7 @@ impl SkillValidator {
 
                 let mut details = serde_json::Map::new();
                 details.insert("name".to_string(), Value::String(manifest.name.clone()));
-                details
-                    .insert("description".to_string(), Value::String(manifest.description.clone()));
+                details.insert("description".to_string(), Value::String(manifest.description.clone()));
                 details.insert(
                     "warnings".to_string(),
                     serde_json::to_value(&warnings).unwrap_or_else(|_| Value::Array(vec![])),
@@ -490,11 +483,7 @@ impl SkillValidator {
                 return CheckResult {
                     name: "scripts_valid".to_string(),
                     status: CheckStatus::Failed,
-                    message: format!(
-                        "Failed to read scripts directory {}: {}",
-                        scripts_dir.display(),
-                        error
-                    ),
+                    message: format!("Failed to read scripts directory {}: {}", scripts_dir.display(), error),
                     details: None,
                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                 };
@@ -523,11 +512,7 @@ impl SkillValidator {
                     .ok()
                     .filter(|m| m.len() > self.config.max_script_size as u64)
                 {
-                    issues.push(format!(
-                        "Script too large: {} ({} bytes)",
-                        path.display(),
-                        metadata.len()
-                    ));
+                    issues.push(format!("Script too large: {} ({} bytes)", path.display(), metadata.len()));
                 }
 
                 // Check extension
@@ -590,11 +575,7 @@ impl SkillValidator {
     }
 
     /// Validate resource directory
-    async fn validate_resource_directory(
-        &self,
-        dir_path: &Path,
-        resource_type: &str,
-    ) -> CheckResult {
+    async fn validate_resource_directory(&self, dir_path: &Path, resource_type: &str) -> CheckResult {
         let start_time = Instant::now();
 
         let mut issues = vec![];
@@ -605,11 +586,7 @@ impl SkillValidator {
                 return CheckResult {
                     name: format!("resource_{resource_type}"),
                     status: CheckStatus::Failed,
-                    message: format!(
-                        "Failed to read resource directory {}: {}",
-                        dir_path.display(),
-                        error
-                    ),
+                    message: format!("Failed to read resource directory {}: {}", dir_path.display(), error),
                     details: None,
                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                 };
@@ -632,15 +609,9 @@ impl SkillValidator {
             let path = entry.path();
             if path.is_file() {
                 // Check file size
-                if let Some(metadata) =
-                    entry.metadata().await.ok().filter(|m| m.len() > 10 * 1024 * 1024)
-                {
+                if let Some(metadata) = entry.metadata().await.ok().filter(|m| m.len() > 10 * 1024 * 1024) {
                     // 10MB limit for resources
-                    issues.push(format!(
-                        "Resource file too large: {} ({} bytes)",
-                        path.display(),
-                        metadata.len()
-                    ));
+                    issues.push(format!("Resource file too large: {} ({} bytes)", path.display(), metadata.len()));
                 }
             }
         }
@@ -797,8 +768,7 @@ impl SkillValidator {
         // Check cache
         if let Ok(metadata) = tokio::fs::metadata(schema_path).await
             && let Ok(mtime) = metadata.modified()
-            && let Some((cached_mtime, cached_result)) =
-                self.schema_validation_cache.get(schema_path)
+            && let Some((cached_mtime, cached_result)) = self.schema_validation_cache.get(schema_path)
             && *cached_mtime == mtime
         {
             let mut result = cached_result.clone();
@@ -880,8 +850,7 @@ impl SkillValidator {
                     }
                 } else {
                     // Try -h
-                    let output =
-                        std::process::Command::new(&config.executable_path).arg("-h").output();
+                    let output = std::process::Command::new(&config.executable_path).arg("-h").output();
 
                     match output {
                         Ok(output) => {
@@ -897,8 +866,7 @@ impl SkillValidator {
                                 CheckResult {
                                     name: "tool_executable".to_string(),
                                     status: CheckStatus::Warning,
-                                    message: "Tool executed but returned non-zero exit code"
-                                        .to_string(),
+                                    message: "Tool executed but returned non-zero exit code".to_string(),
                                     details: None,
                                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                                 }
@@ -973,12 +941,10 @@ impl SkillValidator {
         for check in checks.values() {
             match check.status {
                 CheckStatus::Warning => {
-                    recommendations
-                        .push(format!("Address warning in {}: {}", check.name, check.message));
+                    recommendations.push(format!("Address warning in {}: {}", check.name, check.message));
                 }
                 CheckStatus::Failed => {
-                    recommendations
-                        .push(format!("Fix failed check {}: {}", check.name, check.message));
+                    recommendations.push(format!("Fix failed check {}: {}", check.name, check.message));
                 }
                 _ => {}
             }
@@ -986,8 +952,7 @@ impl SkillValidator {
 
         // Security recommendations
         if security.security_level == SecurityLevel::HighRisk {
-            recommendations
-                .push("Review and fix security issues before using this skill".to_string());
+            recommendations.push("Review and fix security issues before using this skill".to_string());
         }
 
         // Performance recommendations
@@ -1020,10 +985,7 @@ impl SkillValidator {
     }
 
     /// Validate multiple skills in batch
-    pub async fn validate_batch(
-        &mut self,
-        skill_paths: Vec<&Path>,
-    ) -> Vec<Result<ValidationReport>> {
+    pub async fn validate_batch(&mut self, skill_paths: Vec<&Path>) -> Vec<Result<ValidationReport>> {
         let mut results = vec![];
 
         for path in skill_paths {

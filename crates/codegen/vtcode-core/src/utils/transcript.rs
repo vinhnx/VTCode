@@ -49,10 +49,7 @@ impl Drop for SuspensionGuard {
             match stack.pop() {
                 Some(TranscriptMode::Suppressed) | None => {}
                 Some(TranscriptMode::Normal) => {
-                    debug_assert!(
-                        false,
-                        "transcript suspension stack corrupted: expected Suppressed"
-                    );
+                    debug_assert!(false, "transcript suspension stack corrupted: expected Suppressed");
                 }
             };
         });
@@ -82,8 +79,7 @@ struct QueuedMessage {
     style: InlineTextStyle,
 }
 
-static MESSAGE_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> =
-    Lazy::new(|| RwLock::new(VecDeque::new()));
+static MESSAGE_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
 pub fn append(line: &str) {
     if is_suppressed() || line.trim().is_empty() {
@@ -165,11 +161,7 @@ pub fn enqueue_message(message: &str, style: MessageStyle) {
 }
 
 /// Enqueue a message with a specific kind and display it immediately
-pub fn enqueue_message_with_kind(
-    message: &str,
-    kind: InlineMessageKind,
-    text_style: InlineTextStyle,
-) {
+pub fn enqueue_message_with_kind(message: &str, kind: InlineMessageKind, text_style: InlineTextStyle) {
     if message.trim().is_empty() {
         return;
     }
@@ -283,14 +275,7 @@ mod tests {
         append("different");
         append("duplicate");
         let snap = snapshot();
-        assert_eq!(
-            snap,
-            vec![
-                "duplicate".to_owned(),
-                "different".to_owned(),
-                "duplicate".to_owned()
-            ]
-        );
+        assert_eq!(snap, vec!["duplicate".to_owned(), "different".to_owned(), "duplicate".to_owned()]);
         clear();
     }
 

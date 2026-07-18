@@ -216,8 +216,7 @@ fn normalize_windows_path(path: &Path) -> String {
 
 /// Get the default sensitive paths as SensitivePath entries.
 pub fn default_sensitive_paths() -> Vec<SensitivePath> {
-    let paths: Vec<SensitivePath> =
-        DEFAULT_SENSITIVE_PATHS.iter().map(|p| SensitivePath::new(*p)).collect();
+    let paths: Vec<SensitivePath> = DEFAULT_SENSITIVE_PATHS.iter().map(|p| SensitivePath::new(*p)).collect();
 
     #[cfg(windows)]
     {
@@ -394,11 +393,7 @@ impl ResourceLimits {
     #[inline]
     #[must_use]
     pub fn effective_timeout_secs(&self) -> u64 {
-        if self.timeout_secs > 0 {
-            self.timeout_secs
-        } else {
-            300
-        }
+        if self.timeout_secs > 0 { self.timeout_secs } else { 300 }
     }
 }
 
@@ -760,10 +755,7 @@ impl SandboxPolicy {
     /// Create a workspace-write policy with resource limits.
     /// Useful for untrusted code that needs containment.
     #[must_use]
-    pub fn workspace_write_with_limits(
-        writable_roots: Vec<PathBuf>,
-        resource_limits: ResourceLimits,
-    ) -> Self {
+    pub fn workspace_write_with_limits(writable_roots: Vec<PathBuf>, resource_limits: ResourceLimits) -> Self {
         Self::WorkspaceWrite {
             writable_roots: writable_roots.into_iter().map(WritableRoot::new).collect(),
             network_access: false,
@@ -821,8 +813,9 @@ impl SandboxPolicy {
     #[must_use]
     pub fn has_network_allowlist(&self) -> bool {
         match self {
-            Self::ReadOnly { network_allowlist, .. }
-            | Self::WorkspaceWrite { network_allowlist, .. } => !network_allowlist.is_empty(),
+            Self::ReadOnly { network_allowlist, .. } | Self::WorkspaceWrite { network_allowlist, .. } => {
+                !network_allowlist.is_empty()
+            }
             _ => false,
         }
     }
@@ -832,8 +825,9 @@ impl SandboxPolicy {
     #[must_use]
     pub fn network_allowlist(&self) -> &[NetworkAllowlistEntry] {
         match self {
-            Self::ReadOnly { network_allowlist, .. }
-            | Self::WorkspaceWrite { network_allowlist, .. } => network_allowlist,
+            Self::ReadOnly { network_allowlist, .. } | Self::WorkspaceWrite { network_allowlist, .. } => {
+                network_allowlist
+            }
             _ => &[],
         }
     }
@@ -874,9 +868,7 @@ impl SandboxPolicy {
         match self {
             Self::WorkspaceWrite { .. } => {
                 let mut sensitive_paths = self.sensitive_paths();
-                sensitive_paths.extend(protected_writable_root_sensitive_paths(
-                    &self.get_writable_roots_with_cwd(cwd),
-                ));
+                sensitive_paths.extend(protected_writable_root_sensitive_paths(&self.get_writable_roots_with_cwd(cwd)));
                 sensitive_paths
             }
             _ => self.sensitive_paths(),
@@ -980,8 +972,7 @@ impl SandboxPolicy {
             Self::ReadOnly { .. } => false,
             Self::WorkspaceWrite { .. } => {
                 let writable = self.get_writable_roots_with_cwd(cwd);
-                writable.iter().any(|root| path.starts_with(&root.root))
-                    && !self.is_path_write_blocked(path, cwd)
+                writable.iter().any(|root| path.starts_with(&root.root)) && !self.is_path_write_blocked(path, cwd)
             }
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => true,
         }
@@ -1059,8 +1050,7 @@ mod tests {
 
     #[test]
     fn test_read_only_deserializes_legacy_shape() {
-        let policy: SandboxPolicy =
-            serde_json::from_str(r#"{"type":"read_only"}"#).expect("legacy read-only policy");
+        let policy: SandboxPolicy = serde_json::from_str(r#"{"type":"read_only"}"#).expect("legacy read-only policy");
 
         assert_eq!(policy, SandboxPolicy::read_only());
     }
@@ -1129,10 +1119,7 @@ mod tests {
             NetworkAllowlistEntry::https("api.github.com"),
             NetworkAllowlistEntry::https("*.npmjs.org"),
         ];
-        let policy = SandboxPolicy::workspace_write_with_network(
-            vec![PathBuf::from("/tmp/workspace")],
-            allowlist,
-        );
+        let policy = SandboxPolicy::workspace_write_with_network(vec![PathBuf::from("/tmp/workspace")], allowlist);
 
         // Has allowlist, not full access
         assert!(!policy.has_full_network_access());
@@ -1191,10 +1178,7 @@ mod tests {
 
         for entry in USERPROFILE_READ_ROOT_EXCLUSIONS {
             let expected = format!("~/{}", entry);
-            assert!(
-                path_strings.contains(&expected.as_str()),
-                "missing expected default sensitive path: {expected}"
-            );
+            assert!(path_strings.contains(&expected.as_str()), "missing expected default sensitive path: {expected}");
         }
     }
 
@@ -1224,8 +1208,7 @@ mod tests {
 
     #[test]
     fn test_workspace_no_sensitive_blocking() {
-        let policy =
-            SandboxPolicy::workspace_write_no_sensitive_blocking(vec![PathBuf::from("/tmp")]);
+        let policy = SandboxPolicy::workspace_write_no_sensitive_blocking(vec![PathBuf::from("/tmp")]);
         let sensitive = policy.sensitive_paths();
         assert!(sensitive.is_empty());
 
@@ -1282,10 +1265,7 @@ mod tests {
     #[test]
     fn test_workspace_with_limits() {
         let limits = ResourceLimits::conservative();
-        let policy = SandboxPolicy::workspace_write_with_limits(
-            vec![PathBuf::from("/tmp/workspace")],
-            limits.clone(),
-        );
+        let policy = SandboxPolicy::workspace_write_with_limits(vec![PathBuf::from("/tmp/workspace")], limits.clone());
 
         let policy_limits = policy.resource_limits();
         assert_eq!(policy_limits.max_memory_mb, limits.max_memory_mb);

@@ -89,14 +89,7 @@ mod tests {
         let mut state = PtyStreamState::new(None, test_pty_config(), None);
         state.apply_chunk("same\nsame\nnext\n", 5);
         let rendered = state.render_lines(5);
-        assert_eq!(
-            rendered,
-            vec![
-                "  └ same".to_string(),
-                "    same".to_string(),
-                "    next".to_string(),
-            ]
-        );
+        assert_eq!(rendered, vec!["  └ same".to_string(), "    same".to_string(), "    next".to_string(),]);
     }
 
     #[test]
@@ -124,8 +117,7 @@ mod tests {
 
     #[test]
     fn pty_stream_state_keeps_command_prompt_with_truncated_tail() {
-        let mut state =
-            PtyStreamState::new(Some("cargo check".to_string()), test_pty_config(), None);
+        let mut state = PtyStreamState::new(Some("cargo check".to_string()), test_pty_config(), None);
         state.apply_chunk("a\nb\nc\nd\ne\nf\ng\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(
@@ -143,11 +135,7 @@ mod tests {
 
     #[test]
     fn normalizes_command_prompt_whitespace() {
-        let state = PtyStreamState::new(
-            Some("  cargo   check \n -p  vtcode  ".to_string()),
-            test_pty_config(),
-            None,
-        );
+        let state = PtyStreamState::new(Some("  cargo   check \n -p  vtcode  ".to_string()), test_pty_config(), None);
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["• Ran cargo check -p vtcode".to_string()]);
     }

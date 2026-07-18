@@ -45,15 +45,14 @@ fn append_history_system_directives(final_system_prompt: &mut String, request: &
 }
 
 fn split_runtime_context_section(prompt: &str) -> Option<(String, String)> {
-    let (stable_prefix, runtime_section) =
-        if let Some(split_at) = prompt.rfind(NEWLINE_RUNTIME_CONTEXT_NEWLINE) {
-            let (stable_prefix, runtime_section) = prompt.split_at(split_at);
-            (stable_prefix, runtime_section.trim_start_matches('\n'))
-        } else if prompt.starts_with(RUNTIME_CONTEXT_NEWLINE) {
-            ("", prompt)
-        } else {
-            return None;
-        };
+    let (stable_prefix, runtime_section) = if let Some(split_at) = prompt.rfind(NEWLINE_RUNTIME_CONTEXT_NEWLINE) {
+        let (stable_prefix, runtime_section) = prompt.split_at(split_at);
+        (stable_prefix, runtime_section.trim_start_matches('\n'))
+    } else if prompt.starts_with(RUNTIME_CONTEXT_NEWLINE) {
+        ("", prompt)
+    } else {
+        return None;
+    };
     let runtime_section = runtime_section.trim().to_string();
     if runtime_section.is_empty() {
         return None;
@@ -82,14 +81,17 @@ pub(crate) fn build_system_prompt(
             }
         }
         if settings.force_xml_tags {
-            final_system_prompt
-                .push_str("\nPlease use XML tags to structure your response for consistency.");
+            final_system_prompt.push_str("\nPlease use XML tags to structure your response for consistency.");
         }
         if settings.allow_uncertainty {
-            final_system_prompt.push_str("\nIf you are unsure or the information is missing, explicitly state 'I don't know' or 'I am unsure'.");
+            final_system_prompt.push_str(
+                "\nIf you are unsure or the information is missing, explicitly state 'I don't know' or 'I am unsure'.",
+            );
         }
         if settings.strict_grounding {
-            final_system_prompt.push_str("\nOnly use information strictly from the provided documents. Do not rely on external knowledge.");
+            final_system_prompt.push_str(
+                "\nOnly use information strictly from the provided documents. Do not rely on external knowledge.",
+            );
         }
         if settings.force_quote_grounding {
             final_system_prompt.push_str("\nFind quotes from the provided documents that are relevant to the user request. Place these in <quotes> tags first, and then use them to justify your response.");
@@ -109,9 +111,7 @@ pub(crate) fn build_system_prompt(
         };
     }
 
-    if let Some((stable_prefix, runtime_section)) =
-        split_runtime_context_section(&final_system_prompt)
-    {
+    if let Some((stable_prefix, runtime_section)) = split_runtime_context_section(&final_system_prompt) {
         let should_cache_stable_prefix =
             cache_control.is_some() && breakpoints_remaining > 0 && !stable_prefix.is_empty();
         let mut blocks = Vec::new();

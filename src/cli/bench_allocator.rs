@@ -45,8 +45,7 @@ async fn run_burst(events: usize, tokens_per_task: usize, payload_bytes: usize) 
         events_set.spawn(async move {
             let _permit = permit;
             let payload = make_payload(payload_bytes);
-            let tokens: Vec<String> =
-                (0..tokens_per_task).map(|i| format!("token-{i}-{:064}", i)).collect();
+            let tokens: Vec<String> = (0..tokens_per_task).map(|i| format!("token-{i}-{:064}", i)).collect();
             let mut tasks: JoinSet<()> = JoinSet::new();
             for token in &tokens {
                 let token = token.clone();
@@ -92,9 +91,8 @@ pub async fn handle_bench_allocator_command(args: BenchAllocatorArgs) -> Result<
 
     for b in 1..=bursts {
         // Sample peak RSS concurrently while the burst runs.
-        let poll_handle = tokio::spawn(async move {
-            sample_peak_rss_mb(Duration::from_secs(60), Duration::from_millis(25))
-        });
+        let poll_handle =
+            tokio::spawn(async move { sample_peak_rss_mb(Duration::from_secs(60), Duration::from_millis(25)) });
         run_burst(concurrency, tokens_per_task, payload_bytes).await?;
         let peak = poll_handle.await?;
         let post_burst = sample_rss_mb();
@@ -105,9 +103,7 @@ pub async fn handle_bench_allocator_command(args: BenchAllocatorArgs) -> Result<
         let post_idle = sample_rss_mb();
         let retained = post_idle - baseline;
 
-        println!(
-            "{b:>5} | {peak:>11.1} | {post_burst:>13.1} | {post_idle:>12.1} | {retained:>22.1}",
-        );
+        println!("{b:>5} | {peak:>11.1} | {post_burst:>13.1} | {post_idle:>12.1} | {retained:>22.1}",);
     }
 
     let final_rss = sample_rss_mb();

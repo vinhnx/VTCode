@@ -10,26 +10,11 @@ mod capabilities_tests {
 
     #[test]
     fn test_supports_structured_output() {
-        assert!(supports_structured_output(
-            models::CLAUDE_SONNET_4_6,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_structured_output(
-            "claude-opus-4-5-20251101",
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_structured_output(
-            "claude-sonnet-4-5-20250929",
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_structured_output(
-            models::CLAUDE_HAIKU_4_5,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(!supports_structured_output(
-            "claude-3-7-sonnet-test",
-            models::anthropic::DEFAULT_MODEL
-        ));
+        assert!(supports_structured_output(models::CLAUDE_SONNET_4_6, models::anthropic::DEFAULT_MODEL));
+        assert!(supports_structured_output("claude-opus-4-5-20251101", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_structured_output("claude-sonnet-4-5-20250929", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_structured_output(models::CLAUDE_HAIKU_4_5, models::anthropic::DEFAULT_MODEL));
+        assert!(!supports_structured_output("claude-3-7-sonnet-test", models::anthropic::DEFAULT_MODEL));
     }
 
     #[test]
@@ -391,10 +376,7 @@ mod response_parser_tests {
         assert!(matches!(parse_finish_reason("max_tokens"), FinishReason::Length));
         assert!(matches!(parse_finish_reason("tool_use"), FinishReason::ToolCalls));
         assert!(matches!(parse_finish_reason("refusal"), FinishReason::Refusal));
-        assert!(matches!(
-            parse_finish_reason("model_context_window_exceeded"),
-            FinishReason::Length
-        ));
+        assert!(matches!(parse_finish_reason("model_context_window_exceeded"), FinishReason::Length));
     }
 
     #[test]
@@ -410,8 +392,7 @@ mod response_parser_tests {
             }
         });
 
-        let response =
-            parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
+        let response = parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
         assert_eq!(response.content.as_deref(), Some("Hello, world!"));
         assert!(matches!(response.finish_reason, FinishReason::Stop));
     }
@@ -430,8 +411,7 @@ mod response_parser_tests {
             }
         });
 
-        let response =
-            parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
+        let response = parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
         let reasoning = response.reasoning.as_deref().expect("expected reasoning content");
         assert!(reasoning.contains("Let me think"));
         assert_eq!(
@@ -466,8 +446,7 @@ mod response_parser_tests {
             }
         });
 
-        let response =
-            parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
+        let response = parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
         let tool_calls = response.tool_calls.as_ref().expect("expected tool calls");
         assert_eq!(tool_calls.len(), 1);
         let function = tool_calls[0].function.as_ref().expect("expected function call");
@@ -545,10 +524,7 @@ mod request_builder_tests {
             model: models::CLAUDE_OPUS_4_8.to_string(),
             messages: vec![
                 Message::user("Review this code.".to_string()),
-                Message::system(
-                    "From now on, every suggestion must include explicit type annotations."
-                        .to_string(),
-                ),
+                Message::system("From now on, every suggestion must include explicit type annotations.".to_string()),
             ]
             .into(),
             ..Default::default()
@@ -838,8 +814,7 @@ mod request_builder_tests {
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
             system_prompt: Some(Arc::new(
-                "stable system instructions\n[Runtime Context]\n- turns: 7\n- tool_calls: 3"
-                    .to_string(),
+                "stable system instructions\n[Runtime Context]\n- turns: 7\n- tool_calls: 3".to_string(),
             )),
             messages: vec![Message::user("hello".to_string())].into(),
             ..Default::default()
@@ -1106,10 +1081,7 @@ mod request_builder_tests {
     fn test_convert_to_anthropic_format_includes_native_memory_tool() {
         let request = LLMRequest {
             model: models::CLAUDE_SONNET_4_6.to_string(),
-            messages: vec![Message::user(
-                "remember my preferred test runner".to_string(),
-            )]
-            .into(),
+            messages: vec![Message::user("remember my preferred test runner".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition {
                 tool_type: "memory_20250818".to_string(),
                 function: None,

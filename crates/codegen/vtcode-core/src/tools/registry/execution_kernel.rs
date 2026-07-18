@@ -102,12 +102,8 @@ fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
     }
     if tool_name == tool_names::EDIT_FILE {
         return match key {
-            "old_str" => {
-                is_missing_arg_value(args, "old_str") && is_missing_arg_value(args, "old_string")
-            }
-            "new_str" => {
-                is_missing_arg_value(args, "new_str") && is_missing_arg_value(args, "new_string")
-            }
+            "old_str" => is_missing_arg_value(args, "old_str") && is_missing_arg_value(args, "old_string"),
+            "new_str" => is_missing_arg_value(args, "new_str") && is_missing_arg_value(args, "new_string"),
             _ => is_missing_arg_value(args, key),
         };
     }
@@ -131,14 +127,10 @@ fn configured_file_operation_max_payload_bytes() -> usize {
 }
 
 fn schema_uses_description_alias(schema_properties: &Map<String, Value>) -> bool {
-    schema_properties.contains_key(DESCRIPTION_FIELD)
-        && !schema_properties.contains_key(DETAILS_ALIAS_FIELD)
+    schema_properties.contains_key(DESCRIPTION_FIELD) && !schema_properties.contains_key(DETAILS_ALIAS_FIELD)
 }
 
-fn normalize_description_alias(
-    object: &mut Map<String, Value>,
-    schema_properties: &Map<String, Value>,
-) -> bool {
+fn normalize_description_alias(object: &mut Map<String, Value>, schema_properties: &Map<String, Value>) -> bool {
     if !schema_uses_description_alias(schema_properties) || object.contains_key(DESCRIPTION_FIELD) {
         return false;
     }
@@ -206,8 +198,7 @@ fn serialized_payload_size_bytes(args: &Value) -> usize {
 
 fn file_operation_action_for_limit(normalized_tool_name: &str, args: &Value) -> Option<String> {
     if normalized_tool_name == tool_names::UNIFIED_FILE {
-        return crate::tools::tool_intent::file_operation_action(args)
-            .map(|a| a.to_ascii_lowercase());
+        return crate::tools::tool_intent::file_operation_action(args).map(|a| a.to_ascii_lowercase());
     }
     if normalized_tool_name == tool_names::APPLY_PATCH {
         return Some("patch".to_string());
@@ -272,9 +263,7 @@ pub(super) fn remap_consolidated_action_alias_args(
             (tool_names::CRON, tool_names::CRON_LIST) => Some("list"),
             (tool_names::CRON, tool_names::CRON_DELETE) => Some("delete"),
             (tool_names::AGENT, tool_names::SPAWN_AGENT) => Some("spawn"),
-            (tool_names::AGENT, tool_names::SPAWN_BACKGROUND_SUBPROCESS) => {
-                Some("spawn_subprocess")
-            }
+            (tool_names::AGENT, tool_names::SPAWN_BACKGROUND_SUBPROCESS) => Some("spawn_subprocess"),
             (tool_names::AGENT, tool_names::SEND_INPUT) => Some("send_input"),
             (tool_names::AGENT, tool_names::RESUME_AGENT) => Some("resume"),
             (tool_names::AGENT, tool_names::WAIT_AGENT) => Some("wait"),
@@ -334,13 +323,10 @@ pub(super) fn normalize_tool_args<'a>(
 
     if matches!(
         normalized_tool_name,
-        tool_names::RUN_PTY_CMD
-            | tool_names::CREATE_PTY_SESSION
-            | tool_names::UNIFIED_EXEC
-            | tool_names::SHELL
+        tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | tool_names::UNIFIED_EXEC | tool_names::SHELL
     ) {
-        let shell_args = crate::tools::command_args::normalize_shell_args(normalized.as_ref())
-            .map_err(|error| anyhow!(error))?;
+        let shell_args =
+            crate::tools::command_args::normalize_shell_args(normalized.as_ref()).map_err(|error| anyhow!(error))?;
         if shell_args != *normalized.as_ref() {
             normalized = std::borrow::Cow::Owned(shell_args);
         }
@@ -355,10 +341,9 @@ pub(super) fn normalize_tool_args<'a>(
 
 fn public_exec_validation_args(normalized_tool_name: &str, args: &Value) -> Result<Option<Value>> {
     let write_stdin_dispatch = match normalized_tool_name {
-        tool_names::WRITE_STDIN => Some(
-            crate::tools::command_args::write_stdin_dispatch(args)
-                .map_err(|error| anyhow!(error))?,
-        ),
+        tool_names::WRITE_STDIN => {
+            Some(crate::tools::command_args::write_stdin_dispatch(args).map_err(|error| anyhow!(error))?)
+        }
         _ => None,
     };
     let action = match normalized_tool_name {
@@ -368,8 +353,7 @@ fn public_exec_validation_args(normalized_tool_name: &str, args: &Value) -> Resu
             .ok_or_else(|| anyhow!("write_stdin dispatch was not resolved"))?,
         _ => return Ok(None),
     };
-    let mut exec_args =
-        crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
+    let mut exec_args = crate::tools::command_args::normalize_shell_args(args).map_err(|error| anyhow!(error))?;
     let payload = exec_args
         .as_object_mut()
         .ok_or_else(|| anyhow!("{normalized_tool_name} requires a JSON object"))?;
@@ -400,9 +384,8 @@ pub(super) fn preflight_validate_call_with_mode(
 ) -> Result<ToolPreflightOutcome> {
     let normalized_tool_name = resolve_dispatch_target(registry, name, mode)?;
 
-    if let Some(remapped_args) =
-        remap_public_file_operation_alias_args(name, &normalized_tool_name, args)
-            .or_else(|| remap_consolidated_action_alias_args(name, &normalized_tool_name, args))
+    if let Some(remapped_args) = remap_public_file_operation_alias_args(name, &normalized_tool_name, args)
+        .or_else(|| remap_consolidated_action_alias_args(name, &normalized_tool_name, args))
     {
         preflight_validate_resolved_call(registry, &normalized_tool_name, &remapped_args)
     } else {
@@ -423,11 +406,7 @@ pub(super) fn preflight_validate_call_with_mode(
 /// - [`DispatchMode::Harness`]: on a public-route miss, fall back to the
 ///   internal builtin registration, but only for names in
 ///   [`HARNESS_DISPATCHABLE_INTERNAL_TOOLS`].
-pub(super) fn resolve_dispatch_target(
-    registry: &ToolRegistry,
-    name: &str,
-    mode: DispatchMode,
-) -> Result<String> {
+pub(super) fn resolve_dispatch_target(registry: &ToolRegistry, name: &str, mode: DispatchMode) -> Result<String> {
     match registry.resolve_public_tool(name) {
         Ok(resolution) => Ok(resolution.registration_name().to_string()),
         Err(public_err) => mode
@@ -477,21 +456,16 @@ pub(super) fn preflight_validate_resolved_call(
         .inventory
         .registration_for(normalized_tool_name)
         .and_then(|registration| registration.parameter_schema().cloned());
-    let mut validation_args =
-        normalize_tool_args(normalized_tool_name, args, parameter_schema.as_ref())?;
+    let mut validation_args = normalize_tool_args(normalized_tool_name, args, parameter_schema.as_ref())?;
     let mut effective_args = None;
 
-    if let Some(exec_args) =
-        public_exec_validation_args(normalized_tool_name, validation_args.as_ref())?
-    {
+    if let Some(exec_args) = public_exec_validation_args(normalized_tool_name, validation_args.as_ref())? {
         validation_tool_name = tool_names::UNIFIED_EXEC.to_string();
         validation_args = std::borrow::Cow::Owned(exec_args);
         effective_args = Some(validation_args.as_ref().clone());
     } else if normalized_tool_name == tool_names::UNIFIED_FILE
         && let Some(remapped_args) =
-            crate::tools::tool_intent::remap_file_operation_command_args_to_command_session(
-                validation_args.as_ref(),
-            )
+            crate::tools::tool_intent::remap_file_operation_command_args_to_command_session(validation_args.as_ref())
     {
         routed_tool_name = tool_names::UNIFIED_EXEC.to_string();
         validation_tool_name = tool_names::UNIFIED_EXEC.to_string();
@@ -500,8 +474,7 @@ pub(super) fn preflight_validate_resolved_call(
             .registration_for(&validation_tool_name)
             .and_then(|registration| registration.parameter_schema().cloned());
         validation_args = std::borrow::Cow::Owned(
-            normalize_tool_args(&validation_tool_name, &remapped_args, exec_schema.as_ref())?
-                .into_owned(),
+            normalize_tool_args(&validation_tool_name, &remapped_args, exec_schema.as_ref())?.into_owned(),
         );
         effective_args = Some(validation_args.as_ref().clone());
     }
@@ -515,11 +488,9 @@ pub(super) fn preflight_validate_resolved_call(
     }
     if validation_tool_name == tool_names::UNIFIED_EXEC {
         failures.extend(
-            crate::tools::command_args::command_session_missing_required_args(
-                validation_args.as_ref(),
-            )
-            .into_iter()
-            .map(|key| format!("Missing required argument: {key}")),
+            crate::tools::command_args::command_session_missing_required_args(validation_args.as_ref())
+                .into_iter()
+                .map(|key| format!("Missing required argument: {key}")),
         );
     }
 
@@ -540,9 +511,7 @@ pub(super) fn preflight_validate_resolved_call(
         validation_tool_name.as_str(),
         tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION | tool_names::SHELL
     ) || (validation_tool_name == tool_names::UNIFIED_EXEC
-        && crate::tools::command_args::command_session_requires_command_safety(
-            validation_args.as_ref(),
-        ));
+        && crate::tools::command_args::command_session_requires_command_safety(validation_args.as_ref()));
     if should_validate_command
         && let Some(command) = crate::tools::command_args::command_text(validation_args.as_ref())
             .ok()
@@ -559,11 +528,7 @@ pub(super) fn preflight_validate_resolved_call(
     );
 
     if !failures.is_empty() {
-        return Err(anyhow!(
-            "Tool preflight validation failed for '{}': {}",
-            routed_tool_name,
-            failures.join("; ")
-        ));
+        return Err(anyhow!("Tool preflight validation failed for '{}': {}", routed_tool_name, failures.join("; ")));
     }
 
     if validation_tool_name == tool_names::UNIFIED_EXEC
@@ -590,9 +555,7 @@ pub(super) fn preflight_validate_resolved_call(
             let hint_msg = condensed_schema_hint(schema)
                 .map(|hint| format!("\nExpected schema (required fields and types): {hint}"))
                 .unwrap_or_default();
-            return Err(anyhow!(
-                "Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg}"
-            ));
+            return Err(anyhow!("Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg}"));
         }
     }
     if validation_tool_name == tool_names::CODE_SEARCH {
@@ -600,17 +563,10 @@ pub(super) fn preflight_validate_resolved_call(
             .map_err(|error| anyhow!("Invalid arguments for tool '{routed_tool_name}': {error}"))?;
     }
 
-    let intent = crate::tools::tool_intent::classify_tool_intent(
-        &validation_tool_name,
-        validation_args.as_ref(),
-    );
+    let intent = crate::tools::tool_intent::classify_tool_intent(&validation_tool_name, validation_args.as_ref());
     let readonly_classification = !intent.mutating;
     if registry.is_planning_active()
-        && !registry.is_planning_active_allowed_with_intent(
-            &validation_tool_name,
-            validation_args.as_ref(),
-            &intent,
-        )
+        && !registry.is_planning_active_allowed_with_intent(&validation_tool_name, validation_args.as_ref(), &intent)
     {
         let msg = agent_execution::planning_workflow_denial_message(&routed_tool_name);
         return Err(anyhow!(msg).context(agent_execution::PLANNING_DENIED_CONTEXT));
@@ -631,9 +587,8 @@ pub(super) fn preflight_validate_resolved_call(
 mod tests {
     use super::super::assembly::public_tool_name_candidates;
     use super::{
-        ToolRegistry, configured_file_operation_max_payload_bytes,
-        enforce_file_operation_payload_limit, is_missing_required_arg, normalize_tool_args,
-        parse_file_operation_max_payload_bytes, preflight_validate_call,
+        ToolRegistry, configured_file_operation_max_payload_bytes, enforce_file_operation_payload_limit,
+        is_missing_required_arg, normalize_tool_args, parse_file_operation_max_payload_bytes, preflight_validate_call,
         preflight_validate_resolved_call,
     };
     use crate::config::constants::tools as tool_names;
@@ -839,10 +794,7 @@ mod tests {
 
         let normalized = normalize_tool_args(tool_names::REQUEST_USER_INPUT, &args, Some(&schema))?;
         let option = &normalized["questions"][0]["options"][0];
-        assert_eq!(
-            option.get("description").and_then(Value::as_str),
-            Some("Ship the smallest viable slice.")
-        );
+        assert_eq!(option.get("description").and_then(Value::as_str), Some("Ship the smallest viable slice."));
         assert!(option.get("details").is_none());
         Ok(())
     }
@@ -862,10 +814,7 @@ mod tests {
         });
 
         let normalized = normalize_tool_args(tool_names::TASK_TRACKER, &args, Some(&schema))?;
-        assert_eq!(
-            normalized.get("description").and_then(Value::as_str),
-            Some("Add regression coverage")
-        );
+        assert_eq!(normalized.get("description").and_then(Value::as_str), Some("Add regression coverage"));
         assert!(normalized.get("details").is_none());
         Ok(())
     }
@@ -885,10 +834,7 @@ mod tests {
 
         let normalized = normalize_tool_args(tool_names::TASK_TRACKER, &args, Some(&schema))?;
         assert!(normalized.get("description").is_none());
-        assert_eq!(
-            normalized.get("details").and_then(Value::as_str),
-            Some("Keep the real details field.")
-        );
+        assert_eq!(normalized.get("details").and_then(Value::as_str), Some("Keep the real details field."));
         Ok(())
     }
 
@@ -896,12 +842,8 @@ mod tests {
     async fn command_session_preflight_rejects_run_without_command() {
         let (_temp, registry) = new_test_registry().await;
 
-        let err = preflight_validate_resolved_call(
-            &registry,
-            tool_names::UNIFIED_EXEC,
-            &json!({"action": "run"}),
-        )
-        .expect_err("missing command should fail preflight");
+        let err = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({"action": "run"}))
+            .expect_err("missing command should fail preflight");
 
         assert!(err.to_string().contains("Missing required argument: command"));
     }
@@ -929,12 +871,9 @@ mod tests {
     async fn exec_command_preflight_rejects_dangerous_command() {
         let (_temp, registry) = new_test_registry().await;
 
-        let err = preflight_validate_call(
-            &registry,
-            tool_names::EXEC_COMMAND,
-            &json!({"cmd": "git reset --hard HEAD~1"}),
-        )
-        .expect_err("dangerous exec_command should fail preflight");
+        let err =
+            preflight_validate_call(&registry, tool_names::EXEC_COMMAND, &json!({"cmd": "git reset --hard HEAD~1"}))
+                .expect_err("dangerous exec_command should fail preflight");
 
         let text = err.to_string();
         assert!(text.contains("Tool preflight validation failed for 'exec_command'"));
@@ -1010,12 +949,8 @@ mod tests {
     async fn write_stdin_poll_preflight_rejects_non_string_session_id() {
         let (_temp, registry) = new_test_registry().await;
 
-        let error = preflight_validate_call(
-            &registry,
-            tool_names::WRITE_STDIN,
-            &json!({"session_id": 1, "chars": ""}),
-        )
-        .expect_err("non-string session id should fail preflight");
+        let error = preflight_validate_call(&registry, tool_names::WRITE_STDIN, &json!({"session_id": 1, "chars": ""}))
+            .expect_err("non-string session id should fail preflight");
 
         assert!(error.to_string().contains("write_stdin"));
         assert!(error.to_string().contains("Missing required argument: session_id"));
@@ -1028,12 +963,10 @@ mod tests {
         let err = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({}))
             .expect_err("missing action should fail preflight");
 
-        assert!(
-            err.to_string().contains(&format!(
-                "Invalid arguments for tool '{}': missing action; provide `action` or inferable exec arguments",
-                tool_names::UNIFIED_EXEC
-            ))
-        );
+        assert!(err.to_string().contains(&format!(
+            "Invalid arguments for tool '{}': missing action; provide `action` or inferable exec arguments",
+            tool_names::UNIFIED_EXEC
+        )));
     }
 
     #[tokio::test]
@@ -1054,12 +987,8 @@ mod tests {
     async fn command_session_preflight_rejects_poll_without_session_id() {
         let (_temp, registry) = new_test_registry().await;
 
-        let err = preflight_validate_resolved_call(
-            &registry,
-            tool_names::UNIFIED_EXEC,
-            &json!({"action": "poll"}),
-        )
-        .expect_err("missing session_id should fail preflight");
+        let err = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({"action": "poll"}))
+            .expect_err("missing session_id should fail preflight");
 
         assert!(err.to_string().contains("Missing required argument: session_id"));
     }
@@ -1068,11 +997,7 @@ mod tests {
     async fn command_session_preflight_accepts_list_without_extra_args() -> Result<()> {
         let (_temp, registry) = new_test_registry().await;
 
-        let result = preflight_validate_resolved_call(
-            &registry,
-            tool_names::UNIFIED_EXEC,
-            &json!({"action": "list"}),
-        )?;
+        let result = preflight_validate_resolved_call(&registry, tool_names::UNIFIED_EXEC, &json!({"action": "list"}))?;
 
         assert_eq!(result.normalized_tool_name, tool_names::UNIFIED_EXEC);
         Ok(())

@@ -2,8 +2,7 @@ use std::path::PathBuf;
 
 use super::diff::{DiffHunk, DiffPreviewMode, TrustMode};
 use crate::tui::core_tui::types::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardModalMode, WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 
 #[derive(Clone, Debug)]
@@ -124,9 +123,7 @@ impl From<crate::tui::core_tui::types::OverlayEvent> for TransientEvent {
             crate::tui::core_tui::types::OverlayEvent::SelectionChanged(change) => {
                 Self::SelectionChanged(change.into())
             }
-            crate::tui::core_tui::types::OverlayEvent::Submitted(submission) => {
-                Self::Submitted(submission.into())
-            }
+            crate::tui::core_tui::types::OverlayEvent::Submitted(submission) => Self::Submitted(submission.into()),
             crate::tui::core_tui::types::OverlayEvent::Cancelled => Self::Cancelled,
         }
     }
@@ -178,25 +175,13 @@ impl From<crate::tui::core_tui::types::OverlayHotkeyAction> for TransientHotkeyA
     fn from(value: crate::tui::core_tui::types::OverlayHotkeyAction) -> Self {
         match value {
             crate::tui::core_tui::types::OverlayHotkeyAction::LaunchEditor => Self::LaunchEditor,
-            crate::tui::core_tui::types::OverlayHotkeyAction::OpenSourceThread => {
-                Self::OpenSourceThread
-            }
-            crate::tui::core_tui::types::OverlayHotkeyAction::ReloadSubagentInspector => {
-                Self::ReloadSubagentInspector
-            }
-            crate::tui::core_tui::types::OverlayHotkeyAction::GracefulStopSubagent => {
-                Self::GracefulStopSubagent
-            }
-            crate::tui::core_tui::types::OverlayHotkeyAction::ForceCancelSubagent => {
-                Self::ForceCancelSubagent
-            }
-            crate::tui::core_tui::types::OverlayHotkeyAction::FocusJobOutput => {
-                Self::FocusJobOutput
-            }
+            crate::tui::core_tui::types::OverlayHotkeyAction::OpenSourceThread => Self::OpenSourceThread,
+            crate::tui::core_tui::types::OverlayHotkeyAction::ReloadSubagentInspector => Self::ReloadSubagentInspector,
+            crate::tui::core_tui::types::OverlayHotkeyAction::GracefulStopSubagent => Self::GracefulStopSubagent,
+            crate::tui::core_tui::types::OverlayHotkeyAction::ForceCancelSubagent => Self::ForceCancelSubagent,
+            crate::tui::core_tui::types::OverlayHotkeyAction::FocusJobOutput => Self::FocusJobOutput,
             crate::tui::core_tui::types::OverlayHotkeyAction::InterruptJob => Self::InterruptJob,
-            crate::tui::core_tui::types::OverlayHotkeyAction::PreviewJobSnapshot => {
-                Self::PreviewJobSnapshot
-            }
+            crate::tui::core_tui::types::OverlayHotkeyAction::PreviewJobSnapshot => Self::PreviewJobSnapshot,
         }
     }
 }
@@ -204,9 +189,7 @@ impl From<crate::tui::core_tui::types::OverlayHotkeyAction> for TransientHotkeyA
 impl From<crate::tui::core_tui::types::OverlaySelectionChange> for TransientSelectionChange {
     fn from(value: crate::tui::core_tui::types::OverlaySelectionChange) -> Self {
         match value {
-            crate::tui::core_tui::types::OverlaySelectionChange::List(selection) => {
-                Self::List(selection)
-            }
+            crate::tui::core_tui::types::OverlaySelectionChange::List(selection) => Self::List(selection),
         }
     }
 }
@@ -214,15 +197,9 @@ impl From<crate::tui::core_tui::types::OverlaySelectionChange> for TransientSele
 impl From<crate::tui::core_tui::types::OverlaySubmission> for TransientSubmission {
     fn from(value: crate::tui::core_tui::types::OverlaySubmission) -> Self {
         match value {
-            crate::tui::core_tui::types::OverlaySubmission::Selection(selection) => {
-                Self::Selection(selection)
-            }
-            crate::tui::core_tui::types::OverlaySubmission::Wizard(selections) => {
-                Self::Wizard(selections)
-            }
-            crate::tui::core_tui::types::OverlaySubmission::Hotkey(action) => {
-                Self::Hotkey(action.into())
-            }
+            crate::tui::core_tui::types::OverlaySubmission::Selection(selection) => Self::Selection(selection),
+            crate::tui::core_tui::types::OverlaySubmission::Wizard(selections) => Self::Wizard(selections),
+            crate::tui::core_tui::types::OverlaySubmission::Hotkey(action) => Self::Hotkey(action.into()),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::error_display;
 use crate::provider::{
-    ContentPart, FinishReason, LLMError, LLMRequest, LLMStream, LLMStreamEvent, Message,
-    MessageContent, MessageRole, ToolCall, ToolDefinition,
+    ContentPart, FinishReason, LLMError, LLMRequest, LLMStream, LLMStreamEvent, Message, MessageContent, MessageRole,
+    ToolCall, ToolDefinition,
 };
 use crate::types as llm_types;
 use crate::utils::extract_reasoning_content;
@@ -12,9 +12,9 @@ use crate::providers::openai::tool_serialization::sanitize_openai_function_param
 
 /// Returns the first present header among `names`, as an owned string.
 pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {
-    names.iter().find_map(|name| {
-        headers.get(*name).and_then(|value| value.to_str().ok()).map(ToOwned::to_owned)
-    })
+    names
+        .iter()
+        .find_map(|name| headers.get(*name).and_then(|value| value.to_str().ok()).map(ToOwned::to_owned))
 }
 
 /// Converts a float parameter (temperature, top_p, …) into a JSON number,
@@ -99,8 +99,7 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
                 // For OpenAI-compatible APIs, normalize all tools to function type
                 // Special types like "apply_patch", "shell", "custom" are GPT-5.x specific
                 tool.function.as_ref().map(|func| {
-                    let parameters =
-                        sanitize_openai_function_parameters(func.parameters.clone(), true);
+                    let parameters = sanitize_openai_function_parameters(func.parameters.clone(), true);
                     serde_json::json!({
                         "type": "function",
                         "function": {
@@ -160,16 +159,13 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                             has_non_text = true;
                             let mut file_payload = serde_json::Map::new();
                             if let Some(id) = file_id {
-                                file_payload
-                                    .insert("file_id".to_owned(), Value::String(id.clone()));
+                                file_payload.insert("file_id".to_owned(), Value::String(id.clone()));
                             }
                             if let Some(name) = filename {
-                                file_payload
-                                    .insert("filename".to_owned(), Value::String(name.clone()));
+                                file_payload.insert("filename".to_owned(), Value::String(name.clone()));
                             }
                             if let Some(data) = file_data {
-                                file_payload
-                                    .insert("file_data".to_owned(), Value::String(data.clone()));
+                                file_payload.insert("file_data".to_owned(), Value::String(data.clone()));
                             }
                             serialized_parts.push(json!({
                                 "type": "file",
@@ -199,10 +195,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
 /// Serialize message content for OpenAI-compatible payloads and normalize tool
 /// response content to plain text where required.
 #[inline]
-pub fn serialize_message_content_openai_for_role(
-    role: &MessageRole,
-    content: &MessageContent,
-) -> Value {
+pub fn serialize_message_content_openai_for_role(role: &MessageRole, content: &MessageContent) -> Value {
     let serialized = serialize_message_content_openai(content);
     if role == &MessageRole::Tool && !serialized.is_string() {
         Value::String(content.as_text().into_owned())
@@ -255,17 +248,13 @@ fn text_contains_interleaved_reasoning_markup(text: &str) -> bool {
 fn message_content_is_text_only(content: &MessageContent) -> bool {
     match content {
         MessageContent::Text(_) => true,
-        MessageContent::Parts(parts) => {
-            parts.iter().all(|part| matches!(part, ContentPart::Text { .. }))
-        }
+        MessageContent::Parts(parts) => parts.iter().all(|part| matches!(part, ContentPart::Text { .. })),
     }
 }
 
 fn preserved_interleaved_content_from_details(details: &[Value]) -> Option<String> {
     details.iter().find_map(|detail| match detail {
-        Value::String(text)
-            if !text.trim().is_empty() && text_contains_interleaved_reasoning_markup(text) =>
-        {
+        Value::String(text) if !text.trim().is_empty() && text_contains_interleaved_reasoning_markup(text) => {
             Some(text.clone())
         }
         _ => None,
@@ -391,15 +380,9 @@ pub fn ensure_model(request: &mut LLMRequest, default_model: &str) -> String {
 
 /// Parses a JSON response body from an HTTP response, mapping errors to
 /// `LLMError::Provider` with a formatted message including the provider name.
-pub async fn parse_json_response(
-    response: reqwest::Response,
-    provider_name: &str,
-) -> Result<Value, LLMError> {
+pub async fn parse_json_response(response: reqwest::Response, provider_name: &str) -> Result<Value, LLMError> {
     response.json().await.map_err(|e| LLMError::Provider {
-        message: error_display::format_llm_error(
-            provider_name,
-            &format!("failed to parse response: {e}"),
-        ),
+        message: error_display::format_llm_error(provider_name, &format!("failed to parse response: {e}")),
         metadata: None,
     })
 }
@@ -459,8 +442,7 @@ pub fn spawn_openai_compatible_stream(
     use async_stream::try_stream;
 
     let bytes_stream = response.bytes_stream();
-    let (event_tx, event_rx) =
-        tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
     let tx = event_tx.clone();
 
     // Timeout for the entire streaming task (5 minutes).
@@ -472,22 +454,17 @@ pub fn spawn_openai_compatible_stream(
 
         let result = tokio::time::timeout(
             stream_timeout,
-            crate::providers::shared::process_openai_stream(
-                bytes_stream,
-                provider_name,
-                model,
-                |value| {
-                    crate::providers::shared::handle_openai_compatible_chunk(
-                        &value,
-                        &mut aggregator,
-                        &tx,
-                        reasoning_fields,
-                        delta_order,
-                        include_cache_metrics,
-                    );
-                    Ok(())
-                },
-            ),
+            crate::providers::shared::process_openai_stream(bytes_stream, provider_name, model, |value| {
+                crate::providers::shared::handle_openai_compatible_chunk(
+                    &value,
+                    &mut aggregator,
+                    &tx,
+                    reasoning_fields,
+                    delta_order,
+                    include_cache_metrics,
+                );
+                Ok(())
+            }),
         )
         .await;
 
@@ -576,11 +553,7 @@ pub fn convert_usage_to_llm_types(usage: crate::provider::Usage) -> llm_types::U
     usage
 }
 
-pub fn override_base_url(
-    default_base_url: &str,
-    base_url: Option<String>,
-    env_var_name: Option<&str>,
-) -> String {
+pub fn override_base_url(default_base_url: &str, base_url: Option<String>, env_var_name: Option<&str>) -> String {
     if let Some(url) = base_url {
         let trimmed = url.trim();
         if !trimmed.is_empty() {
@@ -696,10 +669,7 @@ pub async fn execute_token_count_request(
     provider_name: &str,
 ) -> Result<Option<Value>, LLMError> {
     let response = request_builder.json(payload).send().await.map_err(|e| {
-        let message = error_display::format_llm_error(
-            provider_name,
-            &format!("Token-count network error: {e}"),
-        );
+        let message = error_display::format_llm_error(provider_name, &format!("Token-count network error: {e}"));
         LLMError::Network { message, metadata: None }
     })?;
 
@@ -717,18 +687,14 @@ pub async fn execute_token_count_request(
 
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        let message = error_display::format_llm_error(
-            provider_name,
-            &format!("Token-count request failed ({status}): {body}"),
-        );
+        let message =
+            error_display::format_llm_error(provider_name, &format!("Token-count request failed ({status}): {body}"));
         return Err(LLMError::Provider { message, metadata: None });
     }
 
     let value = response.json::<Value>().await.map_err(|e| {
-        let message = error_display::format_llm_error(
-            provider_name,
-            &format!("Failed to parse token-count response: {e}"),
-        );
+        let message =
+            error_display::format_llm_error(provider_name, &format!("Failed to parse token-count response: {e}"));
         LLMError::Provider { message, metadata: None }
     })?;
 
@@ -799,11 +765,7 @@ pub fn parse_tool_call_openai_format(value: &Value) -> Option<ToolCall> {
         }
     });
 
-    Some(ToolCall::function(
-        id.to_string(),
-        name.to_string(),
-        arguments.unwrap_or_else(|| "{}".to_string()),
-    ))
+    Some(ToolCall::function(id.to_string(), name.to_string(), arguments.unwrap_or_else(|| "{}".to_string())))
 }
 
 /// Maps common finish reason strings to FinishReason enum.
@@ -829,10 +791,7 @@ const KEY_REASONING_CONTENT: &str = "reasoning_content";
 
 /// Serializes messages to OpenAI-compatible JSON format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
-pub fn serialize_messages_openai_format(
-    request: &LLMRequest,
-    provider_key: &str,
-) -> Result<Vec<Value>, LLMError> {
+pub fn serialize_messages_openai_format(request: &LLMRequest, provider_key: &str) -> Result<Vec<Value>, LLMError> {
     use serde_json::{Map, json};
 
     let mut messages = Vec::with_capacity(request.messages.len());
@@ -843,8 +802,7 @@ pub fn serialize_messages_openai_format(
             .map_err(|e| LLMError::InvalidRequest { message: e, metadata: None })?;
 
         let mut message_map = Map::with_capacity(4); // Pre-allocate for role, content, tool_calls, tool_call_id
-        message_map
-            .insert(KEY_ROLE.to_owned(), Value::String(message.role.as_generic_str().to_owned()));
+        message_map.insert(KEY_ROLE.to_owned(), Value::String(message.role.as_generic_str().to_owned()));
 
         let content_value = serialize_message_content_openai_for_model(message, &request.model);
         message_map.insert(KEY_CONTENT.to_owned(), content_value);
@@ -872,8 +830,7 @@ pub fn serialize_messages_openai_format(
         if message.role == MessageRole::Tool {
             match &message.tool_call_id {
                 Some(tool_call_id) => {
-                    message_map
-                        .insert(KEY_TOOL_CALL_ID.to_owned(), Value::String(tool_call_id.clone()));
+                    message_map.insert(KEY_TOOL_CALL_ID.to_owned(), Value::String(tool_call_id.clone()));
                 }
                 None => {
                     return Err(LLMError::InvalidRequest {
@@ -988,15 +945,11 @@ where
                 let tool_calls = entry
                     .get("tool_calls")
                     .and_then(|tc| tc.as_array())
-                    .map(|calls| {
-                        calls.iter().filter_map(parse_tool_call_openai_format).collect::<Vec<_>>()
-                    })
+                    .map(|calls| calls.iter().filter_map(parse_tool_call_openai_format).collect::<Vec<_>>())
                     .filter(|calls| !calls.is_empty());
 
                 if let Some(calls) = tool_calls {
-                    messages.push(
-                        Message::assistant_with_tools(content, calls).with_phase(assistant_phase),
-                    );
+                    messages.push(Message::assistant_with_tools(content, calls).with_phase(assistant_phase));
                 } else {
                     messages.push(Message::assistant(content).with_phase(assistant_phase));
                 }
@@ -1055,17 +1008,10 @@ pub fn extract_content_from_message(message: &Value) -> Option<String> {
 
 /// Parses usage information from OpenAI-compatible response format.
 #[inline]
-pub fn parse_usage_openai_format(
-    response_json: &Value,
-    include_cache_metrics: bool,
-) -> Option<crate::provider::Usage> {
+pub fn parse_usage_openai_format(response_json: &Value, include_cache_metrics: bool) -> Option<crate::provider::Usage> {
     response_json.get("usage").map(|usage_value| crate::provider::Usage {
-        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-            as u32,
-        completion_tokens: usage_value
-            .get("completion_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32,
+        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         cached_prompt_tokens: if include_cache_metrics {
             usage_value
@@ -1104,11 +1050,7 @@ pub fn serialize_reasoning_detail_values(details: &[Value]) -> Option<Vec<String
             _ => Some(item.to_string()),
         })
         .collect::<Vec<_>>();
-    if normalized.is_empty() {
-        None
-    } else {
-        Some(normalized)
-    }
+    if normalized.is_empty() { None } else { Some(normalized) }
 }
 
 pub fn serialize_reasoning_details_field(details: &Value) -> Option<Vec<String>> {
@@ -1144,11 +1086,7 @@ fn reasoning_text_from_detail_value(detail: &Value) -> Option<String> {
 
     crate::providers::extract_reasoning_trace(&normalized).and_then(|trace| {
         let cleaned = crate::providers::clean_reasoning_text(trace.trim());
-        if cleaned.is_empty() {
-            None
-        } else {
-            Some(cleaned)
-        }
+        if cleaned.is_empty() { None } else { Some(cleaned) }
     })
 }
 
@@ -1215,27 +1153,21 @@ where
 {
     use crate::provider::LLMResponse;
 
-    let choices =
-        response_json.get("choices").and_then(|value| value.as_array()).ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                provider_name,
-                "Invalid response format: missing choices",
-            );
-            LLMError::Provider { message: formatted_error, metadata: None }
-        })?;
+    let choices = response_json.get("choices").and_then(|value| value.as_array()).ok_or_else(|| {
+        let formatted_error =
+            error_display::format_llm_error(provider_name, "Invalid response format: missing choices");
+        LLMError::Provider { message: formatted_error, metadata: None }
+    })?;
 
     if choices.is_empty() {
-        let formatted_error =
-            error_display::format_llm_error(provider_name, "No choices in response");
+        let formatted_error = error_display::format_llm_error(provider_name, "No choices in response");
         return Err(LLMError::Provider { message: formatted_error, metadata: None });
     }
 
     let choice = &choices[0];
     let message = choice.get("message").ok_or_else(|| {
-        let formatted_error = error_display::format_llm_error(
-            provider_name,
-            "Invalid response format: missing message",
-        );
+        let formatted_error =
+            error_display::format_llm_error(provider_name, "Invalid response format: missing message");
         LLMError::Provider { message: formatted_error, metadata: None }
     })?;
 
@@ -1264,8 +1196,7 @@ where
             .and_then(|rc| rc.as_str())
             .map(|s| s.to_string());
 
-        let reasoning_details =
-            native_reasoning_details_json.and_then(serialize_reasoning_details_field);
+        let reasoning_details = native_reasoning_details_json.and_then(serialize_reasoning_details_field);
 
         (reasoning, reasoning_details)
     };
@@ -1336,9 +1267,9 @@ pub fn make_anthropic_thinking_config(config: &vtcode_config::core::AnthropicCon
 mod tests {
     use super::{
         assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
-        extract_reasoning_text_from_serialized_details, is_interleaved_thinking_model,
-        is_minimax_m2_model, normalize_reasoning_detail_object, parse_chat_request_openai_format,
-        parse_response_openai_format, parse_usage_openai_format,
+        extract_reasoning_text_from_serialized_details, is_interleaved_thinking_model, is_minimax_m2_model,
+        normalize_reasoning_detail_object, parse_chat_request_openai_format, parse_response_openai_format,
+        parse_usage_openai_format,
     };
     use crate::provider::{AssistantPhase, Message};
     use serde_json::{Value, json};
@@ -1365,10 +1296,9 @@ mod tests {
 
     #[test]
     fn normalize_reasoning_detail_object_decodes_stringified_json_object() {
-        let normalized = normalize_reasoning_detail_object(&json!(
-            r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#
-        ))
-        .expect("normalized object");
+        let normalized =
+            normalize_reasoning_detail_object(&json!(r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#))
+                .expect("normalized object");
         assert!(normalized.is_object());
         assert_eq!(normalized["type"], "reasoning.text");
     }
@@ -1391,8 +1321,7 @@ mod tests {
 
     #[test]
     fn assistant_interleaved_history_wraps_reasoning_when_needed() {
-        let message =
-            Message::assistant("answer".to_string()).with_reasoning(Some("trace".to_string()));
+        let message = Message::assistant("answer".to_string()).with_reasoning(Some("trace".to_string()));
 
         assert_eq!(
             assistant_interleaved_history_text(&message, "MiniMax-M2.7").as_deref(),
@@ -1436,8 +1365,7 @@ mod tests {
             .as_ref()
             .and_then(|details| details.first())
             .expect("reasoning detail should exist");
-        let parsed_detail: Value =
-            serde_json::from_str(first_detail).expect("reasoning detail should be json");
+        let parsed_detail: Value = serde_json::from_str(first_detail).expect("reasoning detail should be json");
         assert_eq!(parsed_detail["type"], "reasoning.text");
     }
 
@@ -1481,10 +1409,7 @@ mod tests {
     #[test]
     fn extract_reasoning_text_from_detail_values_handles_stringified_json() {
         let details = vec![json!(r#"{"type":"reasoning.text","text":"trace one"}"#)];
-        assert_eq!(
-            extract_reasoning_text_from_detail_values(&details).as_deref(),
-            Some("trace one")
-        );
+        assert_eq!(extract_reasoning_text_from_detail_values(&details).as_deref(), Some("trace one"));
     }
 
     #[test]
@@ -1493,10 +1418,7 @@ mod tests {
             json!({"type":"reasoning.text","text":"first"}).to_string(),
             json!({"type":"reasoning.text","text":"second"}).to_string(),
         ];
-        assert_eq!(
-            extract_reasoning_text_from_serialized_details(&details).as_deref(),
-            Some("first\n\nsecond")
-        );
+        assert_eq!(extract_reasoning_text_from_serialized_details(&details).as_deref(), Some("first\n\nsecond"));
     }
 
     #[test]

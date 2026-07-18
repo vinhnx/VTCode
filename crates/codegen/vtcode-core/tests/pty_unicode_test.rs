@@ -182,18 +182,9 @@ async fn test_unicode_rendering_scenarios() {
             println!("{output}");
 
             // Check if unicode characters are preserved
-            assert!(
-                output.contains("🌍") || output.contains("🚀") || output.contains("✨"),
-                "Should contain emojis"
-            );
-            assert!(
-                output.contains("你好") || output.contains("世界"),
-                "Should contain Chinese characters"
-            );
-            assert!(
-                output.contains("café") || output.contains("naïve"),
-                "Should contain accented characters"
-            );
+            assert!(output.contains("🌍") || output.contains("🚀") || output.contains("✨"), "Should contain emojis");
+            assert!(output.contains("你好") || output.contains("世界"), "Should contain Chinese characters");
+            assert!(output.contains("café") || output.contains("naïve"), "Should contain accented characters");
 
             println!("✓ Unicode characters preserved in PTY output");
         }

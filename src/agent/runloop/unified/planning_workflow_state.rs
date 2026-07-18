@@ -134,7 +134,8 @@ impl PlanningWorkflowSessionState {
     }
 }
 
-pub(crate) const PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT: &str = "Planning workflow: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
+pub(crate) const PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT: &str =
+    "Planning workflow: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.";
 pub(crate) const PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT: &str = "Planning workflow: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `keep planning` to revise.";
 pub(crate) const PLANNING_WORKFLOW_KEEP_PLANNING_HINT: &str =
     "To keep planning, say `keep planning` and describe what to revise.";
@@ -142,9 +143,7 @@ pub(crate) const PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT: &str =
     "If automatic planning handoff fails, call `finish_planning` to present the plan again.";
 
 pub(crate) fn short_confirmation_hint_with_fallback() -> String {
-    format!(
-        "{PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT} {PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT}"
-    )
+    format!("{PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT} {PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT}")
 }
 
 pub(crate) fn render_planning_workflow_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {

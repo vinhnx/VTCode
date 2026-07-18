@@ -9,9 +9,7 @@ use vtcode_ui::tui::app::{
 pub(super) fn persistent_memory_guide_lines(memory_status: &PersistentMemoryStatus) -> Vec<String> {
     let mut lines = Vec::with_capacity(3);
     if memory_status.cleanup_status.needed {
-        lines.push(
-            "Memory is enabled, but one-time cleanup is required before updates.".to_string(),
-        );
+        lines.push("Memory is enabled, but one-time cleanup is required before updates.".to_string());
     } else {
         lines.push("Memory is enabled for this workspace.".to_string());
     }
@@ -43,9 +41,7 @@ pub(super) async fn load_persistent_memory_status(
     Ok(Some(status))
 }
 
-pub(super) fn persistent_memory_header_badge(
-    memory_status: &PersistentMemoryStatus,
-) -> InlineHeaderStatusBadge {
+pub(super) fn persistent_memory_header_badge(memory_status: &PersistentMemoryStatus) -> InlineHeaderStatusBadge {
     if memory_status.cleanup_status.needed {
         return InlineHeaderStatusBadge {
             text: "Memory: Needs cleanup".to_string(),
@@ -61,9 +57,7 @@ pub(super) fn persistent_memory_header_badge(
     InlineHeaderStatusBadge { text, tone: InlineHeaderStatusTone::Ready }
 }
 
-fn persistent_memory_header_highlight(
-    memory_status: &PersistentMemoryStatus,
-) -> InlineHeaderHighlight {
+fn persistent_memory_header_highlight(memory_status: &PersistentMemoryStatus) -> InlineHeaderHighlight {
     InlineHeaderHighlight {
         title: "Memory".to_string(),
         lines: persistent_memory_guide_lines(memory_status),

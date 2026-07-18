@@ -116,10 +116,7 @@ async fn share_defaults_to_json_and_html_export() {
         .await
         .expect("share command should parse");
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Both }
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Both }));
 }
 
 #[tokio::test]
@@ -131,10 +128,7 @@ async fn share_alias_routes_html_export() {
         .await
         .expect("share alias should parse");
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Html }
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Html }));
 }
 
 #[tokio::test]
@@ -291,10 +285,7 @@ async fn agent_command_opens_active_agents_inspector() {
         .await
         .expect("agent command should parse");
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ManageAgents { action: AgentManagerAction::Threads }
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::ManageAgents { action: AgentManagerAction::Threads }));
 }
 
 #[tokio::test]
@@ -366,10 +357,9 @@ async fn agents_create_and_edit_commands_parse_guided_forms() {
         }
     ));
 
-    let create_named =
-        handle_slash_command("agents create project reviewer", &mut renderer, &workspace)
-            .await
-            .expect("agents create project <name> should parse");
+    let create_named = handle_slash_command("agents create project reviewer", &mut renderer, &workspace)
+        .await
+        .expect("agents create project <name> should parse");
     assert!(matches!(
         create_named,
         SlashCommandOutcome::ManageAgents {
@@ -528,10 +518,7 @@ async fn plan_command_still_routes_to_planning_workflow() {
     let toggle = handle_slash_command("plan", &mut renderer, &workspace)
         .await
         .expect("plan should parse");
-    assert!(matches!(
-        toggle,
-        SlashCommandOutcome::TogglePlanningWorkflow { enable: None, prompt: None }
-    ));
+    assert!(matches!(toggle, SlashCommandOutcome::TogglePlanningWorkflow { enable: None, prompt: None }));
 
     let with_prompt = handle_slash_command("plan implement auth checks", &mut renderer, &workspace)
         .await
@@ -627,10 +614,9 @@ async fn prompt_template_invocation_replaces_editor_input() {
     .expect("template");
 
     let mut renderer = renderer_for_tests();
-    let outcome =
-        handle_slash_command("review-template src/lib.rs main", &mut renderer, workspace.path())
-            .await
-            .expect("review template should parse");
+    let outcome = handle_slash_command("review-template src/lib.rs main", &mut renderer, workspace.path())
+        .await
+        .expect("review template should parse");
 
     assert!(matches!(
         outcome,
@@ -644,20 +630,14 @@ async fn prompt_template_invocation_preserves_quoted_arguments() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let template_dir = workspace.path().join(".vtcode/prompts/templates");
     std::fs::create_dir_all(&template_dir).expect("template dir");
-    std::fs::write(
-        template_dir.join("rename-template.md"),
-        "---\ndescription: Rename template\n---\nRename $1 to $2",
-    )
-    .expect("template");
+    std::fs::write(template_dir.join("rename-template.md"), "---\ndescription: Rename template\n---\nRename $1 to $2")
+        .expect("template");
 
     let mut renderer = renderer_for_tests();
-    let outcome = handle_slash_command(
-        r#"rename-template "src/old name.rs" "src/new name.rs""#,
-        &mut renderer,
-        workspace.path(),
-    )
-    .await
-    .expect("rename template should parse");
+    let outcome =
+        handle_slash_command(r#"rename-template "src/old name.rs" "src/new name.rs""#, &mut renderer, workspace.path())
+            .await
+            .expect("rename template should parse");
 
     assert!(matches!(
         outcome,
@@ -671,11 +651,8 @@ async fn built_in_slash_command_beats_same_named_template() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let template_dir = workspace.path().join(".vtcode/prompts/templates");
     std::fs::create_dir_all(&template_dir).expect("template dir");
-    std::fs::write(
-        template_dir.join("help.md"),
-        "---\ndescription: shadow help\n---\nThis should not run.",
-    )
-    .expect("template");
+    std::fs::write(template_dir.join("help.md"), "---\ndescription: shadow help\n---\nThis should not run.")
+        .expect("template");
 
     let mut renderer = renderer_for_tests();
     let outcome = handle_slash_command("help", &mut renderer, workspace.path())
@@ -753,10 +730,9 @@ async fn unknown_slash_command_falls_back_to_normal_prompt_submission() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome =
-        handle_slash_command("totally-unknown keep this raw", &mut renderer, workspace.path())
-            .await
-            .expect("unknown slash should pass through");
+    let outcome = handle_slash_command("totally-unknown keep this raw", &mut renderer, workspace.path())
+        .await
+        .expect("unknown slash should pass through");
 
     assert!(matches!(
         outcome,
@@ -816,10 +792,7 @@ async fn local_no_args_returns_interactive() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
     let outcome = handle_slash_command("local", &mut renderer, &workspace).await.unwrap();
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ManageLocalServer { action: LocalServerAction::Interactive }
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::ManageLocalServer { action: LocalServerAction::Interactive }));
 }
 
 #[tokio::test]

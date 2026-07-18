@@ -110,14 +110,12 @@ impl RateLimiterInner {
         if added > 0 {
             let effective_burst = self.config.burst as f64 * speed_multiplier.max(1.0);
             #[allow(clippy::cast_sign_loss)]
-            let effective_burst: u32 = if effective_burst.is_finite()
-                && effective_burst >= 0.0
-                && effective_burst <= u32::MAX as f64
-            {
-                effective_burst as u32
-            } else {
-                u32::MAX
-            };
+            let effective_burst: u32 =
+                if effective_burst.is_finite() && effective_burst >= 0.0 && effective_burst <= u32::MAX as f64 {
+                    effective_burst as u32
+                } else {
+                    u32::MAX
+                };
             self.tokens = self.tokens.saturating_add(added).min(effective_burst);
             self.last_refill = now;
         }
@@ -152,8 +150,7 @@ use hashbrown::HashMap;
 /// dependency of the project.
 use once_cell::sync::Lazy;
 
-pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> =
-    Lazy::new(|| Mutex::new(RateLimiterInner::new()));
+pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> = Lazy::new(|| Mutex::new(RateLimiterInner::new()));
 
 /// Per-tool rate limiter for finer-grained control.
 /// Each tool gets its own token bucket, allowing different rate limits per tool.
@@ -223,8 +220,7 @@ impl PerToolRateLimiter {
 }
 
 /// Global per-tool rate limiter instance.
-pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> =
-    Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));
+pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> = Lazy::new(|| Mutex::new(PerToolRateLimiter::new()));
 
 /// Public API – try to acquire permission for a tool call.
 ///

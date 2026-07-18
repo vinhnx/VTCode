@@ -32,10 +32,7 @@ pub struct MigrationReport {
 ///
 /// When `remove_legacy` is true, the now-imported `history/` and `logs/`
 /// directories are deleted (the `checkpoints/` directory is preserved).
-pub fn migrate_legacy(
-    workspace: &Path,
-    remove_legacy: bool,
-) -> Result<MigrationReport, SessionStoreError> {
+pub fn migrate_legacy(workspace: &Path, remove_legacy: bool) -> Result<MigrationReport, SessionStoreError> {
     let mut report = MigrationReport::default();
     let vt = workspace.join(".vtcode");
 
@@ -103,12 +100,7 @@ pub fn migrate_legacy(
     Ok(report)
 }
 
-fn write_manifest(
-    dir: &Path,
-    session_id: &str,
-    source: &Path,
-    status: &str,
-) -> Result<(), SessionStoreError> {
+fn write_manifest(dir: &Path, session_id: &str, source: &Path, status: &str) -> Result<(), SessionStoreError> {
     let ts = source
         .metadata()
         .ok()

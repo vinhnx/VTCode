@@ -267,8 +267,7 @@ impl DotfileProtectionConfig {
             return false;
         }
 
-        let filename =
-            std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
+        let filename = std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
 
         // Check if it's a dotfile (starts with . or contains /. or is in a dotfile directory)
         let is_dotfile = filename.starts_with('.')
@@ -302,11 +301,7 @@ impl DotfileProtectionConfig {
     fn is_in_dotfile_directory(path: &str) -> bool {
         let components: Vec<&str> = path.split('/').collect();
         for component in &components {
-            if component.starts_with('.')
-                && !component.is_empty()
-                && *component != "."
-                && *component != ".."
-            {
+            if component.starts_with('.') && !component.is_empty() && *component != "." && *component != ".." {
                 return true;
             }
         }
@@ -315,8 +310,7 @@ impl DotfileProtectionConfig {
 
     /// Check if a file is in the whitelist.
     pub fn is_whitelisted(&self, path: &str) -> bool {
-        let filename =
-            std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
+        let filename = std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
 
         self.whitelist.contains(path) || self.whitelist.contains(filename)
     }
@@ -326,8 +320,7 @@ impl DotfileProtectionConfig {
         if pattern.contains('*') {
             // Handle wildcard patterns
             if let Some(prefix) = pattern.strip_suffix("/*") {
-                path.starts_with(prefix)
-                    || path.contains(&format!("/{}/", prefix.trim_start_matches('.')))
+                path.starts_with(prefix) || path.contains(&format!("/{}/", prefix.trim_start_matches('.')))
             } else if pattern.ends_with(".*") {
                 let prefix = &pattern[..pattern.len() - 1];
                 path.starts_with(prefix)

@@ -7,16 +7,13 @@ use hashbrown::HashMap;
 
 use crate::tui::core_tui::app::session::AppSession;
 use crate::tui::core_tui::app::types::{
-    FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, PreviewCallback,
-    SlashCommandItem,
+    FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, PreviewCallback, SlashCommandItem,
 };
 use crate::tui::core_tui::log;
 use crate::tui::core_tui::runner::{TuiOptions, run_tui};
 use crate::tui::core_tui::session::action::BindingStore;
 use crate::tui::core_tui::session::config::AppearanceConfig;
-use crate::tui::options::{
-    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
-};
+use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 /// Standalone session launch options for reusable integrations.
 #[derive(Clone)]
@@ -83,10 +80,7 @@ impl SessionOptions {
 }
 
 /// Spawn a session using standalone options and local config types.
-pub fn spawn_session_with_options(
-    theme: InlineTheme,
-    options: SessionOptions,
-) -> anyhow::Result<InlineSession> {
+pub fn spawn_session_with_options(theme: InlineTheme, options: SessionOptions) -> anyhow::Result<InlineSession> {
     use crossterm::tty::IsTty;
 
     // Check stdin is a terminal BEFORE spawning the task

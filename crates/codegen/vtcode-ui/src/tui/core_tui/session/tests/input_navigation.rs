@@ -64,10 +64,7 @@ fn shift_left_selects_input_range() {
     let result = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
 
     assert!(result.is_none());
-    assert_eq!(
-        session.input_manager.selection_range(),
-        Some(("hello worl".len(), "hello world".len()))
-    );
+    assert_eq!(session.input_manager.selection_range(), Some(("hello worl".len(), "hello world".len())));
 }
 
 #[test]
@@ -336,10 +333,7 @@ fn ctrl_p_navigates_to_previous_history() {
     // Add a history entry
     session
         .input_manager
-        .add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "previous command".to_string(),
-            Vec::new(),
-        ));
+        .add_to_history(InputHistoryEntry::from_content_and_attachments("previous command".to_string(), Vec::new()));
 
     let event = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
@@ -355,16 +349,10 @@ fn ctrl_n_navigates_to_next_history() {
     // Add history entries
     session
         .input_manager
-        .add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "first command".to_string(),
-            Vec::new(),
-        ));
+        .add_to_history(InputHistoryEntry::from_content_and_attachments("first command".to_string(), Vec::new()));
     session
         .input_manager
-        .add_to_history(InputHistoryEntry::from_content_and_attachments(
-            "second command".to_string(),
-            Vec::new(),
-        ));
+        .add_to_history(InputHistoryEntry::from_content_and_attachments("second command".to_string(), Vec::new()));
 
     // Go to previous history (should be "second command")
     let event_p = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);

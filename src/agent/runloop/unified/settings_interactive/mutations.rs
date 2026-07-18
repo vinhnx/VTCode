@@ -9,9 +9,7 @@ use vtcode_core::config::{constants::defaults, constants::model_helpers};
 use vtcode_core::llm::{auto_lightweight_model, lightweight_model_choices};
 use vtcode_core::ui::theme;
 
-use crate::agent::runloop::unified::config_section_headings::{
-    heading_for_path, normalize_config_path,
-};
+use crate::agent::runloop::unified::config_section_headings::{heading_for_path, normalize_config_path};
 
 use super::SettingsPaletteState;
 use super::docs::{FIELD_DOCS, FieldDoc};
@@ -26,10 +24,7 @@ pub(super) enum ScalarOperation {
     CyclePrev,
 }
 
-pub(super) fn mutate_draft_and_persist<F>(
-    state: &mut SettingsPaletteState,
-    mutator: F,
-) -> Result<()>
+pub(super) fn mutate_draft_and_persist<F>(state: &mut SettingsPaletteState, mutator: F) -> Result<()>
 where
     F: FnOnce(&mut TomlValue) -> Result<()>,
 {
@@ -65,8 +60,7 @@ pub(super) fn reload_state_from_disk(state: &mut SettingsPaletteState) -> Result
         return Ok(());
     }
 
-    let manager = ConfigManager::load_from_workspace(&state.workspace)
-        .context("Failed to reload runtime defaults")?;
+    let manager = ConfigManager::load_from_workspace(&state.workspace).context("Failed to reload runtime defaults")?;
     state.draft = manager.config().clone();
     state.source_label = no_config_source_label(&state.workspace);
     Ok(())
@@ -77,8 +71,7 @@ pub(super) fn no_config_source_label(workspace: &Path) -> String {
 }
 
 pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
-    let node =
-        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
+    let node = get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
 
     let TomlValue::Array(values) = node else {
         bail!("Path '{path}' is not an array");
@@ -123,8 +116,7 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
 
     let mut table = toml::map::Map::new();
     table.insert("name".to_string(), TomlValue::String(name));
-    table
-        .insert("display_name".to_string(), TomlValue::String(format!("Custom Provider {suffix}")));
+    table.insert("display_name".to_string(), TomlValue::String(format!("Custom Provider {suffix}")));
     table.insert("base_url".to_string(), TomlValue::String("https://llm.example/v1".to_string()));
     table.insert("api_key_env".to_string(), TomlValue::String(String::new()));
     table.insert("model".to_string(), TomlValue::String(String::new()));
@@ -132,8 +124,7 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
 }
 
 pub(super) fn pop_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
-    let node =
-        get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
+    let node = get_node_mut(root, path).ok_or_else(|| anyhow!("Array path '{path}' was not found"))?;
 
     let TomlValue::Array(values) = node else {
         bail!("Path '{path}' is not an array");
@@ -146,14 +137,9 @@ pub(super) fn pop_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn apply_scalar_operation(
-    root: &mut TomlValue,
-    path: &str,
-    operation: ScalarOperation,
-) -> Result<()> {
-    let precomputed_cycle_options =
-        matches!(operation, ScalarOperation::CycleNext | ScalarOperation::CyclePrev)
-            .then(|| resolve_cycle_options(Some(root), path, ""));
+pub(super) fn apply_scalar_operation(root: &mut TomlValue, path: &str, operation: ScalarOperation) -> Result<()> {
+    let precomputed_cycle_options = matches!(operation, ScalarOperation::CycleNext | ScalarOperation::CyclePrev)
+        .then(|| resolve_cycle_options(Some(root), path, ""));
     let Some(node) = get_node_mut(root, path) else {
         return apply_missing_scalar_operation(root, path, operation);
     };
@@ -197,11 +183,7 @@ pub(super) fn apply_scalar_operation(
     }
 }
 
-fn apply_missing_scalar_operation(
-    root: &mut TomlValue,
-    path: &str,
-    operation: ScalarOperation,
-) -> Result<()> {
+fn apply_missing_scalar_operation(root: &mut TomlValue, path: &str, operation: ScalarOperation) -> Result<()> {
     match operation {
         ScalarOperation::CycleNext | ScalarOperation::CyclePrev => {
             let mut options = resolve_cycle_options(Some(root), path, "");
@@ -257,11 +239,7 @@ fn insert_missing_string_value(root: &mut TomlValue, path: &str, value: String) 
     }
 }
 
-pub(super) fn resolve_cycle_options(
-    root: Option<&TomlValue>,
-    path: &str,
-    current: &str,
-) -> Vec<String> {
+pub(super) fn resolve_cycle_options(root: Option<&TomlValue>, path: &str, current: &str) -> Vec<String> {
     match normalize_config_path(path).as_str() {
         "agent.codex_app_server.command" => {
             return codex_sidecar_cycle_options(current, "codex");
@@ -333,9 +311,7 @@ fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> V
         deduped.push(option);
     }
 
-    if let Some(auto_index) =
-        deduped.iter().position(|value| value.eq_ignore_ascii_case(auto_model.as_str()))
-    {
+    if let Some(auto_index) = deduped.iter().position(|value| value.eq_ignore_ascii_case(auto_model.as_str())) {
         let auto = deduped.remove(auto_index);
         deduped.insert(1, auto);
     }
@@ -343,11 +319,7 @@ fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> V
     deduped
 }
 
-fn cycle_string_option(
-    current: &str,
-    options: &[String],
-    operation: ScalarOperation,
-) -> Result<String> {
+fn cycle_string_option(current: &str, options: &[String], operation: ScalarOperation) -> Result<String> {
     if options.is_empty() {
         bail!("No cycle options available")
     }
@@ -376,12 +348,11 @@ pub(super) fn mutate_draft<F>(state: &mut SettingsPaletteState, mutator: F) -> R
 where
     F: FnOnce(&mut TomlValue) -> Result<()>,
 {
-    let mut draft_value = TomlValue::try_from(state.draft.clone())
-        .context("Failed to serialize draft configuration")?;
+    let mut draft_value =
+        TomlValue::try_from(state.draft.clone()).context("Failed to serialize draft configuration")?;
     mutator(&mut draft_value)?;
 
-    let parsed: VTCodeConfig =
-        draft_value.try_into().context("Updated draft configuration is invalid")?;
+    let parsed: VTCodeConfig = draft_value.try_into().context("Updated draft configuration is invalid")?;
     parsed.validate().context("Updated draft configuration failed validation")?;
 
     state.draft = parsed;
@@ -391,11 +362,9 @@ where
 fn write_commented_config(path: &Path, config: &VTCodeConfig) -> Result<()> {
     let content = render_commented_config(config)?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("Failed to create directory {}", parent.display()))?;
     }
-    std::fs::write(path, content)
-        .with_context(|| format!("Failed to write configuration file {}", path.display()))
+    std::fs::write(path, content).with_context(|| format!("Failed to write configuration file {}", path.display()))
 }
 
 fn persist_draft(state: &mut SettingsPaletteState) -> Result<()> {
@@ -415,9 +384,7 @@ pub(super) fn render_commented_config(config: &VTCodeConfig) -> Result<String> {
     let mut output = String::new();
     output.push_str("# VT Code Configuration File\n");
     output.push_str("# Saved from /config with readable section headings.\n");
-    output.push_str(
-        "# Every field includes descriptions, defaults, and known choices where available.\n\n",
-    );
+    output.push_str("# Every field includes descriptions, defaults, and known choices where available.\n\n");
 
     render_table_with_comments(&mut output, &root_table, None)?;
     Ok(output)

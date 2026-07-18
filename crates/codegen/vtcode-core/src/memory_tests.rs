@@ -32,12 +32,7 @@ mod memory_profiling {
         }
 
         // Verify cache size never exceeds capacity
-        assert!(
-            cache.len() <= max_entries,
-            "Cache size {} exceeds max capacity {}",
-            cache.len(),
-            max_entries
-        );
+        assert!(cache.len() <= max_entries, "Cache size {} exceeds max capacity {}", cache.len(), max_entries);
 
         // Verify evictions happened
         let stats = cache.stats();
@@ -68,8 +63,7 @@ mod memory_profiling {
     /// Verify cache hit rate tracking
     #[test]
     fn test_cache_hit_rate_metrics() {
-        let cache: UnifiedCache<MemTestKey, String> =
-            UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let key1 = MemTestKey("key1".into());
         let key2 = MemTestKey("key2".into());
 
@@ -92,8 +86,7 @@ mod memory_profiling {
     /// Verify memory tracking accuracy
     #[test]
     fn test_cache_memory_tracking() {
-        let cache: UnifiedCache<MemTestKey, String> =
-            UnifiedCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         let test_size_bytes = 1024;
         let key1 = MemTestKey("key1".into());
@@ -112,8 +105,7 @@ mod memory_profiling {
     /// Verify LRU eviction policy works correctly
     #[test]
     fn test_lru_eviction_policy() {
-        let cache: UnifiedCache<MemTestKey, String> =
-            UnifiedCache::new(2, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(2, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
 
         let key1 = MemTestKey("key1".into());
         let key2 = MemTestKey("key2".into());
@@ -141,8 +133,7 @@ mod memory_profiling {
     #[test]
     #[ignore = "benchmark: run with cargo test -- --ignored"]
     fn bench_cache_operations() {
-        let cache: UnifiedCache<MemTestKey, String> =
-            UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        let cache: UnifiedCache<MemTestKey, String> = UnifiedCache::new(1_000, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let start = std::time::Instant::now();
 
         // Insert 10,000 entries

@@ -116,10 +116,7 @@ impl McpCircuitBreaker {
     }
 
     /// Create a new circuit breaker with custom configuration and metrics hooks.
-    pub fn with_config_and_metrics(
-        config: CircuitBreakerConfig,
-        metrics: Arc<MetricsCollector>,
-    ) -> Self {
+    pub fn with_config_and_metrics(config: CircuitBreakerConfig, metrics: Arc<MetricsCollector>) -> Self {
         Self::build(config, None, Some(metrics))
     }
 

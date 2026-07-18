@@ -81,8 +81,7 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
         let value = if is_string {
             Value::String(raw_value.to_string())
         } else {
-            serde_json::from_str::<Value>(raw_value)
-                .unwrap_or_else(|_| Value::String(raw_value.to_string()))
+            serde_json::from_str::<Value>(raw_value).unwrap_or_else(|_| Value::String(raw_value.to_string()))
         };
 
         object.insert(param_name, value);
@@ -138,11 +137,7 @@ impl TextualToolParser for DsmlToolParser {
         match parse_dsml_tool_call_raw(text) {
             Some((name, args)) => ParseResult::Success(ParsedToolCall { name, args }),
             None => {
-                tracing::debug!(
-                    parser = "dsml",
-                    reason = "no matching DSML v2 pattern",
-                    "Rejected textual tool call"
-                );
+                tracing::debug!(parser = "dsml", reason = "no matching DSML v2 pattern", "Rejected textual tool call");
                 ParseResult::Reject("no matching DSML v2 pattern")
             }
         }

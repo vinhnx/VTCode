@@ -71,11 +71,7 @@ pub(super) async fn capture_code_change_snapshot(
             None
         }
         Ok(Err(err)) => {
-            tracing::warn!(
-                "Failed to capture {} code-change snapshot (join error): {}",
-                phase_label,
-                err
-            );
+            tracing::warn!("Failed to capture {} code-change snapshot (join error): {}", phase_label, err);
             None
         }
         Err(_) => {

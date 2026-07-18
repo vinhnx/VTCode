@@ -9,14 +9,10 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::{inline_theme_from_core_styles, to_tui_appearance};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
-use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
-};
+use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_ui::tui::core::convert_style;
 
-use crate::agent::runloop::model_picker::{
-    LightweightModelPaletteView, prepare_lightweight_model_palette_view,
-};
+use crate::agent::runloop::model_picker::{LightweightModelPaletteView, prepare_lightweight_model_palette_view};
 use crate::agent::runloop::slash_commands::{SessionPaletteMode, ThemePaletteMode};
 use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::model_selection::finalize_lightweight_model_selection;
@@ -88,10 +84,7 @@ pub(crate) enum ActivePalette {
     },
 }
 
-pub(crate) fn show_theme_palette(
-    renderer: &mut AnsiRenderer,
-    mode: ThemePaletteMode,
-) -> Result<bool> {
+pub(crate) fn show_theme_palette(renderer: &mut AnsiRenderer, mode: ThemePaletteMode) -> Result<bool> {
     let title = match mode {
         ThemePaletteMode::Select => THEME_PALETTE_TITLE,
     };
@@ -110,11 +103,7 @@ pub(crate) fn show_theme_palette(
         } else {
             None
         };
-        let scheme_hint = if theme::is_light_theme(id) {
-            "light"
-        } else {
-            "dark"
-        };
+        let scheme_hint = if theme::is_light_theme(id) { "light" } else { "dark" };
         items.push(InlineListItem {
             title: label.to_string(),
             subtitle: Some(format!("id: {id} • {scheme_hint}")),
@@ -168,14 +157,8 @@ pub(crate) fn show_mode_palette(
         if is_current {
             canonical_current = spec.name.as_str();
         }
-        let badge = if is_current {
-            Some("Active".to_string())
-        } else {
-            None
-        };
-        let subtitle = if spec.permissions.default
-            == vtcode_config::core::permissions::PermissionDefault::Auto
-        {
+        let badge = if is_current { Some("Active".to_string()) } else { None };
+        let subtitle = if spec.permissions.default == vtcode_config::core::permissions::PermissionDefault::Auto {
             Some(format!("{} (autonomous)", spec.description))
         } else {
             Some(spec.description.clone())
@@ -185,10 +168,7 @@ pub(crate) fn show_mode_palette(
             subtitle,
             badge,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                MODE_ACTION_PREFIX, spec.name
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", MODE_ACTION_PREFIX, spec.name))),
             search_value: Some(format!("{} {} agent mode", spec.name, spec.description)),
         });
     }
@@ -274,12 +254,7 @@ pub(crate) fn show_sessions_palette(
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Session(listing.identifier())),
-            search_value: Some(session_search_value(
-                listing,
-                &ended_local.to_string(),
-                &duration_label,
-                tool_count,
-            )),
+            search_value: Some(session_search_value(listing, &ended_local.to_string(), &duration_label, tool_count)),
         });
     }
 
@@ -318,10 +293,7 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
-pub(crate) fn show_fork_mode_palette(
-    renderer: &mut AnsiRenderer,
-    session_id: &str,
-) -> Result<bool> {
+pub(crate) fn show_fork_mode_palette(renderer: &mut AnsiRenderer, session_id: &str) -> Result<bool> {
     let items = vec![
         InlineListItem {
             title: "Copy full history".to_string(),
@@ -336,9 +308,7 @@ pub(crate) fn show_fork_mode_palette(
         },
         InlineListItem {
             title: "Start summarized fork".to_string(),
-            subtitle: Some(
-                "Compact the source session into summary plus retained user prompts.".to_string(),
-            ),
+            subtitle: Some("Compact the source session into summary plus retained user prompts.".to_string()),
             badge: Some("Summary".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::SessionForkMode {
@@ -372,7 +342,8 @@ pub(crate) fn show_fork_mode_palette(
 pub(crate) fn show_model_target_palette(renderer: &mut AnsiRenderer) -> Result<bool> {
     let items = [ModelPickerTarget::Main, ModelPickerTarget::Lightweight]
         .into_iter()
-        .map(|target| match target {
+        .map(|target| {
+            match target {
             ModelPickerTarget::Main => InlineListItem {
                 title: "Main model".to_string(),
                 subtitle: Some(
@@ -401,6 +372,7 @@ pub(crate) fn show_model_target_palette(renderer: &mut AnsiRenderer) -> Result<b
                     "model lightweight memory prompt suggestions subagent".to_string(),
                 ),
             },
+        }
         })
         .collect();
 
@@ -458,11 +430,8 @@ pub(crate) async fn refresh_runtime_config_from_manager(
         let runtime_config = runtime_manager.config().clone();
         *vt_cfg = Some(runtime_config.clone());
         config.reasoning_effort = runtime_config.agent.reasoning_effort;
-        renderer
-            .set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
-        vtcode_ui::tui::panic_hook::set_show_diagnostics(
-            runtime_config.ui.show_diagnostics_in_transcript,
-        );
+        renderer.set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
+        vtcode_ui::tui::panic_hook::set_show_diagnostics(runtime_config.ui.show_diagnostics_in_transcript);
 
         let _ = theme::set_active_theme(&runtime_config.agent.theme);
         let styles = theme::active_styles();
@@ -470,10 +439,8 @@ pub(crate) async fn refresh_runtime_config_from_manager(
         handle.set_appearance(to_tui_appearance(&runtime_config));
 
         let provider_label = {
-            let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
-                config,
-                Some(&runtime_config),
-            );
+            let label =
+                crate::agent::runloop::unified::session_setup::resolve_provider_label(config, Some(&runtime_config));
             if label.is_empty() {
                 provider_client.name().to_string()
             } else {
@@ -520,21 +487,16 @@ pub(crate) async fn handle_palette_selection(
                     match theme::set_active_theme(&theme_id) {
                         Ok(()) => {
                             let label = theme::active_theme_label();
-                            renderer
-                                .line(MessageStyle::Info, &format!("Theme switched to {label}"))?;
+                            renderer.line(MessageStyle::Info, &format!("Theme switched to {label}"))?;
                             sync_runtime_theme_selection(config, vt_cfg.as_mut(), &theme_id);
-                            persist_theme_preference(renderer, &config.workspace, &theme_id)
-                                .await?;
+                            persist_theme_preference(renderer, &config.workspace, &theme_id).await?;
                             let styles = theme::active_styles();
                             handle.set_theme(inline_theme_from_core_styles(&styles));
                             apply_prompt_style(handle);
                             handle.force_redraw();
                         }
                         Err(err) => {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("Theme '{theme_id}' not available: {err}"),
-                            )?;
+                            renderer.line(MessageStyle::Error, &format!("Theme '{theme_id}' not available: {err}"))?;
                         }
                     }
                     Ok(None)
@@ -621,9 +583,7 @@ pub(crate) async fn handle_palette_selection(
             finalize_lightweight_model_selection(renderer, config, vt_cfg, selected_model).await?;
             Ok(None)
         }
-        ActivePalette::UrlGuard { prompt, previous } => {
-            Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
-        }
+        ActivePalette::UrlGuard { prompt, previous } => Ok(Some(ActivePalette::UrlGuard { prompt, previous })),
         ActivePalette::Mode => Ok(None),
     }
 }
@@ -640,10 +600,7 @@ pub(crate) fn handle_palette_preview(
                 match mode {
                     ThemePaletteMode::Select => {
                         if let Err(err) = theme::set_active_theme(&theme_id) {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("Theme '{theme_id}' not available: {err}"),
-                            )?;
+                            renderer.line(MessageStyle::Error, &format!("Theme '{theme_id}' not available: {err}"))?;
                         } else {
                             let styles = theme::active_styles();
                             handle.set_theme(inline_theme_from_core_styles(&styles));
@@ -656,15 +613,9 @@ pub(crate) fn handle_palette_preview(
             Ok(Some(ActivePalette::Theme { mode, original_theme_id }))
         }
         ActivePalette::ModelTarget => Ok(Some(ActivePalette::ModelTarget)),
-        ActivePalette::LightweightModel { view } => {
-            Ok(Some(ActivePalette::LightweightModel { view }))
-        }
-        ActivePalette::UrlGuard { prompt, previous } => {
-            Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
-        }
-        ActivePalette::Settings { state, .. } => {
-            Ok(Some(ActivePalette::Settings { state, esc_armed: false }))
-        }
+        ActivePalette::LightweightModel { view } => Ok(Some(ActivePalette::LightweightModel { view })),
+        ActivePalette::UrlGuard { prompt, previous } => Ok(Some(ActivePalette::UrlGuard { prompt, previous })),
+        ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings { state, esc_armed: false })),
         other => Ok(Some(other)),
     }
 }
@@ -690,9 +641,7 @@ pub(crate) fn handle_palette_cancel(
 ) -> Result<Option<ActivePalette>> {
     match palette {
         ActivePalette::Theme { mode, original_theme_id } => {
-            if theme::active_theme_id() != original_theme_id
-                && theme::set_active_theme(&original_theme_id).is_ok()
-            {
+            if theme::active_theme_id() != original_theme_id && theme::set_active_theme(&original_theme_id).is_ok() {
                 let styles = theme::active_styles();
                 handle.set_theme(inline_theme_from_core_styles(&styles));
                 apply_prompt_style(handle);
@@ -713,13 +662,7 @@ pub(crate) fn handle_palette_cancel(
             Ok(None)
         }
         ActivePalette::ForkMode { listings, limit, show_all, .. } => {
-            if show_sessions_palette(
-                renderer,
-                SessionPaletteMode::Fork,
-                &listings,
-                limit,
-                show_all,
-            )? {
+            if show_sessions_palette(renderer, SessionPaletteMode::Fork, &listings, limit, show_all)? {
                 Ok(Some(ActivePalette::Sessions {
                     mode: SessionPaletteMode::Fork,
                     listings,
@@ -749,9 +692,7 @@ pub(crate) fn handle_palette_cancel(
                 Ok(None)
             }
         }
-        ActivePalette::ModelTarget
-        | ActivePalette::LightweightModel { .. }
-        | ActivePalette::Mode => Ok(None),
+        ActivePalette::ModelTarget | ActivePalette::LightweightModel { .. } | ActivePalette::Mode => Ok(None),
         ActivePalette::UrlGuard { previous, .. } => Ok(previous.map(|palette| *palette)),
     }
 }
@@ -782,16 +723,13 @@ pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::runloop::model_picker::{
-        DynamicModelRegistry, build_lightweight_model_palette_view,
-    };
+    use crate::agent::runloop::model_picker::{DynamicModelRegistry, build_lightweight_model_palette_view};
     use chrono::{TimeZone, Utc};
     use vtcode_core::config::constants::models;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
-        UiSurfacePreference,
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
@@ -827,21 +765,14 @@ mod tests {
     fn normalize_config_selection_maps_cycle_prev_to_cycle() {
         let selection = InlineListSelection::ConfigAction("ui.display_mode:cycle_prev".to_string());
         let normalized = normalize_config_selection(&selection);
-        assert_eq!(
-            normalized,
-            InlineListSelection::ConfigAction("ui.display_mode:cycle".to_string())
-        );
+        assert_eq!(normalized, InlineListSelection::ConfigAction("ui.display_mode:cycle".to_string()));
     }
 
     #[test]
     fn normalize_config_selection_maps_dec_to_inc() {
-        let selection =
-            InlineListSelection::ConfigAction("context.max_context_tokens:dec".to_string());
+        let selection = InlineListSelection::ConfigAction("context.max_context_tokens:dec".to_string());
         let normalized = normalize_config_selection(&selection);
-        assert_eq!(
-            normalized,
-            InlineListSelection::ConfigAction("context.max_context_tokens:inc".to_string())
-        );
+        assert_eq!(normalized, InlineListSelection::ConfigAction("context.max_context_tokens:inc".to_string()));
     }
 
     #[test]
@@ -894,9 +825,7 @@ mod tests {
         assert!(view.items.iter().any(|item| item.title == "Use main model"));
         assert_eq!(
             view.selected,
-            Some(InlineListSelection::ConfigAction(format!(
-                "{LIGHTWEIGHT_MODEL_ACTION_PREFIX}auto"
-            )))
+            Some(InlineListSelection::ConfigAction(format!("{LIGHTWEIGHT_MODEL_ACTION_PREFIX}auto")))
         );
         assert!(view.lines.iter().any(|line| line.contains("gpt-5.4-mini -> fallback gpt-5.4")));
     }
@@ -916,9 +845,7 @@ mod tests {
         );
         assert_eq!(
             view.selected,
-            Some(InlineListSelection::ConfigAction(format!(
-                "{LIGHTWEIGHT_MODEL_ACTION_PREFIX}main"
-            )))
+            Some(InlineListSelection::ConfigAction(format!("{LIGHTWEIGHT_MODEL_ACTION_PREFIX}main")))
         );
     }
 
@@ -938,10 +865,7 @@ mod tests {
             .items
             .iter()
             .find(|item| {
-                item.selection
-                    == Some(InlineListSelection::ConfigAction(
-                        "lightweight_model:gpt-5.5".to_string(),
-                    ))
+                item.selection == Some(InlineListSelection::ConfigAction("lightweight_model:gpt-5.5".to_string()))
             })
             .expect("gpt-5.5 entry");
 

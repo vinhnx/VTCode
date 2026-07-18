@@ -2,12 +2,11 @@
 
 use crate::error_display::format_llm_error;
 use crate::provider::{
-    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    MessageRole, ToolDefinition,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, MessageRole,
+    ToolDefinition,
 };
 use crate::providers::shared::{
-    NoopStreamTelemetry, StreamTelemetry, Utf8StreamDecoder,
-    function_output_value_from_message_content,
+    NoopStreamTelemetry, StreamTelemetry, Utf8StreamDecoder, function_output_value_from_message_content,
 };
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -19,9 +18,8 @@ use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
 use super::common::{
-    assistant_interleaved_history_text, ensure_model, impl_llm_client, is_minimax_m2_model,
-    map_finish_reason_common, normalize_reasoning_detail_objects, override_base_url,
-    parse_response_openai_format, resolve_model,
+    assistant_interleaved_history_text, ensure_model, impl_llm_client, is_minimax_m2_model, map_finish_reason_common,
+    normalize_reasoning_detail_objects, override_base_url, parse_response_openai_format, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -40,13 +38,7 @@ pub struct HuggingFaceProvider {
 
 impl HuggingFaceProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::huggingface::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+        Self::with_model_internal(api_key, models::huggingface::DEFAULT_MODEL.to_string(), None, None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -54,13 +46,7 @@ impl HuggingFaceProvider {
     }
 
     pub fn with_timeouts(api_key: String, timeouts: TimeoutsConfig) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::huggingface::DEFAULT_MODEL.to_string(),
-            None,
-            Some(timeouts),
-            None,
-        )
+        Self::with_model_internal(api_key, models::huggingface::DEFAULT_MODEL.to_string(), None, Some(timeouts), None)
     }
 
     fn with_model_internal(
@@ -77,11 +63,7 @@ impl HuggingFaceProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::HUGGINGFACE_API_BASE,
-                base_url,
-                Some(env_vars::HUGGINGFACE_BASE_URL),
-            ),
+            base_url: override_base_url(urls::HUGGINGFACE_API_BASE, base_url, Some(env_vars::HUGGINGFACE_BASE_URL)),
             model,
             _timeouts: timeouts,
             model_behavior,
@@ -148,10 +130,7 @@ impl HuggingFaceProvider {
         crate::providers::common::serialize_tools_openai_format(tools)
     }
 
-    fn serialize_messages_huggingface_chat(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Vec<Value>, LLMError> {
+    fn serialize_messages_huggingface_chat(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
         use serde_json::{Map, json};
 
         let mut messages = Vec::with_capacity(request.messages.len());
@@ -162,12 +141,9 @@ impl HuggingFaceProvider {
                 .map_err(|e| LLMError::InvalidRequest { message: e, metadata: None })?;
 
             let mut message_map = Map::with_capacity(4);
-            message_map
-                .insert("role".to_owned(), Value::String(message.role.as_generic_str().to_owned()));
+            message_map.insert("role".to_owned(), Value::String(message.role.as_generic_str().to_owned()));
 
-            if let Some(interleaved_content) =
-                assistant_interleaved_history_text(message, &request.model)
-            {
+            if let Some(interleaved_content) = assistant_interleaved_history_text(message, &request.model) {
                 message_map.insert("content".to_owned(), Value::String(interleaved_content));
             } else {
                 match &message.content {
@@ -249,8 +225,7 @@ impl HuggingFaceProvider {
             {
                 let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
                 if !normalized_details.is_empty() {
-                    message_map
-                        .insert("reasoning_details".to_owned(), Value::Array(normalized_details));
+                    message_map.insert("reasoning_details".to_owned(), Value::Array(normalized_details));
                 }
             }
 
@@ -265,8 +240,7 @@ impl HuggingFaceProvider {
         let is_glm = self.is_glm_model(&request.model);
 
         if let Some(system) = &request.system_prompt {
-            let has_system = messages.first().and_then(|m| m.get("role")).and_then(|r| r.as_str())
-                == Some("system");
+            let has_system = messages.first().and_then(|m| m.get("role")).and_then(|r| r.as_str()) == Some("system");
             if !has_system {
                 messages.insert(
                     0,
@@ -318,8 +292,7 @@ impl HuggingFaceProvider {
             use crate::rig_adapter::RigProviderCapabilities;
             use vtcode_config::models::Provider;
             if let Some(reasoning_params) =
-                RigProviderCapabilities::new(Provider::HuggingFace, &request.model)
-                    .reasoning_parameters(effort)
+                RigProviderCapabilities::new(Provider::HuggingFace, &request.model).reasoning_parameters(effort)
             {
                 if let Some(params_obj) = reasoning_params.as_object() {
                     for (k, v) in params_obj {
@@ -396,9 +369,7 @@ impl HuggingFaceProvider {
                                 "image_url": format!("data:{};base64,{}", mime_type, data)
                             })
                         }
-                        crate::provider::ContentPart::File {
-                            filename, file_id, file_url, ..
-                        } => {
+                        crate::provider::ContentPart::File { filename, file_id, file_url, .. } => {
                             let fallback = filename
                                 .clone()
                                 .or_else(|| file_id.clone())
@@ -418,9 +389,7 @@ impl HuggingFaceProvider {
                 MessageRole::System | MessageRole::User => {
                     if msg.role == MessageRole::System && request.system_prompt.is_some() {
                         if let crate::provider::MessageContent::Text(text) = &msg.content {
-                            if request.system_prompt.as_ref().map(|s| s.as_str())
-                                == Some(text.as_str())
-                            {
+                            if request.system_prompt.as_ref().map(|s| s.as_str()) == Some(text.as_str()) {
                                 continue;
                             }
                         }
@@ -622,8 +591,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
                 "message" => {
                     if let Some(content_arr) = item.get("content").and_then(|c| c.as_array()) {
                         for entry in content_arr {
-                            let entry_type =
-                                entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            let entry_type = entry.get("type").and_then(|t| t.as_str()).unwrap_or("");
                             match entry_type {
                                 "text" | "output_text" => {
                                     if let Some(text) = entry.get("text").and_then(|t| t.as_str()) {
@@ -701,8 +669,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
                 .or_else(|| usage_value.get("completion_tokens"))
                 .and_then(|ct| ct.as_u64())
                 .unwrap_or(0) as u32,
-            total_tokens: usage_value.get("total_tokens").and_then(|tt| tt.as_u64()).unwrap_or(0)
-                as u32,
+            total_tokens: usage_value.get("total_tokens").and_then(|tt| tt.as_u64()).unwrap_or(0) as u32,
             cached_prompt_tokens: None,
             cache_creation_tokens: None,
             cache_read_tokens: None,
@@ -711,11 +678,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
 
         Ok(LLMResponse {
             content,
-            tool_calls: if tool_calls.is_empty() {
-                None
-            } else {
-                Some(tool_calls)
-            },
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             model,
             usage,
             finish_reason,
@@ -758,8 +721,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             return Err(self.format_error(status, &body));
         }
 
-        let json: Value =
-            response.json().await.map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
+        let json: Value = response.json().await.map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
 
         if use_responses_api {
             if json.get("output").is_some() {
@@ -767,13 +729,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             }
         }
 
-        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
-            json,
-            PROVIDER_NAME,
-            model,
-            false,
-            None,
-        )
+        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(json, PROVIDER_NAME, model, false, None)
     }
 
     pub fn available_models() -> Vec<String> {
@@ -1113,26 +1069,21 @@ mod tests {
 
     #[test]
     fn normalize_reasoning_detail_decodes_stringified_object() {
-        let parsed = normalize_reasoning_detail_object(&json!(
-            "{\"type\":\"reasoning.text\",\"text\":\"step\"}"
-        ))
-        .expect("expected a parsed reasoning detail object");
+        let parsed = normalize_reasoning_detail_object(&json!("{\"type\":\"reasoning.text\",\"text\":\"step\"}"))
+            .expect("expected a parsed reasoning detail object");
         assert!(parsed.is_object());
         assert_eq!(parsed["type"], "reasoning.text");
     }
 
     #[test]
     fn serialize_messages_normalizes_minimax_reasoning_details() {
-        let provider = HuggingFaceProvider::with_model(
-            "test-key".to_string(),
-            "MiniMaxAI/MiniMax-M2.5:novita".to_string(),
-        );
+        let provider =
+            HuggingFaceProvider::with_model("test-key".to_string(), "MiniMaxAI/MiniMax-M2.5:novita".to_string());
         let request = LLMRequest {
             model: "MiniMaxAI/MiniMax-M2.5:novita".to_string(),
             messages: vec![
-                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!(
-                    "{\"type\":\"reasoning.text\",\"text\":\"chain\"}"
-                )])),
+                Message::assistant("answer".to_string())
+                    .with_reasoning_details(Some(vec![json!("{\"type\":\"reasoning.text\",\"text\":\"chain\"}")])),
             ]
             .into(),
             ..Default::default()
@@ -1147,16 +1098,10 @@ mod tests {
 
     #[test]
     fn serialize_messages_rehydrates_glm_interleaved_history_into_content() {
-        let provider = HuggingFaceProvider::with_model(
-            "test-key".to_string(),
-            "zai-org/GLM-5.1:novita".into(),
-        );
+        let provider = HuggingFaceProvider::with_model("test-key".to_string(), "zai-org/GLM-5.1:novita".into());
         let request = LLMRequest {
             model: "zai-org/GLM-5.1:novita".to_string(),
-            messages: vec![
-                Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string())),
-            ]
-            .into(),
+            messages: vec![Message::assistant("done".to_string()).with_reasoning(Some("trace".to_string()))].into(),
             ..Default::default()
         };
 
@@ -1169,10 +1114,7 @@ mod tests {
 
     #[test]
     fn normalize_step35_flash_provider_suffix() {
-        let provider = HuggingFaceProvider::with_model(
-            "test-key".to_string(),
-            "stepfun-ai/Step-3.5-Flash".to_string(),
-        );
+        let provider = HuggingFaceProvider::with_model("test-key".to_string(), "stepfun-ai/Step-3.5-Flash".to_string());
 
         let normalized = provider
             .normalize_model_id("stepfun-ai/Step-3.5-Flash")
@@ -1187,10 +1129,8 @@ mod tests {
 
     #[test]
     fn format_for_chat_completions_keeps_apply_patch_as_function_tool() {
-        let provider = HuggingFaceProvider::with_model(
-            "test-key".to_string(),
-            "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
-        );
+        let provider =
+            HuggingFaceProvider::with_model("test-key".to_string(), "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string());
         let request = LLMRequest {
             model: "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
             messages: vec![Message::user("apply a patch".to_string())].into(),

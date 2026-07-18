@@ -180,10 +180,7 @@ impl ToolResponseBuilder {
     /// Build the modern dual-channel ToolResult
     pub fn build_result(self) -> ToolResult {
         if !self.success {
-            return ToolResult::error(
-                self.tool_name,
-                self.error.unwrap_or_else(|| "Unknown error".to_string()),
-            );
+            return ToolResult::error(self.tool_name, self.error.unwrap_or_else(|| "Unknown error".to_string()));
         }
 
         let llm = self.llm_content.or_else(|| self.content.clone()).unwrap_or_default();

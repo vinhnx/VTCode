@@ -33,8 +33,7 @@ struct WrapperExecResponse {
 mod unix_impl {
     use super::{WrapperExecAction, WrapperExecRequest, WrapperExecResponse};
 
-    pub(super) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str =
-        "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
+    pub(super) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str = "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
     pub(super) const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
     pub(super) const EXEC_WRAPPER_ENV_VAR: &str = "EXEC_WRAPPER";
     use anyhow::{Context, Result, bail};
@@ -64,29 +63,20 @@ mod unix_impl {
 
     impl ZshExecBridgeSession {
         pub(crate) fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
-            let socket_path = std::env::temp_dir()
-                .join(format!("vtcode-zsh-exec-bridge-{}.sock", Uuid::new_v4()));
+            let socket_path = std::env::temp_dir().join(format!("vtcode-zsh-exec-bridge-{}.sock", Uuid::new_v4()));
 
             if socket_path.exists() {
-                fs::remove_file(&socket_path).with_context(|| {
-                    format!("remove pre-existing zsh bridge socket at {}", socket_path.display())
-                })?;
+                fs::remove_file(&socket_path)
+                    .with_context(|| format!("remove pre-existing zsh bridge socket at {}", socket_path.display()))?;
             }
 
-            let listener = UnixListener::bind(&socket_path).with_context(|| {
-                format!("bind zsh exec bridge socket listener at {}", socket_path.display())
-            })?;
+            let listener = UnixListener::bind(&socket_path)
+                .with_context(|| format!("bind zsh exec bridge socket listener at {}", socket_path.display()))?;
             // Restrict socket to owner-only — prevents other users on the same
             // machine from communicating with the bridge (defence in depth;
             // the random UUID path already provides unpredictability).
-            fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o700)).with_context(
-                || {
-                    format!(
-                        "set permissions on zsh exec bridge socket at {}",
-                        socket_path.display()
-                    )
-                },
-            )?;
+            fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o700))
+                .with_context(|| format!("set permissions on zsh exec bridge socket at {}", socket_path.display()))?;
             listener
                 .set_nonblocking(true)
                 .context("set zsh exec bridge listener to nonblocking")?;
@@ -111,15 +101,9 @@ mod unix_impl {
 
         pub(crate) fn env_vars(&self, wrapper_executable: &Path) -> HashMap<String, String> {
             HashMap::from([
-                (
-                    ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR.to_string(),
-                    self.socket_path.to_string_lossy().to_string(),
-                ),
+                (ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR.to_string(), self.socket_path.to_string_lossy().to_string()),
                 (ZSH_EXEC_WRAPPER_MODE_ENV_VAR.to_string(), "1".to_string()),
-                (
-                    EXEC_WRAPPER_ENV_VAR.to_string(),
-                    wrapper_executable.to_string_lossy().to_string(),
-                ),
+                (EXEC_WRAPPER_ENV_VAR.to_string(), wrapper_executable.to_string_lossy().to_string()),
             ])
         }
     }
@@ -136,16 +120,11 @@ mod unix_impl {
         }
     }
 
-    fn run_bridge_loop(
-        listener: UnixListener,
-        stop: Arc<AtomicBool>,
-        allow_confirmed_dangerous: bool,
-    ) {
+    fn run_bridge_loop(listener: UnixListener, stop: Arc<AtomicBool>, allow_confirmed_dangerous: bool) {
         while !stop.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
-                    if let Err(err) = handle_wrapper_request(&mut stream, allow_confirmed_dangerous)
-                    {
+                    if let Err(err) = handle_wrapper_request(&mut stream, allow_confirmed_dangerous) {
                         warn!(error = %err, "zsh exec bridge request failed");
                     }
                 }
@@ -160,10 +139,7 @@ mod unix_impl {
         }
     }
 
-    fn handle_wrapper_request(
-        stream: &mut UnixStream,
-        allow_confirmed_dangerous: bool,
-    ) -> Result<()> {
+    fn handle_wrapper_request(stream: &mut UnixStream, allow_confirmed_dangerous: bool) -> Result<()> {
         let mut payload = String::new();
         stream.read_to_string(&mut payload).context("read wrapper request payload")?;
         let request: WrapperExecRequest =
@@ -202,10 +178,7 @@ mod unix_impl {
 
         let display = shell_words::join(command.iter().map(String::as_str));
         if let Err(err) = crate::tools::validation::commands::validate_command_safety(&display) {
-            return (
-                WrapperExecAction::Deny,
-                Some(format!("Rejected by command safety validation: {err}")),
-            );
+            return (WrapperExecAction::Deny, Some(format!("Rejected by command safety validation: {err}")));
         }
         if crate::command_safety::command_might_be_dangerous(&command) {
             return (WrapperExecAction::Deny, Some("Rejected dangerous subcommand".to_string()));
@@ -240,8 +213,8 @@ mod unix_impl {
             .context("resolve wrapper cwd")?
             .to_string_lossy()
             .to_string();
-        let socket_path = std::env::var(ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR)
-            .context("missing wrapper socket path env var")?;
+        let socket_path =
+            std::env::var(ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR).context("missing wrapper socket path env var")?;
 
         let request_id = Uuid::new_v4().to_string();
         let request = WrapperExecRequest {
@@ -251,8 +224,8 @@ mod unix_impl {
             cwd,
         };
 
-        let mut stream = UnixStream::connect(&socket_path)
-            .with_context(|| format!("connect to wrapper socket at {socket_path}"))?;
+        let mut stream =
+            UnixStream::connect(&socket_path).with_context(|| format!("connect to wrapper socket at {socket_path}"))?;
         let encoded = serde_json::to_string(&request).context("serialize wrapper request")?;
         stream.write_all(encoded.as_bytes()).context("write wrapper request payload")?;
         stream.write_all(b"\n").context("write wrapper request newline")?;
@@ -268,10 +241,7 @@ mod unix_impl {
             serde_json::from_str(response_buf.trim()).context("parse wrapper response payload")?;
 
         if response.request_id != request_id {
-            bail!(
-                "wrapper response request_id mismatch: expected {request_id}, got {}",
-                response.request_id
-            );
+            bail!("wrapper response request_id mismatch: expected {request_id}, got {}", response.request_id);
         }
 
         if response.action == WrapperExecAction::Deny {

@@ -34,10 +34,7 @@ fn compact_loop_text(value: &str, max_chars: usize) -> String {
 }
 
 fn normalize_shell_command_text(value: &str, max_chars: usize) -> String {
-    compact_loop_text(
-        &value.chars().filter(|ch| !matches!(ch, '\'' | '"')).collect::<String>(),
-        max_chars,
-    )
+    compact_loop_text(&value.chars().filter(|ch| !matches!(ch, '\'' | '"')).collect::<String>(), max_chars)
 }
 
 fn normalized_shell_command_arg(args: &Value, max_chars: usize) -> Option<String> {
@@ -235,30 +232,20 @@ fn stable_family_label(name: &str) -> Cow<'_, str> {
 pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
     let label = stable_family_label(canonical_tool_name);
     match canonical_tool_name {
-        tool_names::READ_FILE => {
-            read_file_path_arg(args).map(|path| {
-                format!(
-                    "{label}::{}{}",
-                    compact_loop_key_part(path, 120),
-                    read_file_slice_suffix(args),
-                )
-            })
-        }
+        tool_names::READ_FILE => read_file_path_arg(args)
+            .map(|path| format!("{label}::{}{}", compact_loop_key_part(path, 120), read_file_slice_suffix(args),)),
         tool_names::UNIFIED_FILE => {
             let action = tool_intent::file_operation_action(args).unwrap_or("read");
             if !action.eq_ignore_ascii_case("read") {
                 return None;
             }
             read_file_path_arg(args).map(|path| {
-                format!(
-                    "{label}::read::{}{}",
-                    compact_loop_key_part(path, 120),
-                    read_file_slice_suffix(args),
-                )
+                format!("{label}::read::{}{}", compact_loop_key_part(path, 120), read_file_slice_suffix(args),)
             })
         }
-        tool_names::UNIFIED_EXEC => normalized_shell_command_arg(args, 160)
-            .map(|command| format!("{label}::run::{command}")),
+        tool_names::UNIFIED_EXEC => {
+            normalized_shell_command_arg(args, 160).map(|command| format!("{label}::run::{command}"))
+        }
         tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_loop_identity(args)
             .map(|identity| format!("{canonical_tool_name}::{identity}")),
         tool_names::UNIFIED_SEARCH => {
@@ -291,8 +278,8 @@ pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> 
 #[cfg(test)]
 mod tests {
     use super::{
-        read_file_has_limit_arg, read_file_has_offset_arg, read_file_limit_value,
-        read_file_offset_value, read_file_raw_flag, read_file_slice_suffix,
+        read_file_has_limit_arg, read_file_has_offset_arg, read_file_limit_value, read_file_offset_value,
+        read_file_raw_flag, read_file_slice_suffix,
     };
     use crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key;
     use serde_json::json;
@@ -390,10 +377,8 @@ mod tests {
         // Reproduces turn_613: four reads of the same file with different
         // offset/limit/raw must produce four distinct family keys, so the
         // per-turn family cap does not trip on legitimate pagination.
-        let base = low_signal_family_key(
-            tool_names::UNIFIED_FILE,
-            &json!({"action": "read", "path": "src/cli/update.rs"}),
-        );
+        let base =
+            low_signal_family_key(tool_names::UNIFIED_FILE, &json!({"action": "read", "path": "src/cli/update.rs"}));
         let off81 = low_signal_family_key(
             tool_names::UNIFIED_FILE,
             &json!({"action": "read", "path": "src/cli/update.rs", "offset": 81, "limit": 229}),
@@ -415,11 +400,7 @@ mod tests {
 
         let keys = [base.clone(), off81.clone(), off80.clone(), raw.clone()];
         let unique: std::collections::HashSet<_> = keys.iter().cloned().collect();
-        assert_eq!(
-            unique.len(),
-            4,
-            "paginated reads must have distinct family keys, got: {keys:?}"
-        );
+        assert_eq!(unique.len(), 4, "paginated reads must have distinct family keys, got: {keys:?}");
 
         // Sanity: the bare read keeps the legacy key (no slice suffix).
         assert_eq!(base.as_deref(), Some("unified_file::read::src/cli/update.rs"));
@@ -456,14 +437,8 @@ mod tests {
     #[test]
     fn low_signal_family_key_read_file_distinguishes_paginated_reads() {
         // read_file (not unified_file) must also be slice-aware.
-        let off0 = low_signal_family_key(
-            tool_names::READ_FILE,
-            &json!({"path": "src/lib.rs", "offset": 0}),
-        );
-        let off80 = low_signal_family_key(
-            tool_names::READ_FILE,
-            &json!({"path": "src/lib.rs", "offset": 80}),
-        );
+        let off0 = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "src/lib.rs", "offset": 0}));
+        let off80 = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "src/lib.rs", "offset": 80}));
         assert_ne!(off0, off80, "different offsets must produce different keys");
         assert!(off0.unwrap().ends_with("::off=0"));
         assert!(off80.unwrap().ends_with("::off=80"));

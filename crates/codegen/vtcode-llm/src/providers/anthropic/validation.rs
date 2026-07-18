@@ -7,17 +7,15 @@
 
 use crate::error_display;
 use crate::provider::{
-    AnthropicOptionalU32Override, AnthropicThinkingModeOverride, LLMError, LLMRequest, MessageRole,
-    ToolChoice,
+    AnthropicOptionalU32Override, AnthropicThinkingModeOverride, LLMError, LLMRequest, MessageRole, ToolChoice,
 };
 use vtcode_config::core::AnthropicConfig;
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
-    adaptive_thinking_always_on, allowed_efforts_for_model, claude_thinking_profile,
-    effort_allowed_for_model, matches_model, resolve_model_name, supports_assistant_prefill,
-    supports_effort, supports_manual_interleaved_beta, supports_manual_thinking_budget,
-    supports_structured_output, supports_task_budget,
+    adaptive_thinking_always_on, allowed_efforts_for_model, claude_thinking_profile, effort_allowed_for_model,
+    matches_model, resolve_model_name, supports_assistant_prefill, supports_effort, supports_manual_interleaved_beta,
+    supports_manual_thinking_budget, supports_structured_output, supports_task_budget,
 };
 
 pub fn validate_request(
@@ -26,8 +24,7 @@ pub fn validate_request(
     anthropic_config: &AnthropicConfig,
 ) -> Result<(), LLMError> {
     if request.messages.is_empty() {
-        let formatted_error =
-            error_display::format_llm_error("Anthropic", "Messages cannot be empty");
+        let formatted_error = error_display::format_llm_error("Anthropic", "Messages cannot be empty");
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
@@ -35,8 +32,7 @@ pub fn validate_request(
     // and return appropriate errors. This avoids maintenance burden of keeping hardcoded
     // model lists in sync and allows flexibility for proxies/aggregators.
 
-    if request.output_format.is_some() && !supports_structured_output(&request.model, default_model)
-    {
+    if request.output_format.is_some() && !supports_structured_output(&request.model, default_model) {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
@@ -58,8 +54,7 @@ pub fn validate_request(
     }
 
     let resolved_model = resolve_model_name(&request.model, default_model);
-    let effective_thinking_mode =
-        resolve_effective_thinking_mode(request, default_model, anthropic_config);
+    let effective_thinking_mode = resolve_effective_thinking_mode(request, default_model, anthropic_config);
 
     // Models with adaptive thinking always on (Fable 5, Mythos 5, Opus 4.8) reject disabled thinking.
     // Sonnet 5 has default thinking on but allows disabling via `thinking: {type: "disabled"}`.
@@ -75,23 +70,11 @@ pub fn validate_request(
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
-    let rejects_sampling =
-        matches_model(resolved_model, vtcode_config::constants::models::anthropic::CLAUDE_SONNET_5)
-            || matches_model(
-                resolved_model,
-                vtcode_config::constants::models::anthropic::CLAUDE_FABLE_5,
-            )
-            || matches_model(
-                resolved_model,
-                vtcode_config::constants::models::anthropic::CLAUDE_MYTHOS_5,
-            )
-            || matches_model(
-                resolved_model,
-                vtcode_config::constants::models::anthropic::CLAUDE_OPUS_4_8,
-            );
-    if rejects_sampling
-        && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
-    {
+    let rejects_sampling = matches_model(resolved_model, vtcode_config::constants::models::anthropic::CLAUDE_SONNET_5)
+        || matches_model(resolved_model, vtcode_config::constants::models::anthropic::CLAUDE_FABLE_5)
+        || matches_model(resolved_model, vtcode_config::constants::models::anthropic::CLAUDE_MYTHOS_5)
+        || matches_model(resolved_model, vtcode_config::constants::models::anthropic::CLAUDE_OPUS_4_8);
+    if rejects_sampling && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some()) {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             "Claude Sonnet 5, Fable 5, Mythos 5, and Opus 4.8 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
@@ -113,8 +96,7 @@ pub fn validate_request(
 
     if request.thinking_budget.is_some()
         && claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
-            matches!(profile.mode, super::capabilities::ClaudeThinkingMode::Adaptive)
-                && !profile.supports_manual_budget
+            matches!(profile.mode, super::capabilities::ClaudeThinkingMode::Adaptive) && !profile.supports_manual_budget
         })
     {
         let formatted_error = error_display::format_llm_error(
@@ -141,9 +123,7 @@ pub fn validate_request(
         validate_reasoning_constraints(request, default_model, anthropic_config)?;
     }
 
-    if request_uses_assistant_prefill(request)
-        && !supports_assistant_prefill(resolved_model, default_model)
-    {
+    if request_uses_assistant_prefill(request) && !supports_assistant_prefill(resolved_model, default_model) {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!(
@@ -184,10 +164,7 @@ pub fn validate_request(
 
     if request.anthropic_request_overrides.is_some()
         && request.effort.is_some()
-        && matches!(
-            effective_thinking_mode,
-            EffectiveThinkingMode::Disabled | EffectiveThinkingMode::ManualBudget(_)
-        )
+        && matches!(effective_thinking_mode, EffectiveThinkingMode::Disabled | EffectiveThinkingMode::ManualBudget(_))
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
@@ -289,10 +266,7 @@ fn effective_manual_thinking_budget_override(request: &LLMRequest) -> Option<u32
     request.thinking_budget
 }
 
-fn effective_manual_thinking_budget(
-    request: &LLMRequest,
-    anthropic_config: &AnthropicConfig,
-) -> u32 {
+fn effective_manual_thinking_budget(request: &LLMRequest, anthropic_config: &AnthropicConfig) -> u32 {
     if let Some(budget) = request.thinking_budget {
         return budget;
     }
@@ -312,10 +286,7 @@ fn effective_manual_thinking_budget(
     anthropic_config.interleaved_thinking_budget_tokens
 }
 
-fn effective_task_budget_tokens(
-    request: &LLMRequest,
-    anthropic_config: &AnthropicConfig,
-) -> Option<u32> {
+fn effective_task_budget_tokens(request: &LLMRequest, anthropic_config: &AnthropicConfig) -> Option<u32> {
     if let Some(overrides) = request.anthropic_request_overrides.as_ref() {
         return match overrides.task_budget_tokens {
             AnthropicOptionalU32Override::Explicit(total) => Some(total),
@@ -335,10 +306,8 @@ fn validate_tool_definitions(request: &LLMRequest) -> Result<(), LLMError> {
     let mut has_programmatic_tool_calling = false;
 
     for tool in tools.iter() {
-        let has_allowed_callers =
-            tool.allowed_callers.as_ref().is_some_and(|callers| !callers.is_empty());
-        let has_input_examples =
-            tool.input_examples.as_ref().is_some_and(|examples| !examples.is_empty());
+        let has_allowed_callers = tool.allowed_callers.as_ref().is_some_and(|callers| !callers.is_empty());
+        let has_input_examples = tool.input_examples.as_ref().is_some_and(|examples| !examples.is_empty());
 
         if let Some(function) = tool.function.as_ref() {
             validate_anthropic_tool_name(&function.name)?;
@@ -380,9 +349,7 @@ fn validate_tool_definitions(request: &LLMRequest) -> Result<(), LLMError> {
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
-    if has_programmatic_tool_calling
-        && matches!(request.tool_choice, Some(ToolChoice::Any | ToolChoice::Specific(_)))
-    {
+    if has_programmatic_tool_calling && matches!(request.tool_choice, Some(ToolChoice::Any | ToolChoice::Specific(_))) {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             "programmatic tool calling is incompatible with forced tool_choice values; use 'auto' or omit tool_choice",
@@ -418,11 +385,7 @@ fn validate_effort_setting(effort: &str, model: &str, default_model: &str) -> Re
             "Anthropic",
             &format!(
                 "effort is not supported for model '{}'.",
-                if model.trim().is_empty() {
-                    default_model
-                } else {
-                    model
-                }
+                if model.trim().is_empty() { default_model } else { model }
             ),
         );
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
@@ -484,9 +447,7 @@ fn validate_reasoning_constraints(
     {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
-            &format!(
-                "top_p must be between 0.95 and 1.0 (got {top_p}) when extended thinking is enabled."
-            ),
+            &format!("top_p must be between 0.95 and 1.0 (got {top_p}) when extended thinking is enabled."),
         );
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
@@ -512,20 +473,15 @@ pub fn validate_anthropic_schema(schema: &serde_json::Value) -> Result<(), LLMEr
             validate_schema_object(obj, "root")?;
         }
         Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Array(_) | Value::Null => {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                "Structured output schema must be a JSON object",
-            );
+            let formatted_error =
+                error_display::format_llm_error("Anthropic", "Structured output schema must be a JSON object");
             return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
     }
     Ok(())
 }
 
-fn validate_schema_object(
-    obj: &serde_json::Map<String, serde_json::Value>,
-    path: &str,
-) -> Result<(), LLMError> {
+fn validate_schema_object(obj: &serde_json::Map<String, serde_json::Value>, path: &str) -> Result<(), LLMError> {
     use serde_json::Value;
 
     for (key, value) in obj {
@@ -533,17 +489,13 @@ fn validate_schema_object(
             "type" => {
                 if let Some(type_str) = value.as_str() {
                     match type_str {
-                        "object" | "array" | "string" | "number" | "integer" | "boolean"
-                        | "null" => {}
+                        "object" | "array" | "string" | "number" | "integer" | "boolean" | "null" => {}
                         _ => {
                             let formatted_error = error_display::format_llm_error(
                                 "Anthropic",
                                 &format!("Unsupported schema type '{type_str}', path: {path}"),
                             );
-                            return Err(LLMError::InvalidRequest {
-                                message: formatted_error,
-                                metadata: None,
-                            });
+                            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
                         }
                     }
                 }
@@ -573,14 +525,9 @@ fn validate_schema_object(
                     {
                         let formatted_error = error_display::format_llm_error(
                             "Anthropic",
-                            &format!(
-                                "Array minItems only supports values 0 or 1, got {min_items}, path: {path}"
-                            ),
+                            &format!("Array minItems only supports values 0 or 1, got {min_items}, path: {path}"),
                         );
-                        return Err(LLMError::InvalidRequest {
-                            message: formatted_error,
-                            metadata: None,
-                        });
+                        return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
                     }
                 } else {
                     let formatted_error = error_display::format_llm_error(
@@ -589,10 +536,7 @@ fn validate_schema_object(
                             "Array constraints like '{key}' are not supported by Anthropic structured output. Path: {path}"
                         ),
                     );
-                    return Err(LLMError::InvalidRequest {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
                 }
             }
             "additionalProperties" => {
@@ -601,14 +545,9 @@ fn validate_schema_object(
                 {
                     let formatted_error = error_display::format_llm_error(
                         "Anthropic",
-                        &format!(
-                            "additionalProperties must be set to false, got {additional_props}, path: {path}"
-                        ),
+                        &format!("additionalProperties must be set to false, got {additional_props}, path: {path}"),
                     );
-                    return Err(LLMError::InvalidRequest {
-                        message: formatted_error,
-                        metadata: None,
-                    });
+                    return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
                 }
             }
             "properties" => {

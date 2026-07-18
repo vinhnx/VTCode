@@ -1,6 +1,6 @@
 use super::client::{
-    CODEX_PROVIDER, CodexAppServerClient, CodexReviewStartRequest, CodexReviewTarget,
-    CodexThreadEnvelope, CodexThreadRequest, CodexTurnRequest, ServerEvent,
+    CODEX_PROVIDER, CodexAppServerClient, CodexReviewStartRequest, CodexReviewTarget, CodexThreadEnvelope,
+    CodexThreadRequest, CodexTurnRequest, ServerEvent,
 };
 use crate::agent::runloop::ResumeSession;
 use crate::startup::require_full_auto_workspace_trust;
@@ -15,25 +15,20 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use vtcode_core::cli::args::AskCommandOptions;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
-use vtcode_core::core::interfaces::session::{
-    PlanningEntrySource, SessionRuntime, SessionRuntimeParams,
-};
+use vtcode_core::core::interfaces::session::{PlanningEntrySource, SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::build_thread_archive_metadata;
 use vtcode_core::llm::provider::{FinishReason, LLMResponse, MessageRole};
 use vtcode_core::planning;
 use vtcode_core::ui::terminal;
 use vtcode_core::utils::session_archive::{
-    SessionArchive, SessionArchiveMetadata, SessionMessage, SessionProgressArgs,
-    generate_session_archive_identifier, history_persistence_enabled,
-    reserve_session_archive_identifier,
+    SessionArchive, SessionArchiveMetadata, SessionMessage, SessionProgressArgs, generate_session_archive_identifier,
+    history_persistence_enabled, reserve_session_archive_identifier,
 };
 
 const APPROVAL_POLICY_INTERACTIVE: &str = "on-request";
 const APPROVAL_POLICY_AUTOMATIC: &str = "never";
 const MCP_SERVER_STATUS_UPDATED_METHOD: &str = "mcpServerStatus/updated";
-use vtcode_core::prompts::system::{
-    PLANNING_WORKFLOW_HINT, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT,
-};
+use vtcode_core::prompts::system::{PLANNING_WORKFLOW_HINT, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct CodexSessionRuntime;
@@ -108,9 +103,7 @@ impl CodexMcpStartupTracker {
             return false;
         };
 
-        if !expected_servers.is_empty()
-            && !expected_servers.iter().all(|name| self.current_status.contains_key(name))
-        {
+        if !expected_servers.is_empty() && !expected_servers.iter().all(|name| self.current_status.contains_key(name)) {
             return false;
         }
 
@@ -216,14 +209,7 @@ pub(crate) async fn handle_codex_ask_command(
         &client,
         &mut events,
         &mut mcp_startup,
-        build_turn_request(
-            &config,
-            thread.thread.id,
-            prompt_text,
-            None,
-            true,
-            options.skip_confirmations,
-        ),
+        build_turn_request(&config, thread.thread.id, prompt_text, None, true, options.skip_confirmations),
         false,
         None,
     )
@@ -290,8 +276,7 @@ pub(crate) async fn run_codex_noninteractive_with_instructions(
     run: CodexNonInteractiveRun,
     instructions: Option<String>,
 ) -> Result<CodexCompletedRun> {
-    run_codex_noninteractive_inner(config, vt_cfg, run, normalise_turn_instructions(instructions))
-        .await
+    run_codex_noninteractive_inner(config, vt_cfg, run, normalise_turn_instructions(instructions)).await
 }
 
 async fn run_codex_noninteractive_inner(
@@ -308,10 +293,7 @@ async fn run_codex_noninteractive_inner(
         client.thread_resume(thread_id).await?
     } else {
         client
-            .thread_start(
-                build_thread_request(config, run.read_only, run.skip_confirmations),
-                run.ephemeral,
-            )
+            .thread_start(build_thread_request(config, run.read_only, run.skip_confirmations), run.ephemeral)
             .await?
     };
     let thread_id = thread.thread.id.clone();
@@ -322,16 +304,8 @@ async fn run_codex_noninteractive_inner(
             let review = client
                 .review_start(CodexReviewStartRequest { thread_id: thread_id.clone(), target })
                 .await?;
-            collect_turn_output(
-                &client,
-                &mut events,
-                &mut mcp_startup,
-                thread_id.clone(),
-                review.turn.id,
-                false,
-                None,
-            )
-            .await?
+            collect_turn_output(&client, &mut events, &mut mcp_startup, thread_id.clone(), review.turn.id, false, None)
+                .await?
         } else {
             run_turn(
                 &client,
@@ -407,14 +381,8 @@ async fn run_interactive_session(
     let mut mcp_startup = load_mcp_startup_tracker(&client).await;
     let history_enabled = history_persistence_enabled();
     let mut planning_active = !matches!(planning_entry_source, PlanningEntrySource::None);
-    let (thread, mut archive, mut messages, mut turn_number) = prepare_session_state(
-        &client,
-        config,
-        resume,
-        history_enabled,
-        skip_confirmations || full_auto,
-    )
-    .await?;
+    let (thread, mut archive, mut messages, mut turn_number) =
+        prepare_session_state(&client, config, resume, history_enabled, skip_confirmations || full_auto).await?;
     drain_startup_notifications(&mut events, &mut mcp_startup)?;
 
     println!("Codex thread: {}", thread.thread.id);
@@ -460,9 +428,7 @@ async fn run_interactive_session(
             Ok(output) => {
                 messages.push(SessionMessage::new(MessageRole::Assistant, output));
                 turn_number += 1;
-                if let Some(warning) =
-                    persist_archive_progress(archive.as_ref(), &messages, turn_number)
-                {
+                if let Some(warning) = persist_archive_progress(archive.as_ref(), &messages, turn_number) {
                     tracing::warn!("{warning}");
                 }
                 if planning_active {
@@ -561,26 +527,15 @@ fn build_archive_metadata(config: &CoreAgentConfig, thread_id: &str) -> SessionA
         config.reasoning_effort.as_str(),
     )
     .with_external_thread_id(thread_id.to_string())
-    .with_debug_log_path(
-        crate::main_helpers::runtime_debug_log_path()
-            .map(|path| path.to_string_lossy().to_string()),
-    )
+    .with_debug_log_path(crate::main_helpers::runtime_debug_log_path().map(|path| path.to_string_lossy().to_string()))
 }
 
-fn build_thread_request(
-    config: &CoreAgentConfig,
-    read_only: bool,
-    skip_confirmations: bool,
-) -> CodexThreadRequest {
+fn build_thread_request(config: &CoreAgentConfig, read_only: bool, skip_confirmations: bool) -> CodexThreadRequest {
     CodexThreadRequest {
         cwd: config.workspace.to_string_lossy().to_string(),
         model: Some(config.model.clone()),
         approval_policy: approval_policy(skip_confirmations),
-        sandbox: if read_only {
-            "read-only"
-        } else {
-            "workspace-write"
-        },
+        sandbox: if read_only { "read-only" } else { "workspace-write" },
     }
 }
 
@@ -604,8 +559,7 @@ fn build_turn_request(
         } else {
             json!({ "type": "workspaceWrite", "networkAccess": false })
         },
-        reasoning_effort: Some(config.reasoning_effort.as_str().to_string())
-            .filter(|value| value != "none"),
+        reasoning_effort: Some(config.reasoning_effort.as_str().to_string()).filter(|value| value != "none"),
     }
 }
 
@@ -694,15 +648,13 @@ async fn collect_turn_output(
                 }
                 let status = event.params["turn"]["status"].as_str().unwrap_or("unknown");
                 if status != "completed" {
-                    let message =
-                        event.params["turn"]["error"]["message"].as_str().unwrap_or("turn failed");
+                    let message = event.params["turn"]["error"]["message"].as_str().unwrap_or("turn failed");
                     bail!("Codex turn ended with status '{status}': {message}");
                 }
                 return Ok(output.trim_end().to_string());
             }
             "error" if event.params["threadId"].as_str() == Some(thread_id.as_str()) => {
-                let message =
-                    event.params["error"]["message"].as_str().unwrap_or("Codex turn failed");
+                let message = event.params["error"]["message"].as_str().unwrap_or("Codex turn failed");
                 bail!(message.to_string());
             }
             _ => {}
@@ -735,18 +687,12 @@ async fn handle_steering_message(
 }
 
 fn approval_request_matches(event: &ServerEvent, thread_id: &str, turn_id: &str) -> bool {
-    matches!(
-        event.method.as_str(),
-        "item/commandExecution/requestApproval" | "item/fileChange/requestApproval"
-    ) && event.params["threadId"].as_str() == Some(thread_id)
+    matches!(event.method.as_str(), "item/commandExecution/requestApproval" | "item/fileChange/requestApproval")
+        && event.params["threadId"].as_str() == Some(thread_id)
         && event.params["turnId"].as_str() == Some(turn_id)
 }
 
-async fn handle_approval_request(
-    client: &CodexAppServerClient,
-    request_id: Value,
-    event: &ServerEvent,
-) -> Result<()> {
+async fn handle_approval_request(client: &CodexAppServerClient, request_id: Value, event: &ServerEvent) -> Result<()> {
     let decision = tokio::task::spawn_blocking({
         let method = event.method.clone();
         let params = event.params.clone();
@@ -760,10 +706,11 @@ async fn handle_approval_request(
 }
 
 async fn load_mcp_startup_tracker(client: &CodexAppServerClient) -> CodexMcpStartupTracker {
-    let expected_servers =
-        client.mcp_server_status_list().await.ok().map(|response| {
-            response.data.into_iter().map(|server| server.name).collect::<Vec<_>>()
-        });
+    let expected_servers = client
+        .mcp_server_status_list()
+        .await
+        .ok()
+        .map(|response| response.data.into_iter().map(|server| server.name).collect::<Vec<_>>());
     CodexMcpStartupTracker::new(expected_servers)
 }
 
@@ -787,10 +734,7 @@ fn drain_startup_notifications(
     }
 }
 
-fn handle_mcp_startup_notification(
-    event: &ServerEvent,
-    tracker: &mut CodexMcpStartupTracker,
-) -> bool {
+fn handle_mcp_startup_notification(event: &ServerEvent, tracker: &mut CodexMcpStartupTracker) -> bool {
     let Some((server, status)) = parse_mcp_startup_notification(event) else {
         return false;
     };
@@ -891,8 +835,7 @@ fn read_user_prompt() -> Result<Option<String>> {
         print!("> ");
         terminal::flush_stdout();
         let mut buffer = String::new();
-        let bytes_read =
-            std::io::stdin().read_line(&mut buffer).context("failed to read user input")?;
+        let bytes_read = std::io::stdin().read_line(&mut buffer).context("failed to read user input")?;
         if bytes_read == 0 {
             Ok(None)
         } else {
@@ -927,10 +870,7 @@ fn persist_archive_progress(
         .map(|err| archive_save_warning_message("after turn completion", &err))
 }
 
-fn finalize_archive(
-    archive: Option<SessionArchive>,
-    messages: Vec<SessionMessage>,
-) -> Option<String> {
+fn finalize_archive(archive: Option<SessionArchive>, messages: Vec<SessionMessage>) -> Option<String> {
     let archive = archive?;
 
     let transcript = messages
@@ -1003,10 +943,9 @@ fn is_planning_active_implementation_alias(input: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        CodexMcpStartupStatus, CodexMcpStartupTracker, MCP_SERVER_STATUS_UPDATED_METHOD,
-        ServerEvent, archive_save_warning_message, codex_experimental_features_enabled,
-        finalize_archive, normalize_planning_input, parse_mcp_startup_notification,
-        persist_archive_progress,
+        CodexMcpStartupStatus, CodexMcpStartupTracker, MCP_SERVER_STATUS_UPDATED_METHOD, ServerEvent,
+        archive_save_warning_message, codex_experimental_features_enabled, finalize_archive, normalize_planning_input,
+        parse_mcp_startup_notification, persist_archive_progress,
     };
     use anyhow::anyhow;
     use serde_json::json;
@@ -1016,8 +955,7 @@ mod tests {
 
     #[test]
     fn tracker_emits_immediate_failure_and_settled_summary() {
-        let mut tracker =
-            CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
+        let mut tracker = CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
 
         assert!(
             tracker
@@ -1031,10 +969,7 @@ mod tests {
                 error: "MCP client for `alpha` failed to start: handshake failed".to_string(),
             },
         );
-        assert_eq!(
-            alpha_failure,
-            vec!["MCP client for `alpha` failed to start: handshake failed".to_string()]
-        );
+        assert_eq!(alpha_failure, vec!["MCP client for `alpha` failed to start: handshake failed".to_string()]);
 
         assert!(
             tracker
@@ -1088,8 +1023,7 @@ mod tests {
 
     #[test]
     fn finish_after_lag_marks_missing_expected_servers_interrupted() {
-        let mut tracker =
-            CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
+        let mut tracker = CodexMcpStartupTracker::new(Some(["alpha".to_string(), "beta".to_string()]));
         let _ = tracker.record_update("alpha".to_string(), CodexMcpStartupStatus::Starting);
         let _ = tracker.record_update(
             "alpha".to_string(),
@@ -1102,8 +1036,7 @@ mod tests {
         assert_eq!(
             lagged,
             vec![
-                "MCP startup interrupted. The following servers were not initialized: beta"
-                    .to_string(),
+                "MCP startup interrupted. The following servers were not initialized: beta".to_string(),
                 "MCP startup incomplete (failed: alpha)".to_string()
             ]
         );
@@ -1173,10 +1106,7 @@ mod tests {
             let mut planning_active = true;
             let (user_input, turn_input) = normalize_planning_input(alias, &mut planning_active);
             assert_eq!(user_input, alias, "user_input for {alias}");
-            assert_eq!(
-                turn_input, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT,
-                "turn_input rewrite for {alias}"
-            );
+            assert_eq!(turn_input, PLANNING_WORKFLOW_IMPLEMENTATION_PROMPT, "turn_input rewrite for {alias}");
             assert!(!planning_active, "flag cleared for {alias}");
         }
     }
@@ -1189,8 +1119,7 @@ mod tests {
         // implementation prompt. Both alias sets now derive from
         // `vtcode_core::planning`.
         let mut planning_active = true;
-        let (user_input, turn_input) =
-            normalize_planning_input("exit planning workflow", &mut planning_active);
+        let (user_input, turn_input) = normalize_planning_input("exit planning workflow", &mut planning_active);
 
         assert_eq!(user_input, "exit planning workflow");
         assert_eq!(turn_input, "exit planning workflow");
@@ -1200,8 +1129,7 @@ mod tests {
     #[test]
     fn normalize_planning_input_leaves_unrelated_input_untouched() {
         let mut planning_active = true;
-        let (user_input, turn_input) =
-            normalize_planning_input("add a login page", &mut planning_active);
+        let (user_input, turn_input) = normalize_planning_input("add a login page", &mut planning_active);
 
         assert_eq!(user_input, "add a login page");
         assert_eq!(turn_input, "add a login page");
@@ -1210,10 +1138,8 @@ mod tests {
 
     #[test]
     fn archive_save_warning_message_mentions_context_and_continuation() {
-        let warning = archive_save_warning_message(
-            "after turn completion",
-            &anyhow!("disk full while writing archive"),
-        );
+        let warning =
+            archive_save_warning_message("after turn completion", &anyhow!("disk full while writing archive"));
 
         assert!(warning.contains("after turn completion"));
         assert!(warning.contains("VT Code will continue"));

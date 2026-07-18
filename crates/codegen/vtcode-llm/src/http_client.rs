@@ -23,10 +23,7 @@ impl HttpClientFactory {
             180 // Fallback if disabled
         };
 
-        vtcode_commons::http::create_client_with_timeouts(
-            Duration::from_secs(30),
-            Duration::from_secs(timeout_secs),
-        )
+        vtcode_commons::http::create_client_with_timeouts(Duration::from_secs(30), Duration::from_secs(timeout_secs))
     }
 
     /// Create an HTTP client optimized for streaming requests.
@@ -60,10 +57,7 @@ impl HttpClientFactory {
     ///
     /// Uses 180s request timeout and 30s connect timeout.
     pub fn default_client() -> Client {
-        vtcode_commons::http::create_client_with_timeouts(
-            Duration::from_secs(30),
-            Duration::from_secs(180),
-        )
+        vtcode_commons::http::create_client_with_timeouts(Duration::from_secs(30), Duration::from_secs(180))
     }
 }
 

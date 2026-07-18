@@ -98,11 +98,7 @@ fn smart_case_eq(left: &str, query: &str) -> bool {
     }
 }
 
-fn matching_declarations(
-    file: &OutlineFile,
-    query: &str,
-    candidate_cap: usize,
-) -> (Vec<DeclarationRecord>, bool) {
+fn matching_declarations(file: &OutlineFile, query: &str, candidate_cap: usize) -> (Vec<DeclarationRecord>, bool) {
     let matching = file
         .items
         .iter()
@@ -171,21 +167,17 @@ pub(crate) async fn search_declarations_bounded(
 
         loop {
             line_buf.clear();
-            let read = match read_bounded_record(
-                &mut reader,
-                &mut line_buf,
-                &mut bytes_read,
-                CODE_SEARCH_OUTLINE_BYTE_CAP,
-            )
-            .await
-            {
-                Ok(read) => read,
-                Err(error) => {
-                    drop(reader);
-                    kill_and_reap_declaration_child(&mut child).await;
-                    return Err(error).context("failed to read definition stream");
-                }
-            };
+            let read =
+                match read_bounded_record(&mut reader, &mut line_buf, &mut bytes_read, CODE_SEARCH_OUTLINE_BYTE_CAP)
+                    .await
+                {
+                    Ok(read) => read,
+                    Err(error) => {
+                        drop(reader);
+                        kill_and_reap_declaration_child(&mut child).await;
+                        return Err(error).context("failed to read definition stream");
+                    }
+                };
             match read {
                 BoundedRecordRead::Record => {}
                 BoundedRecordRead::Eof => break,
@@ -203,8 +195,8 @@ pub(crate) async fn search_declarations_bounded(
                 }
             };
             let path = PathBuf::from(&file.path);
-            let Some(language) = AstGrepLanguage::from_path(&path)
-                .or_else(|| AstGrepLanguage::from_user_value(&file.lang))
+            let Some(language) =
+                AstGrepLanguage::from_path(&path).or_else(|| AstGrepLanguage::from_user_value(&file.lang))
             else {
                 continue;
             };
@@ -253,8 +245,7 @@ fn outline_paths<'a>(
         .filter(|path| {
             !path.file_name().and_then(|name| name.to_str()).is_some_and(is_sensitive_file)
                 && (languages.is_empty()
-                    || AstGrepLanguage::from_path(path)
-                        .is_some_and(|language| languages.contains(&language)))
+                    || AstGrepLanguage::from_path(path).is_some_and(|language| languages.contains(&language)))
         })
         .map(|path| command_path_arg(workspace_root, &path));
     Box::new(paths)
@@ -308,8 +299,7 @@ fn arg_os_bytes(arg: &std::ffi::OsStr) -> usize {
 /// Build the path argument passed to ast-grep. Use the workspace-relative form
 /// when possible so the emitted `path` field is relative and readable.
 fn command_path_arg(workspace_root: &Path, resolved: &Path) -> String {
-    let workspace_canonical =
-        std::fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
+    let workspace_canonical = std::fs::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf());
     if let Ok(relative) = resolved.strip_prefix(&workspace_canonical) {
         if relative.as_os_str().is_empty() {
             ".".to_string()

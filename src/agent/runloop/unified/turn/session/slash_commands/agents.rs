@@ -2,15 +2,11 @@ use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
 use vtcode_core::constants::tools;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{
-    AgentPaletteItem, InlineListItem, InlineListSearchConfig, InlineListSelection,
-};
+use vtcode_ui::tui::app::{AgentPaletteItem, InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
 use super::{SlashCommandContext, SlashCommandControl};
-use crate::agent::runloop::slash_commands::{
-    AgentDefinitionScope, AgentManagerAction, SubprocessManagerAction,
-};
+use crate::agent::runloop::slash_commands::{AgentDefinitionScope, AgentManagerAction, SubprocessManagerAction};
 
 #[path = "agents_authoring.rs"]
 mod authoring;
@@ -19,14 +15,13 @@ mod runtime;
 
 #[cfg(test)]
 use runtime::{
-    active_subagent_entries, background_subprocess_summary, subprocess_action_prompt,
-    summarize_thread_event_preview, visible_subagent_entries,
+    active_subagent_entries, background_subprocess_summary, subprocess_action_prompt, summarize_thread_event_preview,
+    visible_subagent_entries,
 };
 use runtime::{
-    apply_background_subprocess_action, close_subagent_entry, handle_list_subprocesses_text,
-    handle_list_threads_text, render_active_agent_status_text, render_background_setup_guidance,
-    render_background_subprocess_status_text, render_subprocess_status,
-    show_active_agent_inspector, show_background_subprocess_inspector, show_threads_modal,
+    apply_background_subprocess_action, close_subagent_entry, handle_list_subprocesses_text, handle_list_threads_text,
+    render_active_agent_status_text, render_background_setup_guidance, render_background_subprocess_status_text,
+    render_subprocess_status, show_active_agent_inspector, show_background_subprocess_inspector, show_threads_modal,
 };
 
 const AGENT_ACTION_PREFIX: &str = "agents:";
@@ -41,10 +36,8 @@ const SUBPROCESS_CANCEL_PREFIX: &str = "subprocesses:cancel:";
 const ACTIVE_AGENT_INSPECTOR_REFRESH_MS: u64 = 750;
 const DEFAULT_AGENT_DESCRIPTION_TEXT: &str = "Describe when VT Code should delegate to this agent.";
 const DEFAULT_AGENT_BODY_TEXT: &str = "\nYou are a focused VT Code subagent.\n\nScope:\n- Describe the tasks this agent should handle.\n- Keep behaviour narrow and task-specific.\n\nConstraints:\n- Use `exec_command` for shell inspection, `apply_patch` for edits, and advanced `code_search` for focused literal queries.\n- Prefer the narrowest tool set that fits the job.\n- Return concise, actionable results.\n\nOutput:\n- State what you checked.\n- Summarise findings or changes.\n- Call out verification or remaining risks when relevant.\n";
-const DEFAULT_AGENT_TOOL_IDS: [&str; 3] =
-    [tools::EXEC_COMMAND, tools::APPLY_PATCH, tools::CODE_SEARCH];
-const SUBAGENT_CONTROLLER_INACTIVE_MESSAGE: &str =
-    "Subagent controller is not active in this session.";
+const DEFAULT_AGENT_TOOL_IDS: [&str; 3] = [tools::EXEC_COMMAND, tools::APPLY_PATCH, tools::CODE_SEARCH];
+const SUBAGENT_CONTROLLER_INACTIVE_MESSAGE: &str = "Subagent controller is not active in this session.";
 
 pub(crate) async fn handle_manage_agents(
     mut ctx: SlashCommandContext<'_>,
@@ -75,9 +68,7 @@ pub(crate) async fn handle_manage_agents(
                 handle_list_threads_text(&mut ctx).await
             }
         }
-        AgentManagerAction::Create { scope, name } => {
-            authoring::handle_create_agent(ctx, scope, name.as_deref()).await
-        }
+        AgentManagerAction::Create { scope, name } => authoring::handle_create_agent(ctx, scope, name.as_deref()).await,
         AgentManagerAction::Inspect { id } => {
             let Some(controller) = ctx.tool_registry.subagent_controller() else {
                 return render_missing_subagent_controller(&mut ctx);
@@ -99,9 +90,7 @@ pub(crate) async fn handle_manage_agents(
             let entry = controller.status_for(&id).await?;
             close_subagent_entry(&mut ctx, &controller, &entry.id, &entry.display_label).await
         }
-        AgentManagerAction::Edit { name } => {
-            authoring::handle_edit_agent(ctx, name.as_deref()).await
-        }
+        AgentManagerAction::Edit { name } => authoring::handle_edit_agent(ctx, name.as_deref()).await,
         AgentManagerAction::Delete { name } => {
             let mut ctx = ctx;
             handle_delete_agent(&mut ctx, &name).await
@@ -119,8 +108,7 @@ pub(crate) async fn handle_manage_subprocesses(
 
     match action {
         SubprocessManagerAction::ToggleDefault => {
-            if !controller.background_subagents_enabled()
-                || controller.configured_default_background_agent().is_none()
+            if !controller.background_subagents_enabled() || controller.configured_default_background_agent().is_none()
             {
                 if ctx.renderer.supports_inline_ui() {
                     ctx.handle.show_local_agents();
@@ -137,10 +125,8 @@ pub(crate) async fn handle_manage_subprocesses(
             if entries.is_empty() {
                 ctx.renderer.line(MessageStyle::Info, "No managed background subprocesses.")?;
             } else {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Refreshed {} background subprocesses.", entries.len()),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, &format!("Refreshed {} background subprocesses.", entries.len()))?;
             }
             Ok(SlashCommandControl::Continue)
         }
@@ -161,23 +147,19 @@ pub(crate) async fn handle_manage_subprocesses(
             }
         }
         SubprocessManagerAction::Stop { id } => {
-            let entry =
-                apply_background_subprocess_action(&mut ctx, &controller, &id, false).await?;
+            let entry = apply_background_subprocess_action(&mut ctx, &controller, &id, false).await?;
             render_subprocess_status(&mut ctx, &entry)?;
             Ok(SlashCommandControl::Continue)
         }
         SubprocessManagerAction::Cancel { id } => {
-            let entry =
-                apply_background_subprocess_action(&mut ctx, &controller, &id, true).await?;
+            let entry = apply_background_subprocess_action(&mut ctx, &controller, &id, true).await?;
             render_subprocess_status(&mut ctx, &entry)?;
             Ok(SlashCommandControl::Continue)
         }
     }
 }
 
-fn render_missing_subagent_controller(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+fn render_missing_subagent_controller(ctx: &mut SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
     Ok(SlashCommandControl::Continue)
 }
@@ -233,9 +215,7 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
                 "delete",
             ),
         ],
-        Some(InlineListSelection::ConfigAction(format!(
-            "{AGENT_ACTION_PREFIX}browse"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{AGENT_ACTION_PREFIX}browse"))),
         Some(InlineListSearchConfig {
             label: "Search subagent actions".to_string(),
             placeholder: Some("browse, create, edit, thread".to_string()),
@@ -258,12 +238,9 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
         value if value == format!("{AGENT_ACTION_PREFIX}create-user") => {
             authoring::handle_create_agent(ctx, Some(AgentDefinitionScope::User), None).await
         }
-        value if value == format!("{AGENT_ACTION_PREFIX}edit") => {
-            authoring::handle_edit_agent(ctx, None).await
-        }
+        value if value == format!("{AGENT_ACTION_PREFIX}edit") => authoring::handle_edit_agent(ctx, None).await,
         value if value == format!("{AGENT_ACTION_PREFIX}delete") => {
-            let Some(name) = select_custom_agent_name(&mut ctx, "Delete custom agent").await?
-            else {
+            let Some(name) = select_custom_agent_name(&mut ctx, "Delete custom agent").await? else {
                 return Ok(SlashCommandControl::Continue);
             };
             if confirm_delete_agent(&mut ctx, &name).await? {
@@ -296,16 +273,8 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
             subtitle: Some(agent_subtitle(spec, false)),
             badge: Some(agent_badge(spec)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{AGENT_INSPECT_PREFIX}{}",
-                spec.name
-            ))),
-            search_value: Some(format!(
-                "{} {} {}",
-                spec.name,
-                spec.description,
-                spec.source.label()
-            )),
+            selection: Some(InlineListSelection::ConfigAction(format!("{AGENT_INSPECT_PREFIX}{}", spec.name))),
+            search_value: Some(format!("{} {} {}", spec.name, spec.description, spec.source.label())),
         });
     }
     for spec in &shadowed {
@@ -315,12 +284,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
             badge: Some("Shadowed".to_string()),
             indent: 0,
             selection: None,
-            search_value: Some(format!(
-                "{} shadowed {} {}",
-                spec.name,
-                spec.description,
-                spec.source.label()
-            )),
+            search_value: Some(format!("{} shadowed {} {}", spec.name, spec.description, spec.source.label())),
         });
     }
 
@@ -328,11 +292,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
     ctx.handle.show_list_modal(
         "Loaded agents".to_string(),
         vec![
-            format!(
-                "{} effective definition(s), {} shadowed definition(s).",
-                specs.len(),
-                shadowed.len()
-            ),
+            format!("{} effective definition(s), {} shadowed definition(s).", specs.len(), shadowed.len()),
             "Select an effective definition to inspect details.".to_string(),
         ],
         items,
@@ -356,11 +316,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
         .into_iter()
         .find(|spec| spec.name == name)
         .ok_or_else(|| anyhow!("Unknown agent {name}"))?;
-    render_agent_details(
-        &mut ctx,
-        &spec,
-        shadowed.iter().filter(|entry| entry.name == name).count(),
-    )?;
+    render_agent_details(&mut ctx, &spec, shadowed.iter().filter(|entry| entry.name == name).count())?;
     Ok(SlashCommandControl::Continue)
 }
 
@@ -377,17 +333,11 @@ async fn handle_list_agents_text(ctx: &mut SlashCommandContext<'_>) -> Result<Sl
 
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Loaded {} effective agent definitions ({} shadowed definitions).",
-            specs.len(),
-            shadowed.len()
-        ),
+        &format!("Loaded {} effective agent definitions ({} shadowed definitions).", specs.len(), shadowed.len()),
     )?;
     for spec in specs {
-        ctx.renderer.line(
-            MessageStyle::Output,
-            &format!("{} {}", spec.name, agent_subtitle(&spec, false)),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Output, &format!("{} {}", spec.name, agent_subtitle(&spec, false)))?;
     }
 
     if threads.is_empty() {
@@ -413,9 +363,7 @@ async fn legacy_create_agent_scaffold(
 ) -> Result<SlashCommandControl> {
     validate_agent_name(name)?;
     let path = match scope {
-        AgentDefinitionScope::Project => {
-            ctx.config.workspace.join(".vtcode/agents").join(format!("{name}.md"))
-        }
+        AgentDefinitionScope::Project => ctx.config.workspace.join(".vtcode/agents").join(format!("{name}.md")),
         AgentDefinitionScope::User => dirs::home_dir()
             .ok_or_else(|| anyhow!("Cannot resolve home directory for user-scope agent"))?
             .join(".vtcode/agents")
@@ -440,26 +388,17 @@ async fn legacy_create_agent_scaffold(
 
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Created agent scaffold at {} with VT Code-native subagent frontmatter.",
-            path.display()
-        ),
+        &format!("Created agent scaffold at {} with VT Code-native subagent frontmatter.", path.display()),
     )?;
     Ok(SlashCommandControl::Continue)
 }
 
-async fn legacy_open_agent_editor(
-    ctx: SlashCommandContext<'_>,
-    name: &str,
-) -> Result<SlashCommandControl> {
+async fn legacy_open_agent_editor(ctx: SlashCommandContext<'_>, name: &str) -> Result<SlashCommandControl> {
     let path = resolve_custom_agent_path(&ctx, name).await?;
     super::apps::handle_launch_editor(ctx, Some(path.display().to_string())).await
 }
 
-async fn handle_delete_agent(
-    ctx: &mut SlashCommandContext<'_>,
-    name: &str,
-) -> Result<SlashCommandControl> {
+async fn handle_delete_agent(ctx: &mut SlashCommandContext<'_>, name: &str) -> Result<SlashCommandControl> {
     let path = resolve_custom_agent_path(ctx, name).await?;
     tokio::fs::remove_file(&path).await?;
     if let Some(controller) = ctx.tool_registry.subagent_controller() {
@@ -471,10 +410,7 @@ async fn handle_delete_agent(
     Ok(SlashCommandControl::Continue)
 }
 
-async fn select_custom_agent_name(
-    ctx: &mut SlashCommandContext<'_>,
-    title: &str,
-) -> Result<Option<String>> {
+async fn select_custom_agent_name(ctx: &mut SlashCommandContext<'_>, title: &str) -> Result<Option<String>> {
     let controller = ctx
         .tool_registry
         .subagent_controller()
@@ -498,16 +434,8 @@ async fn select_custom_agent_name(
             subtitle: Some(agent_subtitle(spec, false)),
             badge: Some(agent_badge(spec)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{AGENT_INSPECT_PREFIX}{}",
-                spec.name
-            ))),
-            search_value: Some(format!(
-                "{} {} {}",
-                spec.name,
-                spec.description,
-                spec.source.label()
-            )),
+            selection: Some(InlineListSelection::ConfigAction(format!("{AGENT_INSPECT_PREFIX}{}", spec.name))),
+            search_value: Some(format!("{} {} {}", spec.name, spec.description, spec.source.label())),
         })
         .collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
@@ -543,9 +471,7 @@ async fn confirm_delete_agent(ctx: &mut SlashCommandContext<'_>, name: &str) -> 
                 subtitle: Some("Remove the selected definition file".to_string()),
                 badge: Some("Confirm".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "agents:confirm-delete".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("agents:confirm-delete".to_string())),
                 search_value: Some("confirm delete".to_string()),
             },
             InlineListItem {
@@ -553,9 +479,7 @@ async fn confirm_delete_agent(ctx: &mut SlashCommandContext<'_>, name: &str) -> 
                 subtitle: Some("Keep the agent definition".to_string()),
                 badge: None,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "agents:cancel-delete".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("agents:cancel-delete".to_string())),
                 search_value: Some("cancel".to_string()),
             },
         ],
@@ -582,9 +506,9 @@ async fn resolve_custom_agent_path(ctx: &SlashCommandContext<'_>, name: &str) ->
         .into_iter()
         .find(|spec| spec.matches_name(name))
         .ok_or_else(|| anyhow!("Unknown agent {name}"))?;
-    let path = spec.file_path.ok_or_else(|| {
-        anyhow!("Agent {name} is built-in or plugin-provided and cannot be edited here")
-    })?;
+    let path = spec
+        .file_path
+        .ok_or_else(|| anyhow!("Agent {name} is built-in or plugin-provided and cannot be edited here"))?;
     Ok(path)
 }
 
@@ -612,10 +536,8 @@ fn render_agent_details(
         ctx.renderer.line(MessageStyle::Output, &format!("File: {}", path.display()))?;
     }
     if shadowed_count > 0 {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("{shadowed_count} lower-priority definition(s) are shadowed."),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("{shadowed_count} lower-priority definition(s) are shadowed."))?;
     }
     for warning in &spec.warnings {
         ctx.renderer.line(MessageStyle::Warning, &format!("Warning: {warning}"))?;
@@ -648,21 +570,13 @@ fn scaffold_agent_markdown(name: &str) -> String {
     )
 }
 
-fn action_item(
-    title: &str,
-    subtitle: &str,
-    badge: Option<&str>,
-    search_value: &str,
-    action: &str,
-) -> InlineListItem {
+fn action_item(title: &str, subtitle: &str, badge: Option<&str>, search_value: &str, action: &str) -> InlineListItem {
     InlineListItem {
         title: title.to_string(),
         subtitle: Some(subtitle.to_string()),
         badge: badge.map(ToString::to_string),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{AGENT_ACTION_PREFIX}{action}"
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{AGENT_ACTION_PREFIX}{action}"))),
         search_value: Some(search_value.to_string()),
     }
 }

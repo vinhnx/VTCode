@@ -106,11 +106,7 @@ impl AcpToolRegistry {
         self.entries.iter().map(|entry| entry.tool).collect()
     }
 
-    pub fn definitions_for(
-        &self,
-        enabled_tools: &[SupportedTool],
-        include_local: bool,
-    ) -> Vec<ToolDefinition> {
+    pub fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
         self.definitions_for_filtered(enabled_tools, include_local, |_| true)
     }
 
@@ -143,12 +139,7 @@ impl AcpToolRegistry {
         definitions
     }
 
-    pub fn render_title(
-        &self,
-        descriptor: ToolDescriptor,
-        function_name: &str,
-        args: &Value,
-    ) -> String {
+    pub fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String {
         render_title(descriptor, function_name, args)
     }
 
@@ -156,17 +147,11 @@ impl AcpToolRegistry {
         self.tool_kind_for_call(function_name, None)
     }
 
-    pub fn tool_kind_for_call(
-        &self,
-        function_name: &str,
-        args: Option<&Value>,
-    ) -> crate::acp::ToolKind {
+    pub fn tool_kind_for_call(&self, function_name: &str, args: Option<&Value>) -> crate::acp::ToolKind {
         let _ = args;
         match function_name {
             tools::READ_FILE => crate::acp::ToolKind::Read,
-            tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => {
-                crate::acp::ToolKind::Search
-            }
+            tools::GREP_FILE | tools::LIST_FILES | tools::CODE_SEARCH => crate::acp::ToolKind::Search,
             tools::RUN_PTY_CMD
             | tools::EXEC_PTY_CMD
             | tools::EXEC_COMMAND

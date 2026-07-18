@@ -16,9 +16,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
-use crate::tui::core_tui::session::transcript_links::{
-    TranscriptFileLinkTarget, decorate_detected_link_lines,
-};
+use crate::tui::core_tui::session::transcript_links::{TranscriptFileLinkTarget, decorate_detected_link_lines};
 use crate::tui::ui::tui::session::wrapping;
 use ratatui::style::Color as RatatuiColor;
 use std::mem;
@@ -47,11 +45,7 @@ fn markdown_to_plain_lines(text: &str) -> Vec<String> {
         lines.pop();
     }
 
-    if lines.is_empty() {
-        vec![String::new()]
-    } else {
-        lines
-    }
+    if lines.is_empty() { vec![String::new()] } else { lines }
 }
 
 fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
@@ -85,11 +79,7 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
         rows.push(current);
     }
 
-    if rows.is_empty() {
-        vec![String::new()]
-    } else {
-        rows
-    }
+    if rows.is_empty() { vec![String::new()] } else { rows }
 }
 
 fn markdown_lines_for_modal(text: &str, style: Style) -> Vec<Line<'static>> {
@@ -98,11 +88,7 @@ fn markdown_lines_for_modal(text: &str, style: Style) -> Vec<Line<'static>> {
         lines.push(Line::from(Span::styled(line, style)));
     }
 
-    if lines.is_empty() {
-        vec![Line::default()]
-    } else {
-        lines
-    }
+    if lines.is_empty() { vec![Line::default()] } else { lines }
 }
 
 #[cfg(test)]
@@ -149,14 +135,8 @@ fn render_modal_text_lines(
         return;
     }
 
-    let (decorated, targets) = decorate_detected_link_lines(
-        lines,
-        area,
-        workspace_root,
-        last_mouse_position,
-        link_style,
-        hovered_link_style,
-    );
+    let (decorated, targets) =
+        decorate_detected_link_lines(lines, area, workspace_root, last_mouse_position, link_style, hovered_link_style);
     frame.render_widget(Paragraph::new(decorated).wrap(Wrap { trim: false }), area);
     outcome.push_text_area(area);
     outcome.link_targets.extend(targets);
@@ -173,10 +153,7 @@ impl SharedListWidgetModel for ModalListPanelModel<'_> {
         if self.list.visible_indices.is_empty() {
             return vec![(
                 InlineListRow::single(
-                    Line::from(Span::styled(
-                        ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
-                        self.styles.detail,
-                    )),
+                    Line::from(Span::styled(ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(), self.styles.detail)),
                     self.styles.detail,
                 ),
                 1_u16,
@@ -292,8 +269,7 @@ pub fn render_wizard_tabs(
             })
             .unwrap_or_default();
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(label, styles.highlight)))
-                .wrap(Wrap { trim: true }),
+            Paragraph::new(Line::from(Span::styled(label, styles.highlight))).wrap(Wrap { trim: true }),
             area,
         );
         return;
@@ -372,8 +348,8 @@ pub(crate) fn render_wizard_modal_body(
     let content_width = text_alignment_fn(area).width.max(1) as usize;
     let current_step_state = wizard.steps.get(wizard.current_step);
     let inline_editor = current_step_state.and_then(inline_editor_for_step);
-    let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty())
-        && inline_editor.is_none();
+    let has_notes =
+        current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty()) && inline_editor.is_none();
     let instruction_lines = wizard.instruction_lines();
     let header_lines = if is_multistep {
         markdown_lines_for_modal(wizard.question_header().as_str(), styles.header)
@@ -393,10 +369,9 @@ pub(crate) fn render_wizard_modal_body(
             .into_iter()
             .map(|line| Line::from(Span::styled(line, styles.hint))),
     );
-    let header_row_count =
-        wrapping::wrap_lines_preserving_urls(header_lines.clone(), content_width)
-            .len()
-            .max(1);
+    let header_row_count = wrapping::wrap_lines_preserving_urls(header_lines.clone(), content_width)
+        .len()
+        .max(1);
     let info_row_count = wrapping::wrap_lines_preserving_urls(info_lines.clone(), content_width)
         .len()
         .max(1);
@@ -499,14 +474,8 @@ pub(crate) fn render_wizard_modal_body(
     if let Some(step) = wizard.steps.get_mut(wizard.current_step)
         && idx < chunks.len()
     {
-        outcome.list_area = Some(render_modal_list(
-            frame,
-            chunks[idx],
-            &mut step.list,
-            styles,
-            None,
-            inline_editor.as_ref(),
-        ));
+        outcome.list_area =
+            Some(render_modal_list(frame, chunks[idx], &mut step.list, styles, None, inline_editor.as_ref()));
     }
 
     outcome
@@ -530,11 +499,7 @@ fn modal_list_summary_line(
         spans.push(Span::styled(ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_owned(), styles.search_match));
         if !ui::MODAL_LIST_SUMMARY_RESET_HINT.is_empty() {
             spans.push(Span::styled(
-                format!(
-                    "{}{}",
-                    ui::MODAL_LIST_SUMMARY_SEPARATOR,
-                    ui::MODAL_LIST_SUMMARY_RESET_HINT
-                ),
+                format!("{}{}", ui::MODAL_LIST_SUMMARY_SEPARATOR, ui::MODAL_LIST_SUMMARY_RESET_HINT),
                 styles.hint,
             ));
         }
@@ -649,14 +614,7 @@ pub(crate) fn render_modal_body(
             }
             ModalSection::Prompt => {
                 if let Some(config) = context.secure_prompt {
-                    render_secure_prompt(
-                        frame,
-                        chunk,
-                        config,
-                        context.input,
-                        context.cursor,
-                        context.input_styles,
-                    );
+                    render_secure_prompt(frame, chunk, config, context.input, context.cursor, context.input_styles);
                 }
             }
             ModalSection::Search => {
@@ -722,11 +680,7 @@ fn diff_line_style(kind: &DiffLineKind) -> Style {
     }
 }
 
-fn modal_instruction_lines(
-    area: Rect,
-    instructions: &[String],
-    styles: &ModalRenderStyles,
-) -> Vec<Line<'static>> {
+fn modal_instruction_lines(area: Rect, instructions: &[String], styles: &ModalRenderStyles) -> Vec<Line<'static>> {
     fn parse_instruction_highlight_markup(text: &str) -> (String, bool) {
         let trimmed = text.trim();
         match trimmed
@@ -769,11 +723,7 @@ fn modal_instruction_lines(
             lines.push(current);
         }
 
-        if lines.is_empty() {
-            vec![text.to_owned()]
-        } else {
-            lines
-        }
+        if lines.is_empty() { vec![text.to_owned()] } else { lines }
     }
 
     if area.width == 0 || area.height == 0 {
@@ -858,12 +808,7 @@ fn modal_instruction_lines(
     rendered_lines
 }
 
-fn render_modal_search(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    search: &ModalSearchState,
-    input_styles: &InputStyles,
-) {
+fn render_modal_search(frame: &mut Frame<'_>, area: Rect, search: &ModalSearchState, input_styles: &InputStyles) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -951,8 +896,7 @@ pub(super) fn highlight_segments(
             let byte_end = byte_start + needle.len();
             let start_index = char_offsets.partition_point(|offset| *offset < byte_start);
             let end_index = char_offsets.partition_point(|offset| *offset < byte_end);
-            for flag in highlight_flags.iter_mut().take(end_index.min(char_count)).skip(start_index)
-            {
+            for flag in highlight_flags.iter_mut().take(end_index.min(char_count)).skip(start_index) {
                 *flag = true;
             }
             search_start = byte_end;
@@ -1064,12 +1008,7 @@ pub fn modal_list_item_lines(
         styles.detail
     };
 
-    let title_spans = highlight_segments(
-        item.title.as_str(),
-        title_style,
-        styles.search_match,
-        list.highlight_terms(),
-    );
+    let title_spans = highlight_segments(item.title.as_str(), title_style, styles.search_match, list.highlight_terms());
     primary_spans.extend(title_spans);
 
     let mut lines = vec![Line::from(primary_spans)];
@@ -1087,12 +1026,8 @@ pub fn modal_list_item_lines(
             if !indent.is_empty() {
                 secondary_spans.push(Span::raw(indent.clone()));
             }
-            let subtitle_spans = highlight_segments(
-                wrapped.as_str(),
-                styles.detail,
-                styles.search_match,
-                list.highlight_terms(),
-            );
+            let subtitle_spans =
+                highlight_segments(wrapped.as_str(), styles.detail, styles.search_match, list.highlight_terms());
             secondary_spans.extend(subtitle_spans);
             lines.push(Line::from(secondary_spans));
         }
@@ -1235,17 +1170,13 @@ mod tests {
         assert!(lines.len() > 1, "long question should wrap across lines");
         for line in &lines {
             let text = line_text(line);
-            assert!(
-                UnicodeWidthStr::width(text.as_str()) <= 40,
-                "line exceeded modal width: {text}"
-            );
+            assert!(UnicodeWidthStr::width(text.as_str()) <= 40, "line exceeded modal width: {text}");
         }
     }
 
     #[test]
     fn render_markdown_lines_for_modal_renders_markdown_headings() {
-        let lines =
-            render_markdown_lines_for_modal("### Goal\n- Reduce prompt size", 80, Style::default());
+        let lines = render_markdown_lines_for_modal("### Goal\n- Reduce prompt size", 80, Style::default());
 
         let rendered = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
         assert!(rendered.contains("Goal"));
@@ -1261,9 +1192,7 @@ mod tests {
                 subtitle: Some("permissions.default = ask".to_string()),
                 badge: Some("Toggle".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "permissions.default:cycle".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("permissions.default:cycle".to_string())),
                 search_value: None,
             }],
             None,
@@ -1286,8 +1215,7 @@ mod tests {
             hint: Style::default(),
         };
 
-        let summary = modal_list_summary_line(&list, &styles, None)
-            .expect("expected summary line for config list");
+        let summary = modal_list_summary_line(&list, &styles, None).expect("expected summary line for config list");
         let text = line_text(&summary);
         assert!(text.contains("Navigation:"));
         assert!(!text.contains("Alt+D"));

@@ -228,9 +228,8 @@ fn copilot_presets() -> Vec<ModelPreset> {
         id: copilot_models::AUTO.to_string(),
         model: copilot_models::AUTO.to_string(),
         display_name: "GitHub Copilot Auto".to_string(),
-        description:
-            "Official GitHub Copilot preview provider via the Copilot CLI with automatic model selection."
-                .to_string(),
+        description: "Official GitHub Copilot preview provider via the Copilot CLI with automatic model selection."
+            .to_string(),
         provider: Provider::Copilot,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
         supported_reasoning_efforts: Vec::new(),
@@ -247,8 +246,7 @@ fn gemini_presets() -> Vec<ModelPreset> {
         id: "gemini-3-flash-preview".to_string(),
         model: "gemini-3-flash-preview".to_string(),
         display_name: "Gemini 3 Flash Preview".to_string(),
-        description: "Most intelligent model built for speed with superior search and grounding"
-            .to_string(),
+        description: "Most intelligent model built for speed with superior search and grounding".to_string(),
         provider: Provider::Gemini,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
         supported_reasoning_efforts: vec![
@@ -273,18 +271,11 @@ fn gemini_presets() -> Vec<ModelPreset> {
     }]
 }
 
-fn reasoning_preset(
-    effort: ReasoningEffortLevel,
-    description: &'static str,
-) -> ReasoningEffortPreset {
+fn reasoning_preset(effort: ReasoningEffortLevel, description: &'static str) -> ReasoningEffortPreset {
     ReasoningEffortPreset { effort, description: description.to_string() }
 }
 
-fn openai_reasoning_efforts(
-    include_none: bool,
-    include_xhigh: bool,
-    include_max: bool,
-) -> Vec<ReasoningEffortPreset> {
+fn openai_reasoning_efforts(include_none: bool, include_xhigh: bool, include_max: bool) -> Vec<ReasoningEffortPreset> {
     let mut efforts = Vec::new();
     if include_none {
         efforts.push(reasoning_preset(ReasoningEffortLevel::None, "Lowest latency"));
@@ -307,8 +298,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-5.6-sol".to_string(),
             model: "gpt-5.6-sol".to_string(),
             display_name: "GPT-5.6 Sol".to_string(),
-            description: "Frontier model for complex professional work in the GPT-5.6 family"
-                .to_string(),
+            description: "Frontier model for complex professional work in the GPT-5.6 family".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(true, true, true),
@@ -382,8 +372,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-5.3-codex".to_string(),
             model: "gpt-5.3-codex".to_string(),
             display_name: "GPT-5.3 Codex".to_string(),
-            description: "GPT-5.3 variant optimized for agentic coding with xhigh reasoning"
-                .to_string(),
+            description: "GPT-5.3 variant optimized for agentic coding with xhigh reasoning".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
@@ -397,8 +386,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-5.2-codex".to_string(),
             model: "gpt-5.2-codex".to_string(),
             display_name: "GPT-5.2 Codex".to_string(),
-            description: "GPT-5.2 variant optimized for agentic coding with xhigh reasoning"
-                .to_string(),
+            description: "GPT-5.2 variant optimized for agentic coding with xhigh reasoning".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(true, true, false),
@@ -426,9 +414,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-5.1-codex-max".to_string(),
             model: "gpt-5.1-codex-max".to_string(),
             display_name: "GPT-5.1 Codex Max".to_string(),
-            description:
-                "Higher-compute GPT-5.1 Codex variant for longer-running engineering tasks"
-                    .to_string(),
+            description: "Higher-compute GPT-5.1 Codex variant for longer-running engineering tasks".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: openai_reasoning_efforts(false, false, false),
@@ -586,8 +572,7 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-oss-120b".to_string(),
             model: "gpt-oss-120b".to_string(),
             display_name: "GPT-OSS 120B".to_string(),
-            description: "OpenAI's open-source 120B parameter model with advanced reasoning"
-                .to_string(),
+            description: "OpenAI's open-source 120B parameter model with advanced reasoning".to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -824,8 +809,7 @@ fn deepseek_presets() -> Vec<ModelPreset> {
             id: "deepseek-v4-pro".to_string(),
             model: "deepseek-v4-pro".to_string(),
             display_name: "DeepSeek V4 Pro".to_string(),
-            description: "High-performance reasoning model with advanced thinking capabilities"
-                .to_string(),
+            description: "High-performance reasoning model with advanced thinking capabilities".to_string(),
             provider: Provider::DeepSeek,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
@@ -876,9 +860,7 @@ fn zai_presets() -> Vec<ModelPreset> {
             id: "glm-5.2".to_string(),
             model: "glm-5.2".to_string(),
             display_name: "GLM-5.2".to_string(),
-            description:
-                "Z.ai flagship model for long-horizon tasks with truly usable 1M-token context"
-                    .to_string(),
+            description: "Z.ai flagship model for long-horizon tasks with truly usable 1M-token context".to_string(),
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -901,9 +883,7 @@ fn zai_presets() -> Vec<ModelPreset> {
             id: "glm-5.1".to_string(),
             model: "glm-5.1".to_string(),
             display_name: "GLM-5.1".to_string(),
-            description:
-                "Z.ai's next-gen foundation model with improved reasoning and agent capabilities"
-                    .to_string(),
+            description: "Z.ai's next-gen foundation model with improved reasoning and agent capabilities".to_string(),
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -931,8 +911,8 @@ fn mistral_presets() -> Vec<ModelPreset> {
             id: "mistral-large-2512".to_string(),
             model: "mistral-large-2512".to_string(),
             display_name: "Mistral Large 3".to_string(),
-            description:
-                "State-of-the-art open-weight general-purpose multimodal model (41B active, 675B total)".to_string(),
+            description: "State-of-the-art open-weight general-purpose multimodal model (41B active, 675B total)"
+                .to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -955,9 +935,8 @@ fn mistral_presets() -> Vec<ModelPreset> {
             id: "mistral-medium-3-5".to_string(),
             model: "mistral-medium-3-5".to_string(),
             display_name: "Mistral Medium 3.5".to_string(),
-            description:
-                "Frontier-class multimodal model optimized for agentic and coding use cases (256k context)"
-                    .to_string(),
+            description: "Frontier-class multimodal model optimized for agentic and coding use cases (256k context)"
+                .to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -980,9 +959,7 @@ fn mistral_presets() -> Vec<ModelPreset> {
             id: "mistral-small-2603".to_string(),
             model: "mistral-small-2603".to_string(),
             display_name: "Mistral Small 4".to_string(),
-            description:
-                "Hybrid model unifying instruct, reasoning, and coding (119B params, 6.5B active)"
-                    .to_string(),
+            description: "Hybrid model unifying instruct, reasoning, and coding (119B params, 6.5B active)".to_string(),
             provider: Provider::Mistral,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -1389,8 +1366,7 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
             id: format!("lmstudio/{}", lmstudio_models::OPENAI_GPT_OSS_20B),
             model: lmstudio_models::OPENAI_GPT_OSS_20B.to_string(),
             display_name: "GPT-OSS 20B (LM Studio)".to_string(),
-            description: "OpenAI's open-weight GPT-OSS 20B model served locally via LM Studio"
-                .to_string(),
+            description: "OpenAI's open-weight GPT-OSS 20B model served locally via LM Studio".to_string(),
             provider: Provider::LmStudio,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1407,8 +1383,7 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
             id: format!("lmstudio/{}", lmstudio_models::META_LLAMA_31_8B_INSTRUCT),
             model: lmstudio_models::META_LLAMA_31_8B_INSTRUCT.to_string(),
             display_name: "Llama 3.1 8B (LM Studio)".to_string(),
-            description: "Meta Llama 3.1 8B Instruct for general-purpose local inference"
-                .to_string(),
+            description: "Meta Llama 3.1 8B Instruct for general-purpose local inference".to_string(),
             provider: Provider::LmStudio,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1447,8 +1422,7 @@ fn llamacpp_presets() -> Vec<ModelPreset> {
             id: format!("llamacpp/{}", llamacpp_models::GPT_OSS_20B),
             model: llamacpp_models::GPT_OSS_20B.to_string(),
             display_name: "GPT-OSS 20B (llama.cpp)".to_string(),
-            description: "OpenAI's open-weight GPT-OSS 20B model served locally through llama.cpp"
-                .to_string(),
+            description: "OpenAI's open-weight GPT-OSS 20B model served locally through llama.cpp".to_string(),
             provider: Provider::LlamaCpp,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1558,9 +1532,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::GLM_5_2),
             model: opencode_go_models::GLM_5_2.to_string(),
             display_name: "GLM-5.2 (OpenCode Go)".to_string(),
-            description:
-                "GLM-5.2 — flagship Z.AI model for long-horizon coding on the OpenCode Go plan"
-                    .to_string(),
+            description: "GLM-5.2 — flagship Z.AI model for long-horizon coding on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1577,9 +1549,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::KIMI_K2_7_CODE),
             model: opencode_go_models::KIMI_K2_7_CODE.to_string(),
             display_name: "Kimi K2.7 Code (OpenCode Go)".to_string(),
-            description:
-                "Kimi K2.7 Code — Moonshot's most capable coding model on the OpenCode Go plan"
-                    .to_string(),
+            description: "Kimi K2.7 Code — Moonshot's most capable coding model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1596,9 +1566,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::KIMI_K2_6),
             model: opencode_go_models::KIMI_K2_6.to_string(),
             display_name: "Kimi K2.6 (OpenCode Go)".to_string(),
-            description:
-                "Kimi K2.6 — Moonshot 1T MoE general agentic model on the OpenCode Go plan"
-                    .to_string(),
+            description: "Kimi K2.6 — Moonshot 1T MoE general agentic model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1615,9 +1583,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::MIMO_V2_5_PRO),
             model: opencode_go_models::MIMO_V2_5_PRO.to_string(),
             display_name: "MiMo-V2.5-Pro (OpenCode Go)".to_string(),
-            description:
-                "MiMo-V2.5-Pro — Xiaomi's flagship reasoning model on the OpenCode Go plan"
-                    .to_string(),
+            description: "MiMo-V2.5-Pro — Xiaomi's flagship reasoning model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1634,8 +1600,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::MIMO_V2_5),
             model: opencode_go_models::MIMO_V2_5.to_string(),
             display_name: "MiMo-V2.5 (OpenCode Go)".to_string(),
-            description: "MiMo-V2.5 — Xiaomi's high-volume coding model on the OpenCode Go plan"
-                .to_string(),
+            description: "MiMo-V2.5 — Xiaomi's high-volume coding model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1652,8 +1617,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::MINIMAX_M3),
             model: opencode_go_models::MINIMAX_M3.to_string(),
             display_name: "MiniMax-M3 (OpenCode Go)".to_string(),
-            description: "MiniMax-M3 — frontier multimodal coding model on the OpenCode Go plan"
-                .to_string(),
+            description: "MiniMax-M3 — frontier multimodal coding model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1670,9 +1634,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::MINIMAX_M2_7),
             model: opencode_go_models::MINIMAX_M2_7.to_string(),
             display_name: "MiniMax-M2.7 (OpenCode Go)".to_string(),
-            description:
-                "MiniMax-M2.7 — recursive self-improvement flagship on the OpenCode Go plan"
-                    .to_string(),
+            description: "MiniMax-M2.7 — recursive self-improvement flagship on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1689,8 +1651,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::QWEN_3_7_MAX),
             model: opencode_go_models::QWEN_3_7_MAX.to_string(),
             display_name: "Qwen3.7 Max (OpenCode Go)".to_string(),
-            description: "Qwen3.7 Max — highest capability Qwen tier on the OpenCode Go plan"
-                .to_string(),
+            description: "Qwen3.7 Max — highest capability Qwen tier on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1707,8 +1668,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::QWEN_3_7_PLUS),
             model: opencode_go_models::QWEN_3_7_PLUS.to_string(),
             display_name: "Qwen3.7 Plus (OpenCode Go)".to_string(),
-            description: "Qwen3.7 Plus — balanced Qwen coding tier on the OpenCode Go plan"
-                .to_string(),
+            description: "Qwen3.7 Plus — balanced Qwen coding tier on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1725,8 +1685,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::QWEN_3_6_PLUS),
             model: opencode_go_models::QWEN_3_6_PLUS.to_string(),
             display_name: "Qwen3.6 Plus (OpenCode Go)".to_string(),
-            description: "Qwen3.6 Plus — cost-effective Qwen coding tier on the OpenCode Go plan"
-                .to_string(),
+            description: "Qwen3.6 Plus — cost-effective Qwen coding tier on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1743,8 +1702,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::DEEPSEEK_V4_PRO),
             model: opencode_go_models::DEEPSEEK_V4_PRO.to_string(),
             display_name: "DeepSeek V4 Pro (OpenCode Go)".to_string(),
-            description: "DeepSeek V4 Pro — high-quality reasoning model on the OpenCode Go plan"
-                .to_string(),
+            description: "DeepSeek V4 Pro — high-quality reasoning model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1761,8 +1719,7 @@ fn opencode_go_presets() -> Vec<ModelPreset> {
             id: format!("opencode-go/{}", opencode_go_models::DEEPSEEK_V4_FLASH),
             model: opencode_go_models::DEEPSEEK_V4_FLASH.to_string(),
             display_name: "DeepSeek V4 Flash (OpenCode Go)".to_string(),
-            description: "DeepSeek V4 Flash — fast, low-cost coding model on the OpenCode Go plan"
-                .to_string(),
+            description: "DeepSeek V4 Flash — fast, low-cost coding model on the OpenCode Go plan".to_string(),
             provider: Provider::OpenCodeGo,
             default_reasoning_effort: ReasoningEffortLevel::Low,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1821,9 +1778,7 @@ fn mimo_presets() -> Vec<ModelPreset> {
             id: mimo_models::MIMO_V2_5_PRO.to_string(),
             model: mimo_models::MIMO_V2_5_PRO.to_string(),
             display_name: "MiMo V2.5 Pro".to_string(),
-            description:
-                "Xiaomi's flagship reasoning model with advanced capabilities (1M context)"
-                    .to_string(),
+            description: "Xiaomi's flagship reasoning model with advanced capabilities (1M context)".to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1840,8 +1795,7 @@ fn mimo_presets() -> Vec<ModelPreset> {
             id: mimo_models::MIMO_V2_5.to_string(),
             model: mimo_models::MIMO_V2_5.to_string(),
             display_name: "MiMo V2.5".to_string(),
-            description: "Xiaomi's general-purpose model with strong reasoning (1M context)"
-                .to_string(),
+            description: "Xiaomi's general-purpose model with strong reasoning (1M context)".to_string(),
             provider: Provider::MiMo,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1863,9 +1817,8 @@ fn qwen_presets() -> Vec<ModelPreset> {
             id: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
             model: qwen_models::DEEPSEEK_V4_FLASH.to_string(),
             display_name: "DeepSeek V4 Flash (Qwen)".to_string(),
-            description:
-                "DeepSeek V4 Flash fast inference model served through Qwen Cloud API (1M context)"
-                    .to_string(),
+            description: "DeepSeek V4 Flash fast inference model served through Qwen Cloud API (1M context)"
+                .to_string(),
             provider: Provider::Qwen,
             default_reasoning_effort: ReasoningEffortLevel::Low,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1882,9 +1835,8 @@ fn qwen_presets() -> Vec<ModelPreset> {
             id: qwen_models::DEEPSEEK_V4_PRO.to_string(),
             model: qwen_models::DEEPSEEK_V4_PRO.to_string(),
             display_name: "DeepSeek V4 Pro (Qwen)".to_string(),
-            description:
-                "DeepSeek V4 Pro high-performance reasoning model served through Qwen Cloud API (1M context)"
-                    .to_string(),
+            description: "DeepSeek V4 Pro high-performance reasoning model served through Qwen Cloud API (1M context)"
+                .to_string(),
             provider: Provider::Qwen,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1901,9 +1853,7 @@ fn qwen_presets() -> Vec<ModelPreset> {
             id: qwen_models::GLM_5_1.to_string(),
             model: qwen_models::GLM_5_1.to_string(),
             display_name: "GLM-5.1 (Qwen)".to_string(),
-            description:
-                "Z.AI GLM-5.1 next-gen foundation model served through Qwen Cloud API"
-                    .to_string(),
+            description: "Z.AI GLM-5.1 next-gen foundation model served through Qwen Cloud API".to_string(),
             provider: Provider::Qwen,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
@@ -1924,9 +1874,7 @@ fn stepfun_presets() -> Vec<ModelPreset> {
         id: stepfun_models::STEP_3_7_FLASH.to_string(),
         model: stepfun_models::STEP_3_7_FLASH.to_string(),
         display_name: "Step 3.7 Flash".to_string(),
-        description:
-            "StepFun's flagship multimodal reasoning model with 256K context and tool calling."
-                .to_string(),
+        description: "StepFun's flagship multimodal reasoning model with 256K context and tool calling.".to_string(),
         provider: Provider::StepFun,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
         supported_reasoning_efforts: vec![
@@ -1948,14 +1896,10 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/gpt-5.2".to_string(),
             model: evolink_models::GPT_5_2.to_string(),
             display_name: "GPT-5.2 (Evolink)".to_string(),
-            description: "GPT-5.2 served through the Evolink OpenAI-compatible gateway."
-                .to_string(),
+            description: "GPT-5.2 served through the Evolink OpenAI-compatible gateway.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: true,
             upgrade: None,
             show_in_picker: true,
@@ -1969,10 +1913,7 @@ fn evolink_presets() -> Vec<ModelPreset> {
             description: "GPT-5.5 flagship model served through the Evolink gateway.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -1983,8 +1924,7 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/deepseek-v4-pro".to_string(),
             model: evolink_models::DEEPSEEK_V4_PRO.to_string(),
             display_name: "DeepSeek V4 Pro (Evolink)".to_string(),
-            description: "DeepSeek V4 Pro reasoning model served through the Evolink gateway."
-                .to_string(),
+            description: "DeepSeek V4 Pro reasoning model served through the Evolink gateway.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -2002,9 +1942,7 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/deepseek-v4-flash".to_string(),
             model: evolink_models::DEEPSEEK_V4_FLASH.to_string(),
             display_name: "DeepSeek V4 Flash (Evolink)".to_string(),
-            description:
-                "DeepSeek V4 Flash fast inference model served through the Evolink gateway."
-                    .to_string(),
+            description: "DeepSeek V4 Flash fast inference model served through the Evolink gateway.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -2040,14 +1978,10 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/gemini-3.1-pro-preview".to_string(),
             model: evolink_models::GEMINI_3_1_PRO.to_string(),
             display_name: "Gemini 3.1 Pro (Evolink)".to_string(),
-            description: "Gemini 3.1 Pro served through the Evolink gateway via OpenAI SDK format."
-                .to_string(),
+            description: "Gemini 3.1 Pro served through the Evolink gateway via OpenAI SDK format.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2058,15 +1992,10 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/gemini-3.5-flash".to_string(),
             model: evolink_models::GEMINI_3_5_FLASH.to_string(),
             display_name: "Gemini 3.5 Flash (Evolink)".to_string(),
-            description:
-                "Gemini 3.5 Flash served through the Evolink gateway via OpenAI SDK format."
-                    .to_string(),
+            description: "Gemini 3.5 Flash served through the Evolink gateway via OpenAI SDK format.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2077,14 +2006,10 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/MiniMax-M3".to_string(),
             model: evolink_models::MINIMAX_M3.to_string(),
             display_name: "MiniMax-M3 (Evolink)".to_string(),
-            description: "MiniMax-M3 frontier multimodal model served through the Evolink gateway."
-                .to_string(),
+            description: "MiniMax-M3 frontier multimodal model served through the Evolink gateway.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2095,14 +2020,10 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/claude-sonnet-4-6".to_string(),
             model: evolink_models::CLAUDE_SONNET_4_6.to_string(),
             display_name: "Claude Sonnet 4.6 (Evolink)".to_string(),
-            description: "Claude Sonnet 4.6 served through Evolink via Anthropic Messages API."
-                .to_string(),
+            description: "Claude Sonnet 4.6 served through Evolink via Anthropic Messages API.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2113,8 +2034,7 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/claude-opus-4-8".to_string(),
             model: evolink_models::CLAUDE_OPUS_4_8.to_string(),
             display_name: "Claude Opus 4.8 (Evolink)".to_string(),
-            description: "Claude Opus 4.8 served through Evolink via Anthropic Messages API."
-                .to_string(),
+            description: "Claude Opus 4.8 served through Evolink via Anthropic Messages API.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
@@ -2131,9 +2051,7 @@ fn evolink_presets() -> Vec<ModelPreset> {
             id: "evolink/claude-haiku-4-5-20251001".to_string(),
             model: evolink_models::CLAUDE_HAIKU_4_5.to_string(),
             display_name: "Claude Haiku 4.5 (Evolink)".to_string(),
-            description:
-                "Claude Haiku 4.5 fast model served through Evolink via Anthropic Messages API."
-                    .to_string(),
+            description: "Claude Haiku 4.5 fast model served through Evolink via Anthropic Messages API.".to_string(),
             provider: Provider::Evolink,
             default_reasoning_effort: ReasoningEffortLevel::Low,
             supported_reasoning_efforts: vec![
@@ -2174,15 +2092,10 @@ fn moonshot_presets() -> Vec<ModelPreset> {
             id: "kimi-k2.7-code".to_string(),
             model: "kimi-k2.7-code".to_string(),
             display_name: "Kimi K2.7 Code (Moonshot)".to_string(),
-            description:
-                "Moonshot's most capable coding model with long-horizon coding breakthrough."
-                    .to_string(),
+            description: "Moonshot's most capable coding model with long-horizon coding breakthrough.".to_string(),
             provider: Provider::Moonshot,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2196,10 +2109,7 @@ fn moonshot_presets() -> Vec<ModelPreset> {
             description: "Moonshot's previous flagship coding and agent model.".to_string(),
             provider: Provider::Moonshot,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![reasoning_preset(
-                ReasoningEffortLevel::Medium,
-                "Balanced",
-            )],
+            supported_reasoning_efforts: vec![reasoning_preset(ReasoningEffortLevel::Medium, "Balanced")],
             is_default: false,
             upgrade: None,
             show_in_picker: true,
@@ -2215,9 +2125,7 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             id: "huggingface/deepseek-v4-flash".to_string(),
             model: "deepseek-ai/DeepSeek-V4-Flash:novita".to_string(),
             display_name: "DeepSeek V4 Flash (HF/Novita)".to_string(),
-            description:
-                "Fast inference model for cost-effective reasoning (1M context, 158B params)"
-                    .to_string(),
+            description: "Fast inference model for cost-effective reasoning (1M context, 158B params)".to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
@@ -2265,9 +2173,7 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             id: "huggingface/nvidia-nemotron-3-ultra".to_string(),
             model: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4:together".to_string(),
             display_name: "NVIDIA-Nemotron-3-Ultra-550B (HF/Together)".to_string(),
-            description:
-                "NVIDIA Nemotron 3 Ultra 550B-A55B-NVFP4 via Together inference provider"
-                    .to_string(),
+            description: "NVIDIA Nemotron 3 Ultra 550B-A55B-NVFP4 via Together inference provider".to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
@@ -2290,9 +2196,8 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             id: "huggingface/minimax-m3".to_string(),
             model: "MiniMaxAI/MiniMax-M3:novita".to_string(),
             display_name: "MiniMax-M3 (HF/Novita)".to_string(),
-            description:
-                "Frontier multimodal coding model with 1M context window via Novita inference provider"
-                    .to_string(),
+            description: "Frontier multimodal coding model with 1M context window via Novita inference provider"
+                .to_string(),
             provider: Provider::HuggingFace,
             default_reasoning_effort: ReasoningEffortLevel::High,
             supported_reasoning_efforts: vec![
@@ -2330,12 +2235,8 @@ mod tests {
         let providers: Vec<Provider> = Provider::all_providers();
 
         for provider in providers {
-            let default_count =
-                presets.iter().filter(|p| p.provider == provider && p.is_default).count();
-            assert!(
-                default_count <= 1,
-                "Provider {provider:?} has {default_count} defaults, expected 0 or 1"
-            );
+            let default_count = presets.iter().filter(|p| p.provider == provider && p.is_default).count();
+            assert!(default_count <= 1, "Provider {provider:?} has {default_count} defaults, expected 0 or 1");
         }
     }
 

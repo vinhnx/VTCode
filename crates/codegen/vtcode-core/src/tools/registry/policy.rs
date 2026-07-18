@@ -170,12 +170,9 @@ impl ToolPolicyGateway {
         let mut args = args.clone();
         let canonical = canonical_tool_name(name);
         let normalized = canonical;
-        let file_operation_read =
-            normalized == tools::UNIFIED_FILE && file_operation_action_is(&args, "read");
+        let file_operation_read = normalized == tools::UNIFIED_FILE && file_operation_action_is(&args, "read");
 
-        if let Some(constraints) =
-            self.tool_policy.as_ref().and_then(|tp| tp.get_constraints(normalized)).cloned()
-        {
+        if let Some(constraints) = self.tool_policy.as_ref().and_then(|tp| tp.get_constraints(normalized)).cloned() {
             let obj = args
                 .as_object_mut()
                 .ok_or_else(|| anyhow!("Error: tool arguments must be an object"))?;
@@ -198,18 +195,12 @@ impl ToolPolicyGateway {
 
             match normalized {
                 n if n == tools::CODE_SEARCH => {
-                    let valid_cap =
-                        constraints.max_results_per_call.filter(|cap| (1..=100).contains(cap));
+                    let valid_cap = constraints.max_results_per_call.filter(|cap| (1..=100).contains(cap));
                     match (obj.get("max_results"), valid_cap) {
                         (None, cap) => {
-                            obj.insert(
-                                "max_results".to_string(),
-                                json!(cap.map_or(20, |cap| 20.min(cap))),
-                            );
+                            obj.insert("max_results".to_string(), json!(cap.map_or(20, |cap| 20.min(cap))));
                         }
-                        (Some(value), Some(cap))
-                            if value.as_u64().is_some_and(|value| value > cap as u64) =>
-                        {
+                        (Some(value), Some(cap)) if value.as_u64().is_some_and(|value| value > cap as u64) => {
                             obj.insert("max_results".to_string(), json!(cap));
                         }
                         (Some(_), _) => {}
@@ -217,9 +208,7 @@ impl ToolPolicyGateway {
                 }
                 n if n == tools::READ_FILE || file_operation_read => {
                     if let Some(cap) = constraints.max_bytes_per_read {
-                        let requested =
-                            obj.get("max_bytes").and_then(|v| v.as_u64()).unwrap_or(cap as u64)
-                                as usize;
+                        let requested = obj.get("max_bytes").and_then(|v| v.as_u64()).unwrap_or(cap as u64) as usize;
                         if requested > cap {
                             obj.insert("max_bytes".to_string(), json!(cap));
                             obj.insert(
@@ -282,14 +271,10 @@ impl ToolPolicyGateway {
             .is_some_and(|manager| manager.has_approval_cache_key(approval_key))
     }
 
-    pub fn matching_shell_approval_prefix(
-        &self,
-        command_words: &[String],
-        scope_signature: &str,
-    ) -> Option<String> {
-        self.tool_policy.as_ref().and_then(|manager| {
-            manager.matching_shell_approval_prefix(command_words, scope_signature)
-        })
+    pub fn matching_shell_approval_prefix(&self, command_words: &[String], scope_signature: &str) -> Option<String> {
+        self.tool_policy
+            .as_ref()
+            .and_then(|manager| manager.matching_shell_approval_prefix(command_words, scope_signature))
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
@@ -465,11 +450,7 @@ impl ToolPolicyGateway {
     /// Determine if a tool should be auto-approved based on risk level
     /// Low-risk read-only tools are auto-approved to reduce approval friction
     fn should_auto_approve_by_risk(tool_name: &str) -> bool {
-        let mut ctx = ToolRiskContext::new(
-            tool_name.to_string(),
-            ToolSource::Internal,
-            WorkspaceTrust::Trusted,
-        );
+        let mut ctx = ToolRiskContext::new(tool_name.to_string(), ToolSource::Internal, WorkspaceTrust::Trusted);
         // Reflect outbound network access in the score so network tools are not
         // silently auto-approved. Without this, the trusted-workspace risk
         // reduction can drop a network tool below the low-risk threshold and
@@ -527,12 +508,7 @@ impl ToolPolicyGateway {
         Ok(None)
     }
 
-    pub async fn persist_mcp_tool_policy(
-        &mut self,
-        provider: &str,
-        tool_name: &str,
-        policy: ToolPolicy,
-    ) -> Result<()> {
+    pub async fn persist_mcp_tool_policy(&mut self, provider: &str, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         if let Some(manager) = self.tool_policy.as_mut() {
             manager.set_mcp_tool_policy(provider, tool_name, policy).await?;
         }
@@ -547,21 +523,15 @@ mod tests {
     use indexmap::IndexMap;
     use serde_json::json;
 
-    async fn gateway_with_constraints(
-        tool_name: &str,
-        constraints: ToolConstraints,
-    ) -> ToolPolicyGateway {
+    async fn gateway_with_constraints(tool_name: &str, constraints: ToolConstraints) -> ToolPolicyGateway {
         let temp = tempfile::tempdir().expect("temp workspace");
         let config_path = temp.path().join("tool-policy.json");
         let config = ToolPolicyConfig {
             constraints: IndexMap::from([(tool_name.to_string(), constraints)]),
             ..ToolPolicyConfig::default()
         };
-        std::fs::write(
-            &config_path,
-            serde_json::to_vec_pretty(&config).expect("policy config json"),
-        )
-        .expect("policy config file");
+        std::fs::write(&config_path, serde_json::to_vec_pretty(&config).expect("policy config json"))
+            .expect("policy config file");
         let manager = ToolPolicyManager::new_with_config_path(config_path)
             .await
             .expect("policy manager");
@@ -629,17 +599,10 @@ mod tests {
             .await;
 
             let constrained = gateway
-                .apply_policy_constraints(
-                    tools::CODE_SEARCH,
-                    &json!({"query": "ToolRegistry", "path": "."}),
-                )
+                .apply_policy_constraints(tools::CODE_SEARCH, &json!({"query": "ToolRegistry", "path": "."}))
                 .expect("valid omitted max_results must remain valid under policy");
 
-            assert_eq!(
-                constrained["max_results"],
-                json!(expected_limit),
-                "configured cap {configured_cap}"
-            );
+            assert_eq!(constrained["max_results"], json!(expected_limit), "configured cap {configured_cap}");
         }
     }
 
@@ -654,10 +617,7 @@ mod tests {
         )
         .await;
         let constrained = gateway
-            .apply_policy_constraints(
-                tools::CODE_SEARCH,
-                &json!({"query": "ToolRegistry", "max_results": 80}),
-            )
+            .apply_policy_constraints(tools::CODE_SEARCH, &json!({"query": "ToolRegistry", "max_results": 80}))
             .expect("constrained args");
         assert_eq!(constrained["max_results"], json!(50));
     }

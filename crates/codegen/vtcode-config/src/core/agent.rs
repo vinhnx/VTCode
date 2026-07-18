@@ -1,7 +1,7 @@
 use crate::constants::{defaults, execution, llm_generation, prompt_budget};
 use crate::types::{
-    ReasoningEffortLevel, ShellPromptProfile, SystemPromptMode, ToolDocumentationMode,
-    UiSurfacePreference, VerbosityLevel,
+    ReasoningEffortLevel, ShellPromptProfile, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
+    VerbosityLevel,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -158,10 +158,7 @@ pub struct AgentConfig {
     pub project_doc_fallback_filenames: Vec<String>,
 
     /// Maximum bytes of instruction content to load from AGENTS.md/CLAUDE.md hierarchy
-    #[serde(
-        default = "default_instruction_max_bytes",
-        alias = "rule_doc_max_bytes"
-    )]
+    #[serde(default = "default_instruction_max_bytes", alias = "rule_doc_max_bytes")]
     pub instruction_max_bytes: usize,
 
     /// Additional instruction files or globs to merge into the hierarchy
@@ -289,9 +286,7 @@ impl ContinuationPolicy {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("off") {
             Some(Self::Off)
-        } else if normalized.eq_ignore_ascii_case("exec_only")
-            || normalized.eq_ignore_ascii_case("exec-only")
-        {
+        } else if normalized.eq_ignore_ascii_case("exec_only") || normalized.eq_ignore_ascii_case("exec-only") {
             Some(Self::ExecOnly)
         } else if normalized.eq_ignore_ascii_case("all") {
             Some(Self::All)
@@ -350,13 +345,9 @@ impl ContextResetMode {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("off") {
             Some(Self::Off)
-        } else if normalized.eq_ignore_ascii_case("on_stall")
-            || normalized.eq_ignore_ascii_case("on-stall")
-        {
+        } else if normalized.eq_ignore_ascii_case("on_stall") || normalized.eq_ignore_ascii_case("on-stall") {
             Some(Self::OnStall)
-        } else if normalized.eq_ignore_ascii_case("on_compaction")
-            || normalized.eq_ignore_ascii_case("on-compaction")
-        {
+        } else if normalized.eq_ignore_ascii_case("on_compaction") || normalized.eq_ignore_ascii_case("on-compaction") {
             Some(Self::OnCompaction)
         } else {
             None
@@ -696,11 +687,7 @@ const fn default_escalation_confidence_threshold() -> f64 {
     0.7
 }
 fn default_escalation_always_escalate_tools() -> Vec<String> {
-    vec![
-        "delete_file".to_string(),
-        "remove".to_string(),
-        "rm".to_string(),
-    ]
+    vec!["delete_file".to_string(), "remove".to_string(), "rm".to_string()]
 }
 const fn default_escalation_cost_threshold() -> f64 {
     0.05
@@ -754,9 +741,7 @@ impl ToolResultClearingConfig {
             return Err("tool_result_clearing.keep_tool_uses must be greater than 0".to_string());
         }
         if self.clear_at_least_tokens == 0 {
-            return Err(
-                "tool_result_clearing.clear_at_least_tokens must be greater than 0".to_string()
-            );
+            return Err("tool_result_clearing.clear_at_least_tokens must be greater than 0".to_string());
         }
         Ok(())
     }
@@ -981,17 +966,11 @@ impl AgentConfig {
     pub fn validate_llm_params(&self) -> Result<(), String> {
         // Validate temperature range
         if !(0.0..=1.0).contains(&self.temperature) {
-            return Err(format!(
-                "temperature must be between 0.0 and 1.0, got {}",
-                self.temperature
-            ));
+            return Err(format!("temperature must be between 0.0 and 1.0, got {}", self.temperature));
         }
 
         if !(0.0..=1.0).contains(&self.refine_temperature) {
-            return Err(format!(
-                "refine_temperature must be between 0.0 and 1.0, got {}",
-                self.refine_temperature
-            ));
+            return Err(format!("refine_temperature must be between 0.0 and 1.0, got {}", self.refine_temperature));
         }
 
         if self.instruction_import_max_depth == 0 {
@@ -1465,8 +1444,7 @@ const fn default_onboarding_enabled() -> bool {
     true
 }
 
-const DEFAULT_INTRO_TEXT: &str =
-    "Let's get oriented. I preloaded workspace context so we can move fast.";
+const DEFAULT_INTRO_TEXT: &str = "Let's get oriented. I preloaded workspace context so we can move fast.";
 
 #[inline]
 fn default_intro_text() -> String {
@@ -1857,8 +1835,7 @@ mod tests {
 
     #[test]
     fn test_harness_config_continuation_policy_deserializes_with_fallback() {
-        let parsed: AgentHarnessConfig =
-            toml::from_str("continuation_policy = \"all\"").expect("valid harness config");
+        let parsed: AgentHarnessConfig = toml::from_str("continuation_policy = \"all\"").expect("valid harness config");
         assert_eq!(parsed.continuation_policy, ContinuationPolicy::All);
 
         let fallback: AgentHarnessConfig =
@@ -1868,14 +1845,8 @@ mod tests {
 
     #[test]
     fn test_harness_orchestration_mode_defaults_and_parses() {
-        assert_eq!(
-            HarnessOrchestrationMode::default(),
-            HarnessOrchestrationMode::PlanBuildEvaluate
-        );
-        assert_eq!(
-            HarnessOrchestrationMode::parse("single"),
-            Some(HarnessOrchestrationMode::Single)
-        );
+        assert_eq!(HarnessOrchestrationMode::default(), HarnessOrchestrationMode::PlanBuildEvaluate);
+        assert_eq!(HarnessOrchestrationMode::parse("single"), Some(HarnessOrchestrationMode::Single));
         assert_eq!(
             HarnessOrchestrationMode::parse("plan_build_evaluate"),
             Some(HarnessOrchestrationMode::PlanBuildEvaluate)
@@ -1890,8 +1861,7 @@ mod tests {
     #[test]
     fn test_harness_config_orchestration_deserializes_with_fallback() {
         let parsed: AgentHarnessConfig =
-            toml::from_str("orchestration_mode = \"plan_build_evaluate\"")
-                .expect("valid harness config");
+            toml::from_str("orchestration_mode = \"plan_build_evaluate\"").expect("valid harness config");
         assert_eq!(parsed.orchestration_mode, HarnessOrchestrationMode::PlanBuildEvaluate);
         assert_eq!(parsed.max_revision_rounds, 2);
 
@@ -1909,10 +1879,7 @@ mod tests {
     #[test]
     fn test_system_prompt_budget_defaults() {
         let config = AgentConfig::default();
-        assert_eq!(
-            config.max_system_prompt_tokens,
-            prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS
-        );
+        assert_eq!(config.max_system_prompt_tokens, prompt_budget::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS);
         assert!(config.system_prompt_budget_warning);
         assert!(!config.trim_system_prompt);
 

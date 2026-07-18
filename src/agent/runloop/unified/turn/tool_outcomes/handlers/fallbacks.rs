@@ -32,10 +32,7 @@ fn public_exec_fallback(command: String) -> (String, Value) {
 }
 
 fn public_list_fallback(path: &str) -> (String, Value) {
-    public_exec_fallback(format!(
-        "find {} -maxdepth 1 -mindepth 1 -print",
-        shell_single_quote(path)
-    ))
+    public_exec_fallback(format!("find {} -maxdepth 1 -mindepth 1 -print", shell_single_quote(path)))
 }
 
 fn public_grep_fallback(args: &Value) -> Option<(String, Value)> {
@@ -101,19 +98,14 @@ fn file_operation_write_fallback(args: &Value) -> Option<(String, Value)> {
     let content = args.get("content").and_then(Value::as_str)?;
 
     let delimiter = unique_heredoc_delimiter(content)?;
-    let command =
-        format!("cat > {} << '{delimiter}'\n{content}\n{delimiter}", shell_single_quote(path));
+    let command = format!("cat > {} << '{delimiter}'\n{content}\n{delimiter}", shell_single_quote(path));
     Some(public_exec_fallback(command))
 }
 
 /// Pick a heredoc delimiter that does not appear as a standalone line in `content`.
 /// Returns `None` if all candidates collide (extremely unlikely).
 fn unique_heredoc_delimiter(content: &str) -> Option<&'static str> {
-    const CANDIDATES: &[&str] = &[
-        "__VT_WRITE_EOF__",
-        "__VT_WRITE_EOF_2__",
-        "__VT_WRITE_EOF_3__",
-    ];
+    const CANDIDATES: &[&str] = &["__VT_WRITE_EOF__", "__VT_WRITE_EOF_2__", "__VT_WRITE_EOF_3__"];
     CANDIDATES.iter().find(|d| !content.lines().any(|line| line == **d)).copied()
 }
 
@@ -123,13 +115,7 @@ pub(super) fn build_validation_error_content_with_fallback(
     fallback_tool: Option<String>,
     fallback_tool_args: Option<Value>,
 ) -> String {
-    build_validation_error_content_with_schema_hint(
-        error,
-        validation_stage,
-        fallback_tool,
-        fallback_tool_args,
-        None,
-    )
+    build_validation_error_content_with_schema_hint(error, validation_stage, fallback_tool, fallback_tool_args, None)
 }
 
 /// Like [`build_validation_error_content_with_fallback`], but optionally
@@ -200,8 +186,7 @@ pub(super) fn preflight_validation_fallback(
     }
 
     if tool_intent::file_operation_action_is(args_val, "list") {
-        let path =
-            trimmed_non_empty_string_field(args_val, "path").unwrap_or_else(|| ".".to_string());
+        let path = trimmed_non_empty_string_field(args_val, "path").unwrap_or_else(|| ".".to_string());
         return Some(public_list_fallback(&path));
     }
 
@@ -223,8 +208,7 @@ pub(super) fn try_recover_preflight_with_fallback(
     args_val: &Value,
     error: &Error,
 ) -> Option<PreparedToolCall> {
-    let (recovered_tool_name, recovered_args) =
-        preflight_validation_fallback(tool_name, args_val, error)?;
+    let (recovered_tool_name, recovered_args) = preflight_validation_fallback(tool_name, args_val, error)?;
     match ctx.tool_registry.admit_public_tool_call(&recovered_tool_name, &recovered_args) {
         Ok(prepared) => Some(prepared),
         Err(recovery_err) => {
@@ -266,9 +250,8 @@ mod tests {
             "content": "# Large Document\n\nSome content here."
         });
 
-        let (tool_name, fallback_args) =
-            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("file_operation write should have fallback");
+        let (tool_name, fallback_args) = super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+            .expect("file_operation write should have fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
         let command = fallback_args["cmd"].as_str().expect("command should be a string");
@@ -285,9 +268,8 @@ mod tests {
             "content": "data"
         });
 
-        let (tool_name, fallback_args) =
-            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("file_operation write should have fallback");
+        let (tool_name, fallback_args) = super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+            .expect("file_operation write should have fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
         let command = fallback_args["cmd"].as_str().expect("command");
@@ -301,9 +283,8 @@ mod tests {
             "content": "Hello, world!"
         });
 
-        let (tool_name, fallback_args) =
-            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("file_operation with content should have write fallback");
+        let (tool_name, fallback_args) = super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+            .expect("file_operation with content should have write fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
         assert!(fallback_args["cmd"].as_str().is_some());
@@ -316,9 +297,8 @@ mod tests {
             "path": "src/main.rs"
         });
 
-        let (tool_name, fallback_args) =
-            super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
-                .expect("file_operation read should have fallback");
+        let (tool_name, fallback_args) = super::recovery_fallback_for_tool(tool_names::UNIFIED_FILE, &args)
+            .expect("file_operation read should have fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
         assert!(fallback_args["cmd"].as_str().is_some_and(|cmd| cmd.contains("'src/main.rs'")));
@@ -327,8 +307,7 @@ mod tests {
     #[test]
     fn unique_heredoc_delimiter_avoids_content_collision() {
         let content = "line 1\n__VT_WRITE_EOF__\nline 3";
-        let delimiter = super::unique_heredoc_delimiter(content)
-            .expect("should find a non-colliding delimiter");
+        let delimiter = super::unique_heredoc_delimiter(content).expect("should find a non-colliding delimiter");
         assert_ne!(delimiter, "__VT_WRITE_EOF__");
         assert!(!content.lines().any(|l| l == delimiter));
     }

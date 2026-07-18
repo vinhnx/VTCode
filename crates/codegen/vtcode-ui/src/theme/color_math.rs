@@ -11,8 +11,7 @@ pub(crate) fn relative_luminance(color: RgbColor) -> f32 {
         if c <= ui::THEME_RELATIVE_LUMINANCE_CUTOFF {
             c / ui::THEME_RELATIVE_LUMINANCE_LOW_FACTOR
         } else {
-            ((c + ui::THEME_RELATIVE_LUMINANCE_OFFSET)
-                / (1.0 + ui::THEME_RELATIVE_LUMINANCE_OFFSET))
+            ((c + ui::THEME_RELATIVE_LUMINANCE_OFFSET) / (1.0 + ui::THEME_RELATIVE_LUMINANCE_OFFSET))
                 .powf(ui::THEME_RELATIVE_LUMINANCE_EXPONENT)
         }
     }
@@ -54,11 +53,7 @@ fn adjust_luminance_to_target(color: RgbColor, target: f32) -> RgbColor {
     }
 }
 
-pub(crate) fn balance_text_luminance(
-    color: RgbColor,
-    background: RgbColor,
-    min_contrast: f32,
-) -> RgbColor {
+pub(crate) fn balance_text_luminance(color: RgbColor, background: RgbColor, min_contrast: f32) -> RgbColor {
     let bg_luminance = relative_luminance(background);
     let mut candidate = color;
     let current = relative_luminance(candidate);
@@ -105,8 +100,7 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     let blend = |c: u8, t: u8| -> u8 {
         let c = c as f32;
         let t = t as f32;
-        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
-            as u8
+        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX) as u8
     };
 
     RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
@@ -115,11 +109,7 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
 pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {
     mix(
         color,
-        RgbColor(
-            ui::THEME_COLOR_WHITE_RED,
-            ui::THEME_COLOR_WHITE_GREEN,
-            ui::THEME_COLOR_WHITE_BLUE,
-        ),
+        RgbColor(ui::THEME_COLOR_WHITE_RED, ui::THEME_COLOR_WHITE_GREEN, ui::THEME_COLOR_WHITE_BLUE),
         ratio,
     )
 }

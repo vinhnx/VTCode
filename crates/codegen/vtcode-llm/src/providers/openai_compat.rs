@@ -22,11 +22,10 @@ use vtcode_config::core::{ModelConfig, PromptCachingConfig};
 use crate::provider::{LLMError, LLMRequest, LLMResponse, LLMStream, ToolDefinition};
 
 use super::common::{
-    chat_completions_url, ensure_model, extract_prompt_cache_settings_default,
-    float_to_json_number, override_base_url, parse_json_response, parse_response_openai_format,
-    resolve_model, send_chat_completions, serialize_messages_openai_format,
-    serialize_tools_openai_format, spawn_openai_compatible_stream, validate_request_common,
-    validate_supported_models,
+    chat_completions_url, ensure_model, extract_prompt_cache_settings_default, float_to_json_number, override_base_url,
+    parse_json_response, parse_response_openai_format, resolve_model, send_chat_completions,
+    serialize_messages_openai_format, serialize_tools_openai_format, spawn_openai_compatible_stream,
+    validate_request_common, validate_supported_models,
 };
 use super::error_handling::handle_openai_http_error;
 use super::shared::OpenAiDeltaOrder;
@@ -134,11 +133,7 @@ pub(crate) trait OpenAiCompatSpec: Sized + Send + Sync + 'static {
     }
 
     /// Inserts the provider's `tool_choice` encoding.
-    fn insert_tool_choice(
-        _core: &OpenAiCompatCore<Self>,
-        request: &LLMRequest,
-        payload: &mut Map<String, Value>,
-    ) {
+    fn insert_tool_choice(_core: &OpenAiCompatCore<Self>, request: &LLMRequest, payload: &mut Map<String, Value>) {
         if let Some(choice) = &request.tool_choice {
             payload.insert("tool_choice".to_owned(), choice.to_provider_format(Self::KEY));
         }
@@ -258,12 +253,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     }
 
     /// Constructor backing the provider's `new_with_client`.
-    pub(crate) fn from_parts(
-        api_key: String,
-        model: String,
-        http_client: HttpClient,
-        base_url: String,
-    ) -> Self {
+    pub(crate) fn from_parts(api_key: String, model: String, http_client: HttpClient, base_url: String) -> Self {
         Self {
             api_key,
             http_client,
@@ -309,18 +299,14 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         }
 
         if let Some(max_tokens) = request.max_tokens {
-            payload.insert(
-                S::MAX_TOKENS_KEY.to_owned(),
-                Value::Number(serde_json::Number::from(u64::from(max_tokens))),
-            );
+            payload
+                .insert(S::MAX_TOKENS_KEY.to_owned(), Value::Number(serde_json::Number::from(u64::from(max_tokens))));
         }
 
-        let suppress_sampling =
-            S::SUPPRESS_SAMPLING_WHEN_REASONING && S::reasoning_enabled(self, request);
+        let suppress_sampling = S::SUPPRESS_SAMPLING_WHEN_REASONING && S::reasoning_enabled(self, request);
         if !suppress_sampling {
             if let Some(temperature) = request.temperature {
-                payload
-                    .insert("temperature".to_owned(), Value::Number(S::float_number(temperature)?));
+                payload.insert("temperature".to_owned(), Value::Number(S::float_number(temperature)?));
             }
             if S::INCLUDE_TOP_P
                 && let Some(top_p) = request.top_p
@@ -332,18 +318,14 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         if request.stream {
             payload.insert("stream".to_owned(), Value::Bool(true));
             if S::STREAM_OPTIONS_INCLUDE_USAGE {
-                payload.insert(
-                    "stream_options".to_owned(),
-                    serde_json::json!({"include_usage": true}),
-                );
+                payload.insert("stream_options".to_owned(), serde_json::json!({"include_usage": true}));
             }
         }
 
         if let Some(tools) = &request.tools {
             let key = Arc::as_ptr(tools) as usize;
             let serialized_tools = {
-                let mut cache =
-                    self.tools_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut cache = self.tools_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                 match cache.get(&key) {
                     Some((arc, serialized)) if Arc::ptr_eq(arc, tools) => Arc::clone(serialized),
                     _ => {
@@ -378,10 +360,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         Ok(Value::Object(payload))
     }
 
-    pub(crate) async fn dispatch(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<reqwest::Response, LLMError> {
+    pub(crate) async fn dispatch(&self, request: &LLMRequest) -> Result<reqwest::Response, LLMError> {
         let payload = self.convert_request(request)?;
         let url = chat_completions_url(&self.base_url);
         let builder = S::apply_auth(self, self.http_client.post(&url));
@@ -390,10 +369,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     }
 
     /// Executes a prepared (model-resolved, validated as needed) generate call.
-    pub(crate) async fn generate_prepared(
-        &self,
-        request: LLMRequest,
-    ) -> Result<LLMResponse, LLMError> {
+    pub(crate) async fn generate_prepared(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
         let response = self.dispatch(&request).await?;
         let response_json = parse_json_response(response, S::NAME).await?;

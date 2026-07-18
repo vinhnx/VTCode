@@ -42,10 +42,7 @@ pub enum TaskState {
 impl TaskState {
     /// Check if this is a terminal state
     pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            TaskState::Completed | TaskState::Failed | TaskState::Canceled | TaskState::Rejected
-        )
+        matches!(self, TaskState::Completed | TaskState::Failed | TaskState::Canceled | TaskState::Rejected)
     }
 
     /// Check if the task can be canceled from this state

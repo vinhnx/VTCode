@@ -79,14 +79,9 @@ fn canonicalize_command_for_detection(command: &str) -> Option<String> {
     }
 
     // `command -v <tool>` or `which <tool>`
-    if (tokens[0] == "command" && tokens.len() >= 3 && tokens[1] == "-v")
-        || (tokens[0] == "which" && tokens.len() >= 2)
+    if (tokens[0] == "command" && tokens.len() >= 3 && tokens[1] == "-v") || (tokens[0] == "which" && tokens.len() >= 2)
     {
-        let tool = if tokens[0] == "command" {
-            tokens[2]
-        } else {
-            tokens[1]
-        };
+        let tool = if tokens[0] == "command" { tokens[2] } else { tokens[1] };
         // Strip path prefix (e.g., /usr/bin/ast-grep → ast-grep)
         let basename = tool.rsplit('/').next().unwrap_or(tool);
         return Some(format!("__verify__:{basename}"));
@@ -140,8 +135,8 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
     }
 
     if let Some(obj) = args.as_object() {
-        let is_read_tool = base_name == tools::READ_FILE
-            || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        let is_read_tool =
+            base_name == tools::READ_FILE || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
         let is_write_tool = base_name == tools::WRITE_FILE
             || base_name == tools::CREATE_FILE
             || base_name == tools::EDIT_FILE
@@ -173,8 +168,7 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
         fn is_root_marker(v: &serde_json::Value) -> bool {
             if let Some(s) = v.as_str() {
                 let trimmed = s.trim();
-                trimmed.is_empty()
-                    || trimmed.trim_matches(|c: char| c == '.' || c == '/').is_empty()
+                trimmed.is_empty() || trimmed.trim_matches(|c: char| c == '.' || c == '/').is_empty()
             } else {
                 false
             }
@@ -196,9 +190,7 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
 
             // For read tools: normalize alias keys to canonical names
             if is_read_tool {
-                if let Some((_, canonical)) =
-                    read_aliases.iter().find(|(alias, _)| *alias == key.as_str())
-                {
+                if let Some((_, canonical)) = read_aliases.iter().find(|(alias, _)| *alias == key.as_str()) {
                     let canonical = canonical.to_string();
                     // Only insert if canonical key not already present
                     if !entries.iter().any(|(k, _)| *k == canonical) {
@@ -317,8 +309,8 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         // For read-file tools: normalize parameter aliases so cycling through
         // offset_lines/line_start, max_lines/chunk_lines/limit_lines/limit, encoding, action
         // all hash to the same canonical form.
-        let is_read_tool = base_name == tools::READ_FILE
-            || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        let is_read_tool =
+            base_name == tools::READ_FILE || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
         if is_read_tool {
             // Normalize path aliases to "path"
             for alias in ["file_path", "filepath", "target_path", "file"] {
@@ -342,9 +334,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             // Normalize limit aliases to "limit"
             // max_lines, chunk_lines, limit_lines, page_size_lines, line_end, end_line → limit
             // For line_end/end_line: compute limit from offset + end_line
-            if let Some(line_end) =
-                normalized.remove("line_end").or_else(|| normalized.remove("end_line"))
-            {
+            if let Some(line_end) = normalized.remove("line_end").or_else(|| normalized.remove("end_line")) {
                 // start_line/end_line or line_start/line_end → offset + limit
                 if !normalized.contains_key("limit") {
                     let start = normalized.get("offset").and_then(|v| v.as_u64()).unwrap_or(1);
@@ -519,10 +509,12 @@ impl LoopDetector {
         {
             let required_history = limit.saturating_sub(1);
             if required_history > 0 && self.recent_calls.len() >= required_history {
-                let identical =
-                    self.recent_calls.iter().rev().take(required_history).all(|record| {
-                        record.tool_name == tool_name && record.args_hash == args_hash
-                    });
+                let identical = self
+                    .recent_calls
+                    .iter()
+                    .rev()
+                    .take(required_history)
+                    .all(|record| record.tool_name == tool_name && record.args_hash == args_hash);
 
                 if identical {
                     // Escalate to hard limit so callers halt immediately.
@@ -566,19 +558,14 @@ impl LoopDetector {
 
         // --- Navigation Loop Detection (NL2Repo-Bench integration) ---
         let base_name = base_tool_name(tool_name);
-        let is_readonly = matches!(
-            base_name,
-            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH
-        ) || (base_name == tools::UNIFIED_FILE
-            && self.recent_calls.back().is_some_and(|r| r.read_target.is_some()));
+        let is_readonly =
+            matches!(base_name, tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH)
+                || (base_name == tools::UNIFIED_FILE
+                    && self.recent_calls.back().is_some_and(|r| r.read_target.is_some()));
 
         let is_mutating = matches!(
             base_name,
-            tools::WRITE_FILE
-                | tools::CREATE_FILE
-                | tools::EDIT_FILE
-                | tools::UNIFIED_EXEC
-                | tools::APPLY_PATCH
+            tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::UNIFIED_EXEC | tools::APPLY_PATCH
         );
 
         if is_readonly {
@@ -735,8 +722,7 @@ impl LoopDetector {
         // handles `file_operation` with `action: "read"` and command tools with
         // `__read__:path` normalization). Use that field as the authoritative
         // indicator instead of checking for a `::read` suffix.
-        let current_has_read_target =
-            self.recent_calls.back().is_some_and(|r| r.read_target.is_some());
+        let current_has_read_target = self.recent_calls.back().is_some_and(|r| r.read_target.is_some());
         let is_read_tool = base_name == tools::READ_FILE
             || (base_name == tools::UNIFIED_FILE && current_has_read_target)
             || (is_command_tool_name(base_name) && current_has_read_target);
@@ -766,10 +752,9 @@ impl LoopDetector {
                 || (rec_base == tools::UNIFIED_FILE && rec_has_read_target)
                 || (is_command_tool_name(rec_base) && rec_has_read_target);
             // Command tools without a read_target are mutating (e.g., `cargo check`)
-            let rec_is_mutating = matches!(
-                rec_base,
-                tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
-            ) || (is_command_tool_name(rec_base) && !rec_has_read_target);
+            let rec_is_mutating =
+                matches!(rec_base, tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH)
+                    || (is_command_tool_name(rec_base) && !rec_has_read_target);
 
             if rec_is_mutating {
                 break;
@@ -781,9 +766,7 @@ impl LoopDetector {
             }
         }
 
-        if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
-            && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS
-        {
+        if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS {
             let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
             self.tool_counts.insert(tool_name.to_string(), hard_limit);
             return Some(format!(
@@ -920,9 +903,7 @@ impl LoopDetector {
         }
 
         match base_name {
-            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH => {
-                MAX_READONLY_TOOL_CALLS
-            }
+            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH => MAX_READONLY_TOOL_CALLS,
             tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH => MAX_WRITE_TOOL_CALLS,
             _ if is_command_tool_name(base_name) => MAX_COMMAND_TOOL_CALLS,
             _ => MAX_OTHER_TOOL_CALLS,
@@ -994,8 +975,7 @@ impl LoopDetector {
 
     /// Detect complex repetitive patterns (e.g. A -> B -> A -> B)
     fn detect_patterns(&self) -> Option<String> {
-        let history: Vec<(&str, u64)> =
-            self.recent_calls.iter().map(|r| (r.tool_name.as_str(), r.args_hash)).collect();
+        let history: Vec<(&str, u64)> = self.recent_calls.iter().map(|r| (r.tool_name.as_str(), r.args_hash)).collect();
 
         let len = history.len();
         if len < 4 {
@@ -1096,8 +1076,7 @@ fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Optio
 /// invocation — either via the legacy `::read` suffix or the modern
 /// `action: "read"` argument.
 fn is_file_operation_read(tool_name: &str, args: &serde_json::Value) -> bool {
-    tool_name.ends_with("::read")
-        || matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
+    tool_name.ends_with("::read") || matches!(args.get("action").and_then(|v| v.as_str()), Some("read"))
 }
 
 #[cfg(test)]
@@ -1317,10 +1296,7 @@ mod tests {
             "max_results": 100
         });
 
-        assert_eq!(
-            hash_normalized_args(tools::CODE_SEARCH, &first),
-            hash_normalized_args(tools::CODE_SEARCH, &second)
-        );
+        assert_eq!(hash_normalized_args(tools::CODE_SEARCH, &first), hash_normalized_args(tools::CODE_SEARCH, &second));
 
         for changed in [
             json!({"query": "Other", "path": "src", "file_types": ["rust", "python"], "result_types": ["definition", "path"]}),
@@ -1408,7 +1384,8 @@ mod tests {
         let mut saw_hard_stop = false;
 
         for offset in [1, 2, 1, 2, 1, 2, 1, 2] {
-            let args = json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
+            let args =
+                json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
             if let Some(warning) = detector.record_call(&tool_key, &args)
                 && warning.contains("HARD STOP")
             {
@@ -1469,12 +1446,8 @@ mod tests {
         // Same offset repeated, with grep calls between reads.
         // Grep doesn't break the streak, so the hard stop fires.
         for _ in 0..MAX_SIMILAR_READ_TARGET_CALLS + 2 {
-            let _ = detector.record_call(
-                &read_tool,
-                &json!({"path": "Cargo.lock", "offset_lines": 1, "limit": 2000}),
-            );
-            let _ = detector
-                .record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
+            let _ = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "offset_lines": 1, "limit": 2000}));
+            let _ = detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
         }
 
         assert!(detector.is_hard_limit_exceeded(&read_tool));
@@ -1514,8 +1487,7 @@ mod tests {
 
     #[test]
     fn test_read_file_encoding_and_action_are_stripped() {
-        let with_encoding =
-            json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
+        let with_encoding = json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
         let without_encoding = json!({"path": "foo.rs", "offset_lines": 1, "max_lines": 200});
 
         let n1 = normalize_args_for_detection(tools::READ_FILE, &with_encoding);
@@ -1605,26 +1577,19 @@ mod tests {
 
         // Call 4: grep Cargo.lock (read-only, does NOT break streak, streak=4)
         // Navigation loop warning fires at streak 4 with the lowered threshold.
-        let r = detector
-            .record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
+        let r = detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
         assert!(r.is_some(), "Navigation loop warning should fire at streak 4");
         let msg = r.unwrap();
         assert!(msg.contains("Navigation Loop Detected"));
 
         // Call 5: read Cargo.lock with start_line (streak=5)
         // Cooldown suppresses the navigation warning; no repetitive-read warning yet.
-        let r = detector.record_call(
-            &read_tool,
-            &json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590}),
-        );
+        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "start_line": 550, "end_line": 590}));
         assert!(r.is_none());
 
         // Call 6: read Cargo.lock with different start_line (streak=6, variants=3)
         // Repetitive-read-target HARD STOP fires: same_target_streak >= 4 && variants <= 3
-        let r = detector.record_call(
-            &read_tool,
-            &json!({"path": "Cargo.lock", "start_line": 4400, "end_line": 4420}),
-        );
+        let r = detector.record_call(&read_tool, &json!({"path": "Cargo.lock", "start_line": 4400, "end_line": 4420}));
         assert!(r.is_some(), "HARD STOP should fire at call 6");
         let msg = r.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP, got: {msg}");
@@ -1666,10 +1631,8 @@ mod tests {
         // and variants <= MAX_SIMILAR_READ_TARGET_VARIANTS => HARD STOP fires.
         let offsets = [0, 100, 0, 100];
         for (i, offset) in offsets.iter().enumerate() {
-            let result = detector.record_call(
-                tools::UNIFIED_FILE,
-                &json!({"action": "read", "path": "src/lib.rs", "offset": offset}),
-            );
+            let result = detector
+                .record_call(tools::UNIFIED_FILE, &json!({"action": "read", "path": "src/lib.rs", "offset": offset}));
             if i < offsets.len() - 1 {
                 assert!(result.is_none(), "call {i} should not trigger");
             } else {
@@ -1766,10 +1729,7 @@ mod tests {
         // Make 3 read-only calls (below threshold)
         for i in 0..3 {
             let args = json!({"query": format!("p_{i}"), "path": "src/"});
-            assert!(
-                detector.record_call(tools::CODE_SEARCH, &args).is_none(),
-                "Call {i} should not trigger warning"
-            );
+            assert!(detector.record_call(tools::CODE_SEARCH, &args).is_none(), "Call {i} should not trigger warning");
         }
 
         // 4th call should trigger navigation loop warning (streak hits 4)
@@ -1833,10 +1793,7 @@ mod tests {
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
         assert!(warning.is_some(), "Subagent global read-only budget should fire at 20");
         let msg = warning.unwrap();
-        assert!(
-            msg.contains("Global read-only budget exhausted"),
-            "Expected budget exhaustion: {msg}"
-        );
+        assert!(msg.contains("Global read-only budget exhausted"), "Expected budget exhaustion: {msg}");
         assert!(msg.contains("limit: 20"), "Expected limit 20 in message: {msg}");
     }
 
@@ -1863,42 +1820,27 @@ mod tests {
 
     #[test]
     fn canonicalize_command_v_to_verify() {
-        assert_eq!(
-            canonicalize_command_for_detection("command -v ast-grep"),
-            Some("__verify__:ast-grep".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("command -v ast-grep"), Some("__verify__:ast-grep".to_string()));
     }
 
     #[test]
     fn canonicalize_which_to_verify() {
-        assert_eq!(
-            canonicalize_command_for_detection("which ast-grep"),
-            Some("__verify__:ast-grep".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("which ast-grep"), Some("__verify__:ast-grep".to_string()));
     }
 
     #[test]
     fn canonicalize_help_to_verify() {
-        assert_eq!(
-            canonicalize_command_for_detection("ast-grep --help"),
-            Some("__verify__:ast-grep".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("ast-grep --help"), Some("__verify__:ast-grep".to_string()));
     }
 
     #[test]
     fn canonicalize_version_to_verify() {
-        assert_eq!(
-            canonicalize_command_for_detection("ast-grep --version"),
-            Some("__verify__:ast-grep".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("ast-grep --version"), Some("__verify__:ast-grep".to_string()));
     }
 
     #[test]
     fn canonicalize_short_help_to_verify() {
-        assert_eq!(
-            canonicalize_command_for_detection("ast-grep -h"),
-            Some("__verify__:ast-grep".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("ast-grep -h"), Some("__verify__:ast-grep".to_string()));
     }
 
     #[test]
@@ -1911,18 +1853,12 @@ mod tests {
 
     #[test]
     fn canonicalize_cat_to_read() {
-        assert_eq!(
-            canonicalize_command_for_detection("cat src/main.rs"),
-            Some("__read__:src/main.rs".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("cat src/main.rs"), Some("__read__:src/main.rs".to_string()));
     }
 
     #[test]
     fn canonicalize_head_to_read() {
-        assert_eq!(
-            canonicalize_command_for_detection("head src/main.rs"),
-            Some("__read__:src/main.rs".to_string())
-        );
+        assert_eq!(canonicalize_command_for_detection("head src/main.rs"), Some("__read__:src/main.rs".to_string()));
     }
 
     #[test]
@@ -1966,10 +1902,7 @@ mod tests {
         assert!(detector.record_call(tool, &args1).is_none());
         // Second call with equivalent command should trigger
         let warning = detector.record_call(tool, &args2);
-        assert!(
-            warning.is_some(),
-            "which ast-grep should be detected as duplicate of command -v ast-grep"
-        );
+        assert!(warning.is_some(), "which ast-grep should be detected as duplicate of command -v ast-grep");
     }
 
     #[test]
@@ -1983,11 +1916,7 @@ mod tests {
 
         // Check that the last record has a read_target
         let record = detector.recent_calls.back().unwrap();
-        assert_eq!(
-            record.read_target.as_deref(),
-            Some("src/main.rs"),
-            "cat command should produce read_target"
-        );
+        assert_eq!(record.read_target.as_deref(), Some("src/main.rs"), "cat command should produce read_target");
     }
 
     #[test]

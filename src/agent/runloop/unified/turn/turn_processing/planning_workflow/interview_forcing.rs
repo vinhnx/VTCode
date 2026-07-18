@@ -6,9 +6,7 @@ use super::PLANNING_WORKFLOW_REMINDER;
 use super::interview_payload::build_fallback_question;
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
 
-pub(super) fn strip_assistant_text(
-    processing_result: TurnProcessingResult,
-) -> TurnProcessingResult {
+pub(super) fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessingResult {
     match processing_result {
         TurnProcessingResult::ToolCalls {
             tool_calls,
@@ -35,9 +33,7 @@ fn append_planning_workflow_reminder_text(text: &str) -> String {
     format!("{text}{separator}{PLANNING_WORKFLOW_REMINDER}")
 }
 
-pub(super) fn maybe_append_planning_workflow_reminder(
-    processing_result: TurnProcessingResult,
-) -> TurnProcessingResult {
+pub(super) fn maybe_append_planning_workflow_reminder(processing_result: TurnProcessingResult) -> TurnProcessingResult {
     match processing_result {
         TurnProcessingResult::ToolCalls {
             tool_calls,
@@ -50,12 +46,7 @@ pub(super) fn maybe_append_planning_workflow_reminder(
             reasoning,
             reasoning_details,
         },
-        TurnProcessingResult::TextResponse {
-            text,
-            reasoning,
-            reasoning_details,
-            proposed_plan,
-        } => {
+        TurnProcessingResult::TextResponse { text, reasoning, reasoning_details, proposed_plan } => {
             let reminder_text = if text.trim().is_empty() && proposed_plan.is_some() {
                 PLANNING_WORKFLOW_REMINDER.to_string()
             } else {

@@ -74,13 +74,7 @@ impl ExecutionTracker {
     }
 
     /// Record a tool execution
-    pub fn record(
-        &mut self,
-        tool_name: &str,
-        status: ExecutionStatus,
-        duration_ms: u64,
-        was_cached: bool,
-    ) {
+    pub fn record(&mut self, tool_name: &str, status: ExecutionStatus, duration_ms: u64, was_cached: bool) {
         // Intern tool name to reduce memory
         let tool_id = self.get_or_intern_tool_id(tool_name);
 

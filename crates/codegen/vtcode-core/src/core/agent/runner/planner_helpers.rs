@@ -28,11 +28,7 @@ impl AgentRunner {
     }
 
     /// Build tracker items from planner output, falling back to defaults if empty.
-    pub(super) fn build_planner_tracker_items(
-        &self,
-        task: &Task,
-        items: Vec<PlannerItem>,
-    ) -> Vec<serde_json::Value> {
+    pub(super) fn build_planner_tracker_items(&self, task: &Task, items: Vec<PlannerItem>) -> Vec<serde_json::Value> {
         let fallback_verify = self.fallback_verify_commands();
         let tracker_items = items
             .into_iter()

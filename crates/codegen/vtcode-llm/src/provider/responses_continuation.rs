@@ -26,10 +26,7 @@ pub fn responses_continuation_key(provider: &str, model: &str) -> Option<(String
     Some((provider, model.to_string()))
 }
 
-pub fn supports_responses_chaining(
-    provider_name: &str,
-    provider_supports_responses_compaction: bool,
-) -> bool {
+pub fn supports_responses_chaining(provider_name: &str, provider_supports_responses_compaction: bool) -> bool {
     provider_supports_responses_compaction
         || provider_name.eq_ignore_ascii_case("openai")
         || provider_name.eq_ignore_ascii_case("openresponses")
@@ -40,18 +37,14 @@ pub fn records_responses_continuation_state(
     provider_name: &str,
     _provider_supports_responses_compaction: bool,
 ) -> bool {
-    provider_name.eq_ignore_ascii_case("openresponses")
-        || provider_name.eq_ignore_ascii_case("gemini")
+    provider_name.eq_ignore_ascii_case("openresponses") || provider_name.eq_ignore_ascii_case("gemini")
 }
 
 /// Compatibility shim for older callers.
 ///
 /// Responses continuation now preserves full request history. Use
 /// [`prepare_responses_continuation_request`] to derive request state.
-pub fn uses_incremental_responses_history(
-    _provider_name: &str,
-    _provider_supports_responses_compaction: bool,
-) -> bool {
+pub fn uses_incremental_responses_history(_provider_name: &str, _provider_supports_responses_compaction: bool) -> bool {
     false
 }
 
@@ -76,9 +69,7 @@ where
         };
     }
 
-    if provider_name.eq_ignore_ascii_case("openresponses")
-        || provider_name.eq_ignore_ascii_case("gemini")
-    {
+    if provider_name.eq_ignore_ascii_case("openresponses") || provider_name.eq_ignore_ascii_case("gemini") {
         return PreparedResponsesRequest {
             messages: Cow::Borrowed(messages),
             previous_response_id: continuation.map(|chain| chain.response_id.clone()),
@@ -106,9 +97,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        ResponsesContinuationState, prepare_openai_responses_request,
-        prepare_responses_continuation_request, records_responses_continuation_state,
-        responses_continuation_key,
+        ResponsesContinuationState, prepare_openai_responses_request, prepare_responses_continuation_request,
+        records_responses_continuation_state, responses_continuation_key,
     };
     use crate::provider::Message;
     use std::borrow::Cow;
@@ -117,10 +107,7 @@ mod tests {
     fn continuation_key_requires_non_empty_provider_and_model() {
         assert_eq!(responses_continuation_key("", "gpt-5"), None);
         assert_eq!(responses_continuation_key("openai", ""), None);
-        assert_eq!(
-            responses_continuation_key("OpenAI", "gpt-5"),
-            Some(("openai".to_string(), "gpt-5".to_string()))
-        );
+        assert_eq!(responses_continuation_key("OpenAI", "gpt-5"), Some(("openai".to_string(), "gpt-5".to_string())));
     }
 
     #[test]

@@ -24,7 +24,8 @@ fn load_system_prompt_from_existing_file() {
     fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
 
     let prompt_path = prompts_dir.join("system.md");
-    let test_prompt = "You are a test assistant with specific instructions.\n\nUse these tools:\n- test_tool: For testing purposes";
+    let test_prompt =
+        "You are a test assistant with specific instructions.\n\nUse these tools:\n- test_tool: For testing purposes";
 
     fs::write(&prompt_path, test_prompt).expect("Failed to write test prompt file");
 
@@ -64,17 +65,13 @@ fn prompt_file_content_variations() {
     let test_cases = vec![
         ("Empty file", ""),
         ("Single line", "You are a helpful assistant."),
-        (
-            "Multiple lines",
-            "You are a helpful assistant.\n\nYou can help with:\n- Code\n- Analysis",
-        ),
+        ("Multiple lines", "You are a helpful assistant.\n\nYou can help with:\n- Code\n- Analysis"),
         ("With special characters", "You are a helpful assistant! Use tools @mention and #tags."),
         ("Large content", large_content.as_str()),
     ];
 
     for (test_name, content) in test_cases {
-        let prompt_path =
-            prompts_dir.join(format!("{}.md", test_name.replace(" ", "_").to_lowercase()));
+        let prompt_path = prompts_dir.join(format!("{}.md", test_name.replace(" ", "_").to_lowercase()));
         fs::write(&prompt_path, content).expect("Failed to write test file");
 
         let loaded = fs::read_to_string(&prompt_path).expect("Failed to load test file");
@@ -86,12 +83,10 @@ fn prompt_file_content_variations() {
 /// Test that the actual prompts/system.md file exists and is valid (if present)
 #[test]
 fn actual_prompt_file_validation() {
-    let prompt_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(prompts::DEFAULT_SYSTEM_PROMPT_PATH);
+    let prompt_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(prompts::DEFAULT_SYSTEM_PROMPT_PATH);
 
     if prompt_path.exists() {
-        let content =
-            fs::read_to_string(&prompt_path).expect("Failed to read actual prompts/system.md");
+        let content = fs::read_to_string(&prompt_path).expect("Failed to read actual prompts/system.md");
 
         // Basic validation of the system prompt content
         assert!(!content.is_empty(), "System prompt should not be empty");
@@ -101,15 +96,13 @@ fn actual_prompt_file_validation() {
         let content_lower = content.to_lowercase();
 
         // Should mention being a coding assistant
-        let has_coding_context = content_lower.contains("coding")
-            || content_lower.contains("code")
-            || content_lower.contains("programming");
+        let has_coding_context =
+            content_lower.contains("coding") || content_lower.contains("code") || content_lower.contains("programming");
         assert!(has_coding_context, "System prompt should mention coding/programming context");
 
         // Should mention tools or functionality
-        let has_tools_context = content_lower.contains("tool")
-            || content_lower.contains("function")
-            || content_lower.contains("command");
+        let has_tools_context =
+            content_lower.contains("tool") || content_lower.contains("function") || content_lower.contains("command");
         assert!(has_tools_context, "System prompt should mention tools or functions");
 
         println!("[SUCCESS] System prompt file exists and contains {} characters", content.len());
@@ -188,9 +181,8 @@ Always respond with helpful, accurate information about the codebase.
     assert!(prompt_path.is_file());
 
     // Test loading the content
-    let loaded_content =
-        fs::read_to_string(temp_dir.path().join(prompts::DEFAULT_SYSTEM_PROMPT_PATH))
-            .expect("Failed to load system prompt using constant path");
+    let loaded_content = fs::read_to_string(temp_dir.path().join(prompts::DEFAULT_SYSTEM_PROMPT_PATH))
+        .expect("Failed to load system prompt using constant path");
 
     assert_eq!(loaded_content, system_prompt);
     assert!(loaded_content.contains("VT Code"));

@@ -179,10 +179,7 @@ const _: () = {
         let mut i = 0;
         while i < bytes.len() {
             let b = bytes[i];
-            assert!(
-                b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_',
-                "tool name must contain only [a-z0-9_]"
-            );
+            assert!(b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_', "tool name must contain only [a-z0-9_]");
             i += 1;
         }
     }

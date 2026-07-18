@@ -11,13 +11,12 @@ use vtcode_config::constants::models::copilot as copilot_models;
 use vtcode_config::models::supported_models_for_provider;
 
 use crate::copilot::{
-    COPILOT_MODEL_ID, COPILOT_PROVIDER_KEY, CopilotAcpClient, CopilotPromptSessionFuture,
-    CopilotRuntimeRequest, CopilotToolCallFailure, CopilotToolCallResponse, PromptSession,
-    PromptSessionCancelHandle, PromptUpdate, probe_auth_status,
+    COPILOT_MODEL_ID, COPILOT_PROVIDER_KEY, CopilotAcpClient, CopilotPromptSessionFuture, CopilotRuntimeRequest,
+    CopilotToolCallFailure, CopilotToolCallResponse, PromptSession, PromptSessionCancelHandle, PromptUpdate,
+    probe_auth_status,
 };
 use crate::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message,
-    MessageRole, ToolDefinition,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, MessageRole, ToolDefinition,
 };
 use crate::providers::common::validate_request_common;
 
@@ -68,9 +67,9 @@ impl CopilotProvider {
         let auth_status = probe_auth_status(&self.auth_config, Some(&self.workspace_root)).await;
         if !auth_status.is_authenticated() {
             return Err(LLMError::Authentication {
-                message: auth_status.message.unwrap_or_else(|| {
-                    "GitHub Copilot is not authenticated. Run `vtcode login copilot`.".to_string()
-                }),
+                message: auth_status
+                    .message
+                    .unwrap_or_else(|| "GitHub Copilot is not authenticated. Run `vtcode login copilot`.".to_string()),
                 metadata: None,
             });
         }
@@ -78,14 +77,9 @@ impl CopilotProvider {
         let llm_tools: Vec<ToolDefinition> = tools.to_vec();
 
         let created = Arc::new(
-            CopilotAcpClient::connect(
-                &self.auth_config,
-                &self.workspace_root,
-                model.raw_model.as_deref(),
-                &llm_tools,
-            )
-            .await
-            .map_err(map_copilot_error)?,
+            CopilotAcpClient::connect(&self.auth_config, &self.workspace_root, model.raw_model.as_deref(), &llm_tools)
+                .await
+                .map_err(map_copilot_error)?,
         );
 
         let mut client = self.client.lock().await;
@@ -103,17 +97,12 @@ impl CopilotProvider {
         Ok(created)
     }
 
-    async fn cached_client(
-        &self,
-        model: &ResolvedCopilotModel,
-        tool_signature: &str,
-    ) -> Option<Arc<CopilotAcpClient>> {
+    async fn cached_client(&self, model: &ResolvedCopilotModel, tool_signature: &str) -> Option<Arc<CopilotAcpClient>> {
         let client = self.client.lock().await;
         client
             .as_ref()
             .filter(|cached| {
-                cached.raw_model.as_deref() == model.raw_model.as_deref()
-                    && cached.tool_signature == tool_signature
+                cached.raw_model.as_deref() == model.raw_model.as_deref() && cached.tool_signature == tool_signature
             })
             .map(|cached| cached.client.clone())
     }
@@ -181,8 +170,7 @@ impl CopilotProvider {
             }
         }
 
-        let (mut updates, mut runtime_requests, completion, cancel_handle) =
-            prompt_session.into_parts();
+        let (mut updates, mut runtime_requests, completion, cancel_handle) = prompt_session.into_parts();
         let stream = stream! {
             let mut cancellation_guard = PromptCancellationGuard::new(cancel_handle);
             let completion = completion;
@@ -412,15 +400,11 @@ impl LLMProvider for CopilotProvider {
         validate_request_common(request, "GitHub Copilot", COPILOT_PROVIDER_KEY, None)?;
 
         if request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
-            return Err(invalid_request(
-                "GitHub Copilot in VT Code v1 does not accept VT Code tool definitions.",
-            ));
+            return Err(invalid_request("GitHub Copilot in VT Code v1 does not accept VT Code tool definitions."));
         }
 
         if request.output_format.is_some() {
-            return Err(invalid_request(
-                "GitHub Copilot in VT Code v1 does not support structured output.",
-            ));
+            return Err(invalid_request("GitHub Copilot in VT Code v1 does not support structured output."));
         }
 
         Ok(())
@@ -515,8 +499,7 @@ fn map_copilot_error(error: anyhow::Error) -> LLMError {
     let message = error.to_string();
     if message.contains("rpc error -32001") || message.contains("Authentication required") {
         return LLMError::Authentication {
-            message: "GitHub Copilot authentication is required. Run `vtcode login copilot`."
-                .to_string(),
+            message: "GitHub Copilot authentication is required. Run `vtcode login copilot`.".to_string(),
             metadata: None,
         };
     }
@@ -600,18 +583,12 @@ mod tests {
     #[test]
     fn curated_model_mapping_uses_auto_as_empty_override() {
         assert_eq!(normalize_copilot_model_id(copilot_models::AUTO), Some(None));
-        assert_eq!(
-            normalize_copilot_model_id(copilot_models::GPT_5_4),
-            Some(Some("gpt-5.4".to_string()))
-        );
+        assert_eq!(normalize_copilot_model_id(copilot_models::GPT_5_4), Some(Some("gpt-5.4".to_string())));
     }
 
     #[test]
     fn normalize_copilot_model_id_accepts_raw_model_ids() {
-        assert_eq!(
-            normalize_copilot_model_id("gpt-5.3-codex"),
-            Some(Some("gpt-5.3-codex".to_string()))
-        );
+        assert_eq!(normalize_copilot_model_id("gpt-5.3-codex"), Some(Some("gpt-5.3-codex".to_string())));
         assert_eq!(normalize_copilot_model_id("gpt 5.3"), None);
     }
 
@@ -619,10 +596,7 @@ mod tests {
     fn validate_request_allows_tool_history_followups() {
         let provider = provider();
         let request = LLMRequest {
-            messages: Arc::new(vec![Message::tool_response(
-                "call-1".to_string(),
-                "tool output".to_string(),
-            )]),
+            messages: Arc::new(vec![Message::tool_response("call-1".to_string(), "tool output".to_string())]),
             ..Default::default()
         };
 

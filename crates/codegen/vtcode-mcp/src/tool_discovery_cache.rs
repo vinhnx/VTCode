@@ -247,11 +247,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Get all cached tools for a provider (with refresh checking)
-    pub fn get_all_tools(
-        &self,
-        provider_name: &str,
-        refresh_if_stale: bool,
-    ) -> Option<Vec<McpToolInfo>> {
+    pub fn get_all_tools(&self, provider_name: &str, refresh_if_stale: bool) -> Option<Vec<McpToolInfo>> {
         let inner = match self.inner.read() {
             Ok(inner) => inner,
             Err(e) => {
@@ -379,8 +375,7 @@ impl CachedToolDiscovery {
         }
 
         // Check detailed cache
-        if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level)
-        {
+        if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level) {
             return cached;
         }
 
@@ -388,22 +383,14 @@ impl CachedToolDiscovery {
         let results = Arc::new(self.perform_search(&all_tools, keyword, detail_level));
 
         // Cache the results
-        self.cache.cache_discovery_shared(
-            provider_name,
-            keyword,
-            detail_level,
-            Arc::clone(&results),
-        );
+        self.cache
+            .cache_discovery_shared(provider_name, keyword, detail_level, Arc::clone(&results));
 
         results
     }
 
     /// Get all tools for a provider with caching
-    pub fn get_all_tools_cached(
-        &self,
-        provider_name: &str,
-        all_tools: Vec<McpToolInfo>,
-    ) -> Vec<McpToolInfo> {
+    pub fn get_all_tools_cached(&self, provider_name: &str, all_tools: Vec<McpToolInfo>) -> Vec<McpToolInfo> {
         // Check cache first
         if let Some(cached) = self.cache.get_all_tools(provider_name, true) {
             return cached;
@@ -429,8 +416,7 @@ impl CachedToolDiscovery {
             let relevance_score = self.calculate_relevance(tool, &keyword_lower);
 
             if relevance_score > 0.0 {
-                let result =
-                    ToolDiscoveryResult { tool: tool.clone(), relevance_score, detail_level };
+                let result = ToolDiscoveryResult { tool: tool.clone(), relevance_score, detail_level };
                 results.push(result);
             }
         }
@@ -471,8 +457,7 @@ impl CachedToolDiscovery {
         }
 
         // Input schema contains keyword
-        let schema_str =
-            serde_json::to_string(&tool.input_schema).unwrap_or_default().to_lowercase();
+        let schema_str = serde_json::to_string(&tool.input_schema).unwrap_or_default().to_lowercase();
         if schema_str.contains(keyword) {
             score += 0.2;
         }

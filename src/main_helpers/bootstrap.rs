@@ -11,12 +11,7 @@ use crate::startup::StartupContext;
 fn env_flag_enabled(var_name: &str) -> bool {
     std::env::var(var_name)
         .ok()
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on" | "debug"
-            )
-        })
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on" | "debug"))
         .unwrap_or(false)
 }
 
@@ -123,10 +118,7 @@ fn has_provider_or_model_configuration() -> bool {
 
 fn cli_args_include_provider_or_model() -> bool {
     std::env::args().skip(1).any(|arg| {
-        arg == "--provider"
-            || arg == "--model"
-            || arg.starts_with("--provider=")
-            || arg.starts_with("--model=")
+        arg == "--provider" || arg == "--model" || arg.starts_with("--provider=") || arg.starts_with("--model=")
     })
 }
 
@@ -173,9 +165,7 @@ fn has_provider_or_model_keys(config: &toml::Value) -> bool {
     root.contains_key("provider")
         || root.contains_key("model")
         || root.get("agent").and_then(toml::Value::as_table).is_some_and(|agent| {
-            agent.contains_key("provider")
-                || agent.contains_key("model")
-                || agent.contains_key("default_model")
+            agent.contains_key("provider") || agent.contains_key("model") || agent.contains_key("default_model")
         })
 }
 
@@ -412,8 +402,8 @@ fn extract_workspace_invalid_value(err_text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_augmented_cli_command, cached_candidates, extract_workspace_invalid_value,
-        similarity_score, suggest_similar_commands, try_enhance_clap_error,
+        build_augmented_cli_command, cached_candidates, extract_workspace_invalid_value, similarity_score,
+        suggest_similar_commands, try_enhance_clap_error,
     };
     use clap::Parser;
     use vtcode_core::cli::args::Cli;
@@ -464,10 +454,7 @@ mod tests {
     fn suggest_similar_commands_finds_chat() {
         let candidates = cached_candidates();
         let suggestions = suggest_similar_commands("ch", candidates, 3);
-        assert!(
-            suggestions.iter().any(|s| s == "chat"),
-            "should suggest 'chat' for 'ch': {suggestions:?}"
-        );
+        assert!(suggestions.iter().any(|s| s == "chat"), "should suggest 'chat' for 'ch': {suggestions:?}");
     }
 
     #[test]
@@ -499,10 +486,7 @@ mod tests {
         let enhanced = try_enhance_clap_error(err);
         assert!(enhanced.is_some(), "should enhance error for 'ch'");
         let text = enhanced.unwrap();
-        assert!(
-            text.contains("Did you mean one of these?"),
-            "should contain suggestion header: {text}"
-        );
+        assert!(text.contains("Did you mean one of these?"), "should contain suggestion header: {text}");
         assert!(text.contains("chat"), "should suggest 'chat': {text}");
     }
 

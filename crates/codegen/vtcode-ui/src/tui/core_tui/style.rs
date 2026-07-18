@@ -54,23 +54,12 @@ pub fn agent_color_style(color: Option<&str>, fallback_color: Color) -> Style {
     Style::default().fg(color).add_modifier(Modifier::BOLD)
 }
 
-pub fn ratatui_style_from_inline(
-    style: &InlineTextStyle,
-    fallback: Option<AnsiColorEnum>,
-) -> Style {
-    crate::design::style::inline_text_style_to_ratatui(
-        style.color,
-        style.bg_color,
-        style.effects,
-        fallback,
-    )
+pub fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+    crate::design::style::inline_text_style_to_ratatui(style.color, style.bg_color, style.effects, fallback)
 }
 
 /// PTY output style helper: keep configured color, suppress bold, enforce dimmed output.
-pub fn ratatui_pty_style_from_inline(
-    style: &InlineTextStyle,
-    fallback: Option<AnsiColorEnum>,
-) -> Style {
+pub fn ratatui_pty_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
     ratatui_style_from_inline(style, fallback)
         .remove_modifier(Modifier::BOLD)
         .add_modifier(Modifier::DIM)
@@ -85,9 +74,7 @@ pub fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
 mod tests {
     use super::*;
     use crate::design::color::resolve_agent_color;
-    use vtcode_config::constants::ui::{
-        AGENT_COLOR_AUTO, AGENT_COLOR_BUILD, AGENT_COLOR_DUCK, AGENT_COLOR_PLAN,
-    };
+    use vtcode_config::constants::ui::{AGENT_COLOR_AUTO, AGENT_COLOR_BUILD, AGENT_COLOR_DUCK, AGENT_COLOR_PLAN};
 
     #[test]
     fn agent_color_style_applies_mode_color_with_bold() {
@@ -98,12 +85,7 @@ mod tests {
         assert_ne!(style.fg, Some(fallback));
         assert!(style.add_modifier.contains(Modifier::BOLD));
 
-        for hue in [
-            AGENT_COLOR_BUILD,
-            AGENT_COLOR_AUTO,
-            AGENT_COLOR_PLAN,
-            AGENT_COLOR_DUCK,
-        ] {
+        for hue in [AGENT_COLOR_BUILD, AGENT_COLOR_AUTO, AGENT_COLOR_PLAN, AGENT_COLOR_DUCK] {
             let s = agent_color_style(Some(hue), fallback);
             assert!(s.add_modifier.contains(Modifier::BOLD));
             assert!(s.fg.is_some());

@@ -54,16 +54,11 @@ mod file_search_integration_tests {
         .with_limit(10);
 
         // Wrap in catch_unwind to handle potential panics from nucleo-matcher
-        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            file_search_bridge::search_files(config, None)
-        }));
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| file_search_bridge::search_files(config, None)));
 
         match result {
             Ok(Ok(results)) => {
-                eprintln!(
-                    "Search completed successfully with {} matches",
-                    results.total_match_count
-                );
+                eprintln!("Search completed successfully with {} matches", results.total_match_count);
             }
             Ok(Err(e)) => {
                 eprintln!("File search error (non-fatal for test): {e}");
@@ -92,10 +87,7 @@ mod file_search_integration_tests {
         match file_search_bridge::search_files(config, Some(cancel_flag)) {
             Ok(results) => {
                 // Should return empty or partial results due to cancellation
-                eprintln!(
-                    "Search completed with {} matches despite cancellation",
-                    results.total_match_count
-                );
+                eprintln!("Search completed with {} matches despite cancellation", results.total_match_count);
             }
             Err(e) => {
                 eprintln!("Cancellation triggered search error (expected): {e}");
@@ -169,9 +161,7 @@ mod file_search_integration_tests {
         let manager = GrepSearchManager::new(PathBuf::from("."));
 
         // Test list_all_files - non-blocking, just verify it doesn't panic
-        match manager
-            .list_all_files(20, vec!["target/**".to_string(), "node_modules/**".to_string()])
-        {
+        match manager.list_all_files(20, vec!["target/**".to_string(), "node_modules/**".to_string()]) {
             Ok(files) => {
                 eprintln!("Listed {} files", files.len());
             }

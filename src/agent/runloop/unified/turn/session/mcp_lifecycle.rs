@@ -74,9 +74,7 @@ pub(crate) async fn handle_mcp_updates(
                                 *pending_mcp_refresh = false;
                             }
                             Err(err) => {
-                                tracing::warn!(
-                                    "Failed to enumerate MCP tools after refresh: {err}"
-                                );
+                                tracing::warn!("Failed to enumerate MCP tools after refresh: {err}");
                             }
                         }
 
@@ -90,10 +88,7 @@ pub(crate) async fn handle_mcp_updates(
                     }
                     Err(err) => {
                         tracing::warn!("Failed to refresh MCP tools after initialization: {err}");
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to index MCP tools: {err}"),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("Failed to index MCP tools: {err}"))?;
                         renderer.line_if_not_empty(MessageStyle::Output)?;
                     }
                 }
@@ -111,10 +106,7 @@ pub(crate) async fn handle_mcp_updates(
     if *mcp_catalog_initialized && last_mcp_refresh.elapsed() >= refresh_interval {
         *last_mcp_refresh = Instant::now();
 
-        if matches!(
-            decide_refresh_action(*pending_mcp_refresh, false),
-            RefreshDecision::ApplyPending
-        ) {
+        if matches!(decide_refresh_action(*pending_mcp_refresh, false), RefreshDecision::ApplyPending) {
             match tool_registry.refresh_mcp_tools().await {
                 Ok(()) => match tool_registry.list_mcp_tools().await {
                     Ok(_) => {
@@ -132,9 +124,7 @@ pub(crate) async fn handle_mcp_updates(
                         *pending_mcp_refresh = false;
                     }
                     Err(err) => {
-                        tracing::warn!(
-                            "Failed to enumerate deferred MCP tools after refresh: {err}"
-                        );
+                        tracing::warn!("Failed to enumerate deferred MCP tools after refresh: {err}");
                     }
                 },
                 Err(err) => {

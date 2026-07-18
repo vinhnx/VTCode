@@ -63,10 +63,7 @@ pub struct TraceRecord {
     pub version: String,
 
     /// Unique identifier for this trace record (UUID v4).
-    #[serde(
-        serialize_with = "serialize_uuid",
-        deserialize_with = "deserialize_uuid"
-    )]
+    #[serde(serialize_with = "serialize_uuid", deserialize_with = "deserialize_uuid")]
     #[cfg_attr(feature = "schema-export", schemars(with = "String"))]
     pub id: uuid::Uuid,
 
@@ -229,11 +226,7 @@ impl TraceFile {
     }
 
     /// Create a file with a single AI-attributed conversation.
-    pub fn with_ai_ranges(
-        path: impl Into<String>,
-        model_id: impl Into<String>,
-        ranges: Vec<TraceRange>,
-    ) -> Self {
+    pub fn with_ai_ranges(path: impl Into<String>, model_id: impl Into<String>, ranges: Vec<TraceRange>) -> Self {
         let mut file = Self::new(path);
         file.add_conversation(TraceConversation {
             url: None,
@@ -808,11 +801,7 @@ mod tests {
 
     #[test]
     fn test_trace_file_builder() {
-        let file = TraceFile::with_ai_ranges(
-            "src/main.rs",
-            "anthropic/claude-opus-4",
-            vec![TraceRange::new(1, 50)],
-        );
+        let file = TraceFile::with_ai_ranges("src/main.rs", "anthropic/claude-opus-4", vec![TraceRange::new(1, 50)]);
         assert_eq!(file.path, "src/main.rs");
         assert_eq!(file.conversations.len(), 1);
     }
@@ -820,21 +809,14 @@ mod tests {
     #[test]
     fn test_normalize_model_id() {
         assert_eq!(normalize_model_id("claude-3-opus", "anthropic"), "anthropic/claude-3-opus");
-        assert_eq!(
-            normalize_model_id("anthropic/claude-3-opus", "anthropic"),
-            "anthropic/claude-3-opus"
-        );
+        assert_eq!(normalize_model_id("anthropic/claude-3-opus", "anthropic"), "anthropic/claude-3-opus");
     }
 
     #[test]
     fn test_trace_record_builder() {
         let trace = TraceRecordBuilder::new()
             .git_revision("abc123def456")
-            .file(TraceFile::with_ai_ranges(
-                "src/lib.rs",
-                "openai/gpt-5",
-                vec![TraceRange::new(10, 20)],
-            ))
+            .file(TraceFile::with_ai_ranges("src/lib.rs", "openai/gpt-5", vec![TraceRange::new(10, 20)]))
             .build();
 
         assert!(trace.vcs.is_some());
@@ -849,8 +831,7 @@ mod tests {
         assert!(json.contains("\"version\": \"0.1.0\""));
         assert!(json.contains("abc123"));
 
-        let restored: TraceRecord =
-            serde_json::from_str(&json).expect("Failed to deserialize trace from JSON");
+        let restored: TraceRecord = serde_json::from_str(&json).expect("Failed to deserialize trace from JSON");
         assert_eq!(restored.version, trace.version);
     }
 

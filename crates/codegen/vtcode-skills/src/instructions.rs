@@ -19,10 +19,7 @@ impl SkillInstructions {
     /// Format skill instructions as an XML-wrapped message (Codex-compatible format).
     pub fn to_xml_message(&self) -> String {
         let path_str = self.path.to_string_lossy().replace('\\', "/");
-        format!(
-            "<skill>\n<name>{}</name>\n<path>{}</path>\n{}\n</skill>",
-            self.name, path_str, self.contents
-        )
+        format!("<skill>\n<name>{}</name>\n<path>{}</path>\n{}\n</skill>", self.name, path_str, self.contents)
     }
 }
 

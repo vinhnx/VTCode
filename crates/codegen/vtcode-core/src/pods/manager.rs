@@ -151,12 +151,7 @@ impl PodManager {
         let gpu_count = request.requested_gpu_count.unwrap_or(profile.gpu_count).max(1);
 
         if gpu_count > pod.gpu_count() {
-            return Err(anyhow!(
-                "requested {} GPUs but pod '{}' only has {}",
-                gpu_count,
-                pod.name,
-                pod.gpu_count()
-            ));
+            return Err(anyhow!("requested {} GPUs but pod '{}' only has {}", gpu_count, pod.name, pod.gpu_count()));
         }
 
         let selected_gpu_ids = select_gpus(&pod, gpu_count);
@@ -165,8 +160,7 @@ impl PodManager {
         let run_path = format!("/tmp/model_run_{sanitized_name}.sh");
         let wrapper_path = format!("/tmp/model_wrapper_{sanitized_name}.sh");
         let log_path = format!("~/{DEFAULT_LOG_DIR}/{sanitized_name}.log");
-        let vllm_args =
-            render_args(&profile.vllm_args, request.memory, request.context.as_deref())?;
+        let vllm_args = render_args(&profile.vllm_args, request.memory, request.context.as_deref())?;
         let run_script = render_run_script(
             &profile,
             &request.model,
@@ -248,10 +242,8 @@ impl PodManager {
             return Ok(0);
         }
 
-        let command = format!(
-            "for PID in {}; do pkill -TERM -P \"$PID\" || true; kill \"$PID\" || true; done",
-            pids.join(" ")
-        );
+        let command =
+            format!("for PID in {}; do pkill -TERM -P \"$PID\" || true; kill \"$PID\" || true; done", pids.join(" "));
         let output = self.transport.exec_capture(&pod.ssh, &command).await?;
         if !output.success {
             return Err(anyhow!("failed to stop models: {}", output.stderr));
@@ -337,11 +329,7 @@ impl PodManager {
         Ok(())
     }
 
-    async fn resolve_active_pod(
-        &self,
-        state: &mut PodsState,
-        request: &PodStartRequest,
-    ) -> Result<PodState> {
+    async fn resolve_active_pod(&self, state: &mut PodsState, request: &PodStartRequest) -> Result<PodState> {
         let mut pod = state.active_pod.clone().unwrap_or_else(|| PodState {
             name: request.pod_name.clone().unwrap_or_else(|| "active-pod".to_string()),
             ssh: request.ssh.clone().unwrap_or_default(),
@@ -367,9 +355,7 @@ impl PodManager {
             return Err(anyhow!("pod ssh command is required; pass --ssh or reuse the active pod"));
         }
         if pod.gpus.is_empty() {
-            return Err(anyhow!(
-                "pod gpu inventory is required; pass --gpu entries or reuse the active pod"
-            ));
+            return Err(anyhow!("pod gpu inventory is required; pass --gpu entries or reuse the active pod"));
         }
 
         state.active_pod = Some(pod.clone());
@@ -377,12 +363,7 @@ impl PodManager {
         Ok(pod)
     }
 
-    fn resolve_profile(
-        &self,
-        catalog: &PodCatalog,
-        pod: &PodState,
-        request: &PodStartRequest,
-    ) -> Result<PodProfile> {
+    fn resolve_profile(&self, catalog: &PodCatalog, pod: &PodState, request: &PodStartRequest) -> Result<PodProfile> {
         if let Some(profile_name) = request.profile.as_deref() {
             let profile = catalog
                 .profiles
@@ -445,24 +426,15 @@ impl PodManager {
             .ok_or_else(|| anyhow!("no profile found for model '{}'", request.model))
     }
 
-    async fn inspect_model(
-        &self,
-        pod: &PodState,
-        name: &str,
-        entry: &RunningModel,
-    ) -> Result<PodHealth> {
-        let process =
-            self.transport.exec_capture(&pod.ssh, &format!("ps -p {}", entry.pid)).await?;
+    async fn inspect_model(&self, pod: &PodState, name: &str, entry: &RunningModel) -> Result<PodHealth> {
+        let process = self.transport.exec_capture(&pod.ssh, &format!("ps -p {}", entry.pid)).await?;
         let health = self
             .transport
             .exec_capture(&pod.ssh, &format!("curl -s -f http://localhost:{}/health", entry.port))
             .await?;
         let log_tail = self
             .transport
-            .exec_capture(
-                &pod.ssh,
-                &format!("tail -n 20 ~/{DEFAULT_LOG_DIR}/{}.log", sanitize_component(name)),
-            )
+            .exec_capture(&pod.ssh, &format!("tail -n 20 ~/{DEFAULT_LOG_DIR}/{}.log", sanitize_component(name)))
             .await?;
 
         Ok(classify_status(process.success, health.success, &log_tail.stdout))
@@ -505,8 +477,7 @@ fn render_run_script(
         let _ = writeln!(script, "export MODELS_PATH={}", shell_quote(models_path));
     }
 
-    let command =
-        render_template(&profile.command_template, model, name, port, &join_args(vllm_args));
+    let command = render_template(&profile.command_template, model, name, port, &join_args(vllm_args));
     let _ = writeln!(script, "exec {command}");
     script
 }
@@ -544,9 +515,10 @@ fn shell_quote(value: &str) -> String {
         return "''".to_string();
     }
 
-    if value.chars().all(|ch| {
-        ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | ',' | '=' | '@')
-    }) {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | ',' | '=' | '@'))
+    {
         return value.to_string();
     }
 
@@ -574,8 +546,7 @@ fn select_gpus(pod: &PodState, count: usize) -> Vec<u32> {
 
 fn next_port(pod: &PodState) -> u16 {
     let mut port = DEFAULT_START_PORT;
-    let occupied: std::collections::HashSet<u16> =
-        pod.models.values().map(|model| model.port).collect();
+    let occupied: std::collections::HashSet<u16> = pod.models.values().map(|model| model.port).collect();
     while occupied.contains(&port) {
         port = port.saturating_add(1);
     }
@@ -600,11 +571,7 @@ fn sanitize_component(name: &str) -> String {
             out.push('_');
         }
     }
-    if out.is_empty() {
-        "model".to_string()
-    } else {
-        out
-    }
+    if out.is_empty() { "model".to_string() } else { out }
 }
 
 fn classify_status(process_alive: bool, health_ok: bool, log_tail: &str) -> PodHealth {
@@ -706,12 +673,7 @@ mod tests {
             }))
         }
 
-        async fn write_file(
-            &self,
-            _ssh_target: &str,
-            remote_path: &str,
-            contents: &str,
-        ) -> Result<()> {
+        async fn write_file(&self, _ssh_target: &str, remote_path: &str, contents: &str) -> Result<()> {
             self.writes.lock().push((remote_path.to_string(), contents.to_string()));
             Ok(())
         }
@@ -730,10 +692,7 @@ mod tests {
 
     #[test]
     fn classify_status_detects_failure_patterns() {
-        assert_eq!(
-            classify_status(true, false, "RuntimeError: Engine core initialization failed"),
-            PodHealth::Crashed
-        );
+        assert_eq!(classify_status(true, false, "RuntimeError: Engine core initialization failed"), PodHealth::Crashed);
         assert_eq!(classify_status(false, false, ""), PodHealth::Dead);
         assert_eq!(classify_status(true, false, ""), PodHealth::Starting);
     }
@@ -765,9 +724,7 @@ mod tests {
 
     #[tokio::test]
     async fn render_and_launch_flow_updates_state() {
-        let store = PodsStore::new(
-            std::env::temp_dir().join(format!("vtcode-pods-start-test-{}", std::process::id())),
-        );
+        let store = PodsStore::new(std::env::temp_dir().join(format!("vtcode-pods-start-test-{}", std::process::id())));
         let transport = Arc::new(MockTransport::default());
         let manager = PodManager::with_transport(store, transport.clone());
         let state = PodsState {
@@ -820,8 +777,7 @@ mod tests {
                 .writes
                 .lock()
                 .iter()
-                .any(|(path, contents)| path.contains("model_run_local.sh")
-                    && contents.contains("vllm serve"))
+                .any(|(path, contents)| path.contains("model_run_local.sh") && contents.contains("vllm serve"))
         );
     }
 

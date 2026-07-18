@@ -218,9 +218,7 @@ impl PlanContent {
                 continue;
             }
 
-            if let Some(rest) =
-                trimmed.strip_prefix("[x] ").or_else(|| trimmed.strip_prefix("[X] "))
-            {
+            if let Some(rest) = trimmed.strip_prefix("[x] ").or_else(|| trimmed.strip_prefix("[X] ")) {
                 total_steps += 1;
                 completed_steps += 1;
                 if let Some(ref mut phase) = current_phase {

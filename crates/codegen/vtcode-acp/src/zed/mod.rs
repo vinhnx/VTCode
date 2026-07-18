@@ -36,12 +36,10 @@ impl AcpClientAdapter for StandardAcpAdapter {
 mod tests {
     use super::agent::ZedAgent;
     use super::*;
-    use crate::tooling::{
-        TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG,
-    };
+    use crate::tooling::{TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_URI_ARG};
     use crate::zed::helpers::{
-        PrimaryAgentCatalog, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PRIMARY_AGENT_ID,
-        SESSION_CONFIG_PROVIDER_ID, SESSION_CONFIG_THOUGHT_LEVEL_ID,
+        PrimaryAgentCatalog, SESSION_CONFIG_MODEL_ID, SESSION_CONFIG_PRIMARY_AGENT_ID, SESSION_CONFIG_PROVIDER_ID,
+        SESSION_CONFIG_THOUGHT_LEVEL_ID,
     };
     use agent_client_protocol::schema::v1::{
         LoadSessionRequest, NewSessionRequest, SetSessionConfigOptionRequest, ToolCallStatus,
@@ -56,8 +54,7 @@ mod tests {
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::{ModelId, Provider};
     use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
-        UiSurfacePreference,
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
     use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
     use vtcode_core::core::agent::snapshots::{
@@ -96,8 +93,7 @@ mod tests {
         let mut discovery_input = SubagentDiscoveryInput::new(workspace.to_path_buf());
         discovery_input.include_user_agents = false;
         let discovered = discover_subagents(&discovery_input).expect("discover primary agents");
-        let primary_agents =
-            PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, "duck");
+        let primary_agents = PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, "duck");
 
         ZedAgent::new(
             core_config,
@@ -121,14 +117,11 @@ mod tests {
             .unwrap_or_default()
     }
 
-    fn primary_agent_select_values(
-        config_options: &[crate::acp::SessionConfigOption],
-    ) -> Vec<String> {
+    fn primary_agent_select_values(config_options: &[crate::acp::SessionConfigOption]) -> Vec<String> {
         config_options
             .iter()
             .find_map(|option| {
-                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID))
-                    .then_some(&option.kind)
+                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID)).then_some(&option.kind)
             })
             .and_then(|kind| match kind {
                 SessionConfigKind::Select(select) => Some(match &select.options {
@@ -142,14 +135,11 @@ mod tests {
             .unwrap_or_default()
     }
 
-    fn primary_agent_select_labels(
-        config_options: &[crate::acp::SessionConfigOption],
-    ) -> Vec<String> {
+    fn primary_agent_select_labels(config_options: &[crate::acp::SessionConfigOption]) -> Vec<String> {
         config_options
             .iter()
             .find_map(|option| {
-                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID))
-                    .then_some(&option.kind)
+                (option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID)).then_some(&option.kind)
             })
             .and_then(|kind| match kind {
                 SessionConfigKind::Select(select) => Some(match &select.options {
@@ -163,15 +153,11 @@ mod tests {
             .unwrap_or_default()
     }
 
-    fn primary_agent_current_value(
-        config_options: &[crate::acp::SessionConfigOption],
-    ) -> Option<String> {
+    fn primary_agent_current_value(config_options: &[crate::acp::SessionConfigOption]) -> Option<String> {
         config_options.iter().find_map(|option| {
             if option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_PRIMARY_AGENT_ID) {
                 match &option.kind {
-                    SessionConfigKind::Select(select) => {
-                        Some(select.current_value.0.as_ref().to_string())
-                    }
+                    SessionConfigKind::Select(select) => Some(select.current_value.0.as_ref().to_string()),
                     _ => None,
                 }
             } else {
@@ -384,10 +370,7 @@ mod tests {
 
             let session = agent.session_handle(&session_id).unwrap();
             assert_eq!(session.data.lock().unwrap().primary_agent, primary_agent);
-            assert_eq!(
-                primary_agent_current_value(&response.config_options),
-                Some(primary_agent.to_string())
-            );
+            assert_eq!(primary_agent_current_value(&response.config_options), Some(primary_agent.to_string()));
         }
     }
 
@@ -483,9 +466,7 @@ Project build prompt."#,
             .unwrap();
 
         assert_eq!(session.data.lock().unwrap().primary_agent, "build");
-        assert!(
-            primary_agent_select_labels(&response.config_options).contains(&"Project Build".into())
-        );
+        assert!(primary_agent_select_labels(&response.config_options).contains(&"Project Build".into()));
     }
 
     #[tokio::test]
@@ -521,8 +502,7 @@ Project build prompt."#,
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
-        let anthropic_default =
-            ModelId::default_single_for_provider(Provider::Anthropic).as_str().into_owned();
+        let anthropic_default = ModelId::default_single_for_provider(Provider::Anthropic).as_str().into_owned();
 
         let response = agent
             .set_session_config_option(SetSessionConfigOptionRequest::new(

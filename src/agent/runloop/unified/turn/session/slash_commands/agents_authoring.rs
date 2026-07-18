@@ -10,18 +10,14 @@ use vtcode_config::load_subagent_from_file;
 use vtcode_config::{SubagentMemoryScope, SubagentSource, SubagentSpec};
 use vtcode_core::constants::tools;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
-};
+use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep};
 
 use super::super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::model_picker::{SubagentModelSelection, pick_subagent_model};
 use crate::agent::runloop::slash_commands::AgentDefinitionScope;
 use crate::agent::runloop::unified::session_setup::refresh_local_agents;
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 
 const AUTHOR_ACTION_PREFIX: &str = "agents:author:";
 const FIELD_PROMPT_ID: &str = "agent-field";
@@ -131,11 +127,7 @@ enum PromptTextResult {
 }
 
 impl NativeAgentDraft {
-    fn new(
-        workspace_root: PathBuf,
-        scope_hint: Option<AgentDefinitionScope>,
-        name_hint: Option<&str>,
-    ) -> Self {
+    fn new(workspace_root: PathBuf, scope_hint: Option<AgentDefinitionScope>, name_hint: Option<&str>) -> Self {
         Self {
             workspace_root,
             scope: scope_hint.unwrap_or(AgentDefinitionScope::Project),
@@ -198,8 +190,7 @@ impl NativeAgentDraft {
     fn normalize_for_save(&mut self) {
         self.name = self.name.trim().to_string();
         self.description = self.description.trim().to_string();
-        self.model = normalized_optional_string(Some(self.model.as_str()))
-            .unwrap_or_else(|| "inherit".to_string());
+        self.model = normalized_optional_string(Some(self.model.as_str())).unwrap_or_else(|| "inherit".to_string());
         self.color = normalized_optional_string(self.color.as_deref());
         self.reasoning_effort = normalized_optional_string(self.reasoning_effort.as_deref());
         self.tools = ordered_tools(std::mem::take(&mut self.tools));
@@ -211,8 +202,7 @@ impl NativeAgentDraft {
         insert_yaml_string(&mut frontmatter, "description", self.description.as_str());
         insert_yaml_string_list(&mut frontmatter, "tools", &self.tools);
         insert_yaml_string(&mut frontmatter, "model", self.model.as_str());
-        if let Some(color) = self.color.as_deref().map(str::trim).filter(|value| !value.is_empty())
-        {
+        if let Some(color) = self.color.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
             insert_yaml_string(&mut frontmatter, "color", color);
         }
         if let Some(reasoning_effort) = self
@@ -411,19 +401,18 @@ async fn edit_native_agent_draft(
                 }
             }
             "agents:author:model" => {
-                if let Some(SubagentModelSelection { model, reasoning_effort }) =
-                    pick_subagent_model(
-                        ctx.renderer,
-                        ctx.handle,
-                        ctx.session,
-                        ctx.ctrl_c_state,
-                        ctx.ctrl_c_notify,
-                        ctx.vt_cfg.as_ref(),
-                        Some(ctx.config.workspace.as_path()),
-                        draft.model.as_str(),
-                        draft.reasoning_effort.as_deref(),
-                    )
-                    .await?
+                if let Some(SubagentModelSelection { model, reasoning_effort }) = pick_subagent_model(
+                    ctx.renderer,
+                    ctx.handle,
+                    ctx.session,
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    ctx.vt_cfg.as_ref(),
+                    Some(ctx.config.workspace.as_path()),
+                    draft.model.as_str(),
+                    draft.reasoning_effort.as_deref(),
+                )
+                .await?
                 {
                     draft.model = model;
                     draft.reasoning_effort = reasoning_effort;
@@ -472,11 +461,7 @@ async fn edit_native_agent_draft(
     }
 }
 
-fn show_authoring_menu(
-    ctx: &mut SlashCommandContext<'_>,
-    draft: &NativeAgentDraft,
-    creating: bool,
-) -> Result<()> {
+fn show_authoring_menu(ctx: &mut SlashCommandContext<'_>, draft: &NativeAgentDraft, creating: bool) -> Result<()> {
     let path = draft.current_path().ok();
     let title = if creating {
         "Create native VT Code agent".to_string()
@@ -485,8 +470,7 @@ fn show_authoring_menu(
     };
     let mut lines = vec![
         "Guided editing updates structured VT Code frontmatter only.".to_string(),
-        "Use `Save + open prompt` if you want to refine the longer prompt body in your editor."
-            .to_string(),
+        "Use `Save + open prompt` if you want to refine the longer prompt body in your editor.".to_string(),
     ];
     if let Some(path) = path.as_ref() {
         lines.push(if creating {
@@ -511,52 +495,18 @@ fn show_authoring_menu(
         ));
         items.push(author_action_item("Name", draft.name.as_str(), Some("Required"), "name"));
     }
-    items.push(author_action_item(
-        "Description",
-        draft.description.as_str(),
-        Some("Required"),
-        "description",
-    ));
-    items.push(author_action_item(
-        "Tools",
-        tools_summary(&draft.tools).as_str(),
-        Some("Checklist"),
-        "tools",
-    ));
-    items.push(author_action_item(
-        "Model + Reasoning",
-        model_summary(draft).as_str(),
-        Some("Picker"),
-        "model",
-    ));
-    items.push(author_action_item(
-        "Color",
-        draft.color.as_deref().unwrap_or("unset"),
-        None,
-        "color",
-    ));
+    items.push(author_action_item("Description", draft.description.as_str(), Some("Required"), "description"));
+    items.push(author_action_item("Tools", tools_summary(&draft.tools).as_str(), Some("Checklist"), "tools"));
+    items.push(author_action_item("Model + Reasoning", model_summary(draft).as_str(), Some("Picker"), "model"));
+    items.push(author_action_item("Color", draft.color.as_deref().unwrap_or("unset"), None, "color"));
     items.push(author_action_item(
         "Background",
-        if draft.background {
-            "Enabled"
-        } else {
-            "Disabled"
-        },
+        if draft.background { "Enabled" } else { "Disabled" },
         None,
         "background",
     ));
-    items.push(author_action_item(
-        "Max Turns",
-        max_turns_summary(draft.max_turns).as_str(),
-        None,
-        "max-turns",
-    ));
-    items.push(author_action_item(
-        "Memory",
-        memory_summary(draft.memory.as_ref()).as_str(),
-        None,
-        "memory",
-    ));
+    items.push(author_action_item("Max Turns", max_turns_summary(draft.max_turns).as_str(), None, "max-turns"));
+    items.push(author_action_item("Memory", memory_summary(draft.memory.as_ref()).as_str(), None, "memory"));
     items.push(author_action_item(
         "Save",
         "Write the agent file without opening an editor.",
@@ -621,19 +571,13 @@ async fn save_native_agent(
     }
 
     let action = if creating { "Created" } else { "Updated" };
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("{} native agent definition at {}.", action, path.display()),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("{} native agent definition at {}.", action, path.display()))?;
 
     match save_behavior {
         SaveBehavior::SaveOnly => Ok(SlashCommandControl::Continue),
         SaveBehavior::SaveAndOpenEditor => {
-            super::super::apps::handle_launch_editor(
-                ctx.reborrow(),
-                Some(path.display().to_string()),
-            )
-            .await
+            super::super::apps::handle_launch_editor(ctx.reborrow(), Some(path.display().to_string())).await
         }
     }
 }
@@ -648,9 +592,7 @@ async fn prompt_scope(
             subtitle: Some("Write to `.vtcode/agents/<name>.md` in this workspace.".to_string()),
             badge: Some("Recommended".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "agents:author:scope:project".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("agents:author:scope:project".to_string())),
             search_value: Some("project workspace .vtcode agents".to_string()),
         },
         InlineListItem {
@@ -658,9 +600,7 @@ async fn prompt_scope(
             subtitle: Some("Write to `~/.vtcode/agents/<name>.md` for all workspaces.".to_string()),
             badge: Some("User".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "agents:author:scope:user".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("agents:author:scope:user".to_string())),
             search_value: Some("user home shared agent".to_string()),
         },
     ];
@@ -690,19 +630,14 @@ async fn prompt_scope(
     })
 }
 
-async fn prompt_background_mode(
-    ctx: &mut SlashCommandContext<'_>,
-    current: bool,
-) -> Result<Option<bool>> {
+async fn prompt_background_mode(ctx: &mut SlashCommandContext<'_>, current: bool) -> Result<Option<bool>> {
     let items = vec![
         InlineListItem {
             title: "Disabled".to_string(),
             subtitle: Some("This agent does not default to background execution.".to_string()),
             badge: Some("Default".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "agents:author:background:false".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("agents:author:background:false".to_string())),
             search_value: Some("background disabled".to_string()),
         },
         InlineListItem {
@@ -710,14 +645,11 @@ async fn prompt_background_mode(
             subtitle: Some("Mark this agent as background-capable by default.".to_string()),
             badge: Some("Background".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "agents:author:background:true".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("agents:author:background:true".to_string())),
             search_value: Some("background enabled".to_string()),
         },
     ];
-    let selected =
-        Some(InlineListSelection::ConfigAction(format!("agents:author:background:{current}")));
+    let selected = Some(InlineListSelection::ConfigAction(format!("agents:author:background:{current}")));
     ctx.handle.show_list_modal(
         "Background mode".to_string(),
         vec!["Choose whether this agent should default to background execution.".to_string()],
@@ -730,12 +662,8 @@ async fn prompt_background_mode(
         return Ok(None);
     };
     Ok(match selection {
-        InlineListSelection::ConfigAction(action) if action == "agents:author:background:false" => {
-            Some(false)
-        }
-        InlineListSelection::ConfigAction(action) if action == "agents:author:background:true" => {
-            Some(true)
-        }
+        InlineListSelection::ConfigAction(action) if action == "agents:author:background:false" => Some(false),
+        InlineListSelection::ConfigAction(action) if action == "agents:author:background:true" => Some(true),
         _ => None,
     })
 }
@@ -746,21 +674,13 @@ async fn prompt_memory_scope(
 ) -> Result<Option<Option<SubagentMemoryScope>>> {
     let items = vec![
         memory_item("No memory", "Do not set a persistent memory scope.", None),
-        memory_item(
-            "Project memory",
-            "Use `.vtcode/agent-memory/<agent-name>/`.",
-            Some(SubagentMemoryScope::Project),
-        ),
+        memory_item("Project memory", "Use `.vtcode/agent-memory/<agent-name>/`.", Some(SubagentMemoryScope::Project)),
         memory_item(
             "Local memory",
             "Use `.vtcode/agent-memory-local/<agent-name>/`.",
             Some(SubagentMemoryScope::Local),
         ),
-        memory_item(
-            "User memory",
-            "Use `~/.vtcode/agent-memory/<agent-name>/`.",
-            Some(SubagentMemoryScope::User),
-        ),
+        memory_item("User memory", "Use `~/.vtcode/agent-memory/<agent-name>/`.", Some(SubagentMemoryScope::User)),
     ];
     let selected = Some(InlineListSelection::ConfigAction(memory_action_key(current)));
     ctx.handle.show_list_modal(
@@ -780,10 +700,7 @@ async fn prompt_memory_scope(
     })
 }
 
-async fn prompt_max_turns(
-    ctx: &mut SlashCommandContext<'_>,
-    current: Option<usize>,
-) -> Result<Option<Option<usize>>> {
+async fn prompt_max_turns(ctx: &mut SlashCommandContext<'_>, current: Option<usize>) -> Result<Option<Option<usize>>> {
     let current_value = current.map(|value| value.to_string()).unwrap_or_default();
     let Some(result) = prompt_text_value(
         ctx,
@@ -903,8 +820,7 @@ async fn prompt_text_value(
                     .trim()
                     .to_string();
                 if required && value.is_empty() {
-                    ctx.renderer
-                        .line(MessageStyle::Error, "A value is required for this field.")?;
+                    ctx.renderer.line(MessageStyle::Error, "A value is required for this field.")?;
                     continue;
                 }
                 return Ok(Some(PromptTextResult::Value(value)));
@@ -929,25 +845,17 @@ async fn edit_tools_checklist(
         let mut items = catalog
             .iter()
             .map(|(tool_id, subtitle, badge)| InlineListItem {
-                title: format!(
-                    "[{}] {}",
-                    if selected.contains(tool_id) { "x" } else { " " },
-                    tool_id
-                ),
+                title: format!("[{}] {}", if selected.contains(tool_id) { "x" } else { " " }, tool_id),
                 subtitle: Some(subtitle.clone()),
                 badge: Some(badge.clone()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(format!(
-                    "{TOOL_TOGGLE_PREFIX}{tool_id}"
-                ))),
+                selection: Some(InlineListSelection::ConfigAction(format!("{TOOL_TOGGLE_PREFIX}{tool_id}"))),
                 search_value: Some(format!("{tool_id} {subtitle} {badge}")),
             })
             .collect::<Vec<_>>();
         items.push(InlineListItem {
             title: "Add custom tool id".to_string(),
-            subtitle: Some(
-                "Append an exact VT Code tool id that is not in the default list.".to_string(),
-            ),
+            subtitle: Some("Append an exact VT Code tool id that is not in the default list.".to_string()),
             badge: Some("Custom".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(TOOL_ADD_CUSTOM_ACTION.to_string())),
@@ -1023,10 +931,7 @@ async fn edit_tools_checklist(
     }
 }
 
-fn tool_catalog(
-    initial_tools: &[String],
-    selected: &BTreeSet<String>,
-) -> Vec<(String, String, String)> {
+fn tool_catalog(initial_tools: &[String], selected: &BTreeSet<String>) -> Vec<(String, String, String)> {
     let extra_tools = initial_tools
         .iter()
         .chain(selected.iter())
@@ -1058,10 +963,8 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
         .filter(is_native_vtcode_spec)
         .collect::<Vec<_>>();
     if specs.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "No native `.vtcode` agent definitions are currently loaded.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "No native `.vtcode` agent definitions are currently loaded.")?;
         return Ok(None);
     }
 
@@ -1072,16 +975,8 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
             subtitle: Some(super::agent_subtitle(spec, false)),
             badge: Some(super::agent_badge(spec)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{}{}",
-                AUTHOR_ACTION_PREFIX, spec.name
-            ))),
-            search_value: Some(format!(
-                "{} {} {}",
-                spec.name,
-                spec.description,
-                spec.source.label()
-            )),
+            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", AUTHOR_ACTION_PREFIX, spec.name))),
+            search_value: Some(format!("{} {} {}", spec.name, spec.description, spec.source.label())),
         })
         .collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
@@ -1105,10 +1000,7 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
     Ok(action.strip_prefix(AUTHOR_ACTION_PREFIX).map(ToString::to_string))
 }
 
-async fn resolve_named_custom_agent(
-    ctx: &SlashCommandContext<'_>,
-    name: &str,
-) -> Result<SubagentSpec> {
+async fn resolve_named_custom_agent(ctx: &SlashCommandContext<'_>, name: &str) -> Result<SubagentSpec> {
     let controller = ctx
         .tool_registry
         .subagent_controller()
@@ -1122,8 +1014,7 @@ async fn resolve_named_custom_agent(
 }
 
 fn is_native_vtcode_spec(spec: &SubagentSpec) -> bool {
-    matches!(spec.source, SubagentSource::ProjectVtcode | SubagentSource::UserVtcode)
-        && spec.file_path.is_some()
+    matches!(spec.source, SubagentSource::ProjectVtcode | SubagentSource::UserVtcode) && spec.file_path.is_some()
 }
 
 fn scope_from_source(source: &SubagentSource) -> Result<AgentDefinitionScope> {
@@ -1226,11 +1117,7 @@ fn insert_yaml_string_list(mapping: &mut YamlMapping, key: &str, values: &[Strin
 
 fn insert_yaml_permissions(mapping: &mut YamlMapping, permissions_config: &AgentPermissionsConfig) {
     let mut permissions = YamlMapping::new();
-    insert_yaml_string(
-        &mut permissions,
-        "default",
-        permission_default_label(permissions_config.default),
-    );
+    insert_yaml_string(&mut permissions, "default", permission_default_label(permissions_config.default));
     insert_yaml_string_list_if_non_empty(&mut permissions, "allow", &permissions_config.allow);
     insert_yaml_string_list_if_non_empty(&mut permissions, "ask", &permissions_config.ask);
     insert_yaml_string_list_if_non_empty(&mut permissions, "auto", &permissions_config.auto);
@@ -1312,20 +1199,13 @@ fn normalized_optional_string(value: Option<&str>) -> Option<String> {
     value.map(str::trim).filter(|value| !value.is_empty()).map(ToString::to_string)
 }
 
-fn author_action_item(
-    title: &str,
-    subtitle: &str,
-    badge: Option<&str>,
-    action: &str,
-) -> InlineListItem {
+fn author_action_item(title: &str, subtitle: &str, badge: Option<&str>, action: &str) -> InlineListItem {
     InlineListItem {
         title: title.to_string(),
         subtitle: Some(subtitle.to_string()),
         badge: badge.map(ToString::to_string),
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{AUTHOR_ACTION_PREFIX}{action}"
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(format!("{AUTHOR_ACTION_PREFIX}{action}"))),
         search_value: Some(format!("{title} {subtitle}")),
     }
 }
@@ -1391,11 +1271,9 @@ Review the target changes."#,
         )
         .expect("write file");
 
-        let spec =
-            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load subagent");
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load subagent");
         let content = fs::read_to_string(&path).expect("read file");
-        let mut draft =
-            NativeAgentDraft::from_spec(temp.path().to_path_buf(), &spec, &content).expect("draft");
+        let mut draft = NativeAgentDraft::from_spec(temp.path().to_path_buf(), &spec, &content).expect("draft");
         draft.description = "Updated description".to_string();
         let rendered = draft.render_markdown().expect("rendered markdown");
 
@@ -1410,8 +1288,7 @@ Review the target changes."#,
         assert!(rendered.ends_with("\nReview the target changes."));
 
         fs::write(&path, rendered).expect("write rendered file");
-        let rendered_spec =
-            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("reload rendered");
+        let rendered_spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("reload rendered");
         assert_eq!(rendered_spec.permissions.allow, vec!["code_search".to_string()]);
         assert_eq!(rendered_spec.permissions.ask, vec!["exec_command".to_string()]);
     }
@@ -1451,10 +1328,7 @@ Review the target changes."#,
         assert_eq!(draft.permissions.default, PermissionDefault::Deny);
         assert!(!draft.background);
         assert_eq!(draft.tools, default_agent_tools());
-        assert_eq!(
-            draft.current_path().expect("path"),
-            workspace.path().join(".vtcode/agents/reviewer.md")
-        );
+        assert_eq!(draft.current_path().expect("path"), workspace.path().join(".vtcode/agents/reviewer.md"));
 
         let rendered = draft.render_markdown().expect("render");
         assert!(rendered.contains("name: reviewer\n"));
@@ -1464,8 +1338,7 @@ Review the target changes."#,
 
         let path = workspace.path().join("reviewer.md");
         fs::write(&path, rendered).expect("write rendered agent");
-        let spec =
-            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load subagent");
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load subagent");
         assert_eq!(spec.permissions.default, PermissionDefault::Deny);
         assert!(spec.permissions.allow.is_empty());
         assert!(spec.permissions.ask.is_empty());
@@ -1509,10 +1382,7 @@ Review the target changes."#,
             Some("reviewer"),
         );
         draft.description = "Review auth changes".to_string();
-        draft.tools = vec![
-            tools::EXEC_COMMAND.to_string(),
-            tools::CODE_SEARCH.to_string(),
-        ];
+        draft.tools = vec![tools::EXEC_COMMAND.to_string(), tools::CODE_SEARCH.to_string()];
         draft.color = Some("teal".to_string());
         draft.reasoning_effort = Some("high".to_string());
         draft.permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
@@ -1520,10 +1390,9 @@ Review the target changes."#,
         draft.max_turns = Some(5);
         draft.memory = Some(SubagentMemoryScope::Project);
         draft.prompt_body = "\nPrompt body\n  with indentation\n".to_string();
-        draft.extra_frontmatter.insert(
-            "skills".to_string(),
-            YamlValue::Array(vec![YamlValue::String("rust-skills".to_string())]),
-        );
+        draft
+            .extra_frontmatter
+            .insert("skills".to_string(), YamlValue::Array(vec![YamlValue::String("rust-skills".to_string())]));
 
         let rendered = draft.render_markdown().expect("render");
         let model_index = rendered.find("model: inherit").expect("model key");
@@ -1567,8 +1436,7 @@ Review the target changes."#,
         let temp = TempDir::new().expect("temp dir");
         let path = temp.path().join("planner.md");
         fs::write(&path, rendered).expect("write rendered agent");
-        let spec =
-            load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load primary");
+        let spec = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("load primary");
         assert_eq!(spec.permissions.default, PermissionDefault::Ask);
         assert_eq!(spec.mode, vtcode_config::AgentMode::Primary);
     }

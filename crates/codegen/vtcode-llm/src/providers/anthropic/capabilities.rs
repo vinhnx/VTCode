@@ -32,12 +32,7 @@ pub(crate) struct ClaudeThinkingProfile {
 }
 
 const ANTHROPIC_EFFORTS_UP_TO_HIGH: &[&str] = &[reasoning::LOW, reasoning::MEDIUM, reasoning::HIGH];
-const ANTHROPIC_EFFORTS_UP_TO_MAX: &[&str] = &[
-    reasoning::LOW,
-    reasoning::MEDIUM,
-    reasoning::HIGH,
-    reasoning::MAX,
-];
+const ANTHROPIC_EFFORTS_UP_TO_MAX: &[&str] = &[reasoning::LOW, reasoning::MEDIUM, reasoning::HIGH, reasoning::MAX];
 const ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX: &[&str] = &[
     reasoning::LOW,
     reasoning::MEDIUM,
@@ -47,21 +42,14 @@ const ANTHROPIC_EFFORTS_UP_TO_XHIGH_AND_MAX: &[&str] = &[
 ];
 
 pub(crate) fn resolve_model_name<'a>(model: &'a str, default_model: &'a str) -> &'a str {
-    if model.trim().is_empty() {
-        default_model
-    } else {
-        model
-    }
+    if model.trim().is_empty() { default_model } else { model }
 }
 
 pub(crate) fn matches_model(model: &str, candidate: &str) -> bool {
     model == candidate || model.contains(candidate)
 }
 
-pub(crate) fn claude_thinking_profile(
-    model: &str,
-    default_model: &str,
-) -> Option<ClaudeThinkingProfile> {
+pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Option<ClaudeThinkingProfile> {
     let requested = resolve_model_name(model, default_model);
 
     if matches_model(requested, models::anthropic::CLAUDE_SONNET_5) {
@@ -199,18 +187,15 @@ pub fn supports_effort(model: &str, default_model: &str) -> bool {
 }
 
 pub fn supports_task_budget(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| profile.supports_task_budget)
+    claude_thinking_profile(model, default_model).is_some_and(|profile| profile.supports_task_budget)
 }
 
 pub(crate) fn supports_manual_thinking_budget(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| profile.supports_manual_budget)
+    claude_thinking_profile(model, default_model).is_some_and(|profile| profile.supports_manual_budget)
 }
 
 pub(crate) fn supports_manual_interleaved_beta(model: &str, default_model: &str) -> bool {
-    claude_thinking_profile(model, default_model)
-        .is_some_and(|profile| profile.manual_interleaved_beta)
+    claude_thinking_profile(model, default_model).is_some_and(|profile| profile.manual_interleaved_beta)
 }
 
 pub(crate) fn supports_assistant_prefill(model: &str, default_model: &str) -> bool {
@@ -244,10 +229,7 @@ pub(crate) fn default_effort_for_model(model: &str, default_model: &str) -> Opti
         .map(|profile| profile.default_effort)
 }
 
-pub(crate) fn allowed_efforts_for_model(
-    model: &str,
-    default_model: &str,
-) -> Option<&'static [&'static str]> {
+pub(crate) fn allowed_efforts_for_model(model: &str, default_model: &str) -> Option<&'static [&'static str]> {
     let profile = claude_thinking_profile(model, default_model)?;
     if !profile.supports_effort {
         return None;
@@ -264,8 +246,7 @@ pub(crate) fn allowed_efforts_for_model(
 
 pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort: &str) -> bool {
     let normalized = effort.trim().to_ascii_lowercase();
-    allowed_efforts_for_model(model, default_model)
-        .is_some_and(|allowed| allowed.contains(&normalized.as_str()))
+    allowed_efforts_for_model(model, default_model).is_some_and(|allowed| allowed.contains(&normalized.as_str()))
 }
 
 pub fn supports_compaction(model: &str) -> bool {
@@ -319,8 +300,7 @@ pub fn is_claude_model(model: &str, default_model: &str) -> bool {
 }
 
 pub fn supported_models() -> Vec<String> {
-    let mut supported: Vec<String> =
-        models::anthropic::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect();
+    let mut supported: Vec<String> = models::anthropic::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect();
 
     supported.extend(models::minimax::SUPPORTED_MODELS.iter().map(|s| s.to_string()));
 

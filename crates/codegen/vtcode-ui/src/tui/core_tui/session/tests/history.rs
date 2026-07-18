@@ -40,9 +40,7 @@ fn arrow_keys_navigate_input_history() {
 fn down_keeps_history_navigation_when_history_is_active() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
     session.close_transient();
 

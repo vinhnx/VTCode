@@ -12,24 +12,19 @@ pub const TOOL_RESPONSE_KEY_CONTENT: &str = "content";
 pub const TOOL_RESPONSE_KEY_TRUNCATED: &str = "truncated";
 pub const TOOL_RESPONSE_KEY_MESSAGE: &str = "message";
 
-pub const TOOL_EXECUTION_CANCELLED_MESSAGE: &str =
-    "Tool execution cancelled at the client's request";
+pub const TOOL_EXECUTION_CANCELLED_MESSAGE: &str = "Tool execution cancelled at the client's request";
 pub const TOOL_PERMISSION_ALLOW_OPTION_ID: &str = "allow-once";
 pub const TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID: &str = "allow-always";
 pub const TOOL_PERMISSION_DENY_OPTION_ID: &str = "reject-once";
 pub const TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID: &str = "reject-always";
 pub const TOOL_PERMISSION_ALLOW_PREFIX: &str = "Allow";
 pub const TOOL_PERMISSION_DENY_PREFIX: &str = "Deny";
-pub const TOOL_PERMISSION_DENIED_MESSAGE: &str =
-    "Tool execution cancelled: permission denied by the user";
-pub const TOOL_PERMISSION_CANCELLED_MESSAGE: &str =
-    "Tool execution cancelled: permission request interrupted";
+pub const TOOL_PERMISSION_DENIED_MESSAGE: &str = "Tool execution cancelled: permission denied by the user";
+pub const TOOL_PERMISSION_CANCELLED_MESSAGE: &str = "Tool execution cancelled: permission request interrupted";
 pub const TOOL_PERMISSION_REQUEST_FAILURE_LOG: &str =
     "Failed to request ACP tool permission, cancelling the tool invocation";
-pub const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
-    "Received unsupported ACP permission option selection";
-pub const TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE: &str =
-    "Tool execution cancelled: permission request failed";
+pub const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str = "Received unsupported ACP permission option selection";
+pub const TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE: &str = "Tool execution cancelled: permission request failed";
 
 pub struct ToolExecutionReport {
     pub status: acp::ToolCallStatus,
@@ -40,11 +35,7 @@ pub struct ToolExecutionReport {
 }
 
 impl ToolExecutionReport {
-    pub fn success(
-        content: Vec<acp::ToolCallContent>,
-        locations: Vec<acp::ToolCallLocation>,
-        payload: Value,
-    ) -> Self {
+    pub fn success(content: Vec<acp::ToolCallContent>, locations: Vec<acp::ToolCallLocation>, payload: Value) -> Self {
         Self {
             status: acp::ToolCallStatus::Completed,
             llm_response: payload.to_string(),
@@ -63,9 +54,7 @@ impl ToolExecutionReport {
         Self {
             status: acp::ToolCallStatus::Failed,
             llm_response: payload.to_string(),
-            content: vec![acp::ToolCallContent::from(format!(
-                "{TOOL_FAILURE_PREFIX}: {message}"
-            ))],
+            content: vec![acp::ToolCallContent::from(format!("{TOOL_FAILURE_PREFIX}: {message}"))],
             locations: Vec::new(),
             raw_output: Some(payload),
         }
@@ -76,13 +65,8 @@ impl ToolExecutionReport {
     }
 }
 
-pub fn create_diff_content(
-    path: &str,
-    old_text: Option<&str>,
-    new_text: &str,
-) -> acp::ToolCallContent {
+pub fn create_diff_content(path: &str, old_text: Option<&str>, new_text: &str) -> acp::ToolCallContent {
     acp::ToolCallContent::Diff(
-        acp::Diff::new(PathBuf::from(path), new_text.to_string())
-            .old_text(old_text.map(|s| s.to_string())),
+        acp::Diff::new(PathBuf::from(path), new_text.to_string()).old_text(old_text.map(|s| s.to_string())),
     )
 }

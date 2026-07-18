@@ -46,9 +46,7 @@ pub fn legacy_mcp_tool_name(name: &str) -> Option<&str> {
 pub fn parse_canonical_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
     let mut parts = name.splitn(3, "::");
     match (parts.next()?, parts.next(), parts.next()) {
-        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider, tool))
-        }
+        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => Some((provider, tool)),
         _ => None,
     }
 }
@@ -78,8 +76,7 @@ fn sanitize_tool_segment(input: &str) -> Cow<'_, str> {
         return Cow::Borrowed("tool");
     }
 
-    let first_bad =
-        input.bytes().position(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'-');
+    let first_bad = input.bytes().position(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'-');
 
     match first_bad {
         None => Cow::Borrowed(input),
@@ -111,10 +108,7 @@ mod tests {
 
     #[test]
     fn parse_canonical_mcp_tool_name_valid() {
-        assert_eq!(
-            parse_canonical_mcp_tool_name("mcp::github::list_issues"),
-            Some(("github", "list_issues"))
-        );
+        assert_eq!(parse_canonical_mcp_tool_name("mcp::github::list_issues"), Some(("github", "list_issues")));
     }
 
     #[test]
@@ -151,10 +145,7 @@ mod tests {
 
     #[test]
     fn model_visible_mcp_tool_name_long_truncates() {
-        let name = model_visible_mcp_tool_name(
-            "very_long_provider_name",
-            "very_long_tool_name_that_exceeds_limit",
-        );
+        let name = model_visible_mcp_tool_name("very_long_provider_name", "very_long_tool_name_that_exceeds_limit");
         assert!(name.len() <= MCP_TOOL_NAME_MAX_LEN);
         assert!(name.starts_with("mcp__"));
     }

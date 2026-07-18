@@ -157,8 +157,7 @@ impl PerformanceProfiler {
     /// Calculate benchmark results from session data
     async fn calculate_results(&self, session: BenchmarkSession) -> BenchmarkResults {
         let total_duration = session.start_time.elapsed();
-        let mut durations_ns: Vec<u64> =
-            session.durations.iter().map(|d| d.as_nanos() as u64).collect();
+        let mut durations_ns: Vec<u64> = session.durations.iter().map(|d| d.as_nanos() as u64).collect();
 
         durations_ns.sort_unstable();
 
@@ -233,31 +232,23 @@ impl PerformanceProfiler {
     }
 
     /// Compare two benchmark results
-    pub fn compare_results(
-        &self,
-        baseline: &BenchmarkResults,
-        current: &BenchmarkResults,
-    ) -> ComparisonReport {
+    pub fn compare_results(&self, baseline: &BenchmarkResults, current: &BenchmarkResults) -> ComparisonReport {
         let throughput_change = if baseline.throughput_ops_per_sec > 0.0 {
-            ((current.throughput_ops_per_sec - baseline.throughput_ops_per_sec)
-                / baseline.throughput_ops_per_sec)
+            ((current.throughput_ops_per_sec - baseline.throughput_ops_per_sec) / baseline.throughput_ops_per_sec)
                 * 100.0
         } else {
             0.0
         };
 
         let avg_latency_change = if baseline.avg_duration_ns > 0 {
-            ((current.avg_duration_ns as f64 - baseline.avg_duration_ns as f64)
-                / baseline.avg_duration_ns as f64)
+            ((current.avg_duration_ns as f64 - baseline.avg_duration_ns as f64) / baseline.avg_duration_ns as f64)
                 * 100.0
         } else {
             0.0
         };
 
         let memory_change = match (baseline.memory_usage_mb, current.memory_usage_mb) {
-            (Some(baseline_mem), Some(current_mem)) => {
-                Some(((current_mem - baseline_mem) / baseline_mem) * 100.0)
-            }
+            (Some(baseline_mem), Some(current_mem)) => Some(((current_mem - baseline_mem) / baseline_mem) * 100.0),
             _ => None,
         };
 
@@ -540,15 +531,10 @@ mod tests {
     async fn test_async_benchmark() -> Result<()> {
         let profiler = PerformanceProfiler::new();
 
-        let results = BenchmarkUtils::benchmark_async_function(
-            &profiler,
-            "test_async_function",
-            50,
-            || async {
-                sleep(Duration::from_micros(200)).await;
-                "result"
-            },
-        )
+        let results = BenchmarkUtils::benchmark_async_function(&profiler, "test_async_function", 50, || async {
+            sleep(Duration::from_micros(200)).await;
+            "result"
+        })
         .await?;
 
         assert_eq!(results.iterations, 50);

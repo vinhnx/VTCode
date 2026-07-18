@@ -47,11 +47,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
             policy_manager.set_policy(&normalized_tool, ToolPolicy::Allow).await?;
             println!(
                 "{}",
-                style(format!(
-                    "✓ Tool '{}' is now allowed",
-                    display_tool_name(&tool, &normalized_tool)
-                ))
-                .green()
+                style(format!("✓ Tool '{}' is now allowed", display_tool_name(&tool, &normalized_tool))).green()
             );
         }
         ToolPolicyCommands::Deny { tool } => {
@@ -59,11 +55,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
             policy_manager.set_policy(&normalized_tool, ToolPolicy::Deny).await?;
             println!(
                 "{}",
-                style(format!(
-                    "✗ Tool '{}' is now denied",
-                    display_tool_name(&tool, &normalized_tool)
-                ))
-                .red()
+                style(format!("✗ Tool '{}' is now denied", display_tool_name(&tool, &normalized_tool))).red()
             );
         }
         ToolPolicyCommands::Prompt { tool } => {

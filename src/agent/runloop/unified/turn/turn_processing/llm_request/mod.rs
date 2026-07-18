@@ -36,9 +36,7 @@ use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-use crate::agent::runloop::unified::ui_interaction::{
-    PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions,
-};
+use crate::agent::runloop::unified::ui_interaction::{PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions};
 use crate::agent::runloop::unified::ui_interaction_stream::{
     FirstProgressTimeout, render_stream_with_options_and_copilot_runtime_impl,
     stream_and_render_response_with_options_impl_first_progress_timeout,
@@ -55,11 +53,10 @@ use retry::is_retryable_llm_error;
 #[cfg(test)]
 use retry::{DEFAULT_LLM_RETRY_ATTEMPTS, MAX_LLM_RETRY_ATTEMPTS};
 use retry::{
-    PostToolRetryAction, classify_llm_error, compact_error_message,
-    compact_tool_messages_for_retry, has_recent_tool_responses, is_previous_response_chain_error,
-    is_stream_timeout_error, llm_first_progress_timeout_secs, llm_retry_attempts,
-    next_post_tool_retry_action, supports_streaming_timeout_fallback,
-    switch_to_non_streaming_retry_mode,
+    PostToolRetryAction, classify_llm_error, compact_error_message, compact_tool_messages_for_retry,
+    has_recent_tool_responses, is_previous_response_chain_error, is_stream_timeout_error,
+    llm_first_progress_timeout_secs, llm_retry_attempts, next_post_tool_retry_action,
+    supports_streaming_timeout_fallback, switch_to_non_streaming_retry_mode,
 };
 use snapshot::capture_turn_request_snapshot;
 #[cfg(test)]
@@ -91,10 +88,7 @@ async fn run_standard_stream_attempt(
     .map_err(anyhow::Error::new)
 }
 
-fn finish_streaming_bridge_success(
-    ctx: &mut TurnProcessingContext<'_>,
-    stream_bridge: &mut HarnessStreamingBridge,
-) {
+fn finish_streaming_bridge_success(ctx: &mut TurnProcessingContext<'_>, stream_bridge: &mut HarnessStreamingBridge) {
     ctx.harness_state
         .remember_streamed_tool_call_items(stream_bridge.take_streamed_tool_call_items());
     stream_bridge.complete_open_items();
@@ -117,10 +111,8 @@ pub(crate) async fn execute_llm_request(
         &turn_snapshot.provider_name,
     );
 
-    ctx.renderer.set_reasoning_visible(resolve_reasoning_visibility(
-        ctx.vt_cfg,
-        turn_snapshot.capabilities.reasoning,
-    ));
+    ctx.renderer
+        .set_reasoning_visible(resolve_reasoning_visibility(ctx.vt_cfg, turn_snapshot.capabilities.reasoning));
     let mut use_streaming = turn_snapshot.capabilities.streaming;
     let initial_request = build_turn_request(
         ctx,
@@ -235,10 +227,8 @@ pub(crate) async fn execute_llm_request(
 
         request.stream = use_streaming;
         let has_post_tool_context = has_recent_tool_responses(&request.messages);
-        let preserve_structured_post_tool_context = supports_responses_chaining(
-            &turn_snapshot.provider_name,
-            turn_snapshot.capabilities.responses_compaction,
-        );
+        let preserve_structured_post_tool_context =
+            supports_responses_chaining(&turn_snapshot.provider_name, turn_snapshot.capabilities.responses_compaction);
 
         // DeepSeek: preemptively disable thinking for post-tool follow-ups.
         // Thinking mode + tool messages causes API errors because DeepSeek
@@ -252,20 +242,14 @@ pub(crate) async fn execute_llm_request(
         }
 
         let step_result = if use_streaming {
-            let mut stream_bridge = HarnessStreamingBridge::new(
-                ctx.harness_emitter,
-                &ctx.harness_state.turn_id.0,
-                step_count,
-                attempt + 1,
-            );
+            let mut stream_bridge =
+                HarnessStreamingBridge::new(ctx.harness_emitter, &ctx.harness_state.turn_id.0, step_count, attempt + 1);
             let stream_options = StreamSpinnerOptions {
                 defer_finish: has_tools,
                 strip_proposed_plan_blocks: turn_snapshot.planning_active,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
-            let stream_result = if turn_snapshot.provider_name
-                == vtcode_core::copilot::COPILOT_PROVIDER_KEY
-            {
+            let stream_result = if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
                 let mut runtime_host = CopilotRuntimeHost::new(
                     ctx.tool_registry,
                     ctx.tool_result_cache,
@@ -301,9 +285,8 @@ pub(crate) async fn execute_llm_request(
                     .as_ref()
                     .start_copilot_prompt_session(request.clone(), &exposed_tools)
                 {
-                    let first_progress_timeout = FirstProgressTimeout::starting_now(
-                        Duration::from_secs(first_progress_timeout_secs),
-                    );
+                    let first_progress_timeout =
+                        FirstProgressTimeout::starting_now(Duration::from_secs(first_progress_timeout_secs));
                     let prompt_session = tokio::select! {
                         biased;
                         _ = ctx.ctrl_c_notify.notified() => {
@@ -402,10 +385,7 @@ pub(crate) async fn execute_llm_request(
                 let elapsed = keepalive_started_at.elapsed();
                 let keepalive_message = wait_keepalive_message(&wait_subject, elapsed);
                 _spinner.update_message(keepalive_message.clone());
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    &keepalive_message,
-                )?;
+                crate::agent::runloop::unified::turn::turn_helpers::display_status(ctx.renderer, &keepalive_message)?;
 
                 next_keepalive_at += WAIT_KEEPALIVE_INTERVAL;
             }
@@ -413,11 +393,8 @@ pub(crate) async fn execute_llm_request(
         let attempt_elapsed = attempt_started_at.elapsed();
         match &step_result {
             Ok((response, _)) => {
-                ctx.telemetry.record_llm_request(
-                    &active_model,
-                    attempt_elapsed,
-                    response.usage.as_ref(),
-                );
+                ctx.telemetry
+                    .record_llm_request(&active_model, attempt_elapsed, response.usage.as_ref());
             }
             Err(_) => {
                 ctx.telemetry.record_llm_request(&active_model, attempt_elapsed, None);
@@ -478,10 +455,8 @@ pub(crate) async fn execute_llm_request(
                     dropped_previous_response_id_for_retry = true;
                     last_error_retryable = Some(true);
                     last_error_category = None;
-                    ctx.session_stats.clear_previous_response_chain_for(
-                        &turn_snapshot.provider_name,
-                        &request.model,
-                    );
+                    ctx.session_stats
+                        .clear_previous_response_chain_for(&turn_snapshot.provider_name, &request.model);
                     // Retry immediately on the same logical attempt. A stale
                     // continuation chain is bookkeeping drift, not a provider
                     // availability failure that should consume retry budget.
@@ -493,9 +468,7 @@ pub(crate) async fn execute_llm_request(
                     continue;
                 }
 
-                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
-                    ctx.ctrl_c_state,
-                ) {
+                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(ctx.ctrl_c_state) {
                     llm_result = Err(err);
                     _spinner.finish();
                     break;
@@ -519,10 +492,7 @@ pub(crate) async fn execute_llm_request(
                         && supports_streaming_timeout_fallback(&turn_snapshot.provider_name)
                         && is_stream_timeout_error(&msg)
                     {
-                        switch_to_non_streaming_retry_mode(
-                            &mut use_streaming,
-                            &mut stream_fallback_used,
-                        );
+                        switch_to_non_streaming_retry_mode(&mut use_streaming, &mut stream_fallback_used);
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
                             "Streaming timed out; retrying with non-streaming for this provider.",
@@ -544,10 +514,7 @@ pub(crate) async fn execute_llm_request(
                         preserve_structured_post_tool_context,
                     ) {
                         Some(PostToolRetryAction::SwitchToNonStreaming) => {
-                            switch_to_non_streaming_retry_mode(
-                                &mut use_streaming,
-                                &mut stream_fallback_used,
-                            );
+                            switch_to_non_streaming_retry_mode(&mut use_streaming, &mut stream_fallback_used);
                             tracing::debug!(
                                 provider = %turn_snapshot.provider_name,
                                 "post-tool follow-up failed; retrying with non-streaming.",

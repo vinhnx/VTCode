@@ -52,9 +52,7 @@ pub(super) struct NormalizedRequestUserInput {
     pub(super) freeform_placeholder: Option<String>,
 }
 
-pub(super) fn normalize_request_user_input_args(
-    args: &Value,
-) -> Result<NormalizedRequestUserInput> {
+pub(super) fn normalize_request_user_input_args(args: &Value) -> Result<NormalizedRequestUserInput> {
     let parsed: RequestUserInputArgs = serde_json::from_value(args.clone())?;
     validate_questions(&parsed.questions)?;
     Ok(NormalizedRequestUserInput {
@@ -133,14 +131,8 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
             .or_else(|| find_case_insensitive_field(args_obj, "header").and_then(Value::as_str));
 
         let mut question = serde_json::Map::new();
-        question.insert(
-            "id".to_string(),
-            Value::String(normalize_fallback_question_id(question_id, 0)),
-        );
-        question.insert(
-            "header".to_string(),
-            Value::String(normalize_fallback_header(header_source, "Question")),
-        );
+        question.insert("id".to_string(), Value::String(normalize_fallback_question_id(question_id, 0)));
+        question.insert("header".to_string(), Value::String(normalize_fallback_header(header_source, "Question")));
         question.insert("question".to_string(), Value::String(question_text.to_string()));
         if let Some(items) = find_case_insensitive_field(tab_obj, "items")
             && let Some(options) = normalize_fallback_options(items)
@@ -159,14 +151,8 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
         let mut question = serde_json::Map::new();
         let question_id = find_case_insensitive_field(args_obj, "id").and_then(Value::as_str);
         let header_source = find_case_insensitive_field(args_obj, "header").and_then(Value::as_str);
-        question.insert(
-            "id".to_string(),
-            Value::String(normalize_fallback_question_id(question_id, 0)),
-        );
-        question.insert(
-            "header".to_string(),
-            Value::String(normalize_fallback_header(header_source, "Question")),
-        );
+        question.insert("id".to_string(), Value::String(normalize_fallback_question_id(question_id, 0)));
+        question.insert("header".to_string(), Value::String(normalize_fallback_header(header_source, "Question")));
         question.insert("question".to_string(), Value::String(question_text.to_string()));
         if let Some(options_value) = find_case_insensitive_field(args_obj, "options")
             && let Some(options) = normalize_fallback_options(options_value)
@@ -210,10 +196,7 @@ pub(super) fn validate_questions(questions: &[RequestUserInputQuestion]) -> Resu
     Ok(())
 }
 
-fn find_case_insensitive_field<'a>(
-    obj: &'a serde_json::Map<String, Value>,
-    key: &str,
-) -> Option<&'a Value> {
+fn find_case_insensitive_field<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a Value> {
     obj.get(key).or_else(|| {
         obj.iter()
             .find(|(name, _)| name.eq_ignore_ascii_case(key))
@@ -310,11 +293,7 @@ fn normalize_fallback_options(value: &Value) -> Option<Vec<Value>> {
             break;
         }
     }
-    if normalized.len() >= 2 {
-        Some(normalized)
-    } else {
-        None
-    }
+    if normalized.len() >= 2 { Some(normalized) } else { None }
 }
 
 fn normalize_fallback_question(
@@ -331,21 +310,15 @@ fn normalize_fallback_question(
     let question_id = ["id", "question_id", "name"]
         .iter()
         .find_map(|key| find_case_insensitive_field(obj, key).and_then(Value::as_str));
-    question.insert(
-        "id".to_string(),
-        Value::String(normalize_fallback_question_id(question_id, index)),
-    );
+    question.insert("id".to_string(), Value::String(normalize_fallback_question_id(question_id, index)));
     let header_source = ["header", "title"]
         .iter()
         .find_map(|key| find_case_insensitive_field(obj, key).and_then(Value::as_str));
-    question.insert(
-        "header".to_string(),
-        Value::String(normalize_fallback_header(header_source, "Question")),
-    );
+    question.insert("header".to_string(), Value::String(normalize_fallback_header(header_source, "Question")));
     question.insert("question".to_string(), Value::String(question_text.to_string()));
 
-    if let Some(options_value) = find_case_insensitive_field(obj, "options")
-        .or_else(|| find_case_insensitive_field(obj, "items"))
+    if let Some(options_value) =
+        find_case_insensitive_field(obj, "options").or_else(|| find_case_insensitive_field(obj, "items"))
         && let Some(options) = normalize_fallback_options(options_value)
     {
         question.insert("options".to_string(), Value::Array(options));

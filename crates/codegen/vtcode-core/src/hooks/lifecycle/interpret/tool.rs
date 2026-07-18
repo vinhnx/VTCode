@@ -1,13 +1,11 @@
 use crate::config::HookCommandConfig;
 use serde_json::Value;
 
-use crate::hooks::lifecycle::types::{
-    HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome,
-};
+use crate::hooks::lifecycle::types::{HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome};
 
 use super::common::{
-    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit,
-    handle_timeout, looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
+    HookCommandResult, allow_plain_success_stdout, extract_common_fields, handle_non_zero_exit, handle_timeout,
+    looks_like_json, matches_hook_event, parse_json_output, trimmed_non_empty,
 };
 
 pub(crate) fn interpret_pre_tool(
@@ -20,10 +18,9 @@ pub(crate) fn interpret_pre_tool(
     if result.timed_out {
         if matches!(outcome.decision, PreToolHookDecision::Continue) {
             outcome.decision = PreToolHookDecision::Deny;
-            outcome.messages.push(HookMessage::error(format!(
-                "Tool call blocked because hook `{}` timed out",
-                command.command
-            )));
+            outcome
+                .messages
+                .push(HookMessage::error(format!("Tool call blocked because hook `{}` timed out", command.command)));
         }
         return;
     }
@@ -66,8 +63,7 @@ pub(crate) fn interpret_pre_tool(
         if let Some(Value::Object(spec)) = common.hook_specific
             && matches_hook_event(&spec, "PreToolUse")
         {
-            if let Some(decision) = spec.get("permissionDecision").and_then(|value| value.as_str())
-            {
+            if let Some(decision) = spec.get("permissionDecision").and_then(|value| value.as_str()) {
                 match decision {
                     "allow" => outcome.decision = PreToolHookDecision::Allow,
                     "deny" => outcome.decision = PreToolHookDecision::Deny,
@@ -80,8 +76,7 @@ pub(crate) fn interpret_pre_tool(
                 }
             }
 
-            if let Some(reason) =
-                spec.get("permissionDecisionReason").and_then(|value| value.as_str())
+            if let Some(reason) = spec.get("permissionDecisionReason").and_then(|value| value.as_str())
                 && !reason.trim().is_empty()
             {
                 outcome.messages.push(HookMessage::info(reason.trim().to_owned()));
@@ -136,9 +131,7 @@ pub(crate) fn interpret_post_tool(
         if let Some(decision) = common.decision.as_deref()
             && decision.eq_ignore_ascii_case("block")
         {
-            if let Some(reason) =
-                common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason))
-            {
+            if let Some(reason) = common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason)) {
                 outcome.block_reason = Some(reason);
             } else {
                 outcome.messages.push(HookMessage::error(format!(

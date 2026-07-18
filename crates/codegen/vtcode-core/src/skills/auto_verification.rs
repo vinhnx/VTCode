@@ -30,11 +30,7 @@ impl AutoSkillVerifier {
     }
 
     /// Process skill output and add file verification (generic for ALL skills)
-    pub async fn process_skill_output(
-        &self,
-        skill_name: &str,
-        original_output: String,
-    ) -> Result<String> {
+    pub async fn process_skill_output(&self, skill_name: &str, original_output: String) -> Result<String> {
         if !self.enabled {
             return Ok(original_output);
         }
@@ -53,8 +49,7 @@ impl AutoSkillVerifier {
         // Add skill-specific header
         let final_output = if enhanced.len() > original_output.len() {
             // Files were detected and verification added
-            let verification =
-                enhanced.strip_prefix(&format!("{original_output}\n\n")).unwrap_or(&enhanced);
+            let verification = enhanced.strip_prefix(&format!("{original_output}\n\n")).unwrap_or(&enhanced);
 
             format!(
                 "✓ Skill '{}' executed\n\n{}{}",
@@ -197,10 +192,7 @@ mod tests {
         let json = serde_json::json!({
             "output": "Generated file.pdf"
         });
-        assert_eq!(
-            AutoSkillVerifier::extract_output_text(&json),
-            Some("Generated file.pdf".to_string())
-        );
+        assert_eq!(AutoSkillVerifier::extract_output_text(&json), Some("Generated file.pdf".to_string()));
 
         let json_str = serde_json::json!("Plain string output");
         assert!(AutoSkillVerifier::extract_output_text(&json_str).is_some());

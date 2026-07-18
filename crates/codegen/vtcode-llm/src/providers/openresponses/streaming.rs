@@ -244,8 +244,7 @@ impl StreamAccumulator {
                 if let StreamEventData::Response(data) = &event.data
                     && let Some(response) = &data.response
                 {
-                    self.response_id =
-                        response.get("id").and_then(|v| v.as_str()).map(String::from);
+                    self.response_id = response.get("id").and_then(|v| v.as_str()).map(String::from);
                     self.model = response.get("model").and_then(|v| v.as_str()).map(String::from);
                 }
             }
@@ -280,21 +279,9 @@ impl StreamAccumulator {
                     // Check if this is a function call item
                     if item.get("type").and_then(|v| v.as_str()) == Some("function_call") {
                         let fc = AccumulatingFunctionCall {
-                            id: item
-                                .get("id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            call_id: item
-                                .get("call_id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            name: item
-                                .get("name")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
+                            id: item.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                            call_id: item.get("call_id").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                            name: item.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
                             arguments: String::new(),
                         };
                         self.current_function_call = Some(fc);
@@ -341,8 +328,7 @@ mod tests {
 
     #[test]
     fn test_parse_sse_text_delta() {
-        let line =
-            r#"data: {"type":"response.output_text.delta","sequence_number":1,"delta":"Hello"}"#;
+        let line = r#"data: {"type":"response.output_text.delta","sequence_number":1,"delta":"Hello"}"#;
         let event = parse_sse_event(line).unwrap();
         assert_eq!(event.event_type, "response.output_text.delta");
     }

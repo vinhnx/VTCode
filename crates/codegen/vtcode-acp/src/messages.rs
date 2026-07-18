@@ -150,24 +150,14 @@ impl AcpMessage {
             message_type: MessageType::Request,
             sender,
             recipient,
-            content: MessageContent::Request(AcpRequest {
-                action,
-                args,
-                timeout_secs: None,
-                sync: true,
-            }),
+            content: MessageContent::Request(AcpRequest { action, args, timeout_secs: None, sync: true }),
             timestamp: chrono::Utc::now().to_rfc3339(),
             correlation_id: None,
         }
     }
 
     /// Create a new ACP response message
-    pub fn response(
-        sender: String,
-        recipient: String,
-        result: Value,
-        correlation_id: String,
-    ) -> Self {
+    pub fn response(sender: String, recipient: String, result: Value, correlation_id: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             message_type: MessageType::Response,
@@ -235,12 +225,7 @@ mod tests {
 
     #[test]
     fn test_message_serialization() {
-        let msg = AcpMessage::request(
-            "agent-1".to_string(),
-            "agent-2".to_string(),
-            "test".to_string(),
-            json!({}),
-        );
+        let msg = AcpMessage::request("agent-1".to_string(), "agent-2".to_string(), "test".to_string(), json!({}));
 
         let json = msg.to_json().unwrap();
         let restored = AcpMessage::from_json(&json).unwrap();

@@ -4,9 +4,7 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_ui::tui::app::{
-    InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission,
-};
+use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientRequest, TransientSubmission};
 
 use super::state::CtrlCState;
 
@@ -71,10 +69,7 @@ where
                 // Esc / Ctrl+C from the TUI.  `request_local_stop()` sets
                 // CancelRequested so the turn loop detects the interruption.
                 // Single Ctrl+C closes the overlay; double Ctrl+C exits.
-                crate::agent::runloop::unified::stop_requests::request_local_stop(
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                );
+                crate::agent::runloop::unified::stop_requests::request_local_stop(ctrl_c_state, ctrl_c_notify);
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Interrupted);
             }

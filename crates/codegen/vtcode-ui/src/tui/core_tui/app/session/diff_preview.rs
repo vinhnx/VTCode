@@ -18,8 +18,8 @@ use crate::tui::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_an
 use crate::tui::ui::markdown::render_diff_content_segments;
 use crate::tui::utils::diff::{DiffBundle, DiffOptions, compute_diff_with_theme};
 use crate::tui::utils::diff_styles::{
-    DiffColorPalette, DiffLineType, current_diff_render_style_context, style_content, style_gutter,
-    style_line_bg, style_sign,
+    DiffColorPalette, DiffLineType, current_diff_render_style_context, style_content, style_gutter, style_line_bg,
+    style_sign,
 };
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
@@ -41,11 +41,7 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     let counts = count_diff_changes(&diff_bundle.hunks);
 
     let [header, content, controls] = area
-        .try_layout(&Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(5),
-            Constraint::Length(4),
-        ]))
+        .try_layout(&Layout::vertical([Constraint::Length(2), Constraint::Min(5), Constraint::Length(4)]))
         .unwrap_or([Rect::ZERO; 3]);
 
     render_file_header(frame, header, preview, &palette, counts.additions, counts.deletions);
@@ -66,26 +62,15 @@ fn render_file_header(
         Span::styled(header_action_label(preview.mode), header_style),
         Span::styled(&preview.file_path, header_style),
         Span::styled(" (", header_style),
-        Span::styled(
-            format!("+{additions}"),
-            Style::default().fg(ratatui_color_from_ansi(palette.added_fg)),
-        ),
+        Span::styled(format!("+{additions}"), Style::default().fg(ratatui_color_from_ansi(palette.added_fg))),
         Span::styled(" ", header_style),
-        Span::styled(
-            format!("-{deletions}"),
-            Style::default().fg(ratatui_color_from_ansi(palette.removed_fg)),
-        ),
+        Span::styled(format!("-{deletions}"), Style::default().fg(ratatui_color_from_ansi(palette.removed_fg))),
         Span::styled(")", header_style),
     ]);
     frame.render_widget(Paragraph::new(header), area);
 }
 
-fn render_diff_content(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    preview: &DiffPreviewState,
-    diff_bundle: &DiffBundle,
-) {
+fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState, diff_bundle: &DiffBundle) {
     let language = language_hint_from_path(&preview.file_path);
     let style_context = current_diff_render_style_context();
 
@@ -100,16 +85,10 @@ fn render_diff_content(
 
         match display_line.kind {
             DiffDisplayKind::HunkHeader => {
-                lines.push(Line::from(Span::styled(
-                    display_line.text,
-                    Style::default().fg(Color::Cyan),
-                )));
+                lines.push(Line::from(Span::styled(display_line.text, Style::default().fg(Color::Cyan))));
             }
             DiffDisplayKind::Metadata => {
-                lines.push(Line::from(Span::styled(
-                    display_line.text,
-                    Style::default().fg(Color::DarkGray),
-                )));
+                lines.push(Line::from(Span::styled(display_line.text, Style::default().fg(Color::DarkGray))));
             }
             DiffDisplayKind::Context | DiffDisplayKind::Addition | DiffDisplayKind::Deletion => {
                 let line_num_str = format!("{:>4} ", display_line.line_number.unwrap_or(0));
@@ -136,11 +115,9 @@ fn render_diff_content(
                     Span::styled(line_num_str, gutter_style),
                 ];
 
-                for segment in render_diff_content_segments(
-                    &display_line.text,
-                    language.as_deref(),
-                    anstyle::Style::new(),
-                ) {
+                for segment in
+                    render_diff_content_segments(&display_line.text, language.as_deref(), anstyle::Style::new())
+                {
                     let style = content_style.patch(ratatui_style_from_ansi(segment.style));
                     spans.push(Span::styled(segment.text, style));
                 }
@@ -179,8 +156,7 @@ fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState
 }
 
 fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
-    let action_key_style =
-        |color: Color| -> Style { Style::default().fg(color).add_modifier(Modifier::BOLD) };
+    let action_key_style = |color: Color| -> Style { Style::default().fg(color).add_modifier(Modifier::BOLD) };
 
     let key_green = Color::LightGreen;
     let key_red = Color::LightRed;
@@ -217,10 +193,7 @@ fn control_lines(preview: &DiffPreviewState) -> Vec<Line<'static>> {
                     Span::raw("-Always "),
                     Span::styled("4", action_key_style(key_cyan)),
                     Span::raw("-Auto "),
-                    Span::styled(
-                        format!("[{trust}]"),
-                        Style::default().fg(muted).add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled(format!("[{trust}]"), Style::default().fg(muted).add_modifier(Modifier::BOLD)),
                 ]),
             ]
         }
@@ -273,8 +246,7 @@ mod tests {
         );
 
         let lines = control_lines(&preview);
-        let first_line: String =
-            lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
+        let first_line: String = lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
         assert!(first_line.contains("Proceed"));
         assert!(first_line.contains("Reload"));
@@ -292,8 +264,7 @@ mod tests {
         );
 
         let lines = control_lines(&preview);
-        let first_line: String =
-            lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
+        let first_line: String = lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
         assert!(first_line.contains("Back"));
         assert!(!first_line.contains("Proceed"));

@@ -34,15 +34,13 @@ pub use config_adapter::{
     as_factory_config_with_hooks,
 };
 pub use factory_types::{ProviderConfig, infer_provider_from_model};
-pub use model_resolver::{
-    DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel,
-};
+pub use model_resolver::{DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel};
 pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use provider_config_types::ProviderConfig as ProviderConfigData;
 pub use tool_bridge::{
-    CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,
-    ToolExecution, ToolIntent, ToolIntentExtractor,
+    CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation, ToolExecution, ToolIntent,
+    ToolIntentExtractor,
 };
 pub use types::{BackendKind, LLMError, LLMResponse};
 pub use vtcode_commons::delegate_components;

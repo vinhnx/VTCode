@@ -14,9 +14,7 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::skills::authoring::SkillAuthor;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
 #[cfg(test)]
-use vtcode_core::skills::loader::{
-    SkillMentionDetectionOptions, detect_skill_mentions_with_options,
-};
+use vtcode_core::skills::loader::{SkillMentionDetectionOptions, detect_skill_mentions_with_options};
 use vtcode_core::skills::types::{Skill, SkillManifest};
 
 use super::skills_commands_parser::parse_skill_command as parse_skill_command_impl;
@@ -411,16 +409,12 @@ Shortcuts:
 /// "Extract tables from PDF document" -> ["pdf-analyzer"] (if description contains "extract" + "tables" or "PDF")
 /// ```
 #[cfg(test)]
-async fn detect_mentioned_skills(
-    user_input: &str,
-    workspace: PathBuf,
-) -> Result<Vec<(String, Skill)>> {
+async fn detect_mentioned_skills(user_input: &str, workspace: PathBuf) -> Result<Vec<(String, Skill)>> {
     let mut loader = EnhancedSkillLoader::new(workspace.clone());
 
     // Discover available skills
     let discovery_result = loader.discover_all_skills().await?;
-    let manifests: Vec<SkillManifest> =
-        discovery_result.skills.iter().map(|s| s.manifest().clone()).collect();
+    let manifests: Vec<SkillManifest> = discovery_result.skills.iter().map(|s| s.manifest().clone()).collect();
 
     // Detect mentions with workspace-aware routing config.
     let detection_options = ConfigManager::load_from_workspace(&workspace)
@@ -434,8 +428,7 @@ async fn detect_mentioned_skills(
             }
         })
         .unwrap_or_default();
-    let mentioned_names =
-        detect_skill_mentions_with_options(user_input, &manifests, &detection_options);
+    let mentioned_names = detect_skill_mentions_with_options(user_input, &manifests, &detection_options);
 
     // Load the mentioned skills
     let mut skills = Vec::new();

@@ -76,13 +76,7 @@ fn subagent_dynamic_model_filter_keeps_only_parseable_model_ids() {
     let registry = DynamicModelRegistry {
         entries: vec![
             selection::selection_from_dynamic(Provider::OpenAI, "gpt-5.4", "gpt-5.4", None, None),
-            selection::selection_from_dynamic(
-                Provider::Ollama,
-                "custom-local-model",
-                "custom-local-model",
-                None,
-                None,
-            ),
+            selection::selection_from_dynamic(Provider::Ollama, "custom-local-model", "custom-local-model", None, None),
         ],
         ..Default::default()
     };
@@ -142,27 +136,14 @@ fn preferred_subagent_model_selection_canonicalizes_shortcuts() {
     let registry = DynamicModelRegistry::default();
     let selection = preferred_subagent_model_selection(&registry, "HaIkU");
 
-    assert_eq!(
-        selection,
-        Some(InlineListSelection::ConfigAction("subagent-model:shortcut:haiku".to_string()))
-    );
+    assert_eq!(selection, Some(InlineListSelection::ConfigAction("subagent-model:shortcut:haiku".to_string())));
 }
 
 #[test]
 fn model_search_value_includes_provider_model_aliases() {
-    let extra_terms = vec![
-        "reasoning".to_string(),
-        "tools".to_string(),
-        "image".to_string(),
-    ];
-    let value = model_search_value(
-        Provider::OpenAI,
-        "GPT-5.4",
-        "gpt-5.4",
-        Some("Latest frontier model"),
-        &extra_terms,
-    )
-    .to_ascii_lowercase();
+    let extra_terms = vec!["reasoning".to_string(), "tools".to_string(), "image".to_string()];
+    let value = model_search_value(Provider::OpenAI, "GPT-5.4", "gpt-5.4", Some("Latest frontier model"), &extra_terms)
+        .to_ascii_lowercase();
 
     assert!(value.contains("openai gpt-5.4"));
     assert!(value.contains("openai/gpt-5.4"));
@@ -184,8 +165,8 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         models: Vec::new(),
     });
 
-    let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
-        .expect("custom provider should parse");
+    let detail =
+        parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg)).expect("custom provider should parse");
 
     assert_eq!(detail.provider_key, "mycorp");
     assert_eq!(detail.provider_label, "MyCorporateName");
@@ -212,8 +193,8 @@ fn parse_model_selection_marks_command_auth_custom_provider_as_keyless() {
         models: Vec::new(),
     });
 
-    let detail = parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg))
-        .expect("custom provider should parse");
+    let detail =
+        parse_model_selection(&MODEL_OPTIONS, "mycorp gpt-5-mini", Some(&cfg)).expect("custom provider should parse");
 
     assert!(!detail.requires_api_key);
     assert!(detail.env_key.is_empty());
@@ -228,10 +209,7 @@ fn static_model_subtitle_formats_current_capabilities() {
 
     let subtitle = static_model_subtitle(option, "openai", "gpt-5.4");
 
-    assert_eq!(
-        subtitle,
-        "gpt-5.4 • Current • Context: 1M • Reasoning • Tools • Input: text, image"
-    );
+    assert_eq!(subtitle, "gpt-5.4 • Current • Context: 1M • Reasoning • Tools • Input: text, image");
 }
 
 #[test]
@@ -249,13 +227,8 @@ fn static_model_search_terms_include_modalities_and_tool_state() {
 
 #[test]
 fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
-    let subtitle = dynamic_model_subtitle(
-        Provider::Ollama,
-        "custom-local-model",
-        false,
-        "ollama",
-        "custom-local-model",
-    );
+    let subtitle =
+        dynamic_model_subtitle(Provider::Ollama, "custom-local-model", false, "ollama", "custom-local-model");
 
     assert_eq!(subtitle, "custom-local-model • Current • Local");
 }
@@ -274,10 +247,7 @@ fn step_one_header_lines_explain_codex_runtime_configuration() {
         lines.iter().any(|line| line.contains("/config codex")),
         "expected Codex runtime note in picker header"
     );
-    assert!(
-        lines.iter().any(|line| line.contains("/model")),
-        "expected note to clarify /model scope"
-    );
+    assert!(lines.iter().any(|line| line.contains("/model")), "expected note to clarify /model scope");
 }
 
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {
@@ -332,8 +302,8 @@ fn static_picker_indexes_resolve_provider_models() {
     let openai_indexes = option_indexes_for_provider(Provider::OpenAI);
     assert!(!openai_indexes.is_empty());
 
-    let gpt54_index = find_option_index(Provider::OpenAI, "GPT-5.4")
-        .expect("gpt-5.4 should be indexed case-insensitively");
+    let gpt54_index =
+        find_option_index(Provider::OpenAI, "GPT-5.4").expect("gpt-5.4 should be indexed case-insensitively");
     let option = MODEL_OPTIONS.get(gpt54_index).expect("indexed option should exist");
     assert_eq!(option.id, "gpt-5.4");
     assert_eq!(option.provider, Provider::OpenAI);
@@ -533,18 +503,14 @@ async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
     let (handle, mut session) = session_with_channels();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(CtrlCState::new());
-    assert!(matches!(
-        ctrl_c_state.register_signal(),
-        crate::agent::runloop::unified::state::CtrlCSignal::Cancel
-    ));
+    assert!(matches!(ctrl_c_state.register_signal(), crate::agent::runloop::unified::state::CtrlCSignal::Cancel));
     let ctrl_c_notify = Arc::new(Notify::new());
-    let url_guard =
-        crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext::new(
-            &handle,
-            &mut session,
-            &ctrl_c_state,
-            &ctrl_c_notify,
-        );
+    let url_guard = crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext::new(
+        &handle,
+        &mut session,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+    );
 
     let progress = picker
         .handle_api_key(&mut renderer, "login", url_guard)

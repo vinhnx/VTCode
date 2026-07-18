@@ -41,8 +41,7 @@ impl SdkMetrics {
 
     /// Record estimated tokens consumed by tool definitions in a single turn.
     pub fn record_tool_definition_tokens(&mut self, tokens: u64) {
-        self.total_tool_definition_tokens =
-            self.total_tool_definition_tokens.saturating_add(tokens);
+        self.total_tool_definition_tokens = self.total_tool_definition_tokens.saturating_add(tokens);
     }
 
     pub fn avg_generation_time_ms(&self) -> u64 {

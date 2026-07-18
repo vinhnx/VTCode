@@ -70,9 +70,7 @@ pub(crate) async fn request_external_url_guard(
     close_guard_modal(ctx.handle).await;
 
     Ok(match outcome {
-        OverlayWaitOutcome::Submitted(UrlGuardDecision::Approve) => {
-            ExternalUrlGuardOutcome::Approved
-        }
+        OverlayWaitOutcome::Submitted(UrlGuardDecision::Approve) => ExternalUrlGuardOutcome::Approved,
         OverlayWaitOutcome::Submitted(UrlGuardDecision::Deny)
         | OverlayWaitOutcome::Cancelled
         | OverlayWaitOutcome::Interrupted => ExternalUrlGuardOutcome::Cancelled,
@@ -107,8 +105,8 @@ async fn close_guard_modal(handle: &InlineHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ExternalUrlGuardContext, ExternalUrlGuardOutcome, ExternalUrlOpenOutcome,
-        request_external_url_guard, request_external_url_open,
+        ExternalUrlGuardContext, ExternalUrlGuardOutcome, ExternalUrlOpenOutcome, request_external_url_guard,
+        request_external_url_open,
     };
     use crate::agent::runloop::unified::state::CtrlCState;
     use crate::agent::runloop::unified::url_guard::URL_GUARD_TITLE;
@@ -116,8 +114,8 @@ mod tests {
     use tokio::sync::Notify;
     use tokio::sync::mpsc;
     use vtcode_ui::tui::app::{
-        InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession,
-        TransientEvent, TransientRequest, TransientSubmission,
+        InlineCommand, InlineEvent, InlineHandle, InlineListSelection, InlineSession, TransientEvent, TransientRequest,
+        TransientSubmission,
     };
 
     fn session_with_channels() -> (
@@ -146,12 +144,7 @@ mod tests {
             let ctrl_c_notify = ctrl_c_notify.clone();
             async move {
                 request_external_url_guard(
-                    ExternalUrlGuardContext::new(
-                        &handle,
-                        &mut session,
-                        &ctrl_c_state,
-                        &ctrl_c_notify,
-                    ),
+                    ExternalUrlGuardContext::new(&handle, &mut session, &ctrl_c_state, &ctrl_c_notify),
                     "https://example.com/docs",
                 )
                 .await
@@ -168,11 +161,9 @@ mod tests {
         }
 
         event_tx
-            .send(InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Selection(InlineListSelection::ConfigAction(
-                    "url_guard:approve".to_string(),
-                )),
-            )))
+            .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                InlineListSelection::ConfigAction("url_guard:approve".to_string()),
+            ))))
             .expect("send approval selection");
 
         let outcome = task.await.expect("join guard task").expect("guard result");

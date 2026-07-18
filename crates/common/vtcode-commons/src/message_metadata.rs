@@ -216,8 +216,7 @@ mod tests {
 
     #[test]
     fn test_compression_status_serde_roundtrip() {
-        let status =
-            CompressionStatus::Compressed { original_token_count: 200, summary_token_count: 50 };
+        let status = CompressionStatus::Compressed { original_token_count: 200, summary_token_count: 50 };
         let json = serde_json::to_string(&status).unwrap();
         let deserialized: CompressionStatus = serde_json::from_str(&json).unwrap();
         assert_eq!(status, deserialized);

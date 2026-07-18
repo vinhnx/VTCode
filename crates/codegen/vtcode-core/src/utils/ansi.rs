@@ -4,8 +4,8 @@ use crate::ui::markdown::{
 };
 use crate::ui::theme;
 use crate::ui::tui::{
-    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
-    InlineSegment, InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
 };
 use crate::utils::ansi_capabilities::AnsiCapabilities;
 pub use crate::utils::message_style::MessageStyle;
@@ -133,10 +133,7 @@ impl AnsiRenderer {
     }
 
     /// Create a renderer that forwards output to the inline UI session handle
-    pub fn with_inline_ui(
-        handle: InlineHandle,
-        highlight_config: SyntaxHighlightingConfig,
-    ) -> Self {
+    pub fn with_inline_ui(handle: InlineHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
         let mut renderer = Self::stdout();
         renderer.highlight_config = highlight_config.clone();
         renderer.sink = Some(InlineSink::new(handle, highlight_config));
@@ -196,11 +193,7 @@ impl AnsiRenderer {
     }
 
     pub fn set_show_diagnostics_in_transcript(&mut self, enabled: bool) {
-        self.show_diagnostics_in_transcript = if cfg!(debug_assertions) {
-            enabled
-        } else {
-            false
-        };
+        self.show_diagnostics_in_transcript = if cfg!(debug_assertions) { enabled } else { false };
     }
 
     /// Set the maximum width for markdown tables. When set, tables wider than
@@ -212,8 +205,7 @@ impl AnsiRenderer {
     }
 
     fn should_render_style(&self, style: MessageStyle) -> bool {
-        self.reasoning_visible
-            || !matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
+        self.reasoning_visible || !matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
     }
 
     fn is_diagnostic_error_style(style: MessageStyle) -> bool {
@@ -231,9 +223,7 @@ impl AnsiRenderer {
     }
 
     fn indent_for_style(&self, style: MessageStyle) -> &'static str {
-        if self.screen_reader_mode
-            && matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
-        {
+        if self.screen_reader_mode && matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis) {
             "  [reasoning] "
         } else {
             style.indent()
@@ -278,12 +268,7 @@ impl AnsiRenderer {
         }
     }
 
-    pub fn show_secure_prompt_modal(
-        &mut self,
-        title: &str,
-        lines: Vec<String>,
-        prompt_label: String,
-    ) {
+    pub fn show_secure_prompt_modal(&mut self, title: &str, lines: Vec<String>, prompt_label: String) {
         if let Some(sink) = &self.sink {
             sink.show_secure_prompt_modal(title.into(), lines, prompt_label);
         }
@@ -339,16 +324,12 @@ impl AnsiRenderer {
         if !self.should_render_style(style) {
             return Ok(());
         }
-        let suppress_transcript = Self::is_diagnostic_error_style(style)
-            && self.sink.is_some()
-            && !self.show_diagnostics_in_transcript;
+        let suppress_transcript =
+            Self::is_diagnostic_error_style(style) && self.sink.is_some() && !self.show_diagnostics_in_transcript;
         if Self::is_diagnostic_error_style(style) {
             Self::log_transcript_error(text, style, self.sink.is_some());
         }
-        if matches!(
-            style,
-            MessageStyle::Response | MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
-        ) {
+        if matches!(style, MessageStyle::Response | MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis) {
             return self.render_markdown(style, text);
         }
         if matches!(style, MessageStyle::Output | MessageStyle::ToolOutput) {
@@ -450,13 +431,7 @@ impl AnsiRenderer {
                 url,
                 vtcode_commons::ansi_codes::hyperlink_close(),
             );
-            sink.write_multiline_with_transcript(
-                style.style(),
-                indent,
-                &linked,
-                Self::message_kind(style),
-                true,
-            )?;
+            sink.write_multiline_with_transcript(style.style(), indent, &linked, Self::message_kind(style), true)?;
             self.last_line_was_empty = false;
             return Ok(());
         }
@@ -483,11 +458,8 @@ impl AnsiRenderer {
     /// Append a large pasted user message as a placeholder in inline UI.
     pub fn append_paste_placeholder(&mut self, message: &str, line_count: usize) -> Result<()> {
         if let Some(sink) = &self.sink {
-            sink.handle.append_pasted_message(
-                InlineMessageKind::User,
-                message.to_string(),
-                line_count,
-            );
+            sink.handle
+                .append_pasted_message(InlineMessageKind::User, message.to_string(), line_count);
             transcript::append(message);
             self.last_line_was_empty = message.trim().is_empty();
             return Ok(());
@@ -520,18 +492,12 @@ impl AnsiRenderer {
     }
 
     /// Write a line with a custom style while preserving the logical message kind.
-    pub fn line_with_override_style(
-        &mut self,
-        fallback: MessageStyle,
-        style: Style,
-        text: &str,
-    ) -> Result<()> {
+    pub fn line_with_override_style(&mut self, fallback: MessageStyle, style: Style, text: &str) -> Result<()> {
         if !self.should_render_style(fallback) {
             return Ok(());
         }
-        let suppress_transcript = Self::is_diagnostic_error_style(fallback)
-            && self.sink.is_some()
-            && !self.show_diagnostics_in_transcript;
+        let suppress_transcript =
+            Self::is_diagnostic_error_style(fallback) && self.sink.is_some() && !self.show_diagnostics_in_transcript;
         if Self::is_diagnostic_error_style(fallback) {
             Self::log_transcript_error(text, fallback, self.sink.is_some());
         }
@@ -616,13 +582,8 @@ impl AnsiRenderer {
             if let Ok((w, _)) = crossterm::terminal::size() {
                 sink.table_max_width = Some(w as usize);
             }
-            let last_empty = sink.write_markdown(
-                text,
-                indent,
-                base_style,
-                Self::message_kind(style),
-                preserve_code_indentation,
-            )?;
+            let last_empty =
+                sink.write_markdown(text, indent, base_style, Self::message_kind(style), preserve_code_indentation)?;
             self.last_line_was_empty = last_empty;
             return Ok(());
         }
@@ -661,11 +622,7 @@ impl AnsiRenderer {
         self.inline_with_style(MessageStyle::Response, delta)
     }
 
-    pub fn stream_markdown_response(
-        &mut self,
-        text: &str,
-        previous_line_count: usize,
-    ) -> Result<usize> {
+    pub fn stream_markdown_response(&mut self, text: &str, previous_line_count: usize) -> Result<usize> {
         // Strip ANSI codes from agent response to prevent interference with markdown rendering
         let text = crate::utils::ansi_parser::strip_ansi(text);
         let text = &text;
@@ -679,15 +636,9 @@ impl AnsiRenderer {
             if let Ok((w, _)) = crossterm::terminal::size() {
                 sink.table_max_width = Some(w as usize);
             }
-            let (prepared, plain_lines, last_empty) =
-                sink.prepare_markdown_lines(text, indent, base_style, true, true);
+            let (prepared, plain_lines, last_empty) = sink.prepare_markdown_lines(text, indent, base_style, true, true);
             let line_count = prepared.len();
-            sink.replace_inline_lines(
-                previous_line_count,
-                prepared,
-                &plain_lines,
-                Self::message_kind(style),
-            );
+            sink.replace_inline_lines(previous_line_count, prepared, &plain_lines, Self::message_kind(style));
             self.last_line_was_empty = last_empty;
             return Ok(line_count);
         }
@@ -711,12 +662,7 @@ impl AnsiRenderer {
         Err(anyhow!("stream_markdown_response requires an inline sink"))
     }
 
-    fn write_markdown_line(
-        &mut self,
-        style: MessageStyle,
-        indent: &str,
-        mut line: MarkdownLine,
-    ) -> Result<()> {
+    fn write_markdown_line(&mut self, style: MessageStyle, indent: &str, mut line: MarkdownLine) -> Result<()> {
         if !indent.is_empty() && !line.segments.is_empty() {
             line.segments.insert(
                 0,
@@ -737,8 +683,7 @@ impl AnsiRenderer {
         let mut plain = String::new();
         if self.color {
             for segment in &line.segments {
-                let clickable_target =
-                    segment.link_target.as_deref().and_then(make_clickable_target);
+                let clickable_target = segment.link_target.as_deref().and_then(make_clickable_target);
                 if let Some(target) = clickable_target.as_deref() {
                     write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
                 }
@@ -751,8 +696,7 @@ impl AnsiRenderer {
             writeln!(self.writer)?;
         } else {
             for segment in &line.segments {
-                let clickable_target =
-                    segment.link_target.as_deref().and_then(make_clickable_target);
+                let clickable_target = segment.link_target.as_deref().and_then(make_clickable_target);
                 if let Some(target) = clickable_target.as_deref() {
                     write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
                 }
@@ -821,10 +765,7 @@ impl InlineSink {
         Some(&trimmed[first_newline + 1..last_fence])
     }
 
-    fn detect_large_json_payload<'a>(
-        kind: InlineMessageKind,
-        text: &'a str,
-    ) -> Option<LargeJsonPayload<'a>> {
+    fn detect_large_json_payload<'a>(kind: InlineMessageKind, text: &'a str) -> Option<LargeJsonPayload<'a>> {
         if !matches!(kind, InlineMessageKind::Tool | InlineMessageKind::Pty) {
             return None;
         }
@@ -910,11 +851,7 @@ impl InlineSink {
     }
 
     #[cfg(feature = "tui")]
-    fn inline_style_from_ratatui(
-        &self,
-        style: RatatuiStyle,
-        fallback: &InlineTextStyle,
-    ) -> InlineTextStyle {
+    fn inline_style_from_ratatui(&self, style: RatatuiStyle, fallback: &InlineTextStyle) -> InlineTextStyle {
         let mut resolved = fallback.clone();
         // Keep transcript segments theme-dynamic by default. Only persist a
         // foreground color when ANSI parsing produced a color different from the
@@ -1146,11 +1083,7 @@ impl InlineSink {
         }
     }
 
-    fn convert_plain_lines(
-        &self,
-        text: &str,
-        fallback: &InlineTextStyle,
-    ) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
+    fn convert_plain_lines(&self, text: &str, fallback: &InlineTextStyle) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
         let fallback_arc = Arc::new(fallback.clone());
         if text.is_empty() {
             return (vec![Vec::new()], vec![String::new()]);
@@ -1161,8 +1094,7 @@ impl InlineSink {
 
         #[cfg(feature = "tui")]
         if let Ok(parsed) = text.as_bytes().into_text() {
-            let mut converted_lines =
-                Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
+            let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let base_style = RatatuiStyle::default().patch(parsed.style);
 
@@ -1239,20 +1171,8 @@ impl InlineSink {
         (converted_lines, plain_lines)
     }
 
-    fn write_multiline(
-        &mut self,
-        style: Style,
-        indent: &str,
-        text: &str,
-        kind: InlineMessageKind,
-    ) -> Result<()> {
-        self.write_multiline_with_transcript(
-            style,
-            indent,
-            text,
-            kind,
-            Self::should_record_transcript(kind),
-        )
+    fn write_multiline(&mut self, style: Style, indent: &str, text: &str, kind: InlineMessageKind) -> Result<()> {
+        self.write_multiline_with_transcript(style, indent, text, kind, Self::should_record_transcript(kind))
     }
 
     fn write_multiline_with_transcript(
@@ -1336,9 +1256,7 @@ impl InlineSink {
             } else {
                 None
             };
-            for (mut segments, mut plain) in
-                converted_lines.into_iter().zip(plain_lines.into_iter())
-            {
+            for (mut segments, mut plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
                 if let Some(ref style_arc) = fallback_arc_opt
                     && !plain.is_empty()
                 {
@@ -1366,13 +1284,7 @@ impl InlineSink {
         Ok(())
     }
 
-    fn write_line(
-        &mut self,
-        style: Style,
-        indent: &str,
-        text: &str,
-        kind: InlineMessageKind,
-    ) -> Result<()> {
+    fn write_line(&mut self, style: Style, indent: &str, text: &str, kind: InlineMessageKind) -> Result<()> {
         self.write_multiline(style, indent, text, kind)
     }
 
@@ -1409,11 +1321,7 @@ impl InlineSink {
         }
     }
 
-    fn write_segments(
-        &mut self,
-        segments: &[MarkdownSegment],
-        kind: InlineMessageKind,
-    ) -> Result<()> {
+    fn write_segments(&mut self, segments: &[MarkdownSegment], kind: InlineMessageKind) -> Result<()> {
         let converted = self.convert_segments(segments);
         let plain = segments.iter().map(|segment| segment.text.clone()).collect::<String>();
         self.handle.append_line(kind, converted);
@@ -1475,18 +1383,14 @@ mod tests {
     #[test]
     fn convert_plain_lines_preserves_ansi_styles() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(
-            InlineHandle::new_for_tests(sender),
-            SyntaxHighlightingConfig::default(),
-        );
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle {
             color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
             bg_color: None,
             effects: Effects::new(),
         };
 
-        let (converted, plain) =
-            sink.convert_plain_lines("\u{1b}[31mred\u{1b}[0m plain", &fallback);
+        let (converted, plain) = sink.convert_plain_lines("\u{1b}[31mred\u{1b}[0m plain", &fallback);
 
         assert_eq!(plain, vec!["red plain".to_owned()]);
         assert_eq!(converted.len(), 1);
@@ -1501,10 +1405,7 @@ mod tests {
     #[test]
     fn convert_plain_lines_retains_trailing_newline() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(
-            InlineHandle::new_for_tests(sender),
-            SyntaxHighlightingConfig::default(),
-        );
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle::default();
 
         let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
@@ -1519,10 +1420,7 @@ mod tests {
     fn write_multiline_combines_tool_lines() {
         use crate::ui::InlineCommand;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut sink = InlineSink::new(
-            InlineHandle::new_for_tests(sender),
-            SyntaxHighlightingConfig::default(),
-        );
+        let mut sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let style = InlineTextStyle::default();
         // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
         let kind = InlineMessageKind::Tool;
@@ -1551,8 +1449,7 @@ mod tests {
         let base_style = MessageStyle::Response.style();
         let markdown = "```rust\nlet value = 1;\n```";
 
-        let (prepared, plain, _) =
-            sink.prepare_markdown_lines(markdown, "", base_style, true, false);
+        let (prepared, plain, _) = sink.prepare_markdown_lines(markdown, "", base_style, true, false);
 
         let (segments, plain_line) = prepared
             .iter()
@@ -1560,21 +1457,13 @@ mod tests {
             .find(|(_, line)| line.contains("let value = 1;"))
             .expect("code line exists");
 
-        assert!(
-            segments.len() > 2,
-            "expected highlighted segments, got {}, line: {}",
-            segments.len(),
-            plain_line
-        );
+        assert!(segments.len() > 2, "expected highlighted segments, got {}, line: {}", segments.len(), plain_line);
     }
 
     #[test]
     fn prepare_markdown_lines_strips_local_path_underlines() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(
-            InlineHandle::new_for_tests(sender),
-            SyntaxHighlightingConfig::default(),
-        );
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let base_style = MessageStyle::Response.style();
         let markdown = "See README.md for details.";
 
@@ -1594,10 +1483,7 @@ mod tests {
     #[test]
     fn prepare_markdown_lines_keeps_https_link_underlines() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(
-            InlineHandle::new_for_tests(sender),
-            SyntaxHighlightingConfig::default(),
-        );
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let base_style = MessageStyle::Response.style();
         let markdown = "[docs](https://example.com)";
 
@@ -1647,8 +1533,7 @@ mod tests {
         use crate::utils::transcript;
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         renderer.set_show_diagnostics_in_transcript(false);
         transcript::clear();
 
@@ -1674,8 +1559,7 @@ mod tests {
         use crate::ui::InlineCommand;
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         renderer.set_show_diagnostics_in_transcript(true);
         renderer.line(MessageStyle::Error, "fatal: visible in transcript").unwrap();
 
@@ -1694,8 +1578,7 @@ mod tests {
         use std::fmt::Write as _;
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut renderer =
-            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
 
         let mut json = String::from("{\n");
         let line_total = INLINE_JSON_COLLAPSE_LINES + 5;
@@ -1734,16 +1617,11 @@ mod tests {
         apply_file_opener_config(vtcode_config::FileOpener::Vscode);
 
         let cwd = std::env::current_dir().expect("current dir");
-        let expected =
-            Url::from_file_path(cwd.join("crates/codegen/vtcode-core/src/utils/ansi.rs"))
-                .expect("file url");
-        let clickable = make_clickable_target("./crates/codegen/vtcode-core/src/utils/ansi.rs:42")
-            .expect("clickable target");
+        let expected = Url::from_file_path(cwd.join("crates/codegen/vtcode-core/src/utils/ansi.rs")).expect("file url");
+        let clickable =
+            make_clickable_target("./crates/codegen/vtcode-core/src/utils/ansi.rs:42").expect("clickable target");
 
-        assert_eq!(
-            clickable,
-            format!("vscode://file{}:42", expected.as_str().trim_start_matches("file://"))
-        );
+        assert_eq!(clickable, format!("vscode://file{}:42", expected.as_str().trim_start_matches("file://")));
 
         apply_file_opener_config(original);
     }
@@ -1767,8 +1645,8 @@ mod tests {
         let original = current_file_opener();
         apply_file_opener_config(vtcode_config::FileOpener::Vscode);
 
-        let clickable = make_clickable_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12")
-            .expect("clickable target");
+        let clickable =
+            make_clickable_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12").expect("clickable target");
 
         assert_eq!(clickable, "vscode://file/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12");
 

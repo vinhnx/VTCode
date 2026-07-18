@@ -144,11 +144,7 @@ impl SearchMetrics {
         let _ = writeln!(output, "  Total searches: {}", self.total_searches);
         let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
         let _ = writeln!(output, "  Avg tokens/search: {:.0}", self.avg_tokens_per_search());
-        let _ = writeln!(
-            output,
-            "  Expensive searches: {}",
-            self.searches.values().filter(|s| s.is_expensive).count()
-        );
+        let _ = writeln!(output, "  Expensive searches: {}", self.searches.values().filter(|s| s.is_expensive).count());
 
         let expensive = self.expensive_searches(3);
         if !expensive.is_empty() {

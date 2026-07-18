@@ -27,17 +27,14 @@ pub use bridge::{DualEventEmitter, ResponseBuilder};
 pub use content::{ContentPart, ImageDetail, InputFileContent, InputImageContent};
 pub use error::{OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType};
 pub use events::{ResponseStreamEvent, SequencedEvent, StreamEventEmitter, VecStreamEmitter};
-pub use integration::{
-    OpenResponsesCallback, OpenResponsesIntegration, OpenResponsesProvider, ToOpenResponse,
-};
+pub use integration::{OpenResponsesCallback, OpenResponsesIntegration, OpenResponsesProvider, ToOpenResponse};
 pub use items::{
-    CustomItem, FunctionCallItem, FunctionCallOutputItem, MessageItem, MessageRole, OutputItem,
-    OutputItemId, ReasoningItem,
+    CustomItem, FunctionCallItem, FunctionCallOutputItem, MessageItem, MessageRole, OutputItem, OutputItemId,
+    ReasoningItem,
 };
 pub use request::{Request, SpecificToolChoice, ToolChoice, ToolChoiceMode};
 pub use response::{
-    IncompleteDetails, IncompleteReason, Response, ResponseId, ResponseStatus, generate_item_id,
-    generate_response_id,
+    IncompleteDetails, IncompleteReason, Response, ResponseId, ResponseStatus, generate_item_id, generate_response_id,
 };
 pub use status::ItemStatus;
 pub use usage::{InputTokensDetails, OpenUsage, OutputTokensDetails};

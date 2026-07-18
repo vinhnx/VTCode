@@ -100,8 +100,7 @@ impl SubagentController {
             "spawn_background_subprocess",
             "launching the background subprocess",
         )?;
-        let desired_max_turns =
-            normalize_background_child_max_turns(request.max_turns.or(spec.max_turns), true);
+        let desired_max_turns = normalize_background_child_max_turns(request.max_turns.or(spec.max_turns), true);
         let desired_model_override = request.model.clone().or_else(|| spec.model.clone());
         let desired_reasoning_override = request
             .reasoning_effort
@@ -149,16 +148,9 @@ impl SubagentController {
     }
 
     /// Spawns a subagent with a custom [`SubagentSpec`] that must be read-only.
-    pub async fn spawn_custom(
-        &self,
-        spec: SubagentSpec,
-        request: SpawnAgentRequest,
-    ) -> Result<SubagentStatusEntry> {
+    pub async fn spawn_custom(&self, spec: SubagentSpec, request: SpawnAgentRequest) -> Result<SubagentStatusEntry> {
         if !spec.is_subagent() {
-            bail!(
-                "custom subagent spawn only supports subagent-capable specs; '{}' is primary-only",
-                spec.name
-            );
+            bail!("custom subagent spawn only supports subagent-capable specs; '{}' is primary-only", spec.name);
         }
 
         if !spec.is_read_only() {
@@ -265,11 +257,7 @@ impl SubagentController {
     }
 
     /// Blocks until one of the target subagents reaches a terminal state or the timeout expires.
-    pub async fn wait(
-        &self,
-        targets: &[String],
-        timeout_ms: Option<u64>,
-    ) -> Result<Option<SubagentStatusEntry>> {
+    pub async fn wait(&self, targets: &[String], timeout_ms: Option<u64>) -> Result<Option<SubagentStatusEntry>> {
         for target in targets {
             if let Ok(entry) = self.status_for(target).await
                 && entry.status.is_terminal()
@@ -278,9 +266,9 @@ impl SubagentController {
             }
         }
 
-        let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or_else(|| {
-            self.config.vt_cfg.subagents.default_timeout_seconds.saturating_mul(1000)
-        }));
+        let timeout = std::time::Duration::from_millis(
+            timeout_ms.unwrap_or_else(|| self.config.vt_cfg.subagents.default_timeout_seconds.saturating_mul(1000)),
+        );
         let deadline = tokio::time::Instant::now() + timeout;
 
         loop {
@@ -289,9 +277,7 @@ impl SubagentController {
                 let state = self.state.read().await;
                 targets
                     .iter()
-                    .filter_map(|target| {
-                        state.children.get(target).map(|record| record.notify.clone())
-                    })
+                    .filter_map(|target| state.children.get(target).map(|record| record.notify.clone()))
                     .collect::<Vec<_>>()
             };
             if notifies.is_empty() {
@@ -355,10 +341,7 @@ impl SubagentController {
         child_ids
     }
 
-    pub(super) async fn collect_spawn_subtree_ids(
-        &self,
-        root_thread_id: &str,
-    ) -> Result<Vec<String>> {
+    pub(super) async fn collect_spawn_subtree_ids(&self, root_thread_id: &str) -> Result<Vec<String>> {
         let mut subtree_ids = Vec::new();
         let mut stack = vec![root_thread_id.to_string()];
 
@@ -382,9 +365,10 @@ impl SubagentController {
         if matches!(record.status, SubagentStatus::Running | SubagentStatus::Queued) {
             return Ok(false);
         }
-        let prompt = record.last_prompt.clone().unwrap_or_else(|| {
-            "Continue the delegated task from the existing context.".to_string()
-        });
+        let prompt = record
+            .last_prompt
+            .clone()
+            .unwrap_or_else(|| "Continue the delegated task from the existing context.".to_string());
         record.status = SubagentStatus::Queued;
         record.updated_at = Utc::now();
         record.completed_at = None;
@@ -413,10 +397,7 @@ impl SubagentController {
         Ok(record.build_status_entry())
     }
 
-    pub(super) async fn background_status_for(
-        &self,
-        target: &str,
-    ) -> Result<BackgroundSubprocessEntry> {
+    pub(super) async fn background_status_for(&self, target: &str) -> Result<BackgroundSubprocessEntry> {
         let state = self.state.read().await;
         let record = state
             .background_children
@@ -459,13 +440,8 @@ impl SubagentController {
             Utc::now().format("%Y%m%dT%H%M%S%3fZ")
         );
         let exec_session_id = format!("exec-{session_id}");
-        let (
-            created_at,
-            previous_prompt,
-            previous_max_turns,
-            previous_model_override,
-            previous_reasoning_override,
-        ) = previous_record.unwrap_or((Utc::now(), String::new(), None, None, None));
+        let (created_at, previous_prompt, previous_max_turns, previous_model_override, previous_reasoning_override) =
+            previous_record.unwrap_or((Utc::now(), String::new(), None, None, None));
         let prompt = overrides
             .as_ref()
             .and_then(|overrides| overrides.prompt.clone())
@@ -569,9 +545,7 @@ impl SubagentController {
                 )
                 .await
         }
-        .with_context(|| {
-            format!("Failed to spawn background subprocess for subagent '{}'", spec.name)
-        })?;
+        .with_context(|| format!("Failed to spawn background subprocess for subagent '{}'", spec.name))?;
 
         tracing::info!(
             agent_name = spec.name.as_str(),
@@ -655,10 +629,7 @@ impl SubagentController {
             .cloned()
     }
 
-    pub(super) async fn resolve_requested_spec(
-        &self,
-        requested: Option<&str>,
-    ) -> Result<SubagentSpec> {
+    pub(super) async fn resolve_requested_spec(&self, requested: Option<&str>) -> Result<SubagentSpec> {
         let requested = requested.unwrap_or("default");
         self.find_spec(requested)
             .await
@@ -717,19 +688,14 @@ impl SubagentController {
                 explicit
             );
         }
-        if !spec.is_read_only()
-            && !delegation.explicit_request
-            && delegation.requested_agent.is_none()
-        {
+        if !spec.is_read_only() && !delegation.explicit_request && delegation.requested_agent.is_none() {
             bail!(
                 "{} cannot launch write-capable agent '{}' without an explicit delegation signal from the current user turn. Ask the user to mention the agent, say 'delegate'/'spawn', or request parallel work.",
                 tool_name,
                 spec.name
             );
         }
-        if spec.is_read_only()
-            && !self.config.vt_cfg.subagents.auto_delegate_read_only
-            && !delegation.explicit_request
+        if spec.is_read_only() && !self.config.vt_cfg.subagents.auto_delegate_read_only && !delegation.explicit_request
         {
             bail!(
                 "{} cannot proactively launch read-only agent '{}' because `subagents.auto_delegate_read_only` is disabled and the current user turn did not explicitly request delegation.",
@@ -790,22 +756,16 @@ impl SubagentController {
             bail!("Subagents are disabled by configuration");
         }
         if self.config.depth.saturating_add(1) > self.config.vt_cfg.subagents.max_depth {
-            bail!(
-                "Subagent depth limit reached (max_depth={})",
-                self.config.vt_cfg.subagents.max_depth
-            );
+            bail!("Subagent depth limit reached (max_depth={})", self.config.vt_cfg.subagents.max_depth);
         }
         // Create a worktree for isolation if requested.
         let worktree_path = if spec.isolation == Some(vtcode_config::IsolationMode::Worktree) {
             let wm = crate::git::WorktreeManager::new(&self.config.workspace_root);
-            let wt_name = format!(
-                "{}-{}",
-                sanitize_component(spec.name.as_str()),
-                Utc::now().format("%Y%m%dT%H%M%S")
-            );
-            Some(wm.create(&wt_name).with_context(|| {
-                format!("Failed to create worktree for subagent '{}'", spec.name)
-            })?)
+            let wt_name = format!("{}-{}", sanitize_component(spec.name.as_str()), Utc::now().format("%Y%m%dT%H%M%S"));
+            Some(
+                wm.create(&wt_name)
+                    .with_context(|| format!("Failed to create worktree for subagent '{}'", spec.name))?,
+            )
         } else {
             None
         };
@@ -816,21 +776,16 @@ impl SubagentController {
                 .children
                 .values()
                 .filter(|record| {
-                    matches!(
-                        record.status,
-                        SubagentStatus::Queued | SubagentStatus::Running | SubagentStatus::Waiting
-                    )
+                    matches!(record.status, SubagentStatus::Queued | SubagentStatus::Running | SubagentStatus::Waiting)
                 })
                 .count()
         };
-        let effective_max_concurrent =
-            self.config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
+        let effective_max_concurrent = self.config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
         if active_count >= effective_max_concurrent {
             bail!("Subagent concurrency limit reached (max_concurrent={effective_max_concurrent})");
         }
         let is_background_child = background;
-        let child_max_turns =
-            normalize_background_child_max_turns(max_turns.or(spec.max_turns), is_background_child);
+        let child_max_turns = normalize_background_child_max_turns(max_turns.or(spec.max_turns), is_background_child);
         let (_, _, effective_config) = prepare_child_runtime_config(
             &self.config.vt_cfg,
             &spec,
@@ -843,17 +798,10 @@ impl SubagentController {
             resolve_effective_subagent_model,
         )?;
 
-        let id = format!(
-            "agent-{}-{}",
-            sanitize_component(spec.name.as_str()),
-            Utc::now().format("%Y%m%dT%H%M%S%3fZ")
-        );
+        let id = format!("agent-{}-{}", sanitize_component(spec.name.as_str()), Utc::now().format("%Y%m%dT%H%M%S%3fZ"));
         let parent_session_id = self.parent_session_id.read().await.clone();
-        let session_id = format!(
-            "{}-{}",
-            sanitize_component(parent_session_id.as_str()),
-            sanitize_component(id.as_str())
-        );
+        let session_id =
+            format!("{}-{}", sanitize_component(parent_session_id.as_str()), sanitize_component(id.as_str()));
         let display_label = subagent_display_label(&spec);
         let notify = Arc::new(Notify::new());
         let mut state = self.state.write().await;

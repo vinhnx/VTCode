@@ -103,13 +103,11 @@ impl McpConnectionPool {
         info!("Initializing MCP provider '{}'", config.name);
 
         // Connect to provider with timeout
-        let provider = tokio::time::timeout(
-            self.connection_timeout,
-            McpProvider::connect(config.clone(), elicitation_handler),
-        )
-        .await
-        .map_err(|_e| McpPoolError::ConnectionTimeout(config.name.clone()))?
-        .map_err(|e| McpPoolError::ConnectionError(config.name.clone(), e.to_string()))?;
+        let provider =
+            tokio::time::timeout(self.connection_timeout, McpProvider::connect(config.clone(), elicitation_handler))
+                .await
+                .map_err(|_e| McpPoolError::ConnectionTimeout(config.name.clone()))?
+                .map_err(|e| McpPoolError::ConnectionError(config.name.clone(), e.to_string()))?;
 
         // Initialize the provider with proper parameters
         let provider_startup_timeout = self.resolve_startup_timeout(&config);
@@ -117,21 +115,14 @@ impl McpConnectionPool {
         let tool_timeout_opt = Some(tool_timeout);
 
         if let Err(err) = provider
-            .initialize(
-                initialize_params,
-                provider_startup_timeout,
-                tool_timeout_opt,
-                &allowlist_snapshot,
-            )
+            .initialize(initialize_params, provider_startup_timeout, tool_timeout_opt, &allowlist_snapshot)
             .await
         {
             return Err(McpPoolError::InitializationError(config.name.clone(), err.to_string()));
         }
 
         // Refresh tools
-        if let Err(err) =
-            provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt).await
-        {
+        if let Err(err) = provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt).await {
             warn!("Failed to fetch tools for provider '{}': {}", config.name, err);
         }
 
@@ -265,19 +256,10 @@ pub struct PooledMcpManager {
 }
 
 impl PooledMcpManager {
-    pub fn new(
-        max_concurrent_connections: usize,
-        connection_timeout_seconds: u64,
-        tool_cache_capacity: usize,
-    ) -> Self {
+    pub fn new(max_concurrent_connections: usize, connection_timeout_seconds: u64, tool_cache_capacity: usize) -> Self {
         Self {
-            pool: Arc::new(McpConnectionPool::new(
-                max_concurrent_connections,
-                connection_timeout_seconds,
-            )),
-            tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(
-                tool_cache_capacity,
-            )),
+            pool: Arc::new(McpConnectionPool::new(max_concurrent_connections, connection_timeout_seconds)),
+            tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(tool_cache_capacity)),
         }
     }
 
@@ -292,12 +274,7 @@ impl PooledMcpManager {
         // Initialize providers in parallel
         let providers = self
             .pool
-            .initialize_providers_parallel(
-                provider_configs,
-                elicitation_handler,
-                tool_timeout,
-                allowlist_snapshot,
-            )
+            .initialize_providers_parallel(provider_configs, elicitation_handler, tool_timeout, allowlist_snapshot)
             .await?;
 
         // Add providers to the pool
@@ -328,10 +305,10 @@ impl PooledMcpManager {
         let args_ref = &arguments;
 
         // Execute the tool with correct signature
-        let result =
-            provider.call_tool(tool_name, args_ref, tool_timeout, allowlist).await.map_err(
-                |e| McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string()),
-            )?;
+        let result = provider
+            .call_tool(tool_name, args_ref, tool_timeout, allowlist)
+            .await
+            .map_err(|e| McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string()))?;
 
         // Convert result to JSON value
         Ok(serde_json::to_value(&result).unwrap_or(serde_json::Value::Null))
@@ -381,11 +358,8 @@ pub struct PooledMcpStats {
 
 /// Build initialize params for an MCP provider
 fn build_pool_initialize_params(_provider: &McpProvider) -> InitializeRequestParams {
-    InitializeRequestParams::new(
-        ClientCapabilities::default(),
-        super::utils::build_client_implementation(),
-    )
-    .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05)
+    InitializeRequestParams::new(ClientCapabilities::default(), super::utils::build_client_implementation())
+        .with_protocol_version(rmcp::model::ProtocolVersion::V_2024_11_05)
 }
 
 /// MCP connection pool errors
@@ -476,10 +450,7 @@ pub mod tests {
         let error = McpPoolError::ConnectionTimeout("test_provider".to_string());
         assert!(error.to_string().contains("test_provider"));
 
-        let error = McpPoolError::InitializationError(
-            "auth".to_string(),
-            "invalid credentials".to_string(),
-        );
+        let error = McpPoolError::InitializationError("auth".to_string(), "invalid credentials".to_string());
         assert!(error.to_string().contains("auth"));
         assert!(error.to_string().contains("invalid credentials"));
     }

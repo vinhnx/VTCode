@@ -112,22 +112,14 @@ impl ToolRegistry {
             )
             .await
         {
-            return Some(wrap_schema(
-                entry.name.as_str(),
-                entry.description.as_str(),
-                &entry.parameters,
-            ));
+            return Some(wrap_schema(entry.name.as_str(), entry.description.as_str(), &entry.parameters));
         }
 
         // Resolve tool (handles built-ins, MCP proxies, and aliases)
         if let Some(registration) = self.inventory.get_registration(tool_name)
             && let Some(schema) = registration.parameter_schema()
         {
-            return Some(wrap_schema(
-                tool_name,
-                registration.metadata().description().unwrap_or(""),
-                schema,
-            ));
+            return Some(wrap_schema(tool_name, registration.metadata().description().unwrap_or(""), schema));
         }
 
         None

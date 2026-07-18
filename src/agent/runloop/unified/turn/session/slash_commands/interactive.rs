@@ -1,9 +1,8 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest,
-    TransientEvent, TransientHotkey, TransientHotkeyAction, TransientHotkeyKey, TransientRequest,
-    TransientSelectionChange, TransientSubmission,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, TransientEvent, TransientHotkey,
+    TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSelectionChange, TransientSubmission,
 };
 
 use super::ui::{ensure_selection_ui_available, wait_for_list_modal_selection};
@@ -14,9 +13,7 @@ use crate::agent::runloop::unified::interactive_features::{
 
 const PROMPT_SUGGESTION_ACTION_PREFIX: &str = "suggest:";
 
-pub(crate) async fn handle_trigger_prompt_suggestions(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_trigger_prompt_suggestions(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ensure_selection_ui_available(&mut ctx, "opening prompt suggestions")? {
         return Ok(SlashCommandControl::Continue);
     }
@@ -69,9 +66,7 @@ pub(crate) async fn handle_trigger_prompt_suggestions(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_toggle_tasks_panel(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_toggle_tasks_panel(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let visible = !ctx.session_stats.task_panel_visible;
     ctx.session_stats.task_panel_visible = visible;
     if visible {
@@ -88,9 +83,7 @@ pub(crate) async fn handle_toggle_tasks_panel(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_show_jobs_panel(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_jobs_panel(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ensure_selection_ui_available(&mut ctx, "opening jobs")? {
         return Ok(SlashCommandControl::Continue);
     }
@@ -107,13 +100,9 @@ pub(crate) async fn handle_show_jobs_panel(
         title: "Jobs".to_string(),
         lines: vec![
             "Active/background command sessions.".to_string(),
-            "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts."
-                .to_string(),
+            "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts.".to_string(),
         ],
-        footer_hint: Some(
-            "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
-                .to_string(),
-        ),
+        footer_hint: Some("ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job".to_string()),
         items,
         selected: selected.clone(),
         search: Some(InlineListSearchConfig {
@@ -136,14 +125,8 @@ pub(crate) async fn handle_show_jobs_panel(
         ],
     }));
 
-    let Some(action) = wait_for_jobs_modal_action(
-        ctx.handle,
-        ctx.session,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        selected,
-    )
-    .await
+    let Some(action) =
+        wait_for_jobs_modal_action(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify, selected).await
     else {
         return Ok(SlashCommandControl::Continue);
     };
@@ -209,18 +192,18 @@ async fn wait_for_jobs_modal_action(
             )) => {
                 current_selection = Some(selection);
             }
-            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Selection(selection),
-            )) => {
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                selection,
+            ))) => {
                 ctrl_c_state.reset();
                 return Some(JobModalAction {
                     kind: JobModalActionKind::Focus,
                     selection: Some(selection),
                 });
             }
-            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Hotkey(action),
-            )) => {
+            vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(
+                action,
+            ))) => {
                 ctrl_c_state.reset();
                 let kind = match action {
                     TransientHotkeyAction::FocusJobOutput => JobModalActionKind::Focus,
@@ -283,10 +266,7 @@ fn preview_job_snapshot(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Resu
         format!("Job {}", snapshot.id),
         vec![
             format!("Command: {}", snapshot.command),
-            format!(
-                "Working dir: {}",
-                snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())
-            ),
+            format!("Working dir: {}", snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())),
             format!("Preview:\n{}", truncate_job_output(&output)),
         ],
         None,
@@ -387,11 +367,9 @@ mod tests {
         let ctrl_c_notify = Arc::new(Notify::new());
 
         event_tx
-            .send(InlineEvent::Transient(TransientEvent::SelectionChanged(
-                TransientSelectionChange::List(InlineListSelection::ConfigAction(
-                    "job:session-2".to_string(),
-                )),
-            )))
+            .send(InlineEvent::Transient(TransientEvent::SelectionChanged(TransientSelectionChange::List(
+                InlineListSelection::ConfigAction("job:session-2".to_string()),
+            ))))
             .expect("selection change");
         event_tx
             .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(
@@ -410,9 +388,6 @@ mod tests {
         .expect("job action");
 
         assert_eq!(action.kind, JobModalActionKind::Interrupt);
-        assert_eq!(
-            action.selection,
-            Some(InlineListSelection::ConfigAction("job:session-2".to_string()))
-        );
+        assert_eq!(action.selection, Some(InlineListSelection::ConfigAction("job:session-2".to_string())));
     }
 }

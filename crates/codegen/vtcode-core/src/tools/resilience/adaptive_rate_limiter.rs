@@ -92,8 +92,7 @@ impl AdaptiveRateLimiter {
 }
 
 /// Shared adaptive limiter for non-session-scoped execution flows (e.g. skill sub-LLM loops).
-pub static GLOBAL_ADAPTIVE_RATE_LIMITER: Lazy<AdaptiveRateLimiter> =
-    Lazy::new(AdaptiveRateLimiter::default);
+pub static GLOBAL_ADAPTIVE_RATE_LIMITER: Lazy<AdaptiveRateLimiter> = Lazy::new(AdaptiveRateLimiter::default);
 
 /// Acquire from the shared adaptive limiter.
 pub fn try_acquire_global(tool_name: &str) -> Result<(), Duration> {
@@ -112,10 +111,7 @@ impl AdaptiveRateLimiter {
         if let Ok(mut inner) = self.inner.lock() {
             inner.tool_priorities.insert(tool_name.to_string(), priority);
         } else {
-            warn!(
-                "adaptive rate limiter state lock poisoned while setting priority for '{}'",
-                tool_name
-            );
+            warn!("adaptive rate limiter state lock poisoned while setting priority for '{}'", tool_name);
         }
     }
 
@@ -190,8 +186,7 @@ mod tests {
         limiter.set_priority("high", Priority::High);
         limiter.set_priority("low", Priority::Low);
 
-        let high_wait =
-            limiter.try_acquire("high").expect_err("high-priority call should be limited");
+        let high_wait = limiter.try_acquire("high").expect_err("high-priority call should be limited");
         let low_wait = limiter.try_acquire("low").expect_err("low-priority call should be limited");
 
         assert!(high_wait < low_wait);

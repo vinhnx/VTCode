@@ -65,13 +65,9 @@ impl ConfigDefaultsProvider for DefaultConfigDefaults {
 }
 
 /// Installs a new [`ConfigDefaultsProvider`], returning the previous provider.
-pub fn install_config_defaults_provider(
-    provider: Arc<dyn ConfigDefaultsProvider>,
-) -> Arc<dyn ConfigDefaultsProvider> {
+pub fn install_config_defaults_provider(provider: Arc<dyn ConfigDefaultsProvider>) -> Arc<dyn ConfigDefaultsProvider> {
     let mut guard = CONFIG_DEFAULTS.write().unwrap_or_else(|poisoned| {
-        tracing::warn!(
-            "config defaults provider lock poisoned while installing provider; recovering"
-        );
+        tracing::warn!("config defaults provider lock poisoned while installing provider; recovering");
         poisoned.into_inner()
     });
     std::mem::replace(&mut *guard, provider)
@@ -103,10 +99,7 @@ pub fn current_config_defaults() -> Arc<dyn ConfigDefaultsProvider> {
     Arc::clone(&*guard)
 }
 
-pub fn with_config_defaults_provider_for_test<F, R>(
-    provider: Arc<dyn ConfigDefaultsProvider>,
-    action: F,
-) -> R
+pub fn with_config_defaults_provider_for_test<F, R>(provider: Arc<dyn ConfigDefaultsProvider>, action: F) -> R
 where
     F: FnOnce() -> R,
 {

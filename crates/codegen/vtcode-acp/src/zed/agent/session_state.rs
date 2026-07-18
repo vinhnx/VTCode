@@ -38,30 +38,21 @@ impl ZedAgent {
         }
     }
 
-    fn session_provider_for_thread(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-    ) -> String {
+    fn session_provider_for_thread(&self, thread: &vtcode_core::core::threads::ThreadRuntimeHandle) -> String {
         thread
             .metadata()
             .map(|metadata| metadata.provider)
             .unwrap_or_else(|| self.config.provider.clone())
     }
 
-    fn session_model_for_thread(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-    ) -> String {
+    fn session_model_for_thread(&self, thread: &vtcode_core::core::threads::ThreadRuntimeHandle) -> String {
         thread
             .metadata()
             .map(|metadata| metadata.model)
             .unwrap_or_else(|| self.config.model.clone())
     }
 
-    fn session_primary_agent_for_thread(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-    ) -> String {
+    fn session_primary_agent_for_thread(&self, thread: &vtcode_core::core::threads::ThreadRuntimeHandle) -> String {
         thread
             .metadata()
             .and_then(|metadata| metadata.primary_agent)
@@ -70,11 +61,7 @@ impl ZedAgent {
             .unwrap_or_else(|| self.primary_agents.default_id().to_string())
     }
 
-    fn sync_thread_primary_agent(
-        &self,
-        thread: &vtcode_core::core::threads::ThreadRuntimeHandle,
-        primary_agent: &str,
-    ) {
+    fn sync_thread_primary_agent(&self, thread: &vtcode_core::core::threads::ThreadRuntimeHandle, primary_agent: &str) {
         if let Some(mut metadata) = thread.metadata() {
             metadata.primary_agent = Some(primary_agent.to_string());
             thread.replace_metadata(Some(metadata));
@@ -134,10 +121,9 @@ impl ZedAgent {
             &self.config.theme,
             self.config.reasoning_effort.as_str(),
         );
-        let thread = self.thread_manager.start_thread_with_identifier(
-            session_id.0.to_string(),
-            ThreadBootstrap::new(Some(metadata)),
-        );
+        let thread = self
+            .thread_manager
+            .start_thread_with_identifier(session_id.0.to_string(), ThreadBootstrap::new(Some(metadata)));
         let handle = self.build_session_handle(session_id.clone(), thread);
         if let Ok(mut guard) = self.sessions.lock() {
             guard.insert(session_id.clone(), handle);
@@ -171,11 +157,7 @@ impl ZedAgent {
         }
     }
 
-    pub(super) fn update_session_primary_agent(
-        &self,
-        session: &SessionHandle,
-        primary_agent: String,
-    ) -> bool {
+    pub(super) fn update_session_primary_agent(&self, session: &SessionHandle, primary_agent: String) -> bool {
         let Some(primary_agent) = self.primary_agents.resolve_id(&primary_agent) else {
             return false;
         };
@@ -242,19 +224,14 @@ impl ZedAgent {
             .any(|entry| entry.as_str() == model)
     }
 
-    fn provider_select_options(
-        &self,
-        current_provider: &str,
-    ) -> Vec<acp::SessionConfigSelectOption> {
+    fn provider_select_options(&self, current_provider: &str) -> Vec<acp::SessionConfigSelectOption> {
         let mut providers = get_factory()
             .lock()
             .ok()
             .map(|factory| factory.list_providers())
             .unwrap_or_default();
         if providers.is_empty() {
-            tracing::warn!(
-                "LLM factory has no registered providers, falling back to Provider::all_providers()"
-            );
+            tracing::warn!("LLM factory has no registered providers, falling back to Provider::all_providers()");
             providers = Provider::all_providers()
                 .into_iter()
                 .map(|provider| provider.to_string())
@@ -287,11 +264,7 @@ impl ZedAgent {
             .collect()
     }
 
-    fn model_select_options(
-        &self,
-        provider: &str,
-        current_model: &str,
-    ) -> Vec<acp::SessionConfigSelectOption> {
+    fn model_select_options(&self, provider: &str, current_model: &str) -> Vec<acp::SessionConfigSelectOption> {
         let mut options = Provider::from_str(provider)
             .ok()
             .map(|provider| {
@@ -308,10 +281,7 @@ impl ZedAgent {
             .unwrap_or_default();
 
         if !options.iter().any(|option| option.value.0.as_ref() == current_model) {
-            options.push(acp::SessionConfigSelectOption::new(
-                current_model.to_string(),
-                current_model.to_string(),
-            ));
+            options.push(acp::SessionConfigSelectOption::new(current_model.to_string(), current_model.to_string()));
         }
 
         options.sort_by(|left, right| left.value.0.cmp(&right.value.0));
@@ -324,10 +294,7 @@ impl ZedAgent {
             .any(|option| option.value.0.as_ref() == provider)
     }
 
-    pub(super) fn current_session_config_options(
-        &self,
-        session: &SessionHandle,
-    ) -> Vec<acp::SessionConfigOption> {
+    pub(super) fn current_session_config_options(&self, session: &SessionHandle) -> Vec<acp::SessionConfigOption> {
         let data = match session.data.lock() {
             Ok(guard) => guard,
             Err(_) => return Vec::new(),
@@ -380,10 +347,9 @@ impl ZedAgent {
         let listing = find_session_by_identifier(identifier)
             .await?
             .ok_or_else(|| anyhow::anyhow!("unknown archived session '{identifier}'"))?;
-        let thread = self.thread_manager.start_thread_with_identifier(
-            listing.identifier(),
-            ThreadBootstrap::from_listing(listing),
-        );
+        let thread = self
+            .thread_manager
+            .start_thread_with_identifier(listing.identifier(), ThreadBootstrap::from_listing(listing));
         let handle = self.build_session_handle(session_id.clone(), thread);
         if let Ok(mut guard) = self.sessions.lock() {
             guard.insert(session_id.clone(), handle.clone());
@@ -395,9 +361,7 @@ impl ZedAgent {
         match finish {
             FinishReason::Stop | FinishReason::ToolCalls => acp::StopReason::EndTurn,
             FinishReason::Length => acp::StopReason::MaxTokens,
-            FinishReason::ContentFilter | FinishReason::Refusal | FinishReason::Error(_) => {
-                acp::StopReason::Refusal
-            }
+            FinishReason::ContentFilter | FinishReason::Refusal | FinishReason::Error(_) => acp::StopReason::Refusal,
             FinishReason::Pause => acp::StopReason::EndTurn,
         }
     }
@@ -572,25 +536,18 @@ mod tests {
     use std::path::Path;
     use vtcode_config::{SubagentDiscoveryInput, discover_subagents};
     use vtcode_core::config::core::PromptCachingConfig;
-    use vtcode_core::config::types::{
-        AgentConfig as CoreAgentConfig, ModelSelectionSource, UiSurfacePreference,
-    };
+    use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource, UiSurfacePreference};
     use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
-    use vtcode_core::utils::session_archive::{
-        SessionArchiveMetadata, SessionListing, SessionSnapshot,
-    };
+    use vtcode_core::utils::session_archive::{SessionArchiveMetadata, SessionListing, SessionSnapshot};
 
     async fn build_agent(workspace: &Path) -> ZedAgent {
         build_agent_with_default_primary_agent(workspace, "duck").await
     }
 
-    async fn build_agent_with_default_primary_agent(
-        workspace: &Path,
-        default_primary_agent: &str,
-    ) -> ZedAgent {
+    async fn build_agent_with_default_primary_agent(workspace: &Path, default_primary_agent: &str) -> ZedAgent {
         let core_config = CoreAgentConfig {
             model: "gpt-5.4".to_string(),
             api_key: String::new(),
@@ -617,10 +574,7 @@ mod tests {
         let mut discovery_input = SubagentDiscoveryInput::new(workspace.to_path_buf());
         discovery_input.include_user_agents = false;
         let discovered = discover_subagents(&discovery_input).expect("discover primary agents");
-        let primary_agents = PrimaryAgentCatalog::from_specs_with_default(
-            &discovered.effective,
-            default_primary_agent,
-        );
+        let primary_agents = PrimaryAgentCatalog::from_specs_with_default(&discovered.effective, default_primary_agent);
 
         ZedAgent::new(
             core_config,
@@ -680,10 +634,9 @@ mod tests {
                 error_logs: Vec::new(),
             },
         };
-        let thread = agent.thread_manager.start_thread_with_identifier(
-            "session-vtcode-acp-archive",
-            ThreadBootstrap::from_listing(listing),
-        );
+        let thread = agent
+            .thread_manager
+            .start_thread_with_identifier("session-vtcode-acp-archive", ThreadBootstrap::from_listing(listing));
 
         let handle = agent.build_session_handle(acp::SessionId::new("session-1"), thread);
 
@@ -719,10 +672,9 @@ mod tests {
                 error_logs: Vec::new(),
             },
         };
-        let thread = agent.thread_manager.start_thread_with_identifier(
-            "session-vtcode-acp-archive",
-            ThreadBootstrap::from_listing(listing),
-        );
+        let thread = agent
+            .thread_manager
+            .start_thread_with_identifier("session-vtcode-acp-archive", ThreadBootstrap::from_listing(listing));
 
         let handle = agent.build_session_handle(acp::SessionId::new("session-1"), thread);
 

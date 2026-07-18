@@ -20,44 +20,34 @@ fn test_provider_factory() {
 
     // Test provider detection from model names
     assert_eq!(factory.provider_from_model("gpt-5"), Some("openai".to_string()));
-    assert_eq!(
-        factory.provider_from_model(models::CLAUDE_SONNET_4_6),
-        Some("anthropic".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("claude-sonnet-4-20250514"),
-        Some("anthropic".to_string())
-    );
+    assert_eq!(factory.provider_from_model(models::CLAUDE_SONNET_4_6), Some("anthropic".to_string()));
+    assert_eq!(factory.provider_from_model("claude-sonnet-4-20250514"), Some("anthropic".to_string()));
     assert_eq!(factory.provider_from_model("gemini-3-flash-preview"), Some("gemini".to_string()));
 }
 
 #[test]
 fn test_provider_creation() {
     // Test creating providers
-    let gemini =
-        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
+    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     gemini.unwrap();
 
     let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
     openai.unwrap();
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
+    let anthropic = create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     anthropic.unwrap();
 }
 
 #[test]
 fn test_unified_client_creation() {
     // Test creating providers for different models
-    let gemini_client =
-        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
+    let gemini_client = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     gemini_client.unwrap();
 
     let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
     openai_client.unwrap();
 
-    let anthropic_client =
-        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
+    let anthropic_client = create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     anthropic_client.unwrap();
 }
 

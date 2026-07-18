@@ -191,12 +191,7 @@ impl<'a> SidebarWidget<'a> {
                 .map(|entry| {
                     Line::from(Span::styled(
                         truncate_string(
-                            &format!(
-                                "{} · {} · {}",
-                                entry.display_label,
-                                entry.kind.as_str(),
-                                entry.status
-                            ),
+                            &format!("{} · {} · {}", entry.display_label, entry.kind.as_str(), entry.status),
                             inner.width.saturating_sub(2) as usize,
                         ),
                         self.styles.default_style(),
@@ -256,10 +251,7 @@ impl<'a> SidebarWidget<'a> {
                 .iter()
                 .map(|tool| {
                     Line::from(Span::styled(
-                        format!(
-                            "▸ {}",
-                            truncate_string(tool, inner.width.saturating_sub(3) as usize)
-                        ),
+                        format!("▸ {}", truncate_string(tool, inner.width.saturating_sub(3) as usize)),
                         self.styles.default_style(),
                     ))
                 })

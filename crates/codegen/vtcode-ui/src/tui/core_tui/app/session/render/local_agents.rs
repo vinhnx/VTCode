@@ -2,8 +2,8 @@ use super::*;
 use crate::tui::config::constants::ui;
 use crate::tui::core_tui::ThemeConfigParser;
 use crate::tui::core_tui::session::list_panel::{
-    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows,
-    input_styles_from_theme, render_shared_list_panel, rows_to_u16,
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows, input_styles_from_theme,
+    render_shared_list_panel, rows_to_u16,
 };
 use crate::tui::core_tui::session::{
     inline_list::{InlineListRow, selection_padding},
@@ -55,22 +55,11 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
                 } else {
                     blank_gutter.clone()
                 };
-                let cursor_style = if is_selected {
-                    self.highlight_style
-                } else {
-                    dim_style
-                };
-                let text_style = if is_selected {
-                    self.highlight_style
-                } else {
-                    dim_style
-                };
+                let cursor_style = if is_selected { self.highlight_style } else { dim_style };
+                let text_style = if is_selected { self.highlight_style } else { dim_style };
                 (
                     InlineListRow::single(
-                        Line::from(vec![
-                            Span::styled(cursor, cursor_style),
-                            Span::styled(row_text, text_style),
-                        ]),
+                        Line::from(vec![Span::styled(cursor, cursor_style), Span::styled(row_text, text_style)]),
                         dim_style,
                     ),
                     1_u16,
@@ -128,11 +117,7 @@ pub fn split_inline_local_agents_area(session: &mut Session, area: Rect) -> (Rec
 }
 
 pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if area.height == 0
-        || area.width == 0
-        || !session.inline_lists_visible()
-        || !session.local_agents_visible()
-    {
+    if area.height == 0 || area.width == 0 || !session.inline_lists_visible() || !session.local_agents_visible() {
         session.local_agents_state.set_visible_rows(0);
         return;
     }
@@ -148,8 +133,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     };
 
     let info_line = if entries.is_empty() {
-        "Background subagents are opt-in. Configure one, then use Ctrl+B or /subprocesses."
-            .to_string()
+        "Background subagents are opt-in. Configure one, then use Ctrl+B or /subprocesses.".to_string()
     } else {
         format!(
             "{} local agent{} • Enter inspect • Alt+O transcript • Ctrl+K stop • Ctrl+X cancel • Esc close",
@@ -159,10 +143,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     };
 
     let header_rows = SharedListPanelSections {
-        header: vec![Line::from(Span::styled(
-            "Local Agents".to_owned(),
-            dim_style,
-        ))],
+        header: vec![Line::from(Span::styled("Local Agents".to_owned(), dim_style))],
         info: vec![Line::from(Span::styled(info_line, dim_style))],
         search: None,
     };
@@ -234,10 +215,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
             ]
         });
 
-    frame.render_widget(
-        Paragraph::new(preview_text).style(default_style).wrap(Wrap { trim: false }),
-        preview_area,
-    );
+    frame.render_widget(Paragraph::new(preview_text).style(default_style).wrap(Wrap { trim: false }), preview_area);
 }
 
 fn format_local_agent_preview(session: &Session, entry: &LocalAgentEntry) -> Vec<Line<'static>> {
@@ -278,10 +256,7 @@ fn local_agent_title_line(session: &Session, entry: &LocalAgentEntry) -> Line<'s
             session.core.shimmer_state.phase(),
         ));
     } else {
-        spans.push(Span::styled(
-            entry.status.clone(),
-            accent_style(session).add_modifier(Modifier::DIM),
-        ));
+        spans.push(Span::styled(entry.status.clone(), accent_style(session).add_modifier(Modifier::DIM)));
     }
 
     Line::from(spans)
@@ -290,11 +265,7 @@ fn local_agent_title_line(session: &Session, entry: &LocalAgentEntry) -> Line<'s
 fn local_agent_status_line(session: &Session, text: &str, shimmer: bool) -> Line<'static> {
     let style = default_style(session).add_modifier(Modifier::DIM);
     if shimmer && session.core.appearance.should_animate_progress_status() {
-        Line::from(shimmer_spans_with_style_at_phase(
-            text,
-            style,
-            session.core.shimmer_state.phase(),
-        ))
+        Line::from(shimmer_spans_with_style_at_phase(text, style, session.core.shimmer_state.phase()))
     } else {
         Line::from(Span::styled(text.to_string(), style))
     }
@@ -310,11 +281,7 @@ fn truncate_row(text: String, max_chars: usize) -> String {
     truncated
 }
 
-fn local_agents_divider_style(
-    session: &Session,
-    selected_index: Option<usize>,
-    entries: &[LocalAgentEntry],
-) -> Style {
+fn local_agents_divider_style(session: &Session, selected_index: Option<usize>, entries: &[LocalAgentEntry]) -> Style {
     let fallback = session.styles.accent_style().add_modifier(Modifier::BOLD);
     let Some(entry) = selected_index.and_then(|index| entries.get(index)) else {
         return fallback;

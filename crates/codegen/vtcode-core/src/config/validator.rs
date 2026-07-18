@@ -19,9 +19,7 @@ use vtcode_config::PromptCacheRetention;
 #[derive(Debug, Clone)]
 enum ModelsDatabase {
     Generated,
-    File {
-        providers: HashMap<String, ProviderModels>,
-    },
+    File { providers: HashMap<String, ProviderModels> },
 }
 
 #[derive(Debug, Clone)]
@@ -44,8 +42,7 @@ impl ModelsDatabase {
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = read_file_with_context_sync(path, "models database")?;
 
-        let json: JsonValue =
-            serde_json::from_str(&content).context("Failed to parse models database JSON")?;
+        let json: JsonValue = serde_json::from_str(&content).context("Failed to parse models database JSON")?;
 
         let mut providers = HashMap::new();
 
@@ -54,12 +51,10 @@ impl ModelsDatabase {
                 if let Some(provider_obj) = provider_data.as_object() {
                     let mut models = HashMap::new();
 
-                    if let Some(models_obj) = provider_obj.get("models").and_then(|v| v.as_object())
-                    {
+                    if let Some(models_obj) = provider_obj.get("models").and_then(|v| v.as_object()) {
                         for (model_id, model_data) in models_obj {
                             let context_window =
-                                model_data.get("context").and_then(|v| v.as_u64()).unwrap_or(0)
-                                    as usize;
+                                model_data.get("context").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
                             models.insert(model_id.clone(), ModelInfo { context_window });
                         }
@@ -79,9 +74,7 @@ impl ModelsDatabase {
             Self::Generated => supported_models_for_provider(provider)
                 .map(|models| models.contains(&model))
                 .unwrap_or(false),
-            Self::File { providers } => {
-                providers.get(provider).map(|p| p.models.contains_key(model)).unwrap_or(false)
-            }
+            Self::File { providers } => providers.get(provider).map(|p| p.models.contains_key(model)).unwrap_or(false),
         }
     }
 
@@ -162,17 +155,14 @@ impl ConfigValidator {
             if configured_context > 0 && configured_context > max_tokens {
                 result.warnings.push(format!(
                     "Configured context window ({} tokens) exceeds model limit ({} tokens) for {} on {}",
-                    configured_context, max_tokens,
-                    config.agent.default_model, config.agent.provider
+                    configured_context, max_tokens, config.agent.default_model, config.agent.provider
                 ));
             }
         }
 
-        if let Some(message) = check_openai_hosted_shell_compat(
-            config,
-            &config.agent.default_model,
-            &config.agent.provider,
-        ) {
+        if let Some(message) =
+            check_openai_hosted_shell_compat(config, &config.agent.default_model, &config.agent.provider)
+        {
             result.warnings.push(message);
         }
 
@@ -241,11 +231,7 @@ pub struct ValidationResult {
     pub warnings: Vec<String>,
 }
 
-pub fn check_prompt_cache_retention_compat(
-    config: &VTCodeConfig,
-    model: &str,
-    provider: &str,
-) -> Option<String> {
+pub fn check_prompt_cache_retention_compat(config: &VTCodeConfig, model: &str, provider: &str) -> Option<String> {
     if !provider.eq_ignore_ascii_case("openai") {
         return None;
     }
@@ -264,11 +250,7 @@ pub fn check_prompt_cache_retention_compat(
     None
 }
 
-pub fn check_openai_hosted_shell_compat(
-    config: &VTCodeConfig,
-    model: &str,
-    provider: &str,
-) -> Option<String> {
+pub fn check_openai_hosted_shell_compat(config: &VTCodeConfig, model: &str, provider: &str) -> Option<String> {
     if !provider.eq_ignore_ascii_case("openai") {
         return None;
     }
@@ -303,9 +285,7 @@ pub fn check_openai_hosted_shell_compat(
     }
 
     if let Some(message) = hosted_shell.first_invalid_skill_message() {
-        return Some(format!(
-            "{message} VT Code will ignore hosted shell until the mounted skills are corrected."
-        ));
+        return Some(format!("{message} VT Code will ignore hosted shell until the mounted skills are corrected."));
     }
 
     if let Some(message) = hosted_shell.first_invalid_network_policy_message() {
@@ -379,9 +359,12 @@ mod tests {
 
         let result = validator.validate(&config).unwrap();
         // Model exists, so there should be no model-specific lookup error.
-        assert!(!result.errors.iter().any(|e| {
-            e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'")
-        }));
+        assert!(
+            !result
+                .errors
+                .iter()
+                .any(|e| { e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'") })
+        );
     }
 
     #[test]
@@ -462,11 +445,7 @@ mod tests {
     fn retention_ok_for_responses_model() {
         let mut cfg = VTCodeConfig::default();
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
-        let msg = check_prompt_cache_retention_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT_5,
-            "openai",
-        );
+        let msg = check_prompt_cache_retention_compat(&cfg, crate::config::constants::models::openai::GPT_5, "openai");
         assert!(msg.is_none());
     }
 
@@ -474,11 +453,7 @@ mod tests {
     fn retention_ok_for_gpt_alias() {
         let mut cfg = VTCodeConfig::default();
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
-        let msg = check_prompt_cache_retention_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT,
-            "openai",
-        );
+        let msg = check_prompt_cache_retention_compat(&cfg, crate::config::constants::models::openai::GPT, "openai");
         assert!(msg.is_none());
     }
 
@@ -498,11 +473,7 @@ mod tests {
         cfg.provider.openai.hosted_shell.environment =
             crate::config::core::OpenAIHostedShellEnvironment::ContainerReference;
 
-        let msg = check_openai_hosted_shell_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT_5,
-            "openai",
-        );
+        let msg = check_openai_hosted_shell_compat(&cfg, crate::config::constants::models::openai::GPT_5, "openai");
         assert!(msg.is_some());
     }
 
@@ -516,14 +487,9 @@ mod tests {
         cfg.provider.openai.hosted_shell.file_ids = vec!["file_123".to_string()];
         cfg.provider.openai.hosted_shell.network_policy.policy_type =
             vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
-        cfg.provider.openai.hosted_shell.network_policy.allowed_domains =
-            vec!["httpbin.org".to_string()];
+        cfg.provider.openai.hosted_shell.network_policy.allowed_domains = vec!["httpbin.org".to_string()];
 
-        let msg = check_openai_hosted_shell_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT_5,
-            "openai",
-        );
+        let msg = check_openai_hosted_shell_compat(&cfg, crate::config::constants::models::openai::GPT_5, "openai");
         assert!(msg.is_some());
     }
 
@@ -532,11 +498,7 @@ mod tests {
         let mut cfg = VTCodeConfig::default();
         cfg.provider.openai.hosted_shell.enabled = true;
 
-        let msg = check_openai_hosted_shell_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT_5,
-            "openai",
-        );
+        let msg = check_openai_hosted_shell_compat(&cfg, crate::config::constants::models::openai::GPT_5, "openai");
         assert!(msg.is_none());
     }
 
@@ -545,11 +507,7 @@ mod tests {
         let mut cfg = VTCodeConfig::default();
         cfg.provider.openai.hosted_shell.enabled = true;
 
-        let msg = check_openai_hosted_shell_compat(
-            &cfg,
-            crate::config::constants::models::openai::GPT,
-            "openai",
-        );
+        let msg = check_openai_hosted_shell_compat(&cfg, crate::config::constants::models::openai::GPT, "openai");
         assert!(msg.is_none());
     }
 
@@ -557,11 +515,10 @@ mod tests {
     fn hosted_shell_warning_for_empty_skill_reference_id() {
         let mut cfg = VTCodeConfig::default();
         cfg.provider.openai.hosted_shell.enabled = true;
-        cfg.provider.openai.hosted_shell.skills =
-            vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
-                skill_id: "   ".to_string(),
-                version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
-            }];
+        cfg.provider.openai.hosted_shell.skills = vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
+            skill_id: "   ".to_string(),
+            version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
+        }];
 
         let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
 
@@ -577,10 +534,7 @@ mod tests {
         let mut cfg = VTCodeConfig::default();
         cfg.provider.openai.hosted_shell.enabled = true;
         cfg.provider.openai.hosted_shell.skills =
-            vec![vtcode_config::core::OpenAIHostedSkill::Inline {
-                bundle_b64: " ".to_string(),
-                sha256: None,
-            }];
+            vec![vtcode_config::core::OpenAIHostedSkill::Inline { bundle_b64: " ".to_string(), sha256: None }];
 
         let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
 
@@ -609,8 +563,7 @@ mod tests {
         cfg.provider.openai.hosted_shell.enabled = true;
         cfg.provider.openai.hosted_shell.network_policy.policy_type =
             vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
-        cfg.provider.openai.hosted_shell.network_policy.allowed_domains =
-            vec!["pypi.org".to_string()];
+        cfg.provider.openai.hosted_shell.network_policy.allowed_domains = vec!["pypi.org".to_string()];
         cfg.provider.openai.hosted_shell.network_policy.domain_secrets =
             vec![vtcode_config::core::OpenAIHostedShellDomainSecret {
                 domain: "httpbin.org".to_string(),
@@ -631,16 +584,18 @@ mod tests {
         config.agent.provider = "openai".to_owned();
         config.agent.default_model = "gpt-5".to_owned();
         config.provider.openai.hosted_shell.enabled = true;
-        config.provider.openai.hosted_shell.skills =
-            vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
-                skill_id: "   ".to_string(),
-                version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
-            }];
+        config.provider.openai.hosted_shell.skills = vec![vtcode_config::core::OpenAIHostedSkill::SkillReference {
+            skill_id: "   ".to_string(),
+            version: vtcode_config::core::OpenAIHostedSkillVersion::default(),
+        }];
 
         let result = validator.validate(&config).unwrap();
 
-        assert!(result.warnings.iter().any(|warning| {
-            warning.contains("provider.openai.hosted_shell.skills[0].skill_id")
-        }));
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|warning| { warning.contains("provider.openai.hosted_shell.skills[0].skill_id") })
+        );
     }
 }

@@ -288,12 +288,7 @@ impl ResponseStreamEvent {
 
     /// Returns true if this is a terminal event.
     pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::ResponseCompleted { .. }
-                | Self::ResponseFailed { .. }
-                | Self::ResponseIncomplete { .. }
-        )
+        matches!(self, Self::ResponseCompleted { .. } | Self::ResponseFailed { .. } | Self::ResponseIncomplete { .. })
     }
 
     /// Returns true if this is an unknown/unsupported event type.
@@ -332,12 +327,7 @@ pub trait StreamEventEmitter: Send {
     }
 
     /// Emit an output item added event.
-    fn output_item_added(
-        &mut self,
-        response_id: &ResponseId,
-        output_index: usize,
-        item: OutputItem,
-    ) {
+    fn output_item_added(&mut self, response_id: &ResponseId, output_index: usize, item: OutputItem) {
         self.emit(ResponseStreamEvent::OutputItemAdded {
             response_id: response_id.clone(),
             output_index,
@@ -346,12 +336,7 @@ pub trait StreamEventEmitter: Send {
     }
 
     /// Emit an output item done event.
-    fn output_item_done(
-        &mut self,
-        response_id: &ResponseId,
-        output_index: usize,
-        item: OutputItem,
-    ) {
+    fn output_item_done(&mut self, response_id: &ResponseId, output_index: usize, item: OutputItem) {
         self.emit(ResponseStreamEvent::OutputItemDone {
             response_id: response_id.clone(),
             output_index,
@@ -378,13 +363,7 @@ pub trait StreamEventEmitter: Send {
     }
 
     /// Emit a reasoning delta event.
-    fn reasoning_delta(
-        &mut self,
-        response_id: &ResponseId,
-        item_id: &str,
-        output_index: usize,
-        delta: &str,
-    ) {
+    fn reasoning_delta(&mut self, response_id: &ResponseId, item_id: &str, output_index: usize, delta: &str) {
         self.emit(ResponseStreamEvent::ReasoningDelta {
             response_id: response_id.clone(),
             item_id: item_id.to_string(),

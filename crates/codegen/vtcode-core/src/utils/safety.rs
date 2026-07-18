@@ -68,10 +68,7 @@ impl SafetyValidator {
 
     /// Validate agent mode selection based on task complexity and user preferences
     /// Returns the recommended agent mode with user confirmation if needed
-    pub fn validate_agent_mode(
-        _task_description: &str,
-        _skip_confirmations: bool,
-    ) -> Result<AgentMode> {
+    pub fn validate_agent_mode(_task_description: &str, _skip_confirmations: bool) -> Result<AgentMode> {
         // Always use single-agent mode
         println!("{}", style("Using single-agent mode with Decision Ledger").green());
         Ok(AgentMode::SingleCoder)
@@ -86,19 +83,14 @@ impl SafetyValidator {
         match (from_id, to_id) {
             (Some(from), Some(to)) => {
                 // Switching to Pro model requires confirmation
-                !matches!(to, ModelId::Gemini31ProPreview)
-                    || matches!(from, ModelId::Gemini31ProPreview)
+                !matches!(to, ModelId::Gemini31ProPreview) || matches!(from, ModelId::Gemini31ProPreview)
             }
             _ => true, // Unknown models are allowed
         }
     }
 
     /// Display safety recommendations for the current configuration
-    pub fn display_safety_recommendations(
-        model: &str,
-        agent_mode: &AgentMode,
-        task_description: Option<&str>,
-    ) {
+    pub fn display_safety_recommendations(model: &str, agent_mode: &AgentMode, task_description: Option<&str>) {
         println!("{}", style(" Safety Configuration Summary").cyan().bold());
         println!("Model: {}", style(model).green());
         println!("Agent Mode: {}", style(format!("{agent_mode:?}")).green());

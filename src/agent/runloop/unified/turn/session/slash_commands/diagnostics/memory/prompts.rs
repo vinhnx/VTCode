@@ -2,9 +2,7 @@ use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
 
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 
 use super::{MEMORY_PROMPT_QUESTION_ID, SlashCommandContext};
 
@@ -16,9 +14,7 @@ pub(super) async fn prompt_required_text(
     placeholder: &str,
     default_value: Option<String>,
 ) -> Result<Option<String>> {
-    let Some(value) =
-        prompt_text(ctx, title, question, freeform_label, placeholder, default_value, false)
-            .await?
+    let Some(value) = prompt_text(ctx, title, question, freeform_label, placeholder, default_value, false).await?
     else {
         return Ok(None);
     };
@@ -65,16 +61,14 @@ async fn prompt_text(
     )
     .await?;
     let value = match outcome {
-        WizardModalOutcome::Submitted(selections) => {
-            selections.into_iter().find_map(|selection| match selection {
-                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
-                    if question_id == MEMORY_PROMPT_QUESTION_ID =>
-                {
-                    other.or_else(|| selected.first().cloned())
-                }
-                _ => None,
-            })
-        }
+        WizardModalOutcome::Submitted(selections) => selections.into_iter().find_map(|selection| match selection {
+            InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                if question_id == MEMORY_PROMPT_QUESTION_ID =>
+            {
+                other.or_else(|| selected.first().cloned())
+            }
+            _ => None,
+        }),
         WizardModalOutcome::Cancelled { .. } => None,
     };
 
@@ -128,12 +122,8 @@ mod tests {
 
     #[test]
     fn diagnostics_prompt_step_keeps_placeholder_only_when_no_default_is_set() {
-        let step = build_diagnostics_prompt_step(
-            "Add an exclude glob.",
-            "Pattern",
-            "**/other-team/.vtcode/rules/**",
-            None,
-        );
+        let step =
+            build_diagnostics_prompt_step("Add an exclude glob.", "Pattern", "**/other-team/.vtcode/rules/**", None);
 
         assert_eq!(step.freeform_placeholder.as_deref(), Some("**/other-team/.vtcode/rules/**"));
         assert_eq!(step.freeform_default, None);
@@ -141,12 +131,7 @@ mod tests {
 
     #[test]
     fn diagnostics_prompt_step_uses_explicit_current_value_default() {
-        let step = build_diagnostics_prompt_step(
-            "Enter the byte budget.",
-            "Bytes",
-            "25600",
-            Some("25600".to_string()),
-        );
+        let step = build_diagnostics_prompt_step("Enter the byte budget.", "Bytes", "25600", Some("25600".to_string()));
 
         assert_eq!(step.freeform_placeholder.as_deref(), Some("25600"));
         assert_eq!(step.freeform_default.as_deref(), Some("25600"));

@@ -34,14 +34,13 @@ use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
 use agent_client_protocol::schema::v1::{
-    AuthenticateRequest, AuthenticateResponse, CancelNotification, InitializeRequest,
-    InitializeResponse, LoadSessionRequest, LoadSessionResponse, NewSessionRequest,
-    NewSessionResponse, PromptRequest, PromptResponse, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse,
+    AuthenticateRequest, AuthenticateResponse, CancelNotification, InitializeRequest, InitializeResponse,
+    LoadSessionRequest, LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
-    Agent, Builder, Client, ConnectionTo, HandleDispatchFrom, Responder, RunWithConnectionTo,
-    on_receive_notification, on_receive_request,
+    Agent, Builder, Client, ConnectionTo, HandleDispatchFrom, Responder, RunWithConnectionTo, on_receive_notification,
+    on_receive_request,
 };
 use futures::StreamExt;
 use serde_json::json;
@@ -77,9 +76,7 @@ where
         .on_receive_request(
             {
                 let agent = Arc::clone(&agent);
-                move |_req: AuthenticateRequest,
-                      request_cx: Responder<AuthenticateResponse>,
-                      _cx| {
+                move |_req: AuthenticateRequest, request_cx: Responder<AuthenticateResponse>, _cx| {
                     let agent = Arc::clone(&agent);
                     async move { handle_authenticate(agent, request_cx).await }
                 }
@@ -109,9 +106,7 @@ where
         .on_receive_request(
             {
                 let agent = Arc::clone(&agent);
-                move |req: SetSessionConfigOptionRequest,
-                      request_cx: Responder<SetSessionConfigOptionResponse>,
-                      _cx| {
+                move |req: SetSessionConfigOptionRequest, request_cx: Responder<SetSessionConfigOptionResponse>, _cx| {
                     let agent = Arc::clone(&agent);
                     async move { handle_set_session_config_option(agent, req, request_cx).await }
                 }
@@ -188,11 +183,7 @@ fn build_auth_methods() -> Vec<acp::AuthMethod> {
             .description("Interactive terminal-based authentication via vtcode login command")
             .args(vec!["login".to_string()]),
     ));
-    methods.push(acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new(
-        "env-api-keys",
-        "API Key",
-        env_api_keys(),
-    )));
+    methods.push(acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new("env-api-keys", "API Key", env_api_keys())));
     methods.push(acp::AuthMethod::EnvVar(acp::AuthMethodEnvVar::new(
         "env-base-urls",
         "API Base URL",
@@ -376,8 +367,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
         let data = session.data.lock().map_err(|_err| SdkError::internal_error())?;
         data.primary_agent.clone()
     };
-    let availability =
-        agent.tool_availability(provider_supports_tools, client_supports_read_text_file);
+    let availability = agent.tool_availability(provider_supports_tools, client_supports_read_text_file);
     let mut enabled_tools = Vec::with_capacity(5);
     for (tool, runtime) in availability {
         if matches!(runtime, ToolRuntime::Enabled) {
@@ -386,8 +376,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
     }
 
     let mut has_local_tools = agent.local_tools_available(&primary_agent);
-    let mut tools_allowed =
-        provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
+    let mut tools_allowed = provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
     let mut tool_definitions = agent
         .tool_definitions(provider_supports_tools, &enabled_tools, &primary_agent)
         .map(Arc::new);
@@ -434,10 +423,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                         assistant_message.push_str(&delta);
                         let chunk = text_chunk(delta);
                         let _ = agent
-                            .send_update(
-                                &args.session_id,
-                                acp::SessionUpdate::AgentMessageChunk(chunk),
-                            )
+                            .send_update(&args.session_id, acp::SessionUpdate::AgentMessageChunk(chunk))
                             .await;
                     }
                 }
@@ -445,10 +431,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                     if !delta.is_empty() {
                         let chunk = text_chunk(delta);
                         let _ = agent
-                            .send_update(
-                                &args.session_id,
-                                acp::SessionUpdate::AgentThoughtChunk(chunk),
-                            )
+                            .send_update(&args.session_id, acp::SessionUpdate::AgentThoughtChunk(chunk))
                             .await;
                     }
                 }
@@ -461,24 +444,16 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                         if !content.is_empty() {
                             let chunk = text_chunk(content.clone());
                             let _ = agent
-                                .send_update(
-                                    &args.session_id,
-                                    acp::SessionUpdate::AgentMessageChunk(chunk),
-                                )
+                                .send_update(&args.session_id, acp::SessionUpdate::AgentMessageChunk(chunk))
                                 .await;
                         }
                         assistant_message.push_str(&content);
                     }
 
-                    if let Some(reasoning) =
-                        response.reasoning.filter(|reasoning| !reasoning.is_empty())
-                    {
+                    if let Some(reasoning) = response.reasoning.filter(|reasoning| !reasoning.is_empty()) {
                         let chunk = text_chunk(reasoning);
                         let _ = agent
-                            .send_update(
-                                &args.session_id,
-                                acp::SessionUpdate::AgentThoughtChunk(chunk),
-                            )
+                            .send_update(&args.session_id, acp::SessionUpdate::AgentThoughtChunk(chunk))
                             .await;
                     }
 
@@ -514,10 +489,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                 break;
             }
 
-            if tools_allowed
-                && let Some(tool_calls) =
-                    response.tool_calls.clone().filter(|calls| !calls.is_empty())
-            {
+            if tools_allowed && let Some(tool_calls) = response.tool_calls.clone().filter(|calls| !calls.is_empty()) {
                 if agent.tool_loop_limit_reached(tool_loop_count) {
                     let message = agent.tool_loop_limit_message();
                     let _ = agent.advance_plan_to_response(&args.session_id, &mut plan).await;
@@ -537,27 +509,20 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                 }
                 agent.push_message(
                     &session,
-                    Message::assistant_with_tools(
-                        response.content.clone().unwrap_or_default(),
-                        tool_calls.clone(),
-                    ),
+                    Message::assistant_with_tools(response.content.clone().unwrap_or_default(), tool_calls.clone()),
                 );
-                let tool_results =
-                    match agent.execute_tool_calls(&session, &args.session_id, &tool_calls).await {
-                        Ok(results) => results,
-                        Err(error) => {
-                            warn!(%error, "Tool execution failed");
-                            break;
-                        }
-                    };
+                let tool_results = match agent.execute_tool_calls(&session, &args.session_id, &tool_calls).await {
+                    Ok(results) => results,
+                    Err(error) => {
+                        warn!(%error, "Tool execution failed");
+                        break;
+                    }
+                };
                 if plan.complete_context() {
                     let _ = agent.send_plan_update(&args.session_id, &plan).await;
                 }
                 for result in tool_results {
-                    agent.push_message(
-                        &session,
-                        Message::tool_response(result.tool_call_id, result.llm_response),
-                    );
+                    agent.push_message(&session, Message::tool_response(result.tool_call_id, result.llm_response));
                 }
                 if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                     stop_reason = acp::StopReason::Cancelled;
@@ -569,8 +534,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                     data.primary_agent.clone()
                 };
                 has_local_tools = agent.local_tools_available(&primary_agent);
-                tools_allowed =
-                    provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
+                tools_allowed = provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
                 tool_definitions = agent
                     .tool_definitions(provider_supports_tools, &enabled_tools, &primary_agent)
                     .map(Arc::new);

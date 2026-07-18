@@ -143,8 +143,7 @@ impl Session {
             }
             InlineCommand::SetPrimaryAgent { name, color } => {
                 self.header_context.primary_agent = name.filter(|value| !value.trim().is_empty());
-                self.header_context.primary_agent_color =
-                    color.filter(|value| !value.trim().is_empty());
+                self.header_context.primary_agent_color = color.filter(|value| !value.trim().is_empty());
                 self.invalidate_header_cache();
             }
             InlineCommand::SetCursorVisible(value) => {

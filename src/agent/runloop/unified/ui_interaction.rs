@@ -50,18 +50,11 @@ pub(crate) struct SessionStatusContext<'a> {
     pub loaded_skills: &'a Arc<RwLock<LoadedSkillsMap>>,
 }
 
-pub(crate) async fn display_session_status(
-    renderer: &mut AnsiRenderer,
-    ctx: SessionStatusContext<'_>,
-) -> Result<()> {
-    let openai_session = match crate::cli::auth::refresh_openai_login_if_available(ctx.vt_cfg).await
-    {
+pub(crate) async fn display_session_status(renderer: &mut AnsiRenderer, ctx: SessionStatusContext<'_>) -> Result<()> {
+    let openai_session = match crate::cli::auth::refresh_openai_login_if_available(ctx.vt_cfg).await {
         Ok(session) => session,
         Err(err) => {
-            renderer.line(
-                MessageStyle::Warning,
-                &format!("OpenAI OAuth refresh failed during /status: {err}"),
-            )?;
+            renderer.line(MessageStyle::Warning, &format!("OpenAI OAuth refresh failed during /status: {err}"))?;
             crate::cli::auth::load_openai_session(ctx.vt_cfg)?
         }
     };
@@ -70,25 +63,19 @@ pub(crate) async fn display_session_status(
     let terminal_info = detect_terminal_info();
     let mcp_info = summarize_mcp_servers(ctx.vt_cfg, ctx.async_mcp_manager).await;
     let skills_info = summarize_loaded_skills(ctx.loaded_skills).await;
-    let agents_info = summarize_loaded_agents_sources(
-        ctx.vt_cfg,
-        ctx.active_instruction_directory,
-        ctx.instruction_context_paths,
-    )
-    .await;
+    let agents_info =
+        summarize_loaded_agents_sources(ctx.vt_cfg, ctx.active_instruction_directory, ctx.instruction_context_paths)
+            .await;
     let memory_info = summarize_project_memory(&ctx.config.workspace);
     let settings_info = summarize_setting_sources(&ctx.config.workspace);
 
     render_status_heading(renderer, "Session status")?;
     renderer.line(MessageStyle::Info, &format!("  Version: {}", env!("CARGO_PKG_VERSION")))?;
     renderer.line(MessageStyle::Info, &format!("  Session ID: {session_id}"))?;
-    renderer
-        .line(MessageStyle::Info, &format!("  Directory: {}", ctx.config.workspace.display()))?;
+    renderer.line(MessageStyle::Info, &format!("  Directory: {}", ctx.config.workspace.display()))?;
     renderer.line(MessageStyle::Info, "")?;
     let provider_label = {
-        let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
-            ctx.config, ctx.vt_cfg,
-        );
+        let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(ctx.config, ctx.vt_cfg);
         if label.is_empty() {
             ctx.config.provider.clone()
         } else {
@@ -106,10 +93,7 @@ pub(crate) async fn display_session_status(
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, &format!("  Memory: {memory_info}"))?;
     renderer.line(MessageStyle::Info, &format!("  Setting sources: {settings_info}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Reasoning effort: {}", ctx.config.reasoning_effort),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Reasoning effort: {}", ctx.config.reasoning_effort))?;
     renderer.line(MessageStyle::Info, &format!("  Messages so far: {}", ctx.message_count))?;
 
     let used_tools = ctx.stats.sorted_tools();
@@ -118,12 +102,7 @@ pub(crate) async fn display_session_status(
     } else {
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "  Tools used: {} / {} ({})",
-                used_tools.len(),
-                ctx.available_tools,
-                used_tools.join(", ")
-            ),
+            &format!("  Tools used: {} / {} ({})", used_tools.len(), ctx.available_tools, used_tools.join(", ")),
         )?;
     }
 
@@ -139,20 +118,12 @@ async fn render_auth_usage_status(
     let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
     let copilot_auth_cfg = ctx.vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
     let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&ctx.config.workspace)).await;
-    let openai_connected =
-        matches!(openai_status, vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. })
-            || ctx.config.openai_chatgpt_auth.is_some();
+    let openai_connected = matches!(openai_status, vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. })
+        || ctx.config.openai_chatgpt_auth.is_some();
     render_status_heading(renderer, "Authentication info")?;
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "  OpenAI: {}",
-            if openai_connected {
-                "connected"
-            } else {
-                "not connected"
-            }
-        ),
+        &format!("  OpenAI: {}", if openai_connected { "connected" } else { "not connected" }),
     )?;
     if let Some(session) = openai_session {
         if let Some(email) = session.email.as_deref() {
@@ -162,43 +133,28 @@ async fn render_auth_usage_status(
             renderer.line(MessageStyle::Info, &format!("    Plan: {plan}"))?;
         }
     }
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  OpenRouter: {}", short_oauth_status_openrouter(&openrouter_status)),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  GitHub Copilot: {}", short_copilot_status(&copilot_status)),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("  OpenRouter: {}", short_oauth_status_openrouter(&openrouter_status)))?;
+    renderer.line(MessageStyle::Info, &format!("  GitHub Copilot: {}", short_copilot_status(&copilot_status)))?;
 
     if ctx.config.provider.eq_ignore_ascii_case("openai") {
         let default_auth = vtcode_auth::OpenAIAuthConfig::default();
         let auth_cfg = ctx.vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
-        let storage_mode =
-            ctx.vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
+        let storage_mode = ctx.vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
         let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
-        let overview =
-            vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
+        let overview = vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
         let usage_status = if ctx.config.openai_chatgpt_auth.is_some() {
             "using ChatGPT subscription"
         } else {
             match overview.active_source {
-                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => {
-                    "using ChatGPT subscription"
-                }
-                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => {
-                    "using OPENAI_API_KEY"
-                }
+                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ChatGpt) => "using ChatGPT subscription",
+                Some(vtcode_config::auth::OpenAIResolvedAuthSource::ApiKey) => "using OPENAI_API_KEY",
                 None => "no active OpenAI credential",
             }
         };
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "  Usage status: {} (preferred_method = {})",
-                usage_status,
-                overview.preferred_method.as_str()
-            ),
+            &format!("  Usage status: {} (preferred_method = {})", usage_status, overview.preferred_method.as_str()),
         )?;
         if let Some(notice) = overview.notice.as_deref() {
             renderer.line(MessageStyle::Info, &format!("  Notice: {notice}"))?;
@@ -210,9 +166,7 @@ async fn render_auth_usage_status(
         let api_key = get_api_key("openrouter", &ApiKeySources::default()).ok();
         let usage_status = match openrouter_status {
             vtcode_auth::AuthStatus::Authenticated { .. } => "using OpenRouter OAuth",
-            vtcode_auth::AuthStatus::NotAuthenticated if api_key.is_some() => {
-                "using OPENROUTER_API_KEY"
-            }
+            vtcode_auth::AuthStatus::NotAuthenticated if api_key.is_some() => "using OPENROUTER_API_KEY",
             vtcode_auth::AuthStatus::NotAuthenticated => "no active OpenRouter credential",
         };
         renderer.line(MessageStyle::Info, &format!("  Usage status: {usage_status}"))?;
@@ -221,9 +175,7 @@ async fn render_auth_usage_status(
             CopilotAuthStatusKind::Authenticated => "using GitHub Copilot managed authentication",
             CopilotAuthStatusKind::Unauthenticated => "no active GitHub Copilot credential",
             CopilotAuthStatusKind::ServerUnavailable => "GitHub Copilot CLI unavailable",
-            CopilotAuthStatusKind::AuthFlowFailed => {
-                "GitHub Copilot authentication needs attention"
-            }
+            CopilotAuthStatusKind::AuthFlowFailed => "GitHub Copilot authentication needs attention",
         };
         renderer.line(MessageStyle::Info, &format!("  Usage status: {usage_status}"))?;
         if let Some(message) = copilot_status.message.as_deref()
@@ -274,20 +226,14 @@ fn detect_ide_info() -> String {
     }
 
     if env::var("CURSOR_TRACE_ID").is_ok() || env::var("CURSOR_SESSION_ID").is_ok() {
-        return format_tool_version_label(
-            "Cursor",
-            detect_command_version("cursor", &["--version"]),
-        );
+        return format_tool_version_label("Cursor", detect_command_version("cursor", &["--version"]));
     }
 
     let in_vscode = env::var("VSCODE_PID").is_ok()
         || env::var("VSCODE_IPC_HOOK_CLI").is_ok()
         || term_program.as_deref().is_some_and(|value| value.contains("vscode"));
     if in_vscode {
-        return format_tool_version_label(
-            "VS Code",
-            detect_command_version("code", &["--version"]),
-        );
+        return format_tool_version_label("VS Code", detect_command_version("code", &["--version"]));
     }
 
     if env::var("JETBRAINS_IDE").is_ok() {
@@ -349,10 +295,7 @@ fn format_tool_version_label(name: &str, version: Option<String>) -> String {
     }
 }
 
-async fn summarize_mcp_servers(
-    vt_cfg: Option<&VTCodeConfig>,
-    async_mcp_manager: Option<&AsyncMcpManager>,
-) -> String {
+async fn summarize_mcp_servers(vt_cfg: Option<&VTCodeConfig>, async_mcp_manager: Option<&AsyncMcpManager>) -> String {
     let mut providers: Vec<String> = Vec::new();
     if let Some(cfg) = vt_cfg {
         if !cfg.mcp.enabled {
@@ -361,17 +304,10 @@ async fn summarize_mcp_servers(
 
         for provider in cfg.mcp.providers.iter().filter(|provider| provider.enabled) {
             let (transport_label, version_label) = match &provider.transport {
-                McpTransportConfig::Http(http) => {
-                    ("http", format!("protocol {}", http.protocol_version.trim()))
-                }
+                McpTransportConfig::Http(http) => ("http", format!("protocol {}", http.protocol_version.trim())),
                 McpTransportConfig::Stdio(_) => ("stdio", "version unknown".to_string()),
             };
-            providers.push(format!(
-                "{} ({}, {})",
-                provider.name.trim(),
-                transport_label,
-                version_label
-            ));
+            providers.push(format!("{} ({}, {})", provider.name.trim(), transport_label, version_label));
         }
     }
 
@@ -389,12 +325,8 @@ async fn summarize_mcp_servers(
                 }
                 Some(format!("active {}/{}", runtime.active_connections, runtime.provider_count))
             }
-            McpInitStatus::Initializing { progress } => {
-                Some(format!("initializing: {}", progress.trim()))
-            }
-            McpInitStatus::Error { message } => {
-                Some(format!("error: {}", truncate_status_value(message.trim(), 80)))
-            }
+            McpInitStatus::Initializing { progress } => Some(format!("initializing: {}", progress.trim())),
+            McpInitStatus::Error { message } => Some(format!("error: {}", truncate_status_value(message.trim(), 80))),
             McpInitStatus::Disabled => Some("disabled".to_string()),
         }
     } else {
@@ -444,12 +376,8 @@ async fn summarize_loaded_agents_sources(
     instruction_context_paths: &[PathBuf],
 ) -> String {
     let agent_config = vt_cfg.map(|cfg| cfg.agent.clone()).unwrap_or_default();
-    let appendix = load_instruction_appendix(
-        &agent_config,
-        active_instruction_directory,
-        instruction_context_paths,
-    )
-    .await;
+    let appendix =
+        load_instruction_appendix(&agent_config, active_instruction_directory, instruction_context_paths).await;
     let (agents, _) = instruction_memory_map(appendix.as_ref());
     format_status_path_list(&agents)
 }
@@ -469,25 +397,15 @@ pub(crate) fn instruction_memory_map(
         .iter()
         .filter(|segment| matches!(segment.source.kind, InstructionSourceKind::Agents))
         .map(|segment| {
-            format_instruction_path(
-                &segment.source.path,
-                bundle.project_root.as_path(),
-                bundle.home_dir.as_deref(),
-            )
+            format_instruction_path(&segment.source.path, bundle.project_root.as_path(), bundle.home_dir.as_deref())
         })
         .collect::<Vec<_>>();
     let matched_rules = project_doc
         .segments
         .iter()
-        .filter(|segment| {
-            matches!(segment.source.kind, InstructionSourceKind::Rule) && segment.source.matched
-        })
+        .filter(|segment| matches!(segment.source.kind, InstructionSourceKind::Rule) && segment.source.matched)
         .map(|segment| {
-            format_instruction_path(
-                &segment.source.path,
-                bundle.project_root.as_path(),
-                bundle.home_dir.as_deref(),
-            )
+            format_instruction_path(&segment.source.path, bundle.project_root.as_path(), bundle.home_dir.as_deref())
         })
         .collect::<Vec<_>>();
 
@@ -567,10 +485,7 @@ impl Drop for PlaceholderGuard {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
-async fn build_spinner_display(
-    current_message: &str,
-    progress_reporter: Option<&ProgressReporter>,
-) -> String {
+async fn build_spinner_display(current_message: &str, progress_reporter: Option<&ProgressReporter>) -> String {
     let progress_info = if let Some(progress_reporter) = progress_reporter {
         let progress = progress_reporter.progress_info().await;
         let mut parts = vec![progress.message.clone()];
@@ -636,8 +551,7 @@ impl PlaceholderSpinner {
         let task = task::spawn(async move {
             let mut current_message = message_with_hint;
             let mut last_display = initial_display;
-            let mut interval =
-                tokio::time::interval(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS));
+            let mut interval = tokio::time::interval(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS));
             interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
             let mut message_updates_enabled = true;
 
@@ -657,8 +571,7 @@ impl PlaceholderSpinner {
                     }
                 }
 
-                let display =
-                    build_spinner_display(&current_message, progress_reporter.as_ref()).await;
+                let display = build_spinner_display(&current_message, progress_reporter.as_ref()).await;
 
                 if display != last_display {
                     spinner_handle.set_input_status(Some(display.clone()), status_right.clone());
@@ -734,12 +647,7 @@ pub(crate) fn start_loading_status(
     input_status_state: &InputStatusState,
     message: impl Into<String>,
 ) -> PlaceholderSpinner {
-    PlaceholderSpinner::new(
-        handle,
-        input_status_state.left.clone(),
-        input_status_state.right.clone(),
-        message,
-    )
+    PlaceholderSpinner::new(handle, input_status_state.left.clone(), input_status_state.right.clone(), message)
 }
 
 #[derive(Default, Clone, Copy)]

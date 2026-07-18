@@ -56,11 +56,7 @@ fn streaming_new_lines_preserves_scrolled_view() {
 
     let after = visible_transcript(&mut session);
     assert_eq!(before.len(), after.len());
-    assert_eq!(
-        session.scroll_offset(),
-        before_offset,
-        "streaming should preserve manual scroll offset"
-    );
+    assert_eq!(session.scroll_offset(), before_offset, "streaming should preserve manual scroll offset");
 }
 
 #[test]
@@ -120,12 +116,8 @@ fn resizing_viewport_clamps_scroll_offset() {
     assert!(session.scroll_offset() > 0);
     let scrolled_offset = session.scroll_offset();
 
-    session.force_view_rows(
-        (LINE_COUNT as u16)
-            + ui::INLINE_HEADER_HEIGHT
-            + Session::input_block_height_for_lines(1)
-            + 2,
-    );
+    session
+        .force_view_rows((LINE_COUNT as u16) + ui::INLINE_HEADER_HEIGHT + Session::input_block_height_for_lines(1) + 2);
 
     let max_offset = session.current_max_scroll_offset();
     assert!(session.scroll_offset() <= scrolled_offset);
@@ -195,14 +187,12 @@ fn agent_messages_include_left_padding() {
     );
 
     let lines = session.reflow_transcript_lines(32);
-    let content_lines: Vec<String> =
-        lines.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
+    let content_lines: Vec<String> = lines.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
     assert!(content_lines.len() >= 2, "expected wrapped agent lines to be visible");
     let first_line = &content_lines[0];
     let second_line = &content_lines[1];
 
-    let expected_prefix =
-        format!("{}{}", ui::INLINE_AGENT_QUOTE_PREFIX, ui::INLINE_AGENT_MESSAGE_LEFT_PADDING);
+    let expected_prefix = format!("{}{}", ui::INLINE_AGENT_QUOTE_PREFIX, ui::INLINE_AGENT_MESSAGE_LEFT_PADDING);
     let continuation_prefix = " ".repeat(expected_prefix.chars().count());
 
     assert!(first_line.starts_with(&expected_prefix), "agent message should include left padding",);
@@ -273,14 +263,7 @@ fn wrap_line_keeps_list_continuation_aligned() {
     let wrapped = session.wrap_line(line, 8);
     let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
 
-    assert_eq!(
-        rendered,
-        vec![
-            "• alpha".to_string(),
-            "  beta".to_string(),
-            "  gamma".to_string()
-        ]
-    );
+    assert_eq!(rendered, vec!["• alpha".to_string(), "  beta".to_string(), "  gamma".to_string()]);
 }
 
 #[test]
@@ -352,10 +335,7 @@ fn pty_block_hides_until_output_available() {
 
     push_pty_line(&mut session, "first output");
 
-    assert!(
-        session.reflow_pty_lines(0, 80).is_empty(),
-        "placeholder PTY line should remain hidden",
-    );
+    assert!(session.reflow_pty_lines(0, 80).is_empty(), "placeholder PTY line should remain hidden",);
 
     let rendered = session.reflow_pty_lines(1, 80);
     assert!(rendered.iter().any(|line| !line.line.spans.is_empty()));
@@ -383,10 +363,7 @@ fn pty_wrapped_lines_keep_hanging_left_padding() {
     let second = line_text(&rendered[1].line);
 
     assert!(first.starts_with("    └ "), "first line was: {first:?}");
-    assert!(
-        second.starts_with("      "),
-        "wrapped line should keep hanging indent, got: {second:?}"
-    );
+    assert!(second.starts_with("      "), "wrapped line should keep hanging indent, got: {second:?}");
 }
 
 #[test]
@@ -398,10 +375,7 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
     let rendered = session.reflow_pty_lines(0, width as u16);
     for line in rendered {
         let line_width: usize = line.line.spans.iter().map(|span| span.width()).sum();
-        assert!(
-            line_width <= width,
-            "wrapped PTY line exceeded viewport width: {line_width} > {width}",
-        );
+        assert!(line_width <= width, "wrapped PTY line exceeded viewport width: {line_width} > {width}",);
     }
 }
 
@@ -411,19 +385,13 @@ fn tool_diff_numbered_lines_keep_hanging_indent_when_wrapped() {
     session.push_line(
         InlineMessageKind::Tool,
         vec![InlineSegment {
-            text:
-                "459 + let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();"
-                    .to_string(),
+            text: "459 + let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();".to_string(),
             style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
     let rendered = session.reflow_transcript_lines(40);
-    assert!(
-        rendered.len() >= 2,
-        "expected wrapped tool diff output, got {} line(s)",
-        rendered.len()
-    );
+    assert!(rendered.len() >= 2, "expected wrapped tool diff output, got {} line(s)", rendered.len());
 
     let first = line_text(&rendered[0]);
     let second = line_text(&rendered[1]);
@@ -448,15 +416,12 @@ fn agent_numbered_code_lines_keep_hanging_indent_when_wrapped() {
                     ..InlineTextStyle::default()
                 }),
             },
-            make_segment(
-                "fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {",
-            ),
+            make_segment("fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {"),
         ],
     );
 
     let rendered = session.reflow_transcript_lines(36);
-    let content_lines: Vec<String> =
-        rendered.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
+    let content_lines: Vec<String> = rendered.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
     assert!(content_lines.len() >= 2, "expected wrapped code line, got: {content_lines:?}");
 
     let first = &content_lines[0];
@@ -490,8 +455,7 @@ fn agent_omitted_code_lines_keep_hanging_indent_when_wrapped() {
     );
 
     let rendered = session.reflow_transcript_lines(52);
-    let content_lines: Vec<String> =
-        rendered.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
+    let content_lines: Vec<String> = rendered.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
     assert!(content_lines.len() >= 2, "expected wrapped omitted line, got: {content_lines:?}");
 
     let first = &content_lines[0];
@@ -595,9 +559,7 @@ fn pty_scroll_preserves_order() {
 
     let top_view = visible_transcript(&mut session);
     assert!(
-        (0..=5).any(|index| top_view
-            .iter()
-            .any(|line| line.contains(&format!("{LABEL_PREFIX}-{index}")))),
+        (0..=5).any(|index| top_view.iter().any(|line| line.contains(&format!("{LABEL_PREFIX}-{index}")))),
         "top view should include earliest PTY lines"
     );
     assert!(
@@ -657,10 +619,7 @@ fn streaming_state_not_cleared_on_status_update_with_content() {
     session.handle_command(agent_append_line_command("Hello"));
     assert!(session.is_streaming_final_answer);
 
-    session.handle_command(InlineCommand::SetInputStatus {
-        left: Some("Working...".to_string()),
-        right: None,
-    });
+    session.handle_command(InlineCommand::SetInputStatus { left: Some("Working...".to_string()), right: None });
 
     assert!(session.is_streaming_final_answer);
 }
@@ -684,10 +643,7 @@ fn non_agent_messages_dont_trigger_streaming_state() {
 fn empty_agent_segments_dont_trigger_streaming_state() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    session.handle_command(InlineCommand::AppendLine {
-        kind: InlineMessageKind::Agent,
-        segments: vec![],
-    });
+    session.handle_command(InlineCommand::AppendLine { kind: InlineMessageKind::Agent, segments: vec![] });
 
     assert!(!session.is_streaming_final_answer);
 }

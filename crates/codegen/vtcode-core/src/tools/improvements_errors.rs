@@ -311,8 +311,7 @@ mod tests {
 
     #[test]
     fn test_error_creation() {
-        let err =
-            ImprovementError::new(ErrorKind::ScoringFailed, "result score too low", "score_result");
+        let err = ImprovementError::new(ErrorKind::ScoringFailed, "result score too low", "score_result");
 
         assert_eq!(err.kind, ErrorKind::ScoringFailed);
         assert_eq!(err.severity, ImprovementSeverity::Error);
@@ -321,9 +320,8 @@ mod tests {
 
     #[test]
     fn test_error_severity() {
-        let err =
-            ImprovementError::new(ErrorKind::CacheCorrupted, "cache state invalid", "cache_read")
-                .with_severity(ImprovementSeverity::Critical);
+        let err = ImprovementError::new(ErrorKind::CacheCorrupted, "cache state invalid", "cache_read")
+            .with_severity(ImprovementSeverity::Critical);
 
         assert_eq!(err.severity, ImprovementSeverity::Critical);
         assert!(!err.is_recoverable());
@@ -331,12 +329,8 @@ mod tests {
 
     #[test]
     fn test_error_logging() {
-        let err = ImprovementError::new(
-            ErrorKind::SelectionFailed,
-            "no candidates available",
-            "select_tool",
-        )
-        .with_source("context is empty");
+        let err = ImprovementError::new(ErrorKind::SelectionFailed, "no candidates available", "select_tool")
+            .with_source("context is empty");
 
         let log = err.to_log_entry();
         assert!(log.contains("ERROR"));

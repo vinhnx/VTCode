@@ -91,11 +91,7 @@ pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
 }
 
 #[inline]
-pub fn notify_attention_with_mode(
-    default_enabled: bool,
-    message: Option<&str>,
-    method: NotifyMethodOverride,
-) {
+pub fn notify_attention_with_mode(default_enabled: bool, message: Option<&str>, method: NotifyMethodOverride) {
     if !is_bell_enabled(default_enabled) {
         return;
     }
@@ -161,14 +157,7 @@ fn detect_terminal_notify_kind() -> TerminalNotifyKind {
     let has_wezterm = std::env::var("WEZTERM_PANE").is_ok();
     let has_vte = std::env::var("VTE_VERSION").is_ok();
 
-    detect_terminal_notify_kind_from(
-        &term,
-        &term_program,
-        has_kitty,
-        has_iterm,
-        has_wezterm,
-        has_vte,
-    )
+    detect_terminal_notify_kind_from(&term, &term_program, has_kitty, has_iterm, has_wezterm, has_vte)
 }
 
 fn send_osc777_notification(message: Option<&str>) {
@@ -250,25 +239,11 @@ mod redraw_tests {
         );
         // Ghostty doesn't support OSC 9/777, use bell-only to avoid "unknown error"
         assert_eq!(
-            detect_terminal_notify_kind_from(
-                "xterm-ghostty",
-                "ghostty",
-                false,
-                false,
-                false,
-                false
-            ),
+            detect_terminal_notify_kind_from("xterm-ghostty", "ghostty", false, false, false, false),
             TerminalNotifyKind::BellOnly
         );
         assert_eq!(
-            detect_terminal_notify_kind_from(
-                "xterm-256color",
-                "wezterm",
-                false,
-                false,
-                false,
-                false
-            ),
+            detect_terminal_notify_kind_from("xterm-256color", "wezterm", false, false, false, false),
             TerminalNotifyKind::Osc9
         );
         assert_eq!(
@@ -284,10 +259,7 @@ mod redraw_tests {
     #[test]
     fn osc_payload_format_is_stable() {
         assert_eq!(build_osc9_payload("done"), format!("{OSC}9;done"));
-        assert_eq!(
-            build_osc777_payload("VT Code", "finished"),
-            format!("{OSC}777;notify;VT Code;finished")
-        );
+        assert_eq!(build_osc777_payload("VT Code", "finished"), format!("{OSC}777;notify;VT Code;finished"));
     }
 }
 

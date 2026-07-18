@@ -6,9 +6,7 @@ use super::helpers::*;
 fn down_opens_local_agents_drawer_when_input_is_empty() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
     session.close_transient();
 
@@ -23,9 +21,7 @@ fn new_local_agent_auto_opens_drawer() {
     let mut session = app_session_with_input("", 0);
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
 
     assert!(session.local_agents_visible());
@@ -36,9 +32,7 @@ fn local_agents_drawer_hides_input_while_open() {
     let mut session = app_session_with_input("draft command", "draft command".len());
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
 
     assert!(session.local_agents_visible());
@@ -60,9 +54,7 @@ fn closing_local_agents_drawer_restores_input_and_draft() {
     let mut session = app_session_with_input("draft command", "draft command".len());
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
     let _ = rendered_app_session_lines(&mut session, 20);
 
@@ -88,16 +80,8 @@ fn local_agents_drawer_navigation_works_with_existing_draft() {
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
         entries: vec![
-            sample_local_agent_entry_with_id(
-                "agent-1",
-                "rust-engineer",
-                app_types::LocalAgentKind::Delegated,
-            ),
-            sample_local_agent_entry_with_id(
-                "agent-2",
-                "qa-reviewer",
-                app_types::LocalAgentKind::Delegated,
-            ),
+            sample_local_agent_entry_with_id("agent-1", "rust-engineer", app_types::LocalAgentKind::Delegated),
+            sample_local_agent_entry_with_id("agent-2", "qa-reviewer", app_types::LocalAgentKind::Delegated),
         ],
     });
 
@@ -117,9 +101,7 @@ fn new_background_local_agent_does_not_auto_open_drawer() {
     let mut session = app_session_with_input("", 0);
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Background,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Background)],
     });
 
     assert!(!session.local_agents_visible());
@@ -129,9 +111,7 @@ fn new_background_local_agent_does_not_auto_open_drawer() {
 fn auto_opened_local_agents_drawer_closes_after_last_delegated_entry_is_removed() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::SetLocalAgents {
-        entries: vec![sample_local_agent_entry(
-            app_types::LocalAgentKind::Delegated,
-        )],
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
     });
 
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
@@ -143,9 +123,9 @@ fn auto_opened_local_agents_drawer_closes_after_last_delegated_entry_is_removed(
 fn manually_opened_empty_local_agents_drawer_stays_open() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::ShowTransient {
-        request: Box::new(app_types::TransientRequest::LocalAgents(
-            app_types::LocalAgentsTransientRequest { visible: Some(true) },
-        )),
+        request: Box::new(app_types::TransientRequest::LocalAgents(app_types::LocalAgentsTransientRequest {
+            visible: Some(true),
+        })),
     });
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
 
@@ -235,10 +215,7 @@ fn shift_tab_does_not_cycle_primary_agent_while_running() {
 #[test]
 fn tab_cycles_primary_agent_back_to_default_after_last_agent() {
     let mut session = app_session_with_input("", 0);
-    session.handle_command(app_types::InlineCommand::SetPrimaryAgent {
-        name: Some("beta".to_string()),
-        color: None,
-    });
+    session.handle_command(app_types::InlineCommand::SetPrimaryAgent { name: Some("beta".to_string()), color: None });
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
@@ -296,9 +273,7 @@ fn shift_tab_cycles_previous_primary_agent() {
 #[test]
 fn header_suggestions_include_subagent_shortcuts() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.local_agents = vec![sample_local_agent_entry(
-        app_types::LocalAgentKind::Delegated,
-    )];
+    session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)];
 
     let line = session.header_suggestions_line().expect("header suggestions line");
     let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
@@ -321,9 +296,7 @@ fn header_suggestions_hide_subagent_shortcuts_without_agents() {
 #[test]
 fn header_suggestions_hide_subagent_shortcuts_with_background_only() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.local_agents = vec![sample_local_agent_entry(
-        app_types::LocalAgentKind::Background,
-    )];
+    session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Background)];
 
     let line = session.header_suggestions_line().expect("header suggestions line");
     let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
@@ -335,9 +308,7 @@ fn header_suggestions_hide_subagent_shortcuts_with_background_only() {
 #[test]
 fn empty_input_status_shows_subagent_shortcuts() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.local_agents = vec![sample_local_agent_entry(
-        app_types::LocalAgentKind::Delegated,
-    )];
+    session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)];
 
     let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
     let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
@@ -362,9 +333,7 @@ fn empty_input_status_hides_subagent_shortcuts_without_agents() {
 #[test]
 fn empty_input_status_hides_subagent_shortcuts_with_background_only() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.local_agents = vec![sample_local_agent_entry(
-        app_types::LocalAgentKind::Background,
-    )];
+    session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Background)];
 
     let rendered = session
         .render_input_status_line(VIEW_WIDTH)
@@ -456,15 +425,13 @@ fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
 
 fn load_primary_agent_palette(session: &mut AppSession) {
     session.handle_command(app_types::InlineCommand::ShowTransient {
-        request: Box::new(app_types::TransientRequest::AgentPalette(
-            app_types::AgentPaletteTransientRequest {
-                agents: vec![
-                    app_types::AgentPaletteItem { name: "beta".to_string(), description: None },
-                    app_types::AgentPaletteItem { name: "alpha".to_string(), description: None },
-                ],
-                visible: None,
-            },
-        )),
+        request: Box::new(app_types::TransientRequest::AgentPalette(app_types::AgentPaletteTransientRequest {
+            agents: vec![
+                app_types::AgentPaletteItem { name: "beta".to_string(), description: None },
+                app_types::AgentPaletteItem { name: "alpha".to_string(), description: None },
+            ],
+            visible: None,
+        })),
     });
     session.close_transient();
 }

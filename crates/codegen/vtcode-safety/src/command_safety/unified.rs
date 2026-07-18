@@ -8,8 +8,8 @@
 //! - Audit logging & caching
 
 use crate::command_safety::{
-    AuditEntry, CommandDatabase, SafeCommandRegistry, SafetyAuditLogger, SafetyDecision,
-    SafetyDecisionCache, command_might_be_dangerous, parse_bash_lc_commands,
+    AuditEntry, CommandDatabase, SafeCommandRegistry, SafetyAuditLogger, SafetyDecision, SafetyDecisionCache,
+    command_might_be_dangerous, parse_bash_lc_commands,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -71,20 +71,9 @@ pub struct UnifiedCommandEvaluator {
 }
 
 impl UnifiedCommandEvaluator {
-    async fn log_audit_entry(
-        &self,
-        command: &[String],
-        allowed: bool,
-        reason: impl Into<String>,
-        decision_type: &str,
-    ) {
+    async fn log_audit_entry(&self, command: &[String], allowed: bool, reason: impl Into<String>, decision_type: &str) {
         self.audit_logger
-            .log(AuditEntry::new(
-                command.to_vec(),
-                allowed,
-                reason.into(),
-                decision_type.to_string(),
-            ))
+            .log(AuditEntry::new(command.to_vec(), allowed, reason.into(), decision_type.to_string()))
             .await;
     }
 
@@ -121,8 +110,7 @@ impl UnifiedCommandEvaluator {
 
         // 1. Check cache first
         if let Some(cached_decision) = self.cache.get(&command_text).await {
-            let reason =
-                EvaluationReason::CacheHit(cached_decision.is_safe, cached_decision.reason.clone());
+            let reason = EvaluationReason::CacheHit(cached_decision.is_safe, cached_decision.reason.clone());
             // Note: Audit logging skipped for cached decisions (logged on original evaluation)
             return Ok(EvaluationResult {
                 allowed: cached_decision.is_safe,
@@ -136,9 +124,7 @@ impl UnifiedCommandEvaluator {
         if command_might_be_dangerous(command) {
             let result = EvaluationResult {
                 allowed: false,
-                primary_reason: EvaluationReason::DangerousCommand(
-                    "matches dangerous patterns".into(),
-                ),
+                primary_reason: EvaluationReason::DangerousCommand("matches dangerous patterns".into()),
                 secondary_reasons: vec![],
                 resolved_path: None,
             };
@@ -203,9 +189,7 @@ impl UnifiedCommandEvaluator {
                 if let SafetyDecision::Deny(reason) = self.registry.is_safe(&script) {
                     let result = EvaluationResult {
                         allowed: false,
-                        primary_reason: EvaluationReason::SafetyDeny(format!(
-                            "sub-command denied: {reason}"
-                        )),
+                        primary_reason: EvaluationReason::SafetyDeny(format!("sub-command denied: {reason}")),
                         secondary_reasons: vec![],
                         resolved_path: None,
                     };
@@ -381,11 +365,7 @@ mod tests {
     async fn policy_deny_stops_evaluation() {
         let evaluator = UnifiedCommandEvaluator::new();
         let result = evaluator
-            .evaluate_with_policy(
-                &["git".to_string(), "status".to_string()],
-                false,
-                "policy blocked",
-            )
+            .evaluate_with_policy(&["git".to_string(), "status".to_string()], false, "policy blocked")
             .await
             .unwrap();
         assert!(!result.allowed);
@@ -396,11 +376,7 @@ mod tests {
     async fn policy_allow_continues_to_safety_checks() {
         let evaluator = UnifiedCommandEvaluator::new();
         let result = evaluator
-            .evaluate_with_policy(
-                &["git".to_string(), "status".to_string()],
-                true,
-                "policy allowed",
-            )
+            .evaluate_with_policy(&["git".to_string(), "status".to_string()], true, "policy allowed")
             .await
             .unwrap();
         // Policy allows, git status passes safety checks
@@ -411,11 +387,7 @@ mod tests {
     async fn safety_deny_overrides_policy_allow() {
         let evaluator = UnifiedCommandEvaluator::new();
         let result = evaluator
-            .evaluate_with_policy(
-                &["rm".to_string(), "-rf".to_string(), "/".to_string()],
-                true,
-                "policy allowed",
-            )
+            .evaluate_with_policy(&["rm".to_string(), "-rf".to_string(), "/".to_string()], true, "policy allowed")
             .await
             .unwrap();
         // Policy allows but safety rules deny
@@ -474,9 +446,7 @@ impl PolicyAwareEvaluator {
     /// Evaluate command with optional policy layer
     pub async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
         // Apply policy layer if configured
-        if let (Some(policy_allowed), Some(reason)) =
-            (&self.allow_policy_decision, &self.policy_reason)
-        {
+        if let (Some(policy_allowed), Some(reason)) = (&self.allow_policy_decision, &self.policy_reason) {
             self.unified.evaluate_with_policy(command, *policy_allowed, reason).await
         } else {
             // No policy configured, use pure safety evaluation

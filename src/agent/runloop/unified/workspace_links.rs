@@ -16,8 +16,7 @@ pub(crate) async fn remove_directory_symlink(path: &Path) -> Result<()> {
         if let Err(err) = tokio::fs::remove_file(path).await
             && err.kind() != ErrorKind::NotFound
         {
-            return Err(err)
-                .with_context(|| format!("failed to remove directory link {}", path.display()));
+            return Err(err).with_context(|| format!("failed to remove directory link {}", path.display()));
         }
     }
 
@@ -25,9 +24,7 @@ pub(crate) async fn remove_directory_symlink(path: &Path) -> Result<()> {
     {
         if let Err(err) = tokio::fs::remove_dir(path).await {
             if err.kind() != ErrorKind::NotFound {
-                return Err(err).with_context(|| {
-                    format!("failed to remove directory link {}", path.display())
-                });
+                return Err(err).with_context(|| format!("failed to remove directory link {}", path.display()));
             }
         }
     }

@@ -366,18 +366,14 @@ mod tests {
         let list = NetworkAllowlist::load_default();
         let domains = list.all_allow_domains_set();
         for wildcard in ["*.auth0.com", "*.workers.dev", "*.vercel.app"] {
-            assert!(
-                domains.contains(wildcard),
-                "default allowlist should include wildcard {wildcard}"
-            );
+            assert!(domains.contains(wildcard), "default allowlist should include wildcard {wildcard}");
         }
     }
 
     #[test]
     fn load_default_flags_unverified_entries() {
         let list = NetworkAllowlist::load_default();
-        let unverified: Vec<&str> =
-            list.unverified_entries().iter().filter_map(|e| e.name.as_deref()).collect();
+        let unverified: Vec<&str> = list.unverified_entries().iter().filter_map(|e| e.name.as_deref()).collect();
         assert!(
             unverified.iter().any(|n| n.contains("MiMo")),
             "expected MiMo to be flagged verify=true; got {unverified:?}"

@@ -23,18 +23,14 @@ pub(super) fn resolve_question_options(
             Some(provided_options) => {
                 let sanitized = sanitize_provided_options(&provided_options);
                 let signature = options_signature(&sanitized);
-                let repeated_signature =
-                    provided_signature_counts.get(&signature).copied().unwrap_or(0) > 1;
+                let repeated_signature = provided_signature_counts.get(&signature).copied().unwrap_or(0) > 1;
                 if should_regenerate_provided_options(question, &sanitized, repeated_signature) {
-                    generate_suggested_options(question)
-                        .or_else(|| Some(generic_planning_options()))
+                    generate_suggested_options(question).or_else(|| Some(generic_planning_options()))
                 } else {
                     Some(sanitized)
                 }
             }
-            None => {
-                generate_suggested_options(question).or_else(|| Some(generic_planning_options()))
-            }
+            None => generate_suggested_options(question).or_else(|| Some(generic_planning_options())),
         })
         .collect()
 }
@@ -97,11 +93,7 @@ fn options_signature(options: &[RequestUserInputOption]) -> String {
     let mut entries = options
         .iter()
         .map(|option| {
-            format!(
-                "{}::{}",
-                normalize_option_text(&option.label),
-                normalize_option_text(&option.description)
-            )
+            format!("{}::{}", normalize_option_text(&option.label), normalize_option_text(&option.description))
         })
         .collect::<Vec<_>>();
 
@@ -131,9 +123,7 @@ fn is_generic_planning_option_label(label: &str) -> bool {
     )
 }
 
-pub(super) fn ensure_recommended_first(
-    mut options: Vec<RequestUserInputOption>,
-) -> Vec<RequestUserInputOption> {
+pub(super) fn ensure_recommended_first(mut options: Vec<RequestUserInputOption>) -> Vec<RequestUserInputOption> {
     if options.is_empty() {
         return options;
     }
@@ -154,9 +144,7 @@ pub(super) fn ensure_recommended_first(
     options
 }
 
-pub(super) fn sanitize_provided_options(
-    options: &[RequestUserInputOption],
-) -> Vec<RequestUserInputOption> {
+pub(super) fn sanitize_provided_options(options: &[RequestUserInputOption]) -> Vec<RequestUserInputOption> {
     let mut seen_labels = HashSet::new();
     let mut sanitized = Vec::new();
 

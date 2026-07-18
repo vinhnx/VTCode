@@ -1,7 +1,5 @@
 use crate::tui::app::SlashCommandItem;
-use crate::tui::options::{
-    FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface,
-};
+use crate::tui::options::{FullscreenInteractionSettings, KeyboardProtocolSettings, SessionSurface};
 
 /// Provides high-level workspace metadata for header rendering.
 pub trait WorkspaceInfoProvider {

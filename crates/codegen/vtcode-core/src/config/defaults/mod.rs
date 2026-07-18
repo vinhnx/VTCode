@@ -1,8 +1,7 @@
 pub use vtcode_config::defaults::{
-    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
-    SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults, get_config_dir,
-    get_data_dir, install_config_defaults_provider, reset_to_default_config_defaults,
-    with_config_defaults,
+    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults, SyntaxHighlightingDefaults,
+    WorkspacePathsDefaults, current_config_defaults, get_config_dir, get_data_dir, install_config_defaults_provider,
+    reset_to_default_config_defaults, with_config_defaults,
 };
 
 pub mod provider {

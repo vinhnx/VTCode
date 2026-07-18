@@ -14,8 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use vtcode_indexer::file_search::{
-    FileMatch, FileSearchResults, MatchType, file_name_from_path, run as file_search_run,
-    run_bounded_no_follow,
+    FileMatch, FileSearchResults, MatchType, file_name_from_path, run as file_search_run, run_bounded_no_follow,
 };
 
 pub use vtcode_indexer::file_search::MatchType as FileMatchType;
@@ -94,10 +93,7 @@ impl FileSearchConfig {
 /// # Returns
 ///
 /// FileSearchResults containing matched files
-pub fn search_files(
-    config: FileSearchConfig,
-    cancel_flag: Option<Arc<AtomicBool>>,
-) -> Result<FileSearchResults> {
+pub fn search_files(config: FileSearchConfig, cancel_flag: Option<Arc<AtomicBool>>) -> Result<FileSearchResults> {
     let cancel = cancel_flag.unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
 
     let limit = NonZero::new(config.max_results).unwrap_or(NonZero::<usize>::MIN);
@@ -211,11 +207,10 @@ mod tests {
         let outside = TempDir::new().expect("outside directory");
         fs::write(workspace.path().join("WidgetLocal.rs"), "").expect("local file");
         fs::write(outside.path().join("WidgetOutside.rs"), "").expect("outside file");
-        symlink(outside.path(), workspace.path().join("linked"))
-            .expect("directory symlink fixture");
+        symlink(outside.path(), workspace.path().join("linked")).expect("directory symlink fixture");
 
-        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 20)
-            .expect("bounded path search");
+        let outcome =
+            search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 20).expect("bounded path search");
 
         assert!(outcome.paths.contains(&PathBuf::from("WidgetLocal.rs")));
         assert!(outcome.paths.iter().all(|path| !path.ends_with("WidgetOutside.rs")));
@@ -225,12 +220,11 @@ mod tests {
     fn bounded_path_search_stops_at_candidate_cap() {
         let workspace = tempfile::TempDir::new().expect("workspace");
         for index in 0..5 {
-            std::fs::write(workspace.path().join(format!("Widget{index}.rs")), "")
-                .expect("fixture file");
+            std::fs::write(workspace.path().join(format!("Widget{index}.rs")), "").expect("fixture file");
         }
 
-        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 2)
-            .expect("bounded path search");
+        let outcome =
+            search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 2).expect("bounded path search");
 
         assert_eq!(outcome.paths.len(), 2);
         assert!(outcome.truncated);
@@ -243,8 +237,8 @@ mod tests {
         std::fs::create_dir_all(&nested).expect("matching directories");
         std::fs::write(nested.join("TargetWidget.rs"), "").expect("matching file");
 
-        let outcome = search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 1)
-            .expect("bounded path search");
+        let outcome =
+            search_paths_bounded_no_follow("Widget", workspace.path().to_path_buf(), 1).expect("bounded path search");
 
         assert_eq!(outcome.paths.len(), 1);
         assert!(outcome.paths[0].ends_with("TargetWidget.rs"));

@@ -27,8 +27,7 @@ impl Default for ApprovalRecorder {
         // This default implementation creates a temporary directory for the cache.
         // In a real application, you might want a more robust default path or
         // to make `new` take an optional `cache_dir`.
-        let temp_dir =
-            std::env::temp_dir().join(format!("approval_recorder_default_{}", std::process::id()));
+        let temp_dir = std::env::temp_dir().join(format!("approval_recorder_default_{}", std::process::id()));
         Self::new(temp_dir)
     }
 }
@@ -229,7 +228,8 @@ mod tests {
         // observe them on the next auto-approve check without restart.
         let temp_dir = temp_cache_dir();
 
-        let key = "find src -type f -name '*.rs' '|' sort|sandbox_permissions=\"use_default\"|additional_permissions=null";
+        let key =
+            "find src -type f -name '*.rs' '|' sort|sandbox_permissions=\"use_default\"|additional_permissions=null";
 
         let reader = ApprovalRecorder::new(temp_dir.path().to_path_buf());
         assert!(!reader.should_auto_approve(key).await);
@@ -257,9 +257,7 @@ mod tests {
 
         assert_eq!(
             recorder
-                .get_approval_count(
-                    "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
-                )
+                .get_approval_count("cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null")
                 .await,
             0
         );

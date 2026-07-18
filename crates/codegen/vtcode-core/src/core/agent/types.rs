@@ -12,9 +12,7 @@ pub enum MessageType {
 }
 
 /// Priority levels for messages and tasks
-#[derive(
-    Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash,
-)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
     Low = 1,
     #[default]

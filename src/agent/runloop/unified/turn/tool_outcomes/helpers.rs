@@ -6,8 +6,7 @@ use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
 
-pub(crate) const FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
-    "user_requested_implementation";
+pub(crate) const FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION: &str = "user_requested_implementation";
 
 /// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
 /// warning fires. NL2Repo-Bench recommends verifying after every few edits.
@@ -133,13 +132,8 @@ pub(crate) fn find_duplicate_in_history(
                     for tc in tool_calls {
                         if let Some(ref func) = tc.function {
                             let tc_args: serde_json::Value = serde_json::from_str(&func.arguments)
-                                .unwrap_or_else(|_| {
-                                    serde_json::Value::Object(serde_json::Map::new())
-                                });
-                            current_batch.insert(
-                                tc.id.clone(),
-                                (canonical_tool_name(&func.name).to_string(), tc_args),
-                            );
+                                .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
+                            current_batch.insert(tc.id.clone(), (canonical_tool_name(&func.name).to_string(), tc_args));
                         }
                     }
                 }
@@ -193,13 +187,10 @@ fn history_has_scoped_mutation_after(
                     let Some(function) = tool_call.function.as_ref() else {
                         continue;
                     };
-                    let Ok(args) = serde_json::from_str::<serde_json::Value>(&function.arguments)
-                    else {
+                    let Ok(args) = serde_json::from_str::<serde_json::Value>(&function.arguments) else {
                         continue;
                     };
-                    if !vtcode_core::tools::tool_intent::classify_tool_intent(&function.name, &args)
-                        .mutating
-                    {
+                    if !vtcode_core::tools::tool_intent::classify_tool_intent(&function.name, &args).mutating {
                         continue;
                     }
                     let paths = vtcode_core::tools::mutation_target_paths(&function.name, &args);
@@ -217,11 +208,7 @@ fn history_has_scoped_mutation_after(
                 };
                 if tool_response_is_success(message)
                     && paths.iter().any(|path| {
-                        vtcode_core::tools::code_search_scope_contains_mutated_path(
-                            search_args,
-                            path,
-                            workspace_root,
-                        )
+                        vtcode_core::tools::code_search_scope_contains_mutated_path(search_args, path, workspace_root)
                     })
                 {
                     return true;
@@ -240,10 +227,7 @@ fn tool_response_is_success(message: &uni::Message) -> bool {
     let Some(output) = output.as_object() else {
         return false;
     };
-    if output.contains_key("error")
-        || output.contains_key("error_type")
-        || output.contains_key("failure_kind")
-    {
+    if output.contains_key("error") || output.contains_key("error_type") || output.contains_key("failure_kind") {
         return false;
     }
     if output.get("status").is_some_and(|status| status.as_str() != Some("success")) {
@@ -293,10 +277,7 @@ fn output_reuses_recent_result(output: &serde_json::Value) -> bool {
 
 fn looks_like_grep_style_command(command: &str) -> bool {
     let lower = command.trim().to_ascii_lowercase();
-    lower.starts_with("grep ")
-        || lower.starts_with("rg ")
-        || lower.contains("/grep ")
-        || lower.contains("/rg ")
+    lower.starts_with("grep ") || lower.starts_with("rg ") || lower.contains("/grep ") || lower.contains("/rg ")
 }
 
 fn output_is_grep_style_miss(output: &serde_json::Value, command_success: bool) -> bool {
@@ -388,9 +369,7 @@ pub(crate) fn push_tool_response<S>(
 
     let tool_call_id = tool_call_id.into();
     history.push(match tool_name {
-        Some(name) => {
-            uni::Message::tool_response_with_origin(tool_call_id, content, name.to_string())
-        }
+        Some(name) => uni::Message::tool_response_with_origin(tool_call_id, content, name.to_string()),
         None => uni::Message::tool_response(tool_call_id, content),
     });
 }
@@ -425,12 +404,11 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
     // allocating full JSON payloads for large tool arguments.
     let mut hash: u64 = 0xcbf29ce484222325;
     let mut input_len = 0usize;
-    let mutability_tag =
-        if vtcode_core::tools::tool_intent::classify_tool_intent(name, args).mutating {
-            "rw"
-        } else {
-            "ro"
-        };
+    let mutability_tag = if vtcode_core::tools::tool_intent::classify_tool_intent(name, args).mutating {
+        "rw"
+    } else {
+        "ro"
+    };
 
     if serde_json::to_writer(HashingWriter::new(&mut hash, &mut input_len), args).is_err() {
         for byte in b"{}" {
@@ -564,13 +542,12 @@ fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
                 false
             }
         }
-        tool_names::WRITE_FILE
-        | tool_names::EDIT_FILE
-        | tool_names::CREATE_FILE
-        | tool_names::SEARCH_REPLACE => ["path", "file_path", "filepath", "filePath"]
-            .iter()
-            .filter_map(|key| args.get(*key).and_then(|value| value.as_str()))
-            .any(path_targets_plan_artifact),
+        tool_names::WRITE_FILE | tool_names::EDIT_FILE | tool_names::CREATE_FILE | tool_names::SEARCH_REPLACE => {
+            ["path", "file_path", "filepath", "filePath"]
+                .iter()
+                .filter_map(|key| args.get(*key).and_then(|value| value.as_str()))
+                .any(path_targets_plan_artifact)
+        }
         _ => false,
     }
 }
@@ -593,11 +570,8 @@ pub(crate) fn update_repetition_tracker(
     let signature_key = signature_key_for(canonical_name, args);
     loop_tracker.record(signature_key.clone());
     let low_signal_family =
-        crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key(
-            canonical_name,
-            args,
-        )
-        .filter(|_| is_low_signal_outcome(outcome, canonical_name));
+        crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key(canonical_name, args)
+            .filter(|_| is_low_signal_outcome(outcome, canonical_name));
     if let Some(low_signal_family) = low_signal_family.as_ref() {
         loop_tracker.record_low_signal(low_signal_family.clone());
     }
@@ -660,9 +634,7 @@ pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
 ///
 /// Returns `Some(&Value)` for successful executions, `None` for failures,
 /// timeouts, and cancellations.
-pub(crate) fn tool_output_from_outcome(
-    outcome: &ToolPipelineOutcome,
-) -> Option<&serde_json::Value> {
+pub(crate) fn tool_output_from_outcome(outcome: &ToolPipelineOutcome) -> Option<&serde_json::Value> {
     match &outcome.status {
         ToolExecutionStatus::Success { output, .. } => Some(output),
         _ => None,
@@ -696,12 +668,7 @@ mod tests {
             "{\"output\":\"first\"}".to_string(),
         )];
 
-        push_tool_response(
-            &mut history,
-            "call_1".to_string(),
-            None,
-            "{\"output\":\"latest\"}".to_string(),
-        );
+        push_tool_response(&mut history, "call_1".to_string(), None, "{\"output\":\"latest\"}".to_string());
 
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].content.as_text_borrowed(), Some("{\"output\":\"latest\"}"));
@@ -711,12 +678,7 @@ mod tests {
     fn push_tool_response_sets_origin_tool_when_provided() {
         let mut history = Vec::new();
 
-        push_tool_response(
-            &mut history,
-            "call_1".to_string(),
-            Some("read_file"),
-            "{\"output\":\"first\"}".to_string(),
-        );
+        push_tool_response(&mut history, "call_1".to_string(), Some("read_file"), "{\"output\":\"first\"}".to_string());
 
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].origin_tool.as_deref(), Some("read_file"));
@@ -782,10 +744,7 @@ mod tests {
                     "{}".into(),
                 )],
             ),
-            uni::Message::tool_response(
-                "call_0".to_string(),
-                "{\"output\":\"file content\"}".into(),
-            ),
+            uni::Message::tool_response("call_0".to_string(), "{\"output\":\"file content\"}".into()),
             // Commentary Assistant with no tool_calls — must act as boundary
             uni::Message::assistant("I need to retry.".into()),
             uni::Message::assistant_with_tools(
@@ -815,10 +774,7 @@ mod tests {
             Some("{\"output\":\"file content\"}"),
             "earlier file read result must remain intact"
         );
-        assert_eq!(
-            tool_messages[1].content.as_text_borrowed(),
-            Some("{\"output\":\"patch result\"}")
-        );
+        assert_eq!(tool_messages[1].content.as_text_borrowed(), Some("{\"output\":\"patch result\"}"));
     }
 
     #[test]
@@ -832,12 +788,7 @@ mod tests {
             ),
         });
 
-        update_repetition_tracker(
-            &mut tracker,
-            &outcome,
-            "edit_file",
-            &json!({"path":"src/main.rs"}),
-        );
+        update_repetition_tracker(&mut tracker, &outcome, "edit_file", &json!({"path":"src/main.rs"}));
 
         assert_eq!(tracker.max_count_filtered(|_| false), 1);
     }
@@ -847,12 +798,7 @@ mod tests {
         let mut tracker = LoopTracker::new();
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
 
-        update_repetition_tracker(
-            &mut tracker,
-            &outcome,
-            "edit_file",
-            &json!({"path":"src/main.rs"}),
-        );
+        update_repetition_tracker(&mut tracker, &outcome, "edit_file", &json!({"path":"src/main.rs"}));
 
         assert_eq!(tracker.max_count_filtered(|_| false), 0);
     }
@@ -896,12 +842,7 @@ mod tests {
         assert_eq!(tracker.consecutive_mutations, 1);
         assert_eq!(tracker.consecutive_navigations, 0);
 
-        update_repetition_tracker(
-            &mut tracker,
-            &success,
-            "write_to_file",
-            &json!({"path":"src/lib.rs","content":"x"}),
-        );
+        update_repetition_tracker(&mut tracker, &success, "write_to_file", &json!({"path":"src/lib.rs","content":"x"}));
         assert_eq!(tracker.consecutive_mutations, 2);
     }
 
@@ -951,21 +892,11 @@ mod tests {
             command_success: true,
         });
 
-        update_repetition_tracker(
-            &mut tracker,
-            &success,
-            tools::READ_FILE,
-            &json!({"path":"src/main.rs"}),
-        );
+        update_repetition_tracker(&mut tracker, &success, tools::READ_FILE, &json!({"path":"src/main.rs"}));
         assert_eq!(tracker.consecutive_navigations, 1);
         assert_eq!(tracker.consecutive_mutations, 0);
 
-        update_repetition_tracker(
-            &mut tracker,
-            &success,
-            tools::GREP_FILE,
-            &json!({"pattern":"foo","path":"src/"}),
-        );
+        update_repetition_tracker(&mut tracker, &success, tools::GREP_FILE, &json!({"pattern":"foo","path":"src/"}));
         assert_eq!(tracker.consecutive_navigations, 2);
     }
 
@@ -981,12 +912,7 @@ mod tests {
 
         // Several reads
         for _ in 0..5 {
-            update_repetition_tracker(
-                &mut tracker,
-                &success,
-                tools::READ_FILE,
-                &json!({"path":"src/main.rs"}),
-            );
+            update_repetition_tracker(&mut tracker, &success, tools::READ_FILE, &json!({"path":"src/main.rs"}));
         }
         assert_eq!(tracker.consecutive_navigations, 5);
 
@@ -1083,9 +1009,7 @@ mod tests {
 
     #[test]
     fn argument_error_detection_includes_required_update_fields() {
-        assert!(check_is_argument_error(
-            "Tool execution failed: 'index' is required for 'update' (1-indexed)"
-        ));
+        assert!(check_is_argument_error("Tool execution failed: 'index' is required for 'update' (1-indexed)"));
     }
 
     #[test]
@@ -1264,10 +1188,7 @@ mod tests {
         let args_b = json!({"action": "read", "path": "src/lib.rs", "offset": 50, "limit": 200});
         let key_a = read_normalized_signature_key("file_operation", &args_a);
         let key_b = read_normalized_signature_key("file_operation", &args_b);
-        assert_eq!(
-            key_a, key_b,
-            "same file read with different offset/limit should produce the same normalized key"
-        );
+        assert_eq!(key_a, key_b, "same file read with different offset/limit should produce the same normalized key");
     }
 
     #[test]
@@ -1297,10 +1218,7 @@ mod tests {
         });
         let key_a = read_normalized_signature_key(tools::CODE_SEARCH, &args_a);
         let key_b = read_normalized_signature_key(tools::CODE_SEARCH, &args_b);
-        assert_ne!(
-            key_a, key_b,
-            "different effective limits must not share one code-search replay identity"
-        );
+        assert_ne!(key_a, key_b, "different effective limits must not share one code-search replay identity");
 
         let args_default = json!({
             "query": " Widget ",
@@ -1348,10 +1266,7 @@ mod tests {
             tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/lib.rs","offset":50,"limit":500}),
         );
-        assert_eq!(
-            key_a, key_b,
-            "same file read with different offset/limit should normalize to the same key"
-        );
+        assert_eq!(key_a, key_b, "same file read with different offset/limit should normalize to the same key");
 
         // Verify: different file → different key
         let key_c = read_normalized_signature_key(
@@ -1369,10 +1284,7 @@ mod tests {
             tools::CODE_SEARCH,
             &json!({"query":"Widget","path":"src","file_types":["typescript","rs"],"result_types":["definition","text"],"max_results":100}),
         );
-        assert_ne!(
-            s_key_a, s_key_b,
-            "different effective limits must not share one code-search replay identity"
-        );
+        assert_ne!(s_key_a, s_key_b, "different effective limits must not share one code-search replay identity");
 
         // Verify: write NOT normalized
         let w_key_a = read_normalized_signature_key(
@@ -1392,10 +1304,7 @@ mod tests {
             vec![uni::ToolCall::function(
                 "tc_exact".into(),
                 tools::UNIFIED_FILE.into(),
-                serde_json::to_string(
-                    &json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100}),
-                )
-                .unwrap(),
+                serde_json::to_string(&json!({"action":"read","path":"src/lib.rs","offset":0,"limit":100})).unwrap(),
             )],
         ));
         history.push(uni::Message {
@@ -1518,9 +1427,7 @@ mod tests {
             ..Default::default()
         };
         let mutation = |path: &str, result: serde_json::Value| {
-            let patch = format!(
-                "*** Begin Patch\n*** Update File: {path}\n@@\n-Widget\n+Gadget\n*** End Patch\n"
-            );
+            let patch = format!("*** Begin Patch\n*** Update File: {path}\n@@\n-Widget\n+Gadget\n*** End Patch\n");
             vec![
                 uni::Message::assistant_with_tools(
                     "edit".into(),
@@ -1537,42 +1444,23 @@ mod tests {
         let mut in_scope_history = vec![search_call.clone(), search_result.clone()];
         in_scope_history.extend(mutation("src/widget.rs", json!({"success": true})));
         assert!(
-            find_duplicate_in_history(
-                &in_scope_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .is_none(),
+            find_duplicate_in_history(&in_scope_history, tools::CODE_SEARCH, &search_args, Path::new("."),).is_none(),
             "editing src/widget.rs after searching src must force a fresh search"
         );
 
         let mut status_success_history = vec![search_call.clone(), search_result.clone()];
-        status_success_history.extend(mutation(
-            "src/widget.rs",
-            json!({"status": "success", "output": "patch applied"}),
-        ));
+        status_success_history
+            .extend(mutation("src/widget.rs", json!({"status": "success", "output": "patch applied"})));
         assert!(
-            find_duplicate_in_history(
-                &status_success_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .is_none(),
+            find_duplicate_in_history(&status_success_history, tools::CODE_SEARCH, &search_args, Path::new("."),)
+                .is_none(),
             "the established successful status shape must invalidate replay"
         );
 
         let mut unrelated_history = vec![search_call.clone(), search_result.clone()];
         unrelated_history.extend(mutation("tests/widget.rs", json!({"success": true})));
         assert_eq!(
-            find_duplicate_in_history(
-                &unrelated_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .as_deref(),
+            find_duplicate_in_history(&unrelated_history, tools::CODE_SEARCH, &search_args, Path::new("."),).as_deref(),
             Some("{\"results\":[\"cached\"]}"),
             "an unrelated edit may reuse the prior scoped search"
         );
@@ -1590,13 +1478,8 @@ mod tests {
             let mut failed_history = vec![search_call.clone(), search_result.clone()];
             failed_history.extend(mutation("src/widget.rs", failure));
             assert_eq!(
-                find_duplicate_in_history(
-                    &failed_history,
-                    tools::CODE_SEARCH,
-                    &search_args,
-                    Path::new("."),
-                )
-                .as_deref(),
+                find_duplicate_in_history(&failed_history, tools::CODE_SEARCH, &search_args, Path::new("."),)
+                    .as_deref(),
                 Some("{\"results\":[\"cached\"]}"),
                 "a mutation without explicit positive success evidence must preserve reuse"
             );
@@ -1606,13 +1489,8 @@ mod tests {
         let unexecuted_mutation = mutation("src/widget.rs", json!({"success": true}));
         unexecuted_history.push(unexecuted_mutation[0].clone());
         assert_eq!(
-            find_duplicate_in_history(
-                &unexecuted_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .as_deref(),
+            find_duplicate_in_history(&unexecuted_history, tools::CODE_SEARCH, &search_args, Path::new("."),)
+                .as_deref(),
             Some("{\"results\":[\"cached\"]}"),
             "an unexecuted mutation call must preserve reuse"
         );
@@ -1620,13 +1498,10 @@ mod tests {
 
     #[test]
     fn mutation_tool_response_success_rejects_malformed_and_conflicting_shapes() {
-        let response =
-            |content: &str| uni::Message::tool_response("edit_call".into(), content.into());
+        let response = |content: &str| uni::Message::tool_response("edit_call".into(), content.into());
 
         assert!(tool_response_is_success(&response(r#"{"success":true}"#)));
-        assert!(tool_response_is_success(&response(
-            r#"{"status":"success","output":"patch applied"}"#,
-        )));
+        assert!(tool_response_is_success(&response(r#"{"status":"success","output":"patch applied"}"#,)));
 
         for content in [
             "not json",
@@ -1655,10 +1530,8 @@ mod tests {
                 serde_json::to_string(&search_args).unwrap(),
             )],
         );
-        let search_result = uni::Message::tool_response(
-            shared_call_id.into(),
-            "{\"results\":[\"genuine search output\"]}".into(),
-        );
+        let search_result =
+            uni::Message::tool_response(shared_call_id.into(), "{\"results\":[\"genuine search output\"]}".into());
         let patch = "*** Begin Patch\n*** Update File: src/widget.rs\n@@\n-Widget\n+Gadget\n*** End Patch\n";
         let patch_call = uni::Message::assistant_with_tools(
             "edit".into(),
@@ -1679,30 +1552,18 @@ mod tests {
             ),
         ];
         assert!(
-            find_duplicate_in_history(
-                &successful_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .is_none(),
+            find_duplicate_in_history(&successful_history, tools::CODE_SEARCH, &search_args, Path::new("."),).is_none(),
             "a successful in-scope patch must invalidate the genuine earlier search result"
         );
 
         successful_history.pop();
         successful_history.push(uni::Message::tool_response(
             shared_call_id.into(),
-            json!({"success": false, "error": "patch rejected", "output": "patch output"})
-                .to_string(),
+            json!({"success": false, "error": "patch rejected", "output": "patch output"}).to_string(),
         ));
         assert_eq!(
-            find_duplicate_in_history(
-                &successful_history,
-                tools::CODE_SEARCH,
-                &search_args,
-                Path::new("."),
-            )
-            .as_deref(),
+            find_duplicate_in_history(&successful_history, tools::CODE_SEARCH, &search_args, Path::new("."),)
+                .as_deref(),
             Some("{\"results\":[\"genuine search output\"]}"),
             "a failed patch must preserve the earlier search without returning patch output"
         );

@@ -15,9 +15,10 @@ use super::super::types::{RunTerminalMode, ToolRuntime};
 
 impl ZedAgent {
     pub(super) fn local_tools_available(&self, primary_agent: &str) -> bool {
-        self.acp_tool_registry.definitions_for(&[], true).iter().any(|definition| {
-            self.primary_agents.allows_local_tool(primary_agent, definition.function_name())
-        })
+        self.acp_tool_registry
+            .definitions_for(&[], true)
+            .iter()
+            .any(|definition| self.primary_agents.allows_local_tool(primary_agent, definition.function_name()))
     }
 
     pub(super) fn tool_definitions(
@@ -35,17 +36,13 @@ impl ZedAgent {
             None
         } else {
             let workspace_root = self.config.workspace.clone();
-            Some(self.acp_tool_registry.definitions_for_filtered(
-                enabled_tools,
-                include_local,
-                |tool_name| {
-                    self.primary_agents.allows_tool(
-                        primary_agent,
-                        tool_name,
-                        workspace_root.as_path(),
-                    )
-                },
-            ))
+            Some(
+                self.acp_tool_registry
+                    .definitions_for_filtered(enabled_tools, include_local, |tool_name| {
+                        self.primary_agents
+                            .allows_tool(primary_agent, tool_name, workspace_root.as_path())
+                    }),
+            )
         }
     }
 
@@ -93,13 +90,12 @@ impl ZedAgent {
             .registered_tools()
             .into_iter()
             .map(|tool| {
-                let runtime = if provider_supports_tools
-                    && (tool != SupportedTool::ReadFile || client_supports_read_text_file)
-                {
-                    ToolRuntime::Enabled
-                } else {
-                    ToolRuntime::Disabled
-                };
+                let runtime =
+                    if provider_supports_tools && (tool != SupportedTool::ReadFile || client_supports_read_text_file) {
+                        ToolRuntime::Enabled
+                    } else {
+                        ToolRuntime::Disabled
+                    };
                 (tool, runtime)
             })
             .collect()
@@ -146,19 +142,13 @@ impl ZedAgent {
             _ => {}
         }
 
-        let parts = command_args::command_words(args)
-            .map_err(str::to_string)?
-            .ok_or_else(|| {
-                "command execution requires a 'command' field (string/array or indexed command.N entries)"
-                    .to_string()
-            })?;
+        let parts = command_args::command_words(args).map_err(str::to_string)?.ok_or_else(|| {
+            "command execution requires a 'command' field (string/array or indexed command.N entries)".to_string()
+        })?;
         validate_command_parts(parts)
     }
 
-    pub(super) fn resolve_terminal_working_dir(
-        &self,
-        args: &Value,
-    ) -> Result<Option<PathBuf>, String> {
+    pub(super) fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
         let requested = command_args::working_dir_text(args);
 
         let Some(raw_dir) = requested else {
@@ -178,10 +168,7 @@ impl ZedAgent {
         Ok(Some(normalized))
     }
 
-    pub(super) fn describe_terminal_location(
-        &self,
-        working_dir: Option<&PathBuf>,
-    ) -> Option<String> {
+    pub(super) fn describe_terminal_location(&self, working_dir: Option<&PathBuf>) -> Option<String> {
         let workspace = &self.config.workspace;
         working_dir.and_then(|path| {
             path.strip_prefix(workspace).ok().map(|relative| {
@@ -211,20 +198,14 @@ impl ZedAgent {
         self.config.workspace.as_path()
     }
 
-    pub(super) fn resolve_workspace_path(
-        &self,
-        candidate: PathBuf,
-        argument: &str,
-    ) -> Result<PathBuf, String> {
+    pub(super) fn resolve_workspace_path(&self, candidate: PathBuf, argument: &str) -> Result<PathBuf, String> {
         let resolved_candidate = if candidate.is_absolute() {
             candidate
         } else {
             self.workspace_root().join(candidate)
         };
         let normalized = ensure_path_within_workspace(&resolved_candidate, self.workspace_root())
-            .map_err(|_err| {
-            Self::argument_message(TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE, argument)
-        })?;
+            .map_err(|_err| Self::argument_message(TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE, argument))?;
 
         if !normalized.is_absolute() {
             return Err(Self::argument_message(TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE, argument));
@@ -275,8 +256,6 @@ impl ZedAgent {
             return self.parse_resource_path(uri);
         }
 
-        Err(format!(
-            "{TOOL_FAILURE_PREFIX}: missing {TOOL_READ_FILE_PATH_ARG} or {TOOL_READ_FILE_URI_ARG}"
-        ))
+        Err(format!("{TOOL_FAILURE_PREFIX}: missing {TOOL_READ_FILE_PATH_ARG} or {TOOL_READ_FILE_URI_ARG}"))
     }
 }

@@ -16,13 +16,7 @@ pub const QWEN_3_6_PLUS: &str = "qwen3.6-plus";
 pub const DEEPSEEK_V4_PRO: &str = "deepseek-v4-pro";
 pub const DEEPSEEK_V4_FLASH: &str = "deepseek-v4-flash";
 
-pub const MESSAGES_API_MODELS: &[&str] = &[
-    MINIMAX_M3,
-    MINIMAX_M2_7,
-    QWEN_3_7_MAX,
-    QWEN_3_7_PLUS,
-    QWEN_3_6_PLUS,
-];
+pub const MESSAGES_API_MODELS: &[&str] = &[MINIMAX_M3, MINIMAX_M2_7, QWEN_3_7_MAX, QWEN_3_7_PLUS, QWEN_3_6_PLUS];
 pub const CHAT_COMPLETIONS_MODELS: &[&str] = &[
     GLM_5_2,
     GLM_5_1,

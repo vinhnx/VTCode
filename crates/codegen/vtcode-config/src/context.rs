@@ -65,15 +65,9 @@ impl Default for DynamicContextConfig {
 
 impl DynamicContextConfig {
     pub fn validate(&self) -> Result<()> {
-        ensure!(
-            self.tool_output_threshold >= 1024,
-            "Tool output threshold must be at least 1024 bytes"
-        );
+        ensure!(self.tool_output_threshold >= 1024, "Tool output threshold must be at least 1024 bytes");
         ensure!(self.max_spooled_files > 0, "Max spooled files must be greater than zero");
-        ensure!(
-            self.retained_user_messages > 0,
-            "Retained user messages must be greater than zero"
-        );
+        ensure!(self.retained_user_messages > 0, "Retained user messages must be greater than zero");
         Ok(())
     }
 }

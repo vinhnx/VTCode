@@ -11,23 +11,17 @@ use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput};
 
-use crate::agent::runloop::model_picker::{
-    ModelPickerProgress, ModelPickerStart, ModelPickerState,
-};
+use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::slash_commands::SessionPaletteMode;
-use crate::agent::runloop::unified::model_selection::{
-    ModelSwitchCompactionTargets, finalize_model_selection,
-};
+use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODE_ACTION_PREFIX,
-    MODEL_TARGET_ACTION_LIGHTWEIGHT, MODEL_TARGET_ACTION_MAIN, build_lightweight_palette_view,
-    handle_palette_cancel, handle_palette_preview, handle_palette_selection,
-    show_fork_mode_palette, show_lightweight_model_palette, show_model_target_palette,
+    ActivePalette, LIGHTWEIGHT_MODEL_ACTION_PREFIX, MODE_ACTION_PREFIX, MODEL_TARGET_ACTION_LIGHTWEIGHT,
+    MODEL_TARGET_ACTION_MAIN, build_lightweight_palette_view, handle_palette_cancel, handle_palette_preview,
+    handle_palette_selection, show_fork_mode_palette, show_lightweight_model_palette, show_model_target_palette,
     show_sessions_palette, show_theme_palette,
 };
 use crate::agent::runloop::unified::settings_interactive::{
-    ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL,
-    show_settings_palette,
+    ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL, show_settings_palette,
 };
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::agent::runloop::unified::url_guard::{
@@ -84,11 +78,7 @@ impl<'a> InlineModalProcessor<'a> {
         self.model_picker.handle.restore_input_draft(input);
     }
 
-    pub(crate) fn request_url_guard(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        url: String,
-    ) -> Result<InlineLoopAction> {
+    pub(crate) fn request_url_guard(&mut self, renderer: &mut AnsiRenderer, url: String) -> Result<InlineLoopAction> {
         if matches!(self.palette.state.as_ref(), Some(ActivePalette::UrlGuard { .. })) {
             return Ok(InlineLoopAction::Continue);
         }
@@ -157,20 +147,15 @@ impl<'a> InlineModalProcessor<'a> {
         let vt_cfg = self.model_picker.vt_cfg.clone();
         let view = {
             let loading_spinner = if renderer.supports_inline_ui() {
-                let spinner = PlaceholderSpinner::new(
-                    self.model_picker.handle,
-                    None,
-                    None,
-                    "Loading lightweight model lists...",
-                );
+                let spinner =
+                    PlaceholderSpinner::new(self.model_picker.handle, None, None, "Loading lightweight model lists...");
                 spinner.set_defer_restore(true);
                 Some(spinner)
             } else {
                 renderer.line(MessageStyle::Info, "Loading lightweight model lists...")?;
                 None
             };
-            let result =
-                build_lightweight_palette_view(self.model_picker.config, vt_cfg.as_ref()).await;
+            let result = build_lightweight_palette_view(self.model_picker.config, vt_cfg.as_ref()).await;
             if let Some(ref s) = loading_spinner {
                 // Explicitly restore after loading is done (override defer_restore).
                 s.finish_with_restore(true);
@@ -186,10 +171,7 @@ impl<'a> InlineModalProcessor<'a> {
         Ok(())
     }
 
-    pub(crate) fn handle_cancel(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<InlineLoopAction> {
+    pub(crate) fn handle_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<InlineLoopAction> {
         if self.handle_url_guard_cancel(renderer)? {
             return Ok(InlineLoopAction::Continue);
         }
@@ -213,11 +195,7 @@ impl<'a> InlineModalProcessor<'a> {
 
         // Update header in real-time when the plan approval selection changes
         // so the user sees which mode they're about to enter.
-        update_header_for_plan_selection(
-            &selection,
-            self.model_picker.header_context,
-            self.model_picker.handle,
-        );
+        update_header_for_plan_selection(&selection, self.model_picker.header_context, self.model_picker.handle);
 
         self.palette.handle_preview(renderer, selection)
     }
@@ -290,11 +268,7 @@ impl<'a> InlineModalProcessor<'a> {
         self.restore_palette(renderer, *previous)
     }
 
-    fn restore_palette(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        palette: ActivePalette,
-    ) -> Result<()> {
+    fn restore_palette(&mut self, renderer: &mut AnsiRenderer, palette: ActivePalette) -> Result<()> {
         match palette {
             ActivePalette::Theme { mode, original_theme_id } => {
                 if show_theme_palette(renderer, mode)? {
@@ -303,14 +277,12 @@ impl<'a> InlineModalProcessor<'a> {
             }
             ActivePalette::Sessions { mode, listings, limit, show_all } => {
                 if show_sessions_palette(renderer, mode, &listings, limit, show_all)? {
-                    *self.palette.state =
-                        Some(ActivePalette::Sessions { mode, listings, limit, show_all });
+                    *self.palette.state = Some(ActivePalette::Sessions { mode, listings, limit, show_all });
                 }
             }
             ActivePalette::ForkMode { session_id, listings, limit, show_all } => {
                 if show_fork_mode_palette(renderer, &session_id)? {
-                    *self.palette.state =
-                        Some(ActivePalette::ForkMode { session_id, listings, limit, show_all });
+                    *self.palette.state = Some(ActivePalette::ForkMode { session_id, listings, limit, show_all });
                 }
             }
             ActivePalette::Settings { state, .. } => {
@@ -390,10 +362,7 @@ impl<'a> InlineModalProcessor<'a> {
         }
     }
 
-    fn handle_settings_submit(
-        &mut self,
-        selection: &InlineListSelection,
-    ) -> Option<InlineLoopAction> {
+    fn handle_settings_submit(&mut self, selection: &InlineListSelection) -> Option<InlineLoopAction> {
         match (self.palette.state.as_ref(), selection) {
             (Some(ActivePalette::Settings { .. }), InlineListSelection::ConfigAction(action))
                 if action == ACTION_CONFIGURE_EDITOR =>
@@ -428,8 +397,7 @@ impl<'a> PaletteCoordinator<'a> {
                     ActivePalette::Sessions { mode: SessionPaletteMode::Resume, .. },
                     InlineListSelection::Session(session_id),
                 ) => {
-                    renderer
-                        .line(MessageStyle::Info, &format!("Resuming session: {session_id}"))?;
+                    renderer.line(MessageStyle::Info, &format!("Resuming session: {session_id}"))?;
                     return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
                 }
                 (
@@ -450,19 +418,9 @@ impl<'a> PaletteCoordinator<'a> {
                     });
                     return Ok(InlineLoopAction::Continue);
                 }
-                (
-                    ActivePalette::ForkMode { .. },
-                    InlineListSelection::SessionForkMode { session_id, summarize },
-                ) => {
-                    let mode_label = if *summarize {
-                        "summarized"
-                    } else {
-                        "full-copy"
-                    };
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Forking session: {session_id} ({mode_label})"),
-                    )?;
+                (ActivePalette::ForkMode { .. }, InlineListSelection::SessionForkMode { session_id, summarize }) => {
+                    let mode_label = if *summarize { "summarized" } else { "full-copy" };
+                    renderer.line(MessageStyle::Info, &format!("Forking session: {session_id} ({mode_label})"))?;
                     return Ok(InlineLoopAction::ForkSession {
                         session_id: session_id.clone(),
                         summarize: *summarize,
@@ -472,9 +430,7 @@ impl<'a> PaletteCoordinator<'a> {
                     if action.starts_with(MODE_ACTION_PREFIX) =>
                 {
                     let agent_name = action.strip_prefix(MODE_ACTION_PREFIX).unwrap_or(action);
-                    return Ok(InlineLoopAction::SelectPrimaryAgent {
-                        name: Some(agent_name.to_string()),
-                    });
+                    return Ok(InlineLoopAction::SelectPrimaryAgent { name: Some(agent_name.to_string()) });
                 }
                 _ => {}
             }
@@ -501,10 +457,7 @@ impl<'a> PaletteCoordinator<'a> {
         // (e.g. subagent inspector, threads modal) whose own event loop has already
         // exited. Silently ignore it -- the overlay was already closed when the
         // event was emitted.
-        tracing::debug!(
-            "Palette selection {:?} dropped -- no active palette (floating overlay event)",
-            selection
-        );
+        tracing::debug!("Palette selection {:?} dropped -- no active palette (floating overlay event)", selection);
 
         Ok(InlineLoopAction::Continue)
     }
@@ -569,8 +522,7 @@ impl<'a> ModelPickerCoordinator<'a> {
         let workspace_hint = Some(self.config.workspace.clone());
         let picker_start = {
             let loading_spinner = if renderer.supports_inline_ui() {
-                let spinner =
-                    PlaceholderSpinner::new(self.handle, None, None, "Loading model lists...");
+                let spinner = PlaceholderSpinner::new(self.handle, None, None, "Loading model lists...");
                 spinner.set_defer_restore(true);
                 Some(spinner)
             } else {
@@ -625,15 +577,11 @@ impl<'a> ModelPickerCoordinator<'a> {
                 )
                 .await
                 {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to apply model selection: {err}"),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
                 }
             }
             Err(err) => {
-                renderer
-                    .line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;
+                renderer.line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;
             }
         }
 
@@ -696,10 +644,7 @@ impl<'a> ModelPickerCoordinator<'a> {
                 )
                 .await
                 {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to apply model selection: {err}"),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
                 }
             }
         }
@@ -735,9 +680,7 @@ fn update_header_for_plan_selection(
         InlineListSelection::PlanApprovalExecute | InlineListSelection::PlanApprovalAutoAccept => {
             (Some("build".to_string()), Some(ui::AGENT_COLOR_BUILD.to_string()))
         }
-        InlineListSelection::PlanApprovalEditPlan => {
-            (Some("plan".to_string()), Some(ui::AGENT_COLOR_PLAN.to_string()))
-        }
+        InlineListSelection::PlanApprovalEditPlan => (Some("plan".to_string()), Some(ui::AGENT_COLOR_PLAN.to_string())),
         _ => return,
     };
 

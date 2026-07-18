@@ -5,14 +5,12 @@ use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 
 #[test]
 fn fallback_from_error_extracts_command_session_poll() {
-    let error = "Tool failed. Use command_session with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
+    let error =
+        "Tool failed. Use command_session with action=\"poll\" and session_id=\"run-ab12\" instead of read_file.";
     let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error, None);
     assert_eq!(
         fallback,
-        Some((
-            tool_names::UNIFIED_EXEC.to_string(),
-            serde_json::json!({"action":"poll","session_id":"run-ab12"}),
-        ))
+        Some((tool_names::UNIFIED_EXEC.to_string(), serde_json::json!({"action":"poll","session_id":"run-ab12"}),))
     );
 }
 
@@ -35,12 +33,10 @@ fn fallback_from_error_extracts_read_file_for_patch_context_mismatch() {
 
 #[test]
 fn fallback_from_error_uses_task_tracker_list_for_update_argument_errors() {
-    let error = "Tool 'task_tracker' execution failed: Tool execution failed: 'index' is required for 'update' (1-indexed)";
+    let error =
+        "Tool 'task_tracker' execution failed: Tool execution failed: 'index' is required for 'update' (1-indexed)";
     let fallback = fallback_from_error(tool_names::TASK_TRACKER, error, None);
-    assert_eq!(
-        fallback,
-        Some((tool_names::TASK_TRACKER.to_string(), serde_json::json!({"action": "list"}),))
-    );
+    assert_eq!(fallback, Some((tool_names::TASK_TRACKER.to_string(), serde_json::json!({"action": "list"}),)));
 }
 
 #[test]
@@ -77,10 +73,7 @@ fn build_error_content_includes_fallback_args() {
         "execution",
     );
 
-    assert_eq!(
-        payload.get("fallback_tool").and_then(|v| v.as_str()),
-        Some(tool_names::READ_PTY_SESSION)
-    );
+    assert_eq!(payload.get("fallback_tool").and_then(|v| v.as_str()), Some(tool_names::READ_PTY_SESSION));
     assert_eq!(payload.get("fallback_tool_args"), Some(&serde_json::json!({"session_id":"run-1"})));
     assert_eq!(payload.get("error_class").and_then(|v| v.as_str()), Some("execution_failure"));
     assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(true));
@@ -98,12 +91,7 @@ fn build_error_content_truncates_large_errors() {
 
 #[test]
 fn build_error_content_marks_policy_denials_non_recoverable() {
-    let payload = build_error_content(
-        "tool permission denied by policy".to_string(),
-        None,
-        None,
-        "execution",
-    );
+    let payload = build_error_content("tool permission denied by policy".to_string(), None, None, "execution");
 
     assert_eq!(payload.get("error_class").and_then(|v| v.as_str()), Some("policy_blocked"));
     assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(false));
@@ -138,10 +126,7 @@ fn build_error_content_keeps_structured_fallback_fields_only() {
     );
 
     assert_eq!(payload.get("fallback_tool"), Some(&serde_json::json!(tool_names::CODE_SEARCH)));
-    assert_eq!(
-        payload.get("fallback_tool_args"),
-        Some(&serde_json::json!({"query":"Widget","path":"."}))
-    );
+    assert_eq!(payload.get("fallback_tool_args"), Some(&serde_json::json!({"query":"Widget","path":"."})));
     assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(
         payload.get("next_action").and_then(|v| v.as_str()),
@@ -168,10 +153,7 @@ fn build_structured_error_content_preserves_retry_and_partial_state_fields() {
 
     assert_eq!(payload.get("partial_state_possible").and_then(|value| value.as_bool()), Some(true));
     assert_eq!(payload.get("retry_delay_ms").and_then(|value| value.as_u64()), Some(750));
-    assert_eq!(
-        payload.get("next_action").and_then(|value| value.as_str()),
-        Some("Retry with smaller scope.")
-    );
+    assert_eq!(payload.get("next_action").and_then(|value| value.as_str()), Some("Retry with smaller scope."));
     assert_eq!(
         payload
             .get("error")
@@ -251,8 +233,7 @@ fn maybe_inline_spooled_removes_redundant_fields() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("spool_hint").is_none());
     assert!(parsed.get("spooled_bytes").is_none());
     assert!(parsed.get("spooled_to_file").is_none());
@@ -300,17 +281,13 @@ fn maybe_inline_spooled_compacts_next_read_duplicates() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("spooled_to_file").is_none());
     assert!(parsed.get("has_more").is_none());
     assert!(parsed.get("next_offset").is_none());
     assert!(parsed.get("chunk_limit").is_none());
     assert!(parsed.get("spool_path").is_none());
-    assert_eq!(
-        parsed.get("path"),
-        Some(&serde_json::json!(".vtcode/context/tool_outputs/command_session_1.txt"))
-    );
+    assert_eq!(parsed.get("path"), Some(&serde_json::json!(".vtcode/context/tool_outputs/command_session_1.txt")));
     assert_eq!(
         parsed.get("next_read_args"),
         Some(&serde_json::json!({
@@ -334,8 +311,7 @@ fn maybe_inline_spooled_preserves_extra_continue_args_fields() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(
         parsed.get("next_continue_args"),
         Some(&serde_json::json!({
@@ -366,8 +342,7 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     // `loop_detected` is internal control logic and is stripped from model output.
     assert!(parsed.get("loop_detected").is_none());
     assert_eq!(
@@ -409,8 +384,7 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("output").is_none());
     assert!(parsed.get("stdout").is_none());
     assert!(parsed.get("stderr").is_none());
@@ -436,13 +410,9 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_code_search_output() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("results").is_none());
-    assert_eq!(
-        parsed.get("spool_path"),
-        Some(&serde_json::json!(".vtcode/context/tool_outputs/code_search_1.txt"))
-    );
+    assert_eq!(parsed.get("spool_path"), Some(&serde_json::json!(".vtcode/context/tool_outputs/code_search_1.txt")));
     assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
     assert!(
         serialized.len() < 1_000,
@@ -478,8 +448,7 @@ async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file
     )
     .await;
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("output").is_none(), "output should be stripped");
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
     assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
@@ -508,8 +477,7 @@ async fn maybe_inline_spooled_with_preview_skips_preview_when_spool_missing() {
     )
     .await;
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("tail_preview").is_none());
     assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
 }
@@ -532,8 +500,7 @@ fn maybe_inline_spooled_drops_terminal_exec_metadata_without_continuation() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(parsed.get("output"), Some(&serde_json::json!("ok")));
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
     assert!(parsed.get("command").is_none());
@@ -562,19 +529,13 @@ fn maybe_inline_spooled_keeps_exec_recovery_guidance() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(parsed.get("output"), Some(&serde_json::json!("bash: pip: command not found")));
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(127)));
-    assert_eq!(
-        parsed.get("critical_note"),
-        Some(&serde_json::json!("Command `pip` was not found in PATH."))
-    );
+    assert_eq!(parsed.get("critical_note"), Some(&serde_json::json!("Command `pip` was not found in PATH.")));
     assert_eq!(
         parsed.get("next_action"),
-        Some(&serde_json::json!(
-            "Check the command name or install the missing binary, then rerun the command."
-        ))
+        Some(&serde_json::json!("Check the command name or install the missing binary, then rerun the command."))
     );
     assert!(parsed.get("command").is_none());
     assert!(parsed.get("session_id").is_none());
@@ -595,12 +556,8 @@ fn maybe_inline_spooled_keeps_recoverable_failure_next_action() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
-    assert_eq!(
-        parsed.get("next_action"),
-        Some(&serde_json::json!("Retry with fallback_tool_args."))
-    );
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
+    assert_eq!(parsed.get("next_action"), Some(&serde_json::json!("Retry with fallback_tool_args.")));
     assert_eq!(parsed.get("fallback_tool"), Some(&serde_json::json!(tool_names::CODE_SEARCH)));
 }
 
@@ -616,8 +573,7 @@ fn maybe_inline_spooled_keeps_code_search_refinement_guidance() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(parsed.get("next_action"), Some(&serde_json::json!("Retry with narrower filters.")));
     assert_eq!(parsed.get("hint"), Some(&serde_json::json!("Try narrowing the path.")));
 }
@@ -633,8 +589,7 @@ fn maybe_inline_spooled_drops_non_recoverable_failure_next_action() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("next_action").is_none());
 }
 
@@ -649,8 +604,7 @@ fn maybe_inline_spooled_drops_generic_success_recovery_guidance() {
         }),
     );
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&serialized).expect("serialized JSON payload");
+    let parsed: serde_json::Value = serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert_eq!(parsed.get("output"), Some(&serde_json::json!("ok")));
     assert!(parsed.get("critical_note").is_none());
     assert!(parsed.get("next_action").is_none());
@@ -674,13 +628,8 @@ async fn tool_output_summary_input_uses_spool_file_tail_for_exec_output() {
     });
     let serialized = serialize_json_for_model(&output);
 
-    let input = tool_output_summary_input_or_serialized(
-        temp.path(),
-        tool_names::UNIFIED_EXEC,
-        &output,
-        &serialized,
-    )
-    .await;
+    let input =
+        tool_output_summary_input_or_serialized(temp.path(), tool_names::UNIFIED_EXEC, &output, &serialized).await;
 
     assert!(input.contains("Tool payload:"));
     assert!(input.contains("stderr_preview:\nwarning text"));
@@ -695,8 +644,7 @@ async fn tool_output_summary_input_uses_spool_file_excerpt_for_large_reads() {
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     std::fs::create_dir_all(&spool_dir).unwrap();
     let spool_path = spool_dir.join("read_1.txt");
-    let spool_content =
-        (1..=200).map(|idx| format!("read-line-{idx}")).collect::<Vec<_>>().join("\n");
+    let spool_content = (1..=200).map(|idx| format!("read-line-{idx}")).collect::<Vec<_>>().join("\n");
     std::fs::write(&spool_path, spool_content).unwrap();
 
     let output = serde_json::json!({
@@ -705,13 +653,7 @@ async fn tool_output_summary_input_uses_spool_file_excerpt_for_large_reads() {
     });
     let serialized = serialize_json_for_model(&output);
 
-    let input = tool_output_summary_input_or_serialized(
-        temp.path(),
-        tool_names::READ_FILE,
-        &output,
-        &serialized,
-    )
-    .await;
+    let input = tool_output_summary_input_or_serialized(temp.path(), tool_names::READ_FILE, &output, &serialized).await;
 
     assert!(input.contains("source_path: src/main.rs"));
     assert!(input.contains("content_excerpt:"));
@@ -729,13 +671,8 @@ async fn tool_output_summary_input_falls_back_to_serialized_output_when_spool_mi
     });
     let serialized = serialize_json_for_model(&output);
 
-    let input = tool_output_summary_input_or_serialized(
-        temp.path(),
-        tool_names::UNIFIED_EXEC,
-        &output,
-        &serialized,
-    )
-    .await;
+    let input =
+        tool_output_summary_input_or_serialized(temp.path(), tool_names::UNIFIED_EXEC, &output, &serialized).await;
 
     assert_eq!(input, serialized);
 }
@@ -757,13 +694,8 @@ async fn tool_output_summary_input_decodes_invalid_utf8_spool_lossily() {
     });
     let serialized = serialize_json_for_model(&output);
 
-    let input = tool_output_summary_input_or_serialized(
-        temp.path(),
-        tool_names::UNIFIED_EXEC,
-        &output,
-        &serialized,
-    )
-    .await;
+    let input =
+        tool_output_summary_input_or_serialized(temp.path(), tool_names::UNIFIED_EXEC, &output, &serialized).await;
 
     assert!(input.contains("warning text"));
     assert!(input.contains("last line"));
@@ -776,9 +708,7 @@ fn blocked_or_denied_failure_detects_guardable_errors() {
         "task_tracker is only available when planning workflow state is active."
     ));
     assert!(is_blocked_or_denied_failure("Tool permission denied"));
-    assert!(is_blocked_or_denied_failure(
-        "Policy violation: exceeded max tool calls per turn (32)"
-    ));
+    assert!(is_blocked_or_denied_failure("Policy violation: exceeded max tool calls per turn (32)"));
     assert!(is_blocked_or_denied_failure("Safety validation failed: command pattern denied"));
 }
 
@@ -846,10 +776,7 @@ fn build_subagent_memory_update_aggregates_structured_child_results() {
             source: "subagent:reviewer".to_string(),
         }]
     );
-    assert_eq!(
-        update.touched_files,
-        vec!["src/agent/runloop/unified/turn/compaction.rs".to_string()]
-    );
+    assert_eq!(update.touched_files, vec!["src/agent/runloop/unified/turn/compaction.rs".to_string()]);
     assert_eq!(update.verification_todo, vec!["Run cargo check".to_string()]);
     assert_eq!(
         update.delegation_notes,

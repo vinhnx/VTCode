@@ -9,16 +9,8 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 impl FileOpsTool {
-    pub(super) async fn read_file_legacy(
-        &self,
-        file_path: &Path,
-        input: &Input,
-    ) -> Result<(String, Value, bool)> {
-        let file_metadata = with_file_context(
-            tokio::fs::metadata(file_path).await,
-            "read metadata for",
-            file_path,
-        )?;
+    pub(super) async fn read_file_legacy(&self, file_path: &Path, input: &Input) -> Result<(String, Value, bool)> {
+        let file_metadata = with_file_context(tokio::fs::metadata(file_path).await, "read metadata for", file_path)?;
 
         if !file_metadata.is_file() {
             return Err(anyhow!("Path is not a file: {}", file_path.display()));
@@ -38,8 +30,7 @@ impl FileOpsTool {
         if let Some(encoding) = input.encoding.as_deref()
             && encoding.eq_ignore_ascii_case("base64")
         {
-            let bytes =
-                with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
+            let bytes = with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
             let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
             let metadata = json!({
                 "size_bytes": bytes.len(),
@@ -57,8 +48,7 @@ impl FileOpsTool {
         }
 
         if let Some(max_bytes) = input.max_bytes {
-            let mut bytes =
-                with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
+            let mut bytes = with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
             let truncated = bytes.len() > max_bytes;
             if truncated {
                 bytes.truncate(max_bytes);

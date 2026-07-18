@@ -8,12 +8,11 @@ pub use vtcode_llm::providers::reasoning::{
     ReasoningBuffer, ReasoningSegment, extract_reasoning_trace, split_reasoning_from_text,
 };
 pub use vtcode_llm::providers::{
-    AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider,
-    HuggingFaceProvider, LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider,
-    MistralProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenCodeGoProvider,
-    OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider, PoolsideProvider, QwenProvider,
-    StepFunProvider, StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
-    TagStreamSanitizer, ZAIProvider, clean_reasoning_text, reasoning,
+    AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider, HuggingFaceProvider,
+    LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
+    OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
+    PoolsideProvider, QwenProvider, StepFunProvider, StreamingProgressBuilder, StreamingProgressCallback,
+    StreamingProgressTracker, TagStreamSanitizer, ZAIProvider, clean_reasoning_text, reasoning,
 };
 
 // Re-export commonly used constants from vtcode-commons::tool_types

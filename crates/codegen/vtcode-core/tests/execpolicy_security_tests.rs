@@ -24,10 +24,7 @@ async fn test_ripgrep_pre_flag_blocked() {
 
     let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "ripgrep --pre flag should be blocked");
-    assert!(
-        result.unwrap_err().to_string().contains("preprocessor"),
-        "error should mention preprocessor"
-    );
+    assert!(result.unwrap_err().to_string().contains("preprocessor"), "error should mention preprocessor");
 }
 
 #[tokio::test]
@@ -92,10 +89,7 @@ async fn test_sed_execution_flag_blocked() {
     let _ = std::fs::remove_file(&test_file);
 
     assert!(result.is_err(), "sed execution flag should be blocked");
-    assert!(
-        result.unwrap_err().to_string().contains("execution flags"),
-        "error should mention execution flags"
-    );
+    assert!(result.unwrap_err().to_string().contains("execution flags"), "error should mention execution flags");
 }
 
 #[tokio::test]
@@ -132,10 +126,7 @@ async fn test_disallowed_command_blocked() {
 
     let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "disallowed command should be blocked");
-    assert!(
-        result.unwrap_err().to_string().contains("not permitted"),
-        "error should mention permission"
-    );
+    assert!(result.unwrap_err().to_string().contains("not permitted"), "error should mention permission");
 }
 
 #[tokio::test]
@@ -174,10 +165,7 @@ async fn test_cp_without_recursive_flag_for_directory() {
     let _ = std::fs::remove_dir_all(&test_dir);
 
     assert!(result.is_err(), "copying directory without -r should be blocked");
-    assert!(
-        result.unwrap_err().to_string().contains("recursive"),
-        "error should mention recursive flag"
-    );
+    assert!(result.unwrap_err().to_string().contains("recursive"), "error should mention recursive flag");
 }
 
 #[tokio::test]
@@ -186,12 +174,7 @@ async fn test_ls_safe_usage() {
     let working_dir = root.clone();
 
     // Test safe ls usage with separate flags
-    let command = vec![
-        "ls".to_string(),
-        "-l".to_string(),
-        "-a".to_string(),
-        ".".to_string(),
-    ];
+    let command = vec!["ls".to_string(), "-l".to_string(), "-a".to_string(), ".".to_string()];
 
     let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_ok(), "safe ls usage should be allowed: {result:?}");

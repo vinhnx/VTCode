@@ -16,10 +16,7 @@ mod text;
 
 pub(crate) use planner::PreparedOperation;
 
-pub(crate) async fn apply(
-    root: &Path,
-    operations: &[PatchOperation],
-) -> Result<Vec<String>, PatchError> {
+pub(crate) async fn apply(root: &Path, operations: &[PatchOperation]) -> Result<Vec<String>, PatchError> {
     let plan = planner::plan_operations(root, operations).await?;
     runner::execute_plan(root, plan).await
 }

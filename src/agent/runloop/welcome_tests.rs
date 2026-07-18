@@ -7,9 +7,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 
 use super::welcome::prepare_session_bootstrap;
 
@@ -218,8 +216,7 @@ async fn test_prepare_session_bootstrap_does_not_surface_acp_trust_in_terminal_s
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.acp.enabled = true;
     vt_cfg.acp.zed.enabled = true;
-    vt_cfg.acp.zed.workspace_trust =
-        vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto;
+    vt_cfg.acp.zed.workspace_trust = vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto;
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
 

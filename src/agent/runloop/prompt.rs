@@ -109,9 +109,7 @@ async fn try_refine_prompt_with_route(
     } else {
         None
     };
-    let temperature = if reasoning_effort.is_some()
-        && matches!(route.provider_name.as_str(), "anthropic" | "minimax")
-    {
+    let temperature = if reasoning_effort.is_some() && matches!(route.provider_name.as_str(), "anthropic" | "minimax") {
         None
     } else {
         Some(vt_cfg.agent.refine_temperature)
@@ -137,15 +135,7 @@ async fn try_refine_prompt_with_route(
 
 fn finalize_refined_prompt(text: String) -> String {
     let lower = text.to_lowercase();
-    let debug_triggers = [
-        "debug",
-        "analyze",
-        "error",
-        "fix",
-        "issue",
-        "troubleshoot",
-        "diagnose",
-    ];
+    let debug_triggers = ["debug", "analyze", "error", "fix", "issue", "troubleshoot", "diagnose"];
     if debug_triggers.iter().any(|token| lower.contains(token)) {
         format!(
             "{text}\n\nNote: For diagnostics, inspect files and run verification commands through `exec_command`. When advanced `code_search` is available, call it with `query` and optional `path`, `file_types`, `result_types`, or `max_results`."
@@ -407,10 +397,7 @@ impl PromptEnricher {
                 if is_pronoun {
                     // Use turn 0 as placeholder - will be improved in Phase 3 integration
                     if let Some(entity_name) = memory.resolve_pronoun(&vague_ref.term, 0) {
-                        enriched.add_context_hint(format!(
-                            "\"{}\" likely refers to: {}",
-                            vague_ref.term, entity_name
-                        ));
+                        enriched.add_context_hint(format!("\"{}\" likely refers to: {}", vague_ref.term, entity_name));
                     }
                 }
             }

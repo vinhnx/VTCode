@@ -11,8 +11,7 @@ mod test_env_overrides {
     use hashbrown::HashMap;
     use std::sync::{LazyLock, Mutex};
 
-    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
     pub(super) fn get(key: &str) -> Option<Option<String>> {
         OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())

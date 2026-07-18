@@ -26,33 +26,28 @@ pub mod validator;
 
 pub use acp::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
-    WorkspaceTrustLevel,
+    AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
 };
 pub use api::{
-    ConfigLayerView, ConfigReadRequest, ConfigReadResponse, ConfigService, ConfigWriteRequest,
-    ConfigWriteResponse, ConfigWriteStrategy, ConfigWriteTarget, OverrideMetadata,
+    ConfigLayerView, ConfigReadRequest, ConfigReadResponse, ConfigService, ConfigWriteRequest, ConfigWriteResponse,
+    ConfigWriteStrategy, ConfigWriteTarget, OverrideMetadata,
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AutoPermissionConfig,
-    AutoPermissionEnvironmentConfig, AutomationConfig, CommandsConfig, EditorToolConfig,
-    FullAutoConfig, GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionsConfig,
-    PersistentMemoryConfig, PromptCachingConfig, ProviderPromptCachingConfig, ScheduledTasksConfig,
-    SecurityConfig, ToolPolicy, ToolProfile, ToolsConfig, build_openai_prompt_cache_key,
-    tool_call_delay_for_rate, tool_loop_limit_reached,
+    AutoPermissionEnvironmentConfig, AutomationConfig, CommandsConfig, EditorToolConfig, FullAutoConfig,
+    GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionsConfig, PersistentMemoryConfig,
+    PromptCachingConfig, ProviderPromptCachingConfig, ScheduledTasksConfig, SecurityConfig, ToolPolicy, ToolProfile,
+    ToolsConfig, build_openai_prompt_cache_key, tool_call_delay_for_rate, tool_loop_limit_reached,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{
-    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
-    SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults, get_config_dir,
-    get_data_dir, install_config_defaults_provider, reset_to_default_config_defaults,
-    with_config_defaults,
+    ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults, SyntaxHighlightingDefaults,
+    WorkspacePathsDefaults, current_config_defaults, get_config_dir, get_data_dir, install_config_defaults_provider,
+    reset_to_default_config_defaults, with_config_defaults,
 };
-pub use hooks::{
-    HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig,
-};
+pub use hooks::{HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig};
 pub use ide_context::{
     IdeContextConfig, IdeContextProviderConfig, IdeContextProviderFamily, IdeContextProviderMode,
     IdeContextProvidersConfig,
@@ -64,30 +59,24 @@ pub use mcp::{
 };
 pub use models::{ModelId, OpenRouterMetadata};
 pub use telemetry::TelemetryConfig;
-pub use types::{
-    ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference,
-    VerbosityLevel,
-};
+pub use types::{ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode, UiSurfacePreference, VerbosityLevel};
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::ConfigValidator;
 pub use vtcode_config::root::{
-    KeyboardProtocolConfig, KeyboardProtocolMode, LayoutModeOverride, PtyConfig,
-    ReasoningDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode,
+    KeyboardProtocolConfig, KeyboardProtocolMode, LayoutModeOverride, PtyConfig, ReasoningDisplayMode, ToolOutputMode,
+    UiConfig, UiDisplayMode,
 };
 pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
 pub use vtcode_config::terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 pub use vtcode_config::{
-    FileOpener, HistoryConfig, HistoryPersistence, NotificationCondition,
-    TerminalNotificationMethod, TuiAlternateScreen, TuiConfig, TuiNotificationEvent,
-    TuiNotificationsConfig,
+    FileOpener, HistoryConfig, HistoryPersistence, NotificationCondition, TerminalNotificationMethod,
+    TuiAlternateScreen, TuiConfig, TuiNotificationEvent, TuiNotificationsConfig,
 };
 pub use vtcode_config::{TimeoutsConfig, resolve_timeout};
 
 /// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags.
 #[cfg(feature = "tui")]
-pub fn keyboard_protocol_to_flags(
-    config: &KeyboardProtocolConfig,
-) -> crossterm::event::KeyboardEnhancementFlags {
+pub fn keyboard_protocol_to_flags(config: &KeyboardProtocolConfig) -> crossterm::event::KeyboardEnhancementFlags {
     keyboard_protocol_to_flags_for_terminal(
         config,
         cfg!(target_os = "macos"),
@@ -217,12 +206,7 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags_for_terminal(
-            &config,
-            true,
-            Some("Ghostty"),
-            Some("xterm-ghostty"),
-        );
+        let flags = keyboard_protocol_to_flags_for_terminal(&config, true, Some("Ghostty"), Some("xterm-ghostty"));
 
         assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
         assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));
@@ -241,12 +225,7 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags_for_terminal(
-            &config,
-            true,
-            Some("Ghostty"),
-            Some("xterm-ghostty"),
-        );
+        let flags = keyboard_protocol_to_flags_for_terminal(&config, true, Some("Ghostty"), Some("xterm-ghostty"));
         assert!(flags.is_empty());
     }
 
@@ -261,12 +240,7 @@ mod keyboard_protocol_tests {
             report_all_keys: false,
         };
 
-        let flags = keyboard_protocol_to_flags_for_terminal(
-            &config,
-            true,
-            Some("Ghostty"),
-            Some("xterm-ghostty"),
-        );
+        let flags = keyboard_protocol_to_flags_for_terminal(&config, true, Some("Ghostty"), Some("xterm-ghostty"));
 
         assert!(flags.contains(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
         assert!(!flags.contains(KeyboardEnhancementFlags::REPORT_EVENT_TYPES));

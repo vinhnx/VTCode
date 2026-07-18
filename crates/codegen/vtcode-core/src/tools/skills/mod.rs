@@ -15,9 +15,7 @@ use crate::tool_policy::ToolPolicy;
 use crate::tools::handlers::{
     DeferredToolPolicy, SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
 };
-use crate::tools::registry::{
-    ToolMetadata, ToolRegistration, ToolRegistry, native_cgp_tool_factory,
-};
+use crate::tools::registry::{ToolMetadata, ToolRegistration, ToolRegistry, native_cgp_tool_factory};
 use crate::tools::traits::Tool;
 use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Context;
@@ -113,10 +111,7 @@ impl SkillToolSessionRuntime {
 
         if !self.tool_registry.has_tool(skill_name.as_str()).await {
             self.tool_registry
-                .register_tool(build_traditional_skill_tool_registration(
-                    &skill,
-                    self.fork_executor.clone(),
-                ))
+                .register_tool(build_traditional_skill_tool_registration(&skill, self.fork_executor.clone()))
                 .await
                 .with_context(|| format!("failed to register skill tool '{skill_name}'"))?;
             self.refresh_tool_snapshot("load_skill").await;
@@ -165,10 +160,7 @@ impl SkillToolSessionRuntime {
     }
 }
 
-fn build_skill_tool_adapter(
-    skill: Skill,
-    fork_executor: Option<Arc<dyn ForkSkillExecutor>>,
-) -> SkillToolAdapter {
+fn build_skill_tool_adapter(skill: Skill, fork_executor: Option<Arc<dyn ForkSkillExecutor>>) -> SkillToolAdapter {
     if skill.manifest.context.as_deref() == Some("fork") {
         match fork_executor {
             Some(executor) => SkillToolAdapter::with_fork_executor(skill, executor),
@@ -192,20 +184,14 @@ pub fn build_traditional_skill_tool_registration(
     // Traditional skills already flow through shared fork executors, so keep
     // the trait-object bridge here and let the native CGP factory handle the
     // ownership-first path when runtime mode is known.
-    let adapter: Arc<dyn Tool> =
-        Arc::new(build_skill_tool_adapter(skill.clone(), fork_executor.clone()));
+    let adapter: Arc<dyn Tool> = Arc::new(build_skill_tool_adapter(skill.clone(), fork_executor.clone()));
     let native_skill = skill.clone();
     let native_fork_executor = fork_executor;
 
-    ToolRegistration::from_tool_with_metadata(
-        skill.name().to_string(),
-        CapabilityLevel::Basic,
-        adapter,
-        metadata,
-    )
-    .with_native_cgp_factory(native_cgp_tool_factory(move || {
-        build_skill_tool_adapter(native_skill.clone(), native_fork_executor.clone())
-    }))
+    ToolRegistration::from_tool_with_metadata(skill.name().to_string(), CapabilityLevel::Basic, adapter, metadata)
+        .with_native_cgp_factory(native_cgp_tool_factory(move || {
+            build_skill_tool_adapter(native_skill.clone(), native_fork_executor.clone())
+        }))
 }
 
 pub fn build_skill_tool_registration(skill: &Skill) -> ToolRegistration {
@@ -289,8 +275,7 @@ fn build_skill_loader_config(
     SkillLoaderConfig {
         codex_home: codex_home.to_path_buf(),
         cwd: workspace_root.to_path_buf(),
-        project_root: find_project_root(workspace_root)
-            .or_else(|| Some(workspace_root.to_path_buf())),
+        project_root: find_project_root(workspace_root).or_else(|| Some(workspace_root.to_path_buf())),
         include_bundled_system_skills,
     }
 }
@@ -299,16 +284,12 @@ fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> 
     let bundled_skills_enabled = ConfigManager::load_from_workspace(workspace_root)
         .map(|manager| manager.config().skills.bundled.enabled)
         .unwrap_or(true);
-    let manager = SkillsManager::new_with_bundled_skills_enabled(
-        codex_home.to_path_buf(),
-        bundled_skills_enabled,
-    );
+    let manager = SkillsManager::new_with_bundled_skills_enabled(codex_home.to_path_buf(), bundled_skills_enabled);
     manager.ensure_system_skills_installed();
     let config = build_skill_loader_config(workspace_root, codex_home, bundled_skills_enabled);
 
     #[cfg(test)]
-    let mut discovery =
-        crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);
+    let mut discovery = crate::skills::loader::discover_skill_metadata_lightweight_hermetic(&config);
 
     #[cfg(not(test))]
     let mut discovery = crate::skills::loader::discover_skill_metadata_lightweight(&config);
@@ -317,10 +298,7 @@ fn discover_session_skill_metadata(workspace_root: &Path, codex_home: &Path) -> 
     discovery
 }
 
-async fn discover_session_utilities(
-    workspace_root: &Path,
-    codex_home: &Path,
-) -> anyhow::Result<Vec<CliToolConfig>> {
+async fn discover_session_utilities(workspace_root: &Path, codex_home: &Path) -> anyhow::Result<Vec<CliToolConfig>> {
     let mut config = DiscoveryConfig::default();
     config.skill_paths.clear();
     config.tool_paths = vec![
@@ -381,9 +359,7 @@ fn required_string_arg<'a>(args: &'a Value, key: &str) -> anyhow::Result<&'a str
 fn unsupported_activation_error(skill_name: &str, skill: EnhancedSkill) -> anyhow::Error {
     let message = match skill {
         EnhancedSkill::CliTool(_) => {
-            format!(
-                "Skill '{skill_name}' is a system utility and cannot be activated via load_skill"
-            )
+            format!("Skill '{skill_name}' is a system utility and cannot be activated via load_skill")
         }
         EnhancedSkill::BuiltInCommand(_) => {
             format!(
@@ -391,9 +367,7 @@ fn unsupported_activation_error(skill_name: &str, skill: EnhancedSkill) -> anyho
             )
         }
         EnhancedSkill::NativePlugin(_) => {
-            format!(
-                "Skill '{skill_name}' is a native plugin and cannot be activated via load_skill"
-            )
+            format!("Skill '{skill_name}' is a native plugin and cannot be activated via load_skill")
         }
         EnhancedSkill::Traditional(_) => {
             format!("Skill '{skill_name}' is already a traditional skill")
@@ -409,15 +383,11 @@ fn resolve_skill_resource_path(skill_root: &Path, resource_path: &str) -> anyhow
         || relative_path.components().any(|component| {
             matches!(
                 component,
-                std::path::Component::ParentDir
-                    | std::path::Component::RootDir
-                    | std::path::Component::Prefix(_)
+                std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)
             )
         })
     {
-        return Err(anyhow::anyhow!(
-            "Resource path '{resource_path}' must be relative to the skill directory"
-        ));
+        return Err(anyhow::anyhow!("Resource path '{resource_path}' must be relative to the skill directory"));
     }
 
     let full_path = skill_root.join(relative_path);
@@ -502,11 +472,7 @@ pub struct LoadSkillTool {
 }
 
 impl LoadSkillTool {
-    pub fn new(
-        workspace_root: PathBuf,
-        active_skills: SkillMap,
-        runtime: SkillToolSessionRuntime,
-    ) -> Self {
+    pub fn new(workspace_root: PathBuf, active_skills: SkillMap, runtime: SkillToolSessionRuntime) -> Self {
         Self::with_codex_home(workspace_root, active_skills, runtime, None)
     }
 
@@ -566,8 +532,7 @@ impl Tool for LoadSkillTool {
         let (codex_home, metadata) =
             discover_skill_catalog(&self.workspace_root, self.codex_home.as_deref(), "load_skill");
 
-        let mut loader =
-            EnhancedSkillLoader::with_codex_home(self.workspace_root.clone(), codex_home.clone());
+        let mut loader = EnhancedSkillLoader::with_codex_home(self.workspace_root.clone(), codex_home.clone());
         let skill = match loader.get_skill(name).await {
             Ok(EnhancedSkill::Traditional(skill)) => *skill,
             Ok(skill) => return Err(unsupported_activation_error(name, skill)),
@@ -592,11 +557,10 @@ impl Tool for LoadSkillTool {
             }
         };
 
-        let activation_status =
-            match self.runtime.activate_skill(&self.active_skills, skill.clone()).await? {
-                SkillActivationState::Activated => SKILL_ACTIVATED_STATUS,
-                SkillActivationState::AlreadyActive => SKILL_ALREADY_ACTIVE_STATUS,
-            };
+        let activation_status = match self.runtime.activate_skill(&self.active_skills, skill.clone()).await? {
+            SkillActivationState::Activated => SKILL_ACTIVATED_STATUS,
+            SkillActivationState::AlreadyActive => SKILL_ALREADY_ACTIVE_STATUS,
+        };
 
         Ok(build_skill_response(&skill, activation_status))
     }
@@ -614,11 +578,7 @@ impl ListSkillsTool {
         Self::with_codex_home(workspace_root, active_skills, None)
     }
 
-    pub fn with_codex_home(
-        workspace_root: PathBuf,
-        active_skills: SkillMap,
-        codex_home: Option<PathBuf>,
-    ) -> Self {
+    pub fn with_codex_home(workspace_root: PathBuf, active_skills: SkillMap, codex_home: Option<PathBuf>) -> Self {
         Self { workspace_root, codex_home, active_skills }
     }
 }
@@ -667,8 +627,7 @@ impl Tool for ListSkillsTool {
         let query = args.get("query").and_then(|v| v.as_str()).map(|s| s.to_lowercase());
         let variety_filter = args.get("variety").and_then(|v| v.as_str());
 
-        let active_names: HashSet<String> =
-            self.active_skills.read().await.keys().cloned().collect();
+        let active_names: HashSet<String> = self.active_skills.read().await.keys().cloned().collect();
         let (codex_home, discovery) =
             discover_skill_catalog(&self.workspace_root, self.codex_home.as_deref(), "list_skills");
 
@@ -753,8 +712,7 @@ impl Tool for ListSkillsTool {
         if !discovery.errors.is_empty()
             && let Some(response_object) = response.as_object_mut()
         {
-            response_object
-                .insert("discovery_errors".to_string(), serde_json::json!(discovery.errors.len()));
+            response_object.insert("discovery_errors".to_string(), serde_json::json!(discovery.errors.len()));
             response_object.insert(
                 "discovery_error_samples".to_string(),
                 serde_json::json!(discovery_error_samples(discovery.errors.as_slice())),
@@ -949,11 +907,7 @@ Use `/rust-skills`.
         let native_factory = registration
             .native_cgp_factory()
             .expect("registration should expose native factory");
-        let wrapped = native_factory(
-            &registration,
-            temp_dir.path().to_path_buf(),
-            CgpRuntimeMode::Interactive,
-        );
+        let wrapped = native_factory(&registration, temp_dir.path().to_path_buf(), CgpRuntimeMode::Interactive);
 
         assert_eq!(wrapped.name(), DEMO_SKILL_TOOL_NAME);
         assert_eq!(wrapped.description(), skill.description());
@@ -1010,13 +964,9 @@ Use `/rust-skills`.
             Some(temp_codex_home(temp_dir.path())),
         );
 
-        let result =
-            tool.execute(json!({ "name": skill_name })).await.expect("load skill succeeds");
+        let result = tool.execute(json!({ "name": skill_name })).await.expect("load skill succeeds");
 
-        assert_eq!(
-            result["activation_status"].as_str(),
-            Some("Associated tools activated and added to context.")
-        );
+        assert_eq!(result["activation_status"].as_str(), Some("Associated tools activated and added to context."));
         assert_eq!(change_count.load(Ordering::SeqCst), 1);
         assert!(active_skills.read().await.contains_key(skill_name));
         assert!(active_tools.read().await.iter().any(|tool| tool.function_name() == skill_name));
@@ -1046,13 +996,15 @@ Use `/rust-skills`.
 
         let active_tools = active_tools.read().await;
         assert!(
-            active_tools.iter().any(|tool| {
-                tool.function_name() == crate::config::constants::tools::CODE_SEARCH
-            })
+            active_tools
+                .iter()
+                .any(|tool| { tool.function_name() == crate::config::constants::tools::CODE_SEARCH })
         );
-        assert!(active_tools.iter().any(|tool| {
-            tool.function_name() == crate::config::constants::tools::REQUEST_USER_INPUT
-        }));
+        assert!(
+            active_tools
+                .iter()
+                .any(|tool| { tool.function_name() == crate::config::constants::tools::REQUEST_USER_INPUT })
+        );
     }
 
     #[tokio::test]
@@ -1160,14 +1112,12 @@ Use `/rust-skills`.
             None,
         );
         let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
-        let skill = match loader.get_skill(skill_name).await.expect("discover skill for activation")
-        {
+        let skill = match loader.get_skill(skill_name).await.expect("discover skill for activation") {
             EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
 
-        let activation_state =
-            runtime.activate_skill(&active_skills, skill).await.expect("activate skill");
+        let activation_state = runtime.activate_skill(&active_skills, skill).await.expect("activate skill");
         assert_eq!(activation_state, SkillActivationState::Activated);
         assert!(registry.has_tool(skill_name).await);
 
@@ -1227,10 +1177,7 @@ Use `/rust-skills`.
             .expect("load bundled skill succeeds");
 
         assert_eq!(result["name"].as_str(), Some("skill-creator"));
-        assert_eq!(
-            result["activation_status"].as_str(),
-            Some("Associated tools activated and added to context.")
-        );
+        assert_eq!(result["activation_status"].as_str(), Some("Associated tools activated and added to context."));
         assert!(active_skills.read().await.contains_key("skill-creator"));
     }
 
@@ -1280,10 +1227,7 @@ Use `/rust-skills`.
             .expect("load bundled skill succeeds");
 
         assert_eq!(result["name"].as_str(), Some("ast-grep"));
-        assert_eq!(
-            result["activation_status"].as_str(),
-            Some("Associated tools activated and added to context.")
-        );
+        assert_eq!(result["activation_status"].as_str(), Some("Associated tools activated and added to context."));
         assert!(active_skills.read().await.contains_key("ast-grep"));
     }
 
@@ -1413,9 +1357,11 @@ Use `/rust-skills`.
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
-        assert!(samples.iter().all(|sample| {
-            !sample.as_str().expect("discovery error sample").contains("rust-skills")
-        }));
+        assert!(
+            samples
+                .iter()
+                .all(|sample| { !sample.as_str().expect("discovery error sample").contains("rust-skills") })
+        );
     }
 
     #[tokio::test]

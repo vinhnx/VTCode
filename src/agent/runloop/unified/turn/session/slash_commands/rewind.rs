@@ -1,27 +1,18 @@
 use crate::agent::runloop::unified::reasoning::model_supports_reasoning;
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
+use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 use anyhow::Result;
-use vtcode_core::core::agent::snapshots::{
-    CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata,
-};
+use vtcode_core::core::agent::snapshots::{CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 #[cfg(test)]
-fn resolve_prompt_boundary_in_history(
-    metadata: &SnapshotMetadata,
-    history: &[uni::Message],
-) -> Option<usize> {
-    let prompt_text =
-        metadata.prompt_text.as_deref().map(str::trim).filter(|value| !value.is_empty());
+fn resolve_prompt_boundary_in_history(metadata: &SnapshotMetadata, history: &[uni::Message]) -> Option<usize> {
+    let prompt_text = metadata.prompt_text.as_deref().map(str::trim).filter(|value| !value.is_empty());
 
     if let Some(index) = metadata.prompt_message_index.filter(|index| *index < history.len()) {
         let message = &history[index];
-        let matches_prompt =
-            prompt_text.is_none_or(|text| message.content.as_text().trim() == text);
+        let matches_prompt = prompt_text.is_none_or(|text| message.content.as_text().trim() == text);
         if message.role == uni::MessageRole::User && matches_prompt {
             return Some(index);
         }
@@ -32,8 +23,7 @@ fn resolve_prompt_boundary_in_history(
             .iter()
             .enumerate()
             .filter(|(_, message)| {
-                message.role == uni::MessageRole::User
-                    && message.content.as_text().trim() == prompt_text
+                message.role == uni::MessageRole::User && message.content.as_text().trim() == prompt_text
             })
             .min_by_key(|(index, _)| {
                 metadata
@@ -74,10 +64,8 @@ pub(crate) async fn handle_rewind_latest(
     scope: RevertScope,
 ) -> Result<SlashCommandControl> {
     let Some(manager) = ctx.checkpoint_manager else {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "In-chat rewind requires access to the checkpoint manager.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "In-chat rewind requires access to the checkpoint manager.")?;
         return Ok(SlashCommandControl::Continue);
     };
 
@@ -105,8 +93,7 @@ pub(crate) async fn handle_rewind_to_turn(
     scope: RevertScope,
 ) -> Result<SlashCommandControl> {
     if let Some(manager) = ctx.checkpoint_manager {
-        let supports_reasoning =
-            model_supports_reasoning(&**ctx.provider_client, &ctx.config.model);
+        let supports_reasoning = model_supports_reasoning(&**ctx.provider_client, &ctx.config.model);
         let result = restore_rewind_from_checkpoint(
             ctx.renderer,
             ctx.handle,
@@ -119,15 +106,13 @@ pub(crate) async fn handle_rewind_to_turn(
         .await;
         if result.is_ok() {
             if let Some(emitter) = ctx.harness_emitter {
-                let _ = emitter.emit(
-                    crate::agent::runloop::unified::inline_events::harness::harness_event(
-                        vtcode_core::exec::events::HarnessEventKind::SnapshotRestored,
-                        Some(format!("Rewound to turn {turn}")),
-                        None,
-                        None,
-                        None,
-                    ),
-                );
+                let _ = emitter.emit(crate::agent::runloop::unified::inline_events::harness::harness_event(
+                    vtcode_core::exec::events::HarnessEventKind::SnapshotRestored,
+                    Some(format!("Rewound to turn {turn}")),
+                    None,
+                    None,
+                    None,
+                ));
             }
         }
         result?;
@@ -157,13 +142,8 @@ async fn restore_rewind_from_checkpoint(
             restored,
             supports_reasoning,
         ),
-        Ok(None) => {
-            renderer.line(MessageStyle::Error, &format!("No checkpoint found for turn {turn}"))
-        }
-        Err(err) => renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to restore checkpoint for turn {turn}: {err}"),
-        ),
+        Ok(None) => renderer.line(MessageStyle::Error, &format!("No checkpoint found for turn {turn}")),
+        Err(err) => renderer.line(MessageStyle::Error, &format!("Failed to restore checkpoint for turn {turn}: {err}")),
     }
 }
 
@@ -180,62 +160,34 @@ fn render_rewind_restore_success(
         *conversation_history = restored.conversation.iter().map(uni::Message::from).collect();
 
         renderer.clear_screen();
-        let resume_lines =
-            crate::agent::runloop::unified::session_setup::build_structured_resume_lines(
-                conversation_history,
-                supports_reasoning,
-            );
-        crate::agent::runloop::unified::session_setup::render_resume_lines(
-            renderer,
-            &resume_lines,
-        )?;
+        let resume_lines = crate::agent::runloop::unified::session_setup::build_structured_resume_lines(
+            conversation_history,
+            supports_reasoning,
+        );
+        crate::agent::runloop::unified::session_setup::render_resume_lines(renderer, &resume_lines)?;
 
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "Restored conversation history from turn {} ({} messages)",
-                turn,
-                restored.conversation.len()
-            ),
+            &format!("Restored conversation history from turn {} ({} messages)", turn, restored.conversation.len()),
         )?;
-        restore_prompt_input_and_report(
-            renderer,
-            handle,
-            &restored.metadata,
-            &restored.conversation,
-        )?;
+        restore_prompt_input_and_report(renderer, handle, &restored.metadata, &restored.conversation)?;
     }
 
     if scope.includes_code() {
         renderer.line(MessageStyle::Info, &format!("Applied code changes from turn {turn}"))?;
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Successfully rewound to turn {turn} with scope {scope:?}"),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("Successfully rewound to turn {turn} with scope {scope:?}"))?;
     Ok(())
 }
 
-fn render_rewind_cli_guidance(
-    renderer: &mut AnsiRenderer,
-    turn: usize,
-    scope: RevertScope,
-) -> Result<()> {
-    renderer
-        .line(MessageStyle::Info, &format!("Rewinding to turn {turn} with scope {scope:?}..."))?;
+fn render_rewind_cli_guidance(renderer: &mut AnsiRenderer, turn: usize, scope: RevertScope) -> Result<()> {
+    renderer.line(MessageStyle::Info, &format!("Rewinding to turn {turn} with scope {scope:?}..."))?;
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Use: `vtcode revert --turn {} --partial {}` from command line",
-            turn,
-            rewind_partial_arg(scope)
-        ),
+        &format!("Use: `vtcode revert --turn {} --partial {}` from command line", turn, rewind_partial_arg(scope)),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Note: In-chat rewind requires access to the checkpoint manager.",
-    )?;
+    renderer.line(MessageStyle::Info, "Note: In-chat rewind requires access to the checkpoint manager.")?;
     Ok(())
 }
 

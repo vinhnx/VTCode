@@ -16,8 +16,7 @@ use serde_json::Value;
 /// payloads without bloating the context.
 pub fn condensed_schema_hint(schema: &Value) -> Option<Value> {
     let properties = schema.get("properties").and_then(Value::as_object)?;
-    let required: Vec<Value> =
-        schema.get("required").and_then(Value::as_array).cloned().unwrap_or_default();
+    let required: Vec<Value> = schema.get("required").and_then(Value::as_array).cloned().unwrap_or_default();
 
     let mut prop_types = serde_json::Map::new();
     for (name, def) in properties {
@@ -58,11 +57,7 @@ pub fn condensed_schema_hint(schema: &Value) -> Option<Value> {
 /// self-correct in a single pass instead of burning the tool budget.
 pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
     let path = err.instance_path().to_string();
-    let path_label = if path.is_empty() {
-        "(root)".to_string()
-    } else {
-        path
-    };
+    let path_label = if path.is_empty() { "(root)".to_string() } else { path };
     let value = err.instance();
     let value_str = match &**value {
         Value::String(s) => format!("\"{s}\""),
@@ -83,13 +78,11 @@ pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
                         .join(", ")
                 })
                 .unwrap_or_default();
-            format!(
-                "field '{path_label}' value {value_str} is not one of the allowed enum: [{opts}]"
-            )
+            format!("field '{path_label}' value {value_str} is not one of the allowed enum: [{opts}]")
         }
-        ValidationErrorKind::Constant { expected_value } => format!(
-            "field '{path_label}' value {value_str} must equal the required const {expected_value}"
-        ),
+        ValidationErrorKind::Constant { expected_value } => {
+            format!("field '{path_label}' value {value_str} must equal the required const {expected_value}")
+        }
         ValidationErrorKind::Type { kind } => {
             let expected = match kind {
                 TypeKind::Single(t) => t.to_string(),
@@ -104,9 +97,9 @@ pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
             };
             format!("missing required property '{name}'")
         }
-        ValidationErrorKind::AdditionalProperties { unexpected } => format!(
-            "unexpected field(s) {unexpected:?} not allowed by the schema (did you use the right field name?)"
-        ),
+        ValidationErrorKind::AdditionalProperties { unexpected } => {
+            format!("unexpected field(s) {unexpected:?} not allowed by the schema (did you use the right field name?)")
+        }
         _ => format!("field '{path_label}' failed validation: {value_str}"),
     }
 }
@@ -148,11 +141,7 @@ mod tests {
         let instance = json!({ "format": "content" });
         let validator = jsonschema::validator_for(&schema).expect("schema is valid");
         let errors: Vec<_> = validator.iter_errors(&instance).collect();
-        assert!(
-            errors.len() >= 2,
-            "expected both missing-action and bad-format errors, got {}",
-            errors.len()
-        );
+        assert!(errors.len() >= 2, "expected both missing-action and bad-format errors, got {}", errors.len());
         let messages: Vec<String> = errors.iter().map(describe_jsonschema_error).collect();
         assert!(messages.iter().any(|m| m.contains("missing required property 'action'")));
         assert!(

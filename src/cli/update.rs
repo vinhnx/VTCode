@@ -57,11 +57,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
 
     // Show pin status
     if let Some(pinned) = updater.pinned_version() {
-        println!(
-            "{} Version pinned to {} (use --unpin to remove)",
-            "ℹ".blue(),
-            pinned.to_string().cyan()
-        );
+        println!("{} Version pinned to {} (use --unpin to remove)", "ℹ".blue(), pinned.to_string().cyan());
     }
 
     match updater.check_for_updates().await {
@@ -154,11 +150,7 @@ fn handle_set_channel(channel_str: String) -> Result<()> {
     config.save()?;
 
     println!("{} Release channel set to {}", "✓".green(), channel.to_string().green());
-    println!(
-        "{} Future updates will follow the {} channel",
-        "→".cyan(),
-        channel.to_string().green()
-    );
+    println!("{} Future updates will follow the {} channel", "→".cyan(), channel.to_string().green());
 
     Ok(())
 }
@@ -218,8 +210,8 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
 
 /// Pin to a specific version
 fn handle_pin_version(version_str: String) -> Result<()> {
-    let version = semver::Version::parse(&version_str)
-        .with_context(|| format!("Invalid version format: {version_str}"))?;
+    let version =
+        semver::Version::parse(&version_str).with_context(|| format!("Invalid version format: {version_str}"))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
     let mut updater = Updater::new(current_version)?;
@@ -234,11 +226,7 @@ fn handle_pin_version(version_str: String) -> Result<()> {
 }
 
 /// Handle when an update is available
-async fn handle_update_available(
-    updater: &Updater,
-    update: &UpdateInfo,
-    options: UpdateCommandOptions,
-) -> Result<()> {
+async fn handle_update_available(updater: &Updater, update: &UpdateInfo, options: UpdateCommandOptions) -> Result<()> {
     println!("\n{} New version available: v{}", "●".cyan(), update.version);
 
     println!("\n{}", "Release notes:".bold());

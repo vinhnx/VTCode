@@ -71,14 +71,13 @@ pub mod task_tracking;
 
 // Apply patch handler
 pub use apply_patch_handler::{
-    ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime,
-    ApplyPatchToolArgs, create_apply_patch_freeform_tool, create_apply_patch_json_tool,
+    ApplyPatchHandler, ApplyPatchRequest as ApplyPatchHandlerRequest, ApplyPatchRuntime, ApplyPatchToolArgs,
+    create_apply_patch_freeform_tool, create_apply_patch_json_tool,
 };
 
 // Events
 pub use events::{
-    ExecCommandInput, ExecCommandSource, ParsedCommand, ToolEmitter, ToolEventCtx,
-    ToolEventFailureKind, ToolEventStage,
+    ExecCommandInput, ExecCommandSource, ParsedCommand, ToolEmitter, ToolEventCtx, ToolEventFailureKind, ToolEventStage,
 };
 
 // Intercept apply patch
@@ -92,11 +91,11 @@ pub use list_dir_handler::{DirEntry, ListDirArgs, ListDirHandler, create_list_di
 
 // New Sandboxing module (Codex-compatible)
 pub use sandboxing::{
-    Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec,
-    ExecApprovalRequirement, ExecEnv, ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess,
-    RejectConfig, ReviewDecision, SandboxAttempt, SandboxConfig, SandboxManager, SandboxOverride,
-    SandboxPolicy, SandboxTransformError, SandboxType, Sandboxable, SandboxablePreference, ToolCtx,
-    ToolError, ToolRuntime, default_exec_approval_requirement, execute_env, with_cached_approval,
+    Approvable, ApprovalCtx, ApprovalStore, AskForApproval, BoxFuture, CommandSpec, ExecApprovalRequirement, ExecEnv,
+    ExecPolicyAmendment, ExecToolCallOutput, NetworkAccess, RejectConfig, ReviewDecision, SandboxAttempt,
+    SandboxConfig, SandboxManager, SandboxOverride, SandboxPolicy, SandboxTransformError, SandboxType, Sandboxable,
+    SandboxablePreference, ToolCtx, ToolError, ToolRuntime, default_exec_approval_requirement, execute_env,
+    with_cached_approval,
 };
 
 // Tool Orchestrator (Codex-compatible)
@@ -104,15 +103,13 @@ pub use tool_orchestrator::ToolOrchestrator;
 
 // Turn Diff Tracker with Agent Trace support
 pub use turn_diff_tracker::{
-    ChangeAttribution, FileChange, FileChangeKind, SharedTurnDiffTracker, TurnDiffTracker,
-    new_shared_tracker,
+    ChangeAttribution, FileChange, FileChangeKind, SharedTurnDiffTracker, TurnDiffTracker, new_shared_tracker,
 };
 
 // Shell handler
 pub use session_tool_catalog::{
-    CatalogToolKind, DeferredToolPolicy, DeferredToolSearchKind, SessionSurface,
-    SessionToolCatalog, SessionToolsConfig, ToolCatalogEntry, ToolCatalogSource,
-    ToolModelCapabilities, ToolProfile, ToolSchemaEntry,
+    CatalogToolKind, DeferredToolPolicy, DeferredToolSearchKind, SessionSurface, SessionToolCatalog,
+    SessionToolsConfig, ToolCatalogEntry, ToolCatalogSource, ToolModelCapabilities, ToolProfile, ToolSchemaEntry,
     anthropic_native_memory_enabled_for_runtime, deferred_tool_policy_for_runtime,
 };
 pub use shell_handler::{ShellHandler, create_shell_tool};
@@ -125,16 +122,13 @@ pub use planning_task_tracker::PlanningTaskTrackerTool;
 pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
-pub use router::{
-    DispatchRegistry, DispatchRegistryBuilder, ToolCall, ToolRouter, ToolRouterProvider,
-};
+pub use router::{DispatchRegistry, DispatchRegistryBuilder, ToolCall, ToolRouter, ToolRouterProvider};
 pub use tool_handler::{
-    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, Constrained, ContentItem,
-    DiffTracker, FreeformTool, FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent,
-    PatchApplyEndEvent, ResponsesApiTool, SandboxPermissions, SharedDiffTracker,
-    ShellEnvironmentPolicy, ShellToolCallParams, ToolCallError, ToolEvent, ToolEventBegin,
-    ToolEventFailure, ToolEventSuccess, ToolHandler, ToolInvocation, ToolKind, ToolOutput,
-    ToolPayload, ToolSession, ToolSpec, TurnContext,
+    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, Constrained, ContentItem, DiffTracker, FreeformTool,
+    FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent, PatchApplyEndEvent, ResponsesApiTool,
+    SandboxPermissions, SharedDiffTracker, ShellEnvironmentPolicy, ShellToolCallParams, ToolCallError, ToolEvent,
+    ToolEventBegin, ToolEventFailure, ToolEventSuccess, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
+    ToolSession, ToolSpec, TurnContext,
 };
 
 // Legacy FileChange re-export for backward compatibility

@@ -41,8 +41,7 @@ mod tests {
     fn suite_rejects_zero_attempts_via_validation() {
         // The runner enforces attempts >= 1; serde itself allows 0, so the
         // guardrail lives in the CLI entrypoint (see eval.rs M3).
-        let suite: EvalSuite =
-            serde_json::from_str(r#"{"id":"s","name":"n","tasks":[],"attempts":0}"#).unwrap();
+        let suite: EvalSuite = serde_json::from_str(r#"{"id":"s","name":"n","tasks":[],"attempts":0}"#).unwrap();
         assert_eq!(suite.attempts, 0);
     }
 }

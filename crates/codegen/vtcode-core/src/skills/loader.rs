@@ -72,8 +72,7 @@ struct CachedLightweightSkillOutcome {
 
 impl CachedLightweightSkillOutcome {
     fn is_expired(&self) -> bool {
-        self.timestamp.elapsed().unwrap_or(LIGHTWEIGHT_SKILL_CACHE_TTL)
-            > LIGHTWEIGHT_SKILL_CACHE_TTL
+        self.timestamp.elapsed().unwrap_or(LIGHTWEIGHT_SKILL_CACHE_TTL) > LIGHTWEIGHT_SKILL_CACHE_TTL
     }
 }
 
@@ -86,9 +85,7 @@ fn lightweight_skill_metadata_cache()
     LIGHTWEIGHT_SKILL_METADATA_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
-fn get_cached_lightweight_skill_outcome(
-    key: &LightweightSkillCacheKey,
-) -> Option<SkillLoadOutcome> {
+fn get_cached_lightweight_skill_outcome(key: &LightweightSkillCacheKey) -> Option<SkillLoadOutcome> {
     match lightweight_skill_metadata_cache().read() {
         Ok(cache) => cache
             .get(key)
@@ -160,10 +157,7 @@ pub fn discover_skill_metadata_lightweight(config: &SkillLoaderConfig) -> SkillL
 
 /// Internal helper that allows specifying an explicit home directory.
 /// This is useful for testing to avoid picking up real user skills from ~/.agents/skills.
-fn load_skills_with_home_dir(
-    config: &SkillLoaderConfig,
-    home_dir: Option<&Path>,
-) -> SkillLoadOutcome {
+fn load_skills_with_home_dir(config: &SkillLoaderConfig, home_dir: Option<&Path>) -> SkillLoadOutcome {
     let mut outcome = SkillLoadOutcome::default();
     let roots = skill_roots_with_home_dir(config, home_dir);
 
@@ -298,10 +292,7 @@ fn disabled_skill_selectors(home_dir: Option<&Path>) -> DisabledSkillSelectors {
     selectors
 }
 
-fn skill_roots_with_home_dir(
-    config: &SkillLoaderConfig,
-    home_dir: Option<&Path>,
-) -> Vec<SkillRoot> {
+fn skill_roots_with_home_dir(config: &SkillLoaderConfig, home_dir: Option<&Path>) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
 
     for repo_dir in repo_skill_search_dirs(config) {
@@ -461,10 +452,9 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                     }
                     Err(err) => {
                         if root.scope != SkillScope::System {
-                            outcome.errors.push(SkillErrorInfo {
-                                path: path.clone(),
-                                message: err.to_string(),
-                            });
+                            outcome
+                                .errors
+                                .push(SkillErrorInfo { path: path.clone(), message: err.to_string() });
                         }
                     }
                 }
@@ -522,9 +512,7 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
             }
 
             if file_name == "SKILL.md" {
-                match fs::read_to_string(&path)
-                    .with_context(|| format!("reading {}", path.display()))
-                {
+                match fs::read_to_string(&path).with_context(|| format!("reading {}", path.display())) {
                     Ok(contents) => match crate::skills::manifest::parse_skill_content(&contents) {
                         Ok((manifest, _)) => {
                             outcome.skills.push(SkillMetadata {
@@ -538,19 +526,17 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                         }
                         Err(err) => {
                             if root.scope != SkillScope::System {
-                                outcome.errors.push(SkillErrorInfo {
-                                    path: path.clone(),
-                                    message: err.to_string(),
-                                });
+                                outcome
+                                    .errors
+                                    .push(SkillErrorInfo { path: path.clone(), message: err.to_string() });
                             }
                         }
                     },
                     Err(err) => {
                         if root.scope != SkillScope::System {
-                            outcome.errors.push(SkillErrorInfo {
-                                path: path.clone(),
-                                message: err.to_string(),
-                            });
+                            outcome
+                                .errors
+                                .push(SkillErrorInfo { path: path.clone(), message: err.to_string() });
                         }
                     }
                 }
@@ -598,15 +584,13 @@ fn try_load_plugin_from_dir(path: &Path, scope: SkillScope) -> Result<Option<Ski
     }
 
     // Read and parse plugin metadata
-    let plugin_json_content =
-        fs::read_to_string(&plugin_json_path).context("Failed to read plugin.json")?;
+    let plugin_json_content = fs::read_to_string(&plugin_json_path).context("Failed to read plugin.json")?;
 
     let plugin_metadata: crate::skills::native_plugin::PluginMetadata =
         serde_json::from_str(&plugin_json_content).context("Invalid plugin.json format")?;
 
     // Validate that the plugin has a corresponding dynamic library
-    let lib_name =
-        crate::skills::native_plugin::PluginLoader::new().library_filename(&plugin_metadata.name);
+    let lib_name = crate::skills::native_plugin::PluginLoader::new().library_filename(&plugin_metadata.name);
 
     if !path.join(&lib_name).exists() {
         // Try alternative library names
@@ -650,23 +634,13 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
                     .unwrap_or_default();
 
                 let resource_type = match path.extension().and_then(|e| e.to_str()) {
-                    Some("py") | Some("sh") | Some("bash") => {
-                        crate::skills::types::ResourceType::Script
-                    }
+                    Some("py") | Some("sh") | Some("bash") => crate::skills::types::ResourceType::Script,
                     Some("md") => crate::skills::types::ResourceType::Markdown,
-                    Some("json") | Some("yaml") | Some("yml") => {
-                        crate::skills::types::ResourceType::Reference
-                    }
-                    _ => {
-                        crate::skills::types::ResourceType::Other(format!("{:?}", path.extension()))
-                    }
+                    Some("json") | Some("yaml") | Some("yml") => crate::skills::types::ResourceType::Reference,
+                    _ => crate::skills::types::ResourceType::Other(format!("{:?}", path.extension())),
                 };
 
-                resources.push(crate::skills::types::SkillResource {
-                    path: rel_path,
-                    resource_type,
-                    content: None,
-                });
+                resources.push(crate::skills::types::SkillResource { path: rel_path, resource_type, content: None });
             }
         }
     }
@@ -689,16 +663,10 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
                     Some("json") | Some("yaml") | Some("yml") | Some("txt") | Some("csv") => {
                         crate::skills::types::ResourceType::Reference
                     }
-                    _ => {
-                        crate::skills::types::ResourceType::Other(format!("{:?}", path.extension()))
-                    }
+                    _ => crate::skills::types::ResourceType::Other(format!("{:?}", path.extension())),
                 };
 
-                resources.push(crate::skills::types::SkillResource {
-                    path: rel_path,
-                    resource_type,
-                    content: None,
-                });
+                resources.push(crate::skills::types::SkillResource { path: rel_path, resource_type, content: None });
             }
         }
     }
@@ -726,11 +694,7 @@ pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::type
                     _ => crate::skills::types::ResourceType::Asset,
                 };
 
-                resources.push(crate::skills::types::SkillResource {
-                    path: rel_path,
-                    resource_type,
-                    content: None,
-                });
+                resources.push(crate::skills::types::SkillResource { path: rel_path, resource_type, content: None });
             }
         }
     }
@@ -842,10 +806,7 @@ impl EnhancedSkillLoader {
     /// Create a new enhanced loader for workspace
     pub fn new(workspace_root: PathBuf) -> Self {
         let codex_home = default_codex_home();
-        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
-            &workspace_root,
-            &codex_home,
-        ));
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
@@ -857,10 +818,7 @@ impl EnhancedSkillLoader {
 
     /// Create a loader pinned to a specific VT Code home directory.
     pub fn with_codex_home(workspace_root: PathBuf, codex_home: PathBuf) -> Self {
-        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(
-            &workspace_root,
-            &codex_home,
-        ));
+        let discovery = SkillDiscovery::with_config(discovery_config_for_codex_home(&workspace_root, &codex_home));
         let plugin_loader = plugin_loader_for_workspace(&workspace_root, Some(&codex_home));
         Self {
             workspace_root,
@@ -926,8 +884,7 @@ impl EnhancedSkillLoader {
             // Check if this directory contains the requested plugin
             let plugin_json = plugin_dir.join("plugin.json");
             if let Ok(content) = fs::read_to_string(&plugin_json)
-                && let Ok(metadata) =
-                    serde_json::from_str::<crate::skills::native_plugin::PluginMetadata>(&content)
+                && let Ok(metadata) = serde_json::from_str::<crate::skills::native_plugin::PluginMetadata>(&content)
                 && metadata.name == name
             {
                 // Load the plugin
@@ -979,12 +936,7 @@ impl EnhancedSkillLoader {
     fn load_full_skill_from_ctx(&self, ctx: &SkillContext) -> Result<Skill> {
         let path = ctx.path();
         let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
-        Skill::with_scope(
-            manifest,
-            path.clone(),
-            infer_scope_from_skill_path(path, &self.workspace_root),
-            instructions,
-        )
+        Skill::with_scope(manifest, path.clone(), infer_scope_from_skill_path(path, &self.workspace_root), instructions)
     }
 }
 
@@ -1028,11 +980,7 @@ impl Default for SkillMentionDetectionOptions {
 
 /// Detect skill mentions using default routing options.
 pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest]) -> Vec<String> {
-    detect_skill_mentions_with_options(
-        user_input,
-        available_skills,
-        &SkillMentionDetectionOptions::default(),
-    )
+    detect_skill_mentions_with_options(user_input, available_skills, &SkillMentionDetectionOptions::default())
 }
 
 /// Detect skill mentions using explicit routing options.
@@ -1088,8 +1036,7 @@ fn skill_routing_keywords(skill: &SkillManifest) -> HashSet<String> {
     let Some(metadata) = &skill.metadata else {
         return keywords;
     };
-    for metadata_keywords in [metadata.get("keywords"), metadata.get("tags")].into_iter().flatten()
-    {
+    for metadata_keywords in [metadata.get("keywords"), metadata.get("tags")].into_iter().flatten() {
         match metadata_keywords {
             serde_json::Value::Array(values) => {
                 for value in values {
@@ -1110,9 +1057,9 @@ fn skill_routing_keywords(skill: &SkillManifest) -> HashSet<String> {
 
 fn extract_keywords(text: &str) -> HashSet<String> {
     const STOPWORDS: &[&str] = &[
-        "the", "and", "with", "from", "that", "this", "when", "where", "what", "your", "for",
-        "into", "onto", "than", "then", "also", "only", "should", "would", "could", "have", "has",
-        "had", "use", "using", "task", "tasks", "help", "need", "want",
+        "the", "and", "with", "from", "that", "this", "when", "where", "what", "your", "for", "into", "onto", "than",
+        "then", "also", "only", "should", "would", "could", "have", "has", "had", "use", "using", "task", "tasks",
+        "help", "need", "want",
     ];
 
     text.split(|c: char| !c.is_alphanumeric())
@@ -1131,9 +1078,7 @@ pub fn load_skills_hermetic(config: &SkillLoaderConfig) -> SkillLoadOutcome {
 
 /// Test helper for hermetic lightweight skill discovery.
 #[cfg(test)]
-pub fn discover_skill_metadata_lightweight_hermetic(
-    config: &SkillLoaderConfig,
-) -> SkillLoadOutcome {
+pub fn discover_skill_metadata_lightweight_hermetic(config: &SkillLoaderConfig) -> SkillLoadOutcome {
     discover_skill_metadata_lightweight_with_home_dir(config, None)
 }
 
@@ -1158,10 +1103,7 @@ mod tests {
 
     #[test]
     fn detects_explicit_skill_mentions() {
-        let skills = vec![manifest(
-            "pdf-analyzer",
-            "Analyze PDF files and extract tables",
-        )];
+        let skills = vec![manifest("pdf-analyzer", "Analyze PDF files and extract tables")];
         let mentions = detect_skill_mentions("Use $pdf-analyzer for this file", &skills);
         assert_eq!(mentions, vec!["pdf-analyzer".to_string()]);
     }
@@ -1173,8 +1115,7 @@ mod tests {
             "Fetch data from API endpoints and summarize responses",
         )];
 
-        let mentions =
-            detect_skill_mentions("Fetch and summarize API responses for these endpoints", &skills);
+        let mentions = detect_skill_mentions("Fetch and summarize API responses for these endpoints", &skills);
         assert_eq!(mentions, vec!["api-fetcher".to_string()]);
     }
 
@@ -1197,21 +1138,14 @@ mod tests {
             "Fetch data from API endpoints and summarize responses",
         )];
 
-        let mentions = detect_skill_mentions(
-            "Please update this local markdown file and fix headings",
-            &skills,
-        );
+        let mentions = detect_skill_mentions("Please update this local markdown file and fix headings", &skills);
         assert!(mentions.is_empty());
     }
 
     #[test]
     fn auto_trigger_can_be_disabled() {
-        let skills = vec![manifest(
-            "sql-checker",
-            "Validate SQL migration scripts for safety",
-        )];
-        let options =
-            SkillMentionDetectionOptions { enable_auto_trigger: false, ..Default::default() };
+        let skills = vec![manifest("sql-checker", "Validate SQL migration scripts for safety")];
+        let options = SkillMentionDetectionOptions { enable_auto_trigger: false, ..Default::default() };
         let mentions = detect_skill_mentions_with_options("Use $sql-checker", &skills, &options);
         assert!(mentions.is_empty());
     }
@@ -1289,8 +1223,7 @@ mod tests {
             "expected bundled cmd-review at {}",
             cmd_review_dir.display()
         );
-        let (manifest, _) =
-            crate::skills::manifest::parse_skill_file(&cmd_review_dir).expect("parse cmd-review");
+        let (manifest, _) = crate::skills::manifest::parse_skill_file(&cmd_review_dir).expect("parse cmd-review");
         assert_eq!(manifest.name, "cmd-review");
         let config = discovery_config_for_codex_home(workspace.path(), codex_home.path());
         assert!(
@@ -1299,10 +1232,8 @@ mod tests {
                 .iter()
                 .any(|path| path == &system_cache_root_dir(codex_home.path()))
         );
-        let mut loader = EnhancedSkillLoader::with_codex_home(
-            workspace.path().to_path_buf(),
-            codex_home.path().to_path_buf(),
-        );
+        let mut loader =
+            EnhancedSkillLoader::with_codex_home(workspace.path().to_path_buf(), codex_home.path().to_path_buf());
 
         let discovery = loader.discover_all_skills().await.expect("discover skills");
         assert!(
@@ -1320,10 +1251,8 @@ mod tests {
     async fn enhanced_loader_discovers_every_command_skill() {
         let workspace = TempDir::new().expect("workspace");
         let codex_home = TempDir::new().expect("codex home");
-        let mut loader = EnhancedSkillLoader::with_codex_home(
-            workspace.path().to_path_buf(),
-            codex_home.path().to_path_buf(),
-        );
+        let mut loader =
+            EnhancedSkillLoader::with_codex_home(workspace.path().to_path_buf(), codex_home.path().to_path_buf());
 
         let discovery = loader.discover_all_skills().await.expect("discover skills");
         let discovered_names = discovery
@@ -1333,11 +1262,7 @@ mod tests {
             .collect::<std::collections::HashSet<_>>();
 
         for spec in command_skill_specs() {
-            assert!(
-                discovered_names.contains(spec.skill_name),
-                "missing command skill {}",
-                spec.skill_name
-            );
+            assert!(discovered_names.contains(spec.skill_name), "missing command skill {}", spec.skill_name);
 
             let skill = loader
                 .get_skill(spec.skill_name)
@@ -1395,8 +1320,7 @@ mod tests {
         let home = tempdir().expect("home");
         let codex_home = tempdir().expect("codex home");
 
-        let old_plugin_skill_dir =
-            workspace.path().join(".agents/plugins/example-plugin-v1/skills/release-helper");
+        let old_plugin_skill_dir = workspace.path().join(".agents/plugins/example-plugin-v1/skills/release-helper");
         write_skill(&old_plugin_skill_dir, "release-helper", "Prepare release notes");
 
         write_codex_skill_config(
@@ -1407,17 +1331,14 @@ mod tests {
             ),
         );
 
-        let new_plugin_skill_dir =
-            workspace.path().join(".agents/plugins/example-plugin-v2/skills/release-helper");
+        let new_plugin_skill_dir = workspace.path().join(".agents/plugins/example-plugin-v2/skills/release-helper");
         write_skill(&new_plugin_skill_dir, "release-helper", "Prepare release notes");
 
         fs::remove_dir_all(workspace.path().join(".agents/plugins/example-plugin-v1"))
             .expect("remove old plugin version");
 
-        let outcome = load_skills_with_home_dir(
-            &skill_loader_config_for(workspace.path(), codex_home.path()),
-            Some(home.path()),
-        );
+        let outcome =
+            load_skills_with_home_dir(&skill_loader_config_for(workspace.path(), codex_home.path()), Some(home.path()));
 
         assert!(
             outcome.skills.iter().all(|skill| skill.name != "release-helper"),
@@ -1436,16 +1357,11 @@ mod tests {
 
         write_codex_skill_config(
             home.path(),
-            &format!(
-                "[[skills.config]]\npath = \"{}\"\nenabled = false\n",
-                skill_dir.join("SKILL.md").display()
-            ),
+            &format!("[[skills.config]]\npath = \"{}\"\nenabled = false\n", skill_dir.join("SKILL.md").display()),
         );
 
-        let outcome = load_skills_with_home_dir(
-            &skill_loader_config_for(workspace.path(), codex_home.path()),
-            Some(home.path()),
-        );
+        let outcome =
+            load_skills_with_home_dir(&skill_loader_config_for(workspace.path(), codex_home.path()), Some(home.path()));
 
         assert!(
             outcome.skills.iter().all(|skill| skill.name != "path-disabled"),

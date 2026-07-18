@@ -2,8 +2,7 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub(super) fn prewarm_search_runtime(&self) {
-        let snapshot =
-            crate::tools::search_runtime::snapshot_for_workspace(self.inventory.workspace_root());
+        let snapshot = crate::tools::search_runtime::snapshot_for_workspace(self.inventory.workspace_root());
 
         tracing::trace!(
             ripgrep_ready = snapshot.ripgrep_ready,

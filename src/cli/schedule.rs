@@ -2,16 +2,13 @@ use anyhow::{Result, bail};
 use chrono::Local;
 use vtcode_core::cli::args::{ScheduleCreateArgs, ScheduleSubcommand};
 use vtcode_core::scheduler::{
-    DURABLE_SCHEDULER_RUNTIME_HINT, DurableTaskStore, ScheduleCreateInput, SchedulerDaemon,
-    durable_task_is_overdue, install_service_file, scheduled_tasks_enabled, uninstall_service_file,
+    DURABLE_SCHEDULER_RUNTIME_HINT, DurableTaskStore, ScheduleCreateInput, SchedulerDaemon, durable_task_is_overdue,
+    install_service_file, scheduled_tasks_enabled, uninstall_service_file,
 };
 
 use crate::startup::StartupContext;
 
-pub(crate) async fn handle_schedule_command(
-    startup: &StartupContext,
-    command: ScheduleSubcommand,
-) -> Result<()> {
+pub(crate) async fn handle_schedule_command(startup: &StartupContext, command: ScheduleSubcommand) -> Result<()> {
     match command {
         ScheduleSubcommand::Create(args) => handle_create(startup, args).await,
         ScheduleSubcommand::List => handle_list(startup).await,
@@ -60,22 +57,14 @@ async fn handle_list(startup: &StartupContext) -> Result<()> {
             .next_run_at
             .map(|value| value.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_else(|| "none".to_string());
-        let is_overdue = durable_task_is_overdue(
-            task.next_run_at,
-            task.last_run_at,
-            task.last_status.is_some(),
-            now,
-        );
+        let is_overdue = durable_task_is_overdue(task.next_run_at, task.last_run_at, task.last_status.is_some(), now);
         let last_status = if is_overdue {
             has_overdue_tasks = true;
             "overdue".to_string()
         } else {
             task.last_status.unwrap_or_else(|| "never_run".to_string())
         };
-        println!(
-            "{}  {}  {}  next={}  status={}",
-            task.id, task.name, task.schedule, next_run, last_status
-        );
+        println!("{}  {}  {}  next={}  status={}", task.id, task.name, task.schedule, next_run, last_status);
     }
     if has_overdue_tasks {
         println!("{DURABLE_SCHEDULER_RUNTIME_HINT}");
@@ -146,9 +135,7 @@ async fn handle_uninstall_service() -> Result<()> {
                 );
             }
             vtcode_core::scheduler::ServiceManager::SystemdUser => {
-                println!(
-                    "If the service is enabled, run `systemctl --user disable --now vtcode-scheduler.service`."
-                );
+                println!("If the service is enabled, run `systemctl --user disable --now vtcode-scheduler.service`.");
             }
         }
         return Ok(());
@@ -162,9 +149,7 @@ fn ensure_scheduler_enabled(startup: &StartupContext) -> Result<()> {
     if scheduled_tasks_enabled(startup.config.automation.scheduled_tasks.enabled) {
         return Ok(());
     }
-    bail!(
-        "Scheduled tasks are disabled. Enable [automation.scheduled_tasks].enabled or unset VTCODE_DISABLE_CRON."
-    )
+    bail!("Scheduled tasks are disabled. Enable [automation.scheduled_tasks].enabled or unset VTCODE_DISABLE_CRON.")
 }
 
 fn schedule_create_input(args: ScheduleCreateArgs) -> ScheduleCreateInput {

@@ -35,10 +35,7 @@ fn with_runtime_debug_context<R>(f: impl FnOnce(&mut RuntimeDebugContext) -> R) 
     }
 }
 
-pub fn configure_runtime_debug_context(
-    debug_session_id: String,
-    archive_session_id: Option<String>,
-) {
+pub fn configure_runtime_debug_context(debug_session_id: String, archive_session_id: Option<String>) {
     with_runtime_debug_context(|context| {
         context.debug_session_id = Some(debug_session_id);
         context.archive_session_id = archive_session_id;
@@ -130,14 +127,12 @@ fn prune_expired_debug_logs(log_dir: &Path, max_age_days: u32) -> Result<()> {
         SystemTime::now()
     } else {
         SystemTime::now()
-            .checked_sub(Duration::from_secs(
-                u64::from(max_age_days).saturating_mul(SECONDS_PER_DAY),
-            ))
+            .checked_sub(Duration::from_secs(u64::from(max_age_days).saturating_mul(SECONDS_PER_DAY)))
             .unwrap_or(UNIX_EPOCH)
     };
 
-    for entry in fs::read_dir(log_dir)
-        .with_context(|| format!("Failed to read debug log directory {}", log_dir.display()))?
+    for entry in
+        fs::read_dir(log_dir).with_context(|| format!("Failed to read debug log directory {}", log_dir.display()))?
     {
         let entry = match entry {
             Ok(value) => value,
@@ -192,8 +187,7 @@ fn rotate_debug_log_if_needed(log_file: &Path, session_id: &str, max_size_mb: u6
         Ok(value) => value,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(err) => {
-            return Err(err)
-                .with_context(|| format!("Failed to inspect debug log {}", log_file.display()));
+            return Err(err).with_context(|| format!("Failed to inspect debug log {}", log_file.display()));
         }
     };
 
@@ -203,16 +197,12 @@ fn rotate_debug_log_if_needed(log_file: &Path, session_id: &str, max_size_mb: u6
 
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     let normalized_session_id = sanitize_debug_component(session_id, "session");
-    let rotated_name = format!(
-        "{DEBUG_LOG_FILE_PREFIX}{normalized_session_id}-rotated-{}-{}.log",
-        timestamp,
-        std::process::id()
-    );
+    let rotated_name =
+        format!("{DEBUG_LOG_FILE_PREFIX}{normalized_session_id}-rotated-{}-{}.log", timestamp, std::process::id());
     let rotated_path = log_file.parent().unwrap_or_else(|| Path::new(".")).join(rotated_name);
 
-    fs::rename(log_file, &rotated_path).with_context(|| {
-        format!("Failed to rotate debug log {} -> {}", log_file.display(), rotated_path.display())
-    })?;
+    fs::rename(log_file, &rotated_path)
+        .with_context(|| format!("Failed to rotate debug log {} -> {}", log_file.display(), rotated_path.display()))?;
     Ok(())
 }
 

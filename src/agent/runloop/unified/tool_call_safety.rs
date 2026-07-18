@@ -16,8 +16,7 @@ use vtcode_core::config::constants::tools;
 #[cfg(test)]
 use vtcode_core::tools::SafetyGatewayConfig;
 use vtcode_core::tools::{
-    SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
-    ToolInvocationId,
+    SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway, ToolInvocationId,
 };
 
 /// Safety violation errors
@@ -117,8 +116,7 @@ impl ToolCallSafetyValidator {
     #[cfg(test)]
     pub fn set_rate_limit_per_second(&self, limit: usize) {
         if limit > 0 {
-            let mut test_rate_limits =
-                self.test_rate_limits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut test_rate_limits = self.test_rate_limits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             test_rate_limits.per_second = limit;
             self.safety_gateway
                 .set_rate_limits(test_rate_limits.per_second, test_rate_limits.per_minute);
@@ -132,11 +130,7 @@ impl ToolCallSafetyValidator {
 
     /// Validate a tool call before execution
     #[cfg(test)]
-    pub(crate) async fn validate_call(
-        &self,
-        tool_name: &str,
-        args: &Value,
-    ) -> Result<(), SafetyError> {
+    pub(crate) async fn validate_call(&self, tool_name: &str, args: &Value) -> Result<(), SafetyError> {
         self.validate_call_with_invocation_id(tool_name, args, ToolInvocationId::new())
             .await
     }
@@ -155,9 +149,7 @@ impl ToolCallSafetyValidator {
 
         match result.decision {
             SafetyDecision::Allow => Ok(()),
-            SafetyDecision::NeedsApproval(justification) => {
-                Err(SafetyError::NeedsApproval(justification))
-            }
+            SafetyDecision::NeedsApproval(justification) => Err(SafetyError::NeedsApproval(justification)),
             SafetyDecision::Deny(reason) => Err(map_gateway_violation(result.violation, &reason)),
         }
     }
@@ -166,11 +158,8 @@ impl ToolCallSafetyValidator {
     #[cfg(test)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
         let normalized = tool_name.trim().to_ascii_lowercase();
-        vtcode_core::tools::tool_intent::classify_tool_intent(
-            normalized.as_str(),
-            &Value::Object(Map::new()),
-        )
-        .destructive
+        vtcode_core::tools::tool_intent::classify_tool_intent(normalized.as_str(), &Value::Object(Map::new()))
+            .destructive
     }
 }
 
@@ -181,9 +170,7 @@ pub(crate) fn invocation_id_from_call_id(call_id: &str) -> ToolInvocationId {
 fn map_gateway_violation(violation: Option<GatewaySafetyError>, reason: &str) -> SafetyError {
     match violation {
         Some(GatewaySafetyError::TurnLimitReached { max }) => SafetyError::TurnLimitReached { max },
-        Some(GatewaySafetyError::SessionLimitReached { max }) => {
-            SafetyError::SessionLimitReached { max }
-        }
+        Some(GatewaySafetyError::SessionLimitReached { max }) => SafetyError::SessionLimitReached { max },
         Some(GatewaySafetyError::RateLimitExceeded { current, max, window }) => {
             SafetyError::RateLimitExceeded { current, max, window }
         }

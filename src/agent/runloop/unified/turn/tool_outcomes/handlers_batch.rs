@@ -75,16 +75,14 @@ fn planned_execution_layout(
     allow_parallel: bool,
 ) -> Vec<(PreparedToolBatchKind, usize)> {
     PreparedToolBatch::plan_layout_with_names(
-        validated_calls.iter().map(|validated_call| {
-            (validated_call.can_parallelize(), validated_call.prepared.canonical_name.as_str())
-        }),
+        validated_calls
+            .iter()
+            .map(|validated_call| (validated_call.can_parallelize(), validated_call.prepared.canonical_name.as_str())),
         allow_parallel,
     )
 }
 
-fn execution_group_stats_from_layout(
-    layout: &[(PreparedToolBatchKind, usize)],
-) -> (usize, usize, usize) {
+fn execution_group_stats_from_layout(layout: &[(PreparedToolBatchKind, usize)]) -> (usize, usize, usize) {
     let groups = layout.len();
     let parallel_groups = layout
         .iter()
@@ -98,10 +96,7 @@ fn execution_group_stats_from_layout(
 fn exec_session_tool_active(tool_name: &str) -> bool {
     use vtcode_core::config::constants::tools as tool_names;
 
-    matches!(
-        tool_name,
-        tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | tool_names::SEND_PTY_INPUT
-    )
+    matches!(tool_name, tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | tool_names::SEND_PTY_INPUT)
 }
 
 async fn terminate_group_exec_sessions_if_needed(
@@ -109,8 +104,7 @@ async fn terminate_group_exec_sessions_if_needed(
     group_has_exec_sessions: bool,
     log_message: &str,
 ) {
-    if group_has_exec_sessions && let Err(err) = registry.terminate_all_exec_sessions_async().await
-    {
+    if group_has_exec_sessions && let Err(err) = registry.terminate_all_exec_sessions_async().await {
         tracing::warn!(error = %err, "{log_message}");
     }
 }
@@ -140,14 +134,13 @@ async fn execute_parallel_group<'a, 'b>(
     }
 
     let progress_reporter = ProgressReporter::new();
-    let _spinner =
-        crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
-            t_ctx.ctx.handle,
-            t_ctx.ctx.input_status_state.left.clone(),
-            t_ctx.ctx.input_status_state.right.clone(),
-            format!("Executing {} tools...", validated_calls.len()),
-            Some(&progress_reporter),
-        );
+    let _spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
+        t_ctx.ctx.handle,
+        t_ctx.ctx.input_status_state.left.clone(),
+        t_ctx.ctx.input_status_state.right.clone(),
+        format!("Executing {} tools...", validated_calls.len()),
+        Some(&progress_reporter),
+    );
 
     let registry = t_ctx.ctx.tool_registry.clone();
     let ctrl_c_state = std::sync::Arc::clone(t_ctx.ctx.ctrl_c_state);
@@ -171,19 +164,18 @@ async fn execute_parallel_group<'a, 'b>(
             let start_time = std::time::Instant::now();
             let max_retries = resolve_max_tool_retries(&name, vt_cfg);
             let circuit_before = snapshot_circuit_diagnostics(&registry, &name);
-            let status =
-                crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref_prevalidated(
-                    &registry,
-                    &name,
-                    &args,
-                    &ctrl_c_state,
-                    &ctrl_c_notify,
-                    Some(&reporter),
-                    max_retries,
-                    exec_settlement_mode_for_tool_call(true, &name, &args),
-                    false,
-                )
-                .await;
+            let status = crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref_prevalidated(
+                &registry,
+                &name,
+                &args,
+                &ctrl_c_state,
+                &ctrl_c_notify,
+                Some(&reporter),
+                max_retries,
+                exec_settlement_mode_for_tool_call(true, &name, &args),
+                false,
+            )
+            .await;
             (call_id, name, args, status, start_time, circuit_before)
         };
         execution_futures.push(fut);
@@ -221,13 +213,10 @@ async fn execute_parallel_group<'a, 'b>(
         batch_tracker.record(&status);
         record_circuit_transition(t_ctx.ctx, &name, circuit_before).await;
 
-        let outcome =
-            crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
+        let outcome = crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
         update_repetition_tracker(t_ctx.repeated_tool_attempts, &outcome, &name, &args);
 
-        if let Some(outcome) =
-            handle_tool_execution_result(t_ctx, call_id, &name, &args, &outcome, start_time).await?
-        {
+        if let Some(outcome) = handle_tool_execution_result(t_ctx, call_id, &name, &args, &outcome, start_time).await? {
             if matches!(
                 outcome,
                 TurnHandlerOutcome::Break(
@@ -241,9 +230,7 @@ async fn execute_parallel_group<'a, 'b>(
                         anyhow::bail!("Unexpected Continue outcome in break-matched handler")
                     }
                     TurnHandlerOutcome::SwitchPrimaryAgent(_) => {
-                        anyhow::bail!(
-                            "Unexpected SwitchPrimaryAgent outcome in break-matched handler"
-                        )
+                        anyhow::bail!("Unexpected SwitchPrimaryAgent outcome in break-matched handler")
                     }
                 };
                 return Ok(Some(
@@ -286,15 +273,9 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             continue;
         };
 
-        let validation_result =
-            validate_tool_call(t_ctx.ctx, tool_call.call_id(), tool_call.tool_name(), args).await?;
-        match finalize_validation_result(
-            t_ctx.ctx,
-            tool_call.call_id(),
-            tool_call.tool_name(),
-            args,
-            validation_result,
-        ) {
+        let validation_result = validate_tool_call(t_ctx.ctx, tool_call.call_id(), tool_call.tool_name(), args).await?;
+        match finalize_validation_result(t_ctx.ctx, tool_call.call_id(), tool_call.tool_name(), args, validation_result)
+        {
             ValidationTransition::Proceed(prepared) => {
                 validated_calls.push(ValidatedToolCall { tool_call, prepared });
             }
@@ -315,8 +296,7 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
     }
 
     let planned_layout = planned_execution_layout(&validated_calls, t_ctx.ctx.full_auto);
-    let (groups, parallel_groups, max_group_size) =
-        execution_group_stats_from_layout(&planned_layout);
+    let (groups, parallel_groups, max_group_size) = execution_group_stats_from_layout(&planned_layout);
     tracing::debug!(
         target: "vtcode.turn.metrics",
         metric = "tool_dispatch_groups",
@@ -333,9 +313,7 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
         let group = validated_calls.by_ref().take(len).collect::<Vec<_>>();
         match kind {
             PreparedToolBatchKind::ParallelReadonly => {
-                if let Some(outcome) =
-                    execute_parallel_group(t_ctx, group, &mut batch_tracker).await?
-                {
+                if let Some(outcome) = execute_parallel_group(t_ctx, group, &mut batch_tracker).await? {
                     return Ok(Some(outcome));
                 }
             }
@@ -408,8 +386,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     args_val: serde_json::Value,
 ) -> Result<Option<TurnHandlerOutcome>> {
     // Show pre-execution indicator for file modification operations
-    if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val)
-    {
+    if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val) {
         let summary_ctx = crate::agent::runloop::unified::tool_summary::ToolSummaryRenderContext {
             workspace_root: Some(ctx.config.workspace.as_path()),
         };
@@ -467,10 +444,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        PreparedToolCall, ValidatedToolCall, interrupt_parallel_group,
-        planned_execution_group_stats,
-    };
+    use super::{PreparedToolCall, ValidatedToolCall, interrupt_parallel_group, planned_execution_group_stats};
     use crate::agent::runloop::unified::turn::context::PreparedAssistantToolCall;
     use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
     use futures::stream::FuturesUnordered;
@@ -509,20 +483,8 @@ mod tests {
     fn build_execution_groups_batches_contiguous_parallel_safe_reads() {
         let stats = planned_execution_group_stats(
             &[
-                validated_call(
-                    "call_1",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"turn loop"}),
-                ),
-                validated_call(
-                    "call_2",
-                    tools::READ_FILE,
-                    true,
-                    true,
-                    serde_json::json!({"path":"src/main.rs"}),
-                ),
+                validated_call("call_1", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"turn loop"})),
+                validated_call("call_2", tools::READ_FILE, true, true, serde_json::json!({"path":"src/main.rs"})),
             ],
             true,
         );
@@ -534,13 +496,7 @@ mod tests {
     fn build_execution_groups_preserves_order_around_mutating_calls() {
         let stats = planned_execution_group_stats(
             &[
-                validated_call(
-                    "call_1",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"alpha"}),
-                ),
+                validated_call("call_1", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"alpha"})),
                 validated_call(
                     "call_2",
                     tools::UNIFIED_EXEC,
@@ -548,13 +504,7 @@ mod tests {
                     false,
                     serde_json::json!({"action":"run","command":["cargo","check"]}),
                 ),
-                validated_call(
-                    "call_3",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"omega"}),
-                ),
+                validated_call("call_3", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"omega"})),
             ],
             true,
         );
@@ -566,20 +516,8 @@ mod tests {
     fn build_execution_groups_splits_duplicate_parallel_tool_names() {
         let stats = planned_execution_group_stats(
             &[
-                validated_call(
-                    "call_1",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"alpha"}),
-                ),
-                validated_call(
-                    "call_2",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"beta"}),
-                ),
+                validated_call("call_1", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"alpha"})),
+                validated_call("call_2", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"beta"})),
             ],
             true,
         );
@@ -591,20 +529,8 @@ mod tests {
     fn build_execution_groups_falls_back_to_serial_when_parallel_disabled() {
         let stats = planned_execution_group_stats(
             &[
-                validated_call(
-                    "call_1",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"alpha"}),
-                ),
-                validated_call(
-                    "call_2",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"beta"}),
-                ),
+                validated_call("call_1", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"alpha"})),
+                validated_call("call_2", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"beta"})),
             ],
             false,
         );
@@ -616,20 +542,8 @@ mod tests {
     fn build_execution_groups_keeps_non_parallel_safe_reads_serial() {
         let stats = planned_execution_group_stats(
             &[
-                validated_call(
-                    "call_1",
-                    tools::LIST_PTY_SESSIONS,
-                    true,
-                    false,
-                    serde_json::json!({}),
-                ),
-                validated_call(
-                    "call_2",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"beta"}),
-                ),
+                validated_call("call_1", tools::LIST_PTY_SESSIONS, true, false, serde_json::json!({})),
+                validated_call("call_2", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"beta"})),
             ],
             true,
         );
@@ -659,13 +573,7 @@ mod tests {
         let stats = planned_execution_group_stats(
             &[
                 remapped,
-                validated_call(
-                    "call_read",
-                    tools::CODE_SEARCH,
-                    true,
-                    true,
-                    serde_json::json!({"query":"beta"}),
-                ),
+                validated_call("call_read", tools::CODE_SEARCH, true, true, serde_json::json!({"query":"beta"})),
             ],
             true,
         );

@@ -27,9 +27,7 @@ pub struct SessionConfig {
 }
 
 // Re-export shared enums from vtcode-commons.
-pub use vtcode_commons::ui_protocol::{
-    LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode,
-};
+pub use vtcode_commons::ui_protocol::{LayoutModeOverride, ReasoningDisplayMode, ThinkingBlockState, UiMode};
 
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,8 +159,7 @@ impl AppearanceConfig {
     }
 
     pub fn should_animate_progress_status(&self) -> bool {
-        !self.screen_reader_mode
-            && (!self.reduce_motion_mode || self.reduce_motion_keep_progress_animation)
+        !self.screen_reader_mode && (!self.reduce_motion_mode || self.reduce_motion_keep_progress_animation)
     }
 
     /// Check if footer should be shown based on ui_mode
@@ -298,9 +295,8 @@ impl SessionConfig {
     /// Loads configuration from a file
     #[expect(dead_code)]
     pub fn load_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let content = read_file_with_context_sync(Path::new(path), "session config file").map_err(
-            |err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) },
-        )?;
+        let content = read_file_with_context_sync(Path::new(path), "session config file")
+            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) })?;
         let config: SessionConfig = toml::from_str(&content)?;
         Ok(config)
     }
@@ -309,9 +305,8 @@ impl SessionConfig {
     #[expect(dead_code)]
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
-        write_file_with_context_sync(Path::new(path), &content, "session config file").map_err(
-            |err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) },
-        )?;
+        write_file_with_context_sync(Path::new(path), &content, "session config file")
+            .map_err(|err| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(err)) })?;
         Ok(())
     }
 
@@ -361,11 +356,7 @@ impl SessionConfig {
             errors.push("navigation_width_percent must be between 0 and 100".to_owned());
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 }
 

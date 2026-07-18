@@ -381,12 +381,7 @@ impl WorkspaceState {
     }
 
     /// Record a file change
-    pub fn record_change(
-        &mut self,
-        path: PathBuf,
-        content_before: Option<String>,
-        content_after: String,
-    ) {
+    pub fn record_change(&mut self, path: PathBuf, content_before: Option<String>, content_after: String) {
         let change = FileChange {
             path,
             content_before,
@@ -477,14 +472,8 @@ mod tests {
     #[test]
     fn test_parse_relative_expression_percentage() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.parse_relative_expression("increase by 20%"),
-            Some(RelativeOp::Increase(20))
-        );
-        assert_eq!(
-            state.parse_relative_expression("decrease by 50%"),
-            Some(RelativeOp::Decrease(50))
-        );
+        assert_eq!(state.parse_relative_expression("increase by 20%"), Some(RelativeOp::Increase(20)));
+        assert_eq!(state.parse_relative_expression("decrease by 50%"), Some(RelativeOp::Decrease(50)));
     }
 
     #[test]

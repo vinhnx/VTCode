@@ -177,8 +177,7 @@ fn cache_key_overlaps_changed_path(key: &ToolCacheKey, changed_path: &str) -> bo
     let changed_path = Path::new(changed_path);
     cache_target == changed_path
         || cache_target.starts_with(changed_path)
-        || (key.tool == crate::config::constants::tools::CODE_SEARCH
-            && changed_path.starts_with(cache_target))
+        || (key.tool == crate::config::constants::tools::CODE_SEARCH && changed_path.starts_with(cache_target))
 }
 
 #[cfg(test)]
@@ -283,10 +282,7 @@ mod tests {
 
         cache.invalidate_for_path("/workspace/src/widget.rs");
 
-        assert!(
-            cache.get(&scoped_search).is_none(),
-            "a descendant edit must prevent stale directory-scope reuse"
-        );
+        assert!(cache.get(&scoped_search).is_none(), "a descendant edit must prevent stale directory-scope reuse");
         assert!(cache.get(&unrelated_search).is_some());
         assert!(cache.get(&sibling_prefix).is_some());
     }

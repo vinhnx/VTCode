@@ -16,9 +16,7 @@
 use std::path::PathBuf;
 
 use tracing::warn;
-use vtcode_session_store::progress::{
-    Milestone, MilestoneStatus, ProgressLedger, load_progress, save_progress,
-};
+use vtcode_session_store::progress::{Milestone, MilestoneStatus, ProgressLedger, load_progress, save_progress};
 
 /// Guard-rail interface isolating the [`ProgressMonitor`] from persistence IO.
 ///
@@ -232,8 +230,7 @@ mod tests {
             persists: persists.clone(),
             checkpoints: checkpoints.clone(),
         };
-        let mut monitor =
-            ProgressMonitor::with_sink(ProgressLedger::new("s1", "goal"), Box::new(sink));
+        let mut monitor = ProgressMonitor::with_sink(ProgressLedger::new("s1", "goal"), Box::new(sink));
 
         monitor.set_milestones(vec![Milestone {
             id: "1".into(),

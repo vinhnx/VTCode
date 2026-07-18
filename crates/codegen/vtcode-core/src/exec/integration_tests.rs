@@ -9,9 +9,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::exec::{
-        AgentBehaviorAnalyzer, ExecutionConfig, PiiTokenizer, Skill, SkillManager, SkillMetadata,
-    };
+    use crate::exec::{AgentBehaviorAnalyzer, ExecutionConfig, PiiTokenizer, Skill, SkillManager, SkillMetadata};
     use anyhow::Result;
     use chrono;
     use tempfile;

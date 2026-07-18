@@ -117,8 +117,7 @@ impl<'config> AgentComponentBuilder<'config> {
 
         let session_info = match self.session_info.take() {
             Some(info) => info,
-            None => create_session_info()
-                .context("Failed to initialize agent session metadata for bootstrap")?,
+            None => create_session_info().context("Failed to initialize agent session metadata for bootstrap")?,
         };
 
         let tool_registry = match self.tool_registry {
@@ -134,9 +133,7 @@ impl<'config> AgentComponentBuilder<'config> {
         // The global singleton is provider-agnostic; provider filtering happens at query time.
         let models_manager = self.models_manager.take().unwrap_or_else(|| {
             // Clone Arc from global - this is cheap since ModelsManager is behind LazyLock
-            Arc::new(ModelsManager::with_provider(
-                self.config.provider.parse::<Provider>().ok().unwrap_or_default(),
-            ))
+            Arc::new(ModelsManager::with_provider(self.config.provider.parse::<Provider>().ok().unwrap_or_default()))
         });
 
         let decision_tracker = self.decision_tracker.unwrap_or_default();
@@ -159,9 +156,7 @@ fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
     let provider_name = if config.provider.trim().is_empty() {
         infer_provider_from_model(&config.model)
             .map(|provider| provider.to_string())
-            .ok_or_else(|| {
-                anyhow::anyhow!("Cannot determine provider for model: {}", config.model)
-            })?
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", config.model))?
     } else {
         config.provider.to_lowercase()
     };
@@ -201,10 +196,7 @@ fn build_session_info(duration: Result<Duration, Duration>) -> SessionInfo {
         }
         Err(delta) => {
             let fallback = delta.as_secs();
-            warn!(
-                fallback_seconds = fallback,
-                "System time is before UNIX epoch; using fallback session id"
-            );
+            warn!(fallback_seconds = fallback, "System time is before UNIX epoch; using fallback session id");
             (fallback, format!("session_fallback_{fallback}"))
         }
     };
@@ -220,17 +212,12 @@ fn build_session_info(duration: Result<Duration, Duration>) -> SessionInfo {
 
 fn ensure_workspace_ready(workspace_root: &Path) -> Result<()> {
     if workspace_root.exists() {
-        let metadata = fs::metadata(workspace_root)
-            .with_context(|| ctx_err!(ERR_GET_METADATA, workspace_root.display()))?;
+        let metadata =
+            fs::metadata(workspace_root).with_context(|| ctx_err!(ERR_GET_METADATA, workspace_root.display()))?;
 
-        anyhow::ensure!(
-            metadata.is_dir(),
-            "Workspace path is not a directory: {}",
-            workspace_root.display()
-        );
+        anyhow::ensure!(metadata.is_dir(), "Workspace path is not a directory: {}", workspace_root.display());
     } else {
-        fs::create_dir_all(workspace_root)
-            .with_context(|| ctx_err!(ERR_CREATE_DIR, workspace_root.display()))?;
+        fs::create_dir_all(workspace_root).with_context(|| ctx_err!(ERR_CREATE_DIR, workspace_root.display()))?;
     }
 
     Ok(())
@@ -243,9 +230,7 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
-    use crate::core::agent::snapshots::{
-        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-    };
+    use crate::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
     use std::collections::BTreeMap;
 
     #[tokio::test]

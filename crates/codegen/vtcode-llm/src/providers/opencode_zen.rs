@@ -37,13 +37,7 @@ impl OpenCodeZenProvider {
     }
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::opencode_zen::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+        Self::with_model_internal(api_key, models::opencode_zen::DEFAULT_MODEL.to_string(), None, None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -94,11 +88,7 @@ impl OpenCodeZenProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::OPENCODE_ZEN_API_BASE,
-                base_url,
-                Some(env_vars::OPENCODE_ZEN_BASE_URL),
-            ),
+            base_url: override_base_url(urls::OPENCODE_ZEN_API_BASE, base_url, Some(env_vars::OPENCODE_ZEN_BASE_URL)),
             model: Self::normalize_model(&model).to_string(),
         }
     }
@@ -143,14 +133,12 @@ impl OpenCodeZenProvider {
                 self.base_url.clone(),
                 TimeoutsConfig::default(),
             )),
-            ZenProtocol::OpenAICompatible => {
-                Box::new(OpenCodeCompatibleProvider::<OpenCodeZenInnerSpec>::new(
-                    self.api_key.clone(),
-                    self.http_client.clone(),
-                    self.base_url.clone(),
-                    requested,
-                ))
-            }
+            ZenProtocol::OpenAICompatible => Box::new(OpenCodeCompatibleProvider::<OpenCodeZenInnerSpec>::new(
+                self.api_key.clone(),
+                self.http_client.clone(),
+                self.base_url.clone(),
+                requested,
+            )),
         }
     }
 }
@@ -171,9 +159,9 @@ impl LLMProvider for OpenCodeZenProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        self.catalog_entry(model).map(|entry| entry.reasoning).unwrap_or_else(|| {
-            self.delegate_for_model(model).supports_reasoning(self.requested_model(model))
-        })
+        self.catalog_entry(model)
+            .map(|entry| entry.reasoning)
+            .unwrap_or_else(|| self.delegate_for_model(model).supports_reasoning(self.requested_model(model)))
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -246,12 +234,7 @@ impl LLMProvider for OpenCodeZenProvider {
             .map(|model| model.to_string())
             .collect::<Vec<_>>();
 
-        super::common::validate_request_common(
-            &normalized,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            Some(&supported_models),
-        )
+        super::common::validate_request_common(&normalized, PROVIDER_NAME, PROVIDER_KEY, Some(&supported_models))
     }
 }
 

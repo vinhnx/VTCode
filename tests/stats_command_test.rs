@@ -9,18 +9,13 @@ use vtcode_core::{
     config::constants::models::google::GEMINI_3_FLASH_PREVIEW,
     config::core::PromptCachingConfig,
     config::types::{AgentConfig, ModelSelectionSource, UiSurfacePreference},
-    core::agent::snapshots::{
-        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-    },
+    core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS},
     handle_stats_command,
     ui::theme::DEFAULT_THEME_ID,
 };
 
 #[tokio::test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "test function, assertions are expected"
-)]
+#[expect(clippy::panic_in_result_fn, reason = "test function, assertions are expected")]
 async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config = AgentConfig {

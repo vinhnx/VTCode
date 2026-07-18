@@ -97,16 +97,10 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
     assert_eq!(list.items[0].badge.as_deref(), Some("Recommended"));
 
     assert_eq!(list.items[1].title, "Yes, manually approve edits");
-    assert_eq!(
-        list.items[1].subtitle.as_deref(),
-        Some("Keep context and confirm each edit before applying.")
-    );
+    assert_eq!(list.items[1].subtitle.as_deref(), Some("Keep context and confirm each edit before applying."));
 
     assert_eq!(list.items[2].title, "Type feedback to revise the plan");
-    assert_eq!(
-        list.items[2].subtitle.as_deref(),
-        Some("Return to planning workflow and refine the plan.")
-    );
+    assert_eq!(list.items[2].subtitle.as_deref(), Some("Return to planning workflow and refine the plan."));
 }
 
 #[test]
@@ -176,9 +170,9 @@ fn info_warning_error_blocks_render_distinct_fieldset_fills() {
         // Top rule carries a center-aligned label flanked by the kind's fill.
         // The fill glyph follows terminal Unicode capabilities.
         assert!(
-            rendered.iter().any(|line| {
-                (line.contains(unicode_fill) || line.contains(ascii_fill)) && line.contains(label)
-            }),
+            rendered
+                .iter()
+                .any(|line| { (line.contains(unicode_fill) || line.contains(ascii_fill)) && line.contains(label) }),
             "{label} block should render a fieldset rule with its fill, got: {rendered:?}"
         );
         // Fieldset blocks never draw vertical box sides.
@@ -312,10 +306,7 @@ fn top_level_task_tree_tail_line_is_dimmed_in_tool_blocks() {
         .find(|span| span.content.contains("Report actions taken"))
         .expect("expected task span");
 
-    assert!(
-        task_span.style.add_modifier.contains(Modifier::DIM),
-        "top-level task rows should render dimmed"
-    );
+    assert!(task_span.style.add_modifier.contains(Modifier::DIM), "top-level task rows should render dimmed");
 }
 
 #[test]

@@ -69,13 +69,7 @@ impl WorktreeManager {
         let branch_name = format!("loop/{sanitized}");
 
         let output = Command::new("git")
-            .args([
-                "worktree",
-                "add",
-                "-b",
-                &branch_name,
-                &worktree_path.to_string_lossy(),
-            ])
+            .args(["worktree", "add", "-b", &branch_name, &worktree_path.to_string_lossy()])
             .current_dir(&self.workspace_root)
             .output()
             .context("Failed to run git worktree add")?;
@@ -113,11 +107,7 @@ impl WorktreeManager {
         let mut current_head: Option<String> = None;
 
         /// Build a WorktreeInfo if the path is under the managed directory.
-        fn try_build_info(
-            path: PathBuf,
-            head: &mut Option<String>,
-            managed_dir: &str,
-        ) -> Option<WorktreeInfo> {
+        fn try_build_info(path: PathBuf, head: &mut Option<String>, managed_dir: &str) -> Option<WorktreeInfo> {
             if !path.starts_with(managed_dir) {
                 return None;
             }
@@ -173,20 +163,11 @@ impl WorktreeManager {
         let worktree_path = self.worktrees_dir().join(&sanitized);
 
         if !worktree_path.exists() {
-            return Err(anyhow!(
-                "Worktree '{}' does not exist at {}",
-                name,
-                worktree_path.display()
-            ));
+            return Err(anyhow!("Worktree '{}' does not exist at {}", name, worktree_path.display()));
         }
 
         let output = Command::new("git")
-            .args([
-                "worktree",
-                "remove",
-                "--force",
-                &worktree_path.to_string_lossy(),
-            ])
+            .args(["worktree", "remove", "--force", &worktree_path.to_string_lossy()])
             .current_dir(&self.workspace_root)
             .output()
             .context("Failed to run git worktree remove")?;
@@ -312,12 +293,7 @@ mod tests {
                 .current_dir(dir.path())
                 .output()
                 .expect("spawn git");
-            assert!(
-                status.status.success(),
-                "git {:?} failed: {}",
-                args,
-                String::from_utf8_lossy(&status.stderr)
-            );
+            assert!(status.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&status.stderr));
         };
         run(&["init", "-q"]);
         run(&["config", "user.email", "test@vtcode.dev"]);
@@ -377,10 +353,7 @@ mod tests {
     fn remove_missing_worktree_errors() {
         let repo = init_temp_git_repo();
         let mgr = manager_for(&repo);
-        assert!(
-            mgr.remove("does-not-exist").is_err(),
-            "removing a non-existent worktree must error"
-        );
+        assert!(mgr.remove("does-not-exist").is_err(), "removing a non-existent worktree must error");
     }
 
     #[test]

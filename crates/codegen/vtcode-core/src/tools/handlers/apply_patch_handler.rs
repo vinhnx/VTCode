@@ -18,13 +18,12 @@ use serde_json::{Value, json};
 
 use super::events::{ToolEmitter, ToolEventCtx};
 use super::sandboxing::{
-    Approvable, ApprovalCtx, AskForApproval, BoxFuture, ExecApprovalRequirement,
-    ExecToolCallOutput, ReviewDecision, SandboxAttempt, Sandboxable, SandboxablePreference,
-    ToolCtx, ToolError, ToolRuntime,
+    Approvable, ApprovalCtx, AskForApproval, BoxFuture, ExecApprovalRequirement, ExecToolCallOutput, ReviewDecision,
+    SandboxAttempt, Sandboxable, SandboxablePreference, ToolCtx, ToolError, ToolRuntime,
 };
 use super::tool_handler::{
-    ApprovalPolicy, FileChange, FreeformTool, FreeformToolFormat, ResponsesApiTool, ToolCallError,
-    ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
+    ApprovalPolicy, FileChange, FreeformTool, FreeformToolFormat, ResponsesApiTool, ToolCallError, ToolHandler,
+    ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
 };
 use super::tool_orchestrator::ToolOrchestrator;
 use crate::config::constants::tools;
@@ -85,10 +84,7 @@ impl Approvable<ApplyPatchRequest> for ApplyPatchRuntime {
         ApplyPatchApprovalKey { patch: req.patch.clone(), cwd: req.cwd.clone() }
     }
 
-    fn exec_approval_requirement(
-        &self,
-        _req: &ApplyPatchRequest,
-    ) -> Option<ExecApprovalRequirement> {
+    fn exec_approval_requirement(&self, _req: &ApplyPatchRequest) -> Option<ExecApprovalRequirement> {
         // Preserve existing behavior from the legacy orchestrator path:
         // apply_patch is executed without additional approval prompts here.
         Some(ExecApprovalRequirement::Skip {
@@ -125,8 +121,7 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
         _ctx: &ToolCtx,
     ) -> Result<ExecToolCallOutput, ToolError> {
         // Parse and apply the patch
-        let patch = Patch::parse(&req.patch)
-            .map_err(|e| ToolError::Rejected(format!("Failed to parse patch: {e}")))?;
+        let patch = Patch::parse(&req.patch).map_err(|e| ToolError::Rejected(format!("Failed to parse patch: {e}")))?;
 
         if patch.is_empty() {
             return Ok(ExecToolCallOutput {
@@ -182,13 +177,10 @@ impl ToolHandler for ApplyPatchHandler {
         // Extract patch input from payload
         let patch_input = match payload {
             ToolPayload::Function { arguments } => {
-                let args: Value = serde_json::from_str(&arguments).map_err(|e| {
-                    ToolCallError::respond(format!("Failed to parse function arguments: {e}"))
-                })?;
+                let args: Value = serde_json::from_str(&arguments)
+                    .map_err(|e| ToolCallError::respond(format!("Failed to parse function arguments: {e}")))?;
                 crate::tools::apply_patch::decode_apply_patch_input(&args)
-                    .map_err(|e| {
-                        ToolCallError::respond(format!("Failed to decode patch input: {e}"))
-                    })?
+                    .map_err(|e| ToolCallError::respond(format!("Failed to decode patch input: {e}")))?
                     .map(|input| input.text)
                     .ok_or_else(|| {
                         ToolCallError::respond(format!(
@@ -199,23 +191,20 @@ impl ToolHandler for ApplyPatchHandler {
             }
             ToolPayload::Custom { input } => input,
             _ => {
-                return Err(ToolCallError::respond(
-                    "apply_patch handler received unsupported payload",
-                ));
+                return Err(ToolCallError::respond("apply_patch handler received unsupported payload"));
             }
         };
 
         // Parse the patch to get file changes
-        let patch = Patch::parse(&patch_input)
-            .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {e}")))?;
+        let patch =
+            Patch::parse(&patch_input).map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {e}")))?;
 
         // Convert patch operations to file changes for tracking
         let changes = convert_patch_to_changes(&patch, &turn.cwd);
 
         // Create emitter for event tracking
         let emitter = ToolEmitter::apply_patch(changes.clone(), true);
-        let event_ctx =
-            ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
+        let event_ctx = ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
         emitter.begin(event_ctx).await;
 
         // Create request
@@ -237,18 +226,11 @@ impl ToolHandler for ApplyPatchHandler {
         };
 
         let result = orchestrator
-            .run(
-                &mut runtime,
-                &req,
-                &tool_ctx,
-                turn.as_ref(),
-                map_approval_policy(turn.approval_policy.value()),
-            )
+            .run(&mut runtime, &req, &tool_ctx, turn.as_ref(), map_approval_policy(turn.approval_policy.value()))
             .await;
 
         // Emit completion event and format output
-        let event_ctx =
-            ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
+        let event_ctx = ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
         let content = emitter.finish(event_ctx, result).await?;
 
         Ok(ToolOutput::Function { content, content_items: None, success: Some(true) })
@@ -272,10 +254,7 @@ fn convert_patch_to_changes(patch: &Patch, cwd: &Path) -> HashMap<PathBuf, FileC
             PatchOperation::UpdateFile { path, new_path, chunks: _ } => {
                 let full_path = cwd.join(path);
                 if let Some(new_path) = new_path {
-                    changes.insert(
-                        full_path,
-                        FileChange::Rename { new_path: cwd.join(new_path), content: None },
-                    );
+                    changes.insert(full_path, FileChange::Rename { new_path: cwd.join(new_path), content: None });
                 } else {
                     // For updates, we track as update with empty placeholders
                     // The actual content will be computed during application
@@ -320,8 +299,7 @@ pub fn create_apply_patch_freeform_tool() -> ToolSpec {
 /// Create JSON function apply_patch tool spec (for standard function calling)
 pub fn create_apply_patch_json_tool() -> ToolSpec {
     use crate::tools::apply_patch::{
-        APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION,
-        with_semantic_anchor_guidance,
+        APPLY_PATCH_ALIAS_DESCRIPTION, DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION, with_semantic_anchor_guidance,
     };
     ToolSpec::Function(ResponsesApiTool {
         name: tools::APPLY_PATCH.to_string(),
@@ -421,10 +399,7 @@ mod tests {
 
     #[test]
     fn test_parse_apply_patch_command_direct() {
-        let cmd = vec![
-            "apply_patch".to_string(),
-            "*** Begin Patch\n*** End Patch".to_string(),
-        ];
+        let cmd = vec!["apply_patch".to_string(), "*** Begin Patch\n*** End Patch".to_string()];
         let (is_patch, content) = parse_apply_patch_command(&cmd);
         assert!(is_patch);
         assert!(content.is_some());
@@ -453,8 +428,7 @@ mod tests {
     #[test]
     fn test_apply_patch_json_args_support_patch_alias() {
         let parsed: ApplyPatchToolArgs =
-            serde_json::from_str(r#"{"patch":"*** Begin Patch\n*** End Patch\n"}"#)
-                .expect("json args should parse");
+            serde_json::from_str(r#"{"patch":"*** Begin Patch\n*** End Patch\n"}"#).expect("json args should parse");
 
         assert_eq!(parsed.input, None);
         assert_eq!(parsed.patch.as_deref(), Some("*** Begin Patch\n*** End Patch\n"));

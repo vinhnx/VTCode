@@ -6,10 +6,7 @@ use super::lifecycle::OperationEffect;
 use super::progress::ProgressMarker;
 use super::{PatchError, PreparedOperation};
 
-pub(super) async fn execute_plan(
-    root: &Path,
-    plan: Vec<PreparedOperation<'_>>,
-) -> Result<Vec<String>, PatchError> {
+pub(super) async fn execute_plan(root: &Path, plan: Vec<PreparedOperation<'_>>) -> Result<Vec<String>, PatchError> {
     let total = plan.len();
     let executor = OperationExecutor::new(root);
     let mut journal = OperationJournal::new();

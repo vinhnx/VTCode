@@ -3,8 +3,8 @@ use anyhow::Result;
 use vtcode_auth::{AuthStatus, OpenAIChatGptAuthStatus, OpenAIResolvedAuthSource};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::copilot::{
-    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind,
-    login_with_events, logout_with_events, probe_auth_status,
+    COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus, CopilotAuthStatusKind, login_with_events,
+    logout_with_events, probe_auth_status,
 };
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
@@ -18,16 +18,13 @@ use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::external_url_guard::{
     ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
 };
-use crate::agent::runloop::unified::wizard_modal::{
-    WizardModalOutcome, show_wizard_modal_and_wait,
-};
+use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 use crate::cli::auth::{
-    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, begin_openai_login,
-    begin_openrouter_login, clear_openai_login, clear_openrouter_login,
-    complete_openai_login_from_manual_future, complete_openai_login_with_manual_future,
-    complete_openrouter_login_with_tui_cancel, is_oauth_flow_cancelled, oauth_flow_cancelled_error,
-    openai_auth_status, openai_manual_placeholder, openrouter_auth_status, prepare_openai_login,
-    prepare_openrouter_login, refresh_openai_login, should_prompt_manual_openai_input,
+    COPILOT_PROVIDER, OPENAI_PROVIDER, OPENROUTER_PROVIDER, begin_openai_login, begin_openrouter_login,
+    clear_openai_login, clear_openrouter_login, complete_openai_login_from_manual_future,
+    complete_openai_login_with_manual_future, complete_openrouter_login_with_tui_cancel, is_oauth_flow_cancelled,
+    oauth_flow_cancelled_error, openai_auth_status, openai_manual_placeholder, openrouter_auth_status,
+    prepare_openai_login, prepare_openrouter_login, refresh_openai_login, should_prompt_manual_openai_input,
     supports_auth_provider,
 };
 
@@ -82,26 +79,18 @@ pub(crate) async fn handle_oauth_login(
 
     match provider.as_str() {
         COPILOT_PROVIDER => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Starting GitHub Copilot authentication via the official `copilot` CLI...",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Starting GitHub Copilot authentication via the official `copilot` CLI...")?;
             render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Login)?;
             let workspace = ctx.config.workspace.clone();
-            let auth_cfg =
-                ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
-            login_with_events(&auth_cfg, &workspace, |event| {
-                render_copilot_auth_event(ctx.renderer, event)
-            })
-            .await?;
+            let auth_cfg = ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
+            login_with_events(&auth_cfg, &workspace, |event| render_copilot_auth_event(ctx.renderer, event)).await?;
             sync_copilot_runtime_if_active(&mut ctx).await?;
             ctx.renderer
                 .line(MessageStyle::Info, "Successfully authenticated with GitHub Copilot.")?;
             if ctx.config.provider.eq_ignore_ascii_case(COPILOT_PROVIDER) {
-                ctx.renderer.line(
-                    MessageStyle::Output,
-                    "Switched the current session to GitHub Copilot.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Output, "Switched the current session to GitHub Copilot.")?;
             }
         }
         OPENROUTER_PROVIDER => {
@@ -115,34 +104,25 @@ pub(crate) async fn handle_oauth_login(
             let started = begin_openrouter_login(prepared).await?;
             ctx.renderer
                 .line(MessageStyle::Info, "Waiting for OpenRouter OAuth callback...")?;
-            let api_key = match complete_openrouter_login_with_tui_cancel(
-                started,
-                ctx.ctrl_c_state,
-                ctx.ctrl_c_notify,
-            )
-            .await
-            {
-                Ok(api_key) => api_key,
-                Err(err) if is_oauth_flow_cancelled(&err) => {
-                    if ctx.ctrl_c_state.is_exit_requested() {
-                        return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+            let api_key =
+                match complete_openrouter_login_with_tui_cancel(started, ctx.ctrl_c_state, ctx.ctrl_c_notify).await {
+                    Ok(api_key) => api_key,
+                    Err(err) if is_oauth_flow_cancelled(&err) => {
+                        if ctx.ctrl_c_state.is_exit_requested() {
+                            return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+                        }
+                        ctx.renderer
+                            .line(MessageStyle::Info, "OpenRouter OAuth authentication cancelled.")?;
+                        return Ok(SlashCommandControl::Continue);
                     }
-                    ctx.renderer
-                        .line(MessageStyle::Info, "OpenRouter OAuth authentication cancelled.")?;
-                    return Ok(SlashCommandControl::Continue);
-                }
-                Err(err) => return Err(err),
-            };
+                    Err(err) => return Err(err),
+                };
             ctx.renderer
                 .line(MessageStyle::Info, "Successfully authenticated with OpenRouter.")?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                "Stored the OAuth token using your configured credential storage mode.",
-            )?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                &format!("Key preview: {}...", &api_key[..api_key.len().min(8)]),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Output, "Stored the OAuth token using your configured credential storage mode.")?;
+            ctx.renderer
+                .line(MessageStyle::Output, &format!("Key preview: {}...", &api_key[..api_key.len().min(8)]))?;
         }
         OPENAI_PROVIDER => {
             ctx.renderer
@@ -157,8 +137,7 @@ pub(crate) async fn handle_oauth_login(
             ctx.renderer.line(MessageStyle::Info, "Waiting for OpenAI OAuth callback...")?;
             let login_result = match started {
                 Ok(started) => {
-                    let manual_input =
-                        prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
+                    let manual_input = prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
                     complete_openai_login_with_manual_future(started, Some(manual_input)).await
                 }
                 Err(err) if should_prompt_manual_openai_input(&err) => {
@@ -166,8 +145,7 @@ pub(crate) async fn handle_oauth_login(
                         MessageStyle::Info,
                         "Local callback listener is unavailable. Waiting for manual redirect input...",
                     )?;
-                    let manual_input =
-                        prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
+                    let manual_input = prompt_openai_manual_callback_input(&mut ctx, callback_port, &auth_url);
                     complete_openai_login_from_manual_future(prepared, manual_input).await
                 }
                 Err(err) => Err(err),
@@ -189,13 +167,9 @@ pub(crate) async fn handle_oauth_login(
             sync_openai_runtime_if_active(&mut ctx).await?;
             ctx.renderer
                 .line(MessageStyle::Info, "Successfully authenticated with OpenAI via ChatGPT.")?;
-            if ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER)
-                && ctx.config.openai_chatgpt_auth.is_some()
-            {
-                ctx.renderer.line(
-                    MessageStyle::Output,
-                    "Switched the current session to OpenAI (ChatGPT).",
-                )?;
+            if ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER) && ctx.config.openai_chatgpt_auth.is_some() {
+                ctx.renderer
+                    .line(MessageStyle::Output, "Switched the current session to OpenAI (ChatGPT).")?;
             }
             if let Some(email) = session.email.as_deref() {
                 ctx.renderer.line(MessageStyle::Output, &format!("Account: {email}"))?;
@@ -222,10 +196,8 @@ pub(crate) async fn handle_oauth_logout(
 
     match provider.as_str() {
         COPILOT_PROVIDER => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Starting GitHub Copilot logout via the official `copilot` CLI...",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Starting GitHub Copilot logout via the official `copilot` CLI...")?;
             render_copilot_auth_intro(ctx.renderer, CopilotAuthAction::Logout)?;
             let auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
             logout_with_events(&auth_cfg, &ctx.config.workspace, |event| {
@@ -262,10 +234,8 @@ pub(crate) async fn handle_oauth_logout(
         OPENAI_PROVIDER => {
             if matches!(openai_auth_status(vt_cfg)?, OpenAIChatGptAuthStatus::NotAuthenticated) {
                 if get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).is_ok() {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        "OpenAI ChatGPT session already cleared; using OPENAI_API_KEY.",
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Info, "OpenAI ChatGPT session already cleared; using OPENAI_API_KEY.")?;
                 } else {
                     ctx.renderer
                         .line(MessageStyle::Info, "No stored OpenAI ChatGPT session to clear.")?;
@@ -278,15 +248,11 @@ pub(crate) async fn handle_oauth_logout(
                 .line(MessageStyle::Info, "OpenAI ChatGPT session cleared successfully.")?;
             if ctx.config.provider.eq_ignore_ascii_case(OPENAI_PROVIDER) {
                 if ctx.config.api_key.trim().is_empty() {
-                    ctx.renderer.line(
-                        MessageStyle::Output,
-                        "The current OpenAI session no longer has active credentials.",
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Output, "The current OpenAI session no longer has active credentials.")?;
                 } else {
-                    ctx.renderer.line(
-                        MessageStyle::Output,
-                        "The current OpenAI session fell back to OPENAI_API_KEY.",
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Output, "The current OpenAI session fell back to OPENAI_API_KEY.")?;
                 }
             }
         }
@@ -388,20 +354,14 @@ pub(crate) async fn handle_show_auth_status(
 
     if provider.is_none() {
         ctx.renderer.line(MessageStyle::Output, "")?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "Use /login, /logout, or /refresh-oauth to manage stored authentication.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Output, "Use /login, /logout, or /refresh-oauth to manage stored authentication.")?;
     }
 
     Ok(SlashCommandControl::Continue)
 }
 
-fn ensure_supported_provider(
-    renderer: &mut AnsiRenderer,
-    provider: &str,
-    action: &str,
-) -> Result<bool> {
+fn ensure_supported_provider(renderer: &mut AnsiRenderer, provider: &str, action: &str) -> Result<bool> {
     if supports_auth_provider(provider) {
         return Ok(true);
     }
@@ -433,10 +393,8 @@ async fn open_browser_with_guidance(
         ExternalUrlOpenOutcome::OpenFailed(err) => {
             ctx.renderer.line(MessageStyle::Info, "Opening browser for authentication...")?;
             ctx.renderer.hyperlink_line(MessageStyle::Response, auth_url)?;
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to open browser automatically: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to open browser automatically: {err}"))?;
             ctx.renderer
                 .line(MessageStyle::Info, "Please open the URL manually in your browser.")?;
             Ok(None)
@@ -446,9 +404,7 @@ async fn open_browser_with_guidance(
                 .line(MessageStyle::Info, "Cancelled opening authentication link.")?;
             Ok(Some(SlashCommandControl::Continue))
         }
-        ExternalUrlOpenOutcome::Exit => {
-            Ok(Some(SlashCommandControl::BreakWithReason(SessionEndReason::Exit)))
-        }
+        ExternalUrlOpenOutcome::Exit => Ok(Some(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))),
         ExternalUrlOpenOutcome::Unsupported => {
             ctx.renderer
                 .line(MessageStyle::Error, "Blocked unsupported authentication link target.")?;
@@ -501,16 +457,14 @@ async fn prompt_openai_manual_callback_input(
     .await?;
 
     let value = match outcome {
-        WizardModalOutcome::Submitted(selections) => {
-            selections.into_iter().find_map(|selection| match selection {
-                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
-                    if question_id == OPENAI_MANUAL_PROMPT_ID =>
-                {
-                    other.or_else(|| selected.first().cloned())
-                }
-                _ => None,
-            })
-        }
+        WizardModalOutcome::Submitted(selections) => selections.into_iter().find_map(|selection| match selection {
+            InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                if question_id == OPENAI_MANUAL_PROMPT_ID =>
+            {
+                other.or_else(|| selected.first().cloned())
+            }
+            _ => None,
+        }),
         WizardModalOutcome::Cancelled { signal } => {
             if matches!(signal, Some("cancel")) {
                 ctx.ctrl_c_state.mark_cancel_handled();
@@ -525,10 +479,7 @@ async fn prompt_openai_manual_callback_input(
     }))
 }
 
-async fn show_oauth_provider_modal(
-    ctx: &mut SlashCommandContext<'_>,
-    action: OAuthProviderAction,
-) -> Result<()> {
+async fn show_oauth_provider_modal(ctx: &mut SlashCommandContext<'_>, action: OAuthProviderAction) -> Result<()> {
     let vt_cfg = ctx.vt_cfg.as_ref();
     let openrouter_status = openrouter_auth_status(vt_cfg)?;
     let openai_status = openai_auth_status(vt_cfg)?;
@@ -542,9 +493,7 @@ async fn show_oauth_provider_modal(
             subtitle: Some(copilot_modal_subtitle(action, &copilot_status)),
             badge: Some(copilot_modal_badge(action, &copilot_status)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"))),
             search_value: Some("github copilot cli auth".to_string()),
         },
         InlineListItem {
@@ -552,9 +501,7 @@ async fn show_oauth_provider_modal(
             subtitle: Some(openai_modal_subtitle(action, &openai_status)),
             badge: Some(openai_modal_badge(action, &openai_status, &openai_overview)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{OAUTH_PROVIDER_PREFIX}{OPENAI_PROVIDER}"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENAI_PROVIDER}"))),
             search_value: Some("openai chatgpt oauth subscription".to_string()),
         },
         InlineListItem {
@@ -562,9 +509,7 @@ async fn show_oauth_provider_modal(
             subtitle: Some(openrouter_modal_subtitle(action, &openrouter_status)),
             badge: Some(openrouter_modal_badge(action, &openrouter_status)),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{OAUTH_PROVIDER_PREFIX}{OPENROUTER_PROVIDER}"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENROUTER_PROVIDER}"))),
             search_value: Some("openrouter oauth".to_string()),
         },
         InlineListItem {
@@ -587,9 +532,7 @@ async fn show_oauth_provider_modal(
         oauth_modal_title(action),
         oauth_modal_lines(action),
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"))),
         None,
     );
     Ok(())
@@ -650,8 +593,7 @@ mod tests {
         let model_picker_state = Box::leak(Box::new(None::<ModelPickerState>));
         let palette_state = Box::leak(Box::new(None::<ActivePalette>));
         let conversation_history = Box::leak(Box::new(Vec::<uni::Message>::new()));
-        let loaded_skills =
-            Box::leak(Box::new(Arc::new(RwLock::new(HashMap::<String, Skill>::new()))));
+        let loaded_skills = Box::leak(Box::new(Arc::new(RwLock::new(HashMap::<String, Skill>::new()))));
         let linked_directories = Box::leak(Box::new(Vec::<LinkedDirectory>::new()));
         let session_bootstrap = Box::leak(Box::new(SessionBootstrap::default()));
         let vt_cfg = Box::leak(Box::new(None::<VTCodeConfig>));
@@ -659,16 +601,13 @@ mod tests {
         let checkpoint_manager = None;
         let lifecycle_hooks = None;
         let harness_emitter = None;
-        let active_primary_agent =
-            Box::leak(Box::new(vtcode_core::primary_agent::ActivePrimaryAgentState::default()));
+        let active_primary_agent = Box::leak(Box::new(vtcode_core::primary_agent::ActivePrimaryAgentState::default()));
         let plan_session = Box::leak(Box::new(
             crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default(),
         ));
         let thread_handle = Box::leak(Box::new(
-            vtcode_core::core::threads::ThreadManager::new().start_thread_with_identifier(
-                "test-thread",
-                vtcode_core::core::threads::ThreadBootstrap::new(None),
-            ),
+            vtcode_core::core::threads::ThreadManager::new()
+                .start_thread_with_identifier("test-thread", vtcode_core::core::threads::ThreadBootstrap::new(None)),
         ));
 
         let ctx = SlashCommandContext {
@@ -720,12 +659,10 @@ fn copilot_modal_subtitle(action: OAuthProviderAction, status: &CopilotAuthStatu
     match action {
         OAuthProviderAction::Login => match status.kind {
             CopilotAuthStatusKind::Authenticated => {
-                "Managed auth is connected; rerun the Copilot CLI login to replace the active session."
-                    .to_string()
+                "Managed auth is connected; rerun the Copilot CLI login to replace the active session.".to_string()
             }
             CopilotAuthStatusKind::Unauthenticated => {
-                "Sign in with your GitHub Copilot subscription through the official Copilot CLI."
-                    .to_string()
+                "Sign in with your GitHub Copilot subscription through the official Copilot CLI.".to_string()
             }
             CopilotAuthStatusKind::ServerUnavailable => {
                 format!(
@@ -737,14 +674,10 @@ fn copilot_modal_subtitle(action: OAuthProviderAction, status: &CopilotAuthStatu
             }
         },
         OAuthProviderAction::Logout => match status.kind {
-            CopilotAuthStatusKind::Authenticated => {
-                "Remove the active GitHub Copilot CLI session.".to_string()
-            }
+            CopilotAuthStatusKind::Authenticated => "Remove the active GitHub Copilot CLI session.".to_string(),
             _ => "No stored GitHub Copilot session to remove.".to_string(),
         },
-        OAuthProviderAction::Refresh => {
-            "GitHub Copilot requires a new login instead of token refresh.".to_string()
-        }
+        OAuthProviderAction::Refresh => "GitHub Copilot requires a new login instead of token refresh.".to_string(),
     }
 }
 
@@ -768,26 +701,20 @@ fn openai_modal_subtitle(action: OAuthProviderAction, status: &OpenAIChatGptAuth
                 "Connected{}; re-authenticate to replace the stored ChatGPT session.",
                 label.as_deref().map(|value| format!(" as {value}")).unwrap_or_default()
             ),
-            OpenAIChatGptAuthStatus::NotAuthenticated => {
-                "Sign in with your ChatGPT subscription.".to_string()
-            }
+            OpenAIChatGptAuthStatus::NotAuthenticated => "Sign in with your ChatGPT subscription.".to_string(),
         },
         OAuthProviderAction::Logout => match status {
             OpenAIChatGptAuthStatus::Authenticated { label, .. } => format!(
                 "Remove the stored ChatGPT session{}.",
                 label.as_deref().map(|value| format!(" for {value}")).unwrap_or_default()
             ),
-            OpenAIChatGptAuthStatus::NotAuthenticated => {
-                "No stored ChatGPT session to remove.".to_string()
-            }
+            OpenAIChatGptAuthStatus::NotAuthenticated => "No stored ChatGPT session to remove.".to_string(),
         },
         OAuthProviderAction::Refresh => match status {
             OpenAIChatGptAuthStatus::Authenticated { .. } => {
                 "Refresh the stored ChatGPT session using its refresh token.".to_string()
             }
-            OpenAIChatGptAuthStatus::NotAuthenticated => {
-                "No stored ChatGPT session to refresh yet.".to_string()
-            }
+            OpenAIChatGptAuthStatus::NotAuthenticated => "No stored ChatGPT session to refresh yet.".to_string(),
         },
     }
 }
@@ -825,16 +752,11 @@ fn openrouter_modal_subtitle(action: OAuthProviderAction, status: &AuthStatus) -
             AuthStatus::NotAuthenticated => "Sign in with OpenRouter OAuth.".to_string(),
         },
         OAuthProviderAction::Logout => match status {
-            AuthStatus::Authenticated { .. } => {
-                "Remove the stored OpenRouter OAuth token.".to_string()
-            }
-            AuthStatus::NotAuthenticated => {
-                "No stored OpenRouter OAuth token to remove.".to_string()
-            }
+            AuthStatus::Authenticated { .. } => "Remove the stored OpenRouter OAuth token.".to_string(),
+            AuthStatus::NotAuthenticated => "No stored OpenRouter OAuth token to remove.".to_string(),
         },
         OAuthProviderAction::Refresh => {
-            "OpenRouter does not expose a refresh-token flow; reconnect with /login openrouter."
-                .to_string()
+            "OpenRouter does not expose a refresh-token flow; reconnect with /login openrouter.".to_string()
         }
     }
 }
@@ -856,15 +778,9 @@ fn render_openrouter_auth_status(renderer: &mut AnsiRenderer, status: AuthStatus
             if let Some(label) = label {
                 renderer.line(MessageStyle::Output, &format!("  Label: {label}"))?;
             }
-            renderer.line(
-                MessageStyle::Output,
-                &format!("  Token obtained: {}", format_auth_duration(age_seconds)),
-            )?;
+            renderer.line(MessageStyle::Output, &format!("  Token obtained: {}", format_auth_duration(age_seconds)))?;
             if let Some(expires_in) = expires_in {
-                renderer.line(
-                    MessageStyle::Output,
-                    &format!("  Expires in: {}", format_auth_duration(expires_in)),
-                )?;
+                renderer.line(MessageStyle::Output, &format!("  Expires in: {}", format_auth_duration(expires_in)))?;
             }
         }
         AuthStatus::NotAuthenticated => {
@@ -878,25 +794,17 @@ fn render_openrouter_auth_status(renderer: &mut AnsiRenderer, status: AuthStatus
     Ok(())
 }
 
-fn render_openai_auth_status(
-    renderer: &mut AnsiRenderer,
-    status: OpenAIChatGptAuthStatus,
-) -> Result<()> {
+fn render_openai_auth_status(renderer: &mut AnsiRenderer, status: OpenAIChatGptAuthStatus) -> Result<()> {
     match status {
         OpenAIChatGptAuthStatus::Authenticated { label, age_seconds, expires_in } => {
             renderer.line(MessageStyle::Info, "OpenAI: authenticated (ChatGPT)")?;
             if let Some(label) = label {
                 renderer.line(MessageStyle::Output, &format!("  Label: {label}"))?;
             }
-            renderer.line(
-                MessageStyle::Output,
-                &format!("  Session obtained: {}", format_auth_duration(age_seconds)),
-            )?;
+            renderer
+                .line(MessageStyle::Output, &format!("  Session obtained: {}", format_auth_duration(age_seconds)))?;
             if let Some(expires_in) = expires_in {
-                renderer.line(
-                    MessageStyle::Output,
-                    &format!("  Expires in: {}", format_auth_duration(expires_in)),
-                )?;
+                renderer.line(MessageStyle::Output, &format!("  Expires in: {}", format_auth_duration(expires_in)))?;
             }
         }
         OpenAIChatGptAuthStatus::NotAuthenticated => {
@@ -910,16 +818,10 @@ fn render_openai_auth_status(
     Ok(())
 }
 
-fn render_copilot_auth_status(
-    renderer: &mut AnsiRenderer,
-    status: CopilotAuthStatus,
-) -> Result<()> {
+fn render_copilot_auth_status(renderer: &mut AnsiRenderer, status: CopilotAuthStatus) -> Result<()> {
     match status.kind {
         CopilotAuthStatusKind::Authenticated => {
-            renderer.line(
-                MessageStyle::Info,
-                "GitHub Copilot: authenticated (managed auth via Copilot CLI)",
-            )?;
+            renderer.line(MessageStyle::Info, "GitHub Copilot: authenticated (managed auth via Copilot CLI)")?;
         }
         CopilotAuthStatusKind::Unauthenticated => {
             renderer.line(MessageStyle::Info, "GitHub Copilot: not authenticated")?;
@@ -941,9 +843,7 @@ fn render_copilot_auth_status(
     if matches!(status.kind, CopilotAuthStatusKind::ServerUnavailable) {
         renderer.line(
             MessageStyle::Output,
-            &format!(
-                "  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}."
-            ),
+            &format!("  Help: install `copilot` or configure `[auth.copilot].command`; see {COPILOT_AUTH_DOC_PATH}."),
         )?;
     }
 
@@ -986,11 +886,7 @@ fn render_openai_credential_overview(
     };
     renderer.line(
         MessageStyle::Output,
-        &format!(
-            "  Usage status: {} (preferred_method = {})",
-            usage_status,
-            overview.preferred_method.as_str()
-        ),
+        &format!("  Usage status: {} (preferred_method = {})", usage_status, overview.preferred_method.as_str()),
     )?;
 
     if current_provider_is_openai {
@@ -1023,14 +919,13 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
 
     let api_key = get_api_key(OPENAI_PROVIDER, &ApiKeySources::default()).ok();
     let (runtime_api_key, runtime_auth) = match ctx.vt_cfg.as_ref() {
-        Some(cfg) => match vtcode_config::auth::resolve_openai_auth(
-            &cfg.auth.openai,
-            cfg.agent.credential_storage_mode,
-            api_key,
-        ) {
-            Ok(resolved) => (resolved.api_key().to_string(), resolved.handle()),
-            Err(_) => (String::new(), None),
-        },
+        Some(cfg) => {
+            match vtcode_config::auth::resolve_openai_auth(&cfg.auth.openai, cfg.agent.credential_storage_mode, api_key)
+            {
+                Ok(resolved) => (resolved.api_key().to_string(), resolved.handle()),
+                Err(_) => (String::new(), None),
+            }
+        }
         None => (api_key.unwrap_or_default(), None),
     };
 
@@ -1143,9 +1038,7 @@ fn render_copilot_auth_intro(renderer: &mut AnsiRenderer, action: CopilotAuthAct
     renderer.line(
         MessageStyle::Info,
         match action {
-            CopilotAuthAction::Login => {
-                "Waiting for the official Copilot CLI to start the managed login flow."
-            }
+            CopilotAuthAction::Login => "Waiting for the official Copilot CLI to start the managed login flow.",
             CopilotAuthAction::Logout => "Clearing the managed GitHub Copilot CLI session.",
         },
     )?;
@@ -1155,10 +1048,7 @@ fn render_copilot_auth_intro(renderer: &mut AnsiRenderer, action: CopilotAuthAct
 fn render_copilot_auth_event(renderer: &mut AnsiRenderer, event: CopilotAuthEvent) -> Result<()> {
     match event {
         CopilotAuthEvent::VerificationCode { url, user_code } => {
-            renderer.line(
-                MessageStyle::Info,
-                "Your GitHub device code — copy it before the browser opens:",
-            )?;
+            renderer.line(MessageStyle::Info, "Your GitHub device code — copy it before the browser opens:")?;
             let device_code_style = AnsiStyle::new()
                 .fg_color(Some(Color::Ansi(AnsiColor::BrightYellow)))
                 .effects(Effects::BOLD);

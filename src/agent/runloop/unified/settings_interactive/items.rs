@@ -6,23 +6,20 @@ use super::docs::FIELD_DOCS;
 use super::mutations::resolve_cycle_options;
 use super::path::get_node;
 use super::render::{
-    action_item, collection_subtitle, display_title, search_value_for_missing_doc,
-    search_value_with_content, section_item, section_subtitle, setting_subtitle, summarize_value,
+    action_item, collection_subtitle, display_title, search_value_for_missing_doc, search_value_with_content,
+    section_item, section_subtitle, setting_subtitle, summarize_value,
 };
 use super::{
-    ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL,
-    ACTION_PREFIX_ARRAY_ADD, ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET,
-    OPTIONAL_DOC_FIELDS, SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH, SETTINGS_MODEL_CONFIG_MAIN_PATH,
-    SETTINGS_MODEL_CONFIG_PATH, SettingsPaletteState,
+    ACTION_CONFIGURE_EDITOR, ACTION_PICK_LIGHTWEIGHT_MODEL, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_ARRAY_ADD,
+    ACTION_PREFIX_ARRAY_POP, ACTION_PREFIX_OPEN, ACTION_PREFIX_SET, OPTIONAL_DOC_FIELDS,
+    SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH, SETTINGS_MODEL_CONFIG_MAIN_PATH, SETTINGS_MODEL_CONFIG_PATH,
+    SettingsPaletteState,
 };
 use crate::agent::runloop::unified::config_section_headings::humanize_identifier;
 
 const HIDDEN_SETTINGS_PATHS: &[&str] = &[];
 
-pub(super) fn build_settings_items(
-    state: &SettingsPaletteState,
-    draft: &TomlValue,
-) -> Result<Vec<InlineListItem>> {
+pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlValue) -> Result<Vec<InlineListItem>> {
     let mut items = Vec::new();
 
     items.push(section_item("Actions"));
@@ -45,8 +42,7 @@ pub(super) fn build_settings_items(
             return Ok(items);
         }
 
-        let node = get_node(draft, view_path)
-            .ok_or_else(|| anyhow!("Could not resolve settings path {view_path}"))?;
+        let node = get_node(draft, view_path).ok_or_else(|| anyhow!("Could not resolve settings path {view_path}"))?;
         append_node_items(&mut items, view_path, node, draft)?;
     } else if let TomlValue::Table(table) = draft {
         items.push(section_item("Quick Access"));
@@ -136,9 +132,7 @@ fn append_synthetic_model_config_items(
                 "Lightweight Model",
                 "Shared lower-cost route for memory, prompt suggestions, and smaller delegated tasks",
                 Some("Section"),
-                &format!(
-                    "{ACTION_PREFIX_OPEN}{SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH}"
-                ),
+                &format!("{ACTION_PREFIX_OPEN}{SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH}"),
             ));
             Ok(true)
         }
@@ -208,16 +202,10 @@ fn append_table_items(
     }
 }
 
-fn append_missing_optional_doc_items(
-    items: &mut Vec<InlineListItem>,
-    root: &TomlValue,
-    parent_path: Option<&str>,
-) {
+fn append_missing_optional_doc_items(items: &mut Vec<InlineListItem>, root: &TomlValue, parent_path: Option<&str>) {
     for path in OPTIONAL_DOC_FIELDS {
         let lookup_path = parent_path
-            .and_then(|parent| {
-                path.strip_prefix(parent).and_then(|suffix| suffix.strip_prefix('.'))
-            })
+            .and_then(|parent| path.strip_prefix(parent).and_then(|suffix| suffix.strip_prefix('.')))
             .unwrap_or(path);
         if get_node(root, lookup_path).is_some() {
             continue;
@@ -230,12 +218,7 @@ fn append_missing_optional_doc_items(
     }
 }
 
-fn item_for_value(
-    label: &str,
-    path: &str,
-    value: &TomlValue,
-    draft_root: &TomlValue,
-) -> InlineListItem {
+fn item_for_value(label: &str, path: &str, value: &TomlValue, draft_root: &TomlValue) -> InlineListItem {
     let doc = FIELD_DOCS.lookup(path);
     let title = display_title(label, path, value);
     let description = doc
@@ -248,9 +231,7 @@ fn item_for_value(
         })
         .unwrap_or_default();
 
-    let summary = if path == "agent.small_model.model"
-        && value.as_str().is_some_and(|current| current.is_empty())
-    {
+    let summary = if path == "agent.small_model.model" && value.as_str().is_some_and(|current| current.is_empty()) {
         "Automatic".to_string()
     } else {
         summarize_value(value)
@@ -291,9 +272,7 @@ fn item_for_value(
             subtitle: Some(subtitle),
             badge: Some("On/Off".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{ACTION_PREFIX_SET}{path}:toggle"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:toggle"))),
             search_value: Some(search_value),
         },
         TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
@@ -301,9 +280,7 @@ fn item_for_value(
             subtitle: Some(setting_subtitle(&summary, &description, true)),
             badge: Some("Step".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{ACTION_PREFIX_SET}{path}:inc"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:inc"))),
             search_value: Some(search_value),
         },
         TomlValue::String(current) => {
@@ -313,9 +290,8 @@ fn item_for_value(
                 subtitle: Some(setting_subtitle(&summary, &description, has_options)),
                 badge: has_options.then(|| "Pick".to_string()),
                 indent: 0,
-                selection: has_options.then(|| {
-                    InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))
-                }),
+                selection: has_options
+                    .then(|| InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))),
                 search_value: Some(search_value),
             }
         }
@@ -327,9 +303,7 @@ fn item_for_value(
             )),
             badge: Some("List".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{ACTION_PREFIX_OPEN}{path}"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
             search_value: Some(search_value),
         },
         TomlValue::Table(_) => InlineListItem {
@@ -337,9 +311,7 @@ fn item_for_value(
             subtitle: Some(section_subtitle(path, value)),
             badge: Some("Section".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{ACTION_PREFIX_OPEN}{path}"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
             search_value: Some(search_value),
         },
         _ => InlineListItem {
@@ -369,8 +341,7 @@ fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
             "Unset".to_string()
         }),
         indent: 0,
-        selection: has_options
-            .then(|| InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))),
+        selection: has_options.then(|| InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:cycle"))),
         search_value: Some(search_value_for_missing_doc(path, label, doc)),
     }
 }

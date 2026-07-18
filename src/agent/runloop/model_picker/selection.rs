@@ -81,9 +81,7 @@ pub(super) fn parse_model_selection(
         if let Some(option) = options.get(index) {
             return Ok(selection_from_option(option));
         }
-        return Err(anyhow!(
-            "Invalid model selection. Use provider and model name (e.g., 'openai gpt-5')"
-        ));
+        return Err(anyhow!("Invalid model selection. Use provider and model name (e.g., 'openai gpt-5')"));
     }
 
     let mut parts = input.split_whitespace();
@@ -141,14 +139,9 @@ pub(super) fn parse_model_selection(
     }
     if let Some(provider) = provider_enum {
         let resolved =
-            ModelResolver::resolve(Some(provider.as_ref()), model_token.trim(), &[], None)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "unable to resolve model `{}` for provider `{}`",
-                        model_token.trim(),
-                        provider.as_ref()
-                    )
-                })?;
+            ModelResolver::resolve(Some(provider.as_ref()), model_token.trim(), &[], None).ok_or_else(|| {
+                anyhow::anyhow!("unable to resolve model `{}` for provider `{}`", model_token.trim(), provider.as_ref())
+            })?;
         return Ok(selection_from_resolved(
             provider_lower,
             provider_label,
@@ -179,17 +172,16 @@ pub(super) fn parse_model_selection(
 }
 
 pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
-    let resolved = ModelResolver::resolve(Some(option.provider.as_ref()), &option.id, &[], None)
-        .unwrap_or_else(|| {
-            // Fallback: create a minimal ResolvedModel for static options
-            ResolvedModel {
-                provider: option.provider,
-                model_id: option.id.clone(),
-                catalog: None,
-                dynamic: None,
-                availability: ModelAvailability::Available,
-            }
-        });
+    let resolved = ModelResolver::resolve(Some(option.provider.as_ref()), &option.id, &[], None).unwrap_or_else(|| {
+        // Fallback: create a minimal ResolvedModel for static options
+        ResolvedModel {
+            provider: option.provider,
+            model_id: option.id.clone(),
+            catalog: None,
+            dynamic: None,
+            availability: ModelAvailability::Available,
+        }
+    });
     selection_from_resolved(
         option.provider.to_string(),
         option.provider.label().to_string(),
@@ -244,9 +236,7 @@ pub(super) fn selection_from_dynamic(
     )
 }
 
-pub(super) fn selections_from_custom_provider(
-    provider: &CustomProviderConfig,
-) -> Vec<SelectionDetail> {
+pub(super) fn selections_from_custom_provider(provider: &CustomProviderConfig) -> Vec<SelectionDetail> {
     let env_key = if provider.uses_command_auth() {
         String::new()
     } else {
@@ -367,9 +357,7 @@ pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => {
-            "No reasoning overhead - fastest responses"
-        }
+        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => "No reasoning overhead - fastest responses",
         ReasoningEffortLevel::Minimal => "Minimal reasoning overhead - very fast responses",
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
@@ -431,9 +419,6 @@ mod tests {
 
     #[test]
     fn managed_auth_provider_skips_api_key_requirement() {
-        assert_eq!(
-            ModelResolver::availability(Provider::Copilot, "copilot"),
-            ModelAvailability::ManagedAuthAvailable
-        );
+        assert_eq!(ModelResolver::availability(Provider::Copilot, "copilot"), ModelAvailability::ManagedAuthAvailable);
     }
 }

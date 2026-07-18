@@ -27,9 +27,7 @@ pub fn infer_default_verify_commands(workspace_root: &Path) -> Vec<String> {
     }
     if workspace_root.join("pom.xml").exists() {
         commands.push("mvn test".to_string());
-    } else if workspace_root.join("build.gradle").exists()
-        || workspace_root.join("build.gradle.kts").exists()
-    {
+    } else if workspace_root.join("build.gradle").exists() || workspace_root.join("build.gradle.kts").exists() {
         commands.push("gradle test".to_string());
     }
     if workspace_root.join("Gemfile").exists() {

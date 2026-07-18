@@ -32,13 +32,7 @@ impl OpenCodeGoProvider {
     }
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            models::opencode_go::DEFAULT_MODEL.to_string(),
-            None,
-            None,
-            None,
-        )
+        Self::with_model_internal(api_key, models::opencode_go::DEFAULT_MODEL.to_string(), None, None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -89,11 +83,7 @@ impl OpenCodeGoProvider {
         Self {
             api_key,
             http_client: HttpClientFactory::for_llm(&timeouts),
-            base_url: override_base_url(
-                urls::OPENCODE_GO_API_BASE,
-                base_url,
-                Some(env_vars::OPENCODE_GO_BASE_URL),
-            ),
+            base_url: override_base_url(urls::OPENCODE_GO_API_BASE, base_url, Some(env_vars::OPENCODE_GO_BASE_URL)),
             model: Self::normalize_model(&model).to_string(),
         }
     }
@@ -128,14 +118,12 @@ impl OpenCodeGoProvider {
                 self.base_url.clone(),
                 TimeoutsConfig::default(),
             )),
-            GoProtocol::OpenAICompatible => {
-                Box::new(OpenCodeCompatibleProvider::<OpenCodeGoInnerSpec>::new(
-                    self.api_key.clone(),
-                    self.http_client.clone(),
-                    self.base_url.clone(),
-                    requested,
-                ))
-            }
+            GoProtocol::OpenAICompatible => Box::new(OpenCodeCompatibleProvider::<OpenCodeGoInnerSpec>::new(
+                self.api_key.clone(),
+                self.http_client.clone(),
+                self.base_url.clone(),
+                requested,
+            )),
         }
     }
 }
@@ -215,12 +203,7 @@ impl LLMProvider for OpenCodeGoProvider {
             .map(|model| model.to_string())
             .collect::<Vec<_>>();
 
-        super::common::validate_request_common(
-            &normalized,
-            PROVIDER_NAME,
-            PROVIDER_KEY,
-            Some(&supported_models),
-        )
+        super::common::validate_request_common(&normalized, PROVIDER_NAME, PROVIDER_KEY, Some(&supported_models))
     }
 }
 

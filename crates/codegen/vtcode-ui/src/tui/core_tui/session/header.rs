@@ -96,9 +96,7 @@ impl Session {
         }
 
         let mut border_style = Style::default();
-        if let Some(accent) =
-            self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground)
-        {
+        if let Some(accent) = self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground) {
             border_style = border_style.fg(ratatui_color_from_ansi(accent));
         }
         let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
@@ -138,12 +136,8 @@ impl Session {
             self.header_context.app_name.trim()
         };
         let prompt = format!("{}{}", ui::HEADER_VERSION_PROMPT, app_name);
-        let version_text = format!(
-            " {}{}{}",
-            ui::HEADER_VERSION_LEFT_DELIMITER,
-            version.trim(),
-            ui::HEADER_VERSION_RIGHT_DELIMITER
-        );
+        let version_text =
+            format!(" {}{}{}", ui::HEADER_VERSION_LEFT_DELIMITER, version.trim(), ui::HEADER_VERSION_RIGHT_DELIMITER);
 
         let prompt_style = self.section_title_style();
         let version_style = self.header_secondary_style().add_modifier(Modifier::DIM);
@@ -162,8 +156,7 @@ impl Session {
             let left_width = spans.iter().map(Span::width).sum::<usize>();
             let summary_width = right_spans.iter().map(Span::width).sum::<usize>();
             let available_width = usize::from(width);
-            let spacer_width =
-                available_width.saturating_sub(left_width.saturating_add(summary_width)).max(1);
+            let spacer_width = available_width.saturating_sub(left_width.saturating_add(summary_width)).max(1);
             spans.push(Span::raw(" ".repeat(spacer_width)));
             spans.extend(right_spans);
         }
@@ -181,12 +174,9 @@ impl Session {
         let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
         if !agent_label.trim().is_empty() {
-            let fallback =
-                self.theme.primary.map(ratatui_color_from_ansi).unwrap_or(Color::LightMagenta);
-            let agent_style = super::super::style::agent_color_style(
-                self.header_context.primary_agent_color.as_deref(),
-                fallback,
-            );
+            let fallback = self.theme.primary.map(ratatui_color_from_ansi).unwrap_or(Color::LightMagenta);
+            let agent_style =
+                super::super::style::agent_color_style(self.header_context.primary_agent_color.as_deref(), fallback);
             spans.push(Span::styled(agent_label, agent_style));
         }
 
@@ -219,17 +209,11 @@ impl Session {
             (false, false) => {}
         }
 
-        if let Some(summary) =
-            (!provider_model_parts.is_empty()).then(|| provider_model_parts.join(" "))
-        {
-            spans.push(Span::styled(
-                summary,
-                self.header_secondary_style().add_modifier(Modifier::DIM),
-            ));
+        if let Some(summary) = (!provider_model_parts.is_empty()).then(|| provider_model_parts.join(" ")) {
+            spans.push(Span::styled(summary, self.header_secondary_style().add_modifier(Modifier::DIM)));
         }
 
-        if !reasoning.is_empty() && !reasoning.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)
-        {
+        if !reasoning.is_empty() && !reasoning.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER) {
             if !spans.is_empty() {
                 spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
             }
@@ -273,8 +257,7 @@ impl Session {
 
             if let Some(stage) = &self.header_context.reasoning_stage {
                 let mut stage_style = style;
-                stage_style =
-                    stage_style.remove_modifier(Modifier::DIM).add_modifier(Modifier::BOLD);
+                stage_style = stage_style.remove_modifier(Modifier::DIM).add_modifier(Modifier::BOLD);
                 spans.push(Span::styled(format!("[{stage}]"), stage_style));
                 spans.push(Span::raw(" "));
             }
@@ -362,11 +345,7 @@ impl Session {
         } else {
             cleaned
         };
-        if value.trim().is_empty() {
-            None
-        } else {
-            Some(value)
-        }
+        if value.trim().is_empty() { None } else { Some(value) }
     }
 
     pub fn header_provider_short_value(&self) -> String {
@@ -404,9 +383,7 @@ impl Session {
                 continue;
             }
 
-            if trimmed.starts_with(ui::HEADER_TOOLS_PREFIX)
-                || trimmed.starts_with(ui::HEADER_GIT_PREFIX)
-            {
+            if trimmed.starts_with(ui::HEADER_TOOLS_PREFIX) || trimmed.starts_with(ui::HEADER_GIT_PREFIX) {
                 continue;
             }
 
@@ -431,13 +408,9 @@ impl Session {
         let mut first_section = true;
         let separator_style = self.header_secondary_style();
 
-        let push_badge = |spans: &mut Vec<Span<'static>>,
-                          text: String,
-                          style: Style,
-                          first: &mut bool| {
+        let push_badge = |spans: &mut Vec<Span<'static>>, text: String, style: Style, first: &mut bool| {
             if !*first {
-                spans
-                    .push(Span::styled(ui::HEADER_SECONDARY_SEPARATOR.to_owned(), separator_style));
+                spans.push(Span::styled(ui::HEADER_SECONDARY_SEPARATOR.to_owned(), separator_style));
             }
             spans.push(Span::styled(text, style));
             *first = false;
@@ -515,10 +488,7 @@ impl Session {
             }
 
             if !first_section {
-                spans.push(Span::styled(
-                    ui::HEADER_META_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
+                spans.push(Span::styled(ui::HEADER_META_SEPARATOR.to_owned(), self.header_secondary_style()));
             }
 
             if !title.is_empty() {
@@ -555,8 +525,7 @@ impl Session {
             .map(|line| line.trim())
             .filter(|line| !line.is_empty())
             .map(|line| {
-                let stripped =
-                    line.strip_prefix("- ").or_else(|| line.strip_prefix("• ")).unwrap_or(line);
+                let stripped = line.strip_prefix("- ").or_else(|| line.strip_prefix("• ")).unwrap_or(line);
                 stripped.trim().to_owned()
             })
             .collect();
@@ -569,8 +538,7 @@ impl Session {
     }
 
     fn compact_highlight_entries(&self, entries: &[String]) -> String {
-        let mut summary =
-            self.truncate_highlight_preview(entries.first().map(String::as_str).unwrap_or(""));
+        let mut summary = self.truncate_highlight_preview(entries.first().map(String::as_str).unwrap_or(""));
         if entries.len() > 1 {
             let remaining = entries.len() - 1;
             if !summary.is_empty() {

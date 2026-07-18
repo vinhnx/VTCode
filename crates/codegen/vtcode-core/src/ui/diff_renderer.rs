@@ -338,10 +338,7 @@ impl DiffRenderer {
 
     fn render_summary(&self, diff: &FileDiff) -> String {
         if !self.use_colors {
-            return format!(
-                "▸ Edit {} (+{} -{})",
-                diff.file_path, diff.stats.additions, diff.stats.deletions
-            );
+            return format!("▸ Edit {} (+{} -{})", diff.file_path, diff.stats.additions, diff.stats.deletions);
         }
 
         // Pre-allocate: bullet(4) + label(4) + path + stats + resets + separators
@@ -392,11 +389,9 @@ impl DiffRenderer {
         let (style_code, prefix, line_number) = match line.line_type {
             DiffLineType::Added => (&self.cached_styles.line_added, "+", line.line_number_new),
             DiffLineType::Removed => (&self.cached_styles.line_removed, "-", line.line_number_old),
-            DiffLineType::Context => (
-                &self.cached_styles.line_context,
-                " ",
-                line.line_number_new.or(line.line_number_old),
-            ),
+            DiffLineType::Context => {
+                (&self.cached_styles.line_context, " ", line.line_number_new.or(line.line_number_old))
+            }
             DiffLineType::Header => (&self.cached_styles.line_header, "", None),
         };
 
@@ -515,27 +510,15 @@ impl DiffChatRenderer {
         config: &GitColorConfig,
     ) -> Self {
         Self {
-            diff_renderer: DiffRenderer::with_git_config(
-                show_line_numbers,
-                context_lines,
-                use_colors,
-                config,
-            ),
+            diff_renderer: DiffRenderer::with_git_config(show_line_numbers, context_lines, use_colors, config),
         }
     }
 
     /// Render a single file change (old vs new content) to an ANSI string.
-    pub fn render_file_change(
-        &self,
-        file_path: &Path,
-        old_content: &str,
-        new_content: &str,
-    ) -> String {
-        let diff = self.diff_renderer.generate_diff(
-            old_content,
-            new_content,
-            &file_path.to_string_lossy(),
-        );
+    pub fn render_file_change(&self, file_path: &Path, old_content: &str, new_content: &str) -> String {
+        let diff = self
+            .diff_renderer
+            .generate_diff(old_content, new_content, &file_path.to_string_lossy());
         self.diff_renderer.render_diff(&diff)
     }
 
@@ -568,23 +551,15 @@ impl DiffChatRenderer {
 
     /// Check if diffs should be suppressed based on size/count thresholds
     /// Returns cached diffs if not suppressed to avoid recomputation
-    fn check_suppression_with_cache(
-        &self,
-        changes: &[(String, String, String)],
-    ) -> SuppressionResult {
+    fn check_suppression_with_cache(&self, changes: &[(String, String, String)]) -> SuppressionResult {
         let file_count = changes.len();
 
         // Early termination: check file count first (cheapest check)
         if file_count > diff_constants::MAX_INLINE_DIFF_FILES {
             // Still need to compute stats for summary, but can use lightweight estimation
-            let (file_stats, total_additions, total_deletions) =
-                self.estimate_stats_lightweight(changes);
+            let (file_stats, total_additions, total_deletions) = self.estimate_stats_lightweight(changes);
             return SuppressionResult::suppressed(DiffSuppressionCheck::suppressed(
-                format!(
-                    "Too many files changed ({} files, max {})",
-                    file_count,
-                    diff_constants::MAX_INLINE_DIFF_FILES
-                ),
+                format!("Too many files changed ({} files, max {})", file_count, diff_constants::MAX_INLINE_DIFF_FILES),
                 file_count,
                 0, // Lines not computed for performance
                 total_additions,
@@ -657,10 +632,7 @@ impl DiffChatRenderer {
     }
 
     /// Lightweight stats estimation without full diff generation
-    fn estimate_stats_lightweight(
-        &self,
-        changes: &[(String, String, String)],
-    ) -> (Vec<FileChangeStats>, usize, usize) {
+    fn estimate_stats_lightweight(&self, changes: &[(String, String, String)]) -> (Vec<FileChangeStats>, usize, usize) {
         let mut file_stats = Vec::with_capacity(changes.len());
         let mut total_additions = 0usize;
         let mut total_deletions = 0usize;
@@ -801,12 +773,7 @@ impl DiffChatRenderer {
     }
 
     /// Render a brief operation summary line (success or failure indicator).
-    pub fn render_operation_summary(
-        &self,
-        operation: &str,
-        files_affected: usize,
-        success: bool,
-    ) -> String {
+    pub fn render_operation_summary(&self, operation: &str, files_affected: usize, success: bool) -> String {
         let status_indicator = if success { "✓" } else { "✗" };
         let status_label = if success { "Success" } else { "Failure" };
         let mut summary = format!("\n{status_indicator} [{status_label}] {operation}\n");
@@ -898,8 +865,7 @@ mod tests {
                 deletions: 20,
             },
         ];
-        let check =
-            DiffSuppressionCheck::suppressed("Test reason".to_string(), 5, 100, 50, 30, file_stats);
+        let check = DiffSuppressionCheck::suppressed("Test reason".to_string(), 5, 100, 50, 30, file_stats);
 
         let output = renderer.render_suppressed_summary(&check);
         assert!(output.contains(diff_constants::SUPPRESSION_MESSAGE));

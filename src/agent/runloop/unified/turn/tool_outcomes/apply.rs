@@ -27,10 +27,7 @@ fn format_turn_elapsed_label(duration: Duration) -> String {
     format!("{hours}h {minutes}m")
 }
 
-pub(crate) async fn apply_turn_outcome(
-    outcome: TurnLoopOutcome,
-    ctx: TurnOutcomeContext<'_>,
-) -> Result<()> {
+pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcomeContext<'_>) -> Result<()> {
     match outcome.result {
         TurnLoopResult::Cancelled => {
             if ctx.ctrl_c_state.is_exit_requested() {
@@ -38,10 +35,8 @@ pub(crate) async fn apply_turn_outcome(
                 return Ok(());
             }
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Interrupted current task. Press Esc, Ctrl+C, or /stop again to exit.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Interrupted current task. Press Esc, Ctrl+C, or /stop again to exit.")?;
             reset_inline_input(
                 ctx.handle,
                 Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()),
@@ -80,19 +75,16 @@ pub(crate) async fn apply_turn_outcome(
                 Ok(artifacts) => {
                     for path in [&artifacts.current_path, &artifacts.archive_path] {
                         let path_text = path.display().to_string();
-                        let _ = ctx
-                            .renderer
-                            .line(MessageStyle::Info, &format!("Blocked handoff: {path_text}"));
+                        let _ = ctx.renderer.line(MessageStyle::Info, &format!("Blocked handoff: {path_text}"));
                         if let Some(emitter) = ctx.harness_emitter {
-                            let _ = emitter.emit(
-                                crate::agent::runloop::unified::inline_events::harness::harness_event(
+                            let _ =
+                                emitter.emit(crate::agent::runloop::unified::inline_events::harness::harness_event(
                                     HarnessEventKind::BlockedHandoffWritten,
                                     Some("Blocked handoff written".to_string()),
                                     Some(path_text),
                                     None,
                                     None,
-                                ),
-                            );
+                                ));
                         }
                     }
                 }
@@ -121,30 +113,23 @@ pub(crate) async fn apply_turn_outcome(
                     Ok(Some(meta)) => {
                         *ctx.next_checkpoint_turn = meta.turn_number.saturating_add(1);
                         if let Some(emitter) = ctx.harness_emitter {
-                            let _ = emitter.emit(
-                                crate::agent::runloop::unified::inline_events::harness::harness_event(
+                            let _ =
+                                emitter.emit(crate::agent::runloop::unified::inline_events::harness::harness_event(
                                     HarnessEventKind::SnapshotCreated,
                                     Some(format!("Turn {turn_number} snapshot saved")),
                                     None,
                                     None,
                                     None,
-                                ),
-                            );
+                                ));
                         }
                     }
                     Ok(None) => {}
-                    Err(err) => tracing::warn!(
-                        "Failed to create checkpoint for turn {}: {}",
-                        turn_number,
-                        err
-                    ),
+                    Err(err) => tracing::warn!("Failed to create checkpoint for turn {}: {}", turn_number, err),
                 }
             }
             if ctx.show_turn_timer {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)))?;
             }
             ctx.ctrl_c_state.reset();
             Ok(())

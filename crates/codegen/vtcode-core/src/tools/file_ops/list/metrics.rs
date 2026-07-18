@@ -13,8 +13,7 @@ impl FileOpsTool {
         let search_root = self.workspace_root.join(&input.path);
 
         if !search_root.exists() {
-            let suggestion =
-                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+            let suggestion = self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
             return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
         }
 
@@ -57,15 +56,12 @@ impl FileOpsTool {
                     continue;
                 }
 
-                if !include_hidden
-                    && path_has_hidden(path.strip_prefix(&workspace_root).unwrap_or(path))
-                {
+                if !include_hidden && path_has_hidden(path.strip_prefix(&workspace_root).unwrap_or(path)) {
                     continue;
                 }
 
                 if let Some(ref filters) = extension_filter_clone {
-                    let extension =
-                        path.extension().and_then(|ext| ext.to_str()).map(normalize_extension);
+                    let extension = path.extension().and_then(|ext| ext.to_str()).map(normalize_extension);
 
                     match extension {
                         Some(ext) if filters.contains(&ext) => {}
@@ -85,8 +81,7 @@ impl FileOpsTool {
                     continue;
                 }
 
-                let relative_path =
-                    path.strip_prefix(&workspace_root).unwrap_or(path).to_path_buf();
+                let relative_path = path.strip_prefix(&workspace_root).unwrap_or(path).to_path_buf();
                 let modified = metadata
                     .modified()
                     .ok()
@@ -133,9 +128,7 @@ impl FileOpsTool {
         let total_entries = entries.len();
 
         let mut ranked = Vec::with_capacity(selected_total);
-        for (idx, (size, rel_path, modified)) in
-            entries.into_iter().take(selected_total).enumerate()
-        {
+        for (idx, (size, rel_path, modified)) in entries.into_iter().take(selected_total).enumerate() {
             let name = rel_path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -154,10 +147,7 @@ impl FileOpsTool {
 
         // Add overflow indication if we have more items than max_items
         if has_overflow && let Some(obj) = output.as_object_mut() {
-            obj.insert(
-                "overflow".to_string(),
-                json!(format!("[+{} more items]", total_entries - effective_max)),
-            );
+            obj.insert("overflow".to_string(), json!(format!("[+{} more items]", total_entries - effective_max)));
         }
 
         let note = format!(

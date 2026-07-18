@@ -8,9 +8,7 @@ use crate::agent::runloop::unified::inline_events::{
     InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState, QueuedInput,
 };
 use crate::agent::runloop::unified::palettes::{ActivePalette, MODE_ACTION_PREFIX};
-use crate::agent::runloop::unified::settings_interactive::{
-    ACTION_CONFIGURE_EDITOR, SettingsPaletteState,
-};
+use crate::agent::runloop::unified::settings_interactive::{ACTION_CONFIGURE_EDITOR, SettingsPaletteState};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::url_guard::UrlGuardPrompt;
@@ -22,14 +20,12 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use vtcode_core::core::agent::snapshots::{DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS};
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{
-    ContentPart, InlineCommand, InlineEvent, InlineHandle, InlineListSelection, SubmittedInput,
-    TransientEvent, TransientRequest, TransientSubmission,
+    ContentPart, InlineCommand, InlineEvent, InlineHandle, InlineListSelection, SubmittedInput, TransientEvent,
+    TransientRequest, TransientSubmission,
 };
 
 #[derive(Clone)]
@@ -909,8 +905,7 @@ async fn steering_events_are_passive_in_idle_loop() {
         InlineEvent::Resume,
         InlineEvent::Steer("keep going".into()),
     ] {
-        let action =
-            context.process_event(event, &mut queue).await.expect("process steering event");
+        let action = context.process_event(event, &mut queue).await.expect("process steering event");
         assert!(matches!(action, InlineLoopAction::Continue));
     }
 }
@@ -960,10 +955,7 @@ async fn steer_with_attachments_restores_full_draft_and_continues() {
 
     let first_attachment = ContentPart::image("first-image", "image/png");
     let second_attachment = ContentPart::image("second-image", "image/png");
-    let input = SubmittedInput::new(
-        "keep going",
-        vec![first_attachment.clone(), second_attachment.clone()],
-    );
+    let input = SubmittedInput::new("keep going", vec![first_attachment.clone(), second_attachment.clone()]);
     let action = context
         .process_event(InlineEvent::Steer(input.clone()), &mut queue)
         .await
@@ -975,19 +967,16 @@ async fn steer_with_attachments_restores_full_draft_and_continues() {
     while let Ok(command) = commands.try_recv() {
         if let InlineCommand::AppendLine { segments, .. } = &command
             && segments.iter().any(|segment| {
-                segment.text.contains(
-                    "Live steering supports text only. Remove image attachments before steering.",
-                )
+                segment
+                    .text
+                    .contains("Live steering supports text only. Remove image attachments before steering.")
             })
         {
             warning_rendered = true;
         }
         if let InlineCommand::RestoreInputDraft(restored_input) = command {
             assert_eq!(restored_input.text, "keep going");
-            assert_eq!(
-                restored_input.attachments,
-                vec![first_attachment.clone(), second_attachment.clone()]
-            );
+            assert_eq!(restored_input.attachments, vec![first_attachment.clone(), second_attachment.clone()]);
             assert_eq!(restored_input, input);
             restored_draft = true;
         }
@@ -1095,10 +1084,7 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(
-            InlineEvent::RequestInlinePromptSuggestion("Review the current".to_string()),
-            &mut queue,
-        )
+        .process_event(InlineEvent::RequestInlinePromptSuggestion("Review the current".to_string()), &mut queue)
         .await
         .expect("process inline prompt suggestion request");
 

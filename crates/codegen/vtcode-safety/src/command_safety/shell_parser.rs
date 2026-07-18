@@ -56,10 +56,7 @@ pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
         Ok(commands) if !commands.is_empty() => return Ok(commands),
         Ok(_) => {} // Empty result, fall through to basic parsing
         Err(e) => {
-            tracing::debug!(
-                "Tree-sitter bash parsing failed: {}, falling back to basic tokenization",
-                e
-            );
+            tracing::debug!("Tree-sitter bash parsing failed: {}, falling back to basic tokenization", e);
         }
     }
 
@@ -92,11 +89,7 @@ fn parse_with_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
     Ok(commands)
 }
 
-fn collect_commands_from_node(
-    node: tree_sitter::Node,
-    source: &str,
-    commands: &mut Vec<Vec<String>>,
-) {
+fn collect_commands_from_node(node: tree_sitter::Node, source: &str, commands: &mut Vec<Vec<String>>) {
     match node.kind() {
         "command" | "simple_command" => {
             if let Some(cmd) = extract_command_from_node(node, source)
@@ -151,11 +144,7 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
         }
     }
 
-    if command.is_empty() {
-        None
-    } else {
-        Some(command)
-    }
+    if command.is_empty() { None } else { Some(command) }
 }
 
 /// Fallback: Parses shell script with simple tokenization
@@ -311,11 +300,7 @@ mod tests {
 
     #[test]
     fn parse_bash_lc_git_status() {
-        let cmd = vec![
-            "bash".to_string(),
-            "-lc".to_string(),
-            "git status".to_string(),
-        ];
+        let cmd = vec!["bash".to_string(), "-lc".to_string(), "git status".to_string()];
         let commands = parse_bash_lc_commands(&cmd);
         assert!(commands.is_some());
         let commands = commands.unwrap();
@@ -390,11 +375,7 @@ mod tests {
 
     #[test]
     fn parse_bash_lc_with_pipe() {
-        let cmd = vec![
-            "bash".to_string(),
-            "-lc".to_string(),
-            "ls -la | head -5".to_string(),
-        ];
+        let cmd = vec!["bash".to_string(), "-lc".to_string(), "ls -la | head -5".to_string()];
         let commands = parse_bash_lc_commands(&cmd);
         assert!(commands.is_some());
         let cmds = commands.unwrap();
@@ -509,8 +490,8 @@ pub(crate) fn additional_dangerous_pattern(segment: &str) -> Option<&'static str
         return Some(":(){:|:&};:");
     }
 
-    let tokens = shell_words::split(segment)
-        .unwrap_or_else(|_| segment.split_whitespace().map(ToString::to_string).collect());
+    let tokens =
+        shell_words::split(segment).unwrap_or_else(|_| segment.split_whitespace().map(ToString::to_string).collect());
     let first = tokens.first()?;
     let command_name = base_command_name(strip_wrapping_quotes(first)).to_ascii_lowercase();
 
@@ -518,11 +499,7 @@ pub(crate) fn additional_dangerous_pattern(segment: &str) -> Option<&'static str
         "rmdir" => Some("rmdir"),
         "wget" => Some("wget"),
         "curl" => Some("curl"),
-        "chmod"
-            if tokens.iter().skip(1).any(|arg| strip_wrapping_quotes(arg).starts_with("777")) =>
-        {
-            Some("chmod 777")
-        }
+        "chmod" if tokens.iter().skip(1).any(|arg| strip_wrapping_quotes(arg).starts_with("777")) => Some("chmod 777"),
         "chown"
             if tokens.iter().skip(1).any(|arg| {
                 let arg = strip_wrapping_quotes(arg).to_ascii_lowercase();

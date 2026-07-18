@@ -145,8 +145,8 @@ impl DiffColorPalette {
 
 // Re-export diff theme configuration
 pub use crate::diff_theme::{
-    DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg, diff_gutter_bg_add_light,
-    diff_gutter_bg_del_light, diff_gutter_fg_light,
+    DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg, diff_gutter_bg_add_light, diff_gutter_bg_del_light,
+    diff_gutter_fg_light,
 };
 
 /// Style presets for consistent UI theming.

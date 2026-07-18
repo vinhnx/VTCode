@@ -2,16 +2,12 @@ use std::path::Path;
 
 use anyhow::Result;
 use vtcode_core::prompts::{expand_prompt_template, find_prompt_template};
-use vtcode_core::skills::{
-    CommandSkillBackend, CommandSkillSpec, find_command_skill_by_slash_name,
-};
+use vtcode_core::skills::{CommandSkillBackend, CommandSkillSpec, find_command_skill_by_slash_name};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::builtins::execute_built_in_command_skill;
 use super::models::SlashCommandOutcome;
-use super::parsing::{
-    parse_analyze_scope, parse_prompt_template_args, parse_review_spec, split_command_and_args,
-};
+use super::parsing::{parse_analyze_scope, parse_prompt_template_args, parse_review_spec, split_command_and_args};
 
 pub(crate) async fn handle_slash_command(
     input: &str,
@@ -120,8 +116,7 @@ fn dispatch_traditional_command_skill(
                 Ok(None) => String::new(),
                 Err(err) => {
                     renderer.line(MessageStyle::Error, &err)?;
-                    renderer
-                        .line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
+                    renderer.line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
                     return Ok(SlashCommandOutcome::Handled);
                 }
             }
@@ -130,10 +125,7 @@ fn dispatch_traditional_command_skill(
     };
 
     Ok(SlashCommandOutcome::ManageSkills {
-        action: crate::agent::runloop::SkillCommandAction::Use {
-            name: skill_name.to_string(),
-            input,
-        },
+        action: crate::agent::runloop::SkillCommandAction::Use { name: skill_name.to_string(), input },
     })
 }
 

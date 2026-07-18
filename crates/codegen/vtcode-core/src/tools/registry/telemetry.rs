@@ -42,10 +42,7 @@ pub enum ToolTelemetryEvent {
     },
 
     /// A tool operation was blocked by policy
-    ToolBlocked {
-        tool_name: String,
-        policy_reason: String,
-    },
+    ToolBlocked { tool_name: String, policy_reason: String },
 
     /// A tool operation exceeded its timeout threshold
     ToolTimeoutWarning {
@@ -76,11 +73,7 @@ impl ToolTelemetryEvent {
     }
 
     /// Create a destructive operation warning for delete-and-recreate patterns
-    pub fn delete_and_recreate_warning(
-        tool_name: impl Into<String>,
-        files: Vec<String>,
-        has_backup: bool,
-    ) -> Self {
+    pub fn delete_and_recreate_warning(tool_name: impl Into<String>, files: Vec<String>, has_backup: bool) -> Self {
         Self::DestructiveOperationWarning {
             tool_name: tool_name.into(),
             operation_type: "delete_and_recreate".to_string(),
@@ -99,12 +92,7 @@ mod tests {
         let event = ToolTelemetryEvent::edit_to_patch_fallback("test.rs", "pattern_not_found");
 
         match event {
-            ToolTelemetryEvent::ToolFallbackDetected {
-                from_tool,
-                to_tool,
-                reason,
-                affected_file,
-            } => {
+            ToolTelemetryEvent::ToolFallbackDetected { from_tool, to_tool, reason, affected_file } => {
                 assert_eq!(from_tool, "edit_file");
                 assert_eq!(to_tool, "apply_patch");
                 assert_eq!(reason, "pattern_not_found");

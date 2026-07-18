@@ -3,9 +3,7 @@ use crossterm::style::Stylize;
 use std::path::Path;
 use tokio::process::Command;
 use vtcode_core::cli::args::CheckSubcommand;
-use vtcode_core::tools::ast_grep_binary::{
-    missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs,
-};
+use vtcode_core::tools::ast_grep_binary::{missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs};
 
 const AST_GREP_CONFIG_PATH: &str = "sgconfig.yml";
 const AST_GREP_INIT_COMMAND: &str = "vtcode init";
@@ -45,11 +43,7 @@ async fn handle_ast_grep_check(workspace: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn run_ast_grep_subcommand(
-    workspace: &Path,
-    ast_grep: &Path,
-    subcommand: &str,
-) -> Result<()> {
+async fn run_ast_grep_subcommand(workspace: &Path, ast_grep: &Path, subcommand: &str) -> Result<()> {
     let status = Command::new(ast_grep)
         .current_dir(workspace)
         .arg(subcommand)
@@ -79,9 +73,7 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
-    use vtcode_core::tools::ast_grep_binary::{
-        AST_GREP_INSTALL_COMMAND, set_ast_grep_binary_override_for_tests,
-    };
+    use vtcode_core::tools::ast_grep_binary::{AST_GREP_INSTALL_COMMAND, set_ast_grep_binary_override_for_tests};
 
     fn create_workspace_with_scaffold() -> TempDir {
         let temp_dir = TempDir::new().expect("workspace");
@@ -89,11 +81,7 @@ mod tests {
         temp_dir
     }
 
-    fn create_ast_grep_stub(
-        temp_dir: &TempDir,
-        test_exit_code: i32,
-        scan_exit_code: i32,
-    ) -> PathBuf {
+    fn create_ast_grep_stub(temp_dir: &TempDir, test_exit_code: i32, scan_exit_code: i32) -> PathBuf {
         #[cfg(windows)]
         let script_path = temp_dir.path().join("ast-grep-stub.cmd");
         #[cfg(not(windows))]

@@ -18,8 +18,7 @@ use serde_json::{Value, json};
 /// - No mixed language in string values within the same response
 /// - Consistent character set usage (Latin, CJK, Cyrillic, etc.)
 fn validate_json_language_consistency(json: &Value) -> Result<()> {
-    let json_str =
-        serde_json::to_string_pretty(json).context("Failed to serialize JSON for validation")?;
+    let json_str = serde_json::to_string_pretty(json).context("Failed to serialize JSON for validation")?;
 
     // Check for mixed scripts in the same JSON structure
     let has_latin = json_str.chars().any(|c| c.is_ascii_alphabetic());
@@ -28,15 +27,12 @@ fn validate_json_language_consistency(json: &Value) -> Result<()> {
     let has_arabic = json_str.chars().any(is_arabic_character);
 
     // Count how many different scripts are present
-    let script_count =
-        [has_latin, has_cjk, has_cyrillic, has_arabic].iter().filter(|&&x| x).count();
+    let script_count = [has_latin, has_cjk, has_cyrillic, has_arabic].iter().filter(|&&x| x).count();
 
     // Allow mixed scripts if they're in separate values (like translations)
     // but flag suspicious patterns
     if script_count > 2 {
-        eprintln!(
-            "Warning: JSON contains {script_count} different scripts - possible language mixing"
-        );
+        eprintln!("Warning: JSON contains {script_count} different scripts - possible language mixing");
     }
 
     // Validate all keys are valid identifiers (ASCII alphanumeric + underscore)
@@ -122,9 +118,7 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
         let first_script = section_scripts[0];
         for (idx, &script) in section_scripts.iter().enumerate().skip(1) {
             if script != first_script && script != Script::Mixed {
-                eprintln!(
-                    "Warning: Markdown section {idx} changed from {first_script:?} to {script:?}"
-                );
+                eprintln!("Warning: Markdown section {idx} changed from {first_script:?} to {script:?}");
             }
         }
     }
@@ -442,9 +436,7 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
         let has_message = obj.contains_key("message");
 
         if !has_success && !has_error && !has_message {
-            eprintln!(
-                "Warning: Tool '{tool_name}' response missing standard fields (success/error/message)"
-            );
+            eprintln!("Warning: Tool '{tool_name}' response missing standard fields (success/error/message)");
         }
     }
 

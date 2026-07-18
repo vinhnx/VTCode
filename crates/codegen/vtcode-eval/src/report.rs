@@ -49,12 +49,7 @@ impl EvalReport {
     }
 }
 
-pub fn build_task_report(
-    task_id: &str,
-    _name: &str,
-    category: EvalCategory,
-    metric: EvalMetric,
-) -> TaskReport {
+pub fn build_task_report(task_id: &str, _name: &str, category: EvalCategory, metric: EvalMetric) -> TaskReport {
     TaskReport {
         task_id: task_id.into(),
         category: category.label().into(),

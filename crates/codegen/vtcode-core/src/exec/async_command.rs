@@ -125,9 +125,9 @@ impl AsyncProcessRunner {
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
-        let mut child = command.spawn().with_context(|| {
-            format!("failed to spawn '{}' with args {:?}", options.program, options.args)
-        })?;
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("failed to spawn '{}' with args {:?}", options.program, options.args))?;
 
         let stdout_handle = child.stdout.take();
         let stderr_handle = child.stderr.take();
@@ -137,9 +137,10 @@ impl AsyncProcessRunner {
         let mut stderr_future = Box::pin(read_stream(stderr_handle, options.stderr));
         let mut wait_future = Box::pin(wait_for_status(shared_child.clone()));
         let mut timeout_future = options.timeout.map(|dur| Box::pin(sleep(dur)) as Pin<Box<Sleep>>);
-        let mut cancellation_future = options.cancellation_token.as_ref().map(|token| {
-            Box::pin(token.clone().cancelled_owned()) as Pin<Box<WaitForCancellationFutureOwned>>
-        });
+        let mut cancellation_future = options
+            .cancellation_token
+            .as_ref()
+            .map(|token| Box::pin(token.clone().cancelled_owned()) as Pin<Box<WaitForCancellationFutureOwned>>);
 
         #[derive(Clone, Copy, PartialEq, Eq)]
         enum Completion {
@@ -245,23 +246,19 @@ impl AsyncProcessRunner {
         let stdout = match stdout_result {
             Some(Ok(data)) => data,
             Some(Err(e)) => return Err(e),
-            None if bounded_drain => {
-                match timeout(POST_KILL_DRAIN_TIMEOUT, stdout_future.as_mut()).await {
-                    Ok(res) => res?,
-                    Err(_) => Vec::new(),
-                }
-            }
+            None if bounded_drain => match timeout(POST_KILL_DRAIN_TIMEOUT, stdout_future.as_mut()).await {
+                Ok(res) => res?,
+                Err(_) => Vec::new(),
+            },
             None => stdout_future.await?,
         };
         let stderr = match stderr_result {
             Some(Ok(data)) => data,
             Some(Err(e)) => return Err(e),
-            None if bounded_drain => {
-                match timeout(POST_KILL_DRAIN_TIMEOUT, stderr_future.as_mut()).await {
-                    Ok(res) => res?,
-                    Err(_) => Vec::new(),
-                }
-            }
+            None if bounded_drain => match timeout(POST_KILL_DRAIN_TIMEOUT, stderr_future.as_mut()).await {
+                Ok(res) => res?,
+                Err(_) => Vec::new(),
+            },
             None => stderr_future.await?,
         };
 

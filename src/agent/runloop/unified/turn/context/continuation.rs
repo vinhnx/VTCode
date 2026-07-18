@@ -1,6 +1,7 @@
 use vtcode_core::llm::provider as uni;
 
-pub(super) const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
+pub(super) const AUTONOMOUS_CONTINUE_DIRECTIVE: &str =
+    "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
 
 /// Maximum number of consecutive relaxed continuation decisions before the turn
 /// is forced to end. This prevents infinite loops where the model keeps producing
@@ -113,8 +114,7 @@ pub(super) fn evaluate_interim_text_continuation(
         let asks_user_question = text.contains('?') || contains_user_input_request(&lower);
         // Also cap relaxed continuations to prevent infinite loops where the model
         // keeps producing continuation-worthy text without progress.
-        let relaxed_budget_exhausted =
-            consecutive_relaxed_continuations >= MAX_CONSECUTIVE_RELAXED_CONTINUATIONS;
+        let relaxed_budget_exhausted = consecutive_relaxed_continuations >= MAX_CONSECUTIVE_RELAXED_CONTINUATIONS;
         if !asks_user_question
             && !relaxed_budget_exhausted
             && not_conclusive
@@ -157,9 +157,11 @@ pub(super) fn evaluate_interim_text_continuation(
 }
 
 pub(super) fn push_system_directive_once(history: &mut Vec<uni::Message>, directive: &str) {
-    let already_present = history.iter().rev().take(3).any(|message| {
-        message.role == uni::MessageRole::System && message.content.as_text().trim() == directive
-    });
+    let already_present = history
+        .iter()
+        .rev()
+        .take(3)
+        .any(|message| message.role == uni::MessageRole::System && message.content.as_text().trim() == directive);
     if !already_present {
         history.push(uni::Message::system(directive.to_string()));
     }
@@ -220,17 +222,13 @@ fn last_user_message_is_follow_up(history: &[uni::Message]) -> bool {
         .rev()
         .find(|message| message.role == uni::MessageRole::User)
         .is_some_and(|message| {
-            crate::agent::runloop::unified::state::is_follow_up_prompt_like(
-                message.content.as_text().as_ref(),
-            )
+            crate::agent::runloop::unified::state::is_follow_up_prompt_like(message.content.as_text().as_ref())
         })
 }
 
 fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
     history.iter().rev().take(16).any(|message| {
-        message.role == uni::MessageRole::Tool
-            || message.tool_call_id.is_some()
-            || message.tool_calls.is_some()
+        message.role == uni::MessageRole::Tool || message.tool_call_id.is_some() || message.tool_calls.is_some()
     })
 }
 
@@ -539,9 +537,7 @@ mod tests {
         assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like(
             "Continue autonomously from the last stalled turn. Stall reason: x."
         ));
-        assert!(!crate::agent::runloop::unified::state::is_follow_up_prompt_like(
-            "run cargo clippy and fix"
-        ));
+        assert!(!crate::agent::runloop::unified::state::is_follow_up_prompt_like("run cargo clippy and fix"));
     }
 
     #[test]
@@ -562,9 +558,7 @@ mod tests {
         ));
         assert!(!is_interim_progress_update("I need you to choose which option to apply."));
         assert!(!is_interim_progress_update("Let me know what you'd like to dig into next."));
-        assert!(!is_interim_progress_update(
-            "Running cargo fmt uses rustfmt to rewrite the source files."
-        ));
+        assert!(!is_interim_progress_update("Running cargo fmt uses rustfmt to rewrite the source files."));
         assert!(!is_interim_progress_update("Completed. All requested fixes are done."));
         assert!(!is_interim_progress_update("Final review: two blockers remain with next action."));
     }
@@ -573,34 +567,13 @@ mod tests {
     fn autonomous_continue_triggers_for_follow_up_and_interim_text() {
         let history = vec![uni::Message::user("continue".to_string())];
         assert!(
-            evaluate_interim_text_continuation(
-                true,
-                false,
-                &history,
-                "Let me fix the next issue.",
-                0
-            )
-            .should_continue
+            evaluate_interim_text_continuation(true, false, &history, "Let me fix the next issue.", 0).should_continue
         );
         assert!(
-            !evaluate_interim_text_continuation(
-                true,
-                true,
-                &history,
-                "Let me fix the next issue.",
-                0
-            )
-            .should_continue
+            !evaluate_interim_text_continuation(true, true, &history, "Let me fix the next issue.", 0).should_continue
         );
         assert!(
-            evaluate_interim_text_continuation(
-                false,
-                false,
-                &history,
-                "Let me fix the next issue.",
-                0
-            )
-            .should_continue
+            evaluate_interim_text_continuation(false, false, &history, "Let me fix the next issue.", 0).should_continue
         );
     }
 
@@ -608,24 +581,22 @@ mod tests {
     fn autonomous_continue_triggers_for_interim_text_after_tool_activity() {
         let history = vec![
             uni::Message::user("run cargo clippy and fix".to_string()),
-            uni::Message::assistant("I will run cargo clippy now.".to_string()).with_tool_calls(
-                vec![uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "command_session".to_string(),
-                    "{}".to_string(),
-                )],
-            ),
+            uni::Message::assistant("I will run cargo clippy now.".to_string()).with_tool_calls(vec![
+                uni::ToolCall::function("call_1".to_string(), "command_session".to_string(), "{}".to_string()),
+            ]),
             uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
         ];
 
-        assert!(evaluate_interim_text_continuation(
-            true,
-            false,
-            &history,
-            "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:",
-            0
-        )
-        .should_continue);
+        assert!(
+            evaluate_interim_text_continuation(
+                true,
+                false,
+                &history,
+                "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:",
+                0
+            )
+            .should_continue
+        );
     }
 
     #[test]
@@ -635,14 +606,16 @@ mod tests {
             uni::Message::assistant("I will start now.".to_string()),
         ];
 
-        assert!(evaluate_interim_text_continuation(
-            true,
-            false,
-            &history,
-            "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:",
-            0
-        )
-        .should_continue);
+        assert!(
+            evaluate_interim_text_continuation(
+                true,
+                false,
+                &history,
+                "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:",
+                0
+            )
+            .should_continue
+        );
     }
 
     #[test]
@@ -687,13 +660,7 @@ mod tests {
         assert!(ctx.consume_recovery_pass());
 
         let outcome = ctx
-            .handle_text_response(
-                "Let me try a narrower search next.".to_string(),
-                Vec::new(),
-                None,
-                None,
-                false,
-            )
+            .handle_text_response("Let me try a narrower search next.".to_string(), Vec::new(), None, None, false)
             .await
             .expect("recovery response should be handled");
 
@@ -739,13 +706,11 @@ mod tests {
         ctx.working_history
             .push(uni::Message::user("run cargo nextest and summarize".to_string()));
         ctx.working_history
-            .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "command_session".to_string(),
-                    "{}".to_string(),
-                ),
-            ]));
+            .push(uni::Message::assistant(String::new()).with_tool_calls(vec![uni::ToolCall::function(
+                "call_1".to_string(),
+                "command_session".to_string(),
+                "{}".to_string(),
+            )]));
         ctx.working_history
             .push(uni::Message::tool_response("call_1".to_string(), "test result: ok".to_string()));
         ctx.activate_recovery("post-tool follow-up failure");
@@ -770,13 +735,7 @@ mod tests {
 
         // Under tool-free recovery, the turn loop must override to terminal.
         let outcome = ctx
-            .handle_text_response(
-                "Let me continue analyzing the results.".to_string(),
-                Vec::new(),
-                None,
-                None,
-                false,
-            )
+            .handle_text_response("Let me continue analyzing the results.".to_string(), Vec::new(), None, None, false)
             .await
             .expect("recovery response should be handled");
 
@@ -799,25 +758,19 @@ mod tests {
         assert!(is_interim_progress_update("I want to verify the output of the previous step."));
         assert!(is_interim_progress_update("My next step is to run the full test suite."));
         assert!(is_interim_progress_update("Time to fix the remaining lint warnings."));
-        assert!(is_interim_progress_update(
-            "Let me now inspect the second module for regressions."
-        ));
+        assert!(is_interim_progress_update("Let me now inspect the second module for regressions."));
     }
 
     #[test]
     fn em_dash_boundary_detected_as_interim() {
-        assert!(is_interim_progress_update(
-            "First check passed—now let me verify the second component."
-        ));
+        assert!(is_interim_progress_update("First check passed—now let me verify the second component."));
         assert!(has_interim_intent_clause("done with the first task—now i'll move to the next"));
     }
 
     #[test]
     fn ellipsis_boundary_detected_as_interim() {
         assert!(has_interim_intent_clause("checking results…now i need to update the config"));
-        assert!(is_interim_progress_update(
-            "Scanning the logs…now let me check for error patterns."
-        ));
+        assert!(is_interim_progress_update("Scanning the logs…now let me check for error patterns."));
     }
 
     #[test]
@@ -836,10 +789,7 @@ mod tests {
         let long_text = format!(
             "{long_analysis_base}{padding} Let me now implement the mutex-based fix in the connection pool module."
         );
-        assert!(
-            long_text.len() > 800,
-            "test text must exceed 800-char limit to trigger relaxed path"
-        );
+        assert!(long_text.len() > 800, "test text must exceed 800-char limit to trigger relaxed path");
 
         let history = vec![
             uni::Message::user("fix the race condition in connection pool".to_string()),
@@ -848,10 +798,7 @@ mod tests {
 
         // Without tool activity, the text is > 800 chars → not interim → hits relaxed path
         // last_user_requested_progressive_work is true → should continue
-        assert!(
-            evaluate_interim_text_continuation(false, false, &history, &long_text, 0)
-                .should_continue
-        );
+        assert!(evaluate_interim_text_continuation(false, false, &history, &long_text, 0).should_continue);
     }
 
     #[test]
@@ -866,34 +813,29 @@ mod tests {
             run the linter again to verify the warnings are resolved.";
         assert!(long_analysis.len() > 280, "test text must exceed original 280-char limit");
 
-        let history = vec![
-            uni::Message::user("run cargo clippy and fix warnings".to_string()),
-            uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "command_session".to_string(),
-                    "{}".to_string(),
-                ),
-            ]),
-            uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
-        ];
+        let history =
+            vec![
+                uni::Message::user("run cargo clippy and fix warnings".to_string()),
+                uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
+                    uni::ToolCall::function("call_1".to_string(), "command_session".to_string(), "{}".to_string()),
+                ]),
+                uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
+            ];
 
-        assert!(
-            evaluate_interim_text_continuation(true, false, &history, long_analysis, 0)
-                .should_continue
-        );
+        assert!(evaluate_interim_text_continuation(true, false, &history, long_analysis, 0).should_continue);
     }
 
     #[test]
     fn short_completion_after_tool_activity_does_not_continue_via_relaxed_path() {
         let history = vec![
             uni::Message::user("create a simple rust hello world program".to_string()),
-            uni::Message::assistant("Let me compile and run it to confirm it works:".to_string())
-                .with_tool_calls(vec![uni::ToolCall::function(
+            uni::Message::assistant("Let me compile and run it to confirm it works:".to_string()).with_tool_calls(
+                vec![uni::ToolCall::function(
                     "call_1".to_string(),
                     "command_session".to_string(),
                     "{}".to_string(),
-                )]),
+                )],
+            ),
             uni::Message::tool_response("call_1".to_string(), "Hello, World!".to_string()),
         ];
 
@@ -1026,22 +968,14 @@ mod tests {
         let history = vec![
             uni::Message::user("can you fetch https://www.google.com.vn/".to_string()),
             uni::Message::assistant("I'll try to fetch it.".to_string()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "exec_command".to_string(),
-                    "{}".to_string(),
-                ),
+                uni::ToolCall::function("call_1".to_string(), "exec_command".to_string(), "{}".to_string()),
             ]),
-            uni::Message::tool_response(
-                "call_1".to_string(),
-                "Tool preflight validation failed".to_string(),
-            ),
+            uni::Message::tool_response("call_1".to_string(), "Tool preflight validation failed".to_string()),
         ];
 
         // Should NOT continue - the model is asking the user a question
         assert!(
-            !evaluate_interim_text_continuation(true, false, &history, blocker_explanation, 0)
-                .should_continue,
+            !evaluate_interim_text_continuation(true, false, &history, blocker_explanation, 0).should_continue,
             "User-directed questions should not trigger relaxed continuation"
         );
     }
@@ -1073,24 +1007,16 @@ mod tests {
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.push(uni::Message::user("what's in this repo?".to_string()));
         ctx.working_history
-            .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "file_operation".to_string(),
-                    "{}".to_string(),
-                ),
-            ]));
+            .push(uni::Message::assistant(String::new()).with_tool_calls(vec![uni::ToolCall::function(
+                "call_1".to_string(),
+                "file_operation".to_string(),
+                "{}".to_string(),
+            )]));
         ctx.working_history
             .push(uni::Message::tool_response("call_1".to_string(), "README summary".to_string()));
 
         let outcome = ctx
-            .handle_text_response(
-                checkpoint_shaped_repo_overview().to_string(),
-                Vec::new(),
-                None,
-                None,
-                false,
-            )
+            .handle_text_response(checkpoint_shaped_repo_overview().to_string(), Vec::new(), None, None, false)
             .await
             .expect("repo overview response should be handled");
 
@@ -1139,22 +1065,18 @@ mod tests {
         let interim_text = "I've reviewed the linter output. There are several warnings. \
             Let me apply these changes to the affected files now. Starting with the networking \
             module, I'll remove the unused imports and then fix the memory leak.";
-        let history = vec![
-            uni::Message::user("run cargo clippy and fix warnings".to_string()),
-            uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "command_session".to_string(),
-                    "{}".to_string(),
-                ),
-            ]),
-            uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
-        ];
+        let history =
+            vec![
+                uni::Message::user("run cargo clippy and fix warnings".to_string()),
+                uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
+                    uni::ToolCall::function("call_1".to_string(), "command_session".to_string(), "{}".to_string()),
+                ]),
+                uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
+            ];
 
         // Should continue - this is genuine interim progress with no user question
         assert!(
-            evaluate_interim_text_continuation(true, false, &history, interim_text, 0)
-                .should_continue,
+            evaluate_interim_text_continuation(true, false, &history, interim_text, 0).should_continue,
             "Genuine interim progress should still trigger continuation"
         );
     }
@@ -1175,52 +1097,33 @@ mod tests {
             resource cleanup in the deinitialization path. I will also review the \
             authentication module for similar issues and ensure all error paths are \
             properly handled with appropriate cleanup routines to prevent resource leaks.";
-        assert!(
-            long_analysis.len() > 800,
-            "test text must exceed 800-char limit to trigger relaxed path"
-        );
-        let history = vec![
-            uni::Message::user("run cargo clippy and fix warnings".to_string()),
-            uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
-                uni::ToolCall::function(
-                    "call_1".to_string(),
-                    "command_session".to_string(),
-                    "{}".to_string(),
-                ),
-            ]),
-            uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
-        ];
+        assert!(long_analysis.len() > 800, "test text must exceed 800-char limit to trigger relaxed path");
+        let history =
+            vec![
+                uni::Message::user("run cargo clippy and fix warnings".to_string()),
+                uni::Message::assistant("Running clippy now.".to_string()).with_tool_calls(vec![
+                    uni::ToolCall::function("call_1".to_string(), "command_session".to_string(), "{}".to_string()),
+                ]),
+                uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
+            ];
 
         // Should continue with budget = 0
-        assert!(
-            evaluate_interim_text_continuation(true, false, &history, long_analysis, 0)
-                .should_continue
-        );
+        assert!(evaluate_interim_text_continuation(true, false, &history, long_analysis, 0).should_continue);
 
         // Should continue with budget = 1 (still under limit)
-        assert!(
-            evaluate_interim_text_continuation(true, false, &history, long_analysis, 1)
-                .should_continue
-        );
+        assert!(evaluate_interim_text_continuation(true, false, &history, long_analysis, 1).should_continue);
 
         // Should continue with budget = 2 (still under limit)
-        assert!(
-            evaluate_interim_text_continuation(true, false, &history, long_analysis, 2)
-                .should_continue
-        );
+        assert!(evaluate_interim_text_continuation(true, false, &history, long_analysis, 2).should_continue);
 
         // Should NOT continue with budget = 3 (at limit)
         assert!(
-            !evaluate_interim_text_continuation(true, false, &history, long_analysis, 3)
-                .should_continue,
+            !evaluate_interim_text_continuation(true, false, &history, long_analysis, 3).should_continue,
             "Relaxed continuation should stop after MAX_CONSECUTIVE_RELAXED_CONTINuations"
         );
 
         // Should NOT continue with budget = 4 (over limit)
-        assert!(
-            !evaluate_interim_text_continuation(true, false, &history, long_analysis, 4)
-                .should_continue
-        );
+        assert!(!evaluate_interim_text_continuation(true, false, &history, long_analysis, 4).should_continue);
     }
 
     #[test]
@@ -1238,9 +1141,7 @@ mod tests {
         assert!(!contains_user_input_request(
             "The compiler errors tell me what to fix next. Let me update the parser branch now."
         ));
-        assert!(!contains_user_input_request(
-            "Let me check whether this should initialize the cache before use."
-        ));
+        assert!(!contains_user_input_request("Let me check whether this should initialize the cache before use."));
         assert!(!contains_user_input_request("let me fix the next issue"));
         assert!(!contains_user_input_request("i'll apply these changes now"));
     }

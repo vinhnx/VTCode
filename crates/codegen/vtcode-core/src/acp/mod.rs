@@ -4,6 +4,5 @@
 pub mod permission_cache;
 
 pub use permission_cache::{
-    AcpPermissionCache, PermissionCacheStats, PermissionGrant, ToolPermissionCache,
-    ToolPermissionCacheStats,
+    AcpPermissionCache, PermissionCacheStats, PermissionGrant, ToolPermissionCache, ToolPermissionCacheStats,
 };

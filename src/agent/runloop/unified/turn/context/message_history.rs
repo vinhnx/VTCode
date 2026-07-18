@@ -1,6 +1,4 @@
-use vtcode_commons::diff_paths::{
-    is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
-};
+use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line, is_diff_header_line};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 
@@ -17,8 +15,8 @@ pub(super) fn build_combined_reasoning(
     reasoning: &[ReasoningSegment],
     detail_reasoning: Option<&str>,
 ) -> Option<String> {
-    let capacity = reasoning.iter().map(|segment| segment.text.len()).sum::<usize>()
-        + reasoning.len().saturating_sub(1);
+    let capacity =
+        reasoning.iter().map(|segment| segment.text.len()).sum::<usize>() + reasoning.len().saturating_sub(1);
     let mut combined_reasoning = String::with_capacity(capacity);
 
     for segment in reasoning {
@@ -65,10 +63,7 @@ pub(super) fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::
     }
 }
 
-pub(super) fn should_suppress_redundant_diff_recap(
-    history: &[uni::Message],
-    assistant_text: &str,
-) -> bool {
+pub(super) fn should_suppress_redundant_diff_recap(history: &[uni::Message], assistant_text: &str) -> bool {
     if assistant_text.trim().is_empty() {
         return false;
     }
@@ -108,10 +103,7 @@ fn is_diff_like_fenced_recap(text: &str) -> bool {
             has_fence = true;
             continue;
         }
-        if is_diff_header_line(trimmed)
-            || is_diff_addition_line(trimmed)
-            || is_diff_deletion_line(trimmed)
-        {
+        if is_diff_header_line(trimmed) || is_diff_addition_line(trimmed) || is_diff_deletion_line(trimmed) {
             has_diff_marker = true;
         }
     }
@@ -167,15 +159,9 @@ fn last_user_requested_diff_view(history: &[uni::Message]) -> bool {
     let Some(text) = last_user_message_text(history) else {
         return false;
     };
-    [
-        "show diff",
-        "git diff",
-        "view diff",
-        "show changes",
-        "what changed",
-    ]
-    .iter()
-    .any(|needle| text.contains(needle))
+    ["show diff", "git diff", "view diff", "show changes", "what changed"]
+        .iter()
+        .any(|needle| text.contains(needle))
 }
 
 fn last_user_requested_diff_analysis(history: &[uni::Message]) -> bool {

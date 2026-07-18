@@ -16,8 +16,7 @@ async fn update_failure_preserves_original_content() {
     let file_path = temp_dir.path().join("file.txt");
     tokio::fs::write(&file_path, "original\n").await.unwrap();
 
-    let patch_text =
-        "*** Begin Patch\n*** Update File: file.txt\n@@\n-missing\n+changed\n*** End Patch";
+    let patch_text = "*** Begin Patch\n*** Update File: file.txt\n@@\n-missing\n+changed\n*** End Patch";
     let patch = Patch::parse(patch_text).unwrap();
 
     let err = patch.apply(temp_dir.path()).await.unwrap_err();
@@ -89,7 +88,8 @@ async fn update_move_writes_destination_and_cleans_backup() {
     let source_path = temp_dir.path().join("source.txt");
     tokio::fs::write(&source_path, "alpha\n").await.unwrap();
 
-    let patch_text = "*** Begin Patch\n*** Update File: source.txt\n*** Move to: renamed.txt\n@@\n-alpha\n+beta\n*** End Patch";
+    let patch_text =
+        "*** Begin Patch\n*** Update File: source.txt\n*** Move to: renamed.txt\n@@\n-alpha\n+beta\n*** End Patch";
     let patch = Patch::parse(patch_text).unwrap();
 
     let messages = patch.apply(temp_dir.path()).await.unwrap();
@@ -114,8 +114,7 @@ async fn update_preserves_file_permissions() {
     let original_mode = 0o444;
     std::fs::set_permissions(&source_path, std::fs::Permissions::from_mode(original_mode)).unwrap();
 
-    let patch_text =
-        "*** Begin Patch\n*** Update File: mode.txt\n@@\n-keep\n+changed\n*** End Patch";
+    let patch_text = "*** Begin Patch\n*** Update File: mode.txt\n@@\n-keep\n+changed\n*** End Patch";
     let patch = Patch::parse(patch_text).unwrap();
 
     patch.apply(temp_dir.path()).await.unwrap();

@@ -29,8 +29,8 @@ pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usiz
 
     // @ must be at a whitespace boundary (token_start) or at start of input
     // This prevents mid-word @ like foo@bar from triggering
-    let prefix_starts_token = token_start == 0
-        || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
+    let prefix_starts_token =
+        token_start == 0 || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
 
     if !prefix_starts_token {
         return None;
@@ -78,9 +78,9 @@ fn looks_like_file_path(reference: &str, is_npm_context: bool) -> bool {
             return false;
         }
         // Check if part after last @ looks like a filename (has letters) vs version (numbers only)
-        return reference.rsplit_once('@').is_some_and(|(_, after)| {
-            after.contains(|c: char| c.is_ascii_alphabetic()) && after.contains('.')
-        });
+        return reference
+            .rsplit_once('@')
+            .is_some_and(|(_, after)| after.contains(|c: char| c.is_ascii_alphabetic()) && after.contains('.'));
     }
 
     // Path patterns: ./path, ../path, /path, ~/path, C:\path
@@ -88,9 +88,7 @@ fn looks_like_file_path(reference: &str, is_npm_context: bool) -> bool {
         || reference.starts_with("../")
         || reference.starts_with('/')
         || reference.starts_with("~/")
-        || (reference.len() > 2
-            && reference.as_bytes()[1] == b':'
-            && matches!(reference.as_bytes()[2], b'\\' | b'/'))
+        || (reference.len() > 2 && reference.as_bytes()[1] == b':' && matches!(reference.as_bytes()[2], b'\\' | b'/'))
     {
         return true;
     }

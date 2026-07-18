@@ -47,11 +47,9 @@ impl LLMProvider for OpenRouterProvider {
         let model = self.resolve_model(&request).to_string();
         let response = self.send_with_fallback(&request, Some(false)).await?;
 
-        let response_json: Value =
-            response.json().await.map_err(|e| format_parse_error("OpenRouter", &e))?;
+        let response_json: Value = response.json().await.map_err(|e| format_parse_error("OpenRouter", &e))?;
 
-        let include_cache_metrics =
-            self.prompt_cache_enabled && self.prompt_cache_settings.report_savings;
+        let include_cache_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.report_savings;
         response_parser::parse_response(response_json, model, include_cache_metrics)
     }
 
@@ -147,10 +145,7 @@ impl LLMProvider for OpenRouterProvider {
         Ok(Box::pin(stream))
     }
 
-    async fn stream_normalized(
-        &self,
-        request: LLMRequest,
-    ) -> Result<LLMNormalizedStream, LLMError> {
+    async fn stream_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
         let resolved_model = self.resolve_model(&request).to_string();
         let response = self.send_with_fallback(&request, Some(true)).await?;
 

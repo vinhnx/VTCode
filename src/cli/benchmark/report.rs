@@ -30,10 +30,8 @@ pub(super) struct BenchmarkTaskReport {
 
 impl BenchmarkTaskReport {
     pub(super) fn from_task_result(task: &Task, result: RunnerTaskResults) -> Self {
-        let success = matches!(
-            result.outcome,
-            RunnerTaskOutcome::Success | RunnerTaskOutcome::StoppedNoAction
-        ) && result.warnings.is_empty();
+        let success = matches!(result.outcome, RunnerTaskOutcome::Success | RunnerTaskOutcome::StoppedNoAction)
+            && result.warnings.is_empty();
         Self {
             id: task.id.clone(),
             title: task.title.clone(),

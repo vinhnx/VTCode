@@ -30,8 +30,7 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
         && (command[1] == "-c" || command[1] == "-lc" || command[1] == "-ilc")
     {
         let script = &command[2];
-        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
-        {
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
                 if command_might_be_dangerous(&sub_cmd) {
                     return true;
@@ -47,13 +46,7 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
 fn is_git_global_option_with_value(arg: &str) -> bool {
     matches!(
         arg,
-        "-C" | "-c"
-            | "--config-env"
-            | "--exec-path"
-            | "--git-dir"
-            | "--namespace"
-            | "--super-prefix"
-            | "--work-tree"
+        "-C" | "-c" | "--config-env" | "--exec-path" | "--git-dir" | "--namespace" | "--super-prefix" | "--work-tree"
     )
 }
 
@@ -75,12 +68,7 @@ fn is_git_global_option_with_inline_value(arg: &str) -> bool {
 pub(crate) fn git_global_option_requires_prompt(arg: &str) -> bool {
     matches!(
         arg,
-        "-c" | "--config-env"
-            | "--exec-path"
-            | "--git-dir"
-            | "--namespace"
-            | "--super-prefix"
-            | "--work-tree"
+        "-c" | "--config-env" | "--exec-path" | "--git-dir" | "--namespace" | "--super-prefix" | "--work-tree"
     ) || matches!(
         arg,
         s if (s.starts_with("-c") && s.len() > 2)
@@ -97,10 +85,7 @@ pub(crate) fn git_global_option_requires_prompt(arg: &str) -> bool {
 /// may appear before it (e.g., `-C`, `-c`, `--git-dir`).
 ///
 /// Shared with `is_safe_command` to avoid git-global-option bypasses.
-pub(crate) fn find_git_subcommand<'a>(
-    command: &'a [String],
-    subcommands: &[&str],
-) -> Option<(usize, &'a str)> {
+pub(crate) fn find_git_subcommand<'a>(command: &'a [String], subcommands: &[&str]) -> Option<(usize, &'a str)> {
     let cmd0 = command.first().map(String::as_str)?;
     if !cmd0.ends_with("git") {
         return None;
@@ -161,10 +146,8 @@ fn git_branch_is_delete(branch_args: &[String]) -> bool {
 /// Check if git push command is dangerous (force, delete, or dangerous refspec)
 fn git_push_is_dangerous(push_args: &[String]) -> bool {
     push_args.iter().map(String::as_str).any(|arg| {
-        matches!(
-            arg,
-            "--force" | "--force-with-lease" | "--force-if-includes" | "--delete" | "-f" | "-d"
-        ) || arg.starts_with("--force-with-lease=")
+        matches!(arg, "--force" | "--force-with-lease" | "--force-if-includes" | "--delete" | "-f" | "-d")
+            || arg.starts_with("--force-with-lease=")
             || arg.starts_with("--force-if-includes=")
             || arg.starts_with("--delete=")
             || short_flag_group_contains(arg, 'f')
@@ -182,9 +165,7 @@ fn git_push_refspec_is_dangerous(arg: &str) -> bool {
 /// Check if git clean command uses force flag
 fn git_clean_is_force(clean_args: &[String]) -> bool {
     clean_args.iter().map(String::as_str).any(|arg| {
-        matches!(arg, "--force" | "-f")
-            || arg.starts_with("--force=")
-            || short_flag_group_contains(arg, 'f')
+        matches!(arg, "--force" | "-f") || arg.starts_with("--force=") || short_flag_group_contains(arg, 'f')
     })
 }
 
@@ -226,10 +207,7 @@ fn is_dangerous_git_subcommand(command: &[String]) -> bool {
 }
 
 /// Find git subcommand from a list of args (without the "git" binary name)
-fn find_git_subcommand_from_args<'a>(
-    args: &'a [String],
-    subcommands: &[&str],
-) -> Option<(usize, &'a str)> {
+fn find_git_subcommand_from_args<'a>(args: &'a [String], subcommands: &[&str]) -> Option<(usize, &'a str)> {
     let mut skip_next = false;
     for (idx, arg) in args.iter().enumerate() {
         if skip_next {
@@ -448,13 +426,9 @@ mod tests {
         assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-D", "feature",])));
         // Test shell script parsing separately
         let script = "git branch --delete feature";
-        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
-        {
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
-                assert!(
-                    command_might_be_dangerous(&sub_cmd),
-                    "sub-command should be dangerous: {sub_cmd:?}"
-                );
+                assert!(command_might_be_dangerous(&sub_cmd), "sub-command should be dangerous: {sub_cmd:?}");
             }
         }
     }
@@ -469,26 +443,13 @@ mod tests {
 
     #[test]
     fn git_branch_delete_with_global_options_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "-C", ".", "branch", "-d", "feature",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git",
-            "-c",
-            "color.ui=false",
-            "branch",
-            "-D",
-            "feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "-C", ".", "branch", "-d", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "-c", "color.ui=false", "branch", "-D", "feature",])));
         // Test shell script parsing separately
         let script = "git -C . branch -d feature";
-        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
-        {
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
-                assert!(
-                    command_might_be_dangerous(&sub_cmd),
-                    "sub-command should be dangerous: {sub_cmd:?}"
-                );
+                assert!(command_might_be_dangerous(&sub_cmd), "sub-command should be dangerous: {sub_cmd:?}");
             }
         }
     }
@@ -504,9 +465,7 @@ mod tests {
 
     #[test]
     fn git_push_force_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "--force", "origin", "main",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "--force", "origin", "main",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "push", "-f", "origin", "main",])));
         assert!(command_might_be_dangerous(&vec_str(&[
             "git",
@@ -522,19 +481,14 @@ mod tests {
     #[test]
     fn git_push_plus_refspec_is_dangerous() {
         assert!(command_might_be_dangerous(&vec_str(&["git", "push", "origin", "+main",])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git",
-            "push",
-            "origin",
-            "+refs/heads/main:refs/heads/main",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(
+            &["git", "push", "origin", "+refs/heads/main:refs/heads/main",]
+        )));
     }
 
     #[test]
     fn git_push_delete_flag_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "--delete", "origin", "feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "--delete", "origin", "feature",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "push", "-d", "origin", "feature",])));
     }
 
@@ -543,13 +497,9 @@ mod tests {
         assert!(command_might_be_dangerous(&vec_str(&["git", "push", "origin", ":feature",])));
         // Test shell script parsing separately
         let script = "git push origin :feature";
-        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
-        {
+        if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
-                assert!(
-                    command_might_be_dangerous(&sub_cmd),
-                    "sub-command should be dangerous: {sub_cmd:?}"
-                );
+                assert!(command_might_be_dangerous(&sub_cmd), "sub-command should be dangerous: {sub_cmd:?}");
             }
         }
     }

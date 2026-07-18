@@ -5,9 +5,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
-use crate::agent::runloop::unified::diagnostics::{
-    CheckupOptions, count_configured_hooks, run_checkup_diagnostics,
-};
+use crate::agent::runloop::unified::diagnostics::{CheckupOptions, count_configured_hooks, run_checkup_diagnostics};
 use crate::agent::runloop::unified::ui_interaction::display_session_status;
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -60,8 +58,7 @@ fn compute_checkup_remediations(vt_cfg: &Option<VTCodeConfig>) -> Vec<CheckupRem
         items.push(CheckupRemediation {
             id: "preapprove_readonly",
             title: "Pre-approve tool use".to_string(),
-            subtitle: "Set tool policy to 'allow' so read-only commands stop prompting."
-                .to_string(),
+            subtitle: "Set tool policy to 'allow' so read-only commands stop prompting.".to_string(),
             search_value: "optimize tool policy allow preapprove prompt".to_string(),
         });
     }
@@ -114,9 +111,7 @@ fn apply_checkup_remediation_to_config(id: &str, cfg: &mut VTCodeConfig) -> Resu
     }
 }
 
-pub(crate) async fn handle_show_status(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
     let active_instruction_directory = ctx
         .context_manager
@@ -141,15 +136,11 @@ pub(crate) async fn handle_show_status(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_show_memory(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_memory(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_status_lines(&mut ctx, false).await?;
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Next actions: `/memory` in inline UI, `/config memory`, or `/edit <target>`.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Next actions: `/memory` in inline UI, `/config memory`, or `/edit <target>`.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -160,9 +151,7 @@ pub(crate) async fn handle_show_memory(
     memory::run_memory_modal(&mut ctx, false).await
 }
 
-pub(crate) async fn handle_show_memory_config(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_config_lines(&mut ctx).await?;
         ctx.renderer.line(
@@ -179,17 +168,12 @@ pub(crate) async fn handle_show_memory_config(
     memory::run_memory_modal(&mut ctx, true).await
 }
 
-pub(crate) async fn handle_run_checkup(
-    mut ctx: SlashCommandContext<'_>,
-    quick: bool,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_run_checkup(mut ctx: SlashCommandContext<'_>, quick: bool) -> Result<SlashCommandControl> {
     run_checkup(&mut ctx, quick).await?;
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_start_checkup_interactive(
-    mut ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_checkup_interactive(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         run_checkup(&mut ctx, false).await?;
         return Ok(SlashCommandControl::Continue);
@@ -266,9 +250,7 @@ async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<(
     Ok(())
 }
 
-pub(crate) async fn handle_start_terminal_setup(
-    ctx: SlashCommandContext<'_>,
-) -> Result<SlashCommandControl> {
+pub(crate) async fn handle_start_terminal_setup(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let vt_cfg = ctx.vt_cfg.as_ref().context("VT Code configuration not available")?;
     vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -279,27 +261,18 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let mut items = vec![
         InlineListItem {
             title: "Run full checkup".to_string(),
-            subtitle: Some(
-                "Run all checks: config, provider key, dependencies, MCP, links, and skills"
-                    .to_string(),
-            ),
+            subtitle: Some("Run all checks: config, provider key, dependencies, MCP, links, and skills".to_string()),
             badge: Some("Recommended".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{CHECKUP_ACTION_PREFIX}full"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}full"))),
             search_value: Some("checkup full all checks mcp dependencies".to_string()),
         },
         InlineListItem {
             title: "Run quick checkup".to_string(),
-            subtitle: Some(
-                "Run core checks only (skips dependencies, MCP, links, and skills)".to_string(),
-            ),
+            subtitle: Some("Run core checks only (skips dependencies, MCP, links, and skills)".to_string()),
             badge: Some("Fast".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{CHECKUP_ACTION_PREFIX}quick"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}quick"))),
             search_value: Some("checkup quick fast checks".to_string()),
         },
         InlineListItem {
@@ -366,8 +339,7 @@ mod tests {
     #[test]
     fn reports_all_three_when_unoptimized() {
         let cfg = cfg_with_hooks();
-        let ids: Vec<&str> =
-            compute_checkup_remediations(&Some(cfg)).iter().map(|r| r.id).collect();
+        let ids: Vec<&str> = compute_checkup_remediations(&Some(cfg)).iter().map(|r| r.id).collect();
         assert!(ids.contains(&"enable_auto_mode"));
         assert!(ids.contains(&"disable_slow_hooks"));
         assert!(ids.contains(&"preapprove_readonly"));

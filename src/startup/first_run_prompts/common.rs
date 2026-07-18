@@ -1,9 +1,7 @@
 use std::io::{self, Write};
 
 use anyhow::{Context, Result, anyhow};
-use vtcode_ui::tui::ui::interactive_list::{
-    SelectionEntry, SelectionInterrupted, run_interactive_selection,
-};
+use vtcode_ui::tui::ui::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
 
 #[derive(Debug, thiserror::Error)]
 #[error("setup interrupted by Ctrl+C")]

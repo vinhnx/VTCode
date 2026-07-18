@@ -31,21 +31,15 @@ impl DiffDisplayLine {
     pub fn numbered_text(&self, line_number_width: usize) -> String {
         match self.kind {
             DiffDisplayKind::Metadata | DiffDisplayKind::HunkHeader => self.text.clone(),
-            DiffDisplayKind::Addition => format!(
-                "+{:>line_number_width$} {}",
-                self.line_number.unwrap_or_default(),
-                self.text
-            ),
-            DiffDisplayKind::Deletion => format!(
-                "-{:>line_number_width$} {}",
-                self.line_number.unwrap_or_default(),
-                self.text
-            ),
-            DiffDisplayKind::Context => format!(
-                " {:>line_number_width$} {}",
-                self.line_number.unwrap_or_default(),
-                self.text
-            ),
+            DiffDisplayKind::Addition => {
+                format!("+{:>line_number_width$} {}", self.line_number.unwrap_or_default(), self.text)
+            }
+            DiffDisplayKind::Deletion => {
+                format!("-{:>line_number_width$} {}", self.line_number.unwrap_or_default(), self.text)
+            }
+            DiffDisplayKind::Context => {
+                format!(" {:>line_number_width$} {}", self.line_number.unwrap_or_default(), self.text)
+            }
         }
     }
 }
@@ -104,8 +98,7 @@ pub fn display_lines_from_unified_diff(diff_content: &str) -> Vec<DiffDisplayLin
             lines.push(DiffDisplayLine {
                 kind: DiffDisplayKind::HunkHeader,
                 line_number: None,
-                text: format_start_only_hunk_header(line)
-                    .unwrap_or_else(|| format!("@@ -{old_start} +{new_start} @@")),
+                text: format_start_only_hunk_header(line).unwrap_or_else(|| format!("@@ -{old_start} +{new_start} @@")),
             });
             continue;
         }

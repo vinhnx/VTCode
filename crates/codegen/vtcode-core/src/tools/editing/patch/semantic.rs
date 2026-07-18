@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -11,64 +10,19 @@ use tokio::process::Command;
 use super::matcher::{PatchContextMatcher, normalise_text, seek_segment};
 use super::{PatchChunk, PatchError};
 use crate::tools::ast_grep_binary::{
-    AST_GREP_INSTALL_COMMAND, missing_ast_grep_message, resolve_ast_grep_binary_from_env_and_fs,
+    AST_GREP_INSTALL_COMMAND, AST_GREP_OVERRIDE, AstGrepBinaryOverride, missing_ast_grep_message,
+    resolve_ast_grep_binary_from_env_and_fs,
 };
 use crate::tools::ast_grep_language::AstGrepLanguage;
 
-static IDENTIFIER_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("semantic identifier regex must compile")
-});
-static AST_GREP_OVERRIDE: Lazy<Mutex<AstGrepBinaryOverride>> =
-    Lazy::new(|| Mutex::new(AstGrepBinaryOverride::System));
+static IDENTIFIER_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("semantic identifier regex must compile"));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SemanticMatch {
     pub(crate) start_idx: usize,
     pub(crate) old_segment: Vec<String>,
     pub(crate) new_segment: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-enum AstGrepBinaryOverride {
-    #[default]
-    System,
-    Missing,
-    Path(PathBuf),
-}
-
-#[doc(hidden)]
-#[must_use]
-pub struct AstGrepBinaryOverrideGuard {
-    previous: AstGrepBinaryOverride,
-}
-
-impl Drop for AstGrepBinaryOverrideGuard {
-    fn drop(&mut self) {
-        if let Ok(mut guard) = AST_GREP_OVERRIDE.lock() {
-            *guard = self.previous.clone();
-        }
-    }
-}
-
-#[doc(hidden)]
-pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepBinaryOverrideGuard {
-    let mut state = AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());
-    let previous = state.clone();
-    *state = match path {
-        Some(path) => AstGrepBinaryOverride::Path(path),
-        None => AstGrepBinaryOverride::Missing,
-    };
-    AstGrepBinaryOverrideGuard { previous }
-}
-
-/// Returns `true` when this registry's test override is forced to `Missing`.
-/// Used by `AstGrepStatus::resolve_or_install` to skip auto-install in tests
-/// that mock the binary as missing through the patch (semantic) registry.
-pub(crate) fn is_binary_override_missing() -> bool {
-    matches!(
-        AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()).clone(),
-        AstGrepBinaryOverride::Missing
-    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,11 +49,7 @@ struct StructuralCandidate {
 }
 
 impl StructuralCandidate {
-    fn from_match(
-        entry: AstGrepJsonMatch,
-        file_lines: &[String],
-        primary_term: &str,
-    ) -> Option<Self> {
+    fn from_match(entry: AstGrepJsonMatch, file_lines: &[String], primary_term: &str) -> Option<Self> {
         if file_lines.is_empty() {
             return None;
         }
@@ -141,32 +91,22 @@ pub(crate) async fn resolve_semantic_match(
             reason: "missing semantic @@ anchor".to_string(),
         })?;
 
-    let language = AstGrepLanguage::from_path(source_path).ok_or_else(|| {
-        PatchError::SemanticResolutionFailed {
-            path: display_path.to_string(),
-            anchor: anchor.to_string(),
-            reason: "unsupported language for semantic fallback".to_string(),
-        }
+    let language = AstGrepLanguage::from_path(source_path).ok_or_else(|| PatchError::SemanticResolutionFailed {
+        path: display_path.to_string(),
+        anchor: anchor.to_string(),
+        reason: "unsupported language for semantic fallback".to_string(),
     })?;
 
     let ast_grep = resolve_ast_grep_binary(display_path, anchor)?;
-    let primary_term =
-        semantic_anchor_term(anchor).ok_or_else(|| PatchError::SemanticResolutionFailed {
-            path: display_path.to_string(),
-            anchor: anchor.to_string(),
-            reason: "anchor does not contain a usable symbol name".to_string(),
-        })?;
+    let primary_term = semantic_anchor_term(anchor).ok_or_else(|| PatchError::SemanticResolutionFailed {
+        path: display_path.to_string(),
+        anchor: anchor.to_string(),
+        reason: "anchor does not contain a usable symbol name".to_string(),
+    })?;
 
-    let candidates = collect_candidates(
-        &ast_grep,
-        language,
-        source_path,
-        original_lines,
-        &primary_term,
-        display_path,
-        anchor,
-    )
-    .await?;
+    let candidates =
+        collect_candidates(&ast_grep, language, source_path, original_lines, &primary_term, display_path, anchor)
+            .await?;
 
     if candidates.is_empty() {
         return Err(PatchError::SemanticResolutionFailed {
@@ -189,13 +129,9 @@ pub(crate) async fn resolve_semantic_match(
         let candidate_lines = &original_lines[candidate.start_line..end_exclusive];
 
         let candidate_matcher = PatchContextMatcher::new(candidate_lines);
-        if let Some(local_start) = seek_segment(
-            &candidate_matcher,
-            &mut candidate_old,
-            &mut candidate_new,
-            0,
-            chunk.is_end_of_file(),
-        ) {
+        if let Some(local_start) =
+            seek_segment(&candidate_matcher, &mut candidate_old, &mut candidate_new, 0, chunk.is_end_of_file())
+        {
             resolved.entry(candidate.start_line + local_start).or_insert(SemanticMatch {
                 start_idx: candidate.start_line + local_start,
                 old_segment: candidate_old,
@@ -208,7 +144,9 @@ pub(crate) async fn resolve_semantic_match(
         0 => Err(PatchError::SemanticResolutionFailed {
             path: display_path.to_string(),
             anchor: anchor.to_string(),
-            reason: "anchor resolved to structural candidates, but removal/context lines were not found safely inside them".to_string(),
+            reason:
+                "anchor resolved to structural candidates, but removal/context lines were not found safely inside them"
+                    .to_string(),
         }),
         1 => resolved
             .into_values()
@@ -216,8 +154,7 @@ pub(crate) async fn resolve_semantic_match(
             .ok_or_else(|| PatchError::SemanticResolutionFailed {
                 path: display_path.to_string(),
                 anchor: anchor.to_string(),
-                reason: "internal error: single semantic match vanished during resolution"
-                    .to_string(),
+                reason: "internal error: single semantic match vanished during resolution".to_string(),
             }),
         candidate_count => Err(PatchError::SemanticAmbiguous {
             path: display_path.to_string(),
@@ -243,9 +180,7 @@ pub(crate) fn resolve_ast_grep_binary_path() -> Result<PathBuf, String> {
     {
         AstGrepBinaryOverride::System => {}
         AstGrepBinaryOverride::Missing => {
-            return Err(missing_ast_grep_message(
-                "Use exact context lines if you cannot install it.",
-            ));
+            return Err(missing_ast_grep_message("Use exact context lines if you cannot install it."));
         }
         AstGrepBinaryOverride::Path(path) => return Ok(path),
     }
@@ -303,17 +238,14 @@ async fn collect_candidates(
     let mut candidates = Vec::new();
 
     for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        let parsed = serde_json::from_str::<AstGrepJsonMatch>(line).map_err(|err| {
-            PatchError::SemanticResolutionFailed {
+        let parsed =
+            serde_json::from_str::<AstGrepJsonMatch>(line).map_err(|err| PatchError::SemanticResolutionFailed {
                 path: display_path.to_string(),
                 anchor: anchor.to_string(),
                 reason: format!("failed to parse ast-grep output: {err}"),
-            }
-        })?;
+            })?;
 
-        if let Some(candidate) =
-            StructuralCandidate::from_match(parsed, original_lines, primary_term)
-        {
+        if let Some(candidate) = StructuralCandidate::from_match(parsed, original_lines, primary_term) {
             candidates.push(candidate);
         }
     }
@@ -366,17 +298,11 @@ mod tests {
 
     #[test]
     fn semantic_anchor_term_skips_rust_visibility_noise() {
-        assert_eq!(
-            semantic_anchor_term("pub(crate) fn second() -> usize"),
-            Some("second".to_string())
-        );
+        assert_eq!(semantic_anchor_term("pub(crate) fn second() -> usize"), Some("second".to_string()));
     }
 
     #[test]
     fn semantic_anchor_term_prefers_symbol_name_after_keywords() {
-        assert_eq!(
-            semantic_anchor_term("impl ToolDefinition for ProviderTool"),
-            Some("tooldefinition".to_string())
-        );
+        assert_eq!(semantic_anchor_term("impl ToolDefinition for ProviderTool"), Some("tooldefinition".to_string()));
     }
 }

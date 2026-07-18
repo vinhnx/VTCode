@@ -182,16 +182,9 @@ fn parse_usize_value(value: &Value) -> Option<usize> {
 }
 
 fn has_explicit_limit(args: &Value) -> bool {
-    [
-        "limit",
-        "l",
-        "page_size_lines",
-        "max_lines",
-        "chunk_lines",
-        "end_line",
-    ]
-    .iter()
-    .any(|key| args.get(*key).is_some())
+    ["limit", "l", "page_size_lines", "max_lines", "chunk_lines", "end_line"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
 }
 
 fn has_explicit_offset(args: &Value) -> bool {
@@ -275,11 +268,7 @@ fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {
     }
 }
 
-fn build_history_cache_key(
-    path: &Path,
-    metadata: &std::fs::Metadata,
-    args: &Value,
-) -> Option<String> {
+fn build_history_cache_key(path: &Path, metadata: &std::fs::Metadata, args: &Value) -> Option<String> {
     let modified = metadata.modified().ok()?;
     let mtime = modified.duration_since(UNIX_EPOCH).ok()?.as_millis();
     let size = metadata.len();
@@ -406,14 +395,7 @@ impl FileOpsTool {
 
             let size_bytes = metadata.len();
             let history_jsonl = is_history_jsonl(&canonical);
-            perf.tag(
-                "path_class",
-                if history_jsonl {
-                    "history_jsonl"
-                } else {
-                    "other"
-                },
-            );
+            perf.tag("path_class", if history_jsonl { "history_jsonl" } else { "other" });
             let is_image = is_image_path(&canonical);
             let is_spool_output = is_tool_output_spool_path(&canonical);
             let is_legacy_request = is_legacy_read_request(&args, is_image);
@@ -460,8 +442,7 @@ impl FileOpsTool {
                         } = handler.handle_detailed(read_args).await?;
                         let full_text_read = is_full_text_read(&args, is_spool_output);
                         let response_content = if full_text_read {
-                            restore_exact_text_content(&content, size_bytes)
-                                .unwrap_or_else(|| content.clone())
+                            restore_exact_text_content(&content, size_bytes).unwrap_or_else(|| content.clone())
                         } else {
                             content.clone()
                         };
@@ -488,12 +469,8 @@ impl FileOpsTool {
                                 builder = builder.field("has_more", json!(true));
                                 builder = builder.field(
                                     "next_read_args",
-                                    ReadChunkContinuationArgs::new(
-                                        requested_path.clone(),
-                                        next_offset,
-                                        plan.limit,
-                                    )
-                                    .to_value(),
+                                    ReadChunkContinuationArgs::new(requested_path.clone(), next_offset, plan.limit)
+                                        .to_value(),
                                 );
                                 builder = builder.field(
                                     "next_action",
@@ -518,9 +495,7 @@ impl FileOpsTool {
                         // Byte-range reads set `applied_limit` to 0, so they are
                         // correctly excluded and use their own `offset_bytes`/
                         // `page_size_bytes` continuation path.
-                        else if has_more
-                            && applied_limit == crate::tools::read_limits::absolute_line_cap()
-                        {
+                        else if has_more && applied_limit == crate::tools::read_limits::absolute_line_cap() {
                             let next_offset = requested_offset.saturating_add(lines_returned);
                             let next_action = if capped_by_limit {
                                 "Read clamped to max_read_lines. \
@@ -535,12 +510,8 @@ impl FileOpsTool {
                                 .field("capped_by_limit", json!(capped_by_limit))
                                 .field(
                                     "next_read_args",
-                                    ReadChunkContinuationArgs::new(
-                                        requested_path.clone(),
-                                        next_offset,
-                                        applied_limit,
-                                    )
-                                    .to_value(),
+                                    ReadChunkContinuationArgs::new(requested_path.clone(), next_offset, applied_limit)
+                                        .to_value(),
                                 )
                                 .field("next_action", json!(next_action));
                         }
@@ -548,12 +519,7 @@ impl FileOpsTool {
                         let response = builder.build_json();
 
                         if full_text_read {
-                            self.track_exact_text_snapshot(
-                                &canonical,
-                                &response_content,
-                                size_bytes,
-                            )
-                            .await;
+                            self.track_exact_text_snapshot(&canonical, &response_content, size_bytes).await;
                         } else {
                             self.track_read_snapshot(&canonical).await;
                         }
@@ -644,8 +610,7 @@ impl FileOpsTool {
                 }
             }
 
-            let content_kind =
-                metadata.get("content_kind").and_then(Value::as_str).unwrap_or("text");
+            let content_kind = metadata.get("content_kind").and_then(Value::as_str).unwrap_or("text");
             let full_legacy_text_read = !use_paging && !truncated && content_kind == "text";
             let response = builder.build_json();
             if full_legacy_text_read {
@@ -685,8 +650,7 @@ impl FileOpsTool {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| ".".to_string());
-        let suggestion =
-            self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File).await;
+        let suggestion = self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File).await;
         Err(anyhow!(
             "Error: File not found: {}. Tried paths: {}.{} Use `exec_command.cmd` with `find {}` to discover available files.",
             path_str,
@@ -720,24 +684,18 @@ mod read_tests {
     #[test]
     fn tool_output_spool_path_detection() {
         assert!(is_tool_output_spool_path(Path::new(".vtcode/context/tool_outputs/run-123.txt")));
-        assert!(is_tool_output_spool_path(Path::new(
-            "/tmp/work/.vtcode/context/tool_outputs/run-123.txt"
-        )));
+        assert!(is_tool_output_spool_path(Path::new("/tmp/work/.vtcode/context/tool_outputs/run-123.txt")));
         assert!(!is_tool_output_spool_path(Path::new(".vtcode/history/session.jsonl")));
     }
 
     #[test]
     fn pty_session_id_detection_from_tool_output_path() {
         assert_eq!(
-            pty_session_id_from_tool_output_path(Path::new(
-                ".vtcode/context/tool_outputs/run-658ceef2.txt"
-            )),
+            pty_session_id_from_tool_output_path(Path::new(".vtcode/context/tool_outputs/run-658ceef2.txt")),
             Some("run-658ceef2".to_string())
         );
         assert_eq!(
-            pty_session_id_from_tool_output_path(Path::new(
-                ".vtcode/context/tool_outputs/command_session_123.txt"
-            )),
+            pty_session_id_from_tool_output_path(Path::new(".vtcode/context/tool_outputs/command_session_123.txt")),
             None
         );
     }
@@ -903,18 +861,10 @@ mod read_tests {
         fs::write(&file_path, "line1\nline2\n").unwrap();
 
         let metadata = fs::metadata(&file_path).unwrap();
-        let key_a = build_history_cache_key(
-            &file_path,
-            &metadata,
-            &json!({"offset_lines": 0, "page_size_lines": 1}),
-        )
-        .unwrap();
-        let key_b = build_history_cache_key(
-            &file_path,
-            &metadata,
-            &json!({"offset_lines": 1, "page_size_lines": 1}),
-        )
-        .unwrap();
+        let key_a =
+            build_history_cache_key(&file_path, &metadata, &json!({"offset_lines": 0, "page_size_lines": 1})).unwrap();
+        let key_b =
+            build_history_cache_key(&file_path, &metadata, &json!({"offset_lines": 1, "page_size_lines": 1})).unwrap();
 
         assert_ne!(key_a, key_b);
     }
@@ -926,8 +876,7 @@ mod read_tests {
         let test_file = workspace_root.join("test_file.txt");
 
         // Create test content with 10 lines
-        let test_content =
-            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n";
+        let test_content = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n";
         fs::write(&test_file, test_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1032,10 +981,8 @@ mod read_tests {
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
         // Bare legacy request (no max_* keys) would otherwise dump the whole file.
-        let input: Input =
-            serde_json::from_value(json!({ "path": test_file.to_string_lossy() })).unwrap();
-        let (read_content, metadata, truncated) =
-            file_ops.read_file_legacy(&test_file, &input).await.unwrap();
+        let input: Input = serde_json::from_value(json!({ "path": test_file.to_string_lossy() })).unwrap();
+        let (read_content, metadata, truncated) = file_ops.read_file_legacy(&test_file, &input).await.unwrap();
 
         let cap = crate::tools::read_limits::read_limit_lines();
         assert_eq!(read_content.lines().count(), cap);
@@ -1091,8 +1038,7 @@ mod read_tests {
         let test_file = workspace_root.join("test_file.txt");
 
         // Create test content with 50 lines
-        let test_content =
-            (1..=50).map(|i| format!("line-{i}")).collect::<Vec<_>>().join("\n") + "\n";
+        let test_content = (1..=50).map(|i| format!("line-{i}")).collect::<Vec<_>>().join("\n") + "\n";
         fs::write(&test_file, test_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1117,10 +1063,7 @@ mod read_tests {
         // Should report applied token budget
         #[allow(clippy::cast_sign_loss)]
         let expected_max_tokens = max_tokens as u64; // safe: max_tokens is positive literal
-        assert_eq!(
-            result["metadata"]["data"]["applied_max_tokens"].as_u64().unwrap(),
-            expected_max_tokens,
-        );
+        assert_eq!(result["metadata"]["data"]["applied_max_tokens"].as_u64().unwrap(), expected_max_tokens,);
     }
 
     #[tokio::test]
@@ -1332,10 +1275,7 @@ mod read_tests {
         assert_eq!(result["next_read_args"]["path"], "big.txt");
         // offset 1 + applied cap (default 400) lines read.
         assert_eq!(result["next_read_args"]["offset"], 401);
-        assert_eq!(
-            result["next_read_args"]["limit"],
-            crate::tools::read_limits::read_limit_lines()
-        );
+        assert_eq!(result["next_read_args"]["limit"], crate::tools::read_limits::read_limit_lines());
     }
 
     #[tokio::test]

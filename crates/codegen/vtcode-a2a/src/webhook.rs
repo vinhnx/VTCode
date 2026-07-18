@@ -58,19 +58,13 @@ impl WebhookNotifier {
         event: StreamingEvent,
     ) -> Result<(), WebhookError> {
         let response = SendStreamingMessageResponse { event };
-        let json = serde_json::to_string(&response)
-            .map_err(|e| WebhookError::Serialization(e.to_string()))?;
+        let json = serde_json::to_string(&response).map_err(|e| WebhookError::Serialization(e.to_string()))?;
 
         self.send_with_retry(&config.url, &json, config.authentication.as_deref()).await
     }
 
     /// Send webhook with retry logic
-    async fn send_with_retry(
-        &self,
-        url: &str,
-        json: &str,
-        auth: Option<&str>,
-    ) -> Result<(), WebhookError> {
+    async fn send_with_retry(&self, url: &str, json: &str, auth: Option<&str>) -> Result<(), WebhookError> {
         let mut last_error = None;
 
         for attempt in 0..=self.max_retries {
@@ -96,12 +90,7 @@ impl WebhookNotifier {
     }
 
     /// Send a single HTTP request
-    async fn send_request(
-        &self,
-        url: &str,
-        json: &str,
-        auth: Option<&str>,
-    ) -> Result<(), WebhookError> {
+    async fn send_request(&self, url: &str, json: &str, auth: Option<&str>) -> Result<(), WebhookError> {
         let mut request = self
             .client
             .post(url)

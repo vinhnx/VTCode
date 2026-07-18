@@ -11,9 +11,7 @@ use std::sync::Arc;
 
 use super::ToolRegistry;
 use super::registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
-use crate::components::{
-    wrap_native_tool_ci, wrap_native_tool_interactive, wrap_tool_ci, wrap_tool_interactive,
-};
+use crate::components::{wrap_native_tool_ci, wrap_native_tool_interactive, wrap_tool_ci, wrap_tool_interactive};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::traits::Tool;
@@ -56,9 +54,7 @@ impl RegistrationMetadataSnapshot {
     fn from_registration(registration: &ToolRegistration) -> Self {
         Self {
             name: Arc::<str>::from(registration.name()),
-            description: Arc::<str>::from(
-                registration.metadata().description().unwrap_or_default(),
-            ),
+            description: Arc::<str>::from(registration.metadata().description().unwrap_or_default()),
             parameter_schema: registration.parameter_schema().cloned(),
             config_schema: registration.config_schema().cloned(),
             state_schema: registration.state_schema().cloned(),
@@ -80,23 +76,16 @@ impl RegistrationMetadataSnapshot {
                 .description()
                 .map(Arc::<str>::from)
                 .unwrap_or_else(|| Arc::<str>::from(tool.description())),
-            parameter_schema: registration
-                .parameter_schema()
-                .cloned()
-                .or_else(|| tool.parameter_schema()),
+            parameter_schema: registration.parameter_schema().cloned().or_else(|| tool.parameter_schema()),
             config_schema: registration.config_schema().cloned().or_else(|| tool.config_schema()),
             state_schema: registration.state_schema().cloned().or_else(|| tool.state_schema()),
             prompt_path: registration
                 .prompt_path()
                 .map(str::to_string)
                 .or_else(|| tool.prompt_path().map(Cow::into_owned)),
-            default_permission: registration
-                .default_permission()
-                .unwrap_or_else(|| tool.default_permission()),
-            allow_patterns: leak_patterns(registration.metadata().allowlist())
-                .or_else(|| tool.allow_patterns()),
-            deny_patterns: leak_patterns(registration.metadata().denylist())
-                .or_else(|| tool.deny_patterns()),
+            default_permission: registration.default_permission().unwrap_or_else(|| tool.default_permission()),
+            allow_patterns: leak_patterns(registration.metadata().allowlist()).or_else(|| tool.allow_patterns()),
+            deny_patterns: leak_patterns(registration.metadata().denylist()).or_else(|| tool.deny_patterns()),
         }
     }
 }
@@ -175,8 +164,7 @@ where
     T: Tool + Send + Sync,
 {
     fn from_registration(inner: T, registration: &ToolRegistration) -> Self {
-        let metadata =
-            RegistrationMetadataSnapshot::from_registration_with_tool(registration, &inner);
+        let metadata = RegistrationMetadataSnapshot::from_registration_with_tool(registration, &inner);
         Self { inner, metadata }
     }
 }
@@ -264,8 +252,7 @@ struct RegistrationBackedDynTool {
 
 impl RegistrationBackedDynTool {
     fn from_registration(inner: Arc<dyn Tool>, registration: &ToolRegistration) -> Self {
-        let metadata =
-            RegistrationMetadataSnapshot::from_registration_with_tool(registration, inner.as_ref());
+        let metadata = RegistrationMetadataSnapshot::from_registration_with_tool(registration, inner.as_ref());
         Self { inner, metadata }
     }
 }
@@ -354,8 +341,7 @@ fn wrap_registered_trait_object_tool(
     workspace_root: PathBuf,
     mode: CgpRuntimeMode,
 ) -> Arc<dyn Tool> {
-    let tool: Arc<dyn Tool> =
-        Arc::new(RegistrationBackedDynTool::from_registration(tool, registration));
+    let tool: Arc<dyn Tool> = Arc::new(RegistrationBackedDynTool::from_registration(tool, registration));
     match mode {
         CgpRuntimeMode::Interactive => Arc::new(wrap_tool_interactive(tool, workspace_root)),
         CgpRuntimeMode::Ci => Arc::new(wrap_tool_ci(tool, workspace_root)),
@@ -419,15 +405,13 @@ impl ToolRegistry {
         }
 
         match registration.handler() {
-            ToolHandler::TraitObject(tool) => Some(ToolHandler::TraitObject(
-                wrap_registered_trait_object_tool(registration, tool, workspace, mode),
-            )),
+            ToolHandler::TraitObject(tool) => {
+                Some(ToolHandler::TraitObject(wrap_registered_trait_object_tool(registration, tool, workspace, mode)))
+            }
             ToolHandler::RegistryFn(_) => {
                 let tool = RegistryFnTool::from_registration(self.clone(), registration)?;
                 Some(ToolHandler::TraitObject(match mode {
-                    CgpRuntimeMode::Interactive => {
-                        Arc::new(wrap_native_tool_interactive(tool, workspace))
-                    }
+                    CgpRuntimeMode::Interactive => Arc::new(wrap_native_tool_interactive(tool, workspace)),
                     CgpRuntimeMode::Ci => Arc::new(wrap_native_tool_ci(tool, workspace)),
                 }))
             }
@@ -491,16 +475,10 @@ impl ToolRegistry {
         let workspace = self.workspace_root_owned();
         let tool_name = Arc::<str>::from(tool.name());
         let registration = match mode {
-            CgpRuntimeMode::Interactive => ToolRegistration::from_cgp_tool(
-                tool_name,
-                capability,
-                wrap_tool_interactive(tool, workspace),
-            ),
-            CgpRuntimeMode::Ci => ToolRegistration::from_cgp_tool(
-                tool_name,
-                capability,
-                wrap_tool_ci(tool, workspace),
-            ),
+            CgpRuntimeMode::Interactive => {
+                ToolRegistration::from_cgp_tool(tool_name, capability, wrap_tool_interactive(tool, workspace))
+            }
+            CgpRuntimeMode::Ci => ToolRegistration::from_cgp_tool(tool_name, capability, wrap_tool_ci(tool, workspace)),
         };
         self.register_tool(registration).await
     }
@@ -543,11 +521,7 @@ mod tests {
     async fn enable_cgp_pipeline_wraps_tools() {
         let registry = ToolRegistry::new(PathBuf::from("/tmp/test")).await;
         let tool: Arc<dyn Tool> = Arc::new(DummyTool);
-        let reg = ToolRegistration::from_tool(
-            "dummy_cgp_test",
-            crate::config::types::CapabilityLevel::Basic,
-            tool,
-        );
+        let reg = ToolRegistration::from_tool("dummy_cgp_test", crate::config::types::CapabilityLevel::Basic, tool);
         registry.register_tool(reg).await.expect("should register");
 
         registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
@@ -560,10 +534,7 @@ mod tests {
             .execute(serde_json::json!({"test": true}))
             .await
             .expect("should execute");
-        assert_eq!(
-            result.get("echoed").and_then(|v| v.get("test")),
-            Some(&serde_json::json!(true))
-        );
+        assert_eq!(result.get("echoed").and_then(|v| v.get("test")), Some(&serde_json::json!(true)));
     }
 
     #[tokio::test]
@@ -641,11 +612,7 @@ mod tests {
     async fn enable_cgp_pipeline_ci_mode() {
         let registry = ToolRegistry::new(PathBuf::from("/tmp/test")).await;
         let tool: Arc<dyn Tool> = Arc::new(DummyTool);
-        let reg = ToolRegistration::from_tool(
-            "dummy_cgp_test",
-            crate::config::types::CapabilityLevel::Basic,
-            tool,
-        );
+        let reg = ToolRegistration::from_tool("dummy_cgp_test", crate::config::types::CapabilityLevel::Basic, tool);
         registry.register_tool(reg).await.expect("should register");
 
         registry.enable_cgp_pipeline(CgpRuntimeMode::Ci).await;
@@ -658,10 +625,7 @@ mod tests {
             .execute(serde_json::json!({"ci": "mode"}))
             .await
             .expect("should execute");
-        assert_eq!(
-            result.get("echoed").and_then(|v| v.get("ci")).and_then(|v| v.as_str()),
-            Some("mode")
-        );
+        assert_eq!(result.get("echoed").and_then(|v| v.get("ci")).and_then(|v| v.as_str()), Some("mode"));
     }
 
     #[tokio::test]
@@ -670,11 +634,7 @@ mod tests {
         let tool: Arc<dyn Tool> = Arc::new(DummyTool);
 
         registry
-            .register_cgp_tool(
-                tool,
-                crate::config::types::CapabilityLevel::Basic,
-                CgpRuntimeMode::Interactive,
-            )
+            .register_cgp_tool(tool, crate::config::types::CapabilityLevel::Basic, CgpRuntimeMode::Interactive)
             .await
             .expect("should register");
 
@@ -688,11 +648,7 @@ mod tests {
         let tool: Arc<dyn Tool> = Arc::new(DummyTool);
 
         registry
-            .register_cgp_tool(
-                tool,
-                crate::config::types::CapabilityLevel::Basic,
-                CgpRuntimeMode::Interactive,
-            )
+            .register_cgp_tool(tool, crate::config::types::CapabilityLevel::Basic, CgpRuntimeMode::Interactive)
             .await
             .expect("should register");
 
@@ -894,10 +850,7 @@ mod tests {
         assert_eq!(result.get("path").and_then(|v| v.as_str()), Some("late-native"));
     }
 
-    fn registry_fn_test_executor<'a>(
-        _registry: &'a ToolRegistry,
-        args: Value,
-    ) -> BoxFuture<'a, Result<Value>> {
+    fn registry_fn_test_executor<'a>(_registry: &'a ToolRegistry, args: Value) -> BoxFuture<'a, Result<Value>> {
         Box::pin(async move {
             Ok(serde_json::json!({
                 "tool_name": "registry_fn_cgp_test",

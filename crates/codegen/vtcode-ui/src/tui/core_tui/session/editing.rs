@@ -54,9 +54,7 @@ fn previous_word_boundary(content: &str, cursor: usize) -> usize {
     }
 
     let prefix = &content[..cursor];
-    let Some((first_non_ws_idx, ch)) =
-        prefix.char_indices().rev().find(|&(_, ch)| !ch.is_whitespace())
-    else {
+    let Some((first_non_ws_idx, ch)) = prefix.char_indices().rev().find(|&(_, ch)| !ch.is_whitespace()) else {
         return 0;
     };
 
@@ -380,8 +378,7 @@ impl Session {
 
     /// Move cursor left to the start of the previous word
     pub(crate) fn move_left_word(&mut self) {
-        let cursor =
-            previous_word_boundary(self.input_manager.content(), self.input_manager.cursor());
+        let cursor = previous_word_boundary(self.input_manager.content(), self.input_manager.cursor());
         self.input_manager.set_cursor(cursor);
     }
     /// Move cursor right to the start of the next word
@@ -408,10 +405,7 @@ impl Session {
     }
 
     /// Remember submitted input in history
-    pub(crate) fn remember_submitted_input(
-        &mut self,
-        submitted: super::input_manager::InputHistoryEntry,
-    ) {
+    pub(crate) fn remember_submitted_input(&mut self, submitted: super::input_manager::InputHistoryEntry) {
         self.input_manager.add_to_history(submitted);
     }
 

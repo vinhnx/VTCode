@@ -20,10 +20,7 @@ impl<'a> DeleteOperation<'a> {
                 OperationState::DeletedFile { original_path: full_path, backup },
                 format!("Deleted file: {}", self.path),
             )),
-            None => Ok(OperationEffect::skipped(format!(
-                "File not found, skipped deletion: {}",
-                self.path
-            ))),
+            None => Ok(OperationEffect::skipped(format!("File not found, skipped deletion: {}", self.path))),
         }
     }
 }

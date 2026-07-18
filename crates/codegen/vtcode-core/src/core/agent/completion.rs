@@ -117,8 +117,7 @@ fn structured_contract_has_unresolved_sections(response_text: &str) -> bool {
     for line in response_text.lines() {
         let line_lower = line.trim().to_lowercase();
         if line_lower.starts_with('#') {
-            in_open_questions =
-                line_lower == "## open questions" || line_lower == "# open questions";
+            in_open_questions = line_lower == "## open questions" || line_lower == "# open questions";
             in_verification = line_lower == "## verification" || line_lower == "# verification";
             continue;
         }
@@ -174,17 +173,14 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
         .skip(1)
         .take(2)
         .any(|m| {
-            let normalized_prev =
-                m.content.as_text().split_whitespace().collect::<Vec<_>>().join(" ");
+            let normalized_prev = m.content.as_text().split_whitespace().collect::<Vec<_>>().join(" ");
             normalized_prev == normalized_current
         });
 
     if repeated {
-        let warning =
-            "Repetitive assistant response detected. Breaking potential loop.".to_string();
+        let warning = "Repetitive assistant response detected. Breaking potential loop.".to_string();
         session_state.warnings.push(warning);
-        session_state.consecutive_idle_turns =
-            session_state.consecutive_idle_turns.saturating_add(1);
+        session_state.consecutive_idle_turns = session_state.consecutive_idle_turns.saturating_add(1);
         return true;
     }
 

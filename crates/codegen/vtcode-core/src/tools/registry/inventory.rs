@@ -101,11 +101,8 @@ impl ToolInventory {
         // Clone once for command_tool (needs ownership), share reference for others
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
-        let file_ops_tool = FileOpsTool::new_with_monitor(
-            workspace_root.clone(),
-            Arc::clone(&grep_search),
-            edited_file_monitor,
-        );
+        let file_ops_tool =
+            FileOpsTool::new_with_monitor(workspace_root.clone(), Arc::clone(&grep_search), edited_file_monitor);
         Self {
             workspace_root,
             tools: Arc::new(RwLock::new(FxHashMap::default())),
@@ -178,8 +175,7 @@ impl ToolInventory {
         }
 
         {
-            let rig_tool =
-                RigRegistrationTool::from_registration(name_lower.clone(), &registration);
+            let rig_tool = RigRegistrationTool::from_registration(name_lower.clone(), &registration);
             let mut tools = self.tools.write();
             let replaced = tools.insert(
                 name_lower.clone(),
@@ -312,8 +308,7 @@ impl ToolInventory {
 
     pub fn has_tool(&self, name: &str) -> bool {
         let name_lower = name.to_ascii_lowercase();
-        self.tools.read().contains_key(&name_lower)
-            || self.state.read().aliases.contains_key(&name_lower)
+        self.tools.read().contains_key(&name_lower) || self.state.read().aliases.contains_key(&name_lower)
     }
 
     pub fn registrations_snapshot(&self) -> Vec<ToolRegistration> {
@@ -449,16 +444,12 @@ mod tests {
     }
 
     fn make_visible_registration(name: impl Into<Arc<str>>) -> ToolRegistration {
-        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
-            Box::pin(async { Ok(Value::Null) })
-        })
+        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| Box::pin(async { Ok(Value::Null) }))
     }
 
     fn make_hidden_registration(name: impl Into<Arc<str>>) -> ToolRegistration {
-        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| {
-            Box::pin(async { Ok(Value::Null) })
-        })
-        .with_llm_visibility(false)
+        ToolRegistration::new(name, CapabilityLevel::Basic, false, |_, _| Box::pin(async { Ok(Value::Null) }))
+            .with_llm_visibility(false)
     }
 
     fn rig_definition_names(inventory: &ToolInventory) -> Vec<String> {
@@ -520,11 +511,7 @@ mod tests {
 
         // Should still find the tool for internal tool-to-tool calls
         let registration = inventory.registration_for("internal_only").unwrap();
-        assert_eq!(
-            registration.name(),
-            "internal_only",
-            "Hidden tool without alias should still be accessible"
-        );
+        assert_eq!(registration.name(), "internal_only", "Hidden tool without alias should still be accessible");
     }
 
     #[test]
@@ -555,10 +542,7 @@ mod tests {
         assert!(usage_entry.is_some(), "Alias usage should still be tracked");
         let (canonical, count) = usage_entry.unwrap();
         assert_eq!(canonical, "file_operation");
-        assert_eq!(
-            *count, initial_count,
-            "Direct hidden registration lookups should not increment alias usage"
-        );
+        assert_eq!(*count, initial_count, "Direct hidden registration lookups should not increment alias usage");
     }
 
     #[test]
@@ -588,10 +572,7 @@ mod tests {
             .map(|registration| registration.name().to_string())
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            rig_definition_names(&inventory),
-            vec!["zeta_tool", "alpha_tool", "middle_tool"]
-        );
+        assert_eq!(rig_definition_names(&inventory), vec!["zeta_tool", "alpha_tool", "middle_tool"]);
         assert_eq!(snapshot_names, rig_definition_names(&inventory));
     }
 
@@ -601,15 +582,11 @@ mod tests {
 
         let tool1 = make_visible_registration("my_tool")
             .with_description("first")
-            .with_parameter_schema(
-                json!({"type": "object", "properties": {"old": {"type": "string"}}}),
-            )
+            .with_parameter_schema(json!({"type": "object", "properties": {"old": {"type": "string"}}}))
             .with_aliases(["old_alias"]);
         let tool2 = make_visible_registration("my_tool")
             .with_description("second")
-            .with_parameter_schema(
-                json!({"type": "object", "properties": {"new": {"type": "string"}}}),
-            )
+            .with_parameter_schema(json!({"type": "object", "properties": {"new": {"type": "string"}}}))
             .with_aliases(["new_alias"]);
         let trailing = make_visible_registration("trailing_tool");
 
@@ -637,10 +614,7 @@ mod tests {
             tool_set.get_tool_definitions().unwrap()
         };
         assert_eq!(rig_defs[0].description, "second");
-        assert_eq!(
-            rig_defs[0].parameters,
-            json!({"type": "object", "properties": {"new": {"type": "string"}}})
-        );
+        assert_eq!(rig_defs[0].parameters, json!({"type": "object", "properties": {"new": {"type": "string"}}}));
         assert_eq!(inventory.registrations_snapshot()[0].metadata().description(), Some("second"));
     }
 
@@ -676,10 +650,9 @@ mod tests {
         for idx in 0..1001 {
             let name = format!("tool_{idx}");
             let leaked_name: &'static str = Box::leak(name.into_boxed_str());
-            let registration =
-                ToolRegistration::new(leaked_name, CapabilityLevel::Basic, false, |_, _| {
-                    Box::pin(async { Ok(Value::Null) })
-                });
+            let registration = ToolRegistration::new(leaked_name, CapabilityLevel::Basic, false, |_, _| {
+                Box::pin(async { Ok(Value::Null) })
+            });
             inventory.register_tool(registration).unwrap();
         }
 
@@ -693,8 +666,7 @@ mod tests {
         {
             let mut state = inventory.state.write();
             state.frequently_used.insert("tool_0".to_string());
-            state.last_cache_cleanup =
-                Instant::now().checked_sub(Duration::from_secs(301)).unwrap();
+            state.last_cache_cleanup = Instant::now().checked_sub(Duration::from_secs(301)).unwrap();
         }
 
         inventory.cleanup_cache_if_needed();

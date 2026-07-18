@@ -155,10 +155,7 @@ pub struct NativePlugin {
     thread_safe: bool,
 }
 
-fn ensure_non_null_c_string_ptr(
-    ptr: *const c_char,
-    context: &'static str,
-) -> Result<NonNull<c_char>> {
+fn ensure_non_null_c_string_ptr(ptr: *const c_char, context: &'static str) -> Result<NonNull<c_char>> {
     NonNull::new(ptr.cast_mut()).ok_or_else(|| anyhow!("{context} returned null pointer"))
 }
 
@@ -233,40 +230,29 @@ impl NativePlugin {
     /// Create a new native plugin from a loaded library
     pub fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
-        let version_fn =
-            get_plugin_symbol::<PluginVersionFn>(&library, b"vtcode_plugin_version\0")?;
+        let version_fn = get_plugin_symbol::<PluginVersionFn>(&library, b"vtcode_plugin_version\0")?;
 
         // SAFETY: function pointer was loaded from a validated ABI symbol.
         let abi_version = unsafe { version_fn() };
         if abi_version != PLUGIN_ABI_VERSION {
-            return Err(anyhow!(
-                "Plugin ABI version mismatch: expected {PLUGIN_ABI_VERSION}, got {abi_version}"
-            ));
+            return Err(anyhow!("Plugin ABI version mismatch: expected {PLUGIN_ABI_VERSION}, got {abi_version}"));
         }
 
         // Optional cleanup function for plugin-owned strings.
-        let free_string_fn =
-            get_plugin_symbol::<PluginFreeStringFn>(&library, b"vtcode_plugin_free_string\0").ok();
+        let free_string_fn = get_plugin_symbol::<PluginFreeStringFn>(&library, b"vtcode_plugin_free_string\0").ok();
 
         // Load metadata
-        let metadata_fn =
-            get_plugin_symbol::<PluginMetadataFn>(&library, b"vtcode_plugin_metadata\0")?;
+        let metadata_fn = get_plugin_symbol::<PluginMetadataFn>(&library, b"vtcode_plugin_metadata\0")?;
 
         // SAFETY: function pointer loaded from the validated ABI symbol.
-        let metadata_ptr =
-            ensure_non_null_c_string_ptr(unsafe { metadata_fn() }, "Plugin metadata function")?;
-        let metadata_json = decode_plugin_c_string(
-            metadata_ptr,
-            free_string_fn,
-            "Plugin metadata is not valid UTF-8",
-        )?;
+        let metadata_ptr = ensure_non_null_c_string_ptr(unsafe { metadata_fn() }, "Plugin metadata function")?;
+        let metadata_json = decode_plugin_c_string(metadata_ptr, free_string_fn, "Plugin metadata is not valid UTF-8")?;
 
         let metadata: PluginMetadata =
             serde_json::from_str(&metadata_json).context("Failed to parse plugin metadata JSON")?;
 
         // Load execute function
-        let execute_fn =
-            get_plugin_symbol::<PluginExecuteFn>(&library, b"vtcode_plugin_execute\0")?;
+        let execute_fn = get_plugin_symbol::<PluginExecuteFn>(&library, b"vtcode_plugin_execute\0")?;
 
         Ok(Self {
             _library: library,
@@ -281,10 +267,8 @@ impl NativePlugin {
 
     /// Execute the plugin with the given context
     pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
-        let input_json =
-            serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
-        let input_cstr =
-            CString::new(input_json).context("Plugin context contains internal null bytes")?;
+        let input_json = serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
+        let input_cstr = CString::new(input_json).context("Plugin context contains internal null bytes")?;
 
         // Serialization logic from Antithesis Part 2 (Challenge 2):
         // If the plugin is not explicitly marked as thread-safe, we must serialize
@@ -313,18 +297,11 @@ impl NativePlugin {
         // 1. The `input_cstr` pointer is valid for the duration of this call.
         // 2. The `execute_fn` obeys the plugin ABI and expects a nul-terminated string.
         // 3. VT Code either holds `execution_lock` or the plugin is explicitly reentrant (thread_safe: true).
-        let result_ptr = ensure_non_null_c_string_ptr(
-            unsafe { (self.execute_fn)(input_cstr.as_ptr()) },
-            "Plugin execute function",
-        )?;
-        let result_json = decode_plugin_c_string(
-            result_ptr,
-            self.free_string_fn,
-            "Plugin result is not valid UTF-8",
-        )?;
+        let result_ptr =
+            ensure_non_null_c_string_ptr(unsafe { (self.execute_fn)(input_cstr.as_ptr()) }, "Plugin execute function")?;
+        let result_json = decode_plugin_c_string(result_ptr, self.free_string_fn, "Plugin result is not valid UTF-8")?;
 
-        let result: PluginResult =
-            serde_json::from_str(&result_json).context("Failed to parse plugin result JSON")?;
+        let result: PluginResult = serde_json::from_str(&result_json).context("Failed to parse plugin result JSON")?;
 
         Ok(result)
     }
@@ -466,15 +443,12 @@ impl PluginLoader {
             }
         }
 
-        Err(anyhow!(
-            "No dynamic library found in {plugin_dir:?}. Expected one of: {lib_name}, or alternatives"
-        ))
+        Err(anyhow!("No dynamic library found in {plugin_dir:?}. Expected one of: {lib_name}, or alternatives"))
     }
 
     /// Get expected library name from plugin metadata
     fn get_library_name_from_metadata(&self, metadata_path: &Path) -> Result<String> {
-        let metadata_content =
-            std::fs::read_to_string(metadata_path).context("Failed to read plugin metadata")?;
+        let metadata_content = std::fs::read_to_string(metadata_path).context("Failed to read plugin metadata")?;
         let metadata: serde_json::Value =
             serde_json::from_str(&metadata_content).context("Invalid plugin metadata JSON")?;
 
@@ -769,9 +743,8 @@ mod tests {
         let raw = CString::new("{\"ok\":true}").expect("valid C string").into_raw();
         let ptr = NonNull::new(raw).expect("non-null raw pointer");
 
-        let decoded =
-            decode_plugin_c_string(ptr, Some(test_free_string), "Plugin result is not valid UTF-8")
-                .expect("valid UTF-8 payload");
+        let decoded = decode_plugin_c_string(ptr, Some(test_free_string), "Plugin result is not valid UTF-8")
+            .expect("valid UTF-8 payload");
 
         assert_eq!(decoded, "{\"ok\":true}");
         TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
@@ -786,12 +759,8 @@ mod tests {
             .into_raw();
         let ptr = NonNull::new(raw).expect("non-null raw pointer");
 
-        let err = decode_plugin_c_string(
-            ptr,
-            Some(test_free_string),
-            "Plugin payload is not valid UTF-8",
-        )
-        .expect_err("invalid UTF-8 should fail decoding");
+        let err = decode_plugin_c_string(ptr, Some(test_free_string), "Plugin payload is not valid UTF-8")
+            .expect_err("invalid UTF-8 should fail decoding");
 
         assert!(err.to_string().contains("Plugin payload is not valid UTF-8"));
         TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));

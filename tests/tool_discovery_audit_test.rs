@@ -4,9 +4,7 @@ use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::CapabilityLevel;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::handlers::{
-    SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile,
-};
+use vtcode_core::tools::handlers::{SessionSurface, SessionToolsConfig, ToolModelCapabilities, ToolProfile};
 
 fn default_public_tool_names() -> Vec<String> {
     vec![

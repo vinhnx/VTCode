@@ -76,10 +76,7 @@ impl PodCatalog {
     }
 
     /// Split all profiles into those compatible with `pod` and those that are not.
-    pub fn compatible_profiles<'a>(
-        &'a self,
-        pod: &PodState,
-    ) -> (Vec<&'a PodProfile>, Vec<&'a PodProfile>) {
+    pub fn compatible_profiles<'a>(&'a self, pod: &PodState) -> (Vec<&'a PodProfile>, Vec<&'a PodProfile>) {
         let mut compatible = Vec::new();
         let mut incompatible = Vec::new();
 

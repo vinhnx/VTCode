@@ -78,20 +78,20 @@ fn is_semantic_rule(rule: &str) -> bool {
 fn normalize_tool_name_to_semantic(tool_name: &str) -> String {
     match tool_name.to_ascii_lowercase().as_str() {
         // Read operations
-        "read_file" | "read" | "grep_file" | "grep" | "list_files" | "list" | "glob"
-        | "listfiles" | "grepfile" | "code_search" | "codesearch" => "read".to_string(),
+        "read_file" | "read" | "grep_file" | "grep" | "list_files" | "list" | "glob" | "listfiles" | "grepfile"
+        | "code_search" | "codesearch" => "read".to_string(),
 
         // Write operations
-        "write_file" | "write" | "create_file" | "createfile" | "delete_file" | "deletefile"
-        | "move_file" | "movefile" | "copy_file" | "copyfile" => "write".to_string(),
+        "write_file" | "write" | "create_file" | "createfile" | "delete_file" | "deletefile" | "move_file"
+        | "movefile" | "copy_file" | "copyfile" => "write".to_string(),
 
         // Edit operations
-        "edit_file" | "edit" | "apply_patch" | "applypatch" | "search_replace"
-        | "searchreplace" | "file_op" | "fileop" | "patch" => "edit".to_string(),
+        "edit_file" | "edit" | "apply_patch" | "applypatch" | "search_replace" | "searchreplace" | "file_op"
+        | "fileop" | "patch" => "edit".to_string(),
 
         // Bash operations
-        "bash" | "shell" | "command" | "exec_command" | "execcommand" | "run_pty_cmd"
-        | "runptycmd" | "execute_code" | "executecode" => "bash".to_string(),
+        "bash" | "shell" | "command" | "exec_command" | "execcommand" | "run_pty_cmd" | "runptycmd"
+        | "execute_code" | "executecode" => "bash".to_string(),
 
         // Web fetch operations
         "webfetch" | "web_fetch" | "fetch" => "webfetch".to_string(),
@@ -250,9 +250,7 @@ pub struct AutoPermissionConfig {
     pub environment: AutoPermissionEnvironmentConfig,
 }
 
-fn deserialize_auto_permission_config<'de, D>(
-    deserializer: D,
-) -> Result<AutoPermissionConfig, D::Error>
+fn deserialize_auto_permission_config<'de, D>(deserializer: D) -> Result<AutoPermissionConfig, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -384,7 +382,8 @@ fn default_auto_permission_allow_exceptions() -> Vec<String> {
     vec![
         "Allow read-only tools and read-only browsing/search actions.".to_string(),
         "Allow file edits and writes inside the current workspace when the path is not protected.".to_string(),
-        "Allow pushes only to the current session branch or configured git remotes inside the trusted environment.".to_string(),
+        "Allow pushes only to the current session branch or configured git remotes inside the trusted environment."
+            .to_string(),
     ]
 }
 
@@ -497,14 +496,8 @@ mod tests {
         assert_eq!(config.auto_permission.model, "gpt-5-mini");
         assert_eq!(config.auto_permission.max_consecutive_denials, 2);
         assert!(!config.auto_permission.drop_broad_allow_rules);
-        assert_eq!(
-            config.auto_permission.environment.trusted_paths,
-            vec!["/work/project".to_string()]
-        );
-        assert_eq!(
-            config.auto_permission.environment.trusted_domains,
-            vec!["example.com".to_string()]
-        );
+        assert_eq!(config.auto_permission.environment.trusted_paths, vec!["/work/project".to_string()]);
+        assert_eq!(config.auto_permission.environment.trusted_domains, vec!["example.com".to_string()]);
     }
 
     #[test]
@@ -556,10 +549,7 @@ mod tests {
 
     #[test]
     fn normalizes_tool_name_with_path_specifier() {
-        assert_eq!(
-            super::normalize_permission_rule("read_file(/src/**/*.rs)"),
-            "read(/src/**/*.rs)"
-        );
+        assert_eq!(super::normalize_permission_rule("read_file(/src/**/*.rs)"), "read(/src/**/*.rs)");
         assert_eq!(super::normalize_permission_rule("write_file(/docs/**)"), "write(/docs/**)");
     }
 

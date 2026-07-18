@@ -15,9 +15,7 @@ use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use vtcode_commons::async_utils::read_exact_uninit;
 
-pub use diff_preview::{
-    build_diff_preview, diff_preview_error_skip, diff_preview_size_skip, diff_preview_suppressed,
-};
+pub use diff_preview::{build_diff_preview, diff_preview_error_skip, diff_preview_size_skip, diff_preview_suppressed};
 pub use tool::FileOpsTool;
 pub use vtcode_commons::fs::is_image_path;
 
@@ -64,9 +62,9 @@ pub(crate) async fn read_byte_range(
         .await
         .with_context(|| format!("Failed to open: {}", file_path.display()))?;
 
-    file.seek(std::io::SeekFrom::Start(offset_bytes)).await.with_context(|| {
-        format!("Failed to seek to offset {} in: {}", offset_bytes, file_path.display())
-    })?;
+    file.seek(std::io::SeekFrom::Start(offset_bytes))
+        .await
+        .with_context(|| format!("Failed to seek to offset {} in: {}", offset_bytes, file_path.display()))?;
 
     // Clamp read size to file bounds, guarding against overflow
     let page_size_u64 = page_size_bytes as u64;
@@ -77,12 +75,7 @@ pub(crate) async fn read_byte_range(
     let actual_read_size = (end_pos - offset_bytes) as usize;
 
     let buffer = read_exact_uninit(&mut file, actual_read_size).await.with_context(|| {
-        format!(
-            "Failed to read {} bytes from offset {} in: {}",
-            actual_read_size,
-            offset_bytes,
-            file_path.display()
-        )
+        format!("Failed to read {} bytes from offset {} in: {}", actual_read_size, offset_bytes, file_path.display())
     })?;
 
     let raw = String::from_utf8_lossy(&buffer).into_owned();
@@ -185,9 +178,7 @@ pub(crate) fn restore_exact_text_content(content: &str, size_bytes: u64) -> Opti
     match size_bytes.checked_sub(content_size) {
         Some(0) => Some(content.to_string()),
         Some(1) => Some(format!("{content}\n")),
-        Some(2) if content.contains("\r\n") || !content.contains('\n') => {
-            Some(format!("{content}\r\n"))
-        }
+        Some(2) if content.contains("\r\n") || !content.contains('\n') => Some(format!("{content}\r\n")),
         _ => None,
     }
 }

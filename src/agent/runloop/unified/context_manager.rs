@@ -206,10 +206,7 @@ impl ContextManager {
         };
     }
 
-    pub(crate) async fn build_system_prompt(
-        &mut self,
-        params: SystemPromptParams,
-    ) -> Result<String> {
+    pub(crate) async fn build_system_prompt(&mut self, params: SystemPromptParams) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
         }
@@ -243,10 +240,7 @@ impl ContextManager {
     ///
     /// This keeps request assembly deterministic and trims no-op artifacts while preserving
     /// tool-calling semantics.
-    pub(crate) fn normalize_history_for_request(
-        &self,
-        history: &[uni::Message],
-    ) -> Vec<uni::Message> {
+    pub(crate) fn normalize_history_for_request(&self, history: &[uni::Message]) -> Vec<uni::Message> {
         if history.is_empty() {
             return Vec::new();
         }
@@ -261,9 +255,7 @@ impl ContextManager {
                 continue;
             }
 
-            if write > 0
-                && can_merge_consecutive_assistant_text(&normalized[write - 1], &normalized[read])
-            {
+            if write > 0 && can_merge_consecutive_assistant_text(&normalized[write - 1], &normalized[read]) {
                 // Clone only the current message for merging (much cheaper than cloning all).
                 let current = normalized[read].clone();
                 append_assistant_text(&mut normalized[write - 1], &current);
@@ -291,9 +283,7 @@ impl ContextManager {
             .editor_context_snapshot
             .as_ref()
             .filter(|snapshot| ide_context_config.allows_provider_family(snapshot.provider_family))
-            .and_then(|snapshot| {
-                snapshot.prompt_block(workspace, ide_context_config.include_selection_text)
-            })?;
+            .and_then(|snapshot| snapshot.prompt_block(workspace, ide_context_config.include_selection_text))?;
 
         Some(uni::Message::user(block))
     }
@@ -315,9 +305,7 @@ impl ContextManager {
         self.instruction_activity_paths
             .iter()
             .find(|path| path.starts_with(workspace))
-            .and_then(|path| {
-                path.parent().filter(|p| p.starts_with(workspace)).map(Path::to_path_buf)
-            })
+            .and_then(|path| path.parent().filter(|p| p.starts_with(workspace)).map(Path::to_path_buf))
             .or_else(|| Some(workspace.clone()))
     }
 
@@ -394,8 +382,7 @@ fn can_merge_consecutive_assistant_text(previous: &uni::Message, current: &uni::
         return false;
     }
 
-    matches!(previous.content, uni::MessageContent::Text(_))
-        && matches!(current.content, uni::MessageContent::Text(_))
+    matches!(previous.content, uni::MessageContent::Text(_)) && matches!(current.content, uni::MessageContent::Text(_))
 }
 
 fn append_assistant_text(previous: &mut uni::Message, current: &uni::Message) {

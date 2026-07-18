@@ -4,8 +4,8 @@ use crate::tools::handlers::turn_diff_tracker::{FileChange, FileChangeKind, Turn
 use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use vtcode_exec_events::trace::{
-    Contributor, RelatedResource, TraceConversation, TraceFile, TraceMetadata, TraceRange,
-    TraceRecord, TraceRecordBuilder, VtCodeMetadata, compute_content_hash, normalize_model_id,
+    Contributor, RelatedResource, TraceConversation, TraceFile, TraceMetadata, TraceRange, TraceRecord,
+    TraceRecordBuilder, VtCodeMetadata, compute_content_hash, normalize_model_id,
 };
 
 // Re-export TraceContext for convenience
@@ -33,9 +33,7 @@ impl TraceGenerator {
 
         // Generate files with attributed ranges
         for (path, change) in tracker.changes() {
-            if let Some(trace_file) =
-                Self::file_change_to_trace_file(path, change, ctx, &workspace_path)
-            {
+            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
                 builder = builder.file(trace_file);
             }
         }
@@ -56,18 +54,11 @@ impl TraceGenerator {
         let trace = builder.build();
 
         // Only return if there are actual attributions
-        if trace.has_attributions() {
-            Some(trace)
-        } else {
-            None
-        }
+        if trace.has_attributions() { Some(trace) } else { None }
     }
 
     /// Generate a trace record from raw file changes.
-    pub fn from_changes(
-        changes: &HashMap<PathBuf, FileChange>,
-        ctx: &TraceContext,
-    ) -> Option<TraceRecord> {
+    pub fn from_changes(changes: &HashMap<PathBuf, FileChange>, ctx: &TraceContext) -> Option<TraceRecord> {
         if changes.is_empty() {
             return None;
         }
@@ -81,9 +72,7 @@ impl TraceGenerator {
         let workspace_path = ctx.workspace_path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         for (path, change) in changes {
-            if let Some(trace_file) =
-                Self::file_change_to_trace_file(path, change, ctx, &workspace_path)
-            {
+            if let Some(trace_file) = Self::file_change_to_trace_file(path, change, ctx, &workspace_path) {
                 builder = builder.file(trace_file);
             }
         }
@@ -101,11 +90,7 @@ impl TraceGenerator {
         builder = builder.metadata(metadata);
 
         let trace = builder.build();
-        if trace.has_attributions() {
-            Some(trace)
-        } else {
-            None
-        }
+        if trace.has_attributions() { Some(trace) } else { None }
     }
 
     /// Convert a FileChange to a TraceFile.
@@ -116,8 +101,7 @@ impl TraceGenerator {
         workspace_path: &Path,
     ) -> Option<TraceFile> {
         // Get relative path from workspace
-        let relative_path =
-            path.strip_prefix(workspace_path).unwrap_or(path).to_string_lossy().to_string();
+        let relative_path = path.strip_prefix(workspace_path).unwrap_or(path).to_string_lossy().to_string();
 
         // Determine line range and content for hash
         let (line_range, content_for_hash) = match &change.kind {
@@ -183,11 +167,8 @@ impl TraceGenerator {
         // Add session URL if available
         if let Some(ref session_id) = ctx.session_id {
             // Use file:// URL for local session files
-            let session_url = format!(
-                "file://{}/sessions/{}.json",
-                workspace_path.join(".vtcode").display(),
-                session_id
-            );
+            let session_url =
+                format!("file://{}/sessions/{}.json", workspace_path.join(".vtcode").display(), session_id);
             conversation.url = Some(session_url.clone());
             conversation.related = Some(vec![RelatedResource::session(session_url)]);
         }
@@ -209,11 +190,7 @@ pub fn get_git_head_revision(workspace_path: &Path) -> Option<String> {
 
     if output.status.success() {
         let revision = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if revision.len() >= 40 {
-            Some(revision)
-        } else {
-            None
-        }
+        if revision.len() >= 40 { Some(revision) } else { None }
     } else {
         None
     }

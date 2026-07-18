@@ -46,8 +46,7 @@ pub fn export_skill_bundle(skill_root: &Path) -> Result<Vec<u8>> {
     {
         let cursor = std::io::Cursor::new(&mut buf);
         let mut zip_writer = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         add_dir_to_zip(&mut zip_writer, skill_root, skill_root, options)?;
         zip_writer.finish().context("Failed to finalize zip archive")?;
@@ -81,8 +80,7 @@ fn add_dir_to_zip<W: Write + std::io::Seek>(
             zip_writer
                 .start_file(&name, options)
                 .with_context(|| format!("starting file {name}"))?;
-            let data =
-                fs::read(&path).with_context(|| format!("reading file {}", path.display()))?;
+            let data = fs::read(&path).with_context(|| format!("reading file {}", path.display()))?;
             zip_writer.write_all(&data)?;
         }
     }
@@ -177,26 +175,19 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
         }
 
         if file.is_dir() {
-            fs::create_dir_all(&out_path)
-                .with_context(|| format!("creating dir {}", out_path.display()))?;
+            fs::create_dir_all(&out_path).with_context(|| format!("creating dir {}", out_path.display()))?;
         } else {
             if file.size() > MAX_FILE_SIZE as u64 {
-                bail!(
-                    "Zip entry '{}' ({} bytes) exceeds maximum {} bytes",
-                    raw_name,
-                    file.size(),
-                    MAX_FILE_SIZE
-                );
+                bail!("Zip entry '{}' ({} bytes) exceeds maximum {} bytes", raw_name, file.size(), MAX_FILE_SIZE);
             }
 
             if let Some(parent) = out_path.parent() {
                 fs::create_dir_all(parent)?;
             }
 
-            let mut out_file = fs::File::create(&out_path)
-                .with_context(|| format!("creating file {}", out_path.display()))?;
-            std::io::copy(&mut file, &mut out_file)
-                .with_context(|| format!("writing file {}", out_path.display()))?;
+            let mut out_file =
+                fs::File::create(&out_path).with_context(|| format!("creating file {}", out_path.display()))?;
+            std::io::copy(&mut file, &mut out_file).with_context(|| format!("writing file {}", out_path.display()))?;
         }
     }
 
@@ -245,12 +236,7 @@ fn validate_extracted_bundle(skill_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_dir_recursive(
-    root: &Path,
-    dir: &Path,
-    file_count: &mut u64,
-    total_size: &mut u64,
-) -> Result<()> {
+fn validate_dir_recursive(root: &Path, dir: &Path, file_count: &mut u64, total_size: &mut u64) -> Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -271,10 +257,7 @@ fn validate_dir_recursive(
             *file_count += 1;
             let size = entry.metadata()?.len();
             if size > MAX_FILE_SIZE as u64 {
-                bail!(
-                    "File {} ({size} bytes) exceeds maximum {MAX_FILE_SIZE} bytes",
-                    path.display(),
-                );
+                bail!("File {} ({size} bytes) exceeds maximum {MAX_FILE_SIZE} bytes", path.display(),);
             }
             *total_size += size;
         }
@@ -299,9 +282,8 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
             count += c;
             size += s;
         } else {
-            fs::copy(&src_path, &dst_path).with_context(|| {
-                format!("failed to copy {} to {}", src_path.display(), dst_path.display())
-            })?;
+            fs::copy(&src_path, &dst_path)
+                .with_context(|| format!("failed to copy {} to {}", src_path.display(), dst_path.display()))?;
             count += 1;
             size += entry
                 .metadata()
@@ -351,8 +333,8 @@ fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Res
 
     fs::create_dir_all(store_path)
         .with_context(|| format!("failed to create store dir at {}", store_path.display()))?;
-    let index_json = serde_json::to_string_pretty(&index)
-        .with_context(|| format!("failed to serialize index for {skill_name}"))?;
+    let index_json =
+        serde_json::to_string_pretty(&index).with_context(|| format!("failed to serialize index for {skill_name}"))?;
     fs::write(&index_path, &index_json)
         .with_context(|| format!("failed to write index at {}", index_path.display()))?;
 

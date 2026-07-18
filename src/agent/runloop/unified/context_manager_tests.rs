@@ -1,14 +1,12 @@
 use super::*;
 use std::path::PathBuf;
 use vtcode_core::{
-    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
-    EditorSelectionRange,
+    EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext, EditorSelectionRange,
 };
 
 #[test]
 fn normalize_history_for_request_drops_empty_noop_messages() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![
         uni::Message::user("hello".to_string()),
         uni::Message::assistant("   ".to_string()),
@@ -23,8 +21,7 @@ fn normalize_history_for_request_drops_empty_noop_messages() {
 
 #[test]
 fn normalize_history_for_request_merges_plain_assistant_text_messages() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![
         uni::Message::assistant("part one".to_string()),
         uni::Message::assistant("part two".to_string()),
@@ -39,13 +36,10 @@ fn normalize_history_for_request_merges_plain_assistant_text_messages() {
 
 #[test]
 fn normalize_history_for_request_keeps_different_assistant_phases_separate() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![
-        uni::Message::assistant("working".to_string())
-            .with_phase(Some(uni::AssistantPhase::Commentary)),
-        uni::Message::assistant("done".to_string())
-            .with_phase(Some(uni::AssistantPhase::FinalAnswer)),
+        uni::Message::assistant("working".to_string()).with_phase(Some(uni::AssistantPhase::Commentary)),
+        uni::Message::assistant("done".to_string()).with_phase(Some(uni::AssistantPhase::FinalAnswer)),
     ];
 
     let normalized = manager.normalize_history_for_request(&history);
@@ -56,8 +50,7 @@ fn normalize_history_for_request_keeps_different_assistant_phases_separate() {
 
 #[test]
 fn normalize_history_for_request_keeps_tool_sequences_intact() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![
         uni::Message::assistant_with_tools(
             String::new(),
@@ -79,8 +72,7 @@ fn normalize_history_for_request_keeps_tool_sequences_intact() {
 
 #[test]
 fn normalize_history_for_request_inserts_synthetic_outputs_for_missing_calls() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![uni::Message::assistant_with_tools(
         String::new(),
         vec![uni::ToolCall::function(
@@ -99,8 +91,7 @@ fn normalize_history_for_request_inserts_synthetic_outputs_for_missing_calls() {
 
 #[test]
 fn normalize_history_for_request_removes_orphan_outputs() {
-    let manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
     let history = vec![uni::Message::tool_response(
         "orphan_call".to_string(),
         "{\"ok\":true}".to_string(),
@@ -112,8 +103,7 @@ fn normalize_history_for_request_removes_orphan_outputs() {
 
 #[tokio::test]
 async fn build_system_prompt_with_empty_base_prompt_fails() {
-    let mut manager =
-        ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let mut manager = ContextManager::new("".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
     let params = SystemPromptParams {
         full_auto: false,
@@ -130,12 +120,7 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
 #[tokio::test]
 async fn request_editor_context_message_includes_active_editor_context_block() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
-    let mut manager = ContextManager::new(
-        "System prompt".to_string(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
+    let mut manager = ContextManager::new("System prompt".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
     manager.set_workspace_root(workspace.path());
     let snapshot = EditorContextSnapshot {
         workspace_root: Some(PathBuf::from(workspace.path())),
@@ -191,12 +176,7 @@ async fn request_editor_context_message_includes_active_editor_context_block() {
 #[tokio::test]
 async fn request_editor_context_message_skips_disallowed_provider_family() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
-    let mut manager = ContextManager::new(
-        "System prompt".to_string(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
+    let mut manager = ContextManager::new("System prompt".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
     manager.set_workspace_root(workspace.path());
     let snapshot = EditorContextSnapshot {
         provider_family: vtcode_config::IdeContextProviderFamily::Zed,
@@ -234,12 +214,7 @@ async fn request_editor_context_message_skips_disallowed_provider_family() {
 #[tokio::test]
 async fn request_editor_context_message_respects_session_local_ide_toggle() {
     let workspace = assert_fs::TempDir::new().expect("workspace");
-    let mut manager = ContextManager::new(
-        "System prompt".to_string(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
+    let mut manager = ContextManager::new("System prompt".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
     manager.set_workspace_root(workspace.path());
     let snapshot = EditorContextSnapshot {
         workspace_root: Some(PathBuf::from(workspace.path())),
@@ -292,16 +267,14 @@ async fn request_editor_context_message_respects_session_local_ide_toggle() {
         })
         .await
         .expect("reenabled prompt");
-    let reenabled_message =
-        manager.request_editor_context_message().expect("reenabled editor context");
+    let reenabled_message = manager.request_editor_context_message().expect("reenabled editor context");
     assert!(!reenabled_prompt.contains("## Active Editor Context"));
     assert!(reenabled_message.content.as_text().contains("## Active Editor Context"));
 }
 
 #[test]
 fn test_update_token_usage_prefers_prompt_pressure() {
-    let mut manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let mut manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
     // Initial state
     assert_eq!(manager.current_token_usage(), 0);
@@ -333,8 +306,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
 
 #[test]
 fn test_update_token_usage_falls_back_when_prompt_missing() {
-    let mut manager =
-        ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
+    let mut manager = ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
     manager.update_token_usage(&Some(uni::Usage {
         prompt_tokens: 0,
@@ -352,12 +324,7 @@ fn test_update_token_usage_falls_back_when_prompt_missing() {
 
 #[tokio::test]
 async fn build_system_prompt_ignores_token_usage_updates() {
-    let mut manager = ContextManager::new(
-        "System prompt".to_string(),
-        (),
-        Arc::new(RwLock::new(HashMap::new())),
-        None,
-    );
+    let mut manager = ContextManager::new("System prompt".to_string(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
     let params = SystemPromptParams {
         full_auto: false,
@@ -381,8 +348,7 @@ async fn build_system_prompt_ignores_token_usage_updates() {
         iterations: None,
     }));
 
-    let prompt_after =
-        manager.build_system_prompt(params).await.expect("prompt after token update");
+    let prompt_after = manager.build_system_prompt(params).await.expect("prompt after token update");
 
     assert_eq!(prompt_before, prompt_after);
     assert!(!prompt_after.contains("<budget:token_budget>"));

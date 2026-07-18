@@ -3,9 +3,7 @@ use super::*;
 pub(crate) fn persistent_memory_base_dir(config: &PersistentMemoryConfig) -> Result<PathBuf> {
     if let Some(override_dir) = config.directory_override.as_deref() {
         if let Some(stripped) = override_dir.strip_prefix("~/") {
-            return Ok(dirs::home_dir()
-                .context("Could not resolve home directory")?
-                .join(stripped));
+            return Ok(dirs::home_dir().context("Could not resolve home directory")?.join(stripped));
         }
         return Ok(PathBuf::from(override_dir));
     }
@@ -45,19 +43,12 @@ pub(super) fn migrate_legacy_memory_dir(legacy_dir: &Path, target_dir: &Path) ->
         return Ok(());
     }
     if target_dir.exists() {
-        std::fs::remove_dir_all(target_dir)
-            .with_context(|| format!("Failed to clear {}", target_dir.display()))?;
+        std::fs::remove_dir_all(target_dir).with_context(|| format!("Failed to clear {}", target_dir.display()))?;
     }
-    let target_parent =
-        target_dir.parent().context("Persistent memory directory is missing a parent")?;
-    std::fs::create_dir_all(target_parent)
-        .with_context(|| format!("Failed to create {}", target_parent.display()))?;
+    let target_parent = target_dir.parent().context("Persistent memory directory is missing a parent")?;
+    std::fs::create_dir_all(target_parent).with_context(|| format!("Failed to create {}", target_parent.display()))?;
     std::fs::rename(legacy_dir, target_dir).with_context(|| {
-        format!(
-            "Failed to migrate persistent memory from {} to {}",
-            legacy_dir.display(),
-            target_dir.display()
-        )
+        format!("Failed to migrate persistent memory from {} to {}", legacy_dir.display(), target_dir.display())
     })?;
     remove_empty_legacy_memory_hierarchy(legacy_dir)?;
     Ok(())
@@ -92,8 +83,7 @@ fn memory_directory_has_stored_content(directory: &Path) -> Result<bool> {
         if !path.exists() {
             continue;
         }
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let contents = std::fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
         if !parse_topic_file(&contents).is_empty() {
             return Ok(true);
         }
@@ -102,15 +92,12 @@ fn memory_directory_has_stored_content(directory: &Path) -> Result<bool> {
     if !rollout_dir.exists() {
         return Ok(false);
     }
-    for entry in std::fs::read_dir(&rollout_dir)
-        .with_context(|| format!("Failed to list {}", rollout_dir.display()))?
-    {
+    for entry in std::fs::read_dir(&rollout_dir).with_context(|| format!("Failed to list {}", rollout_dir.display()))? {
         let path = entry?.path();
         if path.extension().and_then(|v| v.to_str()) != Some("md") {
             continue;
         }
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let contents = std::fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
         if !parse_topic_file(&contents).is_empty() {
             return Ok(true);
         }

@@ -40,9 +40,7 @@ fn slash_palette_enter_submits_immediate_command() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/new")
-    );
+    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/new"));
 }
 
 #[test]
@@ -60,9 +58,7 @@ fn slash_palette_enter_submits_review_immediately() {
     }
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(
-        matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/review")
-    );
+    assert!(matches!(submit, Some(app_types::InlineEvent::Submit(value)) if value.trim() == "/review"));
 }
 
 #[test]
@@ -111,10 +107,7 @@ fn app_help_command_opens_same_visible_help_overlay() {
     assert!(modal.is_help_modal, "should be a help modal");
 
     let lines = rendered_app_session_lines(&mut session, 32);
-    assert!(
-        lines.iter().any(|line| line.contains("Keyboard Shortcuts")),
-        "help overlay should render the title"
-    );
+    assert!(lines.iter().any(|line| line.contains("Keyboard Shortcuts")), "help overlay should render the title");
 }
 
 #[test]
@@ -259,16 +252,12 @@ fn slash_panel_height_stays_fixed_for_short_results() {
     }
 
     let _ = rendered_app_session_lines(&mut short_session, 20);
-    let short_height =
-        short_session.core.bottom_panel_area().expect("short slash panel area").height;
+    let short_height = short_session.core.bottom_panel_area().expect("short slash panel area").height;
 
     let mut full_session = session_with_slash_palette_commands();
     let _ = full_session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     let _ = rendered_app_session_lines(&mut full_session, 20);
     let full_height = full_session.core.bottom_panel_area().expect("full slash panel area").height;
 
-    assert_eq!(
-        short_height, full_height,
-        "slash panel height should stay fixed regardless of result count"
-    );
+    assert_eq!(short_height, full_height, "slash panel height should stay fixed regardless of result count");
 }

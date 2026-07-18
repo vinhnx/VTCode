@@ -8,8 +8,8 @@ use hashbrown::HashMap;
 use std::path::Path;
 
 use vtcode_bash_runner::{
-    PipeSpawnOptions, PipeStdinMode, collect_output_until_exit, spawn_pipe_process,
-    spawn_pipe_process_no_stdin, spawn_pipe_process_with_options,
+    PipeSpawnOptions, PipeStdinMode, collect_output_until_exit, spawn_pipe_process, spawn_pipe_process_no_stdin,
+    spawn_pipe_process_with_options,
 };
 
 fn find_python() -> Option<String> {
@@ -146,8 +146,7 @@ async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> 
     let spawned = spawn_pipe_process(&program, &args, Path::new("."), &env, &None).await?;
 
     let mut output_rx = spawned.output_rx;
-    let pid_bytes =
-        tokio::time::timeout(tokio::time::Duration::from_millis(500), output_rx.recv()).await??;
+    let pid_bytes = tokio::time::timeout(tokio::time::Duration::from_millis(500), output_rx.recv()).await??;
     let pid_text = String::from_utf8_lossy(&pid_bytes);
     let child_pid: i32 = pid_text
         .split_whitespace()

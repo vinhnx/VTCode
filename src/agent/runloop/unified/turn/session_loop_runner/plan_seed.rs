@@ -20,10 +20,7 @@ pub(super) async fn load_active_plan_seed(
         None
     };
 
-    let merged = vtcode_core::tools::handlers::planning_workflow::merge_plan_content(
-        plan_content,
-        tracker_content,
-    )?;
+    let merged = vtcode_core::tools::handlers::planning_workflow::merge_plan_content(plan_content, tracker_content)?;
     if merged.len() > MAX_PLAN_SEED_BYTES {
         let truncated = merged
             .char_indices()

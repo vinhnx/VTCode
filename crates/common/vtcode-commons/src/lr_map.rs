@@ -85,9 +85,7 @@ where
                 w.publish();
             }
             Err(e) => {
-                tracing::warn!(
-                    "LrMap::clear failed due to poisoned mutex: {e}. Operation dropped."
-                );
+                tracing::warn!("LrMap::clear failed due to poisoned mutex: {e}. Operation dropped.");
             }
         }
     }

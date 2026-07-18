@@ -1,14 +1,14 @@
 use super::{
-    CopilotRuntimeHost, auto_approve_builtin_permission, denied_tool_response,
-    filter_copilot_tools, harness_call_item_id, map_builtin_permission_prompt_decision,
-    map_copilot_finish_reason, normalize_copilot_reasoning_delta, summarize_permission_request,
+    CopilotRuntimeHost, auto_approve_builtin_permission, denied_tool_response, filter_copilot_tools,
+    harness_call_item_id, map_builtin_permission_prompt_decision, map_copilot_finish_reason,
+    normalize_copilot_reasoning_delta, summarize_permission_request,
 };
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use vtcode_core::copilot::{
-    CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionRequest,
-    CopilotTerminalCreateRequest, CopilotTerminalEnvVar, CopilotToolCallResponse,
+    CopilotObservedToolCall, CopilotObservedToolCallStatus, CopilotPermissionRequest, CopilotTerminalCreateRequest,
+    CopilotTerminalEnvVar, CopilotToolCallResponse,
 };
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
@@ -38,9 +38,7 @@ fn create_headless_session() -> InlineSession {
     }
 }
 
-fn collect_inline_output(
-    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
-) -> String {
+fn collect_inline_output(receiver: &mut tokio::sync::mpsc::UnboundedReceiver<InlineCommand>) -> String {
     let mut lines: Vec<String> = Vec::new();
     while let Ok(command) = receiver.try_recv() {
         match command {
@@ -61,16 +59,8 @@ fn collect_inline_output(
 #[test]
 fn filter_copilot_tools_keeps_only_allowlisted_names() {
     let tools = Arc::new(vec![
-        ToolDefinition::function(
-            "code_search".to_string(),
-            "Search".to_string(),
-            json!({"type": "object"}),
-        ),
-        ToolDefinition::function(
-            "apply_patch".to_string(),
-            "Patch".to_string(),
-            json!({"type": "object"}),
-        ),
+        ToolDefinition::function("code_search".to_string(), "Search".to_string(), json!({"type": "object"})),
+        ToolDefinition::function("apply_patch".to_string(), "Patch".to_string(), json!({"type": "object"})),
     ]);
 
     let filtered = filter_copilot_tools(Some(&tools), &["code_search".to_string()]);
@@ -158,10 +148,7 @@ fn copilot_finish_reason_maps_protocol_values() {
     assert_eq!(map_copilot_finish_reason("max_tokens"), FinishReason::Length);
     assert_eq!(map_copilot_finish_reason("length"), FinishReason::Length);
     assert_eq!(map_copilot_finish_reason("refusal"), FinishReason::Refusal);
-    assert_eq!(
-        map_copilot_finish_reason("cancelled"),
-        FinishReason::Error("cancelled".to_string())
-    );
+    assert_eq!(map_copilot_finish_reason("cancelled"), FinishReason::Error("cancelled".to_string()));
 }
 
 #[test]
@@ -172,10 +159,8 @@ fn harness_call_item_id_prefers_tool_call_id() {
 
 #[test]
 fn interrupted_builtin_permission_becomes_interactive_denial() {
-    let (decision, cache_for_session) = map_builtin_permission_prompt_decision(
-        HitlDecision::Interrupt,
-        Some("Run cargo check".to_string()),
-    );
+    let (decision, cache_for_session) =
+        map_builtin_permission_prompt_decision(HitlDecision::Interrupt, Some("Run cargo check".to_string()));
 
     assert!(!cache_for_session);
     assert_eq!(
@@ -208,10 +193,7 @@ fn custom_tool_permissions_are_auto_approved_for_session() {
         args: Some(json!({"path": "CHANGELOG.md"})),
     });
 
-    assert_eq!(
-        approval,
-        Some((vtcode_core::copilot::CopilotPermissionDecision::ApprovedAlways, true))
-    );
+    assert_eq!(approval, Some((vtcode_core::copilot::CopilotPermissionDecision::ApprovedAlways, true)));
 }
 
 #[test]
@@ -267,8 +249,7 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state =
-        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+    let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -277,13 +258,8 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let mut plan_session =
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
-    let mut harness_state = HarnessTurnState::new(
-        TurnRunId("run-test".to_string()),
-        TurnId("turn-test".to_string()),
-        8,
-        60,
-        0,
-    );
+    let mut harness_state =
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
     let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
 
     let mut runtime_host = CopilotRuntimeHost::new(
@@ -370,8 +346,7 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state =
-        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+    let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -380,13 +355,8 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     let mut plan_session =
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
-    let mut harness_state = HarnessTurnState::new(
-        TurnRunId("run-test".to_string()),
-        TurnId("turn-test".to_string()),
-        8,
-        60,
-        0,
-    );
+    let mut harness_state =
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
 
     let mut runtime_host = CopilotRuntimeHost::new(
         &mut tool_registry,
@@ -464,8 +434,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state =
-        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+    let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -474,13 +443,8 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let mut plan_session =
         crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState::default();
     let mut mcp_panel_state = McpPanelState::default();
-    let mut harness_state = HarnessTurnState::new(
-        TurnRunId("run-test".to_string()),
-        TurnId("turn-test".to_string()),
-        8,
-        60,
-        0,
-    );
+    let mut harness_state =
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
     let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("harness emitter");
 
     let mut runtime_host = CopilotRuntimeHost::new(
@@ -600,18 +564,12 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state =
-        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
+    let permissions_state = Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     safety_validator.start_turn();
     let traj = TrajectoryLogger::new(&workspace);
-    let mut harness_state = HarnessTurnState::new(
-        TurnRunId("run-test".to_string()),
-        TurnId("turn-test".to_string()),
-        8,
-        60,
-        0,
-    );
+    let mut harness_state =
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
     let tools = Arc::new(vec![ToolDefinition::function(
         "exec_command".to_string(),
         "Run a VT Code command".to_string(),

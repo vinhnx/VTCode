@@ -176,10 +176,7 @@ impl SessionEndReason {
         }
     }
 
-    pub fn thread_completion_status(
-        self,
-        budget_limit_reached: bool,
-    ) -> (&'static str, ThreadCompletionSubtype) {
+    pub fn thread_completion_status(self, budget_limit_reached: bool) -> (&'static str, ThreadCompletionSubtype) {
         if budget_limit_reached {
             return ("budget_limit_reached", ThreadCompletionSubtype::ErrorMaxBudgetUsd);
         }

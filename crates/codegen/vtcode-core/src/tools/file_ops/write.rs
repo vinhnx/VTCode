@@ -49,11 +49,7 @@ impl FileOpsTool {
         self.write_file_internal(args, true)
     }
 
-    pub(crate) async fn write_file_internal(
-        &self,
-        args: Value,
-        acquire_mutation: bool,
-    ) -> Result<Value> {
+    pub(crate) async fn write_file_internal(&self, args: Value, acquire_mutation: bool) -> Result<Value> {
         let input: WriteInput = deserialize_tool_args(&args, "write_file")?;
         let override_snapshot = conflict_override_snapshot(&args);
 
@@ -92,18 +88,13 @@ impl FileOpsTool {
             match read_file_with_context(&file_path, "existing file content").await {
                 Ok(content) => existing_content = Some(content),
                 Err(error) => {
-                    diff_preview = Some(diff_preview_error_skip(
-                        "failed_to_read_existing_content",
-                        Some(&error.to_string()),
-                    ));
+                    diff_preview =
+                        Some(diff_preview_error_skip("failed_to_read_existing_content", Some(&error.to_string())));
                 }
             }
         }
 
-        let effective_mode = if input.overwrite
-            && input.mode != "overwrite"
-            && input.mode != "fail_if_exists"
-        {
+        let effective_mode = if input.overwrite && input.mode != "overwrite" && input.mode != "fail_if_exists" {
             return Err(anyhow!(
                 "Conflicting parameters: overwrite=true but mode='{}'. Use mode='overwrite' or omit overwrite.",
                 input.mode
@@ -166,11 +157,7 @@ impl FileOpsTool {
                 write_text_file(&file_path, &input.content).await?;
             }
             "append" => {
-                let mut file = tokio::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&file_path)
-                    .await?;
+                let mut file = tokio::fs::OpenOptions::new().create(true).append(true).open(&file_path).await?;
                 file.write_all(input.content.as_bytes()).await?;
                 file.flush().await?;
             }
@@ -184,9 +171,7 @@ impl FileOpsTool {
                             .field("reason", json!("File already exists"))
                             .build_json());
                     }
-                    return Err(err).with_context(|| {
-                        format!("Failed to create file content: {}", file_path.display())
-                    });
+                    return Err(err).with_context(|| format!("Failed to create file content: {}", file_path.display()));
                 }
             }
             "fail_if_exists" => {
@@ -197,9 +182,7 @@ impl FileOpsTool {
                             input.path
                         ));
                     }
-                    return Err(err).with_context(|| {
-                        format!("Failed to create file content: {}", file_path.display())
-                    });
+                    return Err(err).with_context(|| format!("Failed to create file content: {}", file_path.display()));
                 }
             }
             _ => {
@@ -225,8 +208,7 @@ impl FileOpsTool {
         if diff_preview.is_none() {
             let existing_snapshot = existing_content.as_deref();
             let total_len = if effective_mode == "append" {
-                existing_snapshot.map(|content| content.len()).unwrap_or_default()
-                    + input.content.len()
+                existing_snapshot.map(|content| content.len()).unwrap_or_default() + input.content.len()
             } else {
                 input.content.len()
             };
@@ -248,20 +230,13 @@ impl FileOpsTool {
                     Cow::Borrowed(input.content.as_str())
                 };
 
-                diff_preview = Some(build_diff_preview(
-                    &input.path,
-                    existing_snapshot,
-                    final_snapshot.as_ref(),
-                ));
+                diff_preview = Some(build_diff_preview(&input.path, existing_snapshot, final_snapshot.as_ref()));
             }
         }
 
         let mut builder = ToolResponseBuilder::new(tools::WRITE_FILE)
             .success()
-            .message(format!(
-                "Successfully wrote file {}",
-                self.workspace_relative_display(&file_path)
-            ))
+            .message(format!("Successfully wrote file {}", self.workspace_relative_display(&file_path)))
             .field("path", json!(self.workspace_relative_display(&file_path)))
             .field("mode", json!(effective_mode))
             .field("bytes_written", json!(input.content.len()))

@@ -106,9 +106,7 @@ pub(super) fn print_loaded_skill(summary: &LoadedSkillSummary) {
 }
 
 pub(super) fn print_skill_ready(name: &str) {
-    println!(
-        "\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {name} for...'"
-    );
+    println!("\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {name} for...'");
 }
 
 pub(super) fn print_skill_config(workspace: &Path) {

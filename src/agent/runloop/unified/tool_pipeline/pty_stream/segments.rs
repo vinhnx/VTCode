@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use anstyle::{
-    Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle,
-};
+use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle};
 use vtcode_core::ui::theme;
 use vtcode_ui::tui::app::{InlineLinkRange, InlineLinkTarget, InlineSegment, InlineTextStyle};
 use vtcode_ui::tui::core::convert_style;
@@ -30,9 +28,7 @@ impl PtyLineStyles {
                 .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
                 .effects(Effects::BOLD),
         ));
-        let yellow = Arc::new(convert_style(
-            AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow))),
-        ));
+        let yellow = Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow)))));
 
         Self {
             output: Arc::clone(&dimmed),
@@ -51,9 +47,7 @@ impl PtyLineStyles {
             keyword: magenta_bold,
             variable: Arc::clone(&yellow),
             string: yellow,
-            option: Arc::new(convert_style(
-                AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Red))),
-            )),
+            option: Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Red))))),
             truncation: Arc::new(convert_style(theme_styles.pty_output)),
         }
     }
@@ -147,11 +141,7 @@ pub(super) fn tokenize_preserve_whitespace(text: &str) -> Vec<&str> {
     parts
 }
 
-fn style_for_token<'a>(
-    token: &'a str,
-    expect_command: &mut bool,
-    styles: &'a PtyLineStyles,
-) -> Arc<InlineTextStyle> {
+fn style_for_token<'a>(token: &'a str, expect_command: &mut bool, styles: &'a PtyLineStyles) -> Arc<InlineTextStyle> {
     if token.trim().is_empty() {
         return Arc::clone(&styles.output);
     }
@@ -161,11 +151,7 @@ fn style_for_token<'a>(
         return Arc::clone(&styles.args);
     }
 
-    if token.starts_with('"')
-        || token.starts_with('\'')
-        || token.ends_with('"')
-        || token.ends_with('\'')
-    {
+    if token.starts_with('"') || token.starts_with('\'') || token.ends_with('"') || token.ends_with('\'') {
         *expect_command = false;
         return Arc::clone(&styles.string);
     }
@@ -205,11 +191,7 @@ fn bash_segments(text: &str, styles: &PtyLineStyles, expect_command: bool) -> Ve
     segments
 }
 
-fn shell_syntax_segments(
-    text: &str,
-    styles: &PtyLineStyles,
-    expect_command: bool,
-) -> Vec<InlineSegment> {
+fn shell_syntax_segments(text: &str, styles: &PtyLineStyles, expect_command: bool) -> Vec<InlineSegment> {
     let semantic = bash_segments(text, styles, expect_command);
     let Some(highlighted) = syntax_highlight::highlight_line_to_anstyle_segments(
         text,
@@ -376,10 +358,7 @@ fn parse_osc8_target(sequence: &str) -> Option<Option<String>> {
     }
 }
 
-fn ansi_output_segments(
-    text: &str,
-    styles: &PtyLineStyles,
-) -> Option<(Vec<InlineSegment>, Vec<InlineLinkRange>)> {
+fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<(Vec<InlineSegment>, Vec<InlineLinkRange>)> {
     if !text.contains('\u{1b}') {
         return None;
     }
@@ -477,10 +456,7 @@ fn append_output_segments_with_ansi(
     }
 }
 
-pub(super) fn line_to_segments(
-    line: &str,
-    styles: &PtyLineStyles,
-) -> (Vec<InlineSegment>, Vec<InlineLinkRange>) {
+pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> (Vec<InlineSegment>, Vec<InlineLinkRange>) {
     if let Some(command_text) = line.strip_prefix("• Ran ") {
         let mut segments = vec![
             InlineSegment {
@@ -561,10 +537,8 @@ mod tests {
     #[test]
     fn pty_output_extracts_osc8_hyperlinks() {
         let styles = PtyLineStyles::new();
-        let (segments, link_ranges) = line_to_segments(
-            "  └ Go \u{1b}]8;;https://example.com/docs\u{1b}\\docs\u{1b}]8;;\u{1b}\\ now",
-            &styles,
-        );
+        let (segments, link_ranges) =
+            line_to_segments("  └ Go \u{1b}]8;;https://example.com/docs\u{1b}\\docs\u{1b}]8;;\u{1b}\\ now", &styles);
 
         let text = segments.iter().map(|segment| segment.text.as_str()).collect::<String>();
         assert_eq!(text, "  └ Go docs now");

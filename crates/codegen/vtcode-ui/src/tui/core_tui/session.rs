@@ -4,8 +4,7 @@ use std::{collections::VecDeque, sync::Arc, time::Instant};
 use anstyle::Color as AnsiColorEnum;
 use anstyle::RgbColor;
 use ratatui::crossterm::event::{
-    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
-    MouseEventKind,
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
 };
 
 use ratatui::{
@@ -19,8 +18,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineListSelection, InlineMessageKind,
-        InlineTextStyle, InlineTheme, OverlayRequest,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineListSelection, InlineMessageKind, InlineTextStyle,
+        InlineTheme, OverlayRequest,
     },
 };
 use crate::tui::config::constants::ui;
@@ -105,8 +104,7 @@ use super::types::InlineHeaderHighlight;
 use crate::tui::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
-const PLACEHOLDER_COLOR: RgbColor =
-    RgbColor(ui::PLACEHOLDER_R, ui::PLACEHOLDER_G, ui::PLACEHOLDER_B);
+const PLACEHOLDER_COLOR: RgbColor = RgbColor(ui::PLACEHOLDER_R, ui::PLACEHOLDER_G, ui::PLACEHOLDER_B);
 const MAX_LOG_LINES: usize = 256;
 const MAX_LOG_DRAIN_PER_TICK: usize = 256;
 

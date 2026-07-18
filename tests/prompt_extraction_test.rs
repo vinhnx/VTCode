@@ -15,8 +15,8 @@ fn test_system_prompt_documentation_exists() {
 #[test]
 #[ignore = "documentation check"]
 fn test_codex_alignment_analysis_exists() {
-    let analysis = fs::read_to_string("prompts/codex_alignment_analysis.md")
-        .expect("codex_alignment_analysis.md should exist");
+    let analysis =
+        fs::read_to_string("prompts/codex_alignment_analysis.md").expect("codex_alignment_analysis.md should exist");
 
     // Verify analysis sections
     assert!(analysis.contains("## Alignment Assessment"));

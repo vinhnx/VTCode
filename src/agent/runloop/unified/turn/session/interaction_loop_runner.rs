@@ -15,12 +15,8 @@ use crate::agent::runloop::unified::external_url_guard::ExternalUrlGuardContext;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::model_selection::{
-    ModelSwitchCompactionTargets, finalize_model_selection,
-};
-use crate::agent::runloop::unified::session_setup::{
-    apply_ide_context_snapshot, ide_context_status_label_from_bridge,
-};
+use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
+use crate::agent::runloop::unified::session_setup::{apply_ide_context_snapshot, ide_context_status_label_from_bridge};
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::state::is_follow_up_prompt_like;
 use crate::agent::runloop::unified::turn::session::{
@@ -32,10 +28,9 @@ use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, Intera
 use support::{
     InlineLoopActionResolution, apply_live_theme_and_appearance, build_durable_scheduler_daemon,
     build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,
-    refresh_ide_context_before_user_turn, refresh_live_ide_context_update,
-    replace_submitted_input_text, resolve_inline_loop_action, scheduler_enabled,
-    selected_model_supports_image_input, stalled_follow_up_recovery_prompt,
-    submitted_images_are_unsupported, sync_mcp_approval_policy_for_context,
+    refresh_ide_context_before_user_turn, refresh_live_ide_context_update, replace_submitted_input_text,
+    resolve_inline_loop_action, scheduler_enabled, selected_model_supports_image_input,
+    stalled_follow_up_recovery_prompt, submitted_images_are_unsupported, sync_mcp_approval_policy_for_context,
 };
 pub(crate) use support::{handle_select_primary_agent, try_resume_latest_session};
 
@@ -81,12 +76,10 @@ pub(super) async fn run_interaction_loop_impl(
             {
                 tracing::warn!("Failed to live-reload workspace configuration: {}", err);
             } else if let Some(cfg) = ctx.vt_cfg.as_ref() {
-                if let Err(err) =
-                    crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
-                        ctx.tool_registry,
-                        cfg,
-                    )
-                {
+                if let Err(err) = crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
+                    ctx.tool_registry,
+                    cfg,
+                ) {
                     tracing::warn!("Failed to apply live-reloaded workspace config: {}", err);
                 }
                 apply_live_theme_and_appearance(ctx.handle, cfg);
@@ -97,11 +90,8 @@ pub(super) async fn run_interaction_loop_impl(
 
         if should_refresh_status {
             let provider_supports_vision = ctx.provider_client.supports_vision(&ctx.config.model);
-            let model_supports_image_input = selected_model_supports_image_input(
-                &ctx.config.provider,
-                &ctx.config.model,
-                provider_supports_vision,
-            );
+            let model_supports_image_input =
+                selected_model_supports_image_input(&ctx.config.provider, &ctx.config.model, provider_supports_vision);
             ctx.handle.set_image_input_enabled(model_supports_image_input);
 
             let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
@@ -130,48 +120,34 @@ pub(super) async fn run_interaction_loop_impl(
                 state.input_status_state,
                 spooled_count,
             );
-            let local_agent_count =
-                if let Some(controller) = ctx.tool_registry.subagent_controller() {
-                    let entries = controller.status_entries().await;
-                    crate::agent::runloop::ui::sync_active_subagent_badges(
-                        ctx.header_context,
-                        ctx.handle,
-                        &entries,
-                    );
-                    let delegated_count =
-                        entries.iter().filter(|entry| !entry.status.is_terminal()).count();
-                    let background_count = controller
-                        .background_status_entries()
-                        .await
-                        .into_iter()
-                        .filter(|entry| {
-                            matches!(
-                                entry.status,
-                                vtcode_core::subagents::BackgroundSubprocessStatus::Starting
-                                    | vtcode_core::subagents::BackgroundSubprocessStatus::Running
-                            ) || (entry.desired_enabled
-                                && matches!(
-                                    entry.status,
-                                    vtcode_core::subagents::BackgroundSubprocessStatus::Error
-                                ))
-                        })
-                        .count();
-                    delegated_count + background_count
-                } else {
-                    crate::agent::runloop::ui::sync_active_subagent_badges(
-                        ctx.header_context,
-                        ctx.handle,
-                        &[],
-                    );
-                    0
-                };
+            let local_agent_count = if let Some(controller) = ctx.tool_registry.subagent_controller() {
+                let entries = controller.status_entries().await;
+                crate::agent::runloop::ui::sync_active_subagent_badges(ctx.header_context, ctx.handle, &entries);
+                let delegated_count = entries.iter().filter(|entry| !entry.status.is_terminal()).count();
+                let background_count = controller
+                    .background_status_entries()
+                    .await
+                    .into_iter()
+                    .filter(|entry| {
+                        matches!(
+                            entry.status,
+                            vtcode_core::subagents::BackgroundSubprocessStatus::Starting
+                                | vtcode_core::subagents::BackgroundSubprocessStatus::Running
+                        ) || (entry.desired_enabled
+                            && matches!(entry.status, vtcode_core::subagents::BackgroundSubprocessStatus::Error))
+                    })
+                    .count();
+                delegated_count + background_count
+            } else {
+                crate::agent::runloop::ui::sync_active_subagent_badges(ctx.header_context, ctx.handle, &[]);
+                0
+            };
             crate::agent::runloop::unified::status_line::update_thread_context(
                 state.input_status_state,
                 ctx.active_thread_label,
                 local_agent_count,
             );
-            let context_limit_tokens =
-                ctx.provider_client.effective_context_size(&ctx.config.model);
+            let context_limit_tokens = ctx.provider_client.effective_context_size(&ctx.config.model);
             let context_used_tokens = ctx.context_manager.current_token_usage();
             crate::agent::runloop::unified::status_line::update_context_budget(
                 state.input_status_state,
@@ -184,25 +160,23 @@ pub(super) async fn run_interaction_loop_impl(
             let status = &mut state.input_status_state;
             let status_config = ctx.vt_cfg.as_ref().map(|cfg| &cfg.ui.status_line);
             status.show_costs =
-                crate::agent::runloop::unified::status_line::status_line_shows_auto_components(
-                    status_config,
-                ) && matches!(ctx.provider_client.name(), "deepseek" | "openai");
+                crate::agent::runloop::unified::status_line::status_line_shows_auto_components(status_config)
+                    && matches!(ctx.provider_client.name(), "deepseek" | "openai");
             status.cost_usd = ctx.session_stats.total_cost_usd();
             let usage = ctx.session_stats.total_usage();
             let total_cache = usage.cached_input_tokens + usage.cache_creation_tokens;
-            status.cache_hit_pct = (total_cache > 0)
-                .then(|| (usage.cached_input_tokens as f64 / total_cache as f64) * 100.0);
+            status.cache_hit_pct =
+                (total_cache > 0).then(|| (usage.cached_input_tokens as f64 / total_cache as f64) * 100.0);
 
-            if let Err(error) =
-                crate::agent::runloop::unified::status_line::update_input_status_if_changed(
-                    ctx.handle,
-                    &ctx.config.workspace,
-                    model,
-                    ctx.config.reasoning_effort.as_str(),
-                    status_config,
-                    status,
-                )
-                .await
+            if let Err(error) = crate::agent::runloop::unified::status_line::update_input_status_if_changed(
+                ctx.handle,
+                &ctx.config.workspace,
+                model,
+                ctx.config.reasoning_effort.as_str(),
+                status_config,
+                status,
+            )
+            .await
             {
                 tracing::warn!("Failed to refresh status line: {}", error);
             }
@@ -223,9 +197,8 @@ pub(super) async fn run_interaction_loop_impl(
                 status.balance = None;
                 status.last_balance_refresh = None;
             }
-            ctx.handle.set_terminal_title_items(
-                ctx.vt_cfg.as_ref().and_then(|cfg| cfg.ui.terminal_title.items.clone()),
-            );
+            ctx.handle
+                .set_terminal_title_items(ctx.vt_cfg.as_ref().and_then(|cfg| cfg.ui.terminal_title.items.clone()));
             ctx.handle
                 .set_terminal_title_thread_label(state.input_status_state.thread_context.clone());
             ctx.handle.set_terminal_title_git_branch(
@@ -299,8 +272,7 @@ pub(super) async fn run_interaction_loop_impl(
             idle_wake_delay,
         };
 
-        let inline_action =
-            poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
+        let inline_action = poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
         sync_mcp_approval_policy_for_context(ctx);
 
         let current_input_activity = ctx.input_activity_counter.load(Ordering::Relaxed);
@@ -331,28 +303,18 @@ pub(super) async fn run_interaction_loop_impl(
                 Ok(Err(err)) => {
                     let error = err.to_string();
                     if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
-                        tracing::warn!(
-                            "Durable scheduler poll failed in interactive session: {}",
-                            error
-                        );
-                        ctx.renderer.line(
-                            MessageStyle::Warning,
-                            &format!("Durable scheduler poll failed: {error}"),
-                        )?;
+                        tracing::warn!("Durable scheduler poll failed in interactive session: {}", error);
+                        ctx.renderer
+                            .line(MessageStyle::Warning, &format!("Durable scheduler poll failed: {error}"))?;
                         last_durable_scheduler_error = Some(error);
                     }
                 }
                 Err(err) => {
                     let error = err.to_string();
                     if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
-                        tracing::warn!(
-                            "Durable scheduler background task failed in interactive session: {}",
-                            error
-                        );
-                        ctx.renderer.line(
-                            MessageStyle::Warning,
-                            &format!("Durable scheduler task failed: {error}"),
-                        )?;
+                        tracing::warn!("Durable scheduler background task failed in interactive session: {}", error);
+                        ctx.renderer
+                            .line(MessageStyle::Warning, &format!("Durable scheduler task failed: {error}"))?;
                         last_durable_scheduler_error = Some(error);
                     }
                 }
@@ -371,10 +333,7 @@ pub(super) async fn run_interaction_loop_impl(
                     Err(err) => {
                         let error = err.to_string();
                         if last_durable_scheduler_error.as_deref() != Some(error.as_str()) {
-                            tracing::warn!(
-                                "Failed to initialize durable scheduler in interactive session: {}",
-                                error
-                            );
+                            tracing::warn!("Failed to initialize durable scheduler in interactive session: {}", error);
                             last_durable_scheduler_error = Some(error);
                         }
                     }
@@ -382,8 +341,7 @@ pub(super) async fn run_interaction_loop_impl(
             }
 
             if let Some(daemon) = durable_scheduler_daemon.clone() {
-                durable_scheduler_run =
-                    Some(tokio::spawn(async move { daemon.run_due_tasks_once().await }));
+                durable_scheduler_run = Some(tokio::spawn(async move { daemon.run_due_tasks_once().await }));
             }
         }
 
@@ -393,12 +351,12 @@ pub(super) async fn run_interaction_loop_impl(
         {
             let due = ctx.tool_registry.collect_due_session_prompts(chrono::Utc::now()).await?;
             for task in due {
-                state.queued_inputs.push_back(
-                    crate::agent::runloop::unified::inline_events::QueuedInput::new(
+                state
+                    .queued_inputs
+                    .push_back(crate::agent::runloop::unified::inline_events::QueuedInput::new(
                         task.prompt.into(),
                         Some(ctx.active_primary_agent.active().display_name.clone()),
-                    ),
-                );
+                    ));
                 ctx.renderer.line(
                     MessageStyle::Info,
                     &format!("Scheduled task {} ({}) is ready to run.", task.id, task.name),
@@ -406,12 +364,11 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
-        let mut submitted_input =
-            match resolve_inline_loop_action(ctx, state, inline_action).await? {
-                InlineLoopActionResolution::ContinueLoop => continue,
-                InlineLoopActionResolution::Submit(input) => input,
-                InlineLoopActionResolution::Outcome(outcome) => return Ok(outcome),
-            };
+        let mut submitted_input = match resolve_inline_loop_action(ctx, state, inline_action).await? {
+            InlineLoopActionResolution::ContinueLoop => continue,
+            InlineLoopActionResolution::Submit(input) => input,
+            InlineLoopActionResolution::Outcome(outcome) => return Ok(outcome),
+        };
         let mut input_owned = submitted_input.text.clone();
 
         if submitted_input.is_empty() {
@@ -436,11 +393,10 @@ pub(super) async fn run_interaction_loop_impl(
         }
 
         if let Some(cfg) = ctx.vt_cfg.as_ref()
-            && let Err(err) =
-                crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
-                    ctx.tool_registry,
-                    cfg,
-                )
+            && let Err(err) = crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
+                ctx.tool_registry,
+                cfg,
+            )
         {
             tracing::warn!("Failed to apply workspace configuration to tools: {}", err);
         }
@@ -452,10 +408,8 @@ pub(super) async fn run_interaction_loop_impl(
                 && let Some(error_msg) = mcp_status.get_error_message()
             {
                 ctx.renderer.line(MessageStyle::Error, &format!("MCP Error: {error_msg}"))?;
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Use /mcp to check status or update your vtcode.toml configuration.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, "Use /mcp to check status or update your vtcode.toml configuration.")?;
             }
         }
 
@@ -464,8 +418,7 @@ pub(super) async fn run_interaction_loop_impl(
             *ctx.default_placeholder = Some(next_placeholder);
         }
 
-        match slash_command_handler::handle_input_commands(input_owned.as_str(), ctx, state).await?
-        {
+        match slash_command_handler::handle_input_commands(input_owned.as_str(), ctx, state).await? {
             slash_command_handler::CommandProcessingResult::Outcome(outcome) => return Ok(outcome),
             slash_command_handler::CommandProcessingResult::ContinueLoop => continue,
             slash_command_handler::CommandProcessingResult::UpdateInput(new_input) => {
@@ -497,10 +450,7 @@ pub(super) async fn run_interaction_loop_impl(
         if let Some(hooks) = ctx.lifecycle_hooks.as_ref() {
             match hooks.run_user_prompt_submit(&turn_id, input_owned.as_str()).await {
                 Ok(outcome) => {
-                    crate::agent::runloop::unified::turn::utils::render_hook_messages(
-                        ctx.renderer,
-                        &outcome.messages,
-                    )?;
+                    crate::agent::runloop::unified::turn::utils::render_hook_messages(ctx.renderer, &outcome.messages)?;
                     crate::agent::runloop::unified::turn::utils::append_additional_context(
                         ctx.conversation_history,
                         outcome.additional_context,
@@ -522,12 +472,7 @@ pub(super) async fn run_interaction_loop_impl(
                 .handle_input(
                     ctx.renderer,
                     input_owned.as_str(),
-                    ExternalUrlGuardContext::new(
-                        ctx.handle,
-                        ctx.session,
-                        ctx.ctrl_c_state,
-                        ctx.ctrl_c_notify,
-                    ),
+                    ExternalUrlGuardContext::new(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify),
                 )
                 .await?;
             match progress {
@@ -546,9 +491,7 @@ pub(super) async fn run_interaction_loop_impl(
                 }
                 ModelPickerProgress::Completed(selection) => {
                     let Some(picker_state) = state.model_picker_state.take() else {
-                        tracing::warn!(
-                            "Model picker completed but state was missing; skipping completion flow"
-                        );
+                        tracing::warn!("Model picker completed but state was missing; skipping completion flow");
                         continue;
                     };
                     let target = ctx.session_stats.model_picker_target;
@@ -583,10 +526,8 @@ pub(super) async fn run_interaction_loop_impl(
                         )
                         .await
                     {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to apply model selection: {err}"),
-                        )?;
+                        ctx.renderer
+                            .line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
                         if let Some(env_key) = &env_key_for_recovery
                             && !env_key.is_empty()
                         {
@@ -640,19 +581,14 @@ pub(super) async fn run_interaction_loop_impl(
                 input_status_state: state.input_status_state,
             };
 
-            if let Some(outcome) = tool_dispatch::handle_direct_tool_execution(
-                input_owned.as_str(),
-                &mut direct_tool_ctx,
-            )
-            .await?
+            if let Some(outcome) =
+                tool_dispatch::handle_direct_tool_execution(input_owned.as_str(), &mut direct_tool_ctx).await?
             {
                 return Ok(outcome);
             }
         }
 
-        if let Some(outcome) =
-            memory_prompt::handle_memory_prompt(input_owned.as_str(), ctx, state).await?
-        {
+        if let Some(outcome) = memory_prompt::handle_memory_prompt(input_owned.as_str(), ctx, state).await? {
             return Ok(outcome);
         }
 
@@ -673,9 +609,11 @@ pub(super) async fn run_interaction_loop_impl(
                     )));
                 }
                 ctx.session_stats.suppress_next_follow_up_prompt();
-                ctx.conversation_history.push(uni::Message::system(
-                    stalled_follow_up_recovery_prompt(&stall_reason, fallback_hint.is_some()),
-                ));
+                ctx.conversation_history
+                    .push(uni::Message::system(stalled_follow_up_recovery_prompt(
+                        &stall_reason,
+                        fallback_hint.is_some(),
+                    )));
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Repeated follow-up after stalled turn detected; enforcing autonomous recovery and conclusion.",
@@ -683,10 +621,8 @@ pub(super) async fn run_interaction_loop_impl(
             } else {
                 let directive = REPEATED_FOLLOW_UP_DIRECTIVE;
                 ctx.conversation_history.push(uni::Message::system(directive.to_string()));
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Repeated follow-up detected; forcing a concrete status/conclusion.",
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, "Repeated follow-up detected; forcing a concrete status/conclusion.")?;
             }
         }
         submitted_input.text = input_owned;

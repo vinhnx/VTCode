@@ -14,8 +14,8 @@ files:
   - tests/**/*.rs
   - benches/**/*.rs
   - fuzz/**/*.rs
-  - vtcode-*/src/**/*.rs
-  - vtcode-*/tests/**/*.rs
-  - vtcode-*/benches/**/*.rs
+  - crates/codegen/vtcode-*/src/**/*.rs
+  - crates/codegen/vtcode-*/tests/**/*.rs
+  - crates/codegen/vtcode-*/benches/**/*.rs
   - build.rs
-  - vtcode-*/build.rs
+  - crates/codegen/vtcode-*/build.rs

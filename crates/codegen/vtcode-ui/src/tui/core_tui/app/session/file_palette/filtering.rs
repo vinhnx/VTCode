@@ -92,13 +92,7 @@ impl FilePalette {
                     break;
                 }
                 if let Some(grandparent) = dir.parent() {
-                    Self::insert_child(
-                        &mut index,
-                        grandparent,
-                        &root,
-                        dir.display().to_string(),
-                        true,
-                    );
+                    Self::insert_child(&mut index, grandparent, &root, dir.display().to_string(), true);
                 }
                 ancestor = dir.parent();
             }
@@ -126,11 +120,7 @@ impl FilePalette {
             return;
         }
 
-        let display_name = if is_dir {
-            format!("{child_name}/")
-        } else {
-            child_name
-        };
+        let display_name = if is_dir { format!("{child_name}/") } else { child_name };
         let relative_path = Self::make_relative(root, &child_path);
 
         let entry = FileEntry {
@@ -213,8 +203,7 @@ impl FilePalette {
                 } else {
                     path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string()
                 };
-                let relative_path =
-                    Self::make_relative(&self.workspace_root, &path.display().to_string());
+                let relative_path = Self::make_relative(&self.workspace_root, &path.display().to_string());
                 FileEntry {
                     path: path.display().to_string(),
                     display_name,
@@ -256,13 +245,9 @@ impl FilePalette {
         for (idx, entry) in self.all_files.iter().enumerate() {
             let path_lower = entry.relative_path.to_lowercase();
 
-            let score = if let Some(fuzzy_score) = Self::simple_fuzzy_match_with_buffer(
-                &path_lower,
-                &mut matcher,
-                &pattern,
-                &query_lower,
-                &mut buffer,
-            ) {
+            let score = if let Some(fuzzy_score) =
+                Self::simple_fuzzy_match_with_buffer(&path_lower, &mut matcher, &pattern, &query_lower, &mut buffer)
+            {
                 let mut score = fuzzy_score;
                 if !path_lower.contains('/') {
                     score += 1000;
@@ -331,13 +316,7 @@ impl FilePalette {
         let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
         let query_lower = query.to_lowercase();
-        Self::simple_fuzzy_match_with_buffer(
-            path,
-            &mut matcher,
-            &pattern,
-            &query_lower,
-            &mut buffer,
-        )
+        Self::simple_fuzzy_match_with_buffer(path, &mut matcher, &pattern, &query_lower, &mut buffer)
     }
 
     /// Scores `path` against a pre-parsed `pattern`/`matcher` pair. Callers own

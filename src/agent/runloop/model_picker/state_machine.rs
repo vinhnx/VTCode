@@ -5,16 +5,10 @@ use super::*;
 use crate::agent::runloop::unified::external_url_guard::{
     ExternalUrlGuardContext, ExternalUrlOpenOutcome, request_external_url_open,
 };
-use crate::cli::auth::{
-    complete_openai_login_with_tui_cancel, is_oauth_flow_cancelled, prepare_openai_login,
-};
+use crate::cli::auth::{complete_openai_login_with_tui_cancel, is_oauth_flow_cancelled, prepare_openai_login};
 
 impl ModelPickerState {
-    pub(super) fn handle_reasoning(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        input: &str,
-    ) -> Result<ModelPickerProgress> {
+    pub(super) fn handle_reasoning(&mut self, renderer: &mut AnsiRenderer, input: &str) -> Result<ModelPickerProgress> {
         if self.selection.is_none() {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         }
@@ -49,10 +43,7 @@ impl ModelPickerState {
         self.apply_reasoning_choice(renderer, selected)
     }
 
-    fn prompt_reasoning_step(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<Option<ModelPickerProgress>> {
+    fn prompt_reasoning_step(&mut self, renderer: &mut AnsiRenderer) -> Result<Option<ModelPickerProgress>> {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
@@ -62,12 +53,8 @@ impl ModelPickerState {
         }
 
         match select_reasoning_with_ratatui(selection, self.current_reasoning) {
-            Ok(Some(ReasoningChoice::Level(level))) => {
-                self.apply_reasoning_choice(renderer, level).map(Some)
-            }
-            Ok(Some(ReasoningChoice::Disable)) => {
-                self.apply_reasoning_off_choice(renderer).map(Some)
-            }
+            Ok(Some(ReasoningChoice::Level(level))) => self.apply_reasoning_choice(renderer, level).map(Some),
+            Ok(Some(ReasoningChoice::Disable)) => self.apply_reasoning_off_choice(renderer).map(Some),
             Ok(None) => {
                 prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
                 Ok(None)
@@ -78,9 +65,7 @@ impl ModelPickerState {
                 }
                 renderer.line(
                     MessageStyle::Info,
-                    &format!(
-                        "Interactive reasoning selector unavailable ({err}). Falling back to manual input."
-                    ),
+                    &format!("Interactive reasoning selector unavailable ({err}). Falling back to manual input."),
                 )?;
                 prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
                 Ok(None)
@@ -98,10 +83,7 @@ impl ModelPickerState {
         prompt_api_key_plain(renderer, selection, self.workspace.as_deref())
     }
 
-    fn prompt_service_tier_step(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<Option<ModelPickerProgress>> {
+    fn prompt_service_tier_step(&mut self, renderer: &mut AnsiRenderer) -> Result<Option<ModelPickerProgress>> {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("Service tier requested before selecting a model"));
         };
@@ -111,9 +93,7 @@ impl ModelPickerState {
         }
 
         match select_service_tier_with_ratatui(selection, self.current_service_tier) {
-            Ok(Some(ServiceTierChoice::ProjectDefault)) => {
-                self.apply_service_tier_choice(renderer, None).map(Some)
-            }
+            Ok(Some(ServiceTierChoice::ProjectDefault)) => self.apply_service_tier_choice(renderer, None).map(Some),
             Ok(Some(ServiceTierChoice::Flex)) => self
                 .apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Flex))
                 .map(Some),
@@ -130,9 +110,7 @@ impl ModelPickerState {
                 }
                 renderer.line(
                     MessageStyle::Info,
-                    &format!(
-                        "Interactive service tier selector unavailable ({err}). Falling back to manual input."
-                    ),
+                    &format!("Interactive service tier selector unavailable ({err}). Falling back to manual input."),
                 )?;
                 prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
                 Ok(None)
@@ -140,10 +118,7 @@ impl ModelPickerState {
         }
     }
 
-    fn continue_after_reasoning(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<ModelPickerProgress> {
+    fn continue_after_reasoning(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
         // Insert MiMo auth method step after reasoning, before service tier
         if self
             .selection
@@ -208,10 +183,7 @@ impl ModelPickerState {
         self.finish_after_mimo_auth_method(renderer)
     }
 
-    pub(super) fn finish_after_mimo_auth_method(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<ModelPickerProgress> {
+    pub(super) fn finish_after_mimo_auth_method(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
         if self
             .selection
             .as_ref()
@@ -228,10 +200,7 @@ impl ModelPickerState {
         self.finish_after_service_tier(renderer)
     }
 
-    fn prompt_mimo_auth_method_step(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<Option<ModelPickerProgress>> {
+    fn prompt_mimo_auth_method_step(&mut self, renderer: &mut AnsiRenderer) -> Result<Option<ModelPickerProgress>> {
         if self.inline_enabled {
             render_mimo_auth_method_inline(renderer)?;
             return Ok(None);
@@ -241,10 +210,7 @@ impl ModelPickerState {
         Ok(None)
     }
 
-    fn finish_after_service_tier(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<ModelPickerProgress> {
+    fn finish_after_service_tier(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
         if self.selection.as_ref().map(|detail| detail.requires_api_key).unwrap_or(false) {
             self.step = PickerStep::AwaitApiKey;
             self.prompt_api_key_step(renderer)?;
@@ -267,10 +233,7 @@ impl ModelPickerState {
         self.continue_after_reasoning(renderer)
     }
 
-    pub(super) fn apply_reasoning_off_choice(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<ModelPickerProgress> {
+    pub(super) fn apply_reasoning_off_choice(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
         let Some(current_selection) = self.selection.clone() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
@@ -281,18 +244,14 @@ impl ModelPickerState {
             self.selected_reasoning = Some(ReasoningEffortLevel::None);
             renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "Reasoning disabled for {} by setting effort to 'none'.",
-                    current_selection.model_display
-                ),
+                &format!("Reasoning disabled for {} by setting effort to 'none'.", current_selection.model_display),
             )?;
 
             return self.continue_after_reasoning(renderer);
         }
 
         let Some(ref target_model) = current_selection.reasoning_off_model else {
-            renderer
-                .line(MessageStyle::Error, "This model does not have a non-reasoning variant.")?;
+            renderer.line(MessageStyle::Error, "This model does not have a non-reasoning variant.")?;
             if self.inline_enabled {
                 render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
             } else {
@@ -327,16 +286,12 @@ impl ModelPickerState {
         let alt_id = new_selection.model_id.clone();
 
         let progress = self.process_model_selection(renderer, new_selection)?;
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Reasoning disabled by switching to {alt_display} ({alt_id})."),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Reasoning disabled by switching to {alt_display} ({alt_id})."))?;
         Ok(progress)
     }
 
     pub(super) fn build_result(&self) -> Result<ModelSelectionResult> {
-        let selection =
-            self.selection.as_ref().ok_or_else(|| anyhow!("Model selection missing"))?;
+        let selection = self.selection.as_ref().ok_or_else(|| anyhow!("Model selection missing"))?;
         let chosen_reasoning = self.selected_reasoning.unwrap_or(self.current_reasoning);
         let reasoning_changed = chosen_reasoning != self.current_reasoning;
         let chosen_service_tier = self.selected_service_tier.unwrap_or(self.current_service_tier);
@@ -368,10 +323,8 @@ impl ModelPickerState {
         renderer: &mut AnsiRenderer,
         selection: SelectionDetail,
     ) -> Result<ModelPickerProgress> {
-        let message = format!(
-            "Selected {} ({}) from {}.",
-            selection.model_display, selection.model_id, selection.provider_label
-        );
+        let message =
+            format!("Selected {} ({}) from {}.", selection.model_display, selection.model_id, selection.provider_label);
         renderer.line(MessageStyle::Info, &message)?;
 
         if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
@@ -413,27 +366,19 @@ impl ModelPickerState {
                     selection.requires_api_key = false;
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "Loaded {} from workspace .env for {}.",
-                            selection.env_key, selection.provider_label
-                        ),
+                        &format!("Loaded {} from workspace .env for {}.", selection.env_key, selection.provider_label),
                     )?;
                 }
                 Ok(Some(ExistingKey::StoredCredential)) => {
                     selection.requires_api_key = false;
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Using stored API key for {}.", selection.provider_label),
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, &format!("Using stored API key for {}.", selection.provider_label))?;
                 }
                 Ok(None) => {}
                 Err(err) => {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!(
-                            "Failed to inspect stored credentials for {}: {}",
-                            selection.provider_label, err
-                        ),
+                        &format!("Failed to inspect stored credentials for {}: {}", selection.provider_label, err),
                     )?;
                 }
             }
@@ -467,16 +412,12 @@ impl ModelPickerState {
 
         match input.to_ascii_lowercase().as_str() {
             "flex" => self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Flex)),
-            "priority" => {
-                self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority))
-            }
+            "priority" => self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority)),
             "default" | "project" | "inherit" => self.apply_service_tier_choice(renderer, None),
             "skip" => self.apply_service_tier_choice(renderer, self.current_service_tier),
             _ => {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Unknown service tier option. Use flex, priority, default, or skip.",
-                )?;
+                renderer
+                    .line(MessageStyle::Error, "Unknown service tier option. Use flex, priority, default, or skip.")?;
                 prompt_service_tier_plain(renderer, selection, self.current_service_tier)?;
                 Ok(ModelPickerProgress::InProgress)
             }
@@ -505,17 +446,14 @@ impl ModelPickerState {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("API key requested before selecting a model"));
         };
-        if input.eq_ignore_ascii_case("login")
-            && matches!(selection.provider_enum, Some(Provider::OpenAI))
-        {
+        if input.eq_ignore_ascii_case("login") && matches!(selection.provider_enum, Some(Provider::OpenAI)) {
             if let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() {
                 if ctrl_c_state.is_exit_requested() {
                     return Ok(ModelPickerProgress::Exit);
                 }
                 if ctrl_c_state.is_cancel_requested() {
                     ctrl_c_state.mark_cancel_handled();
-                    renderer
-                        .line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
+                    renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
@@ -524,26 +462,14 @@ impl ModelPickerState {
             let auth_url = prepared.auth_url.clone();
             match request_external_url_open(url_guard, &auth_url).await? {
                 ExternalUrlOpenOutcome::Opened => {
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Opening browser for OpenAI ChatGPT authentication...",
-                    )?;
+                    renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
                     renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
                 }
                 ExternalUrlOpenOutcome::OpenFailed(err) => {
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Opening browser for OpenAI ChatGPT authentication...",
-                    )?;
+                    renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
                     renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to open browser automatically: {err}"),
-                    )?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Please open the URL manually in your browser.",
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("Failed to open browser automatically: {err}"))?;
+                    renderer.line(MessageStyle::Info, "Please open the URL manually in your browser.")?;
                 }
                 ExternalUrlOpenOutcome::Cancelled => {
                     renderer.line(MessageStyle::Info, "Cancelled opening authentication link.")?;
@@ -553,10 +479,7 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::Exit);
                 }
                 ExternalUrlOpenOutcome::Unsupported => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Blocked unsupported authentication link target.",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Blocked unsupported authentication link target.")?;
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
@@ -567,15 +490,13 @@ impl ModelPickerState {
             let Some(ctrl_c_notify) = self.ctrl_c_notify.as_ref() else {
                 return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
             };
-            match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await
-            {
+            match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await {
                 Ok(_) => {}
                 Err(err) if is_oauth_flow_cancelled(&err) => {
                     if ctrl_c_state.is_exit_requested() {
                         return Ok(ModelPickerProgress::Exit);
                     }
-                    renderer
-                        .line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
+                    renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
                     return Ok(ModelPickerProgress::Cancelled);
                 }
                 Err(err) => return Err(err),
@@ -634,10 +555,7 @@ impl ModelPickerState {
                     }
                     renderer.line(
                         MessageStyle::Info,
-                        &format!(
-                            "Loaded {} from workspace .env for {}.",
-                            selection.env_key, selection.provider_label
-                        ),
+                        &format!("Loaded {} from workspace .env for {}.", selection.env_key, selection.provider_label),
                     )?;
                     self.pending_api_key = None;
                     if let Some(current) = self.selection.as_mut() {
@@ -650,10 +568,8 @@ impl ModelPickerState {
                     if self.inline_enabled {
                         renderer.close_modal();
                     }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Using stored API key for {}.", selection.provider_label),
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, &format!("Using stored API key for {}.", selection.provider_label))?;
                     self.pending_api_key = None;
                     if let Some(current) = self.selection.as_mut() {
                         current.requires_api_key = false;
@@ -680,10 +596,7 @@ impl ModelPickerState {
                 Err(err) => {
                     renderer.line(
                         MessageStyle::Error,
-                        &format!(
-                            "Failed to inspect stored credentials for {}: {}",
-                            selection.provider_label, err
-                        ),
+                        &format!("Failed to inspect stored credentials for {}: {}", selection.provider_label, err),
                     )?;
                     prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
                     return Ok(ModelPickerProgress::InProgress);

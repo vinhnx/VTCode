@@ -62,8 +62,7 @@ impl AgentPalette {
             .iter()
             .filter_map(|entry| {
                 let haystack =
-                    format!("{} {}", entry.name, entry.description.as_deref().unwrap_or_default())
-                        .to_ascii_lowercase();
+                    format!("{} {}", entry.name, entry.description.as_deref().unwrap_or_default()).to_ascii_lowercase();
                 if !haystack.contains(&query) {
                     return None;
                 }
@@ -184,8 +183,8 @@ pub fn extract_agent_reference(input: &str, cursor: usize) -> Option<(usize, usi
         return None;
     }
 
-    let prefix_starts_token = token_start == 0
-        || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
+    let prefix_starts_token =
+        token_start == 0 || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
     if !prefix_starts_token {
         return None;
     }
@@ -201,20 +200,14 @@ mod tests {
     fn extracts_local_agent_reference() {
         let input = "use @agent-explorer now";
         let cursor = input.find(" now").unwrap_or(input.len());
-        assert_eq!(
-            extract_agent_reference(input, cursor),
-            Some((4, cursor, "explorer".to_string()))
-        );
+        assert_eq!(extract_agent_reference(input, cursor), Some((4, cursor, "explorer".to_string())));
     }
 
     #[test]
     fn extracts_plugin_agent_reference() {
         let input = "use @agent-github:reviewer now";
         let cursor = input.find(" now").unwrap_or(input.len());
-        assert_eq!(
-            extract_agent_reference(input, cursor),
-            Some((4, cursor, "github:reviewer".to_string()))
-        );
+        assert_eq!(extract_agent_reference(input, cursor), Some((4, cursor, "github:reviewer".to_string())));
     }
 
     #[test]

@@ -19,21 +19,17 @@ impl ModelId {
             ModelId::OpenRouterMoonshotaiKimiK3 => Cow::Borrowed(
                 "Kimi K3 2.8T parameter flagship with 1M context, native vision, and always-on deep reasoning via OpenRouter",
             ),
-            ModelId::OpenRouterMoonshotaiKimiK26 => Cow::Borrowed(
-                "Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter",
-            ),
+            ModelId::OpenRouterMoonshotaiKimiK26 => {
+                Cow::Borrowed("Kimi K2.6 multimodal agentic model for long-horizon coding and design via OpenRouter")
+            }
             ModelId::OpenRouterMoonshotaiKimiK27Code => Cow::Borrowed(
                 "Kimi K2.7 Code most capable coding model with long-horizon coding breakthrough via OpenRouter",
             ),
-            ModelId::OpenRouterZaiGlm51 => {
-                Cow::Borrowed("Z.AI GLM-5.1 next-gen foundation model via OpenRouter")
+            ModelId::OpenRouterZaiGlm51 => Cow::Borrowed("Z.AI GLM-5.1 next-gen foundation model via OpenRouter"),
+            ModelId::OpenRouterZaiGlm52 => {
+                Cow::Borrowed("Z.AI GLM-5.2 flagship model for long-horizon tasks with 1M context via OpenRouter")
             }
-            ModelId::OpenRouterZaiGlm52 => Cow::Borrowed(
-                "Z.AI GLM-5.2 flagship model for long-horizon tasks with 1M context via OpenRouter",
-            ),
-            ModelId::OpenRouterOpenAIGpt55 => {
-                Cow::Borrowed("OpenAI GPT-5.5 model accessed through OpenRouter")
-            }
+            ModelId::OpenRouterOpenAIGpt55 => Cow::Borrowed("OpenAI GPT-5.5 model accessed through OpenRouter"),
             // Custom user-defined models
             ModelId::Custom(_, _) => Cow::Borrowed("User-defined model"),
             model => Cow::Borrowed(

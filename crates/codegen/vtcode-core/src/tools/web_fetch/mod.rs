@@ -75,8 +75,7 @@ fn fetched_content_from_bytes(bytes: &[u8], max_bytes: usize) -> Result<FetchedW
     let truncated_by_max_bytes = source_size_bytes > max_bytes;
     if !truncated_by_max_bytes {
         return Ok(FetchedWebContent {
-            content: String::from_utf8(bytes.to_vec())
-                .context("Response body is not valid UTF-8")?,
+            content: String::from_utf8(bytes.to_vec()).context("Response body is not valid UTF-8")?,
             truncated_by_max_bytes,
             source_size_bytes,
         });
@@ -221,12 +220,7 @@ impl WebFetchTool {
         )
     }
 
-    async fn fetch_url_content(
-        &self,
-        url: &str,
-        max_bytes: usize,
-        timeout_secs: u64,
-    ) -> Result<FetchedWebContent> {
+    async fn fetch_url_content(&self, url: &str, max_bytes: usize, timeout_secs: u64) -> Result<FetchedWebContent> {
         // Validate URL
         self.validate_url(url)?;
 
@@ -328,8 +322,7 @@ impl WebFetchTool {
 
         // Parse the URL to extract the real host, which correctly separates
         // userinfo credentials (http://evil@127.0.0.1/) from the host.
-        let domain = extract_domain(url)
-            .map_err(|e| anyhow!("Failed to parse URL for security validation: {e}"))?;
+        let domain = extract_domain(url).map_err(|e| anyhow!("Failed to parse URL for security validation: {e}"))?;
 
         // Reject private, loopback, link-local, and reserved IPs.
         if is_private_host(&domain) {
@@ -441,9 +434,7 @@ impl WebFetchTool {
     fn check_malicious_indicators(&self, url: &str) -> Result<()> {
         for pattern in MALICIOUS_PATTERNS {
             if url.contains(pattern) {
-                return Err(anyhow!(
-                    "URL contains potentially malicious pattern. Access blocked for safety"
-                ));
+                return Err(anyhow!("URL contains potentially malicious pattern. Access blocked for safety"));
             }
         }
 
@@ -483,12 +474,10 @@ impl WebFetchTool {
     }
 
     async fn run(&self, raw_args: Value) -> Result<Value> {
-        let args: WebFetchArgs = serde_json::from_value(raw_args).context(
-            "Invalid arguments for web_fetch tool. Provide 'url' (and optionally 'prompt').",
-        )?;
+        let args: WebFetchArgs = serde_json::from_value(raw_args)
+            .context("Invalid arguments for web_fetch tool. Provide 'url' (and optionally 'prompt').")?;
 
-        let max_bytes =
-            args.max_bytes.map(|v| v.min(MAX_ALLOWED_BYTES)).unwrap_or(MAX_CONTENT_SIZE);
+        let max_bytes = args.max_bytes.map(|v| v.min(MAX_ALLOWED_BYTES)).unwrap_or(MAX_CONTENT_SIZE);
         let timeout_secs = args
             .timeout_secs
             .map(|v| v.min(MAX_ALLOWED_TIMEOUT_SECS))
@@ -530,8 +519,7 @@ impl WebFetchTool {
         // Truncate preview for UI display only
         let preview_limit = 8000;
         let (preview, truncated) = if content_length > preview_limit {
-            let truncated_content =
-                vtcode_commons::formatting::truncate_byte_budget(&content, preview_limit, "...");
+            let truncated_content = vtcode_commons::formatting::truncate_byte_budget(&content, preview_limit, "...");
             (truncated_content, true)
         } else {
             (content.clone(), false)
@@ -561,8 +549,7 @@ impl WebFetchTool {
 
         // Add overflow indicator if preview was truncated
         if truncated {
-            response["overflow"] =
-                json!(format!("[+{} more characters]", content_length - preview_limit));
+            response["overflow"] = json!(format!("[+{} more characters]", content_length - preview_limit));
         }
 
         if fetched.truncated_by_max_bytes {
@@ -585,10 +572,7 @@ impl WebFetchTool {
     fn default_headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("text/markdown, */*"));
-        headers.insert(
-            USER_AGENT,
-            HeaderValue::from_static("VT Code/1.0 (compatible; web-fetch tool)"),
-        );
+        headers.insert(USER_AGENT, HeaderValue::from_static("VT Code/1.0 (compatible; web-fetch tool)"));
         headers
     }
 }
@@ -628,9 +612,7 @@ pub(super) fn is_private_host(host: &str) -> bool {
     }
 
     // DNS names like "localhost" that will resolve to loopback.
-    if trimmed.eq_ignore_ascii_case("localhost")
-        || trimmed.eq_ignore_ascii_case("localhost.localdomain")
-    {
+    if trimmed.eq_ignore_ascii_case("localhost") || trimmed.eq_ignore_ascii_case("localhost.localdomain") {
         return true;
     }
 
@@ -708,8 +690,7 @@ fn is_private_ipv6(v6: std::net::Ipv6Addr) -> bool {
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
     let normalized_domain = domain.trim_end_matches('.').to_ascii_lowercase();
-    let normalized_allowed =
-        allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
+    let normalized_allowed = allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
 
     // Wildcard entries like `*.example.com` match the apex and any
     // subdomain. The `*` must be a complete leading label, not a partial
@@ -726,8 +707,7 @@ fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
         return normalized_domain == suffix || normalized_domain.ends_with(&format!(".{suffix}"));
     }
 
-    normalized_domain == normalized_allowed
-        || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
+    normalized_domain == normalized_allowed || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
 }
 
 impl Default for WebFetchTool {
@@ -799,12 +779,7 @@ impl Tool for WebFetchTool {
 /// in cases like turn_578, where the agent was getting real HTTP 4xx
 /// responses but reported the hosts as "blocked" because the error format
 /// only carried a free-form message.
-fn web_fetch_error_response(
-    url: &str,
-    max_bytes: usize,
-    timeout_secs: u64,
-    err: &anyhow::Error,
-) -> Value {
+fn web_fetch_error_response(url: &str, max_bytes: usize, timeout_secs: u64, err: &anyhow::Error) -> Value {
     let message = err.to_string();
     let (category, http_status, next_action) = classify_web_fetch_error(&message);
 
@@ -842,10 +817,7 @@ fn classify_web_fetch_error(message: &str) -> (&'static str, Option<u16>, &'stat
             "The request timed out. The host may be slow or unreachable. Try web_search to look up the page title first, or retry with a larger timeout_secs.",
         );
     }
-    if lower.contains("dns")
-        || lower.contains("name resolution")
-        || lower.contains("connection refused")
-    {
+    if lower.contains("dns") || lower.contains("name resolution") || lower.contains("connection refused") {
         return (
             "network_error",
             None,
@@ -1273,8 +1245,7 @@ mod tests {
 
     #[test]
     fn oversized_body_is_truncated_instead_of_rejected() {
-        let fetched = fetched_content_from_bytes("αβγ".as_bytes(), 3)
-            .expect("valid utf-8 prefix should be returned");
+        let fetched = fetched_content_from_bytes("αβγ".as_bytes(), 3).expect("valid utf-8 prefix should be returned");
 
         assert_eq!(fetched.content, "α");
         assert!(fetched.truncated_by_max_bytes);
@@ -1608,9 +1579,7 @@ mod tests {
         // own tests so a regression in the delegate is caught here too.
         assert_eq!(extract_http_status("status: 403 Forbidden"), Some(403));
         assert_eq!(
-            extract_http_status(
-                "HTTP status server error (503 Service Unavailable) for url (https://example.com/)"
-            ),
+            extract_http_status("HTTP status server error (503 Service Unavailable) for url (https://example.com/)"),
             Some(503)
         );
         assert_eq!(extract_http_status("status:  500 Internal"), Some(500));

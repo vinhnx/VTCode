@@ -115,11 +115,7 @@ impl ToolDiscovery {
     /// only for tools they intend to use.
     ///
     /// Follows AGENTS.md guidelines: limits results to 5 items with overflow indication.
-    pub async fn search_tools(
-        &self,
-        keyword: &str,
-        detail_level: DetailLevel,
-    ) -> Result<Vec<ToolDiscoveryResult>> {
+    pub async fn search_tools(&self, keyword: &str, detail_level: DetailLevel) -> Result<Vec<ToolDiscoveryResult>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
         debug!(keyword = keyword, count = tools.len(), "Searching tools for keyword");
@@ -151,9 +147,7 @@ impl ToolDiscovery {
         }
 
         // Sort by relevance score (highest first)
-        results.sort_by(|a, b| {
-            b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(Ordering::Equal)
-        });
+        results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(Ordering::Equal));
 
         // Apply AGENTS.md compliance: limit to 5 results with overflow indication
         let total_results = results.len();
@@ -202,14 +196,12 @@ impl ToolDiscovery {
     pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        Ok(group_results_by_provider_preserving_order(tools.into_iter().map(|tool| {
-            ToolDiscoveryResult {
-                name: tool.name,
-                provider: tool.provider,
-                description: tool.description,
-                relevance_score: 1.0,
-                input_schema: None,
-            }
+        Ok(group_results_by_provider_preserving_order(tools.into_iter().map(|tool| ToolDiscoveryResult {
+            name: tool.name,
+            provider: tool.provider,
+            description: tool.description,
+            relevance_score: 1.0,
+            input_schema: None,
         })))
     }
 

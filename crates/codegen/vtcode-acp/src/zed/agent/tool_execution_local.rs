@@ -1,14 +1,12 @@
 use super::ZedAgent;
 use crate::acp;
 use crate::reports::{
-    TOOL_RESPONSE_KEY_CONTENT, TOOL_RESPONSE_KEY_PATH, TOOL_RESPONSE_KEY_STATUS,
-    TOOL_RESPONSE_KEY_TOOL, TOOL_RESPONSE_KEY_TRUNCATED, TOOL_SUCCESS_LABEL, ToolExecutionReport,
-    create_diff_content,
+    TOOL_RESPONSE_KEY_CONTENT, TOOL_RESPONSE_KEY_PATH, TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL,
+    TOOL_RESPONSE_KEY_TRUNCATED, TOOL_SUCCESS_LABEL, ToolExecutionReport, create_diff_content,
 };
 use crate::tooling::{
-    TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_MESSAGE_KEY, TOOL_LIST_FILES_PATH_ARG,
-    TOOL_LIST_FILES_RESULT_KEY, TOOL_LIST_FILES_SUMMARY_MAX_ITEMS, TOOL_LIST_FILES_URI_ARG,
-    TOOL_READ_FILE_LIMIT_ARG, TOOL_READ_FILE_LINE_ARG,
+    TOOL_LIST_FILES_ITEMS_KEY, TOOL_LIST_FILES_MESSAGE_KEY, TOOL_LIST_FILES_PATH_ARG, TOOL_LIST_FILES_RESULT_KEY,
+    TOOL_LIST_FILES_SUMMARY_MAX_ITEMS, TOOL_LIST_FILES_URI_ARG, TOOL_READ_FILE_LIMIT_ARG, TOOL_READ_FILE_LINE_ARG,
 };
 use crate::zed::connection::ConnectionHandle;
 use anyhow::Result;
@@ -24,25 +22,16 @@ use vtcode_core::utils::path::ensure_path_within_workspace;
 const RESTRICTED_LOCAL_TOOLS: &[&str] = &["debug_agent", "analyze_agent", "execute_code"];
 
 impl ZedAgent {
-    pub(super) async fn execute_local_tool(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        call_id: &str,
-    ) -> ToolExecutionReport {
+    pub(super) async fn execute_local_tool(&self, tool_name: &str, args: &Value, call_id: &str) -> ToolExecutionReport {
         if RESTRICTED_LOCAL_TOOLS.contains(&tool_name) {
-            warn!(
-                tool = tool_name,
-                "Attempted execution of restricted tool from external ACP client"
-            );
+            warn!(tool = tool_name, "Attempted execution of restricted tool from external ACP client");
             return ToolExecutionReport::failure(
                 tool_name,
                 &format!("Tool '{tool_name}' is not available to external clients"),
             );
         }
 
-        let policy =
-            ExecutionPolicySnapshot::default().with_invocation_id(Some(call_id.to_string()));
+        let policy = ExecutionPolicySnapshot::default().with_invocation_id(Some(call_id.to_string()));
         let request = ToolExecutionRequest::new(tool_name, args.clone()).with_policy(policy);
         let outcome = self.local_tool_registry.execute_public_tool_request(request).await;
         match (outcome.output, outcome.error) {
@@ -65,22 +54,12 @@ impl ZedAgent {
                 );
                 ToolExecutionReport::failure(tool_name, &message)
             }
-            (None, None) => ToolExecutionReport::failure(
-                tool_name,
-                "Tool execution finished without output or error",
-            ),
+            (None, None) => ToolExecutionReport::failure(tool_name, "Tool execution finished without output or error"),
         }
     }
 
-    fn render_local_tool_content(
-        &self,
-        tool_name: &str,
-        output: &Value,
-    ) -> Vec<acp::ToolCallContent> {
-        if tool_name == tools::EDIT_FILE
-            || tool_name == tools::WRITE_FILE
-            || tool_name == tools::CREATE_FILE
-        {
+    fn render_local_tool_content(&self, tool_name: &str, output: &Value) -> Vec<acp::ToolCallContent> {
+        if tool_name == tools::EDIT_FILE || tool_name == tools::WRITE_FILE || tool_name == tools::CREATE_FILE {
             if let (Some(path), Some(old_text), Some(new_text)) = (
                 output.get("path").and_then(Value::as_str),
                 output.get("old_text").and_then(Value::as_str),
@@ -88,19 +67,16 @@ impl ZedAgent {
             ) {
                 return vec![create_diff_content(path, Some(old_text), new_text)];
             }
-            if let (Some(path), Some(new_text)) = (
-                output.get("path").and_then(Value::as_str),
-                output.get("new_text").and_then(Value::as_str),
-            ) {
+            if let (Some(path), Some(new_text)) =
+                (output.get("path").and_then(Value::as_str), output.get("new_text").and_then(Value::as_str))
+            {
                 return vec![create_diff_content(path, None, new_text)];
             }
         }
 
         let mut sections = Vec::with_capacity(10);
 
-        if let Some(stdout) =
-            output.get("stdout").and_then(Value::as_str).filter(|value| !value.is_empty())
-        {
+        if let Some(stdout) = output.get("stdout").and_then(Value::as_str).filter(|value| !value.is_empty()) {
             let plain = strip_ansi(stdout);
             let (rendered, truncated) = self.truncate_text(&plain);
             sections.push(format!("stdout:\n{rendered}"));
@@ -109,9 +85,7 @@ impl ZedAgent {
             }
         }
 
-        if let Some(stderr) =
-            output.get("stderr").and_then(Value::as_str).filter(|value| !value.is_empty())
-        {
+        if let Some(stderr) = output.get("stderr").and_then(Value::as_str).filter(|value| !value.is_empty()) {
             let plain = strip_ansi(stderr);
             let (rendered, truncated) = self.truncate_text(&plain);
             sections.push(format!("stderr:\n{rendered}"));
@@ -121,9 +95,7 @@ impl ZedAgent {
         }
 
         if sections.is_empty() {
-            if let Some(message) =
-                output.get("message").and_then(Value::as_str).filter(|value| !value.is_empty())
-            {
+            if let Some(message) = output.get("message").and_then(Value::as_str).filter(|value| !value.is_empty()) {
                 let plain = strip_ansi(message);
                 let (rendered, truncated) = self.truncate_text(&plain);
                 sections.push(rendered);
@@ -131,8 +103,7 @@ impl ZedAgent {
                     sections.push("[message truncated]".to_string());
                 }
             } else {
-                let summary =
-                    serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string());
+                let summary = serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string());
                 let plain = strip_ansi(&summary);
                 let (rendered, truncated) = self.truncate_text(&plain);
                 sections.push(rendered);
@@ -185,11 +156,7 @@ impl ZedAgent {
 
         let locations = vec![acp::ToolCallLocation::new(path.clone()).line(line)];
 
-        Ok(ToolExecutionReport::success(
-            vec![acp::ToolCallContent::from(tool_content)],
-            locations,
-            payload,
-        ))
+        Ok(ToolExecutionReport::success(vec![acp::ToolCallContent::from(tool_content)], locations, payload))
     }
 
     pub(crate) async fn run_list_files(&self, args: &Value) -> Result<ToolExecutionReport, String> {
@@ -262,10 +229,9 @@ impl ZedAgent {
     fn list_files_content(output: &Value) -> Vec<acp::ToolCallContent> {
         let mut lines = Vec::new();
 
-        if let (Some(count), Some(total)) = (
-            output.get("count").and_then(Value::as_u64),
-            output.get("total").and_then(Value::as_u64),
-        ) {
+        if let (Some(count), Some(total)) =
+            (output.get("count").and_then(Value::as_u64), output.get("total").and_then(Value::as_u64))
+        {
             lines.push(format!("Showing {count} of {total} items"));
         }
 
@@ -300,9 +266,7 @@ impl ZedAgent {
         if let Some(has_more) = output.get("has_more").and_then(Value::as_bool)
             && has_more
         {
-            lines.push(
-                "Additional results available (adjust page or per_page to view more).".to_string(),
-            );
+            lines.push("Additional results available (adjust page or per_page to view more).".to_string());
         }
 
         if let Some(message) = output

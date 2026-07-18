@@ -102,8 +102,7 @@ mod tests {
     #[tokio::test]
     async fn creates_audit_entry() {
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let entry =
-            AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
+        let entry = AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
         assert!(entry.allowed);
         assert!(!entry.timestamp.is_empty());
     }
@@ -112,8 +111,7 @@ mod tests {
     async fn logs_entries() {
         let logger = SafetyAuditLogger::new(true);
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let entry =
-            AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
+        let entry = AuditEntry::new(cmd, true, "git status allowed".to_string(), "Allow".to_string());
 
         logger.log(entry).await;
         assert_eq!(logger.count().await, 1);

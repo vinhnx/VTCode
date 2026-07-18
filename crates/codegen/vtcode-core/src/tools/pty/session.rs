@@ -321,11 +321,7 @@ impl PtySessionHandle {
         } else {
             self.preview_command_echo(text)
         };
-        if filtered.is_empty() {
-            None
-        } else {
-            Some(filtered)
-        }
+        if filtered.is_empty() { None } else { Some(filtered) }
     }
 
     /// Check if all output from this PTY session has been consumed.

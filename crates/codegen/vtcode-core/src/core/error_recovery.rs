@@ -143,12 +143,7 @@ impl ErrorRecoveryManager {
     }
 
     /// Record a new error
-    pub fn record_error(
-        &mut self,
-        error_type: ErrorType,
-        message: String,
-        context: ErrorContext,
-    ) -> String {
+    pub fn record_error(&mut self, error_type: ErrorType, message: String, context: ErrorContext) -> String {
         // Use a more efficient ID generation with minimal formatting
         let error_count = self.errors.len();
         let timestamp_short = current_timestamp() % 10000;
@@ -213,10 +208,7 @@ impl ErrorRecoveryManager {
 
         let strategies = if critical_errors {
             vec![
-                PreservationStrategy::SelectiveRetention {
-                    preserve_decisions: true,
-                    preserve_errors: true,
-                },
+                PreservationStrategy::SelectiveRetention { preserve_decisions: true, preserve_errors: true },
                 PreservationStrategy::ContextReset { preserve_session_data: true },
             ]
         } else {
@@ -320,12 +312,7 @@ impl ErrorRecoveryManager {
     /// Check if an operation should be retried based on error analysis
     /// Cold path: only called after an error has occurred.
     #[cold]
-    pub async fn should_retry_operation(
-        &self,
-        error_type: &ErrorType,
-        error: &anyhow::Error,
-        attempt: u32,
-    ) -> bool {
+    pub async fn should_retry_operation(&self, error_type: &ErrorType, error: &anyhow::Error, attempt: u32) -> bool {
         let operation_type = self.get_operation_type(error_type);
         TIMEOUT_DETECTOR.should_retry(&operation_type, error, attempt).await
     }

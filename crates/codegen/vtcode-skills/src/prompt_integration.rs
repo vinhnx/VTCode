@@ -39,10 +39,7 @@ pub fn generate_skills_prompt(skills: &[SkillMetadata]) -> String {
 }
 
 /// Generate skills section with specified rendering mode
-pub fn generate_skills_prompt_with_mode(
-    skills: &[SkillMetadata],
-    mode: SkillsRenderMode,
-) -> String {
+pub fn generate_skills_prompt_with_mode(skills: &[SkillMetadata], mode: SkillsRenderMode) -> String {
     if skills.is_empty() {
         return String::new();
     }
@@ -65,7 +62,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     let mut prompt = String::from("\n\n## Skills\n");
     prompt.push_str(
         "Available skills (name: description + directory + scope). Content on disk; open SKILL.md when triggered.\n\n",
-	);
+    );
 
     // Sort skills by name for stable ordering
     let mut skill_list: Vec<_> = skills.iter().collect();
@@ -86,10 +83,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Admin => "admin",
         };
 
-        let line = format!(
-            "- {}: {} (file: {}, scope: {})",
-            skill.name, skill.description, location, scope
-        );
+        let line = format!("- {}: {} (file: {}, scope: {})", skill.name, skill.description, location, scope);
 
         let _ = writeln!(prompt, "{line}");
     }
@@ -129,28 +123,16 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
         xml.push_str("  <skill>\n");
         let _ = writeln!(xml, "    <name>{}</name>", xml_escape(&skill.name));
         let _ = writeln!(xml, "    <description>{}</description>", xml_escape(&skill.description));
-        let _ = writeln!(
-            xml,
-            "    <location>{}</location>",
-            xml_escape(&skill.path.display().to_string())
-        );
+        let _ = writeln!(xml, "    <location>{}</location>", xml_escape(&skill.path.display().to_string()));
 
         // Optional fields per Agent Skills spec
         if let Some(manifest) = &skill.manifest {
             if let Some(ref compatibility) = manifest.compatibility {
-                let _ = writeln!(
-                    xml,
-                    "    <compatibility>{}</compatibility>",
-                    xml_escape(compatibility)
-                );
+                let _ = writeln!(xml, "    <compatibility>{}</compatibility>", xml_escape(compatibility));
             }
 
             if let Some(ref allowed_tools) = manifest.allowed_tools {
-                let _ = writeln!(
-                    xml,
-                    "    <allowed-tools>{}</allowed-tools>",
-                    xml_escape(allowed_tools)
-                );
+                let _ = writeln!(xml, "    <allowed-tools>{}</allowed-tools>", xml_escape(allowed_tools));
             }
         }
 
@@ -158,10 +140,7 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
     }
 
     if overflow > 0 {
-        let _ = writeln!(
-            xml,
-            "  <!-- +{overflow} more skills available{SKILL_OVERFLOW_SUFFIX_XML} -->"
-        );
+        let _ = writeln!(xml, "  <!-- +{overflow} more skills available{SKILL_OVERFLOW_SUFFIX_XML} -->");
     }
 
     xml.push_str("</available_skills>\n");
@@ -400,13 +379,9 @@ mod tests {
 
         skills.push(skill);
 
-        let xml_output =
-            generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
-        let markdown_output = generate_skills_prompt_with_format(
-            &skills,
-            SkillsRenderMode::Lean,
-            PromptFormat::Markdown,
-        );
+        let xml_output = generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
+        let markdown_output =
+            generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Markdown);
 
         // XML format should have XML tags
         assert!(xml_output.contains("<available_skills>"));

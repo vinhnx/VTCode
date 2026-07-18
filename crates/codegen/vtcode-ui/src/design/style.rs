@@ -117,8 +117,7 @@ mod tests {
 
     #[test]
     fn anstyle_style_with_fg() {
-        let input =
-            AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(anstyle::AnsiColor::Green)));
+        let input = AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(anstyle::AnsiColor::Green)));
         let result = anstyle_to_ratatui_style(input);
         assert_eq!(result.fg, Some(ratatui::style::Color::Green));
     }
@@ -126,8 +125,7 @@ mod tests {
     #[test]
     fn anstyle_style_with_magenta_fg() {
         // Regression test: Magenta should map to Magenta, not DarkGray.
-        let input =
-            AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(anstyle::AnsiColor::Magenta)));
+        let input = AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(anstyle::AnsiColor::Magenta)));
         let result = anstyle_to_ratatui_style(input);
         assert_eq!(result.fg, Some(ratatui::style::Color::Magenta));
     }
@@ -149,12 +147,8 @@ mod tests {
 
     #[test]
     fn inline_text_style_with_fallback() {
-        let result = inline_text_style_to_ratatui(
-            None,
-            None,
-            Effects::BOLD,
-            Some(AnstyleColor::Ansi(anstyle::AnsiColor::Cyan)),
-        );
+        let result =
+            inline_text_style_to_ratatui(None, None, Effects::BOLD, Some(AnstyleColor::Ansi(anstyle::AnsiColor::Cyan)));
         assert_eq!(result.fg, Some(ratatui::style::Color::Cyan));
         assert!(result.add_modifier.contains(Modifier::BOLD));
     }
@@ -203,20 +197,15 @@ mod tests {
 
     #[test]
     fn convenience_fg_bg_style() {
-        let s = fg_bg_style(
-            AnstyleColor::Ansi(anstyle::AnsiColor::Green),
-            AnstyleColor::Ansi(anstyle::AnsiColor::Black),
-        );
+        let s =
+            fg_bg_style(AnstyleColor::Ansi(anstyle::AnsiColor::Green), AnstyleColor::Ansi(anstyle::AnsiColor::Black));
         assert_eq!(s.fg, Some(ratatui::style::Color::Green));
         assert_eq!(s.bg, Some(ratatui::style::Color::Black));
     }
 
     #[test]
     fn convenience_colored_with_effects() {
-        let s = colored_with_effects(
-            AnstyleColor::Ansi(anstyle::AnsiColor::Yellow),
-            Effects::BOLD | Effects::ITALIC,
-        );
+        let s = colored_with_effects(AnstyleColor::Ansi(anstyle::AnsiColor::Yellow), Effects::BOLD | Effects::ITALIC);
         assert_eq!(s.fg, Some(ratatui::style::Color::Yellow));
         assert!(s.add_modifier.contains(Modifier::BOLD));
         assert!(s.add_modifier.contains(Modifier::ITALIC));

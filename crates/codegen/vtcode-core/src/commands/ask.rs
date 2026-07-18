@@ -32,9 +32,7 @@ pub async fn handle_ask_command(
     let provider_name = if config.provider.trim().is_empty() {
         infer_provider_from_model(&request.model)
             .map(|provider| provider.to_string())
-            .ok_or_else(|| {
-                anyhow::anyhow!("Cannot determine provider for model: {}", request.model)
-            })?
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine provider for model: {}", request.model))?
     } else {
         config.provider.to_lowercase()
     };
@@ -113,8 +111,8 @@ mod tests {
     use super::*;
     use crate::llm::collect_single_response;
     use crate::llm::provider::{
-        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMResponse, LLMStream,
-        LLMStreamEvent, NormalizedStreamEvent, Usage,
+        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMResponse, LLMStream, LLMStreamEvent,
+        NormalizedStreamEvent, Usage,
     };
     use async_trait::async_trait;
     use futures::stream;
@@ -212,10 +210,7 @@ mod tests {
             panic!("legacy stream should not be used when normalized stream is available")
         }
 
-        async fn stream_normalized(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMNormalizedStream, LLMError> {
+        async fn stream_normalized(&self, _request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![
                 Ok(NormalizedStreamEvent::TextDelta { delta: "hello ".to_string() }),
                 Ok(NormalizedStreamEvent::ReasoningDelta { delta: "thinking ".to_string() }),

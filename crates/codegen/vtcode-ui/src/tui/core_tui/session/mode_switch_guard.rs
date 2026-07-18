@@ -10,7 +10,8 @@ use ratatui::crossterm::event::KeyEvent;
 
 /// Warning shown when a mode switch (primary-agent cycle or planning workflow)
 /// is requested while a turn is actively processing.
-pub(crate) const MODE_SWITCH_BUSY_NOTICE: &str = "Mode switching is disabled while the agent is processing. It will be available once this turn finishes.";
+pub(crate) const MODE_SWITCH_BUSY_NOTICE: &str =
+    "Mode switching is disabled while the agent is processing. It will be available once this turn finishes.";
 
 /// Minimal surface a session must expose for the shared mode-switch guard.
 ///
@@ -33,10 +34,7 @@ pub(crate) trait ModeSwitchGuardSession {
 /// and a notice is shown instead, and this returns `false`. The caller is
 /// responsible for constructing the cycle event, since the concrete `InlineEvent`
 /// type differs between the app session and the inline session.
-pub(crate) fn try_cycle_primary_agent<S: ModeSwitchGuardSession>(
-    session: &mut S,
-    key: &KeyEvent,
-) -> bool {
+pub(crate) fn try_cycle_primary_agent<S: ModeSwitchGuardSession>(session: &mut S, key: &KeyEvent) -> bool {
     if session.is_running_activity() {
         session.notify_mode_switch_busy();
         return false;

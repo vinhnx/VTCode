@@ -6,14 +6,9 @@ use crate::tooling::{AcpToolRegistry, SupportedTool, ToolDescriptor};
 pub trait ToolRegistryProvider {
     fn registered_tools(&self) -> Vec<SupportedTool>;
 
-    fn definitions_for(
-        &self,
-        enabled_tools: &[SupportedTool],
-        include_local: bool,
-    ) -> Vec<ToolDefinition>;
+    fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition>;
 
-    fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value)
-    -> String;
+    fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String;
 
     fn lookup(&self, function_name: &str) -> Option<ToolDescriptor>;
 
@@ -25,20 +20,11 @@ impl ToolRegistryProvider for AcpToolRegistry {
         AcpToolRegistry::registered_tools(self)
     }
 
-    fn definitions_for(
-        &self,
-        enabled_tools: &[SupportedTool],
-        include_local: bool,
-    ) -> Vec<ToolDefinition> {
+    fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
         AcpToolRegistry::definitions_for(self, enabled_tools, include_local)
     }
 
-    fn render_title(
-        &self,
-        descriptor: ToolDescriptor,
-        function_name: &str,
-        args: &Value,
-    ) -> String {
+    fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String {
         AcpToolRegistry::render_title(self, descriptor, function_name, args)
     }
 
@@ -59,20 +45,11 @@ where
         <T as ToolRegistryProvider>::registered_tools(&**self)
     }
 
-    fn definitions_for(
-        &self,
-        enabled_tools: &[SupportedTool],
-        include_local: bool,
-    ) -> Vec<ToolDefinition> {
+    fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
         <T as ToolRegistryProvider>::definitions_for(&**self, enabled_tools, include_local)
     }
 
-    fn render_title(
-        &self,
-        descriptor: ToolDescriptor,
-        function_name: &str,
-        args: &Value,
-    ) -> String {
+    fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String {
         <T as ToolRegistryProvider>::render_title(&**self, descriptor, function_name, args)
     }
 

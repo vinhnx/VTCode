@@ -159,12 +159,7 @@ impl ProgressLedger {
     }
 
     /// Record handoff metadata from a previous session.
-    pub fn set_handoff(
-        &mut self,
-        previous_session_id: &str,
-        summary: &str,
-        git_checkpoint: Option<String>,
-    ) {
+    pub fn set_handoff(&mut self, previous_session_id: &str, summary: &str, git_checkpoint: Option<String>) {
         self.previous_session_id = Some(previous_session_id.to_string());
         self.handoff_summary = Some(summary.to_string());
         self.git_checkpoint = git_checkpoint;
@@ -186,10 +181,7 @@ impl ProgressLedger {
         let mut out = String::new();
         out.push_str("# Session Progress\n\n");
         out.push_str(&format!("**Goal:** {}\n", self.goal));
-        out.push_str(&format!(
-            "**Completion:** {:.0}%\n",
-            (self.completion_ratio() * 100.0).round()
-        ));
+        out.push_str(&format!("**Completion:** {:.0}%\n", (self.completion_ratio() * 100.0).round()));
         out.push_str(&format!("**Confidence:** {:.2}\n", self.confidence));
         if let Some(since) = &self.stalled_since {
             out.push_str(&format!("**Stalled since:** {since}\n"));
@@ -242,10 +234,7 @@ pub fn progress_path(workspace: &Path, session_id: &str) -> std::path::PathBuf {
 ///
 /// Returns `Ok(None)` when no ledger file exists yet (a fresh or pre-ledger
 /// session) rather than an error, so callers can treat absence as "no signal".
-pub fn load_progress(
-    workspace: &Path,
-    session_id: &str,
-) -> Result<Option<ProgressLedger>, SessionStoreError> {
+pub fn load_progress(workspace: &Path, session_id: &str) -> Result<Option<ProgressLedger>, SessionStoreError> {
     let path = progress_path(workspace, session_id);
     if !path.exists() {
         return Ok(None);
@@ -256,11 +245,7 @@ pub fn load_progress(
 }
 
 /// Persist the progress ledger for a session, creating `derived/` if needed.
-pub fn save_progress(
-    workspace: &Path,
-    session_id: &str,
-    ledger: &ProgressLedger,
-) -> Result<(), SessionStoreError> {
+pub fn save_progress(workspace: &Path, session_id: &str, ledger: &ProgressLedger) -> Result<(), SessionStoreError> {
     let path = progress_path(workspace, session_id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

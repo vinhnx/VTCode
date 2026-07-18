@@ -43,9 +43,7 @@ fn extract_highlight_items(body: &str) -> Vec<String> {
 
         // Stop at the next major section: ## headers or ### headers that
         // are NOT #### sub-headers (e.g. "### Other Changes").
-        if trimmed.starts_with("## ")
-            || (trimmed.starts_with("### ") && !trimmed.starts_with("#### "))
-        {
+        if trimmed.starts_with("## ") || (trimmed.starts_with("### ") && !trimmed.starts_with("#### ")) {
             break;
         }
 
@@ -68,9 +66,8 @@ fn extract_highlight_items(body: &str) -> Vec<String> {
 }
 
 /// Compiled regex for stripping trailing `(commit_hash) (@author)` patterns.
-static COMMIT_METADATA_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\s*\([0-9a-fA-F]+\)\s*(\(@[^)]+\))?\s*$").expect("valid regex pattern")
-});
+static COMMIT_METADATA_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s*\([0-9a-fA-F]+\)\s*(\(@[^)]+\))?\s*$").expect("valid regex pattern"));
 
 /// Strip trailing `(commit_hash) (@author)` patterns from a highlight line.
 fn strip_commit_metadata(text: &str) -> String {

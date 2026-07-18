@@ -16,8 +16,7 @@ use tokio::time::{sleep, timeout};
 const DEFAULT_MAX_INFLIGHT_PER_MODEL: usize = 4;
 const RATE_LIMIT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
 
-static MODEL_LIMITERS: LazyLock<Mutex<HashMap<String, Arc<Semaphore>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static MODEL_LIMITERS: LazyLock<Mutex<HashMap<String, Arc<Semaphore>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
@@ -84,10 +83,7 @@ pub mod request_builder {
     use super::*;
 
     /// Build standard headers for API requests
-    pub fn build_headers(
-        api_key: &str,
-        provider_headers: Option<Vec<(&str, &str)>>,
-    ) -> reqwest::header::HeaderMap {
+    pub fn build_headers(api_key: &str, provider_headers: Option<Vec<(&str, &str)>>) -> reqwest::header::HeaderMap {
         use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 
         let mut headers = HeaderMap::new();
@@ -101,9 +97,7 @@ pub mod request_builder {
         // Add provider-specific headers
         if let Some(custom_headers) = provider_headers {
             for (key, value) in custom_headers {
-                if let (Ok(name), Ok(val)) =
-                    (HeaderName::from_bytes(key.as_bytes()), HeaderValue::from_str(value))
-                {
+                if let (Ok(name), Ok(val)) = (HeaderName::from_bytes(key.as_bytes()), HeaderValue::from_str(value)) {
                     headers.insert(name, val);
                 }
             }
@@ -197,9 +191,7 @@ pub trait BaseProvider: Send + Sync {
                                             // Check for provider-specific error format
                                             if let Some(error_obj) = json_value.get("error") {
                                                 let error_text = error_obj.to_string();
-                                                if attempt < max_retries
-                                                    && should_retry_status(status)
-                                                {
+                                                if attempt < max_retries && should_retry_status(status) {
                                                     sleep(backoff_duration(attempt)).await;
                                                     last_error = Some(handle_http_error(
                                                         status,
@@ -220,21 +212,13 @@ pub trait BaseProvider: Send + Sync {
                                         }
                                         Err(_) => {
                                             // Not JSON - treat as error text
-                                            if attempt < max_retries && should_retry_status(status)
-                                            {
+                                            if attempt < max_retries && should_retry_status(status) {
                                                 sleep(backoff_duration(attempt)).await;
-                                                last_error = Some(handle_http_error(
-                                                    status,
-                                                    &text,
-                                                    &self.config().model,
-                                                ));
+                                                last_error =
+                                                    Some(handle_http_error(status, &text, &self.config().model));
                                                 continue;
                                             }
-                                            return Err(handle_http_error(
-                                                status,
-                                                &text,
-                                                &self.config().model,
-                                            ));
+                                            return Err(handle_http_error(status, &text, &self.config().model));
                                         }
                                     }
                                 }

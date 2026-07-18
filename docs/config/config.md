@@ -22,11 +22,11 @@ VT Code uses a configuration file named `vtcode.toml` that can be placed at the 
 
 VT Code supports several mechanisms for setting config values:
 
-- The `$VTCODE_HOME/config.toml` configuration file where the `VTCODE_HOME` environment value defaults to `~/.vtcode`.
+- The `$VTCODE_HOME/vtcode.toml` configuration file where the `VTCODE_HOME` environment value defaults to `~/.vtcode`.
 - The workspace-level `vtcode.toml` file that can be placed at the root of your project (similar to `AGENTS.md` in the OpenAI Codex).
 - Environment variables that can override certain configuration options.
 
-Both the workspace `vtcode.toml` and the main `config.toml` file support the following options:
+Both the workspace `vtcode.toml` and the main `vtcode.toml` file support the following options:
 
 ## Feature flags
 

@@ -88,8 +88,7 @@ impl TaskManager {
         completed_tasks.sort_by(|a, b| a.1.cmp(&b.1));
 
         let evict_count = (self.max_tasks / 10).max(1);
-        let evicted_ids: HashSet<_> =
-            completed_tasks.into_iter().take(evict_count).map(|(id, _)| id).collect();
+        let evicted_ids: HashSet<_> = completed_tasks.into_iter().take(evict_count).map(|(id, _)| id).collect();
 
         if evicted_ids.is_empty() {
             return;
@@ -120,12 +119,7 @@ impl TaskManager {
     }
 
     /// Update task status
-    pub async fn update_status(
-        &self,
-        task_id: &str,
-        state: TaskState,
-        message: Option<Message>,
-    ) -> A2aResult<Task> {
+    pub async fn update_status(&self, task_id: &str, state: TaskState, message: Option<Message>) -> A2aResult<Task> {
         let mut manager_state = self.state.write().await;
         let task = manager_state
             .tasks
@@ -203,11 +197,7 @@ impl TaskManager {
         true
     }
 
-    fn clone_task_for_listing(
-        task: &Task,
-        include_artifacts: bool,
-        history_length: Option<usize>,
-    ) -> Task {
+    fn clone_task_for_listing(task: &Task, include_artifacts: bool, history_length: Option<usize>) -> Task {
         let mut task = task.clone();
 
         if !include_artifacts {
@@ -242,12 +232,8 @@ impl TaskManager {
                     .flat_map(|task_ids| task_ids.iter())
                     .filter_map(|task_id| {
                         let task = state.tasks.get(task_id)?;
-                        Self::matches_list_filters(
-                            task,
-                            params.status.as_ref(),
-                            updated_after.as_ref(),
-                        )
-                        .then(|| (task_id.clone(), task.status.timestamp))
+                        Self::matches_list_filters(task, params.status.as_ref(), updated_after.as_ref())
+                            .then(|| (task_id.clone(), task.status.timestamp))
                     })
                     .collect()
             } else {
@@ -255,11 +241,7 @@ impl TaskManager {
                     .tasks
                     .iter()
                     .filter(|(_, task)| {
-                        Self::matches_list_filters(
-                            task,
-                            params.status.as_ref(),
-                            updated_after.as_ref(),
-                        )
+                        Self::matches_list_filters(task, params.status.as_ref(), updated_after.as_ref())
                     })
                     .map(|(task_id, task)| (task_id.clone(), task.status.timestamp))
                     .collect()
@@ -285,8 +267,7 @@ impl TaskManager {
 
         let include_artifacts = params.include_artifacts == Some(true);
         let history_length = params.history_length.map(|len| len as usize);
-        let page_task_ids: Vec<_> =
-            matching_tasks.into_iter().skip(start_idx).take(page_size as usize).collect();
+        let page_task_ids: Vec<_> = matching_tasks.into_iter().skip(start_idx).take(page_size as usize).collect();
         let result = if page_task_ids.is_empty() {
             Vec::new()
         } else {
@@ -294,9 +275,10 @@ impl TaskManager {
             page_task_ids
                 .into_iter()
                 .filter_map(|(task_id, _)| {
-                    state.tasks.get(&task_id).map(|task| {
-                        Self::clone_task_for_listing(task, include_artifacts, history_length)
-                    })
+                    state
+                        .tasks
+                        .get(&task_id)
+                        .map(|task| Self::clone_task_for_listing(task, include_artifacts, history_length))
                 })
                 .collect()
         };
@@ -335,9 +317,7 @@ impl TaskManager {
     /// Set webhook configuration for a task
     pub async fn set_webhook_config(&self, config: TaskPushNotificationConfig) -> A2aResult<()> {
         if !config.url.starts_with("https://") && !config.url.starts_with("http://localhost") {
-            return Err(A2aError::UnsupportedOperation(
-                "Webhook URL must use HTTPS or be localhost".to_string(),
-            ));
+            return Err(A2aError::UnsupportedOperation("Webhook URL must use HTTPS or be localhost".to_string()));
         }
 
         let mut state = self.state.write().await;
@@ -407,8 +387,7 @@ mod tests {
         let manager = TaskManager::new();
         let task = manager.create_task(None).await;
 
-        let updated =
-            manager.update_status(&task.id, TaskState::Working, None).await.expect("update");
+        let updated = manager.update_status(&task.id, TaskState::Working, None).await.expect("update");
         assert_eq!(updated.state(), TaskState::Working);
 
         let msg = Message::agent_text("Task completed successfully");

@@ -315,10 +315,7 @@ mod tests {
         let arr = value.as_array().expect("expected array");
         assert_eq!(arr.len(), 1);
         let serialized = &arr[0];
-        assert!(
-            serialized.get("defer_loading").is_none(),
-            "openai-compatible formatter must drop defer_loading"
-        );
+        assert!(serialized.get("defer_loading").is_none(), "openai-compatible formatter must drop defer_loading");
         assert!(serialized.get("strict").is_none(), "openai-compatible formatter must drop strict");
     }
 
@@ -338,14 +335,8 @@ mod tests {
             .format_tools(std::slice::from_ref(&tool), "claude-opus-4-7")
             .expect("formatter should yield a value");
         let serialized = value.to_string();
-        assert!(
-            serialized.contains("strict"),
-            "anthropic wire payload missing strict: {serialized}"
-        );
-        assert!(
-            serialized.contains("input_examples"),
-            "anthropic wire payload missing input_examples: {serialized}"
-        );
+        assert!(serialized.contains("strict"), "anthropic wire payload missing strict: {serialized}");
+        assert!(serialized.contains("input_examples"), "anthropic wire payload missing input_examples: {serialized}");
     }
 
     #[test]
@@ -360,10 +351,7 @@ mod tests {
             ProviderFamily::OpenAICompatible,
         ] {
             let f = formatter_for_family(family);
-            assert!(
-                !f.supported_extensions().is_empty(),
-                "{family:?} must report at least one extension"
-            );
+            assert!(!f.supported_extensions().is_empty(), "{family:?} must report at least one extension");
         }
     }
 }

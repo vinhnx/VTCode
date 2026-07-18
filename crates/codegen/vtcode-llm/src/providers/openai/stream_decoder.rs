@@ -26,10 +26,7 @@ use vtcode_commons::model_family::find_family_for_model;
 use super::responses_api::parse_responses_payload;
 use super::streaming::OpenAIStreamTelemetry;
 
-fn strip_reasoning_for_model(
-    model: &str,
-    mut response: provider::LLMResponse,
-) -> provider::LLMResponse {
+fn strip_reasoning_for_model(model: &str, mut response: provider::LLMResponse) -> provider::LLMResponse {
     if !find_family_for_model(model).supports_reasoning_summaries {
         response.reasoning = None;
         response.reasoning_details = None;
@@ -58,8 +55,7 @@ fn merge_final_response_metadata(
     include_cached_prompt_metrics: bool,
 ) {
     if let Some(usage_value) = final_response.get("usage") {
-        let cached_prompt_tokens =
-            parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
+        let cached_prompt_tokens = parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         response.usage = Some(provider::Usage {
             prompt_tokens: usage_value
@@ -116,8 +112,7 @@ impl ResponsesToolCallState {
         }
 
         let item_id = item.get("id").and_then(Value::as_str).filter(|value| !value.is_empty());
-        let provider_call_id =
-            item.get("call_id").and_then(Value::as_str).filter(|value| !value.is_empty());
+        let provider_call_id = item.get("call_id").and_then(Value::as_str).filter(|value| !value.is_empty());
         let Some(call_id) = provider_call_id.or(item_id) else {
             return;
         };
@@ -131,8 +126,8 @@ impl ResponsesToolCallState {
 
         self.capture_item_call_id_mapping(item_id, provider_call_id);
 
-        let output_index = output_index
-            .or_else(|| item_id.and_then(|item_id| self.tool_call_indexes.get(item_id).copied()));
+        let output_index =
+            output_index.or_else(|| item_id.and_then(|item_id| self.tool_call_indexes.get(item_id).copied()));
         let index = self.resolve_tool_call_index(call_id, output_index);
         aggregator.handle_tool_calls(&[json!({
             "index": index,
@@ -155,8 +150,7 @@ impl ResponsesToolCallState {
         let item_id = payload.get("item_id").and_then(Value::as_str);
         let payload_call_id = payload.get("call_id").and_then(Value::as_str);
         self.capture_item_call_id_mapping(item_id, payload_call_id);
-        let output_index =
-            payload.get("output_index").and_then(Value::as_u64).map(|value| value as usize);
+        let output_index = payload.get("output_index").and_then(Value::as_u64).map(|value| value as usize);
         let call_id = match self.resolve_provider_call_id(item_id, payload_call_id) {
             Some(call_id) => call_id,
             None => self.fabricated_call_id(output_index),
@@ -186,16 +180,10 @@ impl ResponsesToolCallState {
         self.item_id_to_call_id.insert(item_id.to_string(), call_id.to_string());
     }
 
-    fn resolve_provider_call_id(
-        &self,
-        item_id: Option<&str>,
-        call_id: Option<&str>,
-    ) -> Option<String> {
+    fn resolve_provider_call_id(&self, item_id: Option<&str>, call_id: Option<&str>) -> Option<String> {
         call_id
             .filter(|value| !value.is_empty())
-            .or_else(|| {
-                item_id.and_then(|value| self.item_id_to_call_id.get(value).map(String::as_str))
-            })
+            .or_else(|| item_id.and_then(|value| self.item_id_to_call_id.get(value).map(String::as_str)))
             .or_else(|| item_id.filter(|value| !value.is_empty()))
             .map(ToOwned::to_owned)
     }
@@ -235,10 +223,7 @@ impl ResponsesToolCallState {
     }
 }
 
-pub(crate) fn create_chat_stream(
-    response: reqwest::Response,
-    model: String,
-) -> provider::LLMStream {
+pub(crate) fn create_chat_stream(response: reqwest::Response, model: String) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
         let mut buffer = String::new();
@@ -584,16 +569,11 @@ pub(crate) fn create_responses_stream(
     Box::pin(stream)
 }
 
-fn optional_string_field(
-    payload: &Value,
-    field: &'static str,
-) -> Result<Option<String>, provider::LLMError> {
+fn optional_string_field(payload: &Value, field: &'static str) -> Result<Option<String>, provider::LLMError> {
     match payload.get(field) {
         Some(value) => value.as_str().map(|value| Some(value.to_string())).ok_or_else(|| {
-            StreamAssemblyError::InvalidPayload(format!(
-                "field `{field}` in stream payload must be a string"
-            ))
-            .into_llm_error("OpenAI")
+            StreamAssemblyError::InvalidPayload(format!("field `{field}` in stream payload must be a string"))
+                .into_llm_error("OpenAI")
         }),
         None => Ok(None),
     }

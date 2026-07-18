@@ -106,15 +106,11 @@ mod tests {
 
     #[test]
     fn test_detect_show_diff_normalizes_on_prefixed_file_mentions() {
-        let result = detect_explicit_run_command(
-            "show diff on @crates/codegen/vtcode-core/src/tools/registry/policy.rs",
-        );
+        let result =
+            detect_explicit_run_command("show diff on @crates/codegen/vtcode-core/src/tools/registry/policy.rs");
         assert!(result.is_some());
         let (_, args) = result.expect("direct command expected");
-        assert_eq!(
-            args["command"],
-            "git diff -- crates/codegen/vtcode-core/src/tools/registry/policy.rs"
-        );
+        assert_eq!(args["command"], "git diff -- crates/codegen/vtcode-core/src/tools/registry/policy.rs");
     }
 
     #[test]
@@ -150,9 +146,8 @@ mod tests {
 
     #[test]
     fn test_detect_explicit_run_command_normalizes_natural_cargo_test_phrase() {
-        let result = detect_explicit_run_command(
-            "run cargo test on vtcode bin for func highlights_run_prefix_user_input",
-        );
+        let result =
+            detect_explicit_run_command("run cargo test on vtcode bin for func highlights_run_prefix_user_input");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "cargo test --bin vtcode highlights_run_prefix_user_input");
@@ -192,9 +187,8 @@ mod tests {
 
     #[test]
     fn test_detect_explicit_run_command_extracts_backtick_command() {
-        let result = detect_explicit_run_command(
-            "run please use `cargo test --bin vtcode highlights_run_prefix_user_input`",
-        );
+        let result =
+            detect_explicit_run_command("run please use `cargo test --bin vtcode highlights_run_prefix_user_input`");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "cargo test --bin vtcode highlights_run_prefix_user_input");
@@ -226,8 +220,7 @@ mod tests {
 
     #[test]
     fn test_detect_explicit_run_command_normalizes_pytest_function_phrase() {
-        let result =
-            detect_explicit_run_command("run pytest for func test_detect_explicit_run_command");
+        let result = detect_explicit_run_command("run pytest for func test_detect_explicit_run_command");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "pytest -k test_detect_explicit_run_command");
@@ -240,10 +233,7 @@ mod tests {
         );
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
-        assert_eq!(
-            args["command"],
-            "pytest tests/unit/test_shell.py -k test_detect_explicit_run_command"
-        );
+        assert_eq!(args["command"], "pytest tests/unit/test_shell.py -k test_detect_explicit_run_command");
     }
 
     #[test]

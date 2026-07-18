@@ -20,13 +20,9 @@ use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
 use super::CancellationTokens;
 
-use super::cache::{
-    cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts,
-};
+use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts};
 use super::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
-use super::execution_helpers::{
-    build_tool_status_message, is_loop_detection_status, parse_cached_output,
-};
+use super::execution_helpers::{build_tool_status_message, is_loop_detection_status, parse_cached_output};
 use super::file_conflict_runtime::{RuntimeToolExecution, into_runtime_tool_execution};
 use super::pty_stream::PtyStreamRuntime;
 use super::status::ToolExecutionStatus;
@@ -65,16 +61,9 @@ struct StreamingOutputCoalescer {
 }
 
 impl StreamingOutputCoalescer {
-    fn new(
-        harness_emitter: HarnessEventEmitter,
-        tool_item_id: String,
-        tool_call_id: String,
-    ) -> Self {
+    fn new(harness_emitter: HarnessEventEmitter, tool_item_id: String, tool_call_id: String) -> Self {
         Self {
-            state: Arc::new(StdMutex::new(StreamingToolOutput {
-                started_emitted: false,
-                output: String::new(),
-            })),
+            state: Arc::new(StdMutex::new(StreamingToolOutput { started_emitted: false, output: String::new() })),
             harness_emitter,
             tool_item_id,
             tool_call_id,
@@ -94,10 +83,9 @@ impl StreamingOutputCoalescer {
         };
 
         if emit_started {
-            let _ = self.harness_emitter.emit(tool_output_started_event(
-                self.tool_item_id.clone(),
-                Some(self.tool_call_id.as_str()),
-            ));
+            let _ = self
+                .harness_emitter
+                .emit(tool_output_started_event(self.tool_item_id.clone(), Some(self.tool_call_id.as_str())));
         }
 
         // Emit the chunk directly as the update payload. The Open Responses bridge
@@ -127,11 +115,7 @@ fn build_streaming_progress_callback(
         return (base_callback, None);
     };
 
-    let coalescer = StreamingOutputCoalescer::new(
-        harness_emitter,
-        tool_item_id.to_string(),
-        tool_call_id.to_string(),
-    );
+    let coalescer = StreamingOutputCoalescer::new(harness_emitter, tool_item_id.to_string(), tool_call_id.to_string());
     let callback_coalescer = coalescer.clone();
 
     let callback: ToolProgressCallback = Arc::new(move |progress_tool_name: &str, chunk: &str| {
@@ -228,15 +212,9 @@ async fn execute_with_cache_and_streaming_inner(
     let cache_target = cache_target_path(name, args_val);
 
     if is_cacheable_tool
-        && let Some(cached_status) = lookup_cached_status(
-            registry,
-            tool_result_cache,
-            name,
-            args_val,
-            &cache_target,
-            CacheLookupPhase::Initial,
-        )
-        .await
+        && let Some(cached_status) =
+            lookup_cached_status(registry, tool_result_cache, name, args_val, &cache_target, CacheLookupPhase::Initial)
+                .await
     {
         return into_runtime_tool_execution(name, args_val, cached_status);
     }
@@ -260,13 +238,7 @@ async fn execute_with_cache_and_streaming_inner(
 
     let tool_spinner = if show_loading_ui {
         let status_message = build_tool_status_message(name, args_val);
-        let spinner = PlaceholderSpinner::with_progress(
-            handle,
-            None,
-            None,
-            status_message,
-            progress_reporter.as_ref(),
-        );
+        let spinner = PlaceholderSpinner::with_progress(handle, None, None, status_message, progress_reporter.as_ref());
         spinner.set_defer_restore(true);
         Some(spinner)
     } else {
@@ -275,11 +247,7 @@ async fn execute_with_cache_and_streaming_inner(
 
     let should_stream_pty = matches!(
         name,
-        tools::RUN_PTY_CMD
-            | tools::UNIFIED_EXEC
-            | tools::SEND_PTY_INPUT
-            | tools::EXEC_COMMAND
-            | tools::EXEC_PTY_CMD
+        tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT | tools::EXEC_COMMAND | tools::EXEC_PTY_CMD
     );
     debug_assert!(
         show_loading_ui || !should_stream_pty,
@@ -299,12 +267,8 @@ async fn execute_with_cache_and_streaming_inner(
             registry.pty_config().clone(),
             Some(registry.workspace_root()),
         );
-        let (callback, coalescer) = build_streaming_progress_callback(
-            callback,
-            harness_emitter,
-            tool_item_id,
-            tool_call_id,
-        );
+        let (callback, coalescer) =
+            build_streaming_progress_callback(callback, harness_emitter, tool_item_id, tool_call_id);
         pty_stream_runtime = Some(runtime);
         output_coalescer = coalescer;
         Some(ProgressCallbackGuard::replace(registry, callback))
@@ -363,11 +327,8 @@ async fn execute_with_cache_and_streaming_inner(
 
     let runtime_execution = into_runtime_tool_execution(name, args_val, outcome);
 
-    if let RuntimeToolExecution::Completed(ToolExecutionStatus::Success {
-        output,
-        command_success,
-        ..
-    }) = &runtime_execution
+    if let RuntimeToolExecution::Completed(ToolExecutionStatus::Success { output, command_success, .. }) =
+        &runtime_execution
         && is_cacheable_tool
         && should_cache_success_output(name, output, *command_success)
     {
@@ -436,8 +397,7 @@ async fn lookup_cached_status(
     cache_target: &str,
     phase: CacheLookupPhase,
 ) -> Option<ToolExecutionStatus> {
-    let (workspace_path, cache_key) =
-        workspace_scoped_cache_key(registry, name, args_val, cache_target);
+    let (workspace_path, cache_key) = workspace_scoped_cache_key(registry, name, args_val, cache_target);
     let cached_output = {
         let cache = tool_result_cache.read().await;
         cache.get(&cache_key)
@@ -492,9 +452,8 @@ mod tests {
     use vtcode_ui::tui::app::{InlineCommand, InlineHandle};
 
     use super::{
-        ProgressCallbackGuard, StreamingOutputCoalescer, extract_pty_stream_command,
-        set_tool_execution_status, should_cache_success_output,
-        should_show_loading_ui_for_tool_call,
+        ProgressCallbackGuard, StreamingOutputCoalescer, extract_pty_stream_command, set_tool_execution_status,
+        should_cache_success_output, should_show_loading_ui_for_tool_call,
     };
     use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
     use tempfile::TempDir;
@@ -674,8 +633,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("create temp dir");
         let harness_path = temp_dir.path().join("events.jsonl");
         let emitter = HarnessEventEmitter::new(harness_path.clone()).expect("emitter");
-        let coalescer =
-            StreamingOutputCoalescer::new(emitter, "tool-1".to_string(), "tool_call_0".to_string());
+        let coalescer = StreamingOutputCoalescer::new(emitter, "tool-1".to_string(), "tool_call_0".to_string());
 
         coalescer.on_chunk("abc");
         coalescer.on_chunk("def");

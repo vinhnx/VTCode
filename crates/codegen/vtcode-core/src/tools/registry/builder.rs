@@ -80,10 +80,7 @@ impl ToolRegistry {
         Self::build(workspace_root, PtyConfig::default())
     }
 
-    pub fn new_with_config(
-        workspace_root: PathBuf,
-        pty_config: PtyConfig,
-    ) -> impl Future<Output = Self> {
+    pub fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> impl Future<Output = Self> {
         Self::build(workspace_root, pty_config)
     }
 
@@ -118,19 +115,15 @@ impl ToolRegistry {
         let tool_config = load_tool_config(&workspace_root);
         super::distributed::install_tool_config(tool_config);
 
-        let edited_file_monitor =
-            Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
-        let inventory =
-            ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));
+        let edited_file_monitor = Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
+        let inventory = ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));
         let planning_workflow_state = PlanningWorkflowState::new(workspace_root.clone());
 
         register_builtin_tools(&inventory, &planning_workflow_state);
 
         let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
-        let exec_sessions = crate::tools::exec_session::ExecSessionManager::new(
-            workspace_root.clone(),
-            pty_sessions.clone(),
-        );
+        let exec_sessions =
+            crate::tools::exec_session::ExecSessionManager::new(workspace_root.clone(), pty_sessions.clone());
 
         let policy_gateway = match policy_manager {
             Some(pm) => ToolPolicyGateway::with_policy_manager(pm),
@@ -139,21 +132,16 @@ impl ToolRegistry {
 
         let optimization_config = vtcode_config::OptimizationConfig::default();
         let metrics = Arc::new(crate::metrics::MetricsCollector::new());
-        let hot_cache_size =
-            std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
-                .unwrap_or(std::num::NonZeroUsize::MIN);
-        let output_spooler = Arc::new(ToolOutputSpooler::with_config(
-            &workspace_root,
-            load_workspace_spooler_config(&workspace_root),
-        ));
+        let hot_cache_size = std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
+            .unwrap_or(std::num::NonZeroUsize::MIN);
+        let output_spooler =
+            Arc::new(ToolOutputSpooler::with_config(&workspace_root, load_workspace_spooler_config(&workspace_root)));
 
         // Pre-allocate FxHashMaps with expected capacity for typical MCP tool sets.
         // Most sessions register 10-50 MCP tools; start with room for 32 to
         // avoid rehashing during initial discovery without wasting memory.
-        let mcp_tool_index =
-            rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
-        let mcp_reverse_index =
-            rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
+        let mcp_tool_index = rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
+        let mcp_reverse_index = rustc_hash::FxHashMap::with_capacity_and_hasher(32, rustc_hash::FxBuildHasher);
 
         let registry = Self {
             inventory,
@@ -165,24 +153,17 @@ impl ToolRegistry {
             mcp_tool_index: Arc::new(tokio::sync::RwLock::new(mcp_tool_index)),
             mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(mcp_reverse_index)),
             timeout_policy: Arc::new(parking_lot::RwLock::new(ToolTimeoutPolicy::default())),
-            execution_history: ToolExecutionHistory::with_workspace_root(
-                100,
-                workspace_root.clone(),
-            ),
+            execution_history: ToolExecutionHistory::with_workspace_root(100, workspace_root.clone()),
             harness_context: HarnessContext::default(),
             resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
-            mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::with_metrics(
-                metrics.clone(),
-            )),
+            mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::with_metrics(metrics.clone())),
             shared_circuit_breaker: Arc::new(RwLock::new(None)),
             initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             metrics,
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
-            runtime_sandbox_config: Arc::new(RwLock::new(
-                super::sandbox_facade::runtime_sandbox_config_default(),
-            )),
+            runtime_sandbox_config: Arc::new(RwLock::new(super::sandbox_facade::runtime_sandbox_config_default())),
             agent_type: Arc::new(RwLock::new("unknown".to_owned())),
             cached_available_tools: Arc::new(parking_lot::RwLock::new(None)),
             active_tool_profile: Arc::new(RwLock::new(crate::config::ToolProfile::default())),
@@ -201,9 +182,7 @@ impl ToolRegistry {
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),
             subagent_controller: Arc::new(RwLock::new(None)),
-            session_scheduler: Arc::new(tokio::sync::Mutex::new(
-                crate::scheduler::SessionScheduler::new(),
-            )),
+            session_scheduler: Arc::new(tokio::sync::Mutex::new(crate::scheduler::SessionScheduler::new())),
             session_model_tools: Arc::new(RwLock::new(None)),
             self_ref: Arc::new(RwLock::new(None)),
         };

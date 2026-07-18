@@ -100,8 +100,7 @@ impl Client {
     }
 
     fn classify_api_error(&self, status: StatusCode, message: String) -> StreamingError {
-        let decision =
-            vtcode_commons::retry::RetryPolicy::default().classify_status(status.as_u16());
+        let decision = vtcode_commons::retry::RetryPolicy::default().classify_status(status.as_u16());
 
         StreamingError::ApiError {
             status_code: status.as_u16(),
@@ -111,16 +110,10 @@ impl Client {
     }
 
     /// Generate content with the Gemini API
-    pub async fn generate(
-        &mut self,
-        request: &GenerateContentRequest,
-    ) -> Result<GenerateContentResponse> {
+    pub async fn generate(&mut self, request: &GenerateContentRequest) -> Result<GenerateContentResponse> {
         let start_time = Instant::now();
 
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-            self.model
-        );
+        let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", self.model);
 
         let response = self
             .http
@@ -138,8 +131,7 @@ impl Client {
             return Err(anyhow::Error::new(error));
         }
 
-        let response_data: GenerateContentResponse =
-            response.json().await.context("Failed to parse response")?;
+        let response_data: GenerateContentResponse = response.json().await.context("Failed to parse response")?;
 
         self.metrics.total_requests += 1;
         self.metrics.total_response_time += start_time.elapsed();
@@ -158,10 +150,8 @@ impl Client {
     {
         let start_time = Instant::now();
 
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent",
-            self.model
-        );
+        let url =
+            format!("https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent", self.model);
 
         let response = self
             .http

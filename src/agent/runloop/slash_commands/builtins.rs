@@ -7,13 +7,12 @@ use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::flow::{
-    handle_auth_command, handle_continue_command, handle_fork_command, handle_login_command,
-    handle_logout_command, handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_auth_command, handle_continue_command, handle_fork_command, handle_login_command, handle_logout_command,
+    handle_plan_command, handle_resume_command, handle_rewind_command,
 };
 use super::management::{handle_local_command, handle_mcp_command};
 use super::models::{
-    AgentDefinitionScope, AgentManagerAction, SlashCommandOutcome, SubprocessManagerAction,
-    ThemePaletteMode,
+    AgentDefinitionScope, AgentManagerAction, SlashCommandOutcome, SubprocessManagerAction, ThemePaletteMode,
 };
 use super::parsing::{self, parse_compact_command, parse_session_log_export_format};
 use super::rendering::{render_help, render_theme_list};
@@ -44,19 +43,14 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                         return Ok(SlashCommandOutcome::ThemeChanged(theme::active_theme_id()));
                     }
                     Err(err) => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Theme '{next_theme}' not available: {err}"),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("Theme '{next_theme}' not available: {err}"))?;
                     }
                 }
                 return Ok(SlashCommandOutcome::Handled);
             }
 
             if renderer.supports_inline_ui() {
-                return Ok(SlashCommandOutcome::StartThemePalette {
-                    mode: ThemePaletteMode::Select,
-                });
+                return Ok(SlashCommandOutcome::StartThemePalette { mode: ThemePaletteMode::Select });
             }
 
             renderer.line(MessageStyle::Info, "Provide a theme name to switch themes")?;
@@ -69,10 +63,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 match flag {
                     "--force" | "-f" | "force" => force = true,
                     unknown => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Unknown flag '{unknown}' for /init"),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("Unknown flag '{unknown}' for /init"))?;
                         return Ok(SlashCommandOutcome::Handled);
                     }
                 }
@@ -84,9 +75,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 Ok(SlashCommandOutcome::ShowSettings)
             } else {
                 match args.to_ascii_lowercase().as_str() {
-                    "memory" | "agent.persistent_memory" => {
-                        Ok(SlashCommandOutcome::ShowMemoryConfig)
-                    }
+                    "memory" | "agent.persistent_memory" => Ok(SlashCommandOutcome::ShowMemoryConfig),
                     "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
                     "model" | "model.main" | "model.lightweight" => {
                         Ok(SlashCommandOutcome::ShowSettingsAtPath { path: args.to_string() })
@@ -102,9 +91,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             // command opens the advisor section; an optional path drills into a child
             // field (e.g. `/advisor model`).
             match args.trim() {
-                "" => Ok(SlashCommandOutcome::ShowSettingsAtPath {
-                    path: "provider.anthropic.advisor".to_string(),
-                }),
+                "" => Ok(SlashCommandOutcome::ShowSettingsAtPath { path: "provider.anthropic.advisor".to_string() }),
                 "help" | "--help" | "-h" => {
                     renderer.line(
                         MessageStyle::Info,
@@ -150,10 +137,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                     MessageStyle::Info,
                     "Usage: /compact [--instructions <text>] [--max-output-tokens <n>] [--reasoning-effort <none|minimal|low|medium|high|xhigh>] [--verbosity <low|medium|high>] [--native-only]",
                 )?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "       /compact edit-prompt | /compact reset-prompt",
-                )?;
+                renderer.line(MessageStyle::Info, "       /compact edit-prompt | /compact reset-prompt")?;
                 Ok(SlashCommandOutcome::Handled)
             }
         },
@@ -217,9 +201,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "update" => match parse_update_args(args) {
-            Ok((check_only, install, force)) => {
-                Ok(SlashCommandOutcome::Update { check_only, install, force })
-            }
+            Ok((check_only, install, force)) => Ok(SlashCommandOutcome::Update { check_only, install, force }),
             Err(message) => {
                 renderer.line(MessageStyle::Error, &message)?;
                 Ok(SlashCommandOutcome::Handled)
@@ -240,10 +222,8 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             Ok((level, persist)) => Ok(SlashCommandOutcome::SetEffort { level, persist }),
             Err(message) => {
                 renderer.line(MessageStyle::Error, &message)?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
-                )?;
+                renderer
+                    .line(MessageStyle::Info, "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]")?;
                 Ok(SlashCommandOutcome::Handled)
             }
         },
@@ -265,10 +245,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                 return Ok(SlashCommandOutcome::StartFileBrowser { initial_filter });
             }
 
-            renderer.line(
-                MessageStyle::Error,
-                "File browser requires inline UI mode. Use @ symbol instead.",
-            )?;
+            renderer.line(MessageStyle::Error, "File browser requires inline UI mode. Use @ symbol instead.")?;
             Ok(SlashCommandOutcome::Handled)
         }
         "share" => match parse_session_log_export_format(args) {
@@ -321,8 +298,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                     Ok(SlashCommandOutcome::Handled)
                 }
                 Err(error) => {
-                    renderer
-                        .line(MessageStyle::Error, &format!("Skills command error: {error}"))?;
+                    renderer.line(MessageStyle::Error, &format!("Skills command error: {error}"))?;
                     Ok(SlashCommandOutcome::Handled)
                 }
             }
@@ -367,10 +343,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         }
         "terminal-setup" => {
             if !args.is_empty() {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Usage: /terminal-setup (no arguments supported yet)",
-                )?;
+                renderer.line(MessageStyle::Error, "Usage: /terminal-setup (no arguments supported yet)")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::StartTerminalSetup)
@@ -470,8 +443,7 @@ pub(in crate::agent::runloop::slash_commands) fn parse_subprocesses_command(
             let id = parts.next().ok_or("Usage: /subprocesses cancel <id>")?;
             Ok(SubprocessManagerAction::Cancel { id: id.to_string() })
         }
-        _ => Err("Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]"
-            .to_string()),
+        _ => Err("Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]".to_string()),
     }
 }
 
@@ -545,10 +517,7 @@ pub(in crate::agent::runloop::slash_commands) fn parse_checkup_args(
             "--quick" | "-q" | "quick" => quick = true,
             "--full" | "full" => full = true,
             _ => {
-                return Err(
-                    "Usage: /checkup [--quick|--full]\nExamples: /checkup, /checkup --quick"
-                        .to_string(),
-                );
+                return Err("Usage: /checkup [--quick|--full]\nExamples: /checkup, /checkup --quick".to_string());
             }
         }
         Ok(())

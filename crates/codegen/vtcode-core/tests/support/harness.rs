@@ -31,15 +31,10 @@ impl TestHarness {
     }
 
     #[allow(dead_code)]
-    pub fn write_file(
-        &self,
-        relative: impl AsRef<Path>,
-        contents: impl AsRef<[u8]>,
-    ) -> Result<PathBuf> {
+    pub fn write_file(&self, relative: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result<PathBuf> {
         let path = self.workspace().join(relative);
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| ctx_err!(ERR_CREATE_DIR, parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| ctx_err!(ERR_CREATE_DIR, parent.display()))?;
         }
 
         fs::write(&path, contents).with_context(|| ctx_err!(ERR_WRITE_FILE, path.display()))?;

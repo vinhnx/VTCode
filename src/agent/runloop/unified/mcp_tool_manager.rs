@@ -63,7 +63,7 @@ impl McpToolManager {
         vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
         tool_documentation_mode: ToolDocumentationMode,
         deferred_tool_policy: &DeferredToolPolicy,
-        mcp_tools: Vec<McpToolInfo>, // Passed in from initial setup
+        mcp_tools: Vec<McpToolInfo>,            // Passed in from initial setup
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
         refresh_tool_snapshot(
@@ -79,8 +79,7 @@ impl McpToolManager {
         tool_catalog.mark_pending_refresh("mcp_background_refresh");
 
         // Calculate which tools are newly added by comparing with last known tools
-        let initial_tool_keys: Vec<String> =
-            mcp_tools.iter().map(|t| format!("{}-{}", t.provider, t.name)).collect();
+        let initial_tool_keys: Vec<String> = mcp_tools.iter().map(|t| format!("{}-{}", t.provider, t.name)).collect();
 
         // Store the initial tool names to track changes later (silently)
         *last_known_mcp_tools = initial_tool_keys;

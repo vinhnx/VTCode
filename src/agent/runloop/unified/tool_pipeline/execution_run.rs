@@ -16,15 +16,11 @@ use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
-use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_started_event,
-};
+use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, tool_started_event};
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::invocation_id_from_call_id;
-use crate::agent::runloop::unified::tool_routing::{
-    ToolPermissionFlow, ensure_tool_permission_with_call_id,
-};
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission_with_call_id};
 
 use super::execute_hitl_tool;
 use super::execution_events::{emit_tool_completion_for_status, emit_tool_completion_status};
@@ -32,9 +28,7 @@ use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt};
-use crate::agent::runloop::unified::planning_workflow::{
-    handle_finish_planning, handle_start_planning,
-};
+use crate::agent::runloop::unified::planning_workflow::{handle_finish_planning, handle_start_planning};
 
 fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, String) {
     match ToolInvocationId::parse(tool_item_id) {
@@ -46,19 +40,9 @@ fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, Strin
     }
 }
 
-fn structured_failure_from_message(
-    tool_name: &str,
-    message: impl Into<String>,
-) -> ToolExecutionError {
+fn structured_failure_from_message(tool_name: &str, message: impl Into<String>) -> ToolExecutionError {
     let message = message.into();
-    ToolExecutionError::from_anyhow(
-        tool_name,
-        &anyhow!(message),
-        0,
-        false,
-        false,
-        Some("unified_runloop"),
-    )
+    ToolExecutionError::from_anyhow(tool_name, &anyhow!(message), 0, false, false, Some("unified_runloop"))
 }
 
 fn structured_failure(tool_name: &str, error: &anyhow::Error) -> ToolExecutionError {
@@ -129,16 +113,12 @@ pub(crate) async fn run_tool_call_with_args(
     let mut effective_args = args_val.clone();
     let mut canonical_name = requested_name.to_string();
     let tool_call_id = tool_item_id.as_str();
-    let (safety_invocation_id, fallback_harness_item_id) =
-        resolve_harness_item_identity(&tool_item_id);
+    let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
         if let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion() {
             return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                error: structured_failure_from_message(
-                    requested_name,
-                    exhaustion.policy_violation_message(),
-                ),
+                error: structured_failure_from_message(requested_name, exhaustion.policy_violation_message()),
             }));
         }
 
@@ -149,10 +129,7 @@ pub(crate) async fn run_tool_call_with_args(
             }
             Err(err) => {
                 return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                    error: structured_failure(
-                        requested_name,
-                        &anyhow!("Tool argument validation failed: {err}"),
-                    ),
+                    error: structured_failure(requested_name, &anyhow!("Tool argument validation failed: {err}")),
                 }));
             }
         }
@@ -166,30 +143,25 @@ pub(crate) async fn run_tool_call_with_args(
     let mut tool_started_emitted = streamed_harness_item_id.is_some();
     let harness_item_id = streamed_harness_item_id.unwrap_or(fallback_harness_item_id);
     if !tool_started_emitted && let Some(emitter) = harness_emitter {
-        let _ = emitter.emit(tool_started_event(
-            harness_item_id.clone(),
-            name,
-            Some(&effective_args),
-            Some(tool_call_id),
-        ));
+        let _ =
+            emitter.emit(tool_started_event(harness_item_id.clone(), name, Some(&effective_args), Some(tool_call_id)));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
-    let finish_with_status =
-        |status: ToolExecutionStatus, tool_execution_started: bool, args: &Value| {
-            let outcome = ToolPipelineOutcome::from_status(status);
-            emit_tool_completion_for_status(
-                harness_emitter,
-                tool_started_emitted,
-                tool_execution_started,
-                &harness_item_id,
-                tool_call_id,
-                name,
-                args,
-                &outcome.status,
-            );
-            outcome
-        };
+    let finish_with_status = |status: ToolExecutionStatus, tool_execution_started: bool, args: &Value| {
+        let outcome = ToolPipelineOutcome::from_status(status);
+        emit_tool_completion_for_status(
+            harness_emitter,
+            tool_started_emitted,
+            tool_execution_started,
+            &harness_item_id,
+            tool_call_id,
+            name,
+            args,
+            &outcome.status,
+        );
+        outcome
+    };
 
     if !prevalidated {
         let safety_approval_justification = match check_tool_safety(
@@ -231,16 +203,12 @@ pub(crate) async fn run_tool_call_with_args(
         }
 
         if let Some(warning) = ctx.harness_state.record_tool_call_with_default_warning() {
-            warning.log_threshold_reached(
-                "Tool-call budget warning threshold reached in tool pipeline path",
-            );
+            warning.log_threshold_reached("Tool-call budget warning threshold reached in tool pipeline path");
         }
     }
 
-    let request_user_input_enabled = FeatureSet::from_config(vt_cfg).request_user_input_enabled(
-        ctx.tool_registry.is_planning_active(),
-        ctx.renderer.supports_inline_ui(),
-    );
+    let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
+        .request_user_input_enabled(ctx.tool_registry.is_planning_active(), ctx.renderer.supports_inline_ui());
     if let Some(hitl_result) = execute_hitl_tool(
         name,
         ctx.handle,
@@ -264,16 +232,9 @@ pub(crate) async fn run_tool_call_with_args(
         return Ok(finish_with_status(status, true, &effective_args));
     }
 
-    if let Some(outcome) = handle_start_planning(
-        ctx,
-        name,
-        &effective_args,
-        ctrl_c_state,
-        ctrl_c_notify,
-        max_tool_retries,
-        prevalidated,
-    )
-    .await
+    if let Some(outcome) =
+        handle_start_planning(ctx, name, &effective_args, ctrl_c_state, ctrl_c_notify, max_tool_retries, prevalidated)
+            .await
     {
         emit_tool_completion_for_status(
             harness_emitter,
@@ -287,16 +248,8 @@ pub(crate) async fn run_tool_call_with_args(
         );
         return Ok(outcome);
     }
-    if let Some(outcome) = handle_finish_planning(
-        ctx,
-        name,
-        &effective_args,
-        ctrl_c_state,
-        ctrl_c_notify,
-        max_tool_retries,
-        vt_cfg,
-    )
-    .await
+    if let Some(outcome) =
+        handle_finish_planning(ctx, name, &effective_args, ctrl_c_state, ctrl_c_notify, max_tool_retries, vt_cfg).await
     {
         emit_tool_completion_for_status(
             harness_emitter,
@@ -375,11 +328,7 @@ pub(crate) async fn run_tool_call_with_args(
     Ok(pipeline_outcome)
 }
 
-pub(crate) fn exec_settlement_mode_for_tool_call(
-    prevalidated: bool,
-    name: &str,
-    args: &Value,
-) -> ExecSettlementMode {
+pub(crate) fn exec_settlement_mode_for_tool_call(prevalidated: bool, name: &str, args: &Value) -> ExecSettlementMode {
     if !prevalidated || name != tools::UNIFIED_EXEC {
         return ExecSettlementMode::Manual;
     }
@@ -400,9 +349,7 @@ pub(crate) fn exec_settlement_mode_for_tool_call(
         return ExecSettlementMode::SettleNonInteractive;
     }
 
-    if action.eq_ignore_ascii_case("continue")
-        && command_args::interactive_input_text(args).is_none()
-    {
+    if action.eq_ignore_ascii_case("continue") && command_args::interactive_input_text(args).is_none() {
         ExecSettlementMode::SettleNonInteractive
     } else {
         ExecSettlementMode::Manual
@@ -434,22 +381,12 @@ async fn check_tool_safety(
     .await
     {
         Ok(()) => Ok(None),
-        Err(SafetyValidationFailure::SessionLimitNotIncreased) => {
-            Err(ToolExecutionStatus::Failure {
-                error: structured_failure_from_message(
-                    name,
-                    "Session tool limit reached and not increased by user",
-                ),
-            })
-        }
-        Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => {
-            Err(ToolExecutionStatus::Failure {
-                error: structured_failure(
-                    name,
-                    &anyhow!("Failed while requesting a session tool-limit increase: {error}"),
-                ),
-            })
-        }
+        Err(SafetyValidationFailure::SessionLimitNotIncreased) => Err(ToolExecutionStatus::Failure {
+            error: structured_failure_from_message(name, "Session tool limit reached and not increased by user"),
+        }),
+        Err(SafetyValidationFailure::SessionLimitPromptFailed(error)) => Err(ToolExecutionStatus::Failure {
+            error: structured_failure(name, &anyhow!("Failed while requesting a session tool-limit increase: {error}")),
+        }),
         Err(SafetyValidationFailure::NeedsApproval(justification)) => Ok(Some(justification)),
         Err(SafetyValidationFailure::Validation(error)) => Err(ToolExecutionStatus::Failure {
             error: structured_failure(name, &anyhow!("Safety validation failed: {error}")),
@@ -482,14 +419,7 @@ async fn check_tool_permission(
         safety_approval_justification,
     );
 
-    match ensure_tool_permission_with_call_id(
-        permissions_ctx,
-        name,
-        Some(args_val),
-        Some(tool_call_id),
-    )
-    .await
-    {
+    match ensure_tool_permission_with_call_id(permissions_ctx, name, Some(args_val), Some(tool_call_id)).await {
         Ok(ToolPermissionFlow::Approved { updated_args }) => Ok(updated_args),
         Ok(ToolPermissionFlow::Denied) => Err(ToolExecutionStatus::Failure {
             error: structured_failure_from_message(name, "Tool permission denied"),
@@ -497,9 +427,7 @@ async fn check_tool_permission(
         Ok(ToolPermissionFlow::Blocked { reason }) => Err(ToolExecutionStatus::Failure {
             error: structured_failure_from_message(name, reason),
         }),
-        Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
-            Err(ToolExecutionStatus::Cancelled)
-        }
+        Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => Err(ToolExecutionStatus::Cancelled),
         Err(error) => Err(ToolExecutionStatus::Failure { error: structured_failure(name, &error) }),
     }
 }
@@ -513,10 +441,7 @@ fn build_tool_permissions_context<'a>(
     skip_confirmations: bool,
     vt_cfg: Option<&'a VTCodeConfig>,
     safety_approval_justification: Option<&str>,
-) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<
-    'a,
-    vtcode_ui::tui::app::InlineSession,
-> {
+) -> crate::agent::runloop::unified::tool_routing::ToolPermissionsContext<'a, vtcode_ui::tui::app::InlineSession> {
     let auto_permission_runtime = ctx.auto_permission.as_mut().map(|auto_permission| {
         crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
             config: auto_permission.config,
@@ -544,9 +469,7 @@ fn build_tool_permissions_context<'a>(
         active_agent_permissions: ctx
             .active_agent_permissions
             .or_else(|| vt_cfg.and_then(|cfg| cfg.runtime_agent_permissions.as_ref())),
-        hitl_notification_bell: vt_cfg
-            .map(|cfg| cfg.security.hitl_notification_bell)
-            .unwrap_or(true),
+        hitl_notification_bell: vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
         approval_policy: vt_cfg
             .map(|cfg| cfg.security.human_in_the_loop)
             .map(approval_policy_from_human_in_the_loop)
@@ -574,26 +497,25 @@ async fn apply_post_execution_side_effects(
 ) -> Result<(), anyhow::Error> {
     if !pipeline_outcome.modified_files().is_empty() {
         let modified_files = pipeline_outcome.modified_files().to_vec();
-        let keep_changes =
-            match confirm_changes_with_git_diff(&modified_files, skip_confirmations).await {
-                Ok(value) => value,
-                Err(error) => {
-                    emit_tool_completion_status(
-                        harness_emitter,
-                        tool_started_emitted,
-                        true,
-                        tool_item_id,
-                        tool_call_id,
-                        name,
-                        args_val,
-                        ToolCallStatus::Failed,
-                        None,
-                        None,
-                        error.to_string(),
-                    );
-                    return Err(error);
-                }
-            };
+        let keep_changes = match confirm_changes_with_git_diff(&modified_files, skip_confirmations).await {
+            Ok(value) => value,
+            Err(error) => {
+                emit_tool_completion_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    true,
+                    tool_item_id,
+                    tool_call_id,
+                    name,
+                    args_val,
+                    ToolCallStatus::Failed,
+                    None,
+                    None,
+                    error.to_string(),
+                );
+                return Err(error);
+            }
+        };
 
         if keep_changes {
             ctx.traj.log_tool_call(
@@ -605,10 +527,8 @@ async fn apply_post_execution_side_effects(
                 ctx.is_subagent,
             );
             if pipeline_outcome.command_success {
-                let invalidation_paths = cache_invalidation_paths(
-                    ctx.tool_registry.workspace_root(),
-                    pipeline_outcome.modified_files(),
-                );
+                let invalidation_paths =
+                    cache_invalidation_paths(ctx.tool_registry.workspace_root(), pipeline_outcome.modified_files());
                 let mut cache = ctx.tool_result_cache.write().await;
                 cache.invalidate_for_paths(&invalidation_paths);
             }
@@ -633,8 +553,7 @@ async fn apply_post_execution_side_effects(
 }
 
 fn cache_invalidation_paths(workspace_root: &Path, changed_paths: &[String]) -> Vec<String> {
-    let workspace_root =
-        workspace_root.canonicalize().unwrap_or_else(|_| workspace_root.to_path_buf());
+    let workspace_root = workspace_root.canonicalize().unwrap_or_else(|_| workspace_root.to_path_buf());
     changed_paths
         .iter()
         .map(Path::new)
@@ -652,9 +571,7 @@ fn cache_invalidation_paths(workspace_root: &Path, changed_paths: &[String]) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        cache_invalidation_paths, exec_settlement_mode_for_tool_call, resolve_harness_item_identity,
-    };
+    use super::{cache_invalidation_paths, exec_settlement_mode_for_tool_call, resolve_harness_item_identity};
     use serde_json::json;
     use vtcode_core::tools::registry::ExecSettlementMode;
     use vtcode_core::{config::constants::tools, tools::ToolInvocationId};
@@ -669,10 +586,7 @@ mod tests {
 
         let paths = cache_invalidation_paths(workspace.path(), &["src/widget.rs".to_string()]);
 
-        assert_eq!(
-            paths,
-            vec![changed.canonicalize().expect("canonical source").to_string_lossy()]
-        );
+        assert_eq!(paths, vec![changed.canonicalize().expect("canonical source").to_string_lossy()]);
     }
 
     #[test]

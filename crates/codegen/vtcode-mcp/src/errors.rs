@@ -54,24 +54,18 @@ impl ErrorCode {
     /// Returns a short, actionable guidance message suitable for display in the TUI.
     pub fn user_guidance(&self) -> &'static str {
         match self {
-            Self::ToolNotFound => {
-                "Check that the tool name is correct and the MCP provider is running."
-            }
+            Self::ToolNotFound => "Check that the tool name is correct and the MCP provider is running.",
             Self::ToolInvocationFailed => {
                 "The MCP tool returned an error. Check the tool's arguments and provider logs."
             }
             Self::ProviderNotFound => {
                 "Verify the provider name in vtcode.toml or .mcp.json matches a configured MCP server."
             }
-            Self::ProviderUnavailable => {
-                "The MCP server may be down. Check that the command/endpoint is reachable."
-            }
+            Self::ProviderUnavailable => "The MCP server may be down. Check that the command/endpoint is reachable.",
             Self::SchemaInvalid => {
                 "The tool's input schema does not match expected format. Check the MCP server implementation."
             }
-            Self::ConfigurationError => {
-                "Review the MCP section of vtcode.toml or .mcp.json for syntax errors."
-            }
+            Self::ConfigurationError => "Review the MCP section of vtcode.toml or .mcp.json for syntax errors.",
             Self::InitializationTimeout => {
                 "The MCP server took too long to start. Increase startup_timeout_ms or check the server process."
             }
@@ -188,11 +182,7 @@ mod tests {
         assert!(msg.contains("[MCP_E032]"));
         assert!(msg.contains("15 seconds"));
 
-        let err = tool_invocation_failed(
-            "claude",
-            vtcode_config::constants::tools::LIST_FILES,
-            "timeout",
-        );
+        let err = tool_invocation_failed("claude", vtcode_config::constants::tools::LIST_FILES, "timeout");
         let msg = err.to_string();
         assert!(msg.contains("[MCP_E002]"));
         assert!(msg.contains(vtcode_config::constants::tools::LIST_FILES));

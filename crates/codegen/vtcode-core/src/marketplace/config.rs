@@ -133,17 +133,15 @@ impl MarketplaceSettings {
 
         let content = read_file_with_context(config_path, "marketplace config file").await?;
 
-        let settings: MarketplaceSettings = toml::from_str(&content).with_context(|| {
-            format!("Failed to parse marketplace config file: {}", config_path.display())
-        })?;
+        let settings: MarketplaceSettings = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse marketplace config file: {}", config_path.display()))?;
 
         Ok(settings)
     }
 
     /// Save marketplace settings to a configuration file
     pub async fn save_to_file(&self, config_path: &Path) -> Result<()> {
-        let content =
-            toml::to_string(&self).with_context(|| "Failed to serialize marketplace settings")?;
+        let content = toml::to_string(&self).with_context(|| "Failed to serialize marketplace settings")?;
 
         write_file_with_context(config_path, &content, "marketplace config file").await?;
 
@@ -264,10 +262,7 @@ mod tests {
 
         let loaded_settings = MarketplaceSettings::load_from_file(&config_path).await.unwrap();
         assert_eq!(settings.auto_update.marketplaces, loaded_settings.auto_update.marketplaces);
-        assert_eq!(
-            settings.security.default_trust_level,
-            loaded_settings.security.default_trust_level
-        );
+        assert_eq!(settings.security.default_trust_level, loaded_settings.security.default_trust_level);
     }
 
     #[tokio::test]

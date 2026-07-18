@@ -70,13 +70,11 @@ impl ToolEffectiveness {
         self.last_used_timestamp = current_timestamp();
 
         // Update rolling average of quality
-        self.avg_result_quality = (self.avg_result_quality * (self.success_count - 1) as f32
-            + quality)
-            / self.success_count as f32;
+        self.avg_result_quality =
+            (self.avg_result_quality * (self.success_count - 1) as f32 + quality) / self.success_count as f32;
 
         // Update rolling average of execution time
-        self.avg_execution_time_ms = (self.avg_execution_time_ms * (self.success_count - 1) as f32
-            + execution_time_ms)
+        self.avg_execution_time_ms = (self.avg_execution_time_ms * (self.success_count - 1) as f32 + execution_time_ms)
             / self.success_count as f32;
 
         self.update_success_rate();
@@ -94,8 +92,7 @@ impl ToolEffectiveness {
 
         // Update rolling average of execution time
         let success_count_f = (self.success_count + 1) as f32;
-        self.avg_execution_time_ms = (self.avg_execution_time_ms
-            * (self.success_count as f32 / success_count_f))
+        self.avg_execution_time_ms = (self.avg_execution_time_ms * (self.success_count as f32 / success_count_f))
             + (execution_time_ms / success_count_f);
 
         self.update_success_rate();
@@ -226,23 +223,13 @@ impl ToolEffectivenessTracker {
     }
 
     /// Record successful tool execution
-    pub fn record_success(
-        &mut self,
-        tool_name: &str,
-        metadata: &ResultMetadata,
-        execution_time_ms: f32,
-    ) {
+    pub fn record_success(&mut self, tool_name: &str, metadata: &ResultMetadata, execution_time_ms: f32) {
         let quality = metadata.quality_score();
         self.get_or_create(tool_name).record_success(quality, execution_time_ms);
     }
 
     /// Record failed tool execution
-    pub fn record_failure(
-        &mut self,
-        tool_name: &str,
-        mode: ToolFailureMode,
-        execution_time_ms: f32,
-    ) {
+    pub fn record_failure(&mut self, tool_name: &str, mode: ToolFailureMode, execution_time_ms: f32) {
         self.get_or_create(tool_name).record_failure(mode, execution_time_ms);
     }
 

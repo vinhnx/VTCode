@@ -58,11 +58,7 @@ mod tests {
         let mut state = PtyScreenState::new(size, 100);
         state.process(b"hello");
         let snapshot = state.prepare_snapshot();
-        assert!(
-            snapshot.screen_contents.contains("hello"),
-            "screen_contents = {:?}",
-            snapshot.screen_contents
-        );
+        assert!(snapshot.screen_contents.contains("hello"), "screen_contents = {:?}", snapshot.screen_contents);
     }
 
     #[test]
@@ -71,16 +67,8 @@ mod tests {
         let mut state = PtyScreenState::new(size, 100);
         state.process(b"line1\nline2");
         let snapshot = state.prepare_snapshot();
-        assert!(
-            snapshot.screen_contents.contains("line1"),
-            "screen_contents = {:?}",
-            snapshot.screen_contents
-        );
-        assert!(
-            snapshot.screen_contents.contains("line2"),
-            "screen_contents = {:?}",
-            snapshot.screen_contents
-        );
+        assert!(snapshot.screen_contents.contains("line1"), "screen_contents = {:?}", snapshot.screen_contents);
+        assert!(snapshot.screen_contents.contains("line2"), "screen_contents = {:?}", snapshot.screen_contents);
     }
 
     #[test]
@@ -89,10 +77,6 @@ mod tests {
         let mut state = PtyScreenState::new(size, 100);
         state.process(b"\x1B[1;31mcolored\x1B[0m");
         let snapshot = state.prepare_snapshot();
-        assert!(
-            snapshot.screen_contents.contains("colored"),
-            "screen_contents = {:?}",
-            snapshot.screen_contents
-        );
+        assert!(snapshot.screen_contents.contains("colored"), "screen_contents = {:?}", snapshot.screen_contents);
     }
 }

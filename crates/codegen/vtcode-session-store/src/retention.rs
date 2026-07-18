@@ -29,10 +29,7 @@ impl Default for RetentionPolicy {
 /// Returns the number of sessions removed. This bounds the otherwise
 /// unbounded growth of `.vtcode/sessions/` so overhead does not accumulate
 /// on disk across a long-lived agent.
-pub fn apply_retention(
-    workspace: &Path,
-    policy: RetentionPolicy,
-) -> Result<usize, SessionStoreError> {
+pub fn apply_retention(workspace: &Path, policy: RetentionPolicy) -> Result<usize, SessionStoreError> {
     let root = sessions_root(workspace);
     if !root.exists() {
         return Ok(0);

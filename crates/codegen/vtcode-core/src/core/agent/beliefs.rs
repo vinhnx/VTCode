@@ -51,10 +51,8 @@ impl AgentBeliefs {
 
         // Check total capacity before taking the mutable borrow
         let needs_prune = {
-            let total = self.about_user.len()
-                + self.about_system.len()
-                + self.about_task.len()
-                + self.about_conversation.len();
+            let total =
+                self.about_user.len() + self.about_system.len() + self.about_task.len() + self.about_conversation.len();
             total >= self.max_beliefs
         };
         if needs_prune {
@@ -64,44 +62,16 @@ impl AgentBeliefs {
         // Select the target category, then try to reinforce or push new
         match category {
             BeliefCategory::User => {
-                Self::reinforce_or_push(
-                    &mut self.about_user,
-                    &normalized,
-                    statement,
-                    confidence,
-                    source,
-                    now,
-                );
+                Self::reinforce_or_push(&mut self.about_user, &normalized, statement, confidence, source, now);
             }
             BeliefCategory::System => {
-                Self::reinforce_or_push(
-                    &mut self.about_system,
-                    &normalized,
-                    statement,
-                    confidence,
-                    source,
-                    now,
-                );
+                Self::reinforce_or_push(&mut self.about_system, &normalized, statement, confidence, source, now);
             }
             BeliefCategory::Task => {
-                Self::reinforce_or_push(
-                    &mut self.about_task,
-                    &normalized,
-                    statement,
-                    confidence,
-                    source,
-                    now,
-                );
+                Self::reinforce_or_push(&mut self.about_task, &normalized, statement, confidence, source, now);
             }
             BeliefCategory::Conversation => {
-                Self::reinforce_or_push(
-                    &mut self.about_conversation,
-                    &normalized,
-                    statement,
-                    confidence,
-                    source,
-                    now,
-                );
+                Self::reinforce_or_push(&mut self.about_conversation, &normalized, statement, confidence, source, now);
             }
         }
     }
@@ -298,11 +268,7 @@ mod tests {
         let mut beliefs = AgentBeliefs::default();
         beliefs.add_or_reinforce("high confidence", 0.9, BeliefSource::UserStatement);
         // Add a low-confidence belief and manually set it as old so prune removes it
-        beliefs.add_or_reinforce(
-            "low confidence",
-            0.05,
-            BeliefSource::ToolResult { tool: "ls".to_string() },
-        );
+        beliefs.add_or_reinforce("low confidence", 0.05, BeliefSource::ToolResult { tool: "ls".to_string() });
         if let Some(low) = beliefs.about_system.last_mut() {
             low.last_reinforced_at = 1; // Unix epoch — very old
         }

@@ -73,11 +73,7 @@ mod tests {
 
     #[test]
     fn session_surface_conversion_roundtrip() {
-        let variants = [
-            SessionSurface::Auto,
-            SessionSurface::Alternate,
-            SessionSurface::Inline,
-        ];
+        let variants = [SessionSurface::Auto, SessionSurface::Alternate, SessionSurface::Inline];
 
         for variant in variants {
             let converted: crate::tui::config::UiSurfacePreference = variant.into();

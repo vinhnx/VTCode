@@ -1,7 +1,7 @@
 use crate::sandboxing::{
-    AdditionalPermissions, CommandSpec as SandboxCommandSpec, NetworkAllowlistEntry,
-    ResourceLimits, SandboxManager, SandboxPermissions, SandboxPolicy, SandboxTransformError,
-    SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,
+    AdditionalPermissions, CommandSpec as SandboxCommandSpec, NetworkAllowlistEntry, ResourceLimits, SandboxManager,
+    SandboxPermissions, SandboxPolicy, SandboxTransformError, SeccompProfile, SensitivePath, WritableRoot,
+    default_sensitive_paths,
 };
 use crate::tools::tool_intent;
 use anyhow::{Context, Result, anyhow};
@@ -10,9 +10,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
 };
-use vtcode_config::{
-    ResourceLimitsPreset, SandboxPolicy as RuntimeSandboxPolicy, SeccompProfilePreset,
-};
+use vtcode_config::{ResourceLimitsPreset, SandboxPolicy as RuntimeSandboxPolicy, SeccompProfilePreset};
 
 #[cfg(all(test, target_os = "linux"))]
 use std::sync::{LazyLock, Mutex};
@@ -23,8 +21,10 @@ pub(super) struct ShellExecutionPlan {
     pub(super) sandbox_policy: Option<SandboxPolicy>,
 }
 
-pub(super) const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str = "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
-pub(super) const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str = "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
+pub(super) const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
+    "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
+pub(super) const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str =
+    "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
 
 fn push_unique_reason(reasons: &mut Vec<String>, reason: impl Into<String>) {
     let reason = reason.into();
@@ -75,10 +75,7 @@ pub(super) fn build_shell_execution_plan(
 ) -> Result<ShellExecutionPlan> {
     let mut approval_reasons = Vec::new();
     if crate::command_safety::command_might_be_dangerous(requested_command) {
-        push_unique_reason(
-            &mut approval_reasons,
-            "Command appears dangerous and requires approval.",
-        );
+        push_unique_reason(&mut approval_reasons, "Command appears dangerous and requires approval.");
     }
     if let Some(reason) = shell_permission_approval_reason(sandbox_permissions) {
         push_unique_reason(&mut approval_reasons, reason);
@@ -92,9 +89,7 @@ pub(super) fn build_shell_execution_plan(
     }
 
     let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
-    if matches!(policy, SandboxPolicy::ReadOnly { .. })
-        && command_likely_writes_workspace(requested_command)
-    {
+    if matches!(policy, SandboxPolicy::ReadOnly { .. }) && command_likely_writes_workspace(requested_command) {
         push_unique_reason(
             &mut approval_reasons,
             "Command appears to modify workspace files and needs workspace-write sandbox access.",
@@ -129,10 +124,7 @@ pub(super) fn sandbox_policy_from_runtime_config(
         RuntimeSandboxPolicy::ReadOnly => Ok(read_only_policy_from_runtime_config(sandbox_config)),
         RuntimeSandboxPolicy::DangerFullAccess => Ok(SandboxPolicy::full_access()),
         RuntimeSandboxPolicy::External => Ok(SandboxPolicy::ExternalSandbox {
-            description: format!(
-                "external sandbox requested ({:?})",
-                sandbox_config.external.sandbox_type
-            ),
+            description: format!("external sandbox requested ({:?})", sandbox_config.external.sandbox_type),
         }),
         RuntimeSandboxPolicy::WorkspaceWrite => {
             Ok(workspace_write_policy_from_runtime_config(sandbox_config, workspace_root))
@@ -140,9 +132,7 @@ pub(super) fn sandbox_policy_from_runtime_config(
     }
 }
 
-fn read_only_policy_from_runtime_config(
-    sandbox_config: &vtcode_config::SandboxConfig,
-) -> SandboxPolicy {
+fn read_only_policy_from_runtime_config(sandbox_config: &vtcode_config::SandboxConfig) -> SandboxPolicy {
     let (network_allow_all, network_allowlist) = runtime_network_policy(sandbox_config);
 
     if network_allow_all {
@@ -171,23 +161,18 @@ fn workspace_write_policy_from_runtime_config(
         resource_limits,
         seccomp_profile,
     );
-    if network_allow_all
-        && let SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } = &mut policy
-    {
+    if network_allow_all && let SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } = &mut policy {
         *network_access = true;
         network_allowlist.clear();
     }
     policy
 }
 
-fn runtime_network_policy(
-    sandbox_config: &vtcode_config::SandboxConfig,
-) -> (bool, Vec<NetworkAllowlistEntry>) {
+fn runtime_network_policy(sandbox_config: &vtcode_config::SandboxConfig) -> (bool, Vec<NetworkAllowlistEntry>) {
     use vtcode_config::NetworkPolicy;
 
     let network_blocked = sandbox_config.network.policy == NetworkPolicy::BlockAll;
-    let network_allow_all =
-        !network_blocked && sandbox_config.network.policy == NetworkPolicy::AllowAll;
+    let network_allow_all = !network_blocked && sandbox_config.network.policy == NetworkPolicy::AllowAll;
     let network_allowlist = if network_blocked || network_allow_all {
         Vec::new()
     } else {
@@ -197,8 +182,7 @@ fn runtime_network_policy(
             .iter()
             .filter_map(|entry| {
                 let domain = entry.domain.trim();
-                (!domain.is_empty())
-                    .then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
+                (!domain.is_empty()).then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
             })
             .collect()
     };
@@ -206,9 +190,7 @@ fn runtime_network_policy(
     (network_allow_all, network_allowlist)
 }
 
-fn resource_limits_from_runtime_config(
-    limits_config: &vtcode_config::ResourceLimitsConfig,
-) -> ResourceLimits {
+fn resource_limits_from_runtime_config(limits_config: &vtcode_config::ResourceLimitsConfig) -> ResourceLimits {
     let mut limits = match limits_config.preset {
         ResourceLimitsPreset::Unlimited => ResourceLimits::unlimited(),
         ResourceLimitsPreset::Conservative => ResourceLimits::conservative(),
@@ -241,16 +223,15 @@ fn seccomp_profile_from_runtime_config(
     network_enabled: bool,
 ) -> SeccompProfile {
     let seccomp_cfg = &sandbox_config.seccomp;
-    let mut seccomp_profile =
-        if !seccomp_cfg.enabled || seccomp_cfg.profile == SeccompProfilePreset::Disabled {
-            SeccompProfile::permissive()
-        } else {
-            match seccomp_cfg.profile {
-                SeccompProfilePreset::Strict => SeccompProfile::strict(),
-                SeccompProfilePreset::Permissive => SeccompProfile::permissive(),
-                SeccompProfilePreset::Disabled => SeccompProfile::permissive(),
-            }
-        };
+    let mut seccomp_profile = if !seccomp_cfg.enabled || seccomp_cfg.profile == SeccompProfilePreset::Disabled {
+        SeccompProfile::permissive()
+    } else {
+        match seccomp_cfg.profile {
+            SeccompProfilePreset::Strict => SeccompProfile::strict(),
+            SeccompProfilePreset::Permissive => SeccompProfile::permissive(),
+            SeccompProfilePreset::Disabled => SeccompProfile::permissive(),
+        }
+    };
 
     if network_enabled {
         seccomp_profile = seccomp_profile.with_network();
@@ -311,9 +292,9 @@ pub(super) fn parse_requested_sandbox_permissions(
         .cloned()
         .map(serde_json::from_value::<SandboxPermissions>)
         .transpose()
-        .with_context(|| {
-            "Invalid sandbox_permissions. Use one of: use_default, with_additional_permissions, require_escalated."
-        })?
+        .with_context(
+            || "Invalid sandbox_permissions. Use one of: use_default, with_additional_permissions, require_escalated.",
+        )?
         .unwrap_or_default();
 
     let additional_permissions = payload
@@ -321,9 +302,7 @@ pub(super) fn parse_requested_sandbox_permissions(
         .cloned()
         .map(serde_json::from_value::<AdditionalPermissions>)
         .transpose()
-        .with_context(|| {
-            "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
-        })?
+        .with_context(|| "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays.")?
         .filter(|permissions| !permissions.is_empty());
 
     if sandbox_permissions.requires_escalated_permissions() {
@@ -339,9 +318,7 @@ pub(super) fn parse_requested_sandbox_permissions(
         };
         let normalized = normalize_additional_permissions(additional_permissions, cwd)?;
         if normalized.is_empty() {
-            return Err(anyhow!(
-                "`additional_permissions` must include at least one path in `fs_read` or `fs_write`"
-            ));
+            return Err(anyhow!("`additional_permissions` must include at least one path in `fs_read` or `fs_write`"));
         }
         Some(normalized)
     } else {
@@ -356,11 +333,7 @@ pub(super) fn parse_requested_sandbox_permissions(
     Ok((sandbox_permissions, additional_permissions))
 }
 
-fn normalize_permission_paths(
-    paths: Vec<PathBuf>,
-    command_cwd: &Path,
-    permission_kind: &str,
-) -> Result<Vec<PathBuf>> {
+fn normalize_permission_paths(paths: Vec<PathBuf>, command_cwd: &Path, permission_kind: &str) -> Result<Vec<PathBuf>> {
     let mut out = Vec::with_capacity(paths.len());
     let mut seen = BTreeSet::new();
 
@@ -387,10 +360,8 @@ fn normalize_additional_permissions(
     additional_permissions: AdditionalPermissions,
     command_cwd: &Path,
 ) -> Result<AdditionalPermissions> {
-    let fs_read =
-        normalize_permission_paths(additional_permissions.fs_read, command_cwd, "fs_read")?;
-    let fs_write =
-        normalize_permission_paths(additional_permissions.fs_write, command_cwd, "fs_write")?;
+    let fs_read = normalize_permission_paths(additional_permissions.fs_read, command_cwd, "fs_read")?;
+    let fs_write = normalize_permission_paths(additional_permissions.fs_write, command_cwd, "fs_write")?;
 
     Ok(AdditionalPermissions { fs_read, fs_write })
 }
@@ -430,8 +401,7 @@ pub(super) fn sandbox_policy_with_additional_permissions(
             exclude_slash_tmp,
         } => {
             let mut merged_writes = writable_roots;
-            merged_writes
-                .extend(additional_permissions.fs_write.iter().cloned().map(WritableRoot::new));
+            merged_writes.extend(additional_permissions.fs_write.iter().cloned().map(WritableRoot::new));
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: dedupe_writable_roots(merged_writes),
                 network_access,
@@ -450,12 +420,7 @@ pub(super) fn sandbox_policy_with_additional_permissions(
                 let network_enabled = network_access || !network_allowlist.is_empty();
                 SandboxPolicy::WorkspaceWrite {
                     writable_roots: dedupe_writable_roots(
-                        additional_permissions
-                            .fs_write
-                            .iter()
-                            .cloned()
-                            .map(WritableRoot::new)
-                            .collect(),
+                        additional_permissions.fs_write.iter().cloned().map(WritableRoot::new).collect(),
                     ),
                     network_access,
                     network_allowlist,
@@ -524,9 +489,7 @@ fn transform_command_with_sandbox_policy(
 
     let executable = exec_env.program.to_string_lossy().to_string();
     if exec_env.sandbox_active && !Path::new(&executable).exists() {
-        return Err(anyhow!(
-            "Sandbox is enabled but executable '{executable}' was not found on this system."
-        ));
+        return Err(anyhow!("Sandbox is enabled but executable '{executable}' was not found on this system."));
     }
 
     let mut transformed = Vec::with_capacity(1 + exec_env.args.len());
@@ -535,10 +498,7 @@ fn transform_command_with_sandbox_policy(
     Ok(transformed)
 }
 
-fn map_sandbox_transform_error(
-    error: SandboxTransformError,
-    policy: &SandboxPolicy,
-) -> anyhow::Error {
+fn map_sandbox_transform_error(error: SandboxTransformError, policy: &SandboxPolicy) -> anyhow::Error {
     match error {
         SandboxTransformError::MissingSandboxExecutable => anyhow!(
             "Sandbox is enabled for '{}' but no Linux sandbox helper is configured. \
@@ -644,10 +604,7 @@ fn command_likely_needs_network(command: &[String]) -> bool {
     }
     if name == "git" {
         return command.iter().skip(1).any(|arg| {
-            matches!(
-                arg.as_str(),
-                "clone" | "fetch" | "pull" | "push" | "ls-remote" | "remote" | "submodule"
-            )
+            matches!(arg.as_str(), "clone" | "fetch" | "pull" | "push" | "ls-remote" | "remote" | "submodule")
         });
     }
     false
@@ -692,10 +649,7 @@ fn command_likely_writes_workspace(command: &[String]) -> bool {
 
     if name == "cargo" {
         return command.iter().skip(1).any(|arg| {
-            matches!(
-                arg.as_str(),
-                "fmt" | "fix" | "build" | "check" | "clippy" | "test" | "nextest" | "clean"
-            )
+            matches!(arg.as_str(), "fmt" | "fix" | "build" | "check" | "clippy" | "test" | "nextest" | "clean")
         });
     }
 
@@ -770,9 +724,7 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
 #[cfg(target_os = "linux")]
 fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
     #[cfg(test)]
-    if let Some(path) =
-        LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock().ok().and_then(|guard| guard.clone())
-    {
+    if let Some(path) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock().ok().and_then(|guard| guard.clone()) {
         return Some(path);
     }
 
@@ -785,8 +737,7 @@ fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
 }
 
 #[cfg(all(test, target_os = "linux"))]
-static LINUX_SANDBOX_EXECUTABLE_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> =
-    LazyLock::new(|| Mutex::new(None));
+static LINUX_SANDBOX_EXECUTABLE_OVERRIDE: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
 #[cfg(all(test, target_os = "linux"))]
 pub(super) struct LinuxSandboxExecutableOverrideGuard;
@@ -801,9 +752,7 @@ impl Drop for LinuxSandboxExecutableOverrideGuard {
 }
 
 #[cfg(all(test, target_os = "linux"))]
-pub(super) fn set_linux_sandbox_executable_override_for_tests(
-    path: PathBuf,
-) -> LinuxSandboxExecutableOverrideGuard {
+pub(super) fn set_linux_sandbox_executable_override_for_tests(path: PathBuf) -> LinuxSandboxExecutableOverrideGuard {
     if let Ok(mut guard) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock() {
         *guard = Some(path);
     }

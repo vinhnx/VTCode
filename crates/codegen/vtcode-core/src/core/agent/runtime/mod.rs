@@ -3,8 +3,8 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::SteeringMessage;
 use crate::exec::events::{ThreadEvent, ToolCallStatus};
 use crate::llm::provider::{
-    AssistantPhase, FinishReason, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent,
-    ToolCall, Usage as ProviderUsage,
+    AssistantPhase, FinishReason, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent, ToolCall,
+    Usage as ProviderUsage,
 };
 use crate::llm::providers::gemini::wire::{Content, Part};
 use anyhow::Result;
@@ -130,9 +130,7 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
                     ..Default::default()
                 };
                 if response.usage.as_ref().is_some_and(|usage| {
-                    usage.prompt_tokens == 0
-                        && usage.completion_tokens == 0
-                        && usage.total_tokens == 0
+                    usage.prompt_tokens == 0 && usage.completion_tokens == 0 && usage.total_tokens == 0
                 }) {
                     response.usage = None;
                 }
@@ -175,9 +173,7 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
             response.model = request_model;
         }
         if response.usage.is_none()
-            && (final_usage.prompt_tokens > 0
-                || final_usage.completion_tokens > 0
-                || final_usage.total_tokens > 0)
+            && (final_usage.prompt_tokens > 0 || final_usage.completion_tokens > 0 || final_usage.total_tokens > 0)
         {
             response.usage = Some(final_usage);
         }
@@ -441,8 +437,7 @@ impl StreamingLifecycleBridge {
         }
 
         stage_changed
-            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len)
-                >= MIN_REASONING_UPDATE_BYTES
+            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len) >= MIN_REASONING_UPDATE_BYTES
     }
 
     fn record_reasoning_update(&mut self) {
@@ -456,8 +451,7 @@ impl StreamingLifecycleBridge {
         }
 
         self.output_update_events == 0
-            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len)
-                >= MIN_OUTPUT_UPDATE_BYTES
+            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len) >= MIN_OUTPUT_UPDATE_BYTES
     }
 
     fn start_tool_call(&mut self, call_id: String, name: Option<String>) {
@@ -606,8 +600,7 @@ impl AgentRuntime {
         }
 
         self.output_update_events == 0
-            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len)
-                >= MIN_OUTPUT_UPDATE_BYTES
+            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len) >= MIN_OUTPUT_UPDATE_BYTES
     }
 
     fn should_emit_reasoning_update(&self) -> bool {
@@ -616,8 +609,7 @@ impl AgentRuntime {
         }
 
         self.reasoning_update_events == 0
-            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len)
-                >= MIN_REASONING_UPDATE_BYTES
+            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len) >= MIN_REASONING_UPDATE_BYTES
     }
 
     fn emit_pending_lifecycle_events(&mut self) {
@@ -631,8 +623,7 @@ impl AgentRuntime {
             return;
         }
 
-        let should_emit_snapshot =
-            !self.lifecycle.assistant_started() || self.lifecycle.replace_assistant_text(text);
+        let should_emit_snapshot = !self.lifecycle.assistant_started() || self.lifecycle.replace_assistant_text(text);
         if should_emit_snapshot {
             let _ = self.lifecycle.emit_assistant_snapshot(None);
         }
@@ -644,30 +635,22 @@ impl AgentRuntime {
             return;
         }
 
-        let should_emit_snapshot =
-            !self.lifecycle.reasoning_started() || self.lifecycle.replace_reasoning_text(text);
+        let should_emit_snapshot = !self.lifecycle.reasoning_started() || self.lifecycle.replace_reasoning_text(text);
         if should_emit_snapshot {
             let _ = self.lifecycle.emit_reasoning_snapshot(None);
         }
         let _ = self.lifecycle.complete_reasoning_stream();
     }
 
-    fn finalize_tool_call_lifecycle(
-        &mut self,
-        tool_calls: Option<&[ToolCall]>,
-        _finish_reason: &str,
-    ) {
+    fn finalize_tool_call_lifecycle(&mut self, tool_calls: Option<&[ToolCall]>, _finish_reason: &str) {
         if let Some(tool_calls) = tool_calls {
             for call in tool_calls {
                 let tool_name = call.function.as_ref().map(|function| function.name.clone());
                 let _ = self.lifecycle.start_tool_call(&call.id, tool_name.clone(), None);
                 if let Some(function) = call.function.as_ref() {
-                    let _ = self.lifecycle.sync_tool_call_arguments(
-                        &call.id,
-                        &function.arguments,
-                        tool_name,
-                        None,
-                    );
+                    let _ = self
+                        .lifecycle
+                        .sync_tool_call_arguments(&call.id, &function.arguments, tool_name, None);
                 }
             }
             return;
@@ -685,8 +668,7 @@ impl AgentRuntime {
         match event {
             RuntimeModelProgress::OutputDelta(delta) => {
                 full_text.push_str(&delta);
-                if self.lifecycle.append_assistant_delta(&delta) && self.should_emit_output_update()
-                {
+                if self.lifecycle.append_assistant_delta(&delta) && self.should_emit_output_update() {
                     let _ = self.lifecycle.emit_assistant_snapshot(None);
                     self.output_update_events += 1;
                     self.last_output_emit_len = self.lifecycle.assistant_len();
@@ -695,9 +677,7 @@ impl AgentRuntime {
             }
             RuntimeModelProgress::ReasoningDelta(delta) => {
                 full_reasoning.push_str(&delta);
-                if self.lifecycle.append_reasoning_delta(&delta)
-                    && self.should_emit_reasoning_update()
-                {
+                if self.lifecycle.append_reasoning_delta(&delta) && self.should_emit_reasoning_update() {
                     let _ = self.lifecycle.emit_reasoning_snapshot(None);
                     self.reasoning_update_events += 1;
                     self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
@@ -736,10 +716,8 @@ impl AgentRuntime {
         self.last_reasoning_emit_len = 0;
         let mut full_text = String::new();
         let mut full_reasoning = String::new();
-        let mut on_progress =
-            |event| self.record_model_progress(event, &mut full_text, &mut full_reasoning);
-        let RuntimeModelOutput { mut response } =
-            adapter.execute(request, timeout, &mut on_progress).await?;
+        let mut on_progress = |event| self.record_model_progress(event, &mut full_text, &mut full_reasoning);
+        let RuntimeModelOutput { mut response } = adapter.execute(request, timeout, &mut on_progress).await?;
 
         merge_stream_and_completed_text(&mut full_text, response.content.as_deref());
         merge_stream_and_completed_text(&mut full_reasoning, response.reasoning.as_deref());
@@ -773,8 +751,7 @@ impl AgentRuntime {
             assistant_message = assistant_message.with_reasoning(Some(full_reasoning.clone()));
         }
         if let Some(details) = &response.reasoning_details {
-            let values: Vec<serde_json::Value> =
-                details.iter().map(|s| serde_json::Value::String(s.clone())).collect();
+            let values: Vec<serde_json::Value> = details.iter().map(|s| serde_json::Value::String(s.clone())).collect();
             assistant_message = assistant_message.with_reasoning_details(Some(values));
         }
 
@@ -849,9 +826,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::stream;
 
-    use crate::llm::provider::{
-        LLMError, LLMNormalizedStream, LLMStream, LLMStreamEvent, NormalizedStreamEvent,
-    };
+    use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMStream, LLMStreamEvent, NormalizedStreamEvent};
 
     #[derive(Clone)]
     struct CompletedOnlyStreamProvider {
@@ -885,10 +860,7 @@ mod tests {
             })])))
         }
 
-        async fn stream_normalized(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMNormalizedStream, LLMError> {
+        async fn stream_normalized(&self, _request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![Ok(NormalizedStreamEvent::Done {
                 response: Box::new(self.response.clone()),
             })])))
@@ -923,10 +895,7 @@ mod tests {
             })])))
         }
 
-        async fn stream_normalized(
-            &self,
-            _request: LLMRequest,
-        ) -> Result<LLMNormalizedStream, LLMError> {
+        async fn stream_normalized(&self, _request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![
                 Ok(NormalizedStreamEvent::ReasoningDelta { delta: self.reasoning_delta.clone() }),
                 Ok(NormalizedStreamEvent::TextDelta { delta: self.text_delta.clone() }),

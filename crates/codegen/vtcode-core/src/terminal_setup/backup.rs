@@ -39,18 +39,13 @@ impl ConfigBackupManager {
 
         // Create parent directory if needed
         if let Some(parent) = backup_path.parent() {
-            ensure_dir_exists_sync(parent).with_context(|| {
-                format!("Failed to create backup directory: {}", parent.display())
-            })?;
+            ensure_dir_exists_sync(parent)
+                .with_context(|| format!("Failed to create backup directory: {}", parent.display()))?;
         }
 
         // Copy config to backup
         fs::copy(config_path, &backup_path).with_context(|| {
-            format!(
-                "Failed to backup config from {} to {}",
-                config_path.display(),
-                backup_path.display()
-            )
+            format!("Failed to backup config from {} to {}", config_path.display(), backup_path.display())
         })?;
 
         // Cleanup old backups
@@ -67,17 +62,12 @@ impl ConfigBackupManager {
 
         // Create parent directory if needed
         if let Some(parent) = original_path.parent() {
-            ensure_dir_exists_sync(parent).with_context(|| {
-                format!("Failed to create config directory: {}", parent.display())
-            })?;
+            ensure_dir_exists_sync(parent)
+                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
         }
 
         fs::copy(backup_path, original_path).with_context(|| {
-            format!(
-                "Failed to restore backup from {} to {}",
-                backup_path.display(),
-                original_path.display()
-            )
+            format!("Failed to restore backup from {} to {}", backup_path.display(), original_path.display())
         })?;
 
         Ok(())
@@ -95,16 +85,15 @@ impl ConfigBackupManager {
 
         let mut backups = Vec::new();
 
-        for entry in fs::read_dir(config_dir)
-            .with_context(|| format!("Failed to read directory: {}", config_dir.display()))?
+        for entry in
+            fs::read_dir(config_dir).with_context(|| format!("Failed to read directory: {}", config_dir.display()))?
         {
             let entry = entry.with_context(|| "Failed to read directory entry")?;
             let file_name = entry.file_name();
             let file_name_str = file_name.to_string_lossy();
 
             // Match pattern: config_name.vtcode_backup_YYYYMMDD_HHMMSS
-            if file_name_str.starts_with(&*config_name) && file_name_str.contains(".vtcode_backup_")
-            {
+            if file_name_str.starts_with(&*config_name) && file_name_str.contains(".vtcode_backup_") {
                 backups.push(entry.path());
             }
         }
@@ -140,8 +129,7 @@ impl ConfigBackupManager {
 
         // Remove backups beyond MAX_BACKUPS
         for backup in backups.iter().skip(MAX_BACKUPS) {
-            fs::remove_file(backup)
-                .with_context(|| format!("Failed to remove old backup: {}", backup.display()))?;
+            fs::remove_file(backup).with_context(|| format!("Failed to remove old backup: {}", backup.display()))?;
         }
 
         Ok(())

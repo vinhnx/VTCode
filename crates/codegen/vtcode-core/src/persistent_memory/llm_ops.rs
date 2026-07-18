@@ -54,8 +54,8 @@ fn build_memory_json_request(
     let prompt = if supports_native_json {
         prompt
     } else {
-        let schema = serde_json::to_string_pretty(schema)
-            .context("failed to serialize persistent memory JSON schema")?;
+        let schema =
+            serde_json::to_string_pretty(schema).context("failed to serialize persistent memory JSON schema")?;
         format!(
             "{prompt}\n\nReturn JSON only. Do not add markdown fences or explanatory text. The response must be a single JSON object that matches this schema:\n{schema}"
         )
@@ -192,17 +192,11 @@ async fn classify_facts_with_llm(
     workspace_root: &Path,
     candidates: &[GroundedFactRecord],
 ) -> Result<ClassifiedFacts> {
-    let rt_cfg = runtime_config
-        .ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
-    try_with_memory_routes!(
-        rt_cfg,
-        vt_cfg,
-        workspace_root,
-        MemoryPhase::Extract,
-        |provider, route| {
-            classify_facts_with_provider(provider, route, workspace_root, candidates)
-        }
-    )
+    let rt_cfg =
+        runtime_config.ok_or_else(|| anyhow!("runtime config is required for persistent memory LLM routing"))?;
+    try_with_memory_routes!(rt_cfg, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
+        classify_facts_with_provider(provider, route, workspace_root, candidates)
+    })
     .await
 }
 
@@ -253,8 +247,7 @@ pub(super) async fn classify_facts_with_provider(
         format!(
             "Classify VT Code memory evidence. Keep only durable reusable preferences or repository facts. Rewrite each kept fact into one concise canonical sentence. Drop transient, conversational, or noisy entries by omitting them.\n\nWorkspace: {}\nCandidates:\n{}",
             workspace_root.display(),
-            serde_json::to_string_pretty(&payload)
-                .context("failed to serialize memory classification payload")?
+            serde_json::to_string_pretty(&payload).context("failed to serialize memory classification payload")?
         ),
         "memory_classification",
         &schema,
@@ -266,17 +259,15 @@ pub(super) async fn classify_facts_with_provider(
     let content = response
         .content
         .context("persistent memory classification returned no content")?;
-    let parsed = parse_memory_json_response::<MemoryClassificationPlan>(
-        content.trim(),
-        "persistent memory classification",
-    )?;
+    let parsed =
+        parse_memory_json_response::<MemoryClassificationPlan>(content.trim(), "persistent memory classification")?;
 
     let mut preferences = Vec::new();
     let mut repository_facts = Vec::new();
     for item in parsed.keep {
-        let candidate = candidates.get(item.id).ok_or_else(|| {
-            anyhow!("memory classification referenced unknown candidate id {}", item.id)
-        })?;
+        let candidate = candidates
+            .get(item.id)
+            .ok_or_else(|| anyhow!("memory classification referenced unknown candidate id {}", item.id))?;
         let normalized_fact = normalize_whitespace(item.fact.as_deref().unwrap_or(&candidate.fact));
         if normalized_fact.is_empty() || looks_like_legacy_prompt(&normalized_fact) {
             continue;
@@ -310,22 +301,9 @@ pub(crate) async fn summarize_memory(
     notes: &[MemoryNoteSummary],
 ) -> Option<String> {
     let runtime_config = runtime_config?;
-    try_with_memory_routes!(
-        runtime_config,
-        vt_cfg,
-        workspace_root,
-        MemoryPhase::Consolidate,
-        |provider, route| {
-            summarize_memory_with_provider(
-                provider,
-                route,
-                workspace_root,
-                preferences,
-                repository_facts,
-                notes,
-            )
-        }
-    )
+    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Consolidate, |provider, route| {
+        summarize_memory_with_provider(provider, route, workspace_root, preferences, repository_facts, notes)
+    })
     .await
     .ok()
 }
@@ -368,10 +346,7 @@ pub(super) async fn summarize_memory_with_provider(
         .context("persistent memory summary LLM request failed")?
         .content
         .context("persistent memory summary returned no content")?;
-    let parsed = parse_memory_json_response::<MemorySummaryResponse>(
-        response.trim(),
-        "persistent memory summary",
-    )?;
+    let parsed = parse_memory_json_response::<MemorySummaryResponse>(response.trim(), "persistent memory summary")?;
     let bullets = parsed
         .bullets
         .into_iter()
@@ -395,23 +370,17 @@ pub(crate) async fn plan_memory_operation(
     supplemental_answer: Option<&str>,
     candidates: &[MemoryOpCandidate],
 ) -> Result<MemoryOpPlan> {
-    try_with_memory_routes!(
-        runtime_config,
-        vt_cfg,
-        workspace_root,
-        MemoryPhase::Extract,
-        |provider, route| {
-            plan_memory_operation_with_provider(
-                provider,
-                route,
-                workspace_root,
-                expected_kind.clone(),
-                request,
-                supplemental_answer,
-                candidates,
-            )
-        }
-    )
+    try_with_memory_routes!(runtime_config, vt_cfg, workspace_root, MemoryPhase::Extract, |provider, route| {
+        plan_memory_operation_with_provider(
+            provider,
+            route,
+            workspace_root,
+            expected_kind.clone(),
+            request,
+            supplemental_answer,
+            candidates,
+        )
+    })
     .await
 }
 
@@ -424,8 +393,8 @@ pub(super) async fn plan_memory_operation_with_provider(
     supplemental_answer: Option<&str>,
     candidates: &[MemoryOpCandidate],
 ) -> Result<MemoryOpPlan> {
-    let payload = serde_json::to_string_pretty(candidates)
-        .context("failed to serialize memory operation candidates")?;
+    let payload =
+        serde_json::to_string_pretty(candidates).context("failed to serialize memory operation candidates")?;
     let supplemental = supplemental_answer.unwrap_or("").trim();
     let schema = json!({
         "type": "object",
@@ -491,8 +460,7 @@ pub(super) async fn plan_memory_operation_with_provider(
         .await
         .context("persistent memory planner LLM request failed")?;
     let content = response.content.context("persistent memory planner returned no content")?;
-    let plan =
-        parse_memory_json_response::<MemoryOpPlan>(content.trim(), "persistent memory planner")?;
+    let plan = parse_memory_json_response::<MemoryOpPlan>(content.trim(), "persistent memory planner")?;
     validate_memory_op_plan(&plan, expected_kind, candidates)?;
     Ok(plan)
 }
@@ -528,9 +496,7 @@ fn validate_memory_op_plan(
                 .missing
                 .as_ref()
                 .ok_or_else(|| anyhow!("memory planner returned ask_missing without a prompt"))?;
-            if normalize_whitespace(&m.field).is_empty()
-                || normalize_whitespace(&m.prompt).is_empty()
-            {
+            if normalize_whitespace(&m.field).is_empty() || normalize_whitespace(&m.prompt).is_empty() {
                 bail!("memory planner returned an incomplete missing-field request");
             }
         }
@@ -590,12 +556,7 @@ pub(super) fn resolve_memory_model_routes(
         }
     });
 
-    let resolution = resolve_lightweight_route(
-        runtime_config,
-        vt_cfg,
-        LightweightFeature::Memory,
-        model_override,
-    );
+    let resolution = resolve_lightweight_route(runtime_config, vt_cfg, LightweightFeature::Memory, model_override);
     let primary = memory_model_route_from_resolution(&resolution.primary, runtime_config, vt_cfg);
     let fallback = resolution
         .fallback

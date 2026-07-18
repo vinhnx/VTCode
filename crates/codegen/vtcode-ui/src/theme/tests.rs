@@ -1,8 +1,8 @@
 use anstyle::{Color, RgbColor, Style};
 
 use crate::theme::color_math::{
-    MAX_DARK_BG_TEXT_LUMINANCE, MAX_LIGHT_BG_TEXT_LUMINANCE, MIN_DARK_BG_TEXT_LUMINANCE,
-    contrast_ratio, relative_luminance,
+    MAX_DARK_BG_TEXT_LUMINANCE, MAX_LIGHT_BG_TEXT_LUMINANCE, MIN_DARK_BG_TEXT_LUMINANCE, contrast_ratio,
+    relative_luminance,
 };
 use crate::theme::registry::all_theme_definitions;
 use crate::*;
@@ -69,8 +69,7 @@ fn test_all_themes_have_readable_foreground_and_accents() {
             ("user", style_rgb(styles.user)),
             ("response", style_rgb(styles.response)),
         ] {
-            let color =
-                color.unwrap_or_else(|| panic!("{} missing fg color for {}", name, definition.id));
+            let color = color.unwrap_or_else(|| panic!("{} missing fg color for {}", name, definition.id));
             let ratio = contrast_ratio(color, bg);
             assert!(
                 ratio >= min_contrast,

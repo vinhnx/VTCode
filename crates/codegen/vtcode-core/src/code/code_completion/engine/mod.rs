@@ -61,10 +61,7 @@ impl CompletionEngine {
 
     /// Return a shared `Arc<Vec<CompletionSuggestion>>` to avoid cloning large collections
     /// when the caller can accept shared ownership.
-    pub async fn complete_shared(
-        &self,
-        context: &CompletionContext,
-    ) -> Arc<Vec<CompletionSuggestion>> {
+    pub async fn complete_shared(&self, context: &CompletionContext) -> Arc<Vec<CompletionSuggestion>> {
         let cache_key = format!("{}:{}:{}", context.language, context.line, context.column);
 
         {
@@ -128,8 +125,7 @@ impl CompletionEngine {
         let mut learning_data = self.learning_data.write().await;
 
         // Update acceptance statistics
-        let current_rate =
-            learning_data.pattern_acceptance.get(suggestion_id).copied().unwrap_or(0.0);
+        let current_rate = learning_data.pattern_acceptance.get(suggestion_id).copied().unwrap_or(0.0);
         let new_rate = if accepted {
             (current_rate + 1.0) / 2.0
         } else {
@@ -141,9 +137,8 @@ impl CompletionEngine {
         let mut stats = self.performance_stats.write().await;
         stats.total_requests += 1;
         if accepted {
-            stats.acceptance_rate = (stats.acceptance_rate * (stats.total_requests - 1) as f64
-                + 1.0)
-                / stats.total_requests as f64;
+            stats.acceptance_rate =
+                (stats.acceptance_rate * (stats.total_requests - 1) as f64 + 1.0) / stats.total_requests as f64;
         }
     }
 
@@ -151,15 +146,14 @@ impl CompletionEngine {
     fn get_language_keywords(&self, language: &str) -> Vec<&'static str> {
         match language {
             "rust" => vec![
-                "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "mod",
-                "use", "pub", "crate", "super", "self", "Self", "async", "await", "move", "if",
-                "else", "match", "loop", "while", "for", "in", "break", "continue", "return", "as",
-                "dyn", "where", "unsafe",
+                "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "mod", "use", "pub", "crate",
+                "super", "self", "Self", "async", "await", "move", "if", "else", "match", "loop", "while", "for", "in",
+                "break", "continue", "return", "as", "dyn", "where", "unsafe",
             ],
             "python" => vec![
-                "def", "class", "if", "elif", "else", "for", "while", "try", "except", "finally",
-                "with", "as", "import", "from", "return", "yield", "lambda", "and", "or", "not",
-                "in", "is", "None", "True", "False", "self", "super",
+                "def", "class", "if", "elif", "else", "for", "while", "try", "except", "finally", "with", "as",
+                "import", "from", "return", "yield", "lambda", "and", "or", "not", "in", "is", "None", "True", "False",
+                "self", "super",
             ],
             "javascript" => vec![
                 "function",
@@ -215,7 +209,8 @@ impl CompletionEngine {
                 },
                 CodeSnippet {
                     label: "class".to_string(),
-                    template: "class ${1:Name}:\n\tdef __init__(self${2:params}):\n\t\t${0:# initialization}".to_string(),
+                    template: "class ${1:Name}:\n\tdef __init__(self${2:params}):\n\t\t${0:# initialization}"
+                        .to_string(),
                     description: "Class definition".to_string(),
                 },
             ],
@@ -227,7 +222,8 @@ impl CompletionEngine {
                 },
                 CodeSnippet {
                     label: "class".to_string(),
-                    template: "class ${1:Name} {\n\tconstructor(${2:params}) {\n\t\t${0:// initialization}\n\t}\n}".to_string(),
+                    template: "class ${1:Name} {\n\tconstructor(${2:params}) {\n\t\t${0:// initialization}\n\t}\n}"
+                        .to_string(),
                     description: "Class declaration".to_string(),
                 },
             ],

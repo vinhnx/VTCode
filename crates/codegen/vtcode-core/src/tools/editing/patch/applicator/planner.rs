@@ -47,11 +47,7 @@ pub(crate) async fn plan_operations<'a>(
                         prepared.push(PreparedOperation::Add { path, content });
                     }
                     Err(err) => {
-                        return Err(PatchError::Io {
-                            action: "inspect",
-                            path: full_path,
-                            source: err,
-                        });
+                        return Err(PatchError::Io { action: "inspect", path: full_path, source: err });
                     }
                 }
             }
@@ -79,9 +75,7 @@ pub(crate) async fn plan_operations<'a>(
                     });
                 }
 
-                if let Some(dest_rel) =
-                    new_path.as_ref().filter(|candidate| candidate.as_str() != path)
-                {
+                if let Some(dest_rel) = new_path.as_ref().filter(|candidate| candidate.as_str() != path) {
                     let destination = root.join(dest_rel);
                     match fs::metadata(&destination).await {
                         Ok(existing) => {
@@ -97,11 +91,7 @@ pub(crate) async fn plan_operations<'a>(
                         }
                         Err(err) if err.kind() == ErrorKind::NotFound => {}
                         Err(err) => {
-                            return Err(PatchError::Io {
-                                action: "inspect",
-                                path: destination,
-                                source: err,
-                            });
+                            return Err(PatchError::Io { action: "inspect", path: destination, source: err });
                         }
                     }
                 }
