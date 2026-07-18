@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.14 - 2026-07-18
+
+### Highlights
+#### Bug Fixes
+
+- Revert setup-zig to upstream and remove --frozen from builds (07b226ea) 
+### Other Changes
 ## 0.135.13 - 2026-07-18
 
 ### Highlights
