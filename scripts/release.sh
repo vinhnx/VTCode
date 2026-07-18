@@ -1155,11 +1155,11 @@ main() {
          # Build macOS binaries in parallel
          print_info "Building macOS binaries in parallel..."
          
-          # Build both architectures in parallel on multi-core machines
-          cargo build --frozen --profile release-fast --target x86_64-apple-darwin --jobs 4 &>/dev/null &
-          local pid_x86=$!
-          cargo build --frozen --profile release-fast --target aarch64-apple-darwin --jobs 4 &>/dev/null &
-          local pid_arm=$!
+           # Build both architectures in parallel on multi-core machines
+           cargo build --profile release-fast --target x86_64-apple-darwin --jobs 4 &>/dev/null &
+           local pid_x86=$!
+           cargo build --profile release-fast --target aarch64-apple-darwin --jobs 4 &>/dev/null &
+           local pid_arm=$!
           
           # Wait for x86_64
          if wait "$pid_x86"; then

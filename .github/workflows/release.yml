@@ -88,7 +88,7 @@ jobs:
 
       - name: Install Zig
         if: matrix.target != 'x86_64-unknown-linux-gnu'
-        uses: ./.github/actions/setup-zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.15.2
 
@@ -106,7 +106,7 @@ jobs:
 
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --frozen --profile release-fast --target ${{ matrix.target }} --features allocator-jemalloc --jobs 4
+        run: cargo build --profile release-fast --target ${{ matrix.target }} --features allocator-jemalloc --jobs 4
         shell: bash
         env:
           RUSTC_WRAPPER: sccache
@@ -115,7 +115,7 @@ jobs:
 
       - name: Build with cross (${{ matrix.target }})
         if: matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cross build --frozen --profile release-fast --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }} --jobs 4
+        run: cross build --profile release-fast --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }} --jobs 4
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
@@ -219,7 +219,7 @@ jobs:
           key: x86_64-pc-windows-msvc
 
       - name: Build (x86_64-pc-windows-msvc)
-        run: cargo build --frozen --profile release-fast --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
+        run: cargo build --profile release-fast --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
         shell: bash
 
       - name: Check Binary
@@ -285,12 +285,12 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Install Zig
-        uses: ./.github/actions/setup-zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.15.2
 
       - name: Build (${{ matrix.target }})
-        run: cargo build --frozen --profile release-fast --target ${{ matrix.target }} --jobs 4
+        run: cargo build --profile release-fast --target ${{ matrix.target }} --jobs 4
         shell: bash
 
       - name: Check Binary
