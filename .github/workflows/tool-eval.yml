@@ -1,6 +1,10 @@
 name: tool-eval
 permissions: {}
 
+concurrency:
+  group: tool-eval-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 on:
   push:
     paths:

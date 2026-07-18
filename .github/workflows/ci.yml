@@ -173,6 +173,8 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "20G"
       RUSTC_WRAPPER: "sccache"
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -182,7 +184,7 @@ jobs:
         with: { components: clippy }
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
-      - run: cargo clippy --locked
+      - run: cargo clippy --locked --jobs 4
 
   # Check for unmaintained dependencies.
   # See docs/guides/cargo-unmaintained.md for more information.
@@ -249,6 +251,8 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "20G"
       RUSTC_WRAPPER: "sccache"
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -259,7 +263,31 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
-      - run: cargo check --locked
+      - run: cargo check --locked --jobs 4
+
+  check-windows:
+    name: Check Windows (warm cache)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: x86_64-pc-windows-msvc
+      - run: cargo check --frozen --locked --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
+        shell: bash
 
   test:
     name: "Cargo nextest"
@@ -271,6 +299,8 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "20G"
       RUSTC_WRAPPER: "sccache"
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - name: "Check out the repo"
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
@@ -304,6 +334,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -313,7 +346,7 @@ jobs:
         with:
           toolchain: "1.88"
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - run: cargo check --locked
+      - run: cargo check --locked --jobs 4
 
   nightly:
     name: Nightly Smoke Test
@@ -323,6 +356,9 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
+    env:
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -330,7 +366,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@efcb852328a9f50117170cc43094fb6f09eaf1ae # nightly
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - run: cargo check --locked
+      - run: cargo check --locked --jobs 4
 
   # clippy:
   #   name: "Cargo clippy"

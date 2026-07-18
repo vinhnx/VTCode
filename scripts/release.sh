@@ -260,8 +260,8 @@ generate_structured_changelog() {
     local chore_commits=""
     local other_commits=""
 
-    # Get commits with their hashes
-    while IFS='|' read -r hash message; do
+    # Get commits with their hashes, subjects, and author emails in a single git log call
+    while IFS='|' read -r hash message author_email; do
         [[ -z "$hash" ]] && continue
 
         local type=$(parse_commit_type "$message")
@@ -272,8 +272,6 @@ generate_structured_changelog() {
             continue
         fi
 
-        # Get author for this commit
-        local author_email=$(git log -1 --pretty=format:"%ae" "$hash" 2>/dev/null || echo "")
         local username=""
         if [[ -n "$author_email" ]]; then
             username=$(get_github_username "$author_email")
@@ -300,7 +298,7 @@ generate_structured_changelog() {
             chore) chore_commits="${chore_commits}${entry}"$'\n' ;;
             *) other_commits="${other_commits}${entry}"$'\n' ;;
         esac
-    done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s")
+    done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s|%ae")
 
     # --- Build output with Highlights / Other Changes split ---
     local output=""
@@ -983,7 +981,7 @@ main() {
     else
         python3 scripts/generate_docs_map.py
         python3 scripts/sync_embedded_assets.py
-        git add docs/modules/vtcode_docs_map.md crates/codegen/vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md
+        git add docs/modules/vtcode_docs_map.md
         if ! git diff --cached --quiet; then
             GIT_AUTHOR_NAME="vtcode-release-bot" \
             GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
@@ -1157,13 +1155,13 @@ main() {
          # Build macOS binaries in parallel
          print_info "Building macOS binaries in parallel..."
          
-         # Build both architectures in parallel on multi-core machines
-         cargo build --release --target x86_64-apple-darwin &>/dev/null &
-         local pid_x86=$!
-         cargo build --release --target aarch64-apple-darwin &>/dev/null &
-         local pid_arm=$!
-         
-         # Wait for x86_64
+          # Build both architectures in parallel on multi-core machines
+          cargo build --frozen --profile release-fast --target x86_64-apple-darwin --jobs 4 &>/dev/null &
+          local pid_x86=$!
+          cargo build --frozen --profile release-fast --target aarch64-apple-darwin --jobs 4 &>/dev/null &
+          local pid_arm=$!
+          
+          # Wait for x86_64
          if wait "$pid_x86"; then
             package_release_archive \
                 "x86_64-apple-darwin" \

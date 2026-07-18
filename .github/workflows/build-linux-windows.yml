@@ -26,6 +26,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: build-${{ inputs.tag }}
+  cancel-in-progress: true
+
 # This repo is public, so standard ubuntu-latest and windows-latest runners
 # are free and do not consume any account quota. See:
 # https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions
@@ -38,8 +42,12 @@ jobs:
   build-linux:
     name: Build (${{ matrix.target }})
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     strategy:
       fail-fast: false
       matrix:
@@ -85,14 +93,14 @@ jobs:
 
       - name: Build with cargo (${{ matrix.target }})
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --release --target ${{ matrix.target }} --features allocator-jemalloc
+        run: cargo build --frozen --profile release-fast --target ${{ matrix.target }} --features allocator-jemalloc --jobs 4
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
 
       - name: Build with cross (${{ matrix.target }})
         if: matrix.target != 'x86_64-unknown-linux-gnu'
-        run: cross build --release --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }}
+        run: cross build --frozen --profile release-fast --target ${{ matrix.target }} ${{ endsWith(matrix.target, 'linux-gnu') && ' --features allocator-jemalloc' || '' }} --jobs 4
         shell: bash
         env:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64' || '' }}
@@ -132,7 +140,7 @@ jobs:
       - name: Check Binary
         shell: bash
         run: |
-          if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
+          if [ -f "target/${{ matrix.target }}/release-fast/vtcode" ]; then
             echo "✓ Found Unix binary: vtcode"
           else
             echo "✗ Binary not found!" && exit 1
@@ -141,7 +149,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
+          cd target/${{ matrix.target }}/release-fast
           tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
           cd ../../../
           if command -v sha256sum &> /dev/null; then
@@ -165,8 +173,12 @@ jobs:
     if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     runs-on: windows-latest
+    timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      CARGO_TERM_VERBOSE: false
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
@@ -179,14 +191,19 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: x86_64-pc-windows-msvc
+
       - name: Build (x86_64-pc-windows-msvc)
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: cargo build --frozen --profile release-fast --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
         shell: bash
 
       - name: Check Binary
         shell: bash
         run: |
-          if [ -f "target/x86_64-pc-windows-msvc/release/vtcode.exe" ]; then
+          if [ -f "target/x86_64-pc-windows-msvc/release-fast/vtcode.exe" ]; then
             echo "✓ Found Windows binary: vtcode.exe"
           else
             echo "✗ Binary not found!" && exit 1
@@ -196,7 +213,7 @@ jobs:
         shell: pwsh
         run: |
           $archive = "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip"
-          Compress-Archive -Path "target/x86_64-pc-windows-msvc/release/vtcode.exe" -DestinationPath $archive -Force
+          Compress-Archive -Path "target/x86_64-pc-windows-msvc/release-fast/vtcode.exe" -DestinationPath $archive -Force
           $hash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLower()
           Set-Content -Path "vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256" -Value $hash -NoNewline
 
