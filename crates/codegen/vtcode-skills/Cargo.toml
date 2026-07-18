@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-skills"
-version = "0.135.13"
+version = "0.135.14"
 edition = "2024"
 license.workspace = true
 description = "Skill types, discovery, loading, and validation for VT Code"
