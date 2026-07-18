@@ -527,18 +527,3 @@ run cargo marchette for unsused, redudant crates and fix and improve for vtcode
 ===
 
 for files picker view in vtcode. add a space padding to the left of the file names to improve readability and visual separation. This can be done by adjusting the rendering logic in the file picker component to include a fixed-width padding or margin before each file name. Ensure that the padding is consistent across all file entries and does not interfere with any icons or indicators that may be present. keep folder names aligned with file names for a clean and organized look. also, consider making the folder name bold or using a different color to distinguish it from file names.
-
-===
-
-src/ Modularity (Optional, Requires Review)
-
-Action Details
-src/cli/ 30+ files. Consider if any can be extracted to vtcode-core per AGENTS.md guidance: "Thin binary — all runtime logic in vtcode-core". This is a larger refactor.
-
-===
-
-check all cargo fmt, cargo check, cargo clippy, cargo tests, issues and warings all fix all completely, dont stop untill all clean
-
-===
-
-check https://crates.io/crates/vtcode docs readme it seems not updated latest readme
