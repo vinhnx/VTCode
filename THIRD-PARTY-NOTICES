@@ -1296,7 +1296,7 @@ Apache-2.0 OR MIT (495 crates)
   vtcode-safety 0.135.11
     Source: https://github.com/vinhnx/vtcode
     License: Apache-2.0 OR MIT
-  vtcode-session-store 0.135.11
+  vtcode-memory 0.135.11
     Source: https://github.com/vinhnx/vtcode
     License: Apache-2.0 OR MIT
   vtcode-skills 0.135.11

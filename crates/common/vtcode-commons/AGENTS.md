@@ -12,6 +12,7 @@
 | Filesystem | `fs/`, `diff/`, `diff_paths/`, `vtcodegitignore/`, `workspace_snapshot/` (env-delta fingerprint: `capture`/`diff`/`is_drift`) |
 | Text | `tokens/`, `unicode/`, `sanitizer/`, `slug/`, `formatting/` |
 | Async | `async_utils/`, `thread_safety/` (RelaxedAtomic) |
+| Interjection | `interjection/` (EventQueue, InterjectionBuffer, format_interjection, user_query) |
 | Other | `editor/`, `http/`, `project/`, `validation/`, `serde_helpers/`, `env_lock/` |
 
 ## Rules

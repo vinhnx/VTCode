@@ -1,7 +1,7 @@
 use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::SteeringMessage;
-use crate::exec::events::{ThreadEvent, ToolCallStatus};
+use crate::exec::events::{ThreadEvent, ToolCallStatus, ToolOutcome};
 use crate::llm::provider::{
     AssistantPhase, FinishReason, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent, ToolCall,
     Usage as ProviderUsage,
@@ -575,8 +575,8 @@ impl AgentRuntime {
     }
 
     /// Mark a specific tool call as completed with the given status and emit lifecycle events.
-    pub fn complete_tool_call(&mut self, call_id: &str, status: ToolCallStatus) {
-        let _ = self.lifecycle.complete_tool_call(call_id, status);
+    pub fn complete_tool_call(&mut self, call_id: &str, status: ToolCallStatus, outcome: Option<ToolOutcome>) {
+        let _ = self.lifecycle.complete_tool_call(call_id, status, outcome);
         self.emit_pending_lifecycle_events();
     }
 

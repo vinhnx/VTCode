@@ -65,12 +65,12 @@ Final Priority-Ordered Plan
 Phase 1: IO & Stability (Week 1-2) — Low risk, immediate measurable value
 1.1 Buffered writes + turn-boundary flush in session store
 
-- File: crates/codegen/vtcode-session-store/src/event_log.rs
+- File: crates/codegen/vtcode-memory/src/event_log.rs
 - Change: Wrap events.jsonl in BufWriter (8KB buffer). Flush on TurnCompleted/TurnFailed, not per-event.
 - Impact: ~100x reduction in syscalls for bursty event streams.
 - Risk: Low. BufWriter flushes on drop; turn-boundary flush preserves crash safety.
   1.2 Turn-index manifest for O(1) session open
-- File: crates/codegen/vtcode-session-store/src/event_log.rs + new manifest.rs
+- File: crates/codegen/vtcode-memory/src/event_log.rs + new manifest.rs
 - Change: Write manifest.json on every turn boundary with session_id, turn_count, event_count, last_offset, status, created_at. On open, read manifest (O(1)), skip scan() unless missing/stale.
 - Impact: Eliminates O(n) JSONL parse on session open. For a 10K-event session, startup drops from ~200ms to <1ms.
 - Risk: Low. scan() remains authoritative rebuild path.
@@ -148,17 +148,67 @@ Phase 3 (strategic):
 
 Phase 4 (advanced):
 4.1 → 4.2
-Questions Before Proceeding
 
-1. Should 1.1 + 1.2 be combined into a single "session store IO" PR, or kept separate? They touch the same file but solve different problems.
-2. For 3.1 (skeptic panel), should it replace controller_verify.rs entirely or live alongside it behind a config flag? The existing single-verifier path is simpler and cheaper.
-3. For 3.2 (memory search), should it be a new crate (vtcode-memory) or extend vtcode-session-store? A new crate keeps concerns separated but adds workspace complexity.
-4. For 2.3 (fail-open hooks), should this be the default or opt-in via config? Changing security semantics is controversial.
-5. Should I start implementing now, or do you want to adjust priorities first?
+=== Completed PRs ===
 
-===
+PR 0: TTY detach
+- File: crates/codegen/vtcode-bash-runner/src/pipe.rs
+- Change: Ported detach_from_tty() — setsid() + setpgid(0,0) EPERM fallback. Call before spawning interactive subprocesses.
+- Status: 28/28 tests pass
 
-1.  Should 1.1 + 1.2 be combined into a single "session store IO" PR, or kept separate? They touch the same file but solve different problems. => your recommendation
-2.  For 3.1 (skeptic panel), should it replace controller_verify.rs entirely or live alongside it behind a config flag? The existing single-verifier path is simpler and cheaper. => your recommendation
-3.  For 3.2 (memory search), should it be a new crate (vtcode-memory) or extend vtcode-session-store? => maybe extend vtcode-session-store. and rename vtcode-session-store to vtcode-memory => update workspace ref
-4.  For 2.3 (fail-open hooks), should this be the default or opt-in via config? => your recommendation
+PR 1: Session store IO
+- File: crates/codegen/vtcode-memory/src/event_log.rs + new manifest.rs
+- Change: Added manifest.rs (ManifestStore); event_log.rs uses BufWriter, flushes on turn boundaries, reads manifest/index on open
+- Status: 17/17 tests pass
+
+PR 2: StringInterner
+- File: crates/common/vtcode-commons/src/interner.rs + crates/codegen/vtcode-indexer/src/file_search.rs
+- Change: Ported grok-build's StringInterner — FxHash + arena Vec<u8> + SmallVec collision list. Integrated into file_search.rs
+- Status: 20/20 tests pass
+
+PR 3: ToolPack trait + 8 packs
+- File: crates/codegen/vtcode-core/src/tools/registry/pack.rs + pack_impls.rs + builder.rs
+- Change: Added ToolPack trait, BUILTIN_PACKS slice, register_builtin_packs(); builder.rs switched to pack-based registration; fixed batch_register() to apply with_builtin_behavior + with_catalog_source; updated tests to use has_tool
+- Status: All harness tests pass
+
+PR 4: Memory search
+- File: crates/codegen/vtcode-memory/src/query.rs
+- Change: Added MemorySearchResult struct, search_memory() with substring scoring and default_search_max_results/default_search_min_score
+- Status: 5 new tests; 23/23 vtcode-memory tests pass
+
+PR 5: Fail-open hooks opt-in
+- File: crates/codegen/vtcode-core/src/tools/registry/ + tool_middleware.rs + vtcode-config
+- Change: Added middleware_fail_open: bool to ToolRegistryConfig (default false); added before_execute_opt() to MiddlewareChain; wired before_execute_opt/after_execute/on_error into execution_facade.rs
+- Status: All 3073 vtcode-core tests pass
+
+PR 6: Skeptic panel config-flagged
+- File: crates/codegen/vtcode-core/src/core/agent/runner/orchestration.rs + evaluator_types.rs + vtcode-config
+- Change: Added SkepticPanelConfig to AgentHarnessConfig (enabled: bool, models: Vec<String>); added SkepticPanelEntry/SkepticPanelAggregate types; added run_skeptic_panel() to AgentRunner (parallel via futures::future::join_all); wired into run_evaluator_phase() with fallback to single evaluator
+- Status: All tests pass
+
+PR 7: Interjection buffer primitive
+- File: crates/common/vtcode-commons/src/interjection/{mod,buffer,events,format}.rs
+- Change: Added EventQueue<E>, InterjectionBuffer<Attachment>, PendingInterjection<Attachment>, FormattedInterjection<Attachment>, drain_formatted(), format_interjection(), user_query()
+- Status: 305 vtcode-commons tests pass
+
+PR 8: Goal tracker state machine
+- File: crates/codegen/vtcode-memory/src/progress.rs (extended)
+- Change: Added GoalPhase, GoalStatus (8 states with forward-compat deserialization), GoalPauseReason, GoalClassifierVerdict, GoalEvent, GoalHistoryEntry, GoalOrchestration, GoalTracker pure state machine. Added uuid dependency.
+- Status: 55 vtcode-memory tests pass (20 new GoalTracker tests)
+
+PR 9: Two-pass compaction
+- File: crates/codegen/vtcode-core/src/compaction/two_pass.rs
+- Change: Added split_conversation_for_two_pass() (splits Message slice by token fraction with tool-boundary snapping), note_for_two_pass_pass2(), build_two_pass_pass1_history(), build_two_pass_pass2_history()
+- Status: 5 two-pass tests pass
+
+PR 10: ToolKind taxonomy
+- File: crates/common/vtcode-utility-tool-specs/src/tool_kind.rs
+- Change: Added ToolKind enum (Read, Edit, Delete, ListDir, Move, Search, Lsp, Execute, Plan, WebSearch, WebFetch, Background, Skill, Memory, Goal, Other), ToolNamespace enum (Builtin, Mcp, Skill, Extension, Alias, Other), CanonicalToolMeta with _meta envelope, TokenBucket enum
+- Status: 17 vtcode-utility-tool-specs tests pass (4 new)
+
+=== Decisions ===
+
+1. 1.1 + 1.2 combined into single "session store IO" PR
+2. Skeptic panel lives alongside existing single-verifier path behind a config flag
+3. Memory search extends vtcode-memory (no rename)
+4. Fail-open hooks are opt-in via config (default fail-closed)

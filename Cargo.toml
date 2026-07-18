@@ -117,7 +117,7 @@ vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.135.14" }
 vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.135.14" }
 vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.135.14" }
 vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.135.14" }
-vtcode-session-store = { path = "crates/codegen/vtcode-session-store", version = "0.135.14" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.135.14" }
 vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.135.14" }
 vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.135.14" }
 vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.135.14" }
@@ -150,7 +150,7 @@ members = [
     "crates/codegen/vtcode-llm",
     "crates/codegen/vtcode-mcp",
     "crates/codegen/vtcode-safety",
-    "crates/codegen/vtcode-session-store",
+    "crates/codegen/vtcode-memory",
     "crates/codegen/vtcode-skills",
     "crates/codegen/vtcode-ui",
     "crates/codegen/xtask",
@@ -180,7 +180,7 @@ vtcode-a2a = { path = "crates/codegen/vtcode-a2a" }
 vtcode-mcp = { path = "crates/codegen/vtcode-mcp" }
 vtcode-llm = { path = "crates/codegen/vtcode-llm" }
 vtcode-skills = { path = "crates/codegen/vtcode-skills" }
-vtcode-session-store = { path = "crates/codegen/vtcode-session-store" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory" }
 vtcode-eval = { path = "crates/codegen/vtcode-eval" }
 
 [workspace.lints]
@@ -268,7 +268,7 @@ vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.135.14" }
 vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.135.14" }
 vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.135.14" }
 vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.135.14", default-features = false }
-vtcode-session-store = { path = "crates/codegen/vtcode-session-store", version = "0.135.14" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.135.14" }
 vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.135.14" }
 anyhow = { workspace = true }
 clap = { workspace = true }

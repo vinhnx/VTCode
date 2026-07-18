@@ -153,6 +153,8 @@ async fn execute_manual_compaction(
         return Ok(SlashCommandControl::Continue);
     };
 
+    ctx.session_stats.auto_compact_suppressed = vtcode_core::compaction::SUPPRESS_NONE;
+
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(

@@ -6,7 +6,7 @@
 
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::runtime::AgentRuntime;
-use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus};
+use crate::exec::events::{ItemCompletedEvent, ThreadEvent, ThreadItemDetails, ToolCallStatus, ToolOutcome};
 use tracing::{error, warn};
 
 /// Reject a tool call with a detail message.
@@ -21,9 +21,10 @@ pub(super) fn reject_tool_call(
     args: Option<&serde_json::Value>,
     tool_call_id: &str,
     detail: &str,
+    outcome: ToolOutcome,
 ) {
     if runtime.tool_call_item_id(tool_call_id).is_some() {
-        runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed);
+        runtime.complete_tool_call(tool_call_id, ToolCallStatus::Failed, Some(outcome));
         let lifecycle_events = runtime.take_emitted_events();
         event_recorder.record_thread_events(lifecycle_events.clone());
         emit_failed_tool_outputs_for_completed_invocations(event_recorder, &lifecycle_events, detail);
@@ -51,7 +52,7 @@ pub(super) fn reject_invalid_args(
 ) {
     let detail = format!("Invalid arguments for tool '{tool_name}': {err}");
     error!(agent = %agent_prefix, tool = %tool_name, error = %err, "{log_msg}");
-    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail);
+    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail, ToolOutcome::InvalidTool);
     runtime
         .state
         .push_tool_error(tool_call_id.to_string(), tool_name, &serde_json::Value::String(detail), is_gemini);
@@ -82,7 +83,7 @@ pub(super) fn reject_denied_tool(
         &serde_json::Value::String(detail.clone()),
         is_gemini,
     );
-    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail);
+    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail, ToolOutcome::HookDenied);
 }
 
 /// Emit failed tool output events for completed invocations.

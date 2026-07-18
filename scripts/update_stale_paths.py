@@ -20,7 +20,7 @@ REPLACEMENTS = [
     ("crates/codegen/vtcode-mcp/src/", "crates/codegen/vtcode-mcp/src/"),
     ("crates/codegen/vtcode-llm/src/", "crates/codegen/vtcode-llm/src/"),
     ("crates/codegen/vtcode-safety/src/", "crates/codegen/vtcode-safety/src/"),
-    ("crates/codegen/vtcode-session-store/src/", "crates/codegen/vtcode-session-store/src/"),
+    ("crates/codegen/vtcode-memory/src/", "crates/codegen/vtcode-memory/src/"),
     ("crates/codegen/vtcode-skills/src/", "crates/codegen/vtcode-skills/src/"),
     ("crates/codegen/vtcode-eval/src/", "crates/codegen/vtcode-eval/src/"),
 ]

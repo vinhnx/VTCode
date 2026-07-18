@@ -97,6 +97,9 @@ pub(crate) async fn compact_on_model_switch(
         return Ok(ModelSwitchCompactionOutcome::Unchanged);
     }
 
+    req.targets.session_stats.auto_compact_suppressed = vtcode_core::compaction::SUPPRESS_NONE;
+    req.targets.session_stats.prefire.clear();
+
     // The selection changed (for example an unconfigured custom provider) but no
     // usable client was installed, so we cannot summarize with the new
     // provider. Compact against the stale client would produce a provider-

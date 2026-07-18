@@ -11,6 +11,8 @@ use crate::core::agent::harness_kernel::{
 };
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::exec::events::ToolCallStatus;
+use crate::exec::events::ToolOutcome;
+use crate::exec::events::tool_outcome_from_status;
 use crate::llm::provider::ToolCall;
 use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use anyhow::Result;
@@ -74,19 +76,22 @@ fn complete_tool_invocation(
     args: &serde_json::Value,
     tool_call_item: &ToolCallItemRef,
     status: ToolCallStatus,
+    outcome: Option<ToolOutcome>,
 ) {
     if tool_call_item.synthetic_invocation {
+        let resolved_outcome = outcome.unwrap_or_else(|| tool_outcome_from_status(&status));
         event_recorder.record_thread_event(tool_invocation_completed_event(
             tool_call_item.call_item_id.clone(),
             tool_name,
             Some(args),
             Some(tool_call_id),
             status,
+            resolved_outcome,
         ));
         return;
     }
 
-    runtime.complete_tool_call(tool_call_id, status);
+    runtime.complete_tool_call(tool_call_id, status, outcome);
     super::tool_dispatch_common::drain_and_record_runtime_events(runtime, event_recorder);
 }
 
@@ -128,7 +133,16 @@ fn apply_tool_success(
     runtime
         .state
         .push_tool_result(call_id.to_string(), name, &optimized_result, is_gemini);
-    complete_tool_invocation(runtime, event_recorder, call_id, name, args, tool_call_item, ToolCallStatus::Completed);
+    complete_tool_invocation(
+        runtime,
+        event_recorder,
+        call_id,
+        name,
+        args,
+        tool_call_item,
+        ToolCallStatus::Completed,
+        None,
+    );
     finish_successful_tool_output(event_recorder, &tool_call_item.call_item_id, call_id, &optimized_result);
 }
 
@@ -515,6 +529,7 @@ impl AgentRunner {
                             &args,
                             &tool_call_item,
                             ToolCallStatus::Failed,
+                            None,
                         );
                         let mut failure_ctx = super::tool_dispatch_common::build_tool_failure_context(
                             agent_prefix,
@@ -638,6 +653,7 @@ impl AgentRunner {
                         &args,
                         &tool_call_item,
                         ToolCallStatus::Failed,
+                        None,
                     );
                     let mut failure_ctx = super::tool_dispatch_common::build_tool_failure_context(
                         agent_prefix,
@@ -811,6 +827,7 @@ impl AgentRunner {
             tool_args,
             tool_call_item,
             ToolCallStatus::Completed,
+            None,
         );
         event_recorder.tool_output_started(&tool_call_item.call_item_id, Some(call_id));
         finish_successful_tool_output(event_recorder, &tool_call_item.call_item_id, call_id, &optimized_result);

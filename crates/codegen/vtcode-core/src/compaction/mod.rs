@@ -12,8 +12,67 @@ use crate::llm::utils::truncate_to_token_limit;
 
 pub mod auto;
 pub mod memory_envelope;
+pub mod prefire;
 pub mod summarizer;
 pub mod two_pass;
+
+pub use crate::compaction::prefire::{AsyncCompactionCache, PrefireState};
+
+pub const SUPPRESS_NONE: u8 = 0;
+pub const SUPPRESS_TURN: u8 = 1;
+pub const SUPPRESS_STICKY: u8 = 2;
+pub const SUPPRESS_UNTIL_SUCCESS: u8 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SuppressReason {
+    CreditBlock,
+    Size,
+    Auth,
+    Schema,
+    Other,
+}
+
+impl SuppressReason {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            SuppressReason::CreditBlock => "credit_block",
+            SuppressReason::Size => "size",
+            SuppressReason::Auth => "auth",
+            SuppressReason::Schema => "schema",
+            SuppressReason::Other => "other",
+        }
+    }
+
+    pub(crate) fn suppress_state(self) -> u8 {
+        match self {
+            SuppressReason::Size | SuppressReason::Schema => SUPPRESS_STICKY,
+            SuppressReason::CreditBlock | SuppressReason::Auth => SUPPRESS_UNTIL_SUCCESS,
+            SuppressReason::Other => SUPPRESS_TURN,
+        }
+    }
+}
+
+/// Classify a deterministic compaction failure's error text into a fixed
+/// [`SuppressReason`] (drives telemetry + sticky-vs-per-turn scope).
+pub(crate) fn classify_suppress_reason(error_msg: &str) -> SuppressReason {
+    let m = error_msg.to_ascii_lowercase();
+    if m.contains("spending-limit")
+        || m.contains("spending limit")
+        || m.contains("out of credits")
+        || m.contains("usage balance exhausted")
+        || m.contains("usage limit reached")
+    {
+        SuppressReason::CreditBlock
+    } else if m.contains("context length") || m.contains("too many tokens") {
+        SuppressReason::Size
+    } else if m.contains("status 401") || m.contains("unauthorized") {
+        SuppressReason::Auth
+    } else if m.contains("invalid_request_error") {
+        SuppressReason::Schema
+    } else {
+        SuppressReason::Other
+    }
+}
 
 const DEFAULT_COMPACTION_TARGET_THRESHOLD: f64 = 0.50;
 const DEFAULT_COMPACTION_KEEP_LAST_MESSAGES: usize = 10;
@@ -55,6 +114,10 @@ pub struct CompactionConfig {
     ///
     /// When `false` (default), all old turns become a single flat summary.
     pub hierarchical: bool,
+    /// Auto-compaction suppression state. `SUPPRESS_NONE` (0) means compaction
+    /// is allowed; any other value gates automatic compaction until the
+    /// appropriate clearing event (success, model switch, etc.).
+    pub auto_compact_suppressed: u8,
 }
 
 impl Default for CompactionConfig {
@@ -68,6 +131,7 @@ impl Default for CompactionConfig {
             retained_user_messages: DEFAULT_RETAINED_USER_MESSAGES,
             always_summarize: false,
             hierarchical: false,
+            auto_compact_suppressed: SUPPRESS_NONE,
         }
     }
 }
@@ -454,7 +518,7 @@ async fn summarize_locally_hierarchical(
     Ok(new_history)
 }
 
-fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
+pub(crate) fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
     // Pre-size for the header plus every (non-empty) message body, avoiding
     // repeated reallocations while the summary prompt is assembled.
     let estimated_len =
@@ -480,7 +544,7 @@ fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
     formatted
 }
 
-fn build_local_compacted_history(
+pub(crate) fn build_local_compacted_history(
     history: &[Message],
     summary: &str,
     retained_user_message_tokens: usize,

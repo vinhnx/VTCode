@@ -4,7 +4,9 @@ mod approval_persistence;
 mod approval_policy;
 mod hook_messages;
 mod limit_prompts;
+mod permission_events;
 mod permission_prompt;
+mod preflight;
 mod shell_approval;
 
 use std::borrow::Cow;
@@ -12,6 +14,7 @@ use std::fmt::Write;
 #[cfg(test)]
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock};
@@ -22,6 +25,7 @@ use vtcode_core::command_safety::parse_bash_lc_commands;
 use vtcode_core::config::PermissionsConfig;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::core::interfaces::ui::UiSession;
+use vtcode_core::exec::events::PermissionDecision;
 use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::hooks::{
     LifecycleHookEngine, PermissionDecisionBehavior, PermissionDecisionScope, PreToolHookDecision,
@@ -37,19 +41,21 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHandle;
 
 use crate::agent::runloop::unified::auto_permission::{AutoPermissionReviewDecision, review_tool_call};
+use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::turn::tool_outcomes::error_handling::tool_denial_diagnostic;
 
 use super::state::CtrlCState;
 use approval_cache::{cache_key, record_approval_blocking};
 use approval_persistence::{persist_shell_approval_prefix_rule, persisted_shell_approval};
 use approval_policy::{approval_policy_rejects_prompt, build_tool_risk_context};
 use hook_messages::render_hook_messages;
+use permission_events::{emit_permission_requested, emit_permission_resolved};
 use permission_prompt::{
-    extract_shell_approval_command_words, extract_shell_permission_scope_signature, prompt_policy_denied_tool,
-    prompt_tool_permission, split_command_words_on_operators,
+    extract_shell_approval_command_words, extract_shell_permission_scope_signature, prompt_tool_permission,
+    split_command_words_on_operators,
 };
+use preflight::handle_policy_denied;
 use shell_approval::{
     approval_learning_target, exact_shell_approval_target, persistent_approval_target, tool_display_labels,
 };
@@ -197,6 +203,8 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     /// high-risk implicit-allow tools (auto-approved by the low-risk heuristic)
     /// still get gated by the gateway's risk/destructive assessment.
     pub safety_approval_justification: Option<String>,
+    /// Optional event emitter for permission request/resolved telemetry.
+    pub harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
 fn resolve_permission_decision(
@@ -934,6 +942,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         auto_permission_runtime,
         session_stats,
         safety_approval_justification,
+        harness_emitter,
     } = ctx;
 
     // Generate cache key - use command text for shell tools to enable granular session approval
@@ -982,36 +991,21 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let policy_eval_name = policy_evaluation_name(tool_name, tool_args);
     let policy_decision = tool_registry.evaluate_tool_policy(policy_eval_name.as_ref()).await?;
     if policy_decision == ToolPermissionDecision::Deny {
-        // Show HITL prompt with "Enable" option so the user can fix the policy at runtime
-        if !skip_confirmations {
-            let diagnostic = tool_denial_diagnostic(tool_name);
-            let decision = prompt_policy_denied_tool(
-                tool_name,
-                diagnostic,
-                renderer,
-                handle,
-                ctrl_c_state,
-                ctrl_c_notify,
-                session,
-            )
-            .await?;
-
-            match decision {
-                HitlDecision::Enable => {
-                    // Update tool policy to Allow and clear cached denials
-                    if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Allow).await {
-                        tracing::warn!("Failed to update tool policy for '{}': {}", tool_name, err);
-                    }
-                    if let Some(cache) = tool_permission_cache {
-                        let mut perm_cache = cache.write().await;
-                        perm_cache.invalidate(tool_name);
-                    }
-                    // Fall through to continue normal permission flow
-                }
-                _ => return Ok(ToolPermissionFlow::Denied),
-            }
-        } else {
-            return Ok(ToolPermissionFlow::Denied);
+        if let Some(flow) = handle_policy_denied(
+            tool_registry,
+            tool_name,
+            tool_permission_cache,
+            renderer,
+            handle,
+            ctrl_c_state,
+            ctrl_c_notify,
+            session,
+            skip_confirmations,
+            harness_emitter,
+        )
+        .await?
+        {
+            return Ok(flow);
         }
     }
 
@@ -1288,7 +1282,9 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     };
 
     let final_justification = justification.or(extracted_justification.as_ref());
-    let decision = prompt_tool_permission(
+    let permission_start = Instant::now();
+    emit_permission_requested(harness_emitter, tool_name);
+    let decision = match prompt_tool_permission(
         &display_labels.prompt_label,
         tool_name,
         tool_args,
@@ -1306,7 +1302,22 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         hitl_notification_bell,
         active_thread_label.filter(|label| *label != "main"),
     )
-    .await?;
+    .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            let wait_ms = permission_start.elapsed().as_millis() as u64;
+            emit_permission_resolved(harness_emitter, tool_name, PermissionDecision::Cancelled, wait_ms);
+            return Err(e);
+        }
+    };
+    let wait_ms = permission_start.elapsed().as_millis() as u64;
+    emit_permission_resolved(
+        harness_emitter,
+        tool_name,
+        permission_events::map_hitl_to_permission_decision(&decision),
+        wait_ms,
+    );
     finalize_permission_decision(
         tool_registry,
         tool_name,

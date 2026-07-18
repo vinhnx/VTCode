@@ -1,6 +1,7 @@
 use crate::exec::events::{
     AgentMessageItem, ErrorItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutputItem,
+    ThreadItem, ThreadItemDetails, ToolCallStatus, ToolInvocationItem, ToolOutcome, ToolOutputItem,
+    tool_outcome_from_status,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -508,7 +509,7 @@ impl SharedLifecycleEmitter {
         true
     }
 
-    pub fn complete_tool_call(&mut self, call_id: &str, status: ToolCallStatus) -> bool {
+    pub fn complete_tool_call(&mut self, call_id: &str, status: ToolCallStatus, outcome: Option<ToolOutcome>) -> bool {
         let Some(buffer) = self.tool_calls.remove(call_id) else {
             return false;
         };
@@ -521,12 +522,14 @@ impl SharedLifecycleEmitter {
         } else {
             Some(progress_tool_arguments(&buffer.arguments))
         };
+        let resolved_outcome = outcome.unwrap_or_else(|| tool_outcome_from_status(&status));
         self.pending_events.push(tool_invocation_completed_event(
             buffer.item_id,
             buffer.name.as_deref().unwrap_or_default(),
             arguments.as_ref(),
             Some(call_id),
             status,
+            resolved_outcome,
         ));
         true
     }
@@ -603,7 +606,7 @@ impl SharedLifecycleEmitter {
     pub fn complete_open_tool_calls_with_status(&mut self, status: ToolCallStatus) {
         let call_ids = self.tool_calls.keys().cloned().collect::<Vec<_>>();
         for call_id in call_ids {
-            let _ = self.complete_tool_call(&call_id, status.clone());
+            let _ = self.complete_tool_call(&call_id, status.clone(), None);
         }
     }
 
@@ -689,6 +692,7 @@ fn tool_invocation_item(
     arguments: Option<&Value>,
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
+    outcome: Option<ToolOutcome>,
 ) -> ThreadItem {
     ThreadItem {
         id: item_id,
@@ -697,6 +701,7 @@ fn tool_invocation_item(
             arguments: arguments.cloned(),
             tool_call_id: tool_call_id.map(str::to_string),
             status,
+            outcome,
         }),
     }
 }
@@ -730,7 +735,7 @@ pub fn tool_started_event(
     tool_call_id: Option<&str>,
 ) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, ToolCallStatus::InProgress),
+        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, ToolCallStatus::InProgress, None),
     })
 }
 
@@ -743,7 +748,7 @@ pub fn tool_invocation_updated_event(
     status: ToolCallStatus,
 ) -> ThreadEvent {
     ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, status),
+        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, status, None),
     })
 }
 
@@ -754,9 +759,10 @@ pub fn tool_invocation_completed_event(
     arguments: Option<&Value>,
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
+    outcome: ToolOutcome,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, status),
+        item: tool_invocation_item(item_id, tool_name, arguments, tool_call_id, status, Some(outcome)),
     })
 }
 
@@ -945,5 +951,43 @@ mod tests {
         assert!(payload.aggregated_output.contains("No matches found"));
         assert!(payload.aggregated_output.contains("Pattern looks like a code fragment."));
         assert!(payload.aggregated_output.contains("Retry with a larger parseable pattern."));
+    }
+
+    #[test]
+    fn tool_invocation_completed_event_embeds_outcome() {
+        let event = tool_invocation_completed_event(
+            "tool_1".to_string(),
+            "exec_command",
+            Some(&json!({"cmd": "pwd"})),
+            Some("call_1"),
+            ToolCallStatus::Failed,
+            ToolOutcome::HookDenied,
+        );
+        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
+            panic!("expected completed item");
+        };
+        let ThreadItemDetails::ToolInvocation(details) = item.details else {
+            panic!("expected tool invocation");
+        };
+        assert_eq!(details.status, ToolCallStatus::Failed);
+        assert_eq!(details.outcome, Some(ToolOutcome::HookDenied));
+    }
+
+    #[test]
+    fn complete_tool_call_infers_outcome_from_status() {
+        let mut emitter = SharedLifecycleEmitter::default();
+        let call_id = "call_1".to_string();
+        emitter.start_tool_call(&call_id, Some("exec_command".to_string()), None);
+        emitter.sync_tool_call_arguments(&call_id, "{\"cmd\":\"pwd\"}", Some("exec_command".to_string()), None);
+        emitter.complete_tool_call(&call_id, ToolCallStatus::Completed, None);
+        let events = emitter.drain_events();
+        // events[0] = tool_started, events[1] = tool_invocation_updated, events[2] = tool_invocation_completed
+        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = &events[2] else {
+            panic!("expected completed item at index 2, got {:?}", events[0]);
+        };
+        let ThreadItemDetails::ToolInvocation(details) = &item.details else {
+            panic!("expected tool invocation");
+        };
+        assert_eq!(details.outcome, Some(ToolOutcome::Success));
     }
 }

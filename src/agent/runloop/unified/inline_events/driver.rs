@@ -7,10 +7,11 @@ use tokio::sync::Notify;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::exec::events::{InterjectedEvent, InterjectionSource, RedirectKind, ThreadEvent};
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_ui::tui::app::{InlineHandle, InlineHeaderContext, InlineSession};
+use vtcode_ui::tui::app::{InlineEvent, InlineHandle, InlineHeaderContext, InlineSession, SubmittedInput};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
@@ -161,6 +162,12 @@ impl<'a> InlineEventLoop<'a> {
             return Ok(InlineLoopAction::Continue);
         };
 
+        if let InlineEvent::Submit(ref input) = event {
+            if !input.is_empty() {
+                self.emit_interjected(InterjectionSource::Direct, Self::count_images(input));
+            }
+        }
+
         let interrupts = self.interrupts;
         let handle = self.handle;
         let session_bootstrap = self.session_bootstrap;
@@ -222,14 +229,26 @@ impl<'a> InlineEventLoop<'a> {
         Ok(None)
     }
 
+    fn count_images(input: &SubmittedInput) -> u32 {
+        input.attachments.iter().filter(|part| part.is_image()).count() as u32
+    }
+
+    fn emit_interjected(&self, source: InterjectionSource, image_count: u32) {
+        let Some(emitter) = self.harness_emitter else { return };
+        let _ = emitter.emit(ThreadEvent::Interjected(InterjectedEvent {
+            source,
+            image_count,
+            redirect_kind: RedirectKind::Interjection,
+        }));
+    }
+
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
-        self.queue.take_next_submission().map(|queued| {
-            if queued.input.is_empty() {
-                InlineLoopAction::Continue
-            } else {
-                InlineLoopAction::SubmitQueued(queued)
-            }
-        })
+        let queued = self.queue.take_next_submission()?;
+        if queued.input.is_empty() {
+            return Some(InlineLoopAction::Continue);
+        }
+        self.emit_interjected(InterjectionSource::Queue, Self::count_images(&queued.input));
+        Some(InlineLoopAction::SubmitQueued(queued))
     }
 
     fn exit_action(&self) -> Option<InlineLoopAction> {

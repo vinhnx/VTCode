@@ -196,7 +196,10 @@ impl ResponseBuilder {
             }
 
             // Unknown events from newer schema versions are silently skipped.
-            ThreadEvent::Unknown => {}
+            ThreadEvent::Unknown
+            | ThreadEvent::PermissionRequested(_)
+            | ThreadEvent::PermissionResolved(_)
+            | ThreadEvent::Interjected(_) => {}
         }
     }
 
@@ -1365,6 +1368,7 @@ mod tests {
                 arguments: Some(arguments.clone()),
                 tool_call_id: Some("tool_call_0".to_string()),
                 status: ToolCallStatus::Completed,
+                outcome: None,
             }),
         };
 
@@ -1400,6 +1404,7 @@ mod tests {
                 arguments: Some(arguments.clone()),
                 tool_call_id: Some("tool_call_1".to_string()),
                 status: ToolCallStatus::InProgress,
+                outcome: None,
             }),
         };
 
@@ -1433,6 +1438,7 @@ mod tests {
                 arguments: Some(arguments.clone()),
                 tool_call_id: Some("tool_call_legacy".to_string()),
                 status: ToolCallStatus::Completed,
+                outcome: None,
             }),
         };
 
@@ -1599,6 +1605,7 @@ mod tests {
                     arguments: Some(json!({ "command": ["cargo", "check"] })),
                     tool_call_id: Some("tool_call_0".to_string()),
                     status: ToolCallStatus::Completed,
+                    outcome: None,
                 }),
             },
             ThreadItem {
@@ -1608,6 +1615,7 @@ mod tests {
                     arguments: Some(json!({ "command": ["cargo", "test"] })),
                     tool_call_id: Some("tool_call_0".to_string()),
                     status: ToolCallStatus::Completed,
+                    outcome: None,
                 }),
             },
             ThreadItem {

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use vtcode_core::cli::args::SessionStoreCommand;
-use vtcode_session_store::{
+use vtcode_memory::{
     DEFAULT_MAX_EVENTS, RetentionPolicy, apply_retention, migrate_legacy, open, query_facts, recent_sessions,
 };
 

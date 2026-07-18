@@ -41,6 +41,8 @@ impl AgentRunner {
                 engine_cfg,
                 manual_options: crate::compaction::ManualCompactionOptions::default(),
                 placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+                prefire: None,
+                auto_compact_suppressed: &mut session_state.auto_compact_suppressed,
             },
             std::sync::Arc::make_mut(&mut session_state.messages),
         )

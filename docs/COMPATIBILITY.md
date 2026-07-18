@@ -37,7 +37,7 @@ All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30,
 | vtcode-indexer | 0.133.21 | 1.88 | 2024 | Yes | File indexing + markdown storage |
 | vtcode-bash-runner | 0.133.21 | 1.88 | 2024 | Yes | Shell execution |
 | vtcode-exec-events | 0.133.21 | 1.88 | 2024 | Yes | Event schemas |
-| vtcode-session-store | 0.133.21 | 1.88 | 2024 | No | Internal (publish=false) |
+| vtcode-memory | 0.133.21 | 1.88 | 2024 | No | Internal (publish=false) |
 | vtcode-eval | 0.135.4 | 1.88 | 2024 | No | Internal (publish=false) |
 | vtcode-acp | 0.133.21 | 1.88 | 2024 | Yes | Agent Communication Protocol |
 | vtcode-auth | 0.133.21 | 1.88 | 2024 | Yes | OAuth/PKCE |

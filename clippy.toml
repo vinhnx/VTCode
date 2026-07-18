@@ -41,7 +41,7 @@ absolute-paths-allowed-crates = [
     "vtcode-mcp",
     "vtcode-llm",
     "vtcode-safety",
-    "vtcode-session-store",
+    "vtcode-memory",
     "vtcode-skills",
     "vtcode-eval",
     "vtcode-macros",

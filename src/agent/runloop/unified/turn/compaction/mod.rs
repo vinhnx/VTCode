@@ -671,6 +671,12 @@ pub(crate) async fn maybe_auto_compact_history(
     context: CompactionContext<'_>,
     state: CompactionState<'_>,
 ) -> Result<Option<CompactionOutcome>> {
+    use std::time::Instant;
+    use vtcode_core::compaction::two_pass::{
+        TWO_PASS_DEFAULT_SPLIT_FRACTION, build_two_pass_pass1_history, fingerprint_prefix, note_for_two_pass_pass2,
+        split_conversation_for_two_pass,
+    };
+
     let CompactionContext {
         provider,
         model,
@@ -684,6 +690,58 @@ pub(crate) async fn maybe_auto_compact_history(
     let CompactionState { history, session_stats, context_manager } = state;
 
     let current_prompt_pressure_tokens = context_manager.current_token_usage();
+
+    // Prefire two-pass: when usage approaches the compaction threshold,
+    // run pass-1 summarization in advance so the cache is ready if
+    // compaction fires this turn.
+    if let Some(threshold) = effective_compaction_threshold(vt_cfg, provider, model) {
+        let prefire_lead = threshold * 10 / 100;
+        let prefire_threshold = threshold.saturating_sub(prefire_lead);
+        if current_prompt_pressure_tokens >= prefire_threshold
+            && !session_stats.prefire.has_cache()
+            && !session_stats.prefire.is_in_flight()
+            && session_stats.prefire.try_begin()
+        {
+            let engine_cfg = local_compaction_config(vt_cfg, false);
+            let split = split_conversation_for_two_pass(history, TWO_PASS_DEFAULT_SPLIT_FRACTION);
+            if split.prefix.is_empty() || split.tail.is_empty() {
+                session_stats.prefire.finish();
+            } else {
+                let prefix = split.prefix.to_vec();
+                let prompt = engine_cfg.summary_prompt.clone();
+                let pass1_history = build_two_pass_pass1_history(&prefix, &prompt);
+                let request = vtcode_core::llm::provider::LLMRequest {
+                    messages: std::sync::Arc::new(pass1_history),
+                    model: model.to_string(),
+                    ..Default::default()
+                };
+                let started = Instant::now();
+                let result = provider.generate(request).await;
+                let pass1_latency_ms = started.elapsed().as_millis() as u64;
+
+                if let Ok(response) = result {
+                    let note1 = note_for_two_pass_pass2(&response.content.unwrap_or_default());
+                    if !note1.trim().is_empty() {
+                        let fingerprint = fingerprint_prefix(split.prefix);
+                        session_stats.prefire.store(vtcode_core::compaction::AsyncCompactionCache {
+                            note1,
+                            prefix_len: split.split_idx,
+                            fingerprint,
+                            model_slug: model.to_string(),
+                            pass1_latency_ms,
+                        });
+                        tracing::info!(
+                            target : "two_pass",
+                            prefix_len = split.split_idx,
+                            pass1_latency_ms,
+                            "two_pass: prefire pass1 cached NOTE1"
+                        );
+                    }
+                }
+                session_stats.prefire.finish();
+            }
+        }
+    }
 
     // Delegate to the shared compaction orchestrator (used by both runloops).
     // It enforces the `auto_compaction_enabled` gate, the token threshold, and
@@ -700,6 +758,8 @@ pub(crate) async fn maybe_auto_compact_history(
             engine_cfg: local_compaction_config(vt_cfg, false),
             manual_options: vtcode_core::compaction::ManualCompactionOptions::default(),
             placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+            prefire: Some(&session_stats.prefire),
+            auto_compact_suppressed: &mut session_stats.auto_compact_suppressed,
         },
         history,
     )

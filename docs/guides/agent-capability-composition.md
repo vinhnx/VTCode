@@ -23,7 +23,7 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 | **Tools** | External capability surface. | `crates/codegen/vtcode-core/src/tools/`; `vtcode-utility-tool-specs/`; `vtcode-mcp/`; `vtcode-skills/`. |
 | **Evals** | Closing the loop on quality. | `scripts/evals/` (Python `eval_engine.py`, `metrics.py`); `crates/codegen/vtcode-core/src/llm/rl/` (`signal`/`ledger`/`engine`/`eval`: reward → RL). |
 | **Sandbox** | The controlled, changing environment. | `vtcode-bash-runner/`; `vtcode-safety/` (`command_safety`, `exec_policy`, `sandboxing`). |
-| **State management** | Durable, resumable, cross-session. | `vtcode-session-store/`; `vtcode-exec-events/` (`ThreadEvent`); `crates/codegen/vtcode-core/src/loop_state.rs`, `persistent_memory`. |
+| **State management** | Durable, resumable, cross-session. | `vtcode-memory/`; `vtcode-exec-events/` (`ThreadEvent`); `crates/codegen/vtcode-core/src/loop_state.rs`, `persistent_memory`. |
 
 ## The three environmental constraints
 
@@ -37,7 +37,7 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
    - **Tool-result offloading** — keep re-fetchable payloads out of the live
      window (split results, `output_spooler`, `context.dynamic`).
    Additionally, the durable **`ProgressLedger`**
-   (`crates/codegen/vtcode-session-store/src/progress.rs`) is a tiny derived artifact that
+    (`crates/codegen/vtcode-memory/src/progress.rs`) is a tiny derived artifact that
    summarizes goal progress without reloading the event log.
 
 2. **External tools.** The agent reaches beyond its weights through the tool

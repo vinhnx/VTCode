@@ -336,6 +336,7 @@ mod tests {
                             arguments: Some(json!({"cmd": "pwd"})),
                             tool_call_id: Some("call-1".to_string()),
                             status: ToolCallStatus::InProgress,
+                            outcome: None,
                         }),
                     },
                 }),

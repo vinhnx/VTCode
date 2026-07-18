@@ -1,4 +1,4 @@
-# vtcode-session-store
+# vtcode-memory
 
 Unified per-session state store for VT Code — the single source of truth for an
 agent session's state, context, and history.
@@ -26,7 +26,7 @@ Each session is persisted under `.vtcode/sessions/<session_id>/`:
 ## Usage
 
 ```rust
-use vtcode_session_store::{open, migrate_legacy, apply_retention, query_facts};
+use vtcode_memory::{open, migrate_legacy, apply_retention, query_facts};
 
 // Record a session's events (call from the runloop's event sink).
 let log = open(workspace, session_id)?;

@@ -366,6 +366,15 @@ pub enum ThreadEvent {
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
+    /// Emitted when a tool requires user permission before execution.
+    #[serde(rename = "permission.requested")]
+    PermissionRequested(PermissionRequestedEvent),
+    /// Emitted when the user resolves a permission prompt.
+    #[serde(rename = "permission.resolved")]
+    PermissionResolved(PermissionResolvedEvent),
+    /// A mid-turn user interjection was merged into the running turn.
+    #[serde(rename = "interjected")]
+    Interjected(InterjectedEvent),
     /// Streaming delta for a plan item in Planning workflow.
     #[serde(rename = "plan.delta")]
     PlanDelta(PlanDeltaEvent),
@@ -767,6 +776,58 @@ pub enum ToolCallStatus {
     InProgress,
 }
 
+/// Fine-grained outcome of a tool invocation lifecycle.
+///
+/// Mirrors the outcome taxonomy used by the runtime: `status` remains the
+/// coarse lifecycle signal (`Completed` / `Failed` / `InProgress`), while
+/// `outcome` captures *why* the invocation terminated. Consumers that only
+/// need success/failure can continue to read `status`; analytics and the UI
+/// layer use `outcome` for richer classification.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ToolOutcome {
+    /// Tool executed and returned a result.
+    #[default]
+    Success,
+    /// Tool executed but returned an error.
+    Error,
+    /// User rejected the permission prompt.
+    PermissionRejected,
+    /// User cancelled the permission prompt (e.g. Ctrl+C / Esc).
+    PermissionCancelled,
+    /// User provided a followup message instead of approving.
+    Followup,
+    /// A user-configured hook blocked execution.
+    HookDenied,
+    /// Tool not found or arguments couldn't be parsed.
+    InvalidTool,
+    /// Tool was running when the turn was cancelled.
+    Cancelled,
+}
+
+impl ToolOutcome {
+    #[must_use]
+    pub const fn is_terminal(self) -> bool {
+        !matches!(self, Self::Followup)
+    }
+}
+
+/// Map a terminal [`ToolCallStatus`] to its corresponding [`ToolOutcome`].
+///
+/// # Panics
+///
+/// Panics if `status` is [`ToolCallStatus::InProgress`], which is a non-terminal
+/// state and must never be passed to a completion-event emitter.
+#[must_use]
+pub fn tool_outcome_from_status(status: &ToolCallStatus) -> ToolOutcome {
+    match status {
+        ToolCallStatus::Completed => ToolOutcome::Success,
+        ToolCallStatus::Failed => ToolOutcome::Error,
+        ToolCallStatus::InProgress => unreachable!("InProgress status passed to completion event"),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ToolInvocationItem {
@@ -780,6 +841,9 @@ pub struct ToolInvocationItem {
     pub tool_call_id: Option<String>,
     /// Current lifecycle status of the invocation.
     pub status: ToolCallStatus,
+    /// Fine-grained outcome of the invocation lifecycle.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<ToolOutcome>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -912,6 +976,61 @@ pub enum HarnessEventKind {
     SnapshotCreated,
     /// A checkpoint snapshot was restored (rewind operation).
     SnapshotRestored,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionDecision {
+    Allow,
+    Deny,
+    Cancelled,
+    Followup,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct PermissionRequestedEvent {
+    /// Name of the tool that requires permission.
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct PermissionResolvedEvent {
+    /// Name of the tool that was permitted or denied.
+    pub tool_name: String,
+    /// User's decision on the permission prompt.
+    pub decision: PermissionDecision,
+    /// Wall-clock time the prompt was visible, in milliseconds.
+    pub wait_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum InterjectionSource {
+    Direct,
+    Queue,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum RedirectKind {
+    Interjection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct InterjectedEvent {
+    /// How the interjection reached the running turn.
+    pub source: InterjectionSource,
+    /// Number of image attachments that accompanied the interjection.
+    pub image_count: u32,
+    /// Always `Interjection` for this event; carried so the shared
+    /// `redirect_kind` field is queryable uniformly across redirect events.
+    pub redirect_kind: RedirectKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1122,6 +1241,47 @@ mod tests {
                     arguments: Some(serde_json::json!({ "path": "README.md" })),
                     tool_call_id: Some("tool_call_0".to_string()),
                     status: ToolCallStatus::Completed,
+                    outcome: None,
+                }),
+            },
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
+        Ok(())
+    }
+
+    #[test]
+    fn tool_outcome_serializes_snake_case() {
+        for outcome in [
+            ToolOutcome::Success,
+            ToolOutcome::Error,
+            ToolOutcome::PermissionRejected,
+            ToolOutcome::PermissionCancelled,
+            ToolOutcome::Followup,
+            ToolOutcome::HookDenied,
+            ToolOutcome::InvalidTool,
+            ToolOutcome::Cancelled,
+        ] {
+            let json = serde_json::to_string(&outcome).unwrap();
+            let restored: ToolOutcome = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored, outcome);
+        }
+    }
+
+    #[test]
+    fn tool_invocation_outcome_round_trip() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "tool_1".to_string(),
+                details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                    tool_name: "exec_command".to_string(),
+                    arguments: Some(serde_json::json!({ "command": ["pwd"] })),
+                    tool_call_id: Some("tool_call_0".to_string()),
+                    status: ToolCallStatus::Failed,
+                    outcome: Some(ToolOutcome::PermissionRejected),
                 }),
             },
         });

@@ -26,7 +26,7 @@ at scale.
    (`crates/codegen/vtcode-core/src/llm/usage_cost.rs`) pauses or escalates at thresholds so a
    loop cannot run unbounded.
 5. **Progress over time.** The `ProgressLedger`
-   (`crates/codegen/vtcode-session-store/src/progress.rs`) and `ProgressMonitor`
+    (`crates/codegen/vtcode-memory/src/progress.rs`) and `ProgressMonitor`
    (`crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs`) give the loop an external,
    compaction-safe signal of goal progress and detect stalls.
 

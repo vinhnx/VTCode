@@ -480,6 +480,7 @@ fn build_tool_permissions_context<'a>(
         auto_permission_runtime,
         session_stats: Some(ctx.session_stats),
         safety_approval_justification: safety_approval_justification.map(String::from),
+        harness_emitter: ctx.harness_emitter,
     }
 }
 

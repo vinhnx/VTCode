@@ -20,7 +20,7 @@ use vtcode_core::exec::events::atif::{AtifAgent, AtifTrajectoryBuilder};
 use vtcode_core::exec::events::{
     CompactionMode, CompactionTrigger, HarnessEventItem, HarnessEventKind, ItemCompletedEvent,
     ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem,
-    ThreadItemDetails, ToolCallStatus, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    ThreadItemDetails, ToolCallStatus, ToolOutcome, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
     VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
@@ -336,7 +336,7 @@ pub(crate) fn tool_invocation_completed_event(
     tool_call_id: Option<&str>,
     status: ToolCallStatus,
 ) -> ThreadEvent {
-    shared_tool_invocation_completed_event(item_id, tool_name, args, tool_call_id, status)
+    shared_tool_invocation_completed_event(item_id, tool_name, args, tool_call_id, status, ToolOutcome::Success)
 }
 
 pub(crate) fn tool_output_started_event(call_item_id: String, tool_call_id: Option<&str>) -> ThreadEvent {

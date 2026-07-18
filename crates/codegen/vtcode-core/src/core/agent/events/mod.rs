@@ -12,7 +12,8 @@ use crate::exec::events::{
     CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, ErrorItem, FileChangeItem,
     FileUpdateChange, HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus,
     PatchChangeKind, ThreadCompactBoundaryEvent, ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    ThreadItem, ThreadItemDetails, ThreadStartedEvent, ToolOutcome, TurnCompletedEvent, TurnFailedEvent,
+    TurnStartedEvent, Usage, tool_outcome_from_status,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -21,7 +22,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use vtcode_session_store::event_log::DEFAULT_MAX_EVENTS;
+use vtcode_memory::event_log::DEFAULT_MAX_EVENTS;
 
 const SESSION_STORE_DRAIN_CAPACITY: usize = 8192;
 
@@ -37,7 +38,7 @@ where
 }
 
 /// Build an event sink that persists every recorded event to the unified
-/// per-session store ([`vtcode_session_store`]), making it the canonical
+/// per-session store ([`vtcode_memory`]), making it the canonical
 /// source of truth for session state/history. Returns `None` (non-fatally) if
 /// the store cannot be opened.
 ///
@@ -45,7 +46,7 @@ where
 /// events through a bounded channel in a background task. This prevents
 /// blocking the LLM streaming loop on disk I/O or manifest metadata writes.
 pub fn session_store_sink(workspace: &Path, session_id: &str) -> Option<EventSink> {
-    let log = match vtcode_session_store::open(workspace, session_id, DEFAULT_MAX_EVENTS) {
+    let log = match vtcode_memory::open(workspace, session_id, DEFAULT_MAX_EVENTS) {
         Ok(log) => log,
         Err(err) => {
             tracing::warn!("session store unavailable for {session_id}: {err}");
@@ -322,12 +323,14 @@ impl ExecEventRecorder {
         aggregated_output: &str,
         spool_path: Option<&str>,
     ) {
+        let outcome = tool_outcome_from_status(&status);
         self.record(tool_invocation_completed_event(
             handle.id.clone(),
             &handle.tool_name,
             handle.arguments.as_ref(),
             handle.tool_call_id.as_deref(),
             status.clone(),
+            outcome,
         ));
         self.record(tool_output_completed_event(
             handle.id.clone(),
@@ -381,6 +384,7 @@ impl ExecEventRecorder {
             arguments,
             tool_call_id,
             crate::exec::events::ToolCallStatus::Failed,
+            ToolOutcome::HookDenied,
         ));
         self.record(tool_output_started_event(call_item_id.clone(), tool_call_id));
         self.record(tool_output_completed_event(
@@ -393,6 +397,25 @@ impl ExecEventRecorder {
         ));
         let error_item_id = self.next_item_id();
         self.record(error_item_completed_event(error_item_id, detail.to_string()));
+    }
+
+    pub fn permission_requested(&mut self, tool_name: &str) {
+        self.record(ThreadEvent::PermissionRequested(crate::exec::events::PermissionRequestedEvent {
+            tool_name: tool_name.to_string(),
+        }));
+    }
+
+    pub fn permission_resolved(
+        &mut self,
+        tool_name: &str,
+        decision: crate::exec::events::PermissionDecision,
+        wait_ms: u64,
+    ) {
+        self.record(ThreadEvent::PermissionResolved(crate::exec::events::PermissionResolvedEvent {
+            tool_name: tool_name.to_string(),
+            decision,
+            wait_ms,
+        }));
     }
 
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {

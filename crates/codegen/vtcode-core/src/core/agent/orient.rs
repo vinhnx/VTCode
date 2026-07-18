@@ -115,7 +115,7 @@ impl OrientationContext {
 pub fn gather_orientation(workspace_root: &Path, session_id: &str) -> OrientationContext {
     use crate::loop_memory::{LoopMemoryStore, MarkdownLoopMemory};
 
-    let progress_summary = vtcode_session_store::progress::load_progress(workspace_root, session_id)
+    let progress_summary = vtcode_memory::progress::load_progress(workspace_root, session_id)
         .ok()
         .flatten()
         .map(|ledger| {

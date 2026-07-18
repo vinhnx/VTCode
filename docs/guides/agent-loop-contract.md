@@ -188,7 +188,7 @@ When a reset triggers:
 
 All durable artifacts persist across a reset:
 
-- Progress ledger (`crates/codegen/vtcode-session-store/src/progress.rs`)
+- Progress ledger (`crates/codegen/vtcode-memory/src/progress.rs`)
 - Harness artifacts (spec, contract, feature list, evaluation, sprint contract)
 - Loop memory (notes, decisions)
 - Git log and working tree state

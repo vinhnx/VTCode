@@ -1,5 +1,5 @@
 [package]
-name = "vtcode-session-store"
+name = "vtcode-memory"
 version.workspace = true
 edition = "2024"
 rust-version = "1.93.0"
@@ -9,7 +9,7 @@ license.workspace = true
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
-documentation = "https://docs.rs/vtcode-session-store"
+documentation = "https://docs.rs/vtcode-memory"
 keywords = ["vtcode", "agent", "session", "state", "event-log"]
 categories = ["development-tools", "data-structures"]
 

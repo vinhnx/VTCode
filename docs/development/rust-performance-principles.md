@@ -303,7 +303,7 @@ for i in ..n {
   `volatile` trick from C/++ does not port. The portable equivalent is to
   **carry the predicted state in a local and only touch the container on change.**
 - Applied changes:
-  - `vtcode-session-store` `event_log::memchr_newline` — replaced a scalar
+  - `vtcode-memory` `event_log::memchr_newline` — replaced a scalar
     `Iterator::position` byte scan with the SIMD `memchr` crate (a latency-bound
     tight loop made data-parallel).
   - `vtcode-indexer` `query` — scores `files`/`directories` in **parallel

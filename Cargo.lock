@@ -7268,7 +7268,7 @@ dependencies = [
  "vtcode-config",
  "vtcode-core",
  "vtcode-eval",
- "vtcode-session-store",
+ "vtcode-memory",
  "vtcode-ui",
  "webbrowser",
 ]
@@ -7542,8 +7542,8 @@ dependencies = [
  "vtcode-llm",
  "vtcode-macros",
  "vtcode-mcp",
+ "vtcode-memory",
  "vtcode-safety",
- "vtcode-session-store",
  "vtcode-skills",
  "vtcode-ui",
  "vtcode-utility-tool-specs",
@@ -7692,6 +7692,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-memory"
+version = "0.135.14"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "uuid",
+ "vtcode-exec-events",
+ "walkdir",
+]
+
+[[package]]
 name = "vtcode-safety"
 version = "0.135.14"
 dependencies = [
@@ -7714,20 +7728,6 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "vtcode-commons",
-]
-
-[[package]]
-name = "vtcode-session-store"
-version = "0.135.14"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "uuid",
- "vtcode-exec-events",
- "walkdir",
 ]
 
 [[package]]

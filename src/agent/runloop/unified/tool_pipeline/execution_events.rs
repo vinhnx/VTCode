@@ -4,7 +4,7 @@ use vtcode_core::core::agent::events::{
     ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
     tool_output_payload_from_value,
 };
-use vtcode_core::exec::events::ToolCallStatus;
+use vtcode_core::exec::events::{ToolCallStatus, ToolOutcome, tool_outcome_from_status};
 
 use super::status::ToolExecutionStatus;
 
@@ -28,12 +28,14 @@ pub(super) fn emit_tool_completion_status(
 
     if let Some(emitter) = harness_emitter {
         let aggregated_output = aggregated_output.into();
+        let outcome = tool_outcome_from_status(&status);
         let _ = emitter.emit(tool_invocation_completed_event(
             tool_item_id.to_string(),
             tool_name,
             Some(args),
             Some(tool_call_id),
             status.clone(),
+            outcome,
         ));
         if tool_execution_started {
             let _ = emitter.emit(tool_output_completed_event(

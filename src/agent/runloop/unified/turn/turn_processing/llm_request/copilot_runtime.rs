@@ -463,6 +463,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             auto_permission_runtime: None,
             session_stats: Some(self.session_stats),
             safety_approval_justification: safety_approval_justification.map(String::from),
+            harness_emitter: self.harness_emitter,
         }
     }
 

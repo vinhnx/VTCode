@@ -425,6 +425,9 @@ impl AtifTrajectoryBuilder {
             | ThreadEvent::ItemStarted(_)
             | ThreadEvent::ItemUpdated(_)
             | ThreadEvent::PlanDelta(_)
+            | ThreadEvent::PermissionRequested(_)
+            | ThreadEvent::PermissionResolved(_)
+            | ThreadEvent::Interjected(_)
             | ThreadEvent::Unknown => {}
         }
     }
@@ -693,6 +696,7 @@ mod tests {
                     arguments: Some(serde_json::json!({"path": "README.md"})),
                     tool_call_id: Some("tc_0".to_string()),
                     status: ToolCallStatus::Completed,
+                    outcome: None,
                 }),
             },
         });

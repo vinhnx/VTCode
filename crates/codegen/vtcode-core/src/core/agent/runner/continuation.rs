@@ -11,7 +11,7 @@ use crate::core::agent::task::Task;
 use crate::tools::Tool;
 use crate::tools::handlers::TaskTrackerTool;
 use crate::tools::handlers::planning_workflow::PlanningWorkflowState;
-use vtcode_session_store::Milestone;
+use vtcode_memory::Milestone;
 
 const INTERNAL_SCAFFOLD_MARKER: &str = "<!-- vtcode:internal_scaffold -->";
 

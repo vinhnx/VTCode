@@ -8,7 +8,7 @@ use crate::llm::provider::Message;
 
 /// Default history fraction covered by pass1; the remainder is the blocking
 /// pass2 tail, so keep it small (prod pass2 latency is dominated by tail prefill).
-pub(crate) const TWO_PASS_DEFAULT_SPLIT_FRACTION: f64 = 0.95;
+pub const TWO_PASS_DEFAULT_SPLIT_FRACTION: f64 = 0.95;
 
 /// Minimum char length for a closed `<summary>` block to be preferred as NOTE₁
 /// over the full pass1 response.
@@ -19,7 +19,7 @@ const TWO_PASS_MAX_NOTE1_CHARS: usize = 12_000;
 
 /// Result of splitting a conversation for two-pass compaction.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct TwoPassSplit<'a> {
+pub struct TwoPassSplit<'a> {
     pub prefix: &'a [Message],
     pub tail: &'a [Message],
     pub split_idx: usize,
@@ -148,7 +148,7 @@ fn snap_split_idx_to_tool_boundaries(conversation: &[Message], mut split_idx: us
 }
 
 /// Split `conversation` into pass1 prefix / pass2 tail by estimated-token weight.
-pub(crate) fn split_conversation_for_two_pass(conversation: &[Message], split_fraction: f64) -> TwoPassSplit<'_> {
+pub fn split_conversation_for_two_pass(conversation: &[Message], split_fraction: f64) -> TwoPassSplit<'_> {
     let weights: Vec<usize> = conversation.iter().map(|m| m.estimate_tokens()).collect();
     let mut split_idx = split_index_by_token_fraction(&weights, split_fraction);
     split_idx = snap_split_idx_to_tool_boundaries(conversation, split_idx);
@@ -198,7 +198,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// Prefer a substantive `<summary>` inner for NOTE₁; otherwise the full pass1 response.
-pub(crate) fn note_for_two_pass_pass2(pass1_raw: &str) -> String {
+pub fn note_for_two_pass_pass2(pass1_raw: &str) -> String {
     let mut note = extract_summary_block(pass1_raw, TWO_PASS_MIN_SUMMARY_BLOCK_CHARS)
         .unwrap_or_else(|| pass1_raw.trim().to_string());
     let n = note.chars().count();
@@ -249,7 +249,7 @@ fn format_two_pass_special_pass2_user(note1: &str, compaction_prompt: &str) -> S
 }
 
 /// Pass1 sample history: `prefix` + compaction instruction user turn.
-pub(crate) fn build_two_pass_pass1_history(prefix: &[Message], compaction_prompt: &str) -> Vec<Message> {
+pub fn build_two_pass_pass1_history(prefix: &[Message], compaction_prompt: &str) -> Vec<Message> {
     let mut history = prefix.to_vec();
     history.push(Message {
         role: crate::llm::provider::MessageRole::User,
@@ -268,7 +268,7 @@ pub(crate) fn build_two_pass_pass1_history(prefix: &[Message], compaction_prompt
 /// Pass2 sample history: system (from prefix) + NOTE₁ carrier + tail + special turn.
 ///
 /// Successor-visible artifact is the model output of *this* history only (NOTE₂).
-pub(crate) fn build_two_pass_pass2_history(
+pub fn build_two_pass_pass2_history(
     prefix: &[Message],
     tail: &[Message],
     note1: &str,
@@ -322,6 +322,28 @@ pub(crate) fn build_two_pass_pass2_history(
         metadata: None,
     });
     history
+}
+
+use std::hash::{Hash, Hasher};
+
+/// Cheap fingerprint of a conversation prefix for prefire NOTE₁ validity.
+/// A mismatch means the prefix changed (edit / rewind / branch) since pass-1,
+/// so the cached NOTE₁ no longer summarizes the current prefix.
+pub fn fingerprint_prefix(prefix: &[Message]) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    let mut h = DefaultHasher::new();
+    prefix.len().hash(&mut h);
+    for msg in prefix {
+        let tag: u8 = match msg.role {
+            crate::llm::provider::MessageRole::System => 0,
+            crate::llm::provider::MessageRole::User => 1,
+            crate::llm::provider::MessageRole::Assistant => 2,
+            crate::llm::provider::MessageRole::Tool => 3,
+        };
+        tag.hash(&mut h);
+        msg.content.as_text().hash(&mut h);
+    }
+    h.finish()
 }
 
 #[cfg(test)]

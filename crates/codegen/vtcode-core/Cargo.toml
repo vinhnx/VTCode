@@ -114,7 +114,7 @@ vtcode-commons = { workspace = true }
 vtcode-ui = { workspace = true }
 vtcode-macros = { workspace = true }
 vtcode-exec-events = { workspace = true }
-vtcode-session-store = { workspace = true }
+vtcode-memory = { workspace = true }
 vtcode-auth = { workspace = true }
 vtcode-config = { workspace = true }
 vtcode-utility-tool-specs = { workspace = true }

@@ -41,6 +41,10 @@ pub struct AgentSessionState {
 
     /// Statistics for the current session.
     pub stats: SessionStats,
+    /// Auto-compaction suppression state: `SUPPRESS_NONE` allows compaction;
+    /// other values gate automatic compaction until cleared by success, model
+    /// switch, or explicit `/compact`.
+    pub auto_compact_suppressed: u8,
 
     /// Constraints and limits for the session.
     pub constraints: SessionConstraints,
@@ -148,6 +152,7 @@ impl AgentSessionState {
             conversation: Vec::new(),
             messages: Arc::new(Vec::new()),
             stats: SessionStats::default(),
+            auto_compact_suppressed: crate::compaction::SUPPRESS_NONE,
             constraints: SessionConstraints { max_turns, max_tool_loops, max_context_tokens },
             outcome: TaskOutcome::Unknown,
             stop_reason: None,

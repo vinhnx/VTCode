@@ -2,7 +2,7 @@
 //!
 //! Agent capability is only useful if the agent *keeps getting closer to
 //! completion over time*. [`ProgressMonitor`] externalizes that invariant into
-//! a durable [`ProgressLedger`] persisted via `vtcode-session-store`, so the
+//! a durable [`ProgressLedger`] persisted via `vtcode-memory`, so the
 //! harness can:
 //!
 //! - refuse to declare a session complete while tracked milestones are open,
@@ -16,7 +16,7 @@
 use std::path::PathBuf;
 
 use tracing::warn;
-use vtcode_session_store::progress::{Milestone, MilestoneStatus, ProgressLedger, load_progress, save_progress};
+use vtcode_memory::progress::{Milestone, MilestoneStatus, ProgressLedger, load_progress, save_progress};
 
 /// Guard-rail interface isolating the [`ProgressMonitor`] from persistence IO.
 ///
@@ -24,7 +24,7 @@ use vtcode_session_store::progress::{Milestone, MilestoneStatus, ProgressLedger,
 /// (ledger persistence, memory checkpointing) is delegated through this trait.
 /// This keeps the monitor unit-testable with an in-memory sink and prevents the
 /// long-horizon progress logic from coupling to the filesystem or to
-/// `vtcode-session-store` internals.
+/// `vtcode-memory` internals.
 pub trait ProgressLedgerSink: Send + Sync {
     /// Persist the authoritative ledger. Best-effort; errors are the sink's
     /// concern (typically logged, not propagated).
@@ -43,7 +43,7 @@ impl ProgressLedgerSink for NullProgressSink {
     fn persist(&self, _ledger: &ProgressLedger) {}
 }
 
-/// Filesystem-backed sink: persists the ledger via `vtcode-session-store` and
+/// Filesystem-backed sink: persists the ledger via `vtcode-memory` and
 /// checkpoints a markdown summary into the workspace's durable memory.
 #[derive(Debug, Clone)]
 pub struct SessionProgressSink {

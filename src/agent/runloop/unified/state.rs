@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use vtcode_core::compaction::PrefireState;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider::{Message, PromptCacheProfile, ResponsesContinuationState, responses_continuation_key};
@@ -108,6 +109,12 @@ pub(crate) struct SessionStats {
     /// expired. Shared with the headless session state; see
     /// [`RequestGapTracker`].
     request_gap: RequestGapTracker,
+    /// Prefire two-pass state: cached NOTE₁ for background pass-1.
+    pub prefire: PrefireState,
+    /// Auto-compaction suppression state: `SUPPRESS_NONE` allows compaction;
+    /// other values gate automatic compaction until cleared by success, model
+    /// switch, or explicit `/compact`.
+    pub auto_compact_suppressed: u8,
 }
 
 impl SessionStats {

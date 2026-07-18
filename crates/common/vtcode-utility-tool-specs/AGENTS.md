@@ -9,6 +9,13 @@
 - Schema types are passive data containers with no behavior or validation logic.
 - Uses `rmcp` for MCP schema compatibility.
 
+## Module Groups
+
+| Area | Modules |
+|---|---|
+| Schemas | `collaboration/`, `json_schema/`, `responses_api/`, `mcp_tool/` |
+| Taxonomy | `tool_kind/` (`ToolKind`, `ToolNamespace`, `CanonicalToolMeta`, `TokenBucket`) |
+
 ## Dependencies
 
 - `rmcp` (MCP schema types)

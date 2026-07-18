@@ -256,6 +256,7 @@ fn build_tool_permissions_context_with_safety<'ctx, 'a>(
         }),
         session_stats: Some(ctx.session_stats),
         safety_approval_justification: safety_approval_justification.map(String::from),
+        harness_emitter: ctx.harness_emitter,
     }
 }
 
