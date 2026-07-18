@@ -1089,6 +1089,8 @@ mod tests {
         assert_eq!(projected[0].len(), 1);
         assert_eq!(projected[0][0].start, 0);
         assert!(projected[0][0].end <= "crates/codegen/vtcode-core/src/tool_policy.rs —".len());
-        assert!("crates/codegen/vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end));
+        assert!(
+            "crates/codegen/vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end)
+        );
     }
 }

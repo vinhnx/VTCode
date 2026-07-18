@@ -1735,9 +1735,10 @@ mod tests {
 
         let cwd = std::env::current_dir().expect("current dir");
         let expected =
-            Url::from_file_path(cwd.join("crates/codegen/vtcode-core/src/utils/ansi.rs")).expect("file url");
-        let clickable =
-            make_clickable_target("./crates/codegen/vtcode-core/src/utils/ansi.rs:42").expect("clickable target");
+            Url::from_file_path(cwd.join("crates/codegen/vtcode-core/src/utils/ansi.rs"))
+                .expect("file url");
+        let clickable = make_clickable_target("./crates/codegen/vtcode-core/src/utils/ansi.rs:42")
+            .expect("clickable target");
 
         assert_eq!(
             clickable,

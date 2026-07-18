@@ -583,8 +583,9 @@ mod tests {
 
     #[test]
     fn sed_print_under_workspace_path_yields_pattern_key() {
-        let pattern = pattern_for("sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs")
-            .expect("pattern");
+        let pattern =
+            pattern_for("sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs")
+                .expect("pattern");
 
         assert!(
             pattern
