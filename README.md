@@ -22,7 +22,7 @@ VT Code is a Rust coding agent built for long-running autonomous workflows, with
 ## Features
 
 - **Agent runtime** - Interactive TUI, slash commands, streaming, `ask`/`exec` CLI, session resume
-- **Coding tools** - Safe file ops, ripgrep search + ast-grep outline symbol maps, fuzzy discovery, code intelligence, project indexing, terminal execution
+- **Coding tools** - Safe file ops, [ripgrep](https://github.com/BurntSushi/ripgrep) search + [ast-grep](https://ast-grep.github.io/) outline symbol maps, fuzzy discovery, code intelligence, project indexing, terminal execution
 - **Extensibility** - Agent Skills, MCP client/server, lifecycle hooks, subagents, custom providers, Zed ACP, VS Code, Claude Code
 - **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, **local inference via Ollama, LM Studio, and llama.cpp** (managed with the `/local` command), and more
 - **Safety** - Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging
