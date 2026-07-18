@@ -286,7 +286,7 @@ jobs:
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: x86_64-pc-windows-msvc
-      - run: cargo check --locked --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
+      - run: cargo check --locked --target x86_64-pc-windows-msvc --jobs 4
         shell: bash
 
   test:

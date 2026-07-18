@@ -197,7 +197,7 @@ jobs:
           key: x86_64-pc-windows-msvc
 
       - name: Build (x86_64-pc-windows-msvc)
-        run: cargo build --profile release-fast --target x86_64-pc-windows-msvc --features allocator-jemalloc --jobs 4
+        run: cargo build --profile release-fast --target x86_64-pc-windows-msvc --jobs 4
         shell: bash
 
       - name: Check Binary

@@ -15,6 +15,7 @@ set -euo pipefail
 
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 
 # Temporary file to store release notes
@@ -39,13 +40,13 @@ get_github_username() {
     local email=$1
     # Common email-to-username mappings
     case "$email" in
-        vinhnguyen*) echo "vinhnx" ;;
-        noreply@vtcode.com) echo "vtcode-release-bot" ;;
-        *)
-            # Extract username from email (before @)
-            local username="${email%%@*}"
-            echo "$username"
-            ;;
+    vinhnguyen*) echo "vinhnx" ;;
+    noreply@vtcode.com) echo "vtcode-release-bot" ;;
+    *)
+        # Extract username from email (before @)
+        local username="${email%%@*}"
+        echo "$username"
+        ;;
     esac
 }
 
@@ -66,10 +67,11 @@ add_username_tags() {
             local hash author_email
             hash=$(echo "$line" | cut -d'|' -f1)
             author_email=$(echo "$line" | cut -d'|' -f2)
-            local username=$(get_github_username "$author_email")
+            local username
+            username=$(get_github_username "$author_email")
             echo "$hash|$username"
         fi
-    done > "$temp_mapping_file"
+    done >"$temp_mapping_file"
 
     # Process changelog and add @username tags
     local result=""
@@ -92,7 +94,7 @@ add_username_tags() {
                         found=1
                     fi
                 fi
-            done < "$temp_mapping_file"
+            done <"$temp_mapping_file"
 
             if [[ -n "$username" ]]; then
                 # Append @username to the entry if not already present
@@ -102,7 +104,7 @@ add_username_tags() {
             fi
         fi
         result+="$entry"$'\n'
-    done <<< "$changelog"
+    done <<<"$changelog"
 
     # Clean up
     rm -f "$temp_mapping_file"
@@ -135,12 +137,12 @@ Cost Optimization:
   Default mode (recommended):
     • macOS binaries: built locally (no CI cost, faster)
     • Linux/Windows: built on GitHub Actions (free for public repos)
-  
+
   --full-ci mode (all CI, higher cost):
     • All platforms built on GitHub Actions
     • Uses 4 runners: 2x macOS, 1x Ubuntu, 1x Windows
     • Estimated cost: ~20-30 minutes of runner time
-  
+
   --ci-only mode (hybrid):
     • Skip local macOS build
     • Only trigger CI for Linux/Windows
@@ -154,7 +156,8 @@ parse_commit_type() {
     local message="$1"
     # Extract type from conventional commit format: type(scope): message or type: message
     # Use sed to extract the type prefix
-    local type=$(echo "$message" | sed -E 's/^([a-z]+)(\([^)]+\))?:.*/\1/')
+    local type
+    type=$(echo "$message" | sed -E 's/^([a-z]+)(\([^)]+\))?:.*/\1/')
     if [[ "$type" == "$message" ]]; then
         echo "other"
     else
@@ -166,18 +169,18 @@ parse_commit_type() {
 get_type_prefix() {
     local type="$1"
     case "$type" in
-        feat) echo "[FEAT]" ;;
-        fix) echo "[FIX]" ;;
-        perf) echo "[PERF]" ;;
-        refactor) echo "[REFACTOR]" ;;
-        docs) echo "[DOCS]" ;;
-        test) echo "[TEST]" ;;
-        build) echo "[BUILD]" ;;
-        ci) echo "[CI]" ;;
-        chore) echo "[CHORE]" ;;
-        security) echo "[SECURITY]" ;;
-        deps) echo "[DEPS]" ;;
-        *) echo "" ;;
+    feat) echo "[FEAT]" ;;
+    fix) echo "[FIX]" ;;
+    perf) echo "[PERF]" ;;
+    refactor) echo "[REFACTOR]" ;;
+    docs) echo "[DOCS]" ;;
+    test) echo "[TEST]" ;;
+    build) echo "[BUILD]" ;;
+    ci) echo "[CI]" ;;
+    chore) echo "[CHORE]" ;;
+    security) echo "[SECURITY]" ;;
+    deps) echo "[DEPS]" ;;
+    *) echo "" ;;
     esac
 }
 
@@ -185,18 +188,18 @@ get_type_prefix() {
 get_type_title() {
     local type="$1"
     case "$type" in
-        feat) echo "Features" ;;
-        fix) echo "Bug Fixes" ;;
-        perf) echo "Performance" ;;
-        refactor) echo "Refactors" ;;
-        docs) echo "Documentation" ;;
-        test) echo "Tests" ;;
-        build) echo "Build" ;;
-        ci) echo "CI" ;;
-        chore) echo "Chores" ;;
-        security) echo "Security" ;;
-        deps) echo "Dependencies" ;;
-        *) echo "Other" ;;
+    feat) echo "Features" ;;
+    fix) echo "Bug Fixes" ;;
+    perf) echo "Performance" ;;
+    refactor) echo "Refactors" ;;
+    docs) echo "Documentation" ;;
+    test) echo "Tests" ;;
+    build) echo "Build" ;;
+    ci) echo "CI" ;;
+    chore) echo "Chores" ;;
+    security) echo "Security" ;;
+    deps) echo "Dependencies" ;;
+    *) echo "Other" ;;
     esac
 }
 
@@ -215,7 +218,8 @@ generate_contributors_section() {
 
     while IFS= read -r author_email; do
         [[ -z "$author_email" ]] && continue
-        local username=$(get_github_username "$author_email")
+        local username
+        username=$(get_github_username "$author_email")
         [[ -z "$username" || "$username" == "vtcode-release-bot" ]] && continue
 
         # Deduplicate (bash 3.2 compatible)
@@ -264,8 +268,10 @@ generate_structured_changelog() {
     while IFS='|' read -r hash message author_email; do
         [[ -z "$hash" ]] && continue
 
-        local type=$(parse_commit_type "$message")
-        local clean_msg=$(clean_commit_message "$message")
+        local type
+        type=$(parse_commit_type "$message")
+        local clean_msg
+        clean_msg=$(clean_commit_message "$message")
 
         # Skip excluded patterns
         if [[ "$message" =~ (chore\(release\):|bump version|update version|version bump|release v[0-9]+\.[0-9]+\.[0-9]+|chore.*version|chore.*release|build.*version|update.*version.*number|bump.*version.*to|update homebrew|update changelog) ]]; then
@@ -285,18 +291,18 @@ generate_structured_changelog() {
 
         # Add to appropriate group using prefix variables
         case "$type" in
-            feat) feat_commits="${feat_commits}${entry}"$'\n' ;;
-            fix) fix_commits="${fix_commits}${entry}"$'\n' ;;
-            perf) perf_commits="${perf_commits}${entry}"$'\n' ;;
-            refactor) refactor_commits="${refactor_commits}${entry}"$'\n' ;;
-            security) security_commits="${security_commits}${entry}"$'\n' ;;
-            docs) docs_commits="${docs_commits}${entry}"$'\n' ;;
-            test) test_commits="${test_commits}${entry}"$'\n' ;;
-            build) build_commits="${build_commits}${entry}"$'\n' ;;
-            ci) ci_commits="${ci_commits}${entry}"$'\n' ;;
-            deps) deps_commits="${deps_commits}${entry}"$'\n' ;;
-            chore) chore_commits="${chore_commits}${entry}"$'\n' ;;
-            *) other_commits="${other_commits}${entry}"$'\n' ;;
+        feat) feat_commits="${feat_commits}${entry}"$'\n' ;;
+        fix) fix_commits="${fix_commits}${entry}"$'\n' ;;
+        perf) perf_commits="${perf_commits}${entry}"$'\n' ;;
+        refactor) refactor_commits="${refactor_commits}${entry}"$'\n' ;;
+        security) security_commits="${security_commits}${entry}"$'\n' ;;
+        docs) docs_commits="${docs_commits}${entry}"$'\n' ;;
+        test) test_commits="${test_commits}${entry}"$'\n' ;;
+        build) build_commits="${build_commits}${entry}"$'\n' ;;
+        ci) ci_commits="${ci_commits}${entry}"$'\n' ;;
+        deps) deps_commits="${deps_commits}${entry}"$'\n' ;;
+        chore) chore_commits="${chore_commits}${entry}"$'\n' ;;
+        *) other_commits="${other_commits}${entry}"$'\n' ;;
         esac
     done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s|%ae")
 
@@ -311,13 +317,14 @@ generate_structured_changelog() {
     for type in $highlight_types; do
         local commits=""
         case "$type" in
-            feat) commits="$feat_commits" ;;
-            fix) commits="$fix_commits" ;;
-            docs) commits="$docs_commits" ;;
+        feat) commits="$feat_commits" ;;
+        fix) commits="$fix_commits" ;;
+        docs) commits="$docs_commits" ;;
         esac
 
         if [[ -n "$commits" ]]; then
-            local title=$(get_type_title "$type")
+            local title
+            title=$(get_type_title "$type")
             output+="#### ${title}"$'\n\n'
             output+="${commits}"$'\n'
             has_highlights=true
@@ -334,19 +341,20 @@ generate_structured_changelog() {
     for type in $other_types; do
         local commits=""
         case "$type" in
-            perf) commits="$perf_commits" ;;
-            refactor) commits="$refactor_commits" ;;
-            security) commits="$security_commits" ;;
-            test) commits="$test_commits" ;;
-            build) commits="$build_commits" ;;
-            ci) commits="$ci_commits" ;;
-            deps) commits="$deps_commits" ;;
-            chore) commits="$chore_commits" ;;
-            other) commits="$other_commits" ;;
+        perf) commits="$perf_commits" ;;
+        refactor) commits="$refactor_commits" ;;
+        security) commits="$security_commits" ;;
+        test) commits="$test_commits" ;;
+        build) commits="$build_commits" ;;
+        ci) commits="$ci_commits" ;;
+        deps) commits="$deps_commits" ;;
+        chore) commits="$chore_commits" ;;
+        other) commits="$other_commits" ;;
         esac
 
         if [[ -n "$commits" ]]; then
-            local title=$(get_type_title "$type")
+            local title
+            title=$(get_type_title "$type")
             other_output+="#### ${title}"$'\n\n'
             other_output+="${commits}"$'\n'
             has_other=true
@@ -382,7 +390,7 @@ update_changelog_from_commits() {
     # Find the previous semver tag (handles both v0.82.0 and 0.82.0 formats)
     local previous_version
     previous_version=$(git tag | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^[vV]//' | sort -t. -k1,1rn -k2,2rn -k3,3rn | awk -v ver="$version" '$0 != ver {print; exit}')
-    
+
     if [[ -n "$previous_version" ]]; then
         print_info "Previous version tag: $previous_version"
     else
@@ -423,8 +431,8 @@ update_changelog_from_commits() {
         # Use range from previous version to current if available
         if [[ -n "$previous_version" ]]; then
             print_info "Generating changelog from $previous_version to $version"
-            git-cliff "${cliff_args[@]}" --output "$temp_changelog" "${previous_version}..HEAD" 2>/dev/null || \
-            git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
+            git-cliff "${cliff_args[@]}" --output "$temp_changelog" "${previous_version}..HEAD" 2>/dev/null ||
+                git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
         else
             git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
         fi
@@ -458,7 +466,7 @@ update_changelog_from_commits() {
                 fi
                 echo ""
                 echo "**Full Changelog**: ${full_changelog_url}"
-            } > "$RELEASE_NOTES_FILE"
+            } >"$RELEASE_NOTES_FILE"
 
             if [[ -f CHANGELOG.md ]]; then
                 # Check if this version already exists in the changelog
@@ -478,13 +486,13 @@ update_changelog_from_commits() {
                             printf '%s\n' "$changelog_content"
                         fi
                         printf '%s\n' "$remainder"
-                    } > CHANGELOG.md
+                    } >CHANGELOG.md
                 fi
             else
                 # Create new changelog with git-cliff output
                 cp "$temp_changelog" CHANGELOG.md
             fi
-            
+
             rm -f "$temp_changelog"
         else
             print_warning "git-cliff failed, falling back to built-in changelog generator"
@@ -501,10 +509,10 @@ update_changelog_from_commits() {
     git add CHANGELOG.md
     if ! git diff --cached --quiet; then
         GIT_AUTHOR_NAME="vtcode-release-bot" \
-        GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-        GIT_COMMITTER_NAME="vtcode-release-bot" \
-        GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-        git commit -m "docs: update changelog for $version [skip ci]"
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git commit -m "docs: update changelog for $version [skip ci]"
         print_success "Changelog updated and committed for version $version"
     else
         print_info "No changes to CHANGELOG.md to commit."
@@ -550,7 +558,7 @@ update_changelog_builtin() {
         else
             echo "**Full Changelog**: https://github.com/vinhnx/vtcode/releases/tag/${version}"
         fi
-    } > "$RELEASE_NOTES_FILE"
+    } >"$RELEASE_NOTES_FILE"
 
     if [[ "$dry_run_flag" == 'true' ]]; then
         print_info "Dry run - would update CHANGELOG.md"
@@ -578,7 +586,7 @@ update_changelog_builtin() {
                 printf '%s\n' "$header"
                 printf '%b\n' "$changelog_entry"
                 printf '%s\n' "$remainder"
-            } > CHANGELOG.md
+            } >CHANGELOG.md
         fi
     else
         {
@@ -587,16 +595,16 @@ update_changelog_builtin() {
             printf '%s\n' "All notable changes to vtcode will be documented in this file."
             printf '%s\n' ""
             printf '%b\n' "$changelog_entry"
-        } > CHANGELOG.md
+        } >CHANGELOG.md
     fi
 
     git add CHANGELOG.md
     if ! git diff --cached --quiet; then
         GIT_AUTHOR_NAME="vtcode-release-bot" \
-        GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-        GIT_COMMITTER_NAME="vtcode-release-bot" \
-        GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-        git commit -m "docs: update changelog for $version [skip ci]"
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git commit -m "docs: update changelog for $version [skip ci]"
         print_success "Changelog updated and committed for version $version"
     else
         print_info "No changes to CHANGELOG.md to commit."
@@ -622,6 +630,7 @@ check_clean_tree() {
 
 ensure_cargo_release() {
     if ! command -v cargo-release >/dev/null 2>&1; then
+        # shellcheck disable=SC2016
         print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
         exit 1
     fi
@@ -658,10 +667,10 @@ update_homebrew_formula_file() {
     local aarch64_linux_sha=${5:-}
 
     FORMULA_PATH="$formula_path" \
-    FORMULA_VERSION="$version" \
-    FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
-    FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
-    FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
+        FORMULA_VERSION="$version" \
+        FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
+        FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
+        FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
         python3 <<'PYTHON_SCRIPT'
 import os
 import re
@@ -826,24 +835,54 @@ main() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help) show_usage; exit 0 ;;
-            -p|--patch) increment_type='patch'; shift ;;
-            -m|--minor) increment_type='minor'; shift ;;
-            -M|--major) increment_type='major'; shift ;;
-            --dry-run) dry_run=true; shift ;;
-            --skip-crates) skip_crates=true; shift ;;
-            --skip-binaries) skip_binaries=true; shift ;;
-            --skip-docs) skip_docs=true; shift ;;
-            --full-ci) full_ci=true; shift ;;
-            --ci-only) ci_only=true; shift ;;
-            *)
-                if [[ -n "$release_argument" ]]; then
-                    print_error 'Multiple versions specified'
-                    exit 1
-                fi
-                release_argument=$1
-                shift
-                ;;
+        -h | --help)
+            show_usage
+            exit 0
+            ;;
+        -p | --patch)
+            increment_type='patch'
+            shift
+            ;;
+        -m | --minor)
+            increment_type='minor'
+            shift
+            ;;
+        -M | --major)
+            increment_type='major'
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        --skip-crates)
+            skip_crates=true
+            shift
+            ;;
+        --skip-binaries)
+            skip_binaries=true
+            shift
+            ;;
+        --skip-docs)
+            skip_docs=true
+            shift
+            ;;
+        --full-ci)
+            full_ci=true
+            shift
+            ;;
+        --ci-only)
+            ci_only=true
+            shift
+            ;;
+        *)
+            if [[ -n "$release_argument" ]]; then
+                print_error 'Multiple versions specified'
+                exit 1
+            fi
+            release_argument=$1
+            shift
+            ;;
         esac
     done
 
@@ -864,9 +903,6 @@ main() {
         print_info "Checking GitHub CLI authentication..."
 
         if gh auth status >/dev/null 2>&1; then
-            local current_user=""
-            current_user=$(gh api user --jq '.login' 2>/dev/null || true)
-
             print_info "Switching to GitHub account vinhnx..."
             if unset GITHUB_TOKEN && gh auth switch -u vinhnx >/dev/null 2>&1; then
                 print_success "Switched to GitHub account vinhnx"
@@ -904,17 +940,20 @@ main() {
     if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         next_version="$release_argument"
     else
-        IFS='.' read -ra v <<< "$current_version"
+        IFS='.' read -ra v <<<"$current_version"
         case "$release_argument" in
-            major)
-                local major_num=$((v[0] + 1))
-                next_version="${major_num}.0.0" ;;
-            minor)
-                local minor_num=$((v[1] + 1))
-                next_version="${v[0]}.${minor_num}.0" ;;
-            patch)
-                local patch_num=$((v[2] + 1))
-                next_version="${v[0]}.${v[1]}.${patch_num}" ;;
+        major)
+            local major_num=$((v[0] + 1))
+            next_version="${major_num}.0.0"
+            ;;
+        minor)
+            local minor_num=$((v[1] + 1))
+            next_version="${v[0]}.${minor_num}.0"
+            ;;
+        patch)
+            local patch_num=$((v[2] + 1))
+            next_version="${v[0]}.${v[1]}.${patch_num}"
+            ;;
         esac
     fi
 
@@ -984,10 +1023,10 @@ main() {
         git add docs/modules/vtcode_docs_map.md
         if ! git diff --cached --quiet; then
             GIT_AUTHOR_NAME="vtcode-release-bot" \
-            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-            GIT_COMMITTER_NAME="vtcode-release-bot" \
-            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-            git commit -m "docs: update documentation map [skip ci]"
+                GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+                GIT_COMMITTER_NAME="vtcode-release-bot" \
+                GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+                git commit -m "docs: update documentation map [skip ci]"
             print_success "Documentation map updated and committed"
         else
             print_info "Documentation map already up to date"
@@ -1000,7 +1039,7 @@ main() {
             print_info "Step 1 (dry-run): Would build binaries for x86_64-apple-darwin and aarch64-apple-darwin"
         else
             print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
-            
+
             local build_args=(-v "$next_version" --only-build-local)
             env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
@@ -1061,13 +1100,14 @@ main() {
 
                 # Wait for CI to complete (with timeout)
                 print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
-                local wait_start=$(date +%s)
-                local timeout=3600  # 60 minutes
+                local wait_start
+                wait_start=$(date +%s)
+                local timeout=3600 # 60 minutes
                 local run_id=""
 
                 # Get the workflow run ID - wait for it to appear
                 local find_run_attempts=0
-                local max_find_attempts=24  # Wait up to 2 minutes for run to appear
+                local max_find_attempts=24 # Wait up to 2 minutes for run to appear
                 while [[ -z "$run_id" && $find_run_attempts -lt $max_find_attempts ]]; do
                     sleep 5
                     # Look for the most recent run of this workflow
@@ -1089,7 +1129,8 @@ main() {
                         conclusion=$(echo "$run_info" | jq -r '.conclusion')
 
                         # Check timeout
-                        local now=$(date +%s)
+                        local now
+                        now=$(date +%s)
                         local elapsed=$((now - wait_start))
                         if [[ $elapsed -gt $timeout ]]; then
                             print_warning "CI build timeout after $timeout seconds - will use macOS binaries only"
@@ -1119,7 +1160,8 @@ main() {
 
     # Ensure GITHUB_TOKEN is available
     if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-        export GITHUB_TOKEN=$(gh auth token)
+        export GITHUB_TOKEN
+        GITHUB_TOKEN=$(gh auth token)
     fi
 
     # Check if release already exists
@@ -1152,22 +1194,22 @@ main() {
         local binaries_dir="/tmp/vtcode-release-$released_version"
         mkdir -p "$binaries_dir"
 
-         # Build macOS binaries in parallel
-         print_info "Building macOS binaries in parallel..."
-         
-           # Build both architectures in parallel on multi-core machines
-           cargo build --profile release-fast --target x86_64-apple-darwin --jobs 4 &>/dev/null &
-           local pid_x86=$!
-           cargo build --profile release-fast --target aarch64-apple-darwin --jobs 4 &>/dev/null &
-           local pid_arm=$!
-          
-          # Wait for x86_64
-         if wait "$pid_x86"; then
+        # Build macOS binaries in parallel
+        print_info "Building macOS binaries in parallel..."
+
+        # Build both architectures in parallel on multi-core machines
+        cargo build --profile release-fast --target x86_64-apple-darwin --jobs 4 &>/dev/null &
+        local pid_x86=$!
+        cargo build --profile release-fast --target aarch64-apple-darwin --jobs 4 &>/dev/null &
+        local pid_arm=$!
+
+        # Wait for x86_64
+        if wait "$pid_x86"; then
             package_release_archive \
                 "x86_64-apple-darwin" \
                 "vtcode" \
                 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz"
-            shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
+            shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" >"$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
             print_success "Built macOS x86_64"
         else
             print_warning "Failed to build macOS x86_64"
@@ -1179,7 +1221,7 @@ main() {
                 "aarch64-apple-darwin" \
                 "vtcode" \
                 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz"
-            shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
+            shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" >"$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
             print_success "Built macOS aarch64 (Apple Silicon)"
         else
             print_warning "Failed to build macOS aarch64"
@@ -1190,7 +1232,7 @@ main() {
 
         # Use the run_id from step 3.5 if CI was successful, otherwise try to find one
         local run_id="${CI_RUN_ID:-}"
-        
+
         if [[ -z "$run_id" ]]; then
             # Try to find a successful run if CI_RUN_ID wasn't set
             run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 1 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -1)
@@ -1263,10 +1305,14 @@ main() {
         # Summary of what we have
         if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || "$linux_aarch64_downloaded" == false ]] || [[ "$require_windows" == "true" && "$windows_downloaded" == false ]]; then
             print_warning "Some platform binaries are missing - release will include:"
+            # shellcheck disable=SC2015
             [[ "$linux_gnu_downloaded" == true ]] && print_info "  ✓ Linux x86_64 gnu" || print_warning "  ✗ Linux x86_64 gnu"
+            # shellcheck disable=SC2015
             [[ "$linux_musl_downloaded" == true ]] && print_info "  ✓ Linux x86_64 musl" || print_warning "  ✗ Linux x86_64 musl"
+            # shellcheck disable=SC2015
             [[ "$linux_aarch64_downloaded" == true ]] && print_info "  ✓ Linux aarch64" || print_warning "  ✗ Linux aarch64"
             if [[ "$require_windows" == "true" ]]; then
+                # shellcheck disable=SC2015
                 [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
             else
                 print_info "  - Windows x86_64 (optional, skipped)"
@@ -1277,31 +1323,31 @@ main() {
 
         # Upload all binaries to GitHub Release
         print_info "Uploading all binaries to GitHub Release..."
-        
+
         # Generate consolidated checksums.txt
         (
             cd "$binaries_dir"
             local shacmd=""
-            if command -v sha256sum &> /dev/null; then
+            if command -v sha256sum &>/dev/null; then
                 shacmd="sha256sum"
-            elif command -v shasum &> /dev/null; then
+            elif command -v shasum &>/dev/null; then
                 shacmd="shasum -a 256"
             else
                 print_error "Neither sha256sum nor shasum found"
                 exit 1
             fi
-            
+
             # Clear/create checksums.txt
             rm -f checksums.txt
             touch checksums.txt
-            
+
             for f in *.tar.gz *.zip; do
                 if [ -f "$f" ]; then
-                    $shacmd "$f" >> checksums.txt
+                    $shacmd "$f" >>checksums.txt
                 fi
             done
         )
-        
+
         shopt -s nullglob
         release_files=(
             "$binaries_dir"/*.tar.gz
@@ -1350,7 +1396,6 @@ main() {
         # Cleanup
         rm -rf "$binaries_dir"
     fi
-
 
     # 5. Publish Homebrew tap
     if [[ "$skip_binaries" == 'false' ]]; then
