@@ -21,7 +21,6 @@ include = [
     "Cargo.toml",
     "README.md",
     "LICENSE",
-    "embedded_assets_source/",
     "templates/",
 ]
 [dependencies]

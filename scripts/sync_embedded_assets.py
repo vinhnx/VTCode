@@ -8,10 +8,10 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_EMBEDDED = ROOT / "crates/codegen/vtcode-core" / "embedded_assets_source"
+# embedded_assets_source removed — assets are consumed directly from the workspace root
 
 ASSET_MAPPINGS = {
-    ROOT / "docs" / "modules/vtcode_docs_map.md": CORE_EMBEDDED / "docs" / "modules/vtcode_docs_map.md",
+    # Asset mappings removed — build.rs reads docs/modules/vtcode_docs_map.md directly from the workspace root
 }
 
 

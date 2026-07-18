@@ -1,186 +1,43 @@
 # **Asset Synchronization**
 
-This guide explains the embedded asset synchronization workflow between the workspace and the `vtcode-core` crate.
+This guide explains how embedded assets are consumed by the `vtcode-core` crate.
 
 ## **Overview**
 
-VT Code maintains a synchronization system to mirror canonical prompts and documentation assets from the workspace into the `crates/codegen/vtcode-core/embedded_assets_source` directory. This ensures that the Rust crate has access to the most up-to-date versions of these critical assets.
-
-## **Why Asset Synchronization?**
-
-The sync automation serves several important purposes:
-
-- **Consistency**: Ensures the Rust crate uses the same prompts and documentation as the workspace
-- **Single Source of Truth**: Prompts and docs are maintained in one canonical location
-- **Build Integration**: Assets are embedded in the crate at build time for distribution
-- **Version Control**: Changes to canonical files are tracked and synchronized
+VT Code embeds selected workspace assets directly into the `vtcode-core` crate at build time. The `build.rs` script resolves these assets from the workspace root, so there is no separate mirror directory to maintain.
 
 ## **Synchronized Assets**
 
-The following assets are currently synchronized:
+The following asset is currently embedded:
 
-| Source (Workspace) | Destination (Crate) | Purpose |
-|-------------------|-------------------|---------|
-| `docs/modules/vtcode_docs_map.md` | `crates/codegen/vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md` | Documentation map for self-documentation |
+| Source (Workspace) | Embedded Destination | Purpose |
+|-------------------|---------------------|---------|
+| `docs/modules/vtcode_docs_map.md` | `docs/vtcode_docs_map.md` (in crate build output) | Documentation map for self-documentation |
 
-## **Using the Sync Script**
+## **How It Works**
 
-### **Location**
+1. **Single Source of Truth**: Assets are maintained at the workspace root (e.g., `docs/modules/vtcode_docs_map.md`).
+2. **Build-Time Embedding**: `crates/codegen/vtcode-core/build.rs` copies the asset into the crate's build output during compilation.
+3. **No Manual Sync Required**: Because the build script reads directly from the workspace root, there is no separate sync step or mirror directory.
 
-The sync script is located at `scripts/sync_embedded_assets.py`.
+## **Verification**
 
-### **Basic Usage**
-
-```bash
-# Run the sync (actual copying)
-python3 scripts/sync_embedded_assets.py
-
-# Preview changes without copying (recommended)
-python3 scripts/sync_embedded_assets.py --dry-run
-```
-
-### **What the Script Does**
-
-1. **Validates Sources**: Ensures all source files exist before proceeding
-2. **Creates Directories**: Automatically creates destination directories as needed
-3. **Compares Content**: Only copies files that have changed (byte-level comparison)
-4. **Preserves Metadata**: Uses `shutil.copy2()` to preserve timestamps and metadata
-5. **Reports Changes**: Shows which files were updated or skipped
-
-### **When to Run the Sync Script**
-
-**Always run the sync script after making changes to synchronized assets:**
-
--   After editing `docs/modules/vtcode_docs_map.md`
--   After adding or removing synchronized assets
-
-### **Integration with Development Workflow**
-
-#### **For Documentation Changes**
-
-When updating documentation in the workspace:
+After modifying an embedded asset:
 
 ```bash
-# 1. Make your documentation changes
-vim docs/modules/vtcode_docs_map.md
+# Verify the crate still builds
+cargo check --package vtcode-core
 
-# 2. Preview the sync to see what will be updated
-python3 scripts/sync_embedded_assets.py --dry-run
-
-# 3. Run the sync if changes look correct
-python3 scripts/sync_embedded_assets.py
-
-# 4. Verify the changes were applied
-git diff crates/codegen/vtcode-core/embedded_assets_source/
+# Run tests
+cargo nextest run -p vtcode-core
 ```
 
-#### **For Prompt Changes**
+## **Adding New Embedded Assets**
 
-When updating system prompts:
+To embed a new asset:
 
-```bash
-# 1. Edit the prompt files (built-in templates)
-# (VT Code uses compiled-in templates for most prompts today)
-
-# 2. Test your changes
-cargo test --package vtcode-core
-```
-
-## **Automated Integration**
-
-### **Pre-commit Hooks (Recommended)**
-
-Consider adding the sync script to your pre-commit workflow:
-
-```bash
-#!/bin/bash
-# .git/hooks/pre-commit
-
-# Sync embedded assets before commit
-python3 scripts/sync_embedded_assets.py --dry-run
-if [ $? -ne 0 ]; then
-    echo "Sync required. Run: python3 scripts/sync_embedded_assets.py"
-    exit 1
-fi
-```
-
-### **CI/CD Integration**
-
-Add the sync check to your CI pipeline to ensure assets are always synchronized:
-
-```yaml
-# .github/workflows/ci.yml
-- name: Sync Embedded Assets Check
-  run: |
-    python3 scripts/sync_embedded_assets.py --dry-run
-    if [ $? -ne 0 ]; then
-      echo "Assets need synchronization. Run sync script."
-      exit 1
-    fi
-```
-
-## **Troubleshooting**
-
-### **Common Issues**
-
-**"Source asset missing" Error**
-- Ensure the source file exists in the expected location
-- Check file permissions and accessibility
-- Verify the path in `ASSET_MAPPINGS` is correct
-
-**Permission Errors**
-- Ensure you have write permissions to `crates/codegen/vtcode-core/embedded_assets_source/`
-- Check that the script has execute permissions: `chmod +x scripts/sync_embedded_assets.py`
-
-**Unexpected Changes**
-- Always use `--dry-run` first to preview changes
-- Review the diff before committing: `git diff crates/codegen/vtcode-core/embedded_assets_source/`
-- Check that you haven't accidentally modified the wrong files
-
-### **Verification Steps**
-
-After running the sync, verify it worked correctly:
-
-```bash
-# 1. Check what changed
-git status crates/codegen/vtcode-core/embedded_assets_source/
-
-# 2. Review the differences
-git diff crates/codegen/vtcode-core/embedded_assets_source/
-
-# 3. Ensure tests still pass
-cargo test --package vtcode-core
-
-# 4. Verify the crate builds correctly
-cargo build --package vtcode-core
-```
-
-## **Adding New Synchronized Assets**
-
-To add new assets to the synchronization system:
-
-1. **Update the Script**: Add your file mappings to `ASSET_MAPPINGS` in `scripts/sync_embedded_assets.py`
-2. **Test the Sync**: Run `python3 scripts/sync_embedded_assets.py --dry-run` to test
-3. **Run Initial Sync**: Execute the sync to create the initial copy
-4. **Update Documentation**: Document the new asset in this guide
-
-Example addition to `ASSET_MAPPINGS`:
-
-```python
-ASSET_MAPPINGS = {
-    # ... existing mappings ...
-    ROOT / "docs" / "new-guideline.md": CORE_EMBEDDED
-    / "docs" / "new-guideline.md",
-}
-```
-
-## **Best Practices**
-
-- **Always preview first**: Use `--dry-run` to see what will be changed
-- **Run regularly**: Sync assets whenever you modify canonical files
-- **Review changes**: Check `git diff` before committing synchronized changes
-- **Test after sync**: Ensure the crate still builds and tests pass
-- **Document changes**: Update this guide when adding new synchronized assets
+1. **Add to `build.rs`**: Append a `(source_relative, dest_relative)` tuple to `EMBEDDED_ASSETS` in `crates/codegen/vtcode-core/build.rs`.
+2. **Test the Build**: Ensure `cargo check --package vtcode-core` succeeds and the asset is available at runtime.
 
 ## **Related Documentation**
 
@@ -191,16 +48,3 @@ ASSET_MAPPINGS = {
 ## **Navigation**
 
 - **[Back to Development Guide](./README.md)**
-
-## **Quick Reference**
-
-```bash
-# Preview sync changes
-python3 scripts/sync_embedded_assets.py --dry-run
-
-# Execute sync
-python3 scripts/sync_embedded_assets.py
-
-# Check what changed
-git diff crates/codegen/vtcode-core/embedded_assets_source/
-```

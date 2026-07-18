@@ -17,9 +17,8 @@ use vtcode_core::permissions::{PermissionRequest, build_permission_request};
 use vtcode_core::tools::command_args;
 
 const AUTO_PERMISSION_SYSTEM_PROMPT: &str =
-    include_str!("../../../../../system-prompts/system-prompt-auto-permission-review.md");
-const REVIEWER_PROMPT: &str =
-    include_str!("../../../../../system-prompts/agent-prompt-auto-permission-rule-reviewer.md");
+    include_str!("prompts/system-prompt-auto-permission-review.md");
+const REVIEWER_PROMPT: &str = include_str!("prompts/agent-prompt-auto-permission-rule-reviewer.md");
 
 const PROBE_PROMPT: &str = r#"
 You are VT Code's prompt-injection probe for tool outputs.

@@ -34,8 +34,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/development/asset-synchronization.md`
   - **Content**: **Asset Synchronization**
-  - **Topics**: **Overview**, **Why Asset Synchronization?**, **Synchronized Assets**, **Using the Sync Script**, **Automated Integration**
-  - **User Questions**: "What can you tell me about **Asset Synchronization**?", "How does **Overview** work?", "How does **Why Asset Synchronization?** work?"
+  - **Topics**: **Overview**, **Synchronized Assets**, **How It Works**, **Verification**, **Adding New Embedded Assets**
+  - **User Questions**: "What can you tell me about **Asset Synchronization**?", "How does **Overview** work?", "How does **Synchronized Assets** work?"
 
 - **File**: `docs/development/testing.md`
   - **Content**: **Testing Guide**

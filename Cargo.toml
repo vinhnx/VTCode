@@ -23,7 +23,6 @@ exclude = [
     "prompts/",
     "dist/",
     "npm/",
-    "crates/codegen/vtcode-core/embedded_assets_source/",
     "resources/",
 ]
 default-run = "vtcode"
