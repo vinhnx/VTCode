@@ -36,7 +36,7 @@ pub struct FileStat {
     pub size: u64,
     /// Modification time in nanoseconds since the Unix epoch.
     pub mtime_ns: i64,
-    /// FNV-1a hash of the file's first [`HASH_SAMPLE_BYTES`] bytes.
+    /// FNV-1a hash of the file's first 4096 bytes.
     pub head_hash: u64,
 }
 
