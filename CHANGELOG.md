@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.1 - 2026-07-19
+
+### Highlights
+#### Bug Fixes
+
+- Shorten invalid crates.io keyword (1a7e5c9c) 
+- Skip missing embedded assets during publish verification (317f9430) 
+### Other Changes
 ## 0.136.0 - 2026-07-19
 
 ### Highlights
