@@ -43,11 +43,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (relative, dest_relative) in EMBEDDED_ASSETS {
         let source = workspace_dir.join(relative);
         if !source.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("failed to locate embedded asset `{}` at `{}`", relative, source.display()),
-            )
-            .into());
+            println!("cargo:warning=skipping missing embedded asset `{}`", relative);
+            continue;
         }
 
         println!("cargo:rerun-if-changed={}", source.display());
