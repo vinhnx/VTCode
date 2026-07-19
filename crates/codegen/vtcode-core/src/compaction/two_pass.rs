@@ -26,13 +26,14 @@ pub struct TwoPassSplit<'a> {
 }
 
 /// Choose a split index so prefix weight is at least `fraction` of total.
+#[allow(clippy::cast_sign_loss)]
 fn split_index_by_token_fraction(weights: &[usize], fraction: f64) -> usize {
     if weights.is_empty() {
         return 0;
     }
     let frac = fraction.clamp(0.05, 0.95);
     let total_w: usize = weights.iter().copied().sum::<usize>().max(1);
-    let target_w = (frac * total_w as f64) as usize;
+    let target_w = (frac * total_w as f64).round() as u64 as usize;
     let mut acc = 0usize;
     let mut split_idx = weights.len().saturating_sub(1).max(1);
     for (i, w) in weights.iter().enumerate() {
@@ -375,7 +376,7 @@ mod tests {
 
     #[test]
     fn default_split_fraction_leaves_five_percent_tail() {
-        assert_eq!(TWO_PASS_DEFAULT_SPLIT_FRACTION, 0.95);
+        assert!((TWO_PASS_DEFAULT_SPLIT_FRACTION - 0.95).abs() < f64::EPSILON);
         let weights = vec![10usize; 40];
         let idx = split_index_by_token_fraction(&weights, TWO_PASS_DEFAULT_SPLIT_FRACTION);
         assert_eq!(idx, 38);
@@ -384,7 +385,7 @@ mod tests {
 
     #[test]
     fn split_does_not_sever_tool_pairs() {
-        let mut assistant = Message {
+        let assistant = Message {
             role: MessageRole::Assistant,
             content: crate::llm::provider::MessageContent::Text("call".to_string()),
             reasoning: None,

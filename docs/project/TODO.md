@@ -1,4 +1,4 @@
-reference compaction summarization template for auto compact -> continuation
+reference compaction summarization template for auto compact -> continuation for vtcode harnessing agent, m
 
 ```
 --- compaction ---
@@ -49,11 +49,3 @@ Relevant Files
 ===
 
 reference and explore research /Users/vinhnguyenxuan/Developer/learn-by-doing/claude-code-main and apply learning to improve vtcode codebase.
-
-====
-
-improve: api key UI/uX and security. also auto-discover multiple providers from exported ENV. and first launch setup wizard for API keys.
-
-i've already have OPENROUTER_API_KEY exported from .zshrc, why do I have to paste it here? Besides, storing the API key to workspace .env is risky and duplicated work. vtcode should discover and allow multiple providers from the exported ENV.
-
-/Users/vinhnguyenxuan/Documents/vtcode-resources/idea/HNhpB3bakAAoJaH.jpg

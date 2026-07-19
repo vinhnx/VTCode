@@ -19,8 +19,6 @@
 //! Each pack's `register()` method batches its tool registrations into a
 //! single `inventory.register_tool_batch()` call to minimize lock contention.
 
-use std::sync::Arc;
-
 use crate::tools::handlers::PlanningWorkflowState;
 use crate::tools::registry::inventory::ToolInventory;
 use crate::tools::registry::registration::{ToolCatalogSource, ToolRegistration};
@@ -46,11 +44,6 @@ pub trait ToolPack: Send + Sync {
     ///
     /// Implementations should batch registrations where possible.
     async fn register(&self, inventory: &ToolInventory, plan_state: &PlanningWorkflowState);
-
-    /// Optional: configure pack-specific settings from user config.
-    ///
-    /// The default is a no-op. Packs that need config should override this.
-    async fn configure(&self, _plan_state: &PlanningWorkflowState) {}
 }
 
 /// Batch-register a list of tools into the inventory, logging any failures.
@@ -107,6 +100,7 @@ pub async fn register_builtin_packs(inventory: &ToolInventory, plan_state: &Plan
 mod tests {
     use super::*;
     use crate::config::constants::tools;
+    use std::sync::Arc;
 
     #[test]
     fn builtin_packs_slice_is_populated() {

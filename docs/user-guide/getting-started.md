@@ -113,6 +113,10 @@ export OPENAI_API_KEY=your_api_key_here
 export ANTHROPIC_API_KEY=your_api_key_here
 ```
 
+On first launch in a fresh workspace, VT Code auto-discovers any provider whose key is already in your shell environment (so if you `export OPENROUTER_API_KEY` in `~/.zshrc`, the setup wizard detects it and skips re-prompting). The provider picker marks every ready provider with `✓` and defaults the cursor to one you can use immediately. If you paste a key in the wizard instead, it is stored in your OS keyring — not a workspace `.env` — so the secret is never duplicated per project. You can switch providers anytime with `/model`.
+
+If no key is in your environment, the wizard lets you paste one now or skip and set it later via `/model`.
+
 ### 2. Confirm Workspace Context
 
 `WORKSPACE_DIR` tells VT Code which project folder to treat as its primary context. The CLI sets this automatically when you launch inside a directory, but you can override or verify it explicitly:

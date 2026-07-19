@@ -24,7 +24,6 @@ use crate::tools::invocation::ToolInvocationId;
 use crate::tools::mcp::{legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
 use crate::tools::request_response::{ToolCallRequest, ToolCallResponse};
 use crate::tools::safety_gateway::{SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError};
-use crate::tools::tool_middleware::MiddlewareChain;
 use crate::tools::unified_error::UnifiedErrorKind;
 use crate::tools::unified_error::UnifiedToolError;
 use crate::ui::search::fuzzy_match;

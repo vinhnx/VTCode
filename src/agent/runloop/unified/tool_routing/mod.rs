@@ -352,7 +352,7 @@ async fn apply_permission_hook_updates(
         return messages;
     }
 
-    tool_registry.apply_permissions_config(&*state);
+    tool_registry.apply_permissions_config(&state);
 
     if persist_project {
         let config_for_persistence = state.clone();
@@ -1012,7 +1012,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let permission_decision = if let Some(state) = permissions_state {
         let permissions_snapshot = state.read().await;
         resolve_permission_decision(
-            &*permissions_snapshot,
+            &permissions_snapshot,
             active_agent_permissions,
             current_dir,
             current_dir,
@@ -1169,7 +1169,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
                 &normalized_tool_name,
                 tool_args,
                 &permission_request,
-                &*guard,
+                &guard,
                 auto_permission_runtime,
                 session_stats,
                 !full_auto_allowlist_active,

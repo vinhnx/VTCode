@@ -9,7 +9,6 @@
 //! mechanism and cannot be avoided at the call site.
 #![allow(unsafe_code)]
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use linkme::distributed_slice;
@@ -132,7 +131,7 @@ impl ToolPack for PlanningPack {
                 tools::TASK_TRACKER,
                 CapabilityLevel::Basic,
                 TaskTrackerTool::new(
-                    plan_state.workspace_root().unwrap_or_else(std::path::PathBuf::new),
+                    plan_state.workspace_root().unwrap_or_default(),
                     plan_state,
                 ),
             )
@@ -523,40 +522,40 @@ impl ToolPack for EditingPack {
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn hitl_pack() -> Box<dyn ToolPack> {
-    Box::new(HitlPack::default())
+    Box::new(HitlPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn planning_pack() -> Box<dyn ToolPack> {
-    Box::new(PlanningPack::default())
+    Box::new(PlanningPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn multi_agent_pack() -> Box<dyn ToolPack> {
-    Box::new(MultiAgentPack::default())
+    Box::new(MultiAgentPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn search_pack() -> Box<dyn ToolPack> {
-    Box::new(SearchPack::default())
+    Box::new(SearchPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn web_pack() -> Box<dyn ToolPack> {
-    Box::new(WebPack::default())
+    Box::new(WebPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn shell_pack() -> Box<dyn ToolPack> {
-    Box::new(ShellPack::default())
+    Box::new(ShellPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn internal_pty_pack() -> Box<dyn ToolPack> {
-    Box::new(InternalPtyPack::default())
+    Box::new(InternalPtyPack)
 }
 
 #[distributed_slice(BUILTIN_PACKS)]
 fn editing_pack() -> Box<dyn ToolPack> {
-    Box::new(EditingPack::default())
+    Box::new(EditingPack)
 }

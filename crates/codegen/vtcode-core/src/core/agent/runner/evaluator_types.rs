@@ -162,7 +162,6 @@ impl EvaluatorResponse {
 /// Single skeptic panel entry: model id + its evaluator response.
 #[derive(Debug, Clone)]
 pub(super) struct SkepticPanelEntry {
-    pub(super) model: String,
     pub(super) response: EvaluatorResponse,
 }
 
@@ -172,12 +171,10 @@ pub(super) struct SkepticPanelEntry {
 /// scorecard dimension meets the threshold across all panelists.
 #[derive(Debug, Clone)]
 pub(super) struct SkepticPanelAggregate {
-    pub(super) entries: Vec<SkepticPanelEntry>,
     pub(super) verdict: String,
     pub(super) summary: String,
     pub(super) scorecard: EvaluatorScorecard,
     pub(super) high_severity_findings: usize,
-    pub(super) all_passed: bool,
 }
 
 impl SkepticPanelAggregate {
@@ -209,12 +206,10 @@ impl SkepticPanelAggregate {
             }
         }
         Self {
-            entries,
             verdict,
             summary,
             scorecard,
             high_severity_findings,
-            all_passed,
         }
     }
 }

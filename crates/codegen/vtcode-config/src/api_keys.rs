@@ -191,6 +191,140 @@ fn get_custom_api_key_from_secure_storage(provider: &str) -> Result<Option<Strin
     storage.load(mode)
 }
 
+/// Where a provider's credential was discovered.
+///
+/// Used by the first-run wizard and model picker to show *why* a provider is
+/// ready without re-prompting for a key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialSource {
+    /// Process environment variable — covers shell exports (e.g. `~/.zshrc`)
+    /// and values loaded from a workspace `.env` by `load_dotenv()`.
+    Env,
+    /// OS keyring / encrypted file storage (`CustomApiKeyStorage`).
+    SecureStorage,
+    /// Active OAuth session (OpenRouter or OpenAI ChatGPT).
+    OAuth,
+    /// Auth is managed by an external CLI (e.g. GitHub Copilot via `copilot`).
+    ManagedAuth,
+    /// Local server — no key required (Ollama, LM Studio, llama.cpp).
+    Local,
+}
+
+impl CredentialSource {
+    /// One-line, user-facing description of where the credential came from.
+    pub fn describe(self, provider: Provider) -> &'static str {
+        match self {
+            CredentialSource::Env => "found in environment",
+            CredentialSource::SecureStorage => "stored in OS keyring",
+            CredentialSource::OAuth => "OAuth session active",
+            CredentialSource::ManagedAuth => "managed by external CLI",
+            CredentialSource::Local => {
+                if provider.is_local() {
+                    "local — no key required"
+                } else {
+                    "ready"
+                }
+            }
+        }
+    }
+}
+
+/// A provider with a discoverable credential — ready to use without prompting
+/// the user to paste a key.
+#[derive(Debug, Clone, Copy)]
+pub struct DiscoveredProvider {
+    pub provider: Provider,
+    pub source: CredentialSource,
+}
+
+/// Determine whether a single built-in provider has a usable credential right
+/// now, and where it comes from. Returns `None` when no credential is found.
+///
+/// Mirrors the resolution order of [`get_api_key`]: env var (including
+/// provider-specific alternate env vars) → OAuth session → secure storage.
+/// Local and managed-auth providers are always considered ready.
+pub fn provider_credential_source(provider: Provider) -> Option<CredentialSource> {
+    if provider.is_local() {
+        return Some(CredentialSource::Local);
+    }
+    if provider.uses_managed_auth() {
+        return Some(CredentialSource::ManagedAuth);
+    }
+
+    // OAuth-backed providers: an active session counts as ready.
+    if matches!(provider, Provider::OpenRouter) && crate::auth::load_oauth_token().ok().flatten().is_some() {
+        return Some(CredentialSource::OAuth);
+    }
+    if matches!(provider, Provider::OpenAI) && crate::auth::load_openai_chatgpt_session().ok().flatten().is_some() {
+        return Some(CredentialSource::OAuth);
+    }
+
+    // Primary env var for the provider.
+    let env_key = provider.default_api_key_env();
+    if !env_key.is_empty() && env_value_present(env_key) {
+        return Some(CredentialSource::Env);
+    }
+
+    // Provider-specific alternate env vars (kept in sync with get_api_key).
+    let alt = alternate_env_var(provider);
+    if let Some(alt_key) = alt
+        && env_value_present(alt_key)
+    {
+        return Some(CredentialSource::Env);
+    }
+
+    // Secure storage (OS keyring with encrypted-file fallback).
+    if has_stored_credential(provider) {
+        return Some(CredentialSource::SecureStorage);
+    }
+
+    None
+}
+
+/// Scan all built-in providers and return those with a discoverable credential.
+///
+/// "Discoverable" means the provider can be used right now without the user
+/// pasting a key: the env var is set (shell export or loaded `.env`), a key is
+/// in secure storage, an OAuth session is active, auth is managed by an
+/// external CLI, or the provider is local and needs no key.
+///
+/// Results follow `Provider::all_providers()` order. This does not consult
+/// `vtcode.toml` custom providers — the first-run wizard runs before a config
+/// exists. Runtime custom-provider auth is handled by `resolve_runtime_provider_auth`.
+pub fn discover_available_providers() -> Vec<DiscoveredProvider> {
+    Provider::all_providers()
+        .into_iter()
+        .filter_map(|provider| {
+            provider_credential_source(provider).map(|source| DiscoveredProvider { provider, source })
+        })
+        .collect()
+}
+
+/// Look up a provider in a discovery snapshot.
+pub fn find_discovered(discovered: &[DiscoveredProvider], provider: Provider) -> Option<&DiscoveredProvider> {
+    discovered.iter().find(|entry| entry.provider == provider)
+}
+
+fn env_value_present(env_key: &str) -> bool {
+    matches!(read_env_var(env_key), Some(value) if !value.trim().is_empty())
+}
+
+/// Alternate env var names that `get_api_key` accepts for a provider.
+fn alternate_env_var(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::Gemini => Some("GOOGLE_API_KEY"),
+        Provider::Qwen => Some("DASHSCOPE_API_KEY"),
+        _ => None,
+    }
+}
+
+fn has_stored_credential(provider: Provider) -> bool {
+    get_custom_api_key_from_secure_storage(provider.as_ref())
+        .ok()
+        .flatten()
+        .is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,5 +520,90 @@ mod tests {
     #[test]
     fn resolve_api_key_env_preserves_explicit_override() {
         assert_eq!(resolve_api_key_env("openai", "CUSTOM_OPENAI_KEY"), "CUSTOM_OPENAI_KEY");
+    }
+
+    #[test]
+    fn local_providers_are_always_discovered() {
+        // Local providers need no key and should be discoverable with empty env.
+        with_overrides(
+            &[
+                ("OLLAMA_API_KEY", None),
+                ("LMSTUDIO_API_KEY", None),
+                ("LLAMACPP_API_KEY", None),
+            ],
+            || {
+                assert_eq!(provider_credential_source(Provider::Ollama), Some(CredentialSource::Local));
+                assert_eq!(provider_credential_source(Provider::LmStudio), Some(CredentialSource::Local));
+                assert_eq!(provider_credential_source(Provider::LlamaCpp), Some(CredentialSource::Local));
+            },
+        );
+    }
+
+    #[test]
+    fn copilot_is_managed_auth_discovered() {
+        assert_eq!(provider_credential_source(Provider::Copilot), Some(CredentialSource::ManagedAuth));
+    }
+
+    #[test]
+    fn env_var_makes_provider_discovered() {
+        with_override("OPENROUTER_API_KEY", Some("or-test-key"), || {
+            assert_eq!(provider_credential_source(Provider::OpenRouter), Some(CredentialSource::Env));
+        });
+    }
+
+    #[test]
+    fn missing_env_var_leaves_provider_undiscovered() {
+        with_override("OPENROUTER_API_KEY", None, || {
+            assert_eq!(provider_credential_source(Provider::OpenRouter), None);
+        });
+    }
+
+    #[test]
+    fn gemini_alt_env_var_is_discovered() {
+        with_overrides(&[("GEMINI_API_KEY", None), ("GOOGLE_API_KEY", Some("g-key"))], || {
+            assert_eq!(provider_credential_source(Provider::Gemini), Some(CredentialSource::Env));
+        });
+    }
+
+    #[test]
+    fn qwen_alt_env_var_is_discovered() {
+        with_overrides(&[("QWEN_API_KEY", None), ("DASHSCOPE_API_KEY", Some("ds-key"))], || {
+            assert_eq!(provider_credential_source(Provider::Qwen), Some(CredentialSource::Env));
+        });
+    }
+
+    #[test]
+    fn discover_available_providers_includes_ready_providers() {
+        // With OPENROUTER_API_KEY set, OpenRouter must appear in discovery
+        // alongside the always-ready local + managed-auth providers.
+        with_overrides(
+            &[
+                ("OPENROUTER_API_KEY", Some("or-key")),
+                ("OPENAI_API_KEY", None),
+                ("ANTHROPIC_API_KEY", None),
+                ("GEMINI_API_KEY", None),
+            ],
+            || {
+                let discovered = discover_available_providers();
+                let providers: Vec<Provider> = discovered.iter().map(|d| d.provider).collect();
+
+                assert!(providers.contains(&Provider::OpenRouter), "OpenRouter should be discovered");
+                assert!(providers.contains(&Provider::Ollama), "Ollama should be discovered (local)");
+                assert!(providers.contains(&Provider::Copilot), "Copilot should be discovered (managed auth)");
+                assert!(
+                    !providers.contains(&Provider::OpenAI),
+                    "OpenAI should NOT be discovered when OPENAI_API_KEY is unset"
+                );
+
+                let or = find_discovered(&discovered, Provider::OpenRouter).unwrap();
+                assert_eq!(or.source, CredentialSource::Env);
+            },
+        );
+    }
+
+    #[test]
+    fn credential_source_describes_origin() {
+        assert_eq!(CredentialSource::Env.describe(Provider::OpenRouter), "found in environment");
+        assert_eq!(CredentialSource::Local.describe(Provider::Ollama), "local — no key required");
     }
 }

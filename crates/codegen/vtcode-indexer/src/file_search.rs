@@ -438,11 +438,7 @@ enum PatternStorage {
 }
 
 impl BestMatchesList {
-    fn new(
-        limit: usize,
-        pattern_text: &str,
-        interner: &Arc<Mutex<vtcode_commons::StringInterner>>,
-    ) -> Self {
+    fn new(limit: usize, pattern_text: &str, interner: &Arc<Mutex<vtcode_commons::StringInterner>>) -> Self {
         // Normalize pattern to lowercase to work around a nucleo-matcher bug:
         // its prefilter only does case-insensitive search for lowercase needle
         // chars, not uppercase. See https://github.com/openai/codex/pull/15772.

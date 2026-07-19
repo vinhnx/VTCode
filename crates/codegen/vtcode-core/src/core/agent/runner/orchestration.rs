@@ -14,7 +14,6 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::json;
 use std::fmt::Write;
-use std::future::Future;
 
 #[derive(Debug, Clone)]
 pub(super) struct PlannerArtifacts {
@@ -464,12 +463,7 @@ impl AgentRunner {
             return self
                 .request_evaluator_response(task, session_state, verification_results)
                 .await
-                .map(|r| {
-                    SkepticPanelAggregate::from_entries(vec![SkepticPanelEntry {
-                        model: self.get_selected_model(),
-                        response: r,
-                    }])
-                });
+                .map(|r| SkepticPanelAggregate::from_entries(vec![SkepticPanelEntry { response: r }]));
         }
 
         let spec_content = tokio::fs::read_to_string(harness_artifacts::current_spec_path(&self._workspace))
@@ -514,7 +508,7 @@ impl AgentRunner {
 
         let mut handles = Vec::with_capacity(models.len());
         for model in models {
-            let mut req = LLMRequest { model: model.clone(), ..base_request.clone() };
+            let req = LLMRequest { model: model.clone(), ..base_request.clone() };
             let provider = self.provider_client.as_ref();
             handles.push(async move {
                 let response = provider
@@ -533,7 +527,7 @@ impl AgentRunner {
                 .context(format!("parse skeptic evaluator response for model {model}"));
             match parsed {
                 Ok(evaluator) => {
-                    entries.push(SkepticPanelEntry { model, response: evaluator });
+                    entries.push(SkepticPanelEntry { response: evaluator });
                 }
                 Err(err) => {
                     tracing::warn!(model = %model, error = %err, "skeptic evaluator parse failed");

@@ -19,7 +19,6 @@ use vtcode_config::loader::ConfigManager;
 
 use super::ToolRegistry;
 use super::assembly::ToolAssembly;
-use super::builtins::register_builtin_tools;
 use super::circuit_breaker;
 use super::distributed::ToolConfigSnapshot;
 use super::execution_history::ToolExecutionHistory;

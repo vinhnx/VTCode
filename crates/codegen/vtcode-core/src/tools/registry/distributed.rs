@@ -71,6 +71,7 @@ pub fn tool_config() -> Option<&'static ToolConfigSnapshot> {
 /// with `#[distributed_slice(BUILTIN_TOOLS)]`. The function receives an optional
 /// `PlanningWorkflowState` reference for tools that depend on planning workflow runtime state;
 /// tools that do not need it simply ignore the parameter.
+#[allow(dead_code)]
 pub type BuiltinToolFactory = fn(Option<&PlanningWorkflowState>) -> ToolRegistration;
 
 #[cfg(test)]

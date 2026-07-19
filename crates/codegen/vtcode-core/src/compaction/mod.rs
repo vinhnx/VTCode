@@ -33,16 +33,6 @@ pub(crate) enum SuppressReason {
 }
 
 impl SuppressReason {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            SuppressReason::CreditBlock => "credit_block",
-            SuppressReason::Size => "size",
-            SuppressReason::Auth => "auth",
-            SuppressReason::Schema => "schema",
-            SuppressReason::Other => "other",
-        }
-    }
-
     pub(crate) fn suppress_state(self) -> u8 {
         match self {
             SuppressReason::Size | SuppressReason::Schema => SUPPRESS_STICKY,

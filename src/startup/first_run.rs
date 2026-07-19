@@ -1,6 +1,9 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
+use vtcode_config::api_keys::{
+    CredentialSource, DiscoveredProvider, discover_available_providers, provider_credential_source,
+};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::constants::{defaults, llm_generation};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
@@ -73,6 +76,14 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
     renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line(MessageStyle::Info, "  VT Code - First-time setup wizard")?;
     renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+
+    // Discover providers that already have a usable credential (shell-exported
+    // env vars, loaded .env, OS keyring, OAuth, managed auth, or local). This
+    // drives the provider list's "ready" markers and the default cursor, and
+    // lets the API-key prompt skip re-pasting keys the user already has.
+    let discovered = discover_available_providers();
+    render_discovery_summary(&mut renderer, &discovered)?;
+
     let (provider, model, lightweight_model, reasoning, persistent_memory, trust) = match mode {
         SetupMode::Interactive => {
             renderer.line(
@@ -82,12 +93,14 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
             renderer.line(MessageStyle::Status, "Press Enter to accept the suggested value in brackets.")?;
             renderer.line(MessageStyle::Info, "")?;
 
-            let provider = resolve_initial_provider(config);
-            let provider = prompt_provider(&mut renderer, provider)?;
+            let provider = resolve_initial_provider(config, &discovered);
+            let provider = prompt_provider(&mut renderer, provider, &discovered)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            // Interactive API key entry — key is written to .env by the prompt
-            prompt_api_key_interactive(&mut renderer, provider, workspace)?;
+            // Interactive API key entry — skips the paste prompt when the key is
+            // already in the environment or OS keyring; stores pasted keys in
+            // the OS keyring (not workspace .env).
+            prompt_api_key_interactive(&mut renderer, provider)?;
             renderer.line(MessageStyle::Info, "")?;
 
             let default_model = default_model_for_provider(provider);
@@ -116,7 +129,7 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
             )?;
             renderer.line(MessageStyle::Info, "")?;
 
-            let provider = resolve_initial_provider(config);
+            let provider = resolve_initial_provider(config, &discovered);
             let default_model = default_model_for_provider(provider);
             let model = default_model.to_owned();
             let lightweight_model = String::new();
@@ -281,10 +294,55 @@ fn persistent_memory_label(enabled: bool) -> &'static str {
 
 fn api_key_hint(provider: Provider) -> String {
     if provider.is_local() {
-        "No API key required for local provider.".to_string()
-    } else {
-        format!("Set {} in your environment.", provider.default_api_key_env())
+        return "No API key required for local provider.".to_string();
     }
+    if provider.uses_managed_auth() {
+        return format!("Run `vtcode login {}` to authenticate.", provider);
+    }
+    match provider_credential_source(provider) {
+        Some(CredentialSource::Env) => {
+            format!("Using {} from your environment.", provider.default_api_key_env())
+        }
+        Some(CredentialSource::SecureStorage) => {
+            format!("Using the {} key from your OS keyring.", provider.label())
+        }
+        Some(CredentialSource::OAuth) => {
+            format!("Using your active {} OAuth session.", provider.label())
+        }
+        Some(CredentialSource::ManagedAuth | CredentialSource::Local) => {
+            format!("{} is ready.", provider.label())
+        }
+        None => format!("Set {} in your environment, or paste it with /model.", provider.default_api_key_env()),
+    }
+}
+
+/// Print a one-line summary of which providers already have a usable credential,
+/// so the user knows they can pick any of them without re-entering a key.
+fn render_discovery_summary(renderer: &mut AnsiRenderer, discovered: &[DiscoveredProvider]) -> Result<()> {
+    // Only "real" credentials (env/keyring/OAuth) are worth advertising — local
+    // and managed-auth providers are always nominally ready but not what most
+    // users are choosing between on first run.
+    let ready: Vec<&DiscoveredProvider> = discovered
+        .iter()
+        .filter(|d| {
+            matches!(d.source, CredentialSource::Env | CredentialSource::SecureStorage | CredentialSource::OAuth)
+        })
+        .collect();
+
+    if ready.is_empty() {
+        renderer.line(
+            MessageStyle::Info,
+            "No provider API keys found in your environment or OS keyring. You can paste a key next, or export one (e.g. in ~/.zshrc) and re-run /init.",
+        )?;
+    } else {
+        let labels: Vec<&str> = ready.iter().map(|d| d.provider.label()).collect();
+        renderer.line(
+            MessageStyle::Status,
+            &format!("Found credentials for: {}. Pick any of these — no need to re-enter a key.", labels.join(", ")),
+        )?;
+    }
+    renderer.line(MessageStyle::Info, "")?;
+    Ok(())
 }
 
 fn trust_label(level: WorkspaceTrustLevel) -> &'static str {

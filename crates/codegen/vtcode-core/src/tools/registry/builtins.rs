@@ -25,17 +25,7 @@ use vtcode_utility_tool_specs::{
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
 use super::registration::{ToolCatalogSource, ToolRegistration};
-use super::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
-
-/// Register all builtin tools into the inventory using the shared planning workflow state.
-pub(super) fn register_builtin_tools(inventory: &ToolInventory, planning_workflow_state: &PlanningWorkflowState) {
-    for registration in builtin_tool_registrations(Some(planning_workflow_state)) {
-        let tool_name = registration.name().to_string();
-        if let Err(err) = inventory.register_tool(registration) {
-            tracing::warn!(tool = %tool_name, %err, "Failed to register builtin tool");
-        }
-    }
-}
+use super::{ToolRegistry, native_cgp_tool_factory};
 
 /// Build builtin tool registrations from the distributed slice.
 ///
@@ -45,6 +35,7 @@ pub(super) fn register_builtin_tools(inventory: &ToolInventory, planning_workflo
 ///
 /// In metadata-only contexts (e.g., declaration building), callers may pass
 /// `None`, and a placeholder `PlanningWorkflowState` will be used.
+#[allow(dead_code)]
 pub(super) fn builtin_tool_registrations(
     planning_workflow_state: Option<&PlanningWorkflowState>,
 ) -> Vec<ToolRegistration> {
@@ -561,6 +552,7 @@ fn register_apply_patch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
 // - load_skill
 // - load_skill_resource
 
+#[allow(dead_code)]
 fn with_builtin_behavior(registration: ToolRegistration) -> ToolRegistration {
     if let Some(behavior) = builtin_tool_behavior(registration.name()) {
         registration.with_behavior(behavior)
