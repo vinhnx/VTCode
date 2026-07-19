@@ -21,6 +21,7 @@ chrono = { workspace = true }
 walkdir = "2.5"
 thiserror = { workspace = true }
 uuid = { workspace = true }
+lru = "0.18"
 
 [dev-dependencies]
 tempfile = { workspace = true }

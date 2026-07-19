@@ -34,12 +34,12 @@ pub fn create_stream(
 ) -> crate::provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
-        let mut buffer = String::new();
+        let mut buf: Vec<u8> = Vec::new();
+        let mut offset = 0usize;
         let mut decoder = shared::Utf8StreamDecoder::new();
         let mut aggregator = shared::StreamAggregator::new(model);
         let mut reasoning_blocks = BTreeMap::new();
         let mut finalized_reasoning_details = Vec::new();
-        // Raw advisor server_tool_use + advisor_tool_result blocks for round-trip.
         let mut advisor_blocks: Vec<Value> = Vec::new();
 
         while let Some(chunk_result) = body_stream.next().await {
@@ -47,13 +47,13 @@ pub fn create_stream(
                 format_network_error("Anthropic", &anyhow::Error::new(err))
             })?;
 
-            buffer.push_str(&decoder.push(&chunk));
+            buf.extend_from_slice(decoder.push(&chunk).as_bytes());
 
-            while let Some((split_idx, delimiter_len)) = shared::find_sse_boundary(&buffer) {
-                let event_text = buffer[..split_idx].to_string();
-                buffer.drain(..split_idx + delimiter_len);
+            while let Some((split_idx, delimiter_len)) = shared::find_sse_boundary_bytes(&buf, offset) {
+                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                offset = split_idx + delimiter_len;
 
-                if let Some(data_payload) = shared::extract_data_payload(&event_text) {
+                if let Some(data_payload) = shared::extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload.is_empty() {
                         continue;

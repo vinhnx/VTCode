@@ -9,6 +9,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
+use tracing::warn;
 use vtcode_commons::utils::current_timestamp;
 
 pub use self::pressure::MemoryPressure;
@@ -214,7 +215,10 @@ impl MemoryMonitor {
             Ok(MemoryPressure::Normal) => 1.0,
             Ok(MemoryPressure::Warning) => vtcode_config::constants::memory::WARNING_TTL_REDUCTION_FACTOR,
             Ok(MemoryPressure::Critical) => vtcode_config::constants::memory::CRITICAL_TTL_REDUCTION_FACTOR,
-            Err(_) => 1.0, // Assume normal if we can't check
+            Err(error) => {
+                warn!(error = %error, "memory pressure check failed; assuming normal TTL factor");
+                1.0
+            }
         }
     }
 

@@ -35,23 +35,49 @@ impl FileTracker {
 
     /// Scan for newly created or modified files matching tracked patterns
     pub async fn detect_new_files(&self, since: SystemTime) -> Result<Vec<TrackedFile>> {
-        let mut new_files = Vec::new();
+        use tokio::task;
+        let workspace = self.workspace_root.clone();
+        let patterns = self.tracked_patterns.clone();
 
-        for pattern in &self.tracked_patterns {
-            let matches = self.find_files_matching_pattern(pattern).await?;
+        let entries = task::spawn_blocking(move || {
+            let mut files: Vec<PathBuf> = Vec::new();
+            let glob_patterns: Vec<_> = patterns
+                .iter()
+                .map(|p| glob::Pattern::new(p))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_default();
 
-            for file_path in matches {
-                if let Ok(metadata) = tokio::fs::metadata(&file_path).await
-                    && let Ok(modified) = metadata.modified()
-                    && modified >= since
-                    && metadata.is_file()
-                {
-                    new_files.push(TrackedFile {
-                        absolute_path: file_path,
-                        size: metadata.len(),
-                        modified,
-                    });
+            let walker = vtcode_commons::walk::build_walker_single_threaded(&workspace).build();
+            for entry in walker.flatten() {
+                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    continue;
                 }
+                let path = entry.path();
+                let relative = path.strip_prefix(&workspace).unwrap_or(path);
+                let relative_str = relative.to_string_lossy();
+                for pattern in &glob_patterns {
+                    if pattern.matches(&relative_str) {
+                        files.push(path.to_path_buf());
+                        break;
+                    }
+                }
+            }
+            files
+        })
+        .await
+        .context("Failed to spawn file search task")?;
+
+        let mut new_files = Vec::new();
+        for file_path in entries {
+            if let Ok(metadata) = tokio::fs::metadata(&file_path).await
+                && let Ok(modified) = metadata.modified()
+                && modified >= since
+            {
+                new_files.push(TrackedFile {
+                    absolute_path: file_path,
+                    size: metadata.len(),
+                    modified,
+                });
             }
         }
 

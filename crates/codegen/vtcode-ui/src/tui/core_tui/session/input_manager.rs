@@ -163,6 +163,8 @@ pub struct InputManager {
     /// Down-arrow restores the draft as soon as the index falls into this
     /// range instead of cycling through archived items.
     archived_count: usize,
+    /// Cached joined content to avoid repeated allocation and `leak`.
+    content_cache: String,
 }
 
 #[expect(dead_code)]
@@ -181,7 +183,12 @@ impl InputManager {
             history_index: None,
             history_draft: None,
             archived_count: 0,
+            content_cache: String::new(),
         }
+    }
+
+    fn refresh_content_cache(&mut self) {
+        self.content_cache = self.textarea.lines().join("\n");
     }
 
     // ------------------------------------------------------------------
@@ -189,12 +196,7 @@ impl InputManager {
     // ------------------------------------------------------------------
 
     pub fn content(&self) -> &str {
-        // `leak` converts the joined `String` into `&'static str`.
-        // Acceptable because vtcode's input is bounded to `INLINE_INPUT_MAX_LINES`
-        // (10) lines of ~200 chars each — at most ~2 KB per call.  The leaked
-        // memory is reclaimed when the process exits.  Returning `&'static str`
-        // avoids changing the 100+ call sites that expect `&str`.
-        self.textarea.lines().join("\n").leak()
+        &self.content_cache
     }
 
     pub fn set_content(&mut self, content: String) {
@@ -204,6 +206,7 @@ impl InputManager {
         self.compact_paste_range = None;
         self.clear_selection();
         self.reset_history_navigation();
+        self.refresh_content_cache();
     }
 
     pub(crate) fn compact_paste_range(&self) -> Option<Range<usize>> {
@@ -430,6 +433,7 @@ impl InputManager {
         let (row, col) = textarea_bridge::byte_offset_to_row_col(self.textarea.lines(), cursor_byte);
         self.set_textarea_cursor(row, col);
         self.clear_selection();
+        self.refresh_content_cache();
     }
 
     pub fn delete_selection(&mut self) -> bool {
@@ -483,6 +487,7 @@ impl InputManager {
             self.track_compact_paste_replace(cursor, cursor, ch.len_utf8());
             self.textarea.insert_char(ch);
         }
+        self.refresh_content_cache();
     }
 
     pub fn insert_text(&mut self, text: &str) {
@@ -493,6 +498,7 @@ impl InputManager {
             self.track_compact_paste_replace(cursor, cursor, text.len());
             self.textarea.insert_str(text);
         }
+        self.refresh_content_cache();
     }
 
     pub fn backspace(&mut self) {
@@ -506,6 +512,7 @@ impl InputManager {
             self.track_compact_paste_replace(start, cursor, 0);
         }
         self.textarea.delete_char();
+        self.refresh_content_cache();
     }
 
     pub fn delete(&mut self) {
@@ -522,6 +529,7 @@ impl InputManager {
             self.track_compact_paste_replace(cursor, end, 0);
         }
         self.textarea.delete_next_char();
+        self.refresh_content_cache();
     }
 
     pub fn delete_word_forward(&mut self) {
@@ -529,6 +537,7 @@ impl InputManager {
             return;
         }
         self.textarea.delete_next_word();
+        self.refresh_content_cache();
     }
 
     pub fn delete_whitespace_around_cursor(&mut self) {
@@ -713,6 +722,7 @@ impl InputManager {
         self.attachment_placeholders.clear();
         self.compact_paste_range = None;
         self.reset_history_navigation();
+        self.refresh_content_cache();
     }
 
     // ------------------------------------------------------------------
@@ -723,6 +733,7 @@ impl InputManager {
         let changed = self.textarea.undo();
         if changed {
             self.compact_paste_range = None;
+            self.refresh_content_cache();
         }
         changed
     }
@@ -731,6 +742,7 @@ impl InputManager {
         let changed = self.textarea.redo();
         if changed {
             self.compact_paste_range = None;
+            self.refresh_content_cache();
         }
         changed
     }
@@ -916,6 +928,7 @@ impl InputManager {
         self.attachments = entry.attachment_elements();
         self.attachment_placeholders = attachment_placeholders_for_content(&entry.content, self.attachments.len());
         self.compact_paste_range = None;
+        self.refresh_content_cache();
     }
 
     pub fn apply_history_index(&mut self, index: usize) -> bool {

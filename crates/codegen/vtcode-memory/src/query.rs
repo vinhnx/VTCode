@@ -1,9 +1,17 @@
 //! Read-only queries across sessions for analytics and long-term learning.
 
 use std::path::Path;
+use std::sync::Mutex;
+
+use lru::LruCache;
 
 use crate::error::SessionStoreError;
 use crate::sessions_root;
+
+const MANIFEST_CACHE_CAPACITY: usize = 200;
+const MANIFEST_CACHE_NONZERO_CAPACITY: std::num::NonZeroUsize =
+    std::num::NonZeroUsize::new(MANIFEST_CACHE_CAPACITY).unwrap();
+static MANIFEST_CACHE: std::sync::OnceLock<Mutex<LruCache<String, SessionSummary>>> = std::sync::OnceLock::new();
 
 /// Lightweight summary of a single session, read from its `manifest.json`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -66,11 +74,21 @@ pub fn recent_sessions(workspace: &Path, n: usize) -> Vec<SessionSummary> {
         Ok(e) => e,
         Err(_) => return Vec::new(),
     };
+    let mut cache = MANIFEST_CACHE
+        .get_or_init(|| Mutex::new(LruCache::new(MANIFEST_CACHE_NONZERO_CAPACITY)))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for entry in entries.filter_map(Result::ok) {
         let manifest = entry.path().join("manifest.json");
+        let key = manifest.to_string_lossy().to_string();
+        if let Some(s) = cache.get(&key) {
+            out.push(s.clone());
+            continue;
+        }
         if let Ok(bytes) = std::fs::read(&manifest)
             && let Ok(s) = serde_json::from_slice::<SessionSummary>(&bytes)
         {
+            cache.put(key, s.clone());
             out.push(s);
         }
     }

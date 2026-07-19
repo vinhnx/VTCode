@@ -251,7 +251,7 @@ pub fn save_progress(workspace: &Path, session_id: &str, ledger: &ProgressLedger
         std::fs::create_dir_all(parent)
             .map_err(|e| SessionStoreError::CreateDir { path: parent.to_path_buf(), source: e })?;
     }
-    let bytes = serde_json::to_string_pretty(ledger)?;
+    let bytes = serde_json::to_string(ledger)?;
     std::fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path, e))?;
     Ok(())
 }

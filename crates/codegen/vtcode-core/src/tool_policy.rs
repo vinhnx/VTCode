@@ -496,13 +496,10 @@ impl ToolPolicyManager {
     }
 
     fn apply_auto_allow_defaults(config: &mut ToolPolicyConfig) {
-        // OPTIMIZATION: Avoid unnecessary allocations in loop
         for &tool in AUTO_ALLOW_TOOLS {
-            config
-                .policies
-                .entry(tool.into())
-                .and_modify(|policy| *policy = ToolPolicy::Allow)
-                .or_insert(ToolPolicy::Allow);
+            if !config.policies.contains_key(tool) {
+                config.policies.insert(tool.into(), ToolPolicy::Allow);
+            }
             if !config.available_tools.iter().any(|t| t == tool) {
                 config.available_tools.push(tool.into());
             }
@@ -805,8 +802,10 @@ impl ToolPolicyManager {
                         if let Some(ref mut handler) = self.permission_handler {
                             handler.prompt_tool_permission(tool_name)
                         } else {
-                            // Default: allow through (for backward compatibility)
-                            Ok(ToolExecutionDecision::Allowed)
+                            tracing::warn!(
+                                "Prompt policy for tool '{tool_name}' denied: no permission handler configured"
+                            );
+                            Ok(ToolExecutionDecision::Denied)
                         }
                     }
                 }
@@ -828,8 +827,8 @@ impl ToolPolicyManager {
                 if let Some(ref mut handler) = self.permission_handler {
                     handler.prompt_tool_permission(tool_name)
                 } else {
-                    // Default: allow through (for backward compatibility)
-                    Ok(ToolExecutionDecision::Allowed)
+                    tracing::warn!("Prompt policy for tool '{tool_name}' denied: no permission handler configured");
+                    Ok(ToolExecutionDecision::Denied)
                 }
             }
         }

@@ -7696,6 +7696,7 @@ name = "vtcode-memory"
 version = "0.136.3"
 dependencies = [
  "chrono",
+ "lru",
  "serde",
  "serde_json",
  "tempfile",

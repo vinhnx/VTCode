@@ -64,14 +64,14 @@ impl ManifestStore {
     /// Atomically write the manifest. Parent directories must already exist.
     pub fn write_manifest(&self, manifest: &SessionManifest) -> Result<(), SessionStoreError> {
         let path = self.manifest_path();
-        let bytes = serde_json::to_string_pretty(manifest)?;
+        let bytes = serde_json::to_string(manifest)?;
         fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path.clone(), e))
     }
 
     /// Atomically write the turn index. Parent directories must already exist.
     pub fn write_turn_index(&self, index: &TurnIndex) -> Result<(), SessionStoreError> {
         let path = self.turns_path();
-        let bytes = serde_json::to_string_pretty(index)?;
+        let bytes = serde_json::to_string(index)?;
         fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path.clone(), e))
     }
 }

@@ -840,19 +840,20 @@ where
     use crate::providers::error_handling::format_network_error;
     use futures::StreamExt;
 
-    let mut buffer = String::new();
+    let mut buf: Vec<u8> = Vec::new();
+    let mut offset = 0usize;
     let mut decoder = Utf8StreamDecoder::new();
     let mut last_response_value = None;
 
     while let Some(chunk_result) = byte_stream.next().await {
         let chunk_bytes = chunk_result.map_err(|e| format_network_error(provider_name, &e.to_string()))?;
-        buffer.push_str(&decoder.push(&chunk_bytes));
+        buf.extend_from_slice(decoder.push(&chunk_bytes).as_bytes());
 
-        while let Some((boundary_idx, boundary_len)) = find_sse_boundary(&buffer) {
-            let event = buffer[..boundary_idx].to_string();
-            buffer.drain(..boundary_idx + boundary_len);
+        while let Some((boundary_idx, boundary_len)) = find_sse_boundary_bytes(&buf, offset) {
+            let event = std::str::from_utf8(&buf[offset..boundary_idx]).expect("valid utf-8 stream data");
+            offset = boundary_idx + boundary_len;
 
-            if let Some(data) = extract_data_payload(&event) {
+            if let Some(data) = extract_data_payload(event) {
                 if data == "[DONE]" {
                     break;
                 }
@@ -1035,6 +1036,24 @@ pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
         }
         (Some(boundary), None) => Some(boundary),
         (None, Some(boundary)) => Some(boundary),
+        (None, None) => None,
+    }
+}
+
+#[inline]
+pub fn find_sse_boundary_bytes(buffer: &[u8], offset: usize) -> Option<(usize, usize)> {
+    let data = &buffer[offset..];
+    let newline_boundary = data.windows(2).position(|w| w == b"\n\n").map(|idx| (idx, 2));
+    let carriage_boundary = data.windows(4).position(|w| w == b"\r\n\r\n").map(|idx| (idx, 4));
+
+    match (newline_boundary, carriage_boundary) {
+        (Some((n_idx, n_len)), Some((c_idx, c_len))) => {
+            let na = offset + n_idx;
+            let ca = offset + c_idx;
+            if na <= ca { Some((na, n_len)) } else { Some((ca, c_len)) }
+        }
+        (Some((idx, len)), None) => Some((offset + idx, len)),
+        (None, Some((idx, len))) => Some((offset + idx, len)),
         (None, None) => None,
     }
 }

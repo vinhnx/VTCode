@@ -113,7 +113,9 @@ impl ToolRegistry {
         // user's allow/block lists, cooldown, and session cap rather than
         // defaulting out.
         let tool_config = load_tool_config(&workspace_root);
-        super::distributed::install_tool_config(tool_config);
+        if let Err(error) = super::distributed::install_tool_config(tool_config) {
+            tracing::warn!(error = %error, "tool config reinstall failed; using existing snapshot");
+        }
 
         let edited_file_monitor = Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
         let inventory = ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));

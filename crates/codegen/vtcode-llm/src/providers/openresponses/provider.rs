@@ -586,19 +586,20 @@ impl OpenResponsesProvider {
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
-            let mut buffer = String::new();
+            let mut buf: Vec<u8> = Vec::new();
+            let mut offset = 0usize;
             let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::providers::shared::StreamAggregator::new(model);
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
-                buffer.push_str(&decoder.push(&chunk));
+                buf.extend_from_slice(decoder.push(&chunk).as_bytes());
 
-                while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary(&buffer) {
-                    let event = buffer[..split_idx].to_string();
-                    buffer.drain(..split_idx + delimiter_len);
+                while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
+                    let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                    offset = split_idx + delimiter_len;
 
-                    if let Some(data_payload) = crate::providers::shared::extract_data_payload(&event) {
+                    if let Some(data_payload) = crate::providers::shared::extract_data_payload(event) {
                         let trimmed = data_payload.trim();
                         if trimmed.is_empty() || trimmed == "[DONE]" {
                             continue;
@@ -785,19 +786,20 @@ impl LLMProvider for OpenResponsesProvider {
 
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
-            let mut buffer = String::new();
+            let mut buf: Vec<u8> = Vec::new();
+            let mut offset = 0usize;
             let mut decoder = Utf8StreamDecoder::new();
             let mut aggregator = crate::providers::shared::StreamAggregator::new(model);
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|e| format_network_error("OpenResponses", &e))?;
-                buffer.push_str(&decoder.push(&chunk));
+                buf.extend_from_slice(decoder.push(&chunk).as_bytes());
 
-                while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary(&buffer) {
-                    let event_text = buffer[..split_idx].to_string();
-                    buffer.drain(..split_idx + delimiter_len);
+                while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
+                    let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                    offset = split_idx + delimiter_len;
 
-                    if let Some(data_payload) = crate::providers::shared::extract_data_payload(&event_text) {
+                    if let Some(data_payload) = crate::providers::shared::extract_data_payload(event) {
                         let trimmed = data_payload.trim();
                         if trimmed.is_empty() || trimmed == "[DONE]" {
                             continue;

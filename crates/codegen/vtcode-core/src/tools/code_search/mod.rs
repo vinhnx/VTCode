@@ -1,23 +1,23 @@
 //! Typed public boundary for the focused `code_search` tool.
 
-use std::collections::{HashMap, HashSet};
-use std::path::{Component, Path, PathBuf};
+pub mod backends;
+pub mod identity;
+pub mod ranking;
+pub mod scope;
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
+use tokio::task::spawn_blocking;
 
 use crate::tools::ast_grep_language::AstGrepLanguage;
 use crate::tools::file_search_bridge::BoundedPathSearch;
-use crate::tools::grep_file::{LiteralSearchCandidate, search_literal_bounded};
-use crate::tools::outline_search::{DeclarationFileRecord, search_declarations_bounded};
-use crate::tools::tree_sitter_runtime::{
-    SourceByteRange, exact_declaration_name_range, is_exact_usage_identifier, parse_source, usage_node_kind_allowlist,
-};
+use crate::tools::grep_file::search_literal_bounded;
+use crate::tools::outline_search::search_declarations_bounded;
 use crate::types::CompactStr;
-use vtcode_commons::canonicalize;
-use vtcode_commons::exclusions::is_sensitive_file;
 use vtcode_commons::formatting::{collapse_whitespace, truncate_byte_budget};
-use vtcode_commons::walk::{build_default_walker, is_excluded_dir};
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const SNIPPET_BYTE_CAP: usize = 240;
@@ -28,7 +28,7 @@ fn backend_candidate_cap(max_results: usize) -> usize {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CodeSearchRequest {
+pub struct CodeSearchRequest {
     pub query: CompactStr,
     #[serde(default)]
     pub path: Option<CompactStr>,
@@ -42,7 +42,7 @@ pub(crate) struct CodeSearchRequest {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum CodeSearchResultType {
+pub enum CodeSearchResultType {
     Definition,
     Usage,
     Text,
@@ -63,7 +63,7 @@ impl CodeSearchResultType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CodeSearchFilters {
+pub struct CodeSearchFilters {
     pub path: CompactStr,
     pub file_types: Vec<CompactStr>,
     pub result_types: Vec<CodeSearchResultType>,
@@ -71,7 +71,7 @@ pub(crate) struct CodeSearchFilters {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CodeSearchResult {
+pub struct CodeSearchResult {
     pub result_type: CodeSearchResultType,
     pub path: CompactStr,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,7 +85,7 @@ pub(crate) struct CodeSearchResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CodeSearchResponse {
+pub struct CodeSearchResponse {
     pub query: CompactStr,
     pub filters: CodeSearchFilters,
     pub results: Vec<CodeSearchResult>,
@@ -132,92 +132,6 @@ impl CodeSearchRequest {
     }
 }
 
-fn normalised_identity_value(args: &serde_json::Value, include_max_results: bool) -> Option<serde_json::Value> {
-    let request = serde_json::from_value::<CodeSearchRequest>(args.clone()).ok()?;
-    let mut normalised = request.normalise().ok()?;
-    normalised.filters.file_types.sort_unstable();
-    let mut identity = serde_json::json!({
-        "query": normalised.query,
-        "path": normalised.filters.path,
-        "file_types": normalised.filters.file_types,
-        "result_types": normalised.filters.result_types,
-    });
-    if include_max_results {
-        identity["max_results"] = normalised.filters.max_results.into();
-    }
-    Some(identity)
-}
-
-/// Normalised identity for result caching and replay.
-///
-/// The effective result limit affects both the returned results and echoed
-/// filters, so it is part of this identity.
-pub fn normalised_identity(args: &serde_json::Value) -> Option<String> {
-    serde_json::to_string(&normalised_identity_value(args, true)?).ok()
-}
-
-/// Normalised identity for detecting repeated search behaviour.
-///
-/// Loop detection deliberately ignores the result limit: changing only the
-/// requested extent does not make an otherwise repeated search distinct.
-pub fn normalised_loop_identity(args: &serde_json::Value) -> Option<String> {
-    serde_json::to_string(&normalised_identity_value(args, false)?).ok()
-}
-
-/// Return whether a mutated path lies within the file or directory scope of a
-/// valid `code_search` request.
-///
-/// Both paths are resolved against a canonical workspace root so relative and
-/// absolute tool arguments share one component-aware comparison. Existing
-/// prefixes are canonicalised while missing suffixes remain lexical, which
-/// keeps deleted and newly-created targets comparable.
-pub fn scope_contains_mutated_path(args: &serde_json::Value, mutated_path: &Path, workspace_root: &Path) -> bool {
-    let Ok(request) = serde_json::from_value::<CodeSearchRequest>(args.clone()) else {
-        return false;
-    };
-    let Ok(request) = request.normalise() else {
-        return false;
-    };
-    let workspace_root = canonicalize_existing_prefix(workspace_root);
-    let resolve = |path: &Path| {
-        let absolute = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            workspace_root.join(path)
-        };
-        canonicalize_existing_prefix(&absolute)
-    };
-    let scope = resolve(Path::new(request.filters.path.as_str()));
-    let mutated_path = resolve(mutated_path);
-    mutated_path.starts_with(&scope) || scope.starts_with(&mutated_path)
-}
-
-/// Canonicalise the longest existing prefix, then append any missing suffix.
-/// This resolves symlinked workspace roots and existing directory aliases while
-/// retaining deleted or newly-created mutation targets for replay checks.
-fn canonicalize_existing_prefix(path: &Path) -> PathBuf {
-    let normalised = crate::utils::path::normalize_path(path);
-    let mut existing_prefix = normalised.as_path();
-    let mut missing_components = Vec::new();
-
-    loop {
-        if let Ok(canonical) = canonicalize(existing_prefix) {
-            return missing_components.iter().rev().fold(canonical, |mut resolved, component| {
-                resolved.push(component);
-                resolved
-            });
-        }
-        let Some(component) = existing_prefix.file_name() else {
-            return normalised;
-        };
-        missing_components.push(component.to_os_string());
-        let Some(parent) = existing_prefix.parent() else {
-            return normalised;
-        };
-        existing_prefix = parent;
-    }
-}
-
 fn normalise_file_types(file_types: Option<Vec<CompactStr>>) -> Result<Vec<CompactStr>> {
     let Some(file_types) = file_types else {
         return Ok(Vec::new());
@@ -258,306 +172,24 @@ fn normalise_result_types(result_types: Option<Vec<CodeSearchResultType>>) -> Re
         .collect())
 }
 
-#[derive(Debug)]
-struct ResolvedSearchScope {
-    workspace_root: PathBuf,
-    requested_path: PathBuf,
-    requested_is_file: bool,
-    allowed_files: HashSet<PathBuf>,
-}
-
-#[derive(Debug)]
-struct RankedCandidate {
-    result: CodeSearchResult,
-    backend_ordinal: u8,
-}
-
-#[derive(Debug, Default)]
-struct DeclarationInventory {
-    complete: bool,
-    exact_name_ranges: Vec<SourceByteRange>,
-}
-
-#[derive(Debug, Default)]
-struct UsageScopeSupport {
-    has_supported_files: bool,
-    has_unsupported_files: bool,
-    requested_unsupported_file_types: bool,
-}
-
-fn requested_languages(filters: &CodeSearchFilters) -> Vec<AstGrepLanguage> {
-    filters
-        .file_types
-        .iter()
-        .filter_map(|value| AstGrepLanguage::from_user_value(value))
-        .collect()
-}
-
-fn usage_scope_support(scope: &ResolvedSearchScope, languages: &[AstGrepLanguage]) -> UsageScopeSupport {
-    let mut support = UsageScopeSupport {
-        requested_unsupported_file_types: languages
-            .iter()
-            .any(|language| usage_node_kind_allowlist(*language).is_none()),
-        ..UsageScopeSupport::default()
-    };
-    for path in &scope.allowed_files {
-        let Some(language) = AstGrepLanguage::from_path(path) else {
-            continue;
-        };
-        if !languages.is_empty() && !languages.contains(&language) {
-            continue;
-        }
-        if usage_node_kind_allowlist(language).is_some() {
-            support.has_supported_files = true;
-        } else {
-            support.has_unsupported_files = true;
-        }
-    }
-    support
-}
-
-fn has_complete_supported_inventory(
-    scope: &ResolvedSearchScope,
-    languages: &[AstGrepLanguage],
-    stream_complete: bool,
-    inventories: &HashMap<PathBuf, DeclarationInventory>,
-) -> bool {
-    scope.allowed_files.iter().any(|path| {
-        let Some(language) = AstGrepLanguage::from_path(path) else {
-            return false;
-        };
-        if (!languages.is_empty() && !languages.contains(&language)) || usage_node_kind_allowlist(language).is_none() {
-            return false;
-        }
-        inventories.get(path).map_or(stream_complete, |inventory| inventory.complete)
-    })
-}
-
-fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearchScope> {
-    let requested_path = Path::new(requested);
-    if requested_path.components().any(|component| component == Component::ParentDir) {
-        bail!("code_search path must not contain '..' traversal");
-    }
-    let workspace_root = canonicalize(workspace_root)
-        .with_context(|| format!("failed to canonicalise workspace root {}", workspace_root.display()))?;
-    let candidate = if requested_path.is_absolute() {
-        requested_path.to_path_buf()
-    } else {
-        workspace_root.join(requested_path)
-    };
-    let requested_path = canonicalize(&candidate)
-        .with_context(|| format!("failed to resolve code_search path {}", candidate.display()))?;
-    if !requested_path.starts_with(&workspace_root) {
-        bail!("code_search path escapes the workspace");
-    }
-    if requested_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(is_sensitive_file)
-    {
-        bail!("code_search path is sensitive");
-    }
-
-    let requested_is_file = requested_path.is_file();
-    let walk_root = if requested_is_file {
-        requested_path.parent().unwrap_or(&workspace_root).to_path_buf()
-    } else {
-        requested_path.clone()
-    };
-    let mut builder = build_default_walker(&walk_root);
-    let filter_walk_root = walk_root.clone();
-    let filter_requested_path = requested_path.clone();
-    builder.filter_entry(move |entry| {
-        !is_excluded_dir(entry)
-            && (!requested_is_file || entry.path() == filter_walk_root || entry.path() == filter_requested_path)
-    });
-    let mut requested_available = requested_path == workspace_root;
-    let mut allowed_files = HashSet::new();
-    for entry in builder.build().filter_map(std::result::Result::ok) {
-        if entry.file_type().is_some_and(|file_type| file_type.is_symlink()) {
-            continue;
-        }
-        let path = entry.path();
-        if path.file_name().and_then(|name| name.to_str()).is_some_and(is_sensitive_file) {
-            continue;
-        }
-        let Ok(canonical) = canonicalize(path) else {
-            continue;
-        };
-        if !canonical.starts_with(&workspace_root) {
-            continue;
-        }
-        if canonical == requested_path {
-            requested_available = true;
-        }
-        if entry.file_type().is_some_and(|file_type| file_type.is_file()) {
-            allowed_files.insert(canonical);
-        }
-    }
-    if !requested_available {
-        bail!("code_search path is ignored or unavailable");
-    }
-
-    Ok(ResolvedSearchScope {
-        workspace_root,
-        requested_path,
-        requested_is_file,
-        allowed_files,
-    })
-}
-
-fn workspace_relative(scope: &ResolvedSearchScope, path: &Path) -> Option<CompactStr> {
-    let relative = path.strip_prefix(&scope.workspace_root).ok()?;
-    let value = if relative.as_os_str().is_empty() {
-        ".".to_string()
-    } else {
-        relative.to_string_lossy().replace('\\', "/")
-    };
-    Some(CompactStr::from(value))
-}
-
-fn accepted_candidate_path(
-    scope: &ResolvedSearchScope,
-    base: &Path,
-    candidate: &Path,
-    languages: &[AstGrepLanguage],
-) -> Option<(PathBuf, CompactStr)> {
-    let path = if candidate.is_absolute() {
-        candidate.to_path_buf()
-    } else {
-        base.join(candidate)
-    };
-    let canonical = canonicalize(path).ok()?;
-    if !scope.allowed_files.contains(&canonical)
-        || !canonical.starts_with(&scope.workspace_root)
-        || (scope.requested_is_file && canonical != scope.requested_path)
-        || (!scope.requested_is_file && !canonical.starts_with(&scope.requested_path))
-        || canonical
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(is_sensitive_file)
-    {
-        return None;
-    }
-    let language_matches = languages.is_empty()
-        || AstGrepLanguage::from_path(&canonical).is_some_and(|language| languages.contains(&language));
-    if !language_matches {
-        return None;
-    }
-    let relative = workspace_relative(scope, &canonical)?;
-    Some((canonical, relative))
-}
-
-fn normalised_snippet(text: &str) -> CompactStr {
-    let compact = collapse_whitespace(text);
-    CompactStr::from(truncate_byte_budget(&compact, SNIPPET_BYTE_CAP, ""))
-}
-
-fn byte_position(source: &str, offset: usize) -> (usize, usize) {
-    let bounded = offset.min(source.len());
-    let before = &source[..bounded];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = before.rsplit_once('\n').map_or(before.len(), |(_, tail)| tail.len()) + 1;
-    (line, column)
-}
-
-fn source_line(source: &str, line: usize) -> &str {
-    source.lines().nth(line.saturating_sub(1)).unwrap_or("")
-}
-
-fn response_path(scope: &ResolvedSearchScope) -> CompactStr {
-    workspace_relative(scope, &scope.requested_path).unwrap_or_else(|| CompactStr::from("."))
-}
-
-fn deduplicate_and_order(mut candidates: Vec<RankedCandidate>) -> Vec<CodeSearchResult> {
-    let mut source_locations: HashMap<(CompactStr, usize, usize), RankedCandidate> = HashMap::new();
-    let mut path_only = Vec::new();
-    for candidate in candidates.drain(..) {
-        let (Some(line), Some(column)) = (candidate.result.line, candidate.result.column) else {
-            path_only.push(candidate);
-            continue;
-        };
-        let key = (candidate.result.path.clone(), line, column);
-        match source_locations.get(&key) {
-            Some(existing) if existing.result.result_type.precedence() <= candidate.result.result_type.precedence() => {
-            }
-            _ => {
-                source_locations.insert(key, candidate);
-            }
-        }
-    }
-    let mut ordered = source_locations.into_values().chain(path_only).collect::<Vec<_>>();
-    ordered.sort_by(|left, right| {
-        left.result
-            .result_type
-            .precedence()
-            .cmp(&right.result.result_type.precedence())
-            .then_with(|| left.result.path.cmp(&right.result.path))
-            .then_with(|| left.result.line.unwrap_or(0).cmp(&right.result.line.unwrap_or(0)))
-            .then_with(|| left.result.column.unwrap_or(0).cmp(&right.result.column.unwrap_or(0)))
-            .then_with(|| left.backend_ordinal.cmp(&right.backend_ordinal))
-    });
-    ordered.into_iter().map(|candidate| candidate.result).collect()
-}
-
-fn unavailable_hint(unavailable: &[CodeSearchResultType]) -> Option<CompactStr> {
-    if unavailable.is_empty() {
-        return None;
-    }
-    let names = unavailable
-        .iter()
-        .map(|kind| match kind {
-            CodeSearchResultType::Definition => "definition",
-            CodeSearchResultType::Usage => "usage",
-            CodeSearchResultType::Text => "text",
-            CodeSearchResultType::Path => "path",
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    Some(CompactStr::from(format!("Some requested result categories were unavailable: {names}.")))
-}
-
-fn append_path_candidates(
-    scope: &ResolvedSearchScope,
-    base: &Path,
-    paths: impl IntoIterator<Item = PathBuf>,
-    languages: &[AstGrepLanguage],
-    candidates: &mut Vec<RankedCandidate>,
-) {
-    let mut seen_canonical_paths = HashSet::new();
-    for path in paths {
-        let Some((canonical, relative)) = accepted_candidate_path(scope, base, &path, languages) else {
-            continue;
-        };
-        if !seen_canonical_paths.insert(canonical) {
-            continue;
-        }
-        candidates.push(RankedCandidate {
-            result: CodeSearchResult {
-                result_type: CodeSearchResultType::Path,
-                path: relative,
-                line: None,
-                column: None,
-                name: None,
-                snippet: None,
-            },
-            backend_ordinal: 3,
-        });
-    }
-}
-
-pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -> Result<CodeSearchResponse> {
+pub async fn execute(workspace_root: &Path, request: CodeSearchRequest) -> Result<CodeSearchResponse> {
     let mut request = request.normalise()?;
-    let scope = resolve_scope(workspace_root, &request.filters.path)?;
-    request.filters.path = response_path(&scope);
-    let languages = requested_languages(&request.filters);
+    let scope = spawn_blocking({
+        let workspace_root = workspace_root.to_path_buf();
+        let path = request.filters.path.clone();
+        move || scope::resolve_scope(&workspace_root, &path)
+    })
+    .await
+    .context("Failed to resolve search scope")??;
+    request.filters.path = scope::response_path(&scope);
+    let languages = scope::requested_languages(&request.filters);
     let candidate_cap = backend_candidate_cap(request.filters.max_results);
     let definition_enabled = request.filters.result_types.contains(&CodeSearchResultType::Definition);
     let usage_enabled = request.filters.result_types.contains(&CodeSearchResultType::Usage);
     let text_enabled = request.filters.result_types.contains(&CodeSearchResultType::Text);
     let path_enabled = request.filters.result_types.contains(&CodeSearchResultType::Path);
 
-    let usage_support = usage_scope_support(&scope, &languages);
+    let usage_support = scope::usage_scope_support(&scope, &languages);
     let usage_backend_needed = usage_enabled && usage_support.has_supported_files;
     let literal_outcome = if text_enabled || usage_backend_needed {
         search_literal_bounded(&request.query, &scope.requested_path, &languages, candidate_cap)
@@ -582,7 +214,8 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
     let path_outcome = if path_enabled {
         let query = request.query.to_string();
         if scope.requested_is_file {
-            let relative = workspace_relative(&scope, &scope.requested_path).unwrap_or_else(|| CompactStr::from("."));
+            let relative =
+                scope::workspace_relative(&scope, &scope.requested_path).unwrap_or_else(|| CompactStr::from("."));
             let matches = relative.to_lowercase().contains(&query.to_lowercase());
             Ok(Some(BoundedPathSearch {
                 paths: matches.then(|| scope.requested_path.clone()).into_iter().collect(),
@@ -590,7 +223,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
             }))
         } else {
             let search_root = scope.requested_path.clone();
-            tokio::task::spawn_blocking(move || {
+            spawn_blocking(move || {
                 crate::tools::file_search_bridge::search_paths_bounded_no_follow(&query, search_root, candidate_cap)
             })
             .await
@@ -621,7 +254,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
             truncated |= outcome.truncated;
             outline_stream_complete = outcome.stream_complete;
             for file in &outcome.files {
-                process_declaration_file(
+                backends::process_declaration_file(
                     &scope,
                     &languages,
                     &request.query,
@@ -646,7 +279,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
 
     if usage_backend_needed
         && !unavailable.contains(&CodeSearchResultType::Usage)
-        && !has_complete_supported_inventory(&scope, &languages, outline_stream_complete, &inventories)
+        && !scope::has_complete_supported_inventory(&scope, &languages, outline_stream_complete, &inventories)
     {
         unavailable.push(CodeSearchResultType::Usage);
     }
@@ -654,7 +287,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
     match literal_outcome {
         Ok(Some(outcome)) => {
             truncated |= outcome.truncated;
-            classify_literal_candidates(
+            backends::classify_literal_candidates(
                 &scope,
                 &languages,
                 outcome.candidates,
@@ -685,7 +318,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
             } else {
                 &scope.requested_path
             };
-            append_path_candidates(&scope, base, outcome.paths, &languages, &mut candidates);
+            ranking::append_path_candidates(&scope, base, outcome.paths, &languages, &mut candidates);
         }
         Err(_) => unavailable.push(CodeSearchResultType::Path),
         Ok(None) => {}
@@ -698,7 +331,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
         bail!("all requested code_search result categories are unavailable");
     }
 
-    let mut results = deduplicate_and_order(candidates);
+    let mut results = ranking::deduplicate_and_order(candidates);
     if results.len() > request.filters.max_results {
         results.truncate(request.filters.max_results);
         truncated = true;
@@ -717,7 +350,7 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
             "Usage results are syntactic same-spelling identifiers and may refer to different symbols.",
         ));
     }
-    if let Some(hint) = unavailable_hint(&unavailable) {
+    if let Some(hint) = ranking::unavailable_hint(&unavailable) {
         hints.push(hint);
     }
     hints.dedup();
@@ -732,140 +365,44 @@ pub(crate) async fn execute(workspace_root: &Path, request: CodeSearchRequest) -
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_declaration_file(
-    scope: &ResolvedSearchScope,
-    languages: &[AstGrepLanguage],
-    query: &str,
-    file: &DeclarationFileRecord,
-    definition_enabled: bool,
-    source_cache: &mut HashMap<PathBuf, String>,
-    inventories: &mut HashMap<PathBuf, DeclarationInventory>,
-    candidates: &mut Vec<RankedCandidate>,
-) {
-    let Some((canonical, relative)) = accepted_candidate_path(scope, &scope.workspace_root, &file.path, languages)
-    else {
-        return;
-    };
-    let Ok(source) = std::fs::read_to_string(&canonical) else {
-        inventories.insert(canonical, DeclarationInventory::default());
-        return;
-    };
-    source_cache.insert(canonical.clone(), source.clone());
-    let language = AstGrepLanguage::from_path(&canonical).unwrap_or(file.language);
-    let tree = parse_source(language, &source).ok();
-    let mut inventory = DeclarationInventory {
-        complete: file.complete && tree.is_some() && usage_node_kind_allowlist(language).is_some(),
-        exact_name_ranges: Vec::new(),
-    };
-    for declaration in &file.declarations {
-        let full_range = SourceByteRange {
-            start: declaration.range.byte_start,
-            end: declaration.range.byte_end,
-        };
-        let exact_range = tree.as_ref().and_then(|tree| {
-            exact_declaration_name_range(tree, &source, language, full_range, &declaration.name, query)
-        });
-        if let Some(range) = exact_range {
-            inventory.exact_name_ranges.push(range);
-        } else {
-            inventory.complete = false;
-        }
-        if definition_enabled && let Some(position_range) = exact_range {
-            let (line, column) = byte_position(&source, position_range.start);
-            candidates.push(RankedCandidate {
-                result: CodeSearchResult {
-                    result_type: CodeSearchResultType::Definition,
-                    path: relative.clone(),
-                    line: Some(line),
-                    column: Some(column),
-                    name: Some(CompactStr::from(declaration.name.as_str())),
-                    snippet: Some(normalised_snippet(source_line(&source, line))),
-                },
-                backend_ordinal: 0,
-            });
-        }
-    }
-    inventories.insert(canonical, inventory);
+fn normalised_snippet(text: &str) -> CompactStr {
+    let compact = collapse_whitespace(text);
+    CompactStr::from(truncate_byte_budget(&compact, SNIPPET_BYTE_CAP, ""))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn classify_literal_candidates(
-    scope: &ResolvedSearchScope,
-    languages: &[AstGrepLanguage],
-    literals: Vec<LiteralSearchCandidate>,
-    usage_enabled: bool,
-    text_enabled: bool,
-    outline_stream_complete: bool,
-    source_cache: &mut HashMap<PathBuf, String>,
-    inventories: &HashMap<PathBuf, DeclarationInventory>,
-    candidates: &mut Vec<RankedCandidate>,
-) {
-    for literal in literals {
-        let Some((canonical, relative)) =
-            accepted_candidate_path(scope, &scope.workspace_root, &literal.path, languages)
-        else {
-            continue;
-        };
-        let language = AstGrepLanguage::from_path(&canonical);
-        let range = SourceByteRange { start: literal.byte_start, end: literal.byte_end };
-        let inventory = inventories.get(&canonical);
-        let is_definition = inventory.is_some_and(|inventory| inventory.exact_name_ranges.contains(&range));
-        if is_definition {
-            continue;
-        }
-        let can_classify_usage = usage_enabled
-            && language.is_some_and(|language| usage_node_kind_allowlist(language).is_some())
-            && inventory.map_or(outline_stream_complete, |inventory| inventory.complete);
-        let is_usage = if can_classify_usage {
-            let source = source_cache
-                .entry(canonical.clone())
-                .or_insert_with(|| std::fs::read_to_string(&canonical).unwrap_or_default());
-            language
-                .and_then(|language| parse_source(language, source).ok().map(|tree| (language, tree)))
-                .is_some_and(|(language, tree)| is_exact_usage_identifier(&tree, language, range))
-        } else {
-            false
-        };
-        if is_usage {
-            candidates.push(RankedCandidate {
-                result: CodeSearchResult {
-                    result_type: CodeSearchResultType::Usage,
-                    path: relative,
-                    line: Some(literal.line),
-                    column: Some(literal.column),
-                    name: Some(CompactStr::from(literal.matched_text.as_str())),
-                    snippet: Some(normalised_snippet(&literal.snippet)),
-                },
-                backend_ordinal: 1,
-            });
-        } else if text_enabled {
-            candidates.push(RankedCandidate {
-                result: CodeSearchResult {
-                    result_type: CodeSearchResultType::Text,
-                    path: relative,
-                    line: Some(literal.line),
-                    column: Some(literal.column),
-                    name: None,
-                    snippet: Some(normalised_snippet(&literal.snippet)),
-                },
-                backend_ordinal: 2,
-            });
-        }
-    }
+fn byte_position(source: &str, offset: usize) -> (usize, usize) {
+    let bounded = offset.min(source.len());
+    let before = &source[..bounded];
+    let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let column = before.rsplit_once('\n').map_or(before.len(), |(_, tail)| tail.len()) + 1;
+    (line, column)
 }
 
-pub(crate) fn validate_args(args: &serde_json::Value) -> Result<()> {
+fn source_line(source: &str, line: usize) -> &str {
+    source.lines().nth(line.saturating_sub(1)).unwrap_or("")
+}
+
+pub fn validate_args(args: &serde_json::Value) -> Result<()> {
     let request: CodeSearchRequest = serde_json::from_value(args.clone())?;
     request.normalise().map(|_| ())
 }
+
+pub use identity::normalised_identity;
+pub use identity::normalised_loop_identity;
+pub use identity::scope_contains_mutated_path;
+pub use ranking::DeclarationInventory;
+pub use scope::ResolvedSearchScope;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tools::ast_grep_binary::set_ast_grep_binary_override_for_tests;
+    use crate::tools::ast_grep_language::AstGrepLanguage;
+    use crate::tools::grep_file::LiteralSearchCandidate;
+    use crate::tools::outline_search::{DeclarationFileRecord, DeclarationRange, DeclarationRecord};
     use serde_json::json;
     use serial_test::serial;
+    use std::collections::HashSet;
     use std::fs;
     use tempfile::TempDir;
 
@@ -1038,9 +575,7 @@ mod tests {
         fs::create_dir_all(workspace.path().join("src/module")).expect("source fixture");
         let args = json!({"query": "Widget", "path": "src/module"});
         let absolute_child = workspace.path().join("src/module/widget.rs");
-        let canonical_child = canonicalize(workspace.path())
-            .expect("canonical workspace")
-            .join("src/module/widget.rs");
+        let canonical_child = identity::canonicalize_existing_prefix(workspace.path()).join("src/module/widget.rs");
 
         for mutation in [
             PathBuf::from("src/module/widget.rs"),
@@ -1079,8 +614,8 @@ mod tests {
         let workspace = TempDir::new().expect("workspace");
         let source = workspace.path().join("widget.rs");
         fs::write(&source, "fn Widget() {}\n").expect("source fixture");
-        let canonical_root = canonicalize(workspace.path()).expect("canonical workspace");
-        let canonical_source = canonicalize(&source).expect("canonical source");
+        let canonical_root = identity::canonicalize_existing_prefix(workspace.path());
+        let canonical_source = identity::canonicalize_existing_prefix(&source);
         let scope = ResolvedSearchScope {
             workspace_root: canonical_root.clone(),
             requested_path: canonical_root,
@@ -1092,7 +627,7 @@ mod tests {
             DeclarationInventory { complete: false, exact_name_ranges: Vec::new() },
         )]);
 
-        assert!(!has_complete_supported_inventory(&scope, &[AstGrepLanguage::Rust], true, &inventories,));
+        assert!(!scope::has_complete_supported_inventory(&scope, &[AstGrepLanguage::Rust], true, &inventories,));
     }
 
     #[test]
@@ -1589,12 +1124,12 @@ mod tests {
     #[test]
     fn code_search_incomplete_declaration_inventory_preserves_text() {
         let fixture = code_search_fixture();
-        let scope = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
-        let canonical = canonicalize(fixture.workspace.path().join("src/widget.rs")).expect("canonical fixture path");
+        let scope = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
+        let canonical = identity::canonicalize_existing_prefix(&fixture.workspace.path().join("src/widget.rs"));
         let mut inventories = HashMap::new();
         inventories.insert(canonical, DeclarationInventory { complete: false, exact_name_ranges: Vec::new() });
         let mut candidates = Vec::new();
-        classify_literal_candidates(
+        backends::classify_literal_candidates(
             &scope,
             &[AstGrepLanguage::Rust],
             vec![LiteralSearchCandidate {
@@ -1621,8 +1156,8 @@ mod tests {
     #[test]
     fn code_search_definitions_require_exact_name_ranges() {
         let fixture = code_search_fixture();
-        let scope = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
-        let canonical = canonicalize(fixture.workspace.path().join("src/widget.rs")).expect("canonical fixture path");
+        let scope = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
+        let canonical = identity::canonicalize_existing_prefix(&fixture.workspace.path().join("src/widget.rs"));
         let source = fs::read_to_string(&canonical).expect("fixture source");
         let exact_end = source.find("}\n").expect("exact declaration end") + 1;
         let missing_name_start = source.find("Widget();").expect("body call");
@@ -1631,17 +1166,17 @@ mod tests {
             language: AstGrepLanguage::Rust,
             complete: true,
             declarations: vec![
-                crate::tools::outline_search::DeclarationRecord {
+                DeclarationRecord {
                     name: "Widget".to_string(),
-                    range: crate::tools::outline_search::DeclarationRange { byte_start: 0, byte_end: exact_end },
+                    range: DeclarationRange { byte_start: 0, byte_end: exact_end },
                 },
-                crate::tools::outline_search::DeclarationRecord {
+                DeclarationRecord {
                     name: "Different".to_string(),
-                    range: crate::tools::outline_search::DeclarationRange { byte_start: 0, byte_end: exact_end },
+                    range: DeclarationRange { byte_start: 0, byte_end: exact_end },
                 },
-                crate::tools::outline_search::DeclarationRecord {
+                DeclarationRecord {
                     name: "Widget".to_string(),
-                    range: crate::tools::outline_search::DeclarationRange {
+                    range: DeclarationRange {
                         byte_start: missing_name_start,
                         byte_end: missing_name_start + "Widget()".len(),
                     },
@@ -1650,7 +1185,7 @@ mod tests {
         };
         let mut inventories = HashMap::new();
         let mut candidates = Vec::new();
-        process_declaration_file(
+        backends::process_declaration_file(
             &scope,
             &[AstGrepLanguage::Rust],
             "Widget",
@@ -1669,7 +1204,7 @@ mod tests {
         assert_eq!(inventory.exact_name_ranges.len(), 1);
 
         let mut mixed = candidates;
-        classify_literal_candidates(
+        backends::classify_literal_candidates(
             &scope,
             &[AstGrepLanguage::Rust],
             vec![
@@ -1699,7 +1234,7 @@ mod tests {
             &inventories,
             &mut mixed,
         );
-        let results = deduplicate_and_order(mixed);
+        let results = ranking::deduplicate_and_order(mixed);
         assert_eq!(
             results
                 .iter()
@@ -1717,25 +1252,27 @@ mod tests {
     #[test]
     fn code_search_scope_inventory_is_limited_to_requested_path() {
         let fixture = code_search_fixture();
-        let direct = resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("file scope");
+        let direct = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("file scope");
         assert_eq!(direct.allowed_files.len(), 1);
         assert!(direct.allowed_files.contains(&direct.requested_path));
 
-        let subtree = resolve_scope(fixture.workspace.path(), "src").expect("directory scope");
+        let subtree = scope::resolve_scope(fixture.workspace.path(), "src").expect("directory scope");
         assert!(
             subtree
                 .allowed_files
                 .iter()
                 .all(|path| path.starts_with(&subtree.requested_path))
         );
-        assert!(!subtree.allowed_files.contains(
-            &canonicalize(fixture.workspace.path().join("ignored.rs")).expect("ignored fixture canonical path")
-        ));
+        assert!(
+            !subtree
+                .allowed_files
+                .contains(&identity::canonicalize_existing_prefix(&fixture.workspace.path().join("ignored.rs")))
+        );
     }
 
     #[test]
     fn code_search_deduplication_keeps_strongest_location() {
-        let candidate = |result_type, backend_ordinal| RankedCandidate {
+        let candidate = |result_type, backend_ordinal| ranking::RankedCandidate {
             result: CodeSearchResult {
                 result_type,
                 path: CompactStr::from("src/widget.rs"),
@@ -1747,7 +1284,7 @@ mod tests {
             backend_ordinal,
         };
 
-        let results = deduplicate_and_order(vec![
+        let results = ranking::deduplicate_and_order(vec![
             candidate(CodeSearchResultType::Text, 2),
             candidate(CodeSearchResultType::Usage, 1),
             candidate(CodeSearchResultType::Definition, 0),
@@ -1760,9 +1297,9 @@ mod tests {
     #[test]
     fn code_search_path_candidates_deduplicate_canonical_aliases_before_merge() {
         let fixture = code_search_fixture();
-        let scope = resolve_scope(fixture.workspace.path(), "src").expect("scope");
+        let scope = scope::resolve_scope(fixture.workspace.path(), "src").expect("scope");
         let mut candidates = Vec::new();
-        append_path_candidates(
+        ranking::append_path_candidates(
             &scope,
             &scope.requested_path,
             [PathBuf::from("WidgetConfig.rs"), PathBuf::from("./WidgetConfig.rs")],

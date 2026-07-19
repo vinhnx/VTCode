@@ -291,6 +291,7 @@ pub struct SearchResult {
 pub struct SimpleIndexer {
     config: SimpleIndexerConfig,
     index_cache: HashMap<String, FileIndex>,
+    content_cache: HashMap<String, (String, Arc<str>)>,
     storage: Arc<dyn IndexStorage>,
     filter: Arc<dyn TraversalFilter>,
 }
@@ -325,6 +326,7 @@ impl SimpleIndexer {
         Self {
             config,
             index_cache: HashMap::new(),
+            content_cache: HashMap::new(),
             storage,
             filter,
         }
@@ -483,9 +485,6 @@ impl SimpleIndexer {
         path_filter: Option<&str>,
         extract_matches: bool,
     ) -> Vec<SearchResult> {
-        // Reading every file from disk is the dominant cost; parallelize it
-        // across the rayon pool. Small candidate sets stay serial to avoid
-        // thread-pool spawn overhead and keep ordering deterministic.
         const PARALLEL_THRESHOLD: usize = 64;
 
         let candidate_paths: Vec<&String> = self
@@ -494,27 +493,25 @@ impl SimpleIndexer {
             .filter(|file_path| path_filter.is_none_or(|filter| file_path.contains(filter)))
             .collect();
 
-        let map_file = |file_path: &&String| -> Vec<SearchResult> {
-            let mut local = Vec::new();
-            if let Ok(content) = fs::read_to_string(file_path) {
-                for (line_num, line) in content.lines().enumerate() {
-                    if regex.is_match(line) {
-                        let matches = if extract_matches {
-                            regex.find_iter(line).map(|m| m.as_str().to_string()).collect()
-                        } else {
-                            vec![line.to_string()]
-                        };
-
-                        local.push(SearchResult {
-                            file_path: (*file_path).clone(),
-                            line_number: line_num + 1,
-                            line_content: line.to_string(),
-                            matches,
-                        });
-                    }
-                }
+        let mut content_lookup: HashMap<&String, Arc<str>> = HashMap::with_capacity(candidate_paths.len());
+        for path in &candidate_paths {
+            if let Some(index) = self.index_cache.get(*path)
+                && let Some((hash, content)) = self.content_cache.get(*path)
+                && hash == &index.hash
+            {
+                content_lookup.insert(*path, content.clone());
             }
-            local
+        }
+
+        let map_file = move |file_path: &&String| -> Vec<SearchResult> {
+            if let Some(cached) = content_lookup.get(file_path) {
+                return Self::search_content(cached.as_ref(), regex, file_path, extract_matches);
+            }
+            let text = match fs::read_to_string(file_path) {
+                Ok(text) => text,
+                Err(_) => return Vec::new(),
+            };
+            Self::search_content(&text, regex, file_path, extract_matches)
         };
 
         let mut results: Vec<SearchResult> = if candidate_paths.len() <= PARALLEL_THRESHOLD {
@@ -529,6 +526,28 @@ impl SimpleIndexer {
                 .then_with(|| left.line_number.cmp(&right.line_number))
         });
         results
+    }
+
+    #[inline]
+    fn search_content(content: &str, regex: &Regex, file_path: &&String, extract_matches: bool) -> Vec<SearchResult> {
+        let mut local = Vec::new();
+        for (line_num, line) in content.lines().enumerate() {
+            if regex.is_match(line) {
+                let matches = if extract_matches {
+                    regex.find_iter(line).map(|m| m.as_str().to_string()).collect()
+                } else {
+                    vec![line.to_string()]
+                };
+
+                local.push(SearchResult {
+                    file_path: (*file_path).clone(),
+                    line_number: line_num + 1,
+                    line_content: line.to_string(),
+                    matches,
+                });
+            }
+        }
+        local
     }
 
     /// Search files using regex pattern.
@@ -640,7 +659,7 @@ impl SimpleIndexer {
             .to_string()
     }
 
-    fn build_file_index(&self, file_path: &Path) -> Result<Option<FileIndex>> {
+    fn build_file_index(&mut self, file_path: &Path) -> Result<Option<FileIndex>> {
         if !self.should_process_file_path(file_path) {
             return Ok(None);
         }
@@ -663,6 +682,9 @@ impl SimpleIndexer {
             language: self.detect_language(file_path),
             tags: vec![],
         };
+
+        self.content_cache
+            .insert(index.path.clone(), (index.hash.clone(), Arc::from(content)));
 
         Ok(Some(index))
     }
@@ -710,6 +732,7 @@ impl SimpleIndexer {
 
     fn replace_cached_entries(&mut self, dir_path: &Path, entries: &[FileIndex]) {
         self.index_cache.retain(|path, _| !Path::new(path).starts_with(dir_path));
+        self.content_cache.retain(|path, _| !Path::new(path).starts_with(dir_path));
 
         self.index_cache
             .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
@@ -720,15 +743,19 @@ impl SimpleIndexer {
             Some(entry) => self.index_cache.insert(cache_key.clone(), entry),
             None => self.index_cache.remove(cache_key.as_str()),
         };
+        let previous_content = self.content_cache.remove(cache_key.as_str());
 
         if let Err(err) = self.persist_current_snapshot() {
             match previous_entry {
                 Some(entry) => {
-                    self.index_cache.insert(cache_key, entry);
+                    self.index_cache.insert(cache_key.clone(), entry);
                 }
                 None => {
                     self.index_cache.remove(cache_key.as_str());
                 }
+            }
+            if let Some(content) = previous_content {
+                self.content_cache.insert(cache_key, content);
             }
             return Err(err);
         }
@@ -776,6 +803,7 @@ impl Clone for SimpleIndexer {
         Self {
             config: self.config.clone(),
             index_cache: self.index_cache.clone(),
+            content_cache: self.content_cache.clone(),
             storage: self.storage.clone(),
             filter: self.filter.clone(),
         }

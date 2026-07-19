@@ -2,18 +2,30 @@ use hashbrown::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
 /// Regex pattern for Unix-style environment variables: $VAR or ${VAR}
-static UNIX_ENV_PATTERN: Lazy<Regex> =
-    Lazy::new(|| match Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}") {
+///
+/// # Panics
+///
+/// Panics at first access if the regex pattern fails to compile. The pattern
+/// is a string literal validated by tests; a panic here indicates a typo
+/// in the pattern itself, not a runtime failure.
+static UNIX_ENV_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}") {
         Ok(regex) => regex,
         Err(error) => panic!("valid unix env regex must compile: {error}"),
     });
 
 /// Regex pattern for Windows-style environment variables: %VAR%
-static WINDOWS_ENV_PATTERN: Lazy<Regex> = Lazy::new(|| match Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%") {
+///
+/// # Panics
+///
+/// Panics at first access if the regex pattern fails to compile. The pattern
+/// is a string literal validated by tests; a panic here indicates a typo
+/// in the pattern itself, not a runtime failure.
+static WINDOWS_ENV_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%") {
     Ok(regex) => regex,
     Err(error) => panic!("valid windows env regex must compile: {error}"),
 });
@@ -196,5 +208,24 @@ mod tests {
 
         let resolved = resolve_program_path_from_paths("fake-tool", [bin_dir.to_path_buf()].into_iter());
         assert_eq!(resolved, Some(fake.to_string_lossy().into_owned()))
+    }
+}
+
+#[cfg(test)]
+mod regex_validation_tests {
+    #[test]
+    fn unix_env_regex_pattern_compiles() {
+        // Validates that the UNIX_ENV_PATTERN regex string literal is a valid
+        // regex. A failure here indicates a typo in the pattern, which would
+        // otherwise panic at first access in production.
+        let _ = &*super::UNIX_ENV_PATTERN;
+    }
+
+    #[test]
+    fn windows_env_regex_pattern_compiles() {
+        // Validates that the WINDOWS_ENV_PATTERN regex string literal is a valid
+        // regex. A failure here indicates a typo in the pattern, which would
+        // otherwise panic at first access in production.
+        let _ = &*super::WINDOWS_ENV_PATTERN;
     }
 }

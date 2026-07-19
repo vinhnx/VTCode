@@ -4,7 +4,7 @@
 //! focused, independently testable unit. The parent struct delegates to
 //! this module's methods for loop-related logic.
 
-use std::collections::hash_map::DefaultHasher;
+use std::collections::{VecDeque, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 
 /// Tracks tool call loops, progress stagnation, and escalation chains.
@@ -23,7 +23,7 @@ pub struct LoopDetectionState {
     pub consecutive_escalations: u32,
     /// Rolling window of progress hashes for stagnation detection.
     /// Each entry is a hash of the assistant response content + key state.
-    pub progress_hashes: Vec<u64>,
+    pub progress_hashes: VecDeque<u64>,
     /// Consecutive turns with matching progress hashes.
     pub stagnant_turns: usize,
     /// Consecutive idle turns (no tool calls, no meaningful output).
@@ -38,7 +38,7 @@ impl Default for LoopDetectionState {
             consecutive_tool_loops: 0,
             tool_loop_limit_hit: false,
             consecutive_escalations: 0,
-            progress_hashes: Vec::with_capacity(16),
+            progress_hashes: VecDeque::with_capacity(16),
             stagnant_turns: 0,
             consecutive_idle_turns: 0,
             max_tool_loop_streak: 0,
@@ -80,9 +80,9 @@ impl LoopDetectionState {
     ///
     /// Returns `true` if the session appears stagnant (same hash repeated).
     pub fn record_progress(&mut self, content_hash: u64, window_size: usize) -> bool {
-        self.progress_hashes.push(content_hash);
+        self.progress_hashes.push_back(content_hash);
         if self.progress_hashes.len() > window_size {
-            self.progress_hashes.remove(0);
+            self.progress_hashes.pop_front();
         }
 
         // Check if all recent hashes are identical

@@ -1,7 +1,7 @@
 use crate::error_display;
 use crate::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent};
 use crate::providers::shared::responses_adapter::{ResponsesStreamAdapter, ResponsesStreamEvent};
-use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary};
+use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes};
 use async_stream::try_stream;
 use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
@@ -336,7 +336,8 @@ where
         let provider_name = options.provider_name;
         let mut processor = ResponsesNormalizedStreamProcessor::new(options, parse_final_response);
         let mut body_stream = response.bytes_stream();
-        let mut buffer = String::new();
+        let mut buf: Vec<u8> = Vec::new();
+        let mut offset = 0usize;
         let mut decoder = Utf8StreamDecoder::new();
 
         while let Some(chunk_result) = body_stream.next().await {
@@ -344,13 +345,13 @@ where
                 provider_name,
                 format!("streaming error: {err}"),
             ))?;
-            buffer.push_str(&decoder.push(&chunk));
+            buf.extend_from_slice(decoder.push(&chunk).as_bytes());
 
-            while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
-                let event = buffer[..split_idx].to_string();
-                buffer.drain(..split_idx + delimiter_len);
+            while let Some((split_idx, delimiter_len)) = find_sse_boundary_bytes(&buf, offset) {
+                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                offset = split_idx + delimiter_len;
 
-                if let Some(data_payload) = extract_data_payload(&event) {
+                if let Some(data_payload) = extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
                         continue;

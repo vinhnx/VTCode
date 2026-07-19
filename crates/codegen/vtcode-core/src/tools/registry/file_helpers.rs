@@ -108,8 +108,8 @@ fn apply_edit_replacement(content: &str, effective_old_str: &str, effective_new_
     let mut replacement_occurred = false;
     let mut new_content = content.to_owned();
 
-    if content.contains(effective_old_str) {
-        new_content = content.replace(effective_old_str, effective_new_str);
+    if let Some(pos) = content.find(effective_old_str) {
+        new_content = format!("{}{}{}", &content[..pos], effective_new_str, &content[pos + effective_old_str.len()..]);
         replacement_occurred = new_content != content;
     }
 

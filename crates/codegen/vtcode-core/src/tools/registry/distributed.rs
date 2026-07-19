@@ -38,22 +38,22 @@ static TOOL_CONFIG: OnceLock<ToolConfigSnapshot> = OnceLock::new();
 ///
 /// A second call with the SAME snapshot is a no-op (lets tests share
 /// state across multiple `ToolRegistry::new` invocations in one
-/// process). A second call with a DIFFERENT snapshot panics, since
-/// silently dropping the new value would mask a real config-loading
+/// process). A second call with a DIFFERENT snapshot returns an error,
+/// since silently dropping the new value would mask a real config-loading
 /// bug (e.g. two vtcode.toml files racing during a hot reload).
-pub fn install_tool_config(snapshot: ToolConfigSnapshot) {
+pub fn install_tool_config(snapshot: ToolConfigSnapshot) -> anyhow::Result<()> {
     match TOOL_CONFIG.set(snapshot) {
-        Ok(()) => {}
+        Ok(()) => Ok(()),
         Err(new) => {
             let existing = TOOL_CONFIG.get().expect("set failed; lock should be initialized");
             if existing != &new {
-                panic!(
+                Err(anyhow::anyhow!(
                     "install_tool_config called with a different snapshot; \
                      first install and second install disagree on the user config"
-                );
+                ))
+            } else {
+                Ok(())
             }
-            // Same value: a no-op. This is the common case for tests
-            // that build multiple `ToolRegistry` instances in one process.
         }
     }
 }
@@ -85,33 +85,30 @@ mod tests {
     fn install_tool_config_re_install_with_same_snapshot_is_a_noop() {
         // The first install may have already happened in an earlier test
         // case in this process. We re-install the same default snapshot;
-        // the function must not panic, even if a prior install exists.
-        install_tool_config(ToolConfigSnapshot::default());
+        // the function must return Ok, even if a prior install exists.
+        install_tool_config(ToolConfigSnapshot::default()).ok();
     }
 
-    /// A second install with a DIFFERENT snapshot panics. This guards
+    /// A second install with a DIFFERENT snapshot returns an error. This guards
     /// against a real bug (two config files racing during a hot reload,
     /// or a test that forgot to reset the global) silently dropping the
     /// new value.
     #[test]
-    #[should_panic(expected = "install_tool_config called with a different snapshot")]
-    fn install_tool_config_panics_on_diverging_snapshot() {
+    fn install_tool_config_errors_on_diverging_snapshot() {
         // Force a divergent install by clearing whatever is already
-        // there and re-installing with a non-default value. The clear
-        // path is only available via test-only panic in the divergent
-        // branch, so we exercise the panic by passing a value that
-        // differs from the first one observed in this process.
+        // there and re-installing with a non-default value.
         let divergent = ToolConfigSnapshot {
             web_search: WebSearchConfig { max_results: 999, ..WebSearchConfig::default() },
             ..ToolConfigSnapshot::default()
         };
         // If a prior test already installed a default snapshot, this
-        // divergent install should panic because the values disagree.
-        // If no prior install has happened yet, this will succeed; the
-        // `should_panic` will then fail. To make the test deterministic
-        // we first install a known default, then the divergent one.
-        install_tool_config(ToolConfigSnapshot::default());
-        install_tool_config(divergent);
+        // divergent install should return an error because the values disagree.
+        // If no prior install has happened yet, this will succeed;
+        // to make the test deterministic we first install a known default,
+        // then the divergent one.
+        install_tool_config(ToolConfigSnapshot::default()).ok();
+        let result = install_tool_config(divergent);
+        assert!(result.is_err(), "expected error on diverging snapshot, got: {result:?}");
     }
 }
 

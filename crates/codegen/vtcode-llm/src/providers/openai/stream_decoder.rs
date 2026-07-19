@@ -13,8 +13,7 @@ use crate::provider;
 use crate::providers::shared::StreamTelemetry;
 use crate::providers::shared::parse_cached_prompt_tokens_from_usage;
 use crate::providers::shared::{
-    ResponsesStreamEventPolicy, StreamAssemblyError, extract_data_payload, find_sse_boundary,
-    response_stream_event_policy,
+    ResponsesStreamEventPolicy, StreamAssemblyError, extract_data_payload, response_stream_event_policy,
 };
 use async_stream::try_stream;
 use futures::StreamExt;
@@ -226,7 +225,8 @@ impl ResponsesToolCallState {
 pub(crate) fn create_chat_stream(response: reqwest::Response, model: String) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
-        let mut buffer = String::new();
+        let mut buf: Vec<u8> = Vec::new();
+        let mut offset = 0usize;
         let retain_reasoning_summaries = find_family_for_model(&model).supports_reasoning_summaries;
         let mut aggregator = crate::providers::shared::StreamAggregator::new(model.clone());
         let telemetry = OpenAIStreamTelemetry;
@@ -240,13 +240,13 @@ pub(crate) fn create_chat_stream(response: reqwest::Response, model: String) -> 
                 provider::LLMError::Network { message: formatted_error, metadata: None }
             })?;
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buf.extend_from_slice(String::from_utf8_lossy(&chunk).as_bytes());
 
-            while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
-                let event = buffer[..split_idx].to_string();
-                buffer.drain(..split_idx + delimiter_len);
+            while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
+                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                offset = split_idx + delimiter_len;
 
-                if let Some(data_payload) = extract_data_payload(&event) {
+                if let Some(data_payload) = extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload.is_empty() || trimmed_payload == "[DONE]" {
                         continue;
@@ -316,7 +316,8 @@ pub(crate) fn create_responses_stream(
 ) -> provider::LLMStream {
     let stream = try_stream! {
         let mut body_stream = response.bytes_stream();
-        let mut buffer = String::new();
+        let mut buf: Vec<u8> = Vec::new();
+        let mut offset = 0usize;
         let mut aggregator = crate::providers::shared::StreamAggregator::new(model.clone());
         let retain_reasoning_summaries = find_family_for_model(&model).supports_reasoning_summaries;
         let mut final_response: Option<Value> = None;
@@ -335,17 +336,17 @@ pub(crate) fn create_responses_stream(
                 provider::LLMError::Network { message: formatted_error, metadata: None }
             })?;
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
+            buf.extend_from_slice(String::from_utf8_lossy(&chunk).as_bytes());
 
-            while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
-                let event = buffer[..split_idx].to_string();
-                buffer.drain(..split_idx + delimiter_len);
+            while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
+                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                offset = split_idx + delimiter_len;
                 #[cfg(debug_assertions)]
                 {
                     streamed_events_counter = streamed_events_counter.saturating_add(1);
                 }
 
-                if let Some(data_payload) = extract_data_payload(&event) {
+                if let Some(data_payload) = extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload.is_empty() {
                         continue;

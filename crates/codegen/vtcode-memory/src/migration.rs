@@ -112,7 +112,7 @@ fn write_manifest(dir: &Path, session_id: &str, source: &Path, status: &str) -> 
     manifest.updated_at = ts;
     manifest.status = status.to_string();
     let path = dir.join("manifest.json");
-    let bytes = serde_json::to_string_pretty(&manifest)?;
+    let bytes = serde_json::to_string(&manifest)?;
     std::fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path, e))?;
     Ok(())
 }

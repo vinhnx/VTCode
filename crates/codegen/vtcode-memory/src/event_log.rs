@@ -1,5 +1,6 @@
 //! Append-only per-session `ThreadEvent` log plus index and manifest.
 
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -30,6 +31,9 @@ struct LogState {
     /// event (the previous implementation re-statted the file twice on every
     /// `append`); initialized from the file length on `open`.
     next_offset: u64,
+    /// Buffered pending writes to batch syscalls. Events are appended here
+    /// and flushed to disk at turn boundaries or before read operations.
+    write_buf: Vec<u8>,
 }
 
 impl LogState {
@@ -39,6 +43,7 @@ impl LogState {
             index: TurnIndex::default(),
             in_turn: false,
             next_offset: 0,
+            write_buf: Vec::with_capacity(65536),
         }
     }
 }
@@ -109,11 +114,7 @@ impl SessionEventLog {
         let written = line.len() + 1;
         let mut st = self.state.lock().map_err(poison)?;
         let start = st.next_offset;
-        {
-            let mut file = self.file.lock().map_err(poison)?;
-            writeln!(file, "{line}").map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            file.flush().map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-        }
+        writeln!(&mut st.write_buf, "{line}").map_err(|e| SessionStoreError::io(&self.events_path, e))?;
         let end = start + written as u64;
         st.next_offset = end;
 
@@ -123,7 +124,7 @@ impl SessionEventLog {
             ThreadEvent::TurnStarted(_) => {
                 st.in_turn = true;
                 let n = st.manifest.turn_count + 1;
-                st.index.entries.push(TurnIndexEntry {
+                st.index.entries.push_back(TurnIndexEntry {
                     turn_number: n,
                     start_offset: start,
                     end_offset: end,
@@ -133,7 +134,7 @@ impl SessionEventLog {
             }
             ThreadEvent::TurnCompleted(_) => {
                 if st.in_turn {
-                    if let Some(entry) = st.index.entries.last_mut() {
+                    if let Some(entry) = st.index.entries.back_mut() {
                         entry.end_offset = end;
                         entry.event_count += 1;
                     }
@@ -141,11 +142,11 @@ impl SessionEventLog {
                     st.manifest.turn_count = st.index.entries.len() as u64;
                 }
                 st.manifest.status = "completed".to_string();
-                self.persist_meta_locked(&st)?;
+                self.persist_meta_locked(&mut st)?;
             }
             ThreadEvent::TurnFailed(_) => {
                 if st.in_turn {
-                    if let Some(entry) = st.index.entries.last_mut() {
+                    if let Some(entry) = st.index.entries.back_mut() {
                         entry.end_offset = end;
                         entry.event_count += 1;
                     }
@@ -153,11 +154,11 @@ impl SessionEventLog {
                     st.manifest.turn_count = st.index.entries.len() as u64;
                 }
                 st.manifest.status = "failed".to_string();
-                self.persist_meta_locked(&st)?;
+                self.persist_meta_locked(&mut st)?;
             }
             _ => {
                 if st.in_turn
-                    && let Some(entry) = st.index.entries.last_mut()
+                    && let Some(entry) = st.index.entries.back_mut()
                 {
                     entry.end_offset = end;
                     entry.event_count += 1;
@@ -177,37 +178,48 @@ impl SessionEventLog {
             return Ok(());
         }
         let mut st = self.state.lock().map_err(poison)?;
+        self.flush_write_buf_locked(&mut st)?;
         if st.manifest.event_count <= self.max_events as u64 {
             return Ok(());
         }
+
+        let _excess = st.manifest.event_count as i64 - self.max_events as i64;
+        let mut evicted_event_count = 0u64;
+        let mut truncate_offset = 0u64;
+
         while st.manifest.event_count > self.max_events as u64
-            && let Some(oldest) = st.index.entries.first()
+            && let Some(oldest) = st.index.entries.front()
         {
-            let truncate_offset = oldest.end_offset;
-            let _evicted = oldest.event_count;
-            {
-                let mut file = self.file.lock().map_err(poison)?;
-                file.seek(SeekFrom::Start(truncate_offset))
-                    .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-                let mut remaining = Vec::new();
-                file.read_to_end(&mut remaining)
-                    .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-                file.set_len(0).map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-                file.seek(SeekFrom::Start(0))
-                    .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-                file.write_all(&remaining)
-                    .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-                file.flush().map_err(|e| SessionStoreError::io(&self.events_path, e))?;
-            }
-            st.index.entries.remove(0);
-            for entry in &mut st.index.entries {
-                entry.start_offset -= truncate_offset;
-                entry.end_offset -= truncate_offset;
-            }
-            st.next_offset -= truncate_offset;
-            st.manifest.event_count = st.index.entries.iter().map(|e| e.event_count).sum();
-            let _ = st.manifest.event_count; // approximate; turns dominate
+            truncate_offset = oldest.end_offset;
+            evicted_event_count += oldest.event_count;
+            st.index.entries.pop_front();
         }
+
+        if truncate_offset == 0 {
+            return Ok(());
+        }
+
+        {
+            let mut file = self.file.lock().map_err(poison)?;
+            file.seek(SeekFrom::Start(truncate_offset))
+                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            let mut remaining = Vec::new();
+            file.read_to_end(&mut remaining)
+                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            file.set_len(0).map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            file.seek(SeekFrom::Start(0))
+                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            file.write_all(&remaining)
+                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            file.flush().map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+        }
+
+        for entry in &mut st.index.entries {
+            entry.start_offset -= truncate_offset;
+            entry.end_offset -= truncate_offset;
+        }
+        st.next_offset -= truncate_offset;
+        st.manifest.event_count = st.manifest.event_count.saturating_sub(evicted_event_count);
         Ok(())
     }
 
@@ -222,6 +234,10 @@ impl SessionEventLog {
                 .cloned()
                 .ok_or(SessionStoreError::TurnNotFound { session: st.manifest.session_id.clone(), turn })?
         };
+        {
+            let mut st = self.state.lock().map_err(poison)?;
+            self.flush_write_buf_locked(&mut st)?;
+        }
         let buf = {
             let mut file = self.file.lock().map_err(poison)?;
             file.seek(SeekFrom::Start(entry.start_offset))
@@ -278,7 +294,7 @@ impl SessionEventLog {
         let mut st = self.state.lock().map_err(poison)?;
         st.manifest.status = "completed".to_string();
         st.manifest.updated_at = now_rfc3339();
-        self.persist_meta_locked(&st)
+        self.persist_meta_locked(&mut st)
     }
 
     /// Rebuild index + manifest by scanning `events.jsonl` (authoritative).
@@ -321,7 +337,7 @@ impl SessionEventLog {
                     ThreadEvent::TurnStarted(_) => {
                         in_turn = true;
                         let n = st.manifest.turn_count + 1;
-                        st.index.entries.push(TurnIndexEntry {
+                        st.index.entries.push_back(TurnIndexEntry {
                             turn_number: n,
                             start_offset: pos,
                             end_offset: line_end,
@@ -331,7 +347,7 @@ impl SessionEventLog {
                     }
                     ThreadEvent::TurnCompleted(_) | ThreadEvent::TurnFailed(_) => {
                         if in_turn {
-                            if let Some(entry) = st.index.entries.last_mut() {
+                            if let Some(entry) = st.index.entries.back_mut() {
                                 entry.end_offset = line_end;
                                 entry.event_count += 1;
                             }
@@ -349,7 +365,7 @@ impl SessionEventLog {
                         }
                     }
                     _ => {
-                        if in_turn && let Some(entry) = st.index.entries.last_mut() {
+                        if in_turn && let Some(entry) = st.index.entries.back_mut() {
                             entry.end_offset = line_end;
                             entry.event_count += 1;
                         }
@@ -366,10 +382,37 @@ impl SessionEventLog {
         Ok(())
     }
 
-    fn persist_meta_locked(&self, st: &LogState) -> Result<(), SessionStoreError> {
+    fn persist_meta_locked(&self, st: &mut LogState) -> Result<(), SessionStoreError> {
+        self.flush_write_buf_locked(st)?;
         self.manifest_store.write_manifest(&st.manifest)?;
         self.manifest_store.write_turn_index(&st.index)?;
         Ok(())
+    }
+
+    /// Flush the in-memory write buffer to the underlying file.
+    fn flush_write_buf_locked(&self, st: &mut LogState) -> Result<(), SessionStoreError> {
+        if st.write_buf.is_empty() {
+            return Ok(());
+        }
+        let mut file = self.file.lock().map_err(poison)?;
+        file.write_all(&st.write_buf)
+            .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+        st.write_buf.clear();
+        Ok(())
+    }
+}
+
+impl Drop for SessionEventLog {
+    fn drop(&mut self) {
+        if let Ok(mut st) = self.state.lock() {
+            if !st.write_buf.is_empty() {
+                if let Ok(mut file) = self.file.lock() {
+                    let _ = file.write_all(&st.write_buf);
+                    let _ = file.flush();
+                    st.write_buf.clear();
+                }
+            }
+        }
     }
 }
 
@@ -440,7 +483,7 @@ pub struct TurnIndexEntry {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TurnIndex {
     /// Turn entries in ordinal order.
-    pub entries: Vec<TurnIndexEntry>,
+    pub entries: VecDeque<TurnIndexEntry>,
 }
 
 impl TurnIndex {

@@ -14,6 +14,7 @@ use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use crate::llm::request_gap::RequestGapTracker;
 use hashbrown::HashMap;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use vtcode_exec_events::ThreadEvent;
@@ -78,7 +79,7 @@ pub struct AgentSessionState {
     pub consecutive_escalations: u32,
     /// Rolling window of progress hashes for stagnation detection.
     /// Each entry is a hash of the assistant response content + key state.
-    pub progress_hashes: Vec<u64>,
+    pub progress_hashes: VecDeque<u64>,
     /// Consecutive turns with matching progress hashes.
     pub stagnant_turns: usize,
     pub last_processed_message_idx: usize,
@@ -168,7 +169,7 @@ impl AgentSessionState {
             consecutive_tool_loops: 0,
             tool_loop_limit_hit: false,
             consecutive_escalations: 0,
-            progress_hashes: Vec::with_capacity(16),
+            progress_hashes: VecDeque::with_capacity(16),
             stagnant_turns: 0,
             last_processed_message_idx: 0,
             previous_response_chains: HashMap::new(),
@@ -360,14 +361,14 @@ impl AgentSessionState {
             self.stagnant_turns = 0;
             return false;
         };
-        if self.progress_hashes.last() == Some(&hash) {
+        if self.progress_hashes.back() == Some(&hash) {
             self.stagnant_turns += 1;
         } else {
             self.stagnant_turns = 0;
         }
-        self.progress_hashes.push(hash);
+        self.progress_hashes.push_back(hash);
         if self.progress_hashes.len() > 16 {
-            self.progress_hashes.remove(0);
+            self.progress_hashes.pop_front();
         }
         self.stagnant_turns >= Self::PROGRESS_STAGNATION_THRESHOLD
     }
@@ -719,7 +720,7 @@ mod tests {
         });
         state.reconcile_token_count();
         state.last_processed_message_idx = 2;
-        state.progress_hashes.push(123);
+        state.progress_hashes.push_back(123);
         state.stagnant_turns = 3;
         state.set_previous_response_chain("openai", "gpt-5", Some("resp_1"), Arc::new(vec![]));
 

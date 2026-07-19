@@ -2,11 +2,12 @@ use super::FileOpsTool;
 use crate::tools::file_ops::path_policy::PathSuggestionKind;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use serde_json::{Value, json};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs;
+use tokio::task::spawn_blocking;
 use vtcode_commons::walk::build_default_walker;
 
 pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> Result<Value> {
@@ -23,12 +24,28 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
 
     let mut dir_contents: HashMap<String, Vec<(String, String)>> = HashMap::new(); // path -> [(name, type)]
 
-    // Walk the directory structure up to max_depth
-    for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
-        let entry = entry.map_err(|e| anyhow!("Walk error: {e}"))?;
-        let path = entry.path();
+    // Collect walker entries in a blocking task, then process async
+    let walker_entries: Vec<(PathBuf, bool)> = spawn_blocking({
+        let search_path = search_path.clone();
+        move || {
+            let mut entries = Vec::new();
+            for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                let path = entry.path().to_path_buf();
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                entries.push((path, is_dir));
+            }
+            entries
+        }
+    })
+    .await
+    .context("Failed to spawn walker task")?;
 
-        if tool.should_exclude(path).await {
+    for (path, is_dir) in walker_entries {
+        if tool.should_exclude(&path).await {
             continue;
         }
 
@@ -37,9 +54,9 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
             continue;
         }
 
-        if path.is_dir() {
+        if is_dir {
             let mut children = Vec::with_capacity(16); // Pre-allocate for typical directory size
-            if let Ok(entries) = fs::read_dir(path).await {
+            if let Ok(entries) = fs::read_dir(&path).await {
                 let mut entries_list = Vec::with_capacity(32); // Pre-allocate for directory entries
                 let mut entry = entries;
                 while let Ok(Some(file_entry)) = entry.next_entry().await {
@@ -59,7 +76,7 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
 
             let relative_path = path
                 .strip_prefix(&tool.workspace_root)
-                .unwrap_or(path)
+                .unwrap_or(&path)
                 .to_string_lossy()
                 .to_string();
             dir_contents.insert(relative_path, children);
