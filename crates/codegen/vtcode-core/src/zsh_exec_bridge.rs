@@ -3,35 +3,32 @@ use anyhow::Result;
 use anyhow::anyhow;
 #[cfg(not(unix))]
 use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct WrapperExecRequest {
-    request_id: String,
-    file: String,
-    argv: Vec<String>,
-    cwd: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum WrapperExecAction {
-    Allow,
-    Deny,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct WrapperExecResponse {
-    request_id: String,
-    action: WrapperExecAction,
-    reason: Option<String>,
-}
-
 #[cfg(unix)]
 mod unix_impl {
-    use super::{WrapperExecAction, WrapperExecRequest, WrapperExecResponse};
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct WrapperExecRequest {
+        request_id: String,
+        file: String,
+        argv: Vec<String>,
+        cwd: String,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    enum WrapperExecAction {
+        Allow,
+        Deny,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct WrapperExecResponse {
+        request_id: String,
+        action: WrapperExecAction,
+        reason: Option<String>,
+    }
 
     pub(super) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str = "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
     pub(super) const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
@@ -39,6 +36,7 @@ mod unix_impl {
     use anyhow::{Context, Result, bail};
     use hashbrown::HashMap;
     use parking_lot::Mutex;
+    use serde::{Deserialize, Serialize};
     use std::fs;
     use std::io::{ErrorKind, Read, Write};
     use std::os::unix::fs::PermissionsExt;
@@ -266,7 +264,7 @@ mod unix_impl {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
+        use super::{WrapperExecAction, WrapperExecRequest, evaluate_wrapper_exec_request};
 
         fn request(command: &[&str]) -> WrapperExecRequest {
             let file = command.first().unwrap_or(&"/usr/bin/true").to_string();

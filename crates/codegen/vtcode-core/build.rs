@@ -1,5 +1,4 @@
 #![allow(missing_docs)]
-use std::io;
 
 use std::env;
 use std::fs;

@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use once_cell::sync::OnceCell;
 
 use crate::config::GatekeeperConfig;
+#[cfg(target_os = "macos")]
 use vtcode_commons::canonicalize;
 
 const GATEKEEPER_CACHE_MAX_ENTRIES: usize = 1024;

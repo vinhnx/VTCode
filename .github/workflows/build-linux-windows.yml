@@ -57,6 +57,20 @@ jobs:
           - aarch64-unknown-linux-gnu
 
     steps:
+      - name: Wait for tag to exist
+        shell: bash
+        run: |
+          for i in $(seq 1 12); do
+            if git ls-remote --exit-code --tags "https://github.com/vinhnx/VTCode.git" "${{ inputs.tag }}"; then
+              echo "Tag ${{ inputs.tag }} found"
+              exit 0
+            fi
+            echo "Tag ${{ inputs.tag }} not found yet, waiting 10s..."
+            sleep 10
+          done
+          echo "::error::Tag ${{ inputs.tag }} does not exist after 120s" >&2
+          exit 1
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
         with:
           ref: ${{ inputs.tag }}
