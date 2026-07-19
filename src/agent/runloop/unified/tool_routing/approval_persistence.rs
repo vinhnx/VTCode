@@ -87,8 +87,8 @@ pub(super) async fn persist_shell_approval_prefix_rule(
         .persist_approval_cache_prefix(&rendered_rule)
         .await
         .context("Failed to persist shell approval prefix to tool policy")?;
-    let workspace_root = tool_registry.workspace_root().clone();
-    let mut manager = crate::main_helpers::load_workspace_config(&workspace_root)?;
+    let workspace_root = tool_registry.workspace_root();
+    let mut manager = crate::main_helpers::load_workspace_config(workspace_root)?;
     let mut config = manager.config().clone();
 
     if !config

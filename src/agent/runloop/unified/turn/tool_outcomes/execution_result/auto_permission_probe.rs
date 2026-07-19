@@ -13,13 +13,13 @@ async fn auto_permission_probe_warning(
         return None;
     }
 
-    let permissions = ctx.vt_cfg.map(|cfg| cfg.permissions.clone())?;
+    let permissions = ctx.vt_cfg.map(|cfg| &cfg.permissions);
     let working_history = ctx.working_history.clone();
     match probe_tool_output(
         ctx.provider_client.as_mut(),
         ctx.config,
         ctx.vt_cfg,
-        &permissions,
+        permissions?,
         &working_history,
         content_for_model,
     )

@@ -53,12 +53,12 @@ pub(super) fn tool_permission_prompt_kind(tool_name: &str) -> ToolPermissionProm
 }
 
 fn normalized_shell_command_value(args: &Value) -> Option<Value> {
-    let normalized = vtcode_core::tools::command_args::normalize_shell_args(args)
-        .ok()
-        .unwrap_or_else(|| args.clone());
-    vtcode_core::tools::command_args::normalized_command_value(&normalized)
-        .ok()
-        .flatten()
+    match vtcode_core::tools::command_args::normalize_shell_args(args) {
+        Ok(normalized) => vtcode_core::tools::command_args::normalized_command_value(&normalized)
+            .ok()
+            .flatten(),
+        Err(_) => vtcode_core::tools::command_args::normalized_command_value(args).ok().flatten(),
+    }
 }
 
 fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {

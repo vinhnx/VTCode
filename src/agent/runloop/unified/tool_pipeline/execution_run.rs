@@ -111,7 +111,7 @@ pub(crate) async fn run_tool_call_with_args(
     turn_index: usize,
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
-    let mut effective_args = args_val.clone();
+    let mut effective_args = std::borrow::Cow::Borrowed(args_val);
     let mut canonical_name = requested_name.to_string();
     let tool_call_id = tool_item_id.as_str();
     let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
@@ -126,7 +126,7 @@ pub(crate) async fn run_tool_call_with_args(
         match ctx.tool_registry.admit_public_tool_call(requested_name, args_val) {
             Ok(prepared) => {
                 canonical_name = prepared.canonical_name;
-                effective_args = prepared.effective_args;
+                effective_args = std::borrow::Cow::Owned(prepared.effective_args);
             }
             Err(err) => {
                 return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
@@ -144,8 +144,12 @@ pub(crate) async fn run_tool_call_with_args(
     let mut tool_started_emitted = streamed_harness_item_id.is_some();
     let harness_item_id = streamed_harness_item_id.unwrap_or(fallback_harness_item_id);
     if !tool_started_emitted && let Some(emitter) = harness_emitter {
-        let _ =
-            emitter.emit(tool_started_event(harness_item_id.clone(), name, Some(&effective_args), Some(tool_call_id)));
+        let _ = emitter.emit(tool_started_event(
+            harness_item_id.clone(),
+            name,
+            Some(effective_args.as_ref()),
+            Some(tool_call_id),
+        ));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
@@ -168,7 +172,7 @@ pub(crate) async fn run_tool_call_with_args(
         let safety_approval_justification = match check_tool_safety(
             ctx,
             name,
-            &effective_args,
+            effective_args.as_ref(),
             safety_invocation_id,
             ctrl_c_state,
             ctrl_c_notify,
@@ -177,7 +181,7 @@ pub(crate) async fn run_tool_call_with_args(
         {
             Ok(justification) => justification,
             Err(safety_failure) => {
-                return Ok(finish_with_status(safety_failure, false, &effective_args));
+                return Ok(finish_with_status(safety_failure, false, effective_args.as_ref()));
             }
         };
 
@@ -185,7 +189,7 @@ pub(crate) async fn run_tool_call_with_args(
             ctx,
             tool_call_id,
             name,
-            &effective_args,
+            effective_args.as_ref(),
             ctrl_c_state,
             ctrl_c_notify,
             default_placeholder,
@@ -196,10 +200,10 @@ pub(crate) async fn run_tool_call_with_args(
         )
         .await
         {
-            Ok(Some(updated_args)) => effective_args = updated_args,
+            Ok(Some(updated_args)) => effective_args = std::borrow::Cow::Owned(updated_args),
             Ok(None) => {}
             Err(permission_failure) => {
-                return Ok(finish_with_status(permission_failure, false, &effective_args));
+                return Ok(finish_with_status(permission_failure, false, effective_args.as_ref()));
             }
         }
 
@@ -214,7 +218,7 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         ctx.handle,
         ctx.session,
-        &effective_args,
+        effective_args.as_ref(),
         ctrl_c_state,
         ctrl_c_notify,
         request_user_input_enabled,
@@ -230,12 +234,19 @@ pub(crate) async fn run_tool_call_with_args(
             },
             Err(error) => ToolExecutionStatus::Failure { error: structured_failure(name, &error) },
         };
-        return Ok(finish_with_status(status, true, &effective_args));
+        return Ok(finish_with_status(status, true, effective_args.as_ref()));
     }
 
-    if let Some(outcome) =
-        handle_start_planning(ctx, name, &effective_args, ctrl_c_state, ctrl_c_notify, max_tool_retries, prevalidated)
-            .await
+    if let Some(outcome) = handle_start_planning(
+        ctx,
+        name,
+        effective_args.as_ref(),
+        ctrl_c_state,
+        ctrl_c_notify,
+        max_tool_retries,
+        prevalidated,
+    )
+    .await
     {
         emit_tool_completion_for_status(
             harness_emitter,
@@ -244,13 +255,21 @@ pub(crate) async fn run_tool_call_with_args(
             &harness_item_id,
             tool_call_id,
             name,
-            &effective_args,
+            effective_args.as_ref(),
             &outcome.status,
         );
         return Ok(outcome);
     }
-    if let Some(outcome) =
-        handle_finish_planning(ctx, name, &effective_args, ctrl_c_state, ctrl_c_notify, max_tool_retries, vt_cfg).await
+    if let Some(outcome) = handle_finish_planning(
+        ctx,
+        name,
+        effective_args.as_ref(),
+        ctrl_c_state,
+        ctrl_c_notify,
+        max_tool_retries,
+        vt_cfg,
+    )
+    .await
     {
         emit_tool_completion_for_status(
             harness_emitter,
@@ -259,7 +278,7 @@ pub(crate) async fn run_tool_call_with_args(
             &harness_item_id,
             tool_call_id,
             name,
-            &effective_args,
+            effective_args.as_ref(),
             &outcome.status,
         );
         return Ok(outcome);
@@ -271,14 +290,14 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         &harness_item_id,
         tool_call_id,
-        &effective_args,
+        effective_args.as_ref(),
         ctrl_c_state,
         ctrl_c_notify,
         ctx.handle,
         harness_emitter.cloned(),
         vt_cfg,
         max_tool_retries,
-        exec_settlement_mode_for_tool_call(prevalidated, name, &effective_args),
+        exec_settlement_mode_for_tool_call(prevalidated, name, effective_args.as_ref()),
         !prevalidated,
     )
     .await;
@@ -290,7 +309,7 @@ pub(crate) async fn run_tool_call_with_args(
         name,
         &harness_item_id,
         tool_call_id,
-        &effective_args,
+        effective_args.as_ref(),
         execution,
         ctrl_c_state,
         ctrl_c_notify,
@@ -307,7 +326,7 @@ pub(crate) async fn run_tool_call_with_args(
         &harness_item_id,
         tool_call_id,
         name,
-        &effective_args,
+        effective_args.as_ref(),
         turn_index,
         skip_confirmations,
         harness_emitter,
@@ -323,7 +342,7 @@ pub(crate) async fn run_tool_call_with_args(
         &harness_item_id,
         tool_call_id,
         name,
-        &effective_args,
+        effective_args.as_ref(),
         &pipeline_outcome.status,
     );
     Ok(pipeline_outcome)

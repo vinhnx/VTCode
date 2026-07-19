@@ -4,7 +4,7 @@ use vtcode_core::core::agent::events::{
     ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event, tool_output_completed_event,
     tool_output_payload_from_value,
 };
-use vtcode_core::exec::events::{ToolCallStatus, ToolOutcome, tool_outcome_from_status};
+use vtcode_core::exec::events::{ToolCallStatus, tool_outcome_from_status};
 
 use super::status::ToolExecutionStatus;
 

@@ -291,7 +291,7 @@ async fn apply_permission_hook_updates(
 
     let updates = bounded_permission_updates(updates, &mut messages);
 
-    let mut next_permissions = permissions_state.read().await.clone();
+    let mut state = permissions_state.write().await;
     let mut changed = false;
     let mut persist_project = false;
 
@@ -310,8 +310,8 @@ async fn apply_permission_hook_updates(
             (destination, PermissionUpdateKind::AddRules(rules)) => {
                 let rules = bounded_permission_rules("add_rules", rules, &mut messages);
                 let target = match behavior {
-                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
-                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                    PermissionDecisionBehavior::Allow => &mut state.allow,
+                    PermissionDecisionBehavior::Deny => &mut state.deny,
                 };
                 let mut seen = target.iter().cloned().collect::<BTreeSet<_>>();
                 for rule in rules {
@@ -325,8 +325,8 @@ async fn apply_permission_hook_updates(
             (destination, PermissionUpdateKind::ReplaceRules(rules)) => {
                 let rules = bounded_permission_rules("replace_rules", rules, &mut messages);
                 let target = match behavior {
-                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
-                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                    PermissionDecisionBehavior::Allow => &mut state.allow,
+                    PermissionDecisionBehavior::Deny => &mut state.deny,
                 };
                 if target.as_slice() != rules {
                     *target = rules.to_vec();
@@ -337,8 +337,8 @@ async fn apply_permission_hook_updates(
             (destination, PermissionUpdateKind::RemoveRules(rules)) => {
                 let rules = bounded_permission_rules("remove_rules", rules, &mut messages);
                 let target = match behavior {
-                    PermissionDecisionBehavior::Allow => &mut next_permissions.allow,
-                    PermissionDecisionBehavior::Deny => &mut next_permissions.deny,
+                    PermissionDecisionBehavior::Allow => &mut state.allow,
+                    PermissionDecisionBehavior::Deny => &mut state.deny,
                 };
                 let initial_len = target.len();
                 target.retain(|rule| !rules.iter().any(|candidate| candidate == rule));
@@ -352,18 +352,16 @@ async fn apply_permission_hook_updates(
         return messages;
     }
 
-    {
-        let mut state = permissions_state.write().await;
-        *state = next_permissions.clone();
-    }
-    tool_registry.apply_permissions_config(&next_permissions);
+    tool_registry.apply_permissions_config(&*state);
 
     if persist_project {
+        let config_for_persistence = state.clone();
+        drop(state);
         let workspace_root = tool_registry.workspace_root().clone();
         match ConfigManager::load_from_workspace(&workspace_root) {
             Ok(mut manager) => {
                 let mut config = manager.config().clone();
-                config.permissions = next_permissions;
+                config.permissions = config_for_persistence;
                 if let Err(err) = manager.save_config(&config) {
                     messages.push(HookMessage::error(format!(
                         "PermissionRequest hook failed to persist project settings: {err}"
@@ -1009,21 +1007,27 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         }
     }
 
-    let current_dir = std::env::current_dir().unwrap_or_else(|_| tool_registry.workspace_root().clone());
-    let permissions_snapshot = if let Some(state) = permissions_state {
-        state.read().await.clone()
+    let current_dir = tool_registry.workspace_root();
+    let permission_request = build_permission_request(current_dir, current_dir, &normalized_tool_name, tool_args);
+    let permission_decision = if let Some(state) = permissions_state {
+        let permissions_snapshot = state.read().await;
+        resolve_permission_decision(
+            &*permissions_snapshot,
+            active_agent_permissions,
+            current_dir,
+            current_dir,
+            &permission_request,
+        )
     } else {
-        permissions_config.cloned().unwrap_or_default()
+        let default_permissions = PermissionsConfig::default();
+        resolve_permission_decision(
+            permissions_config.unwrap_or(&default_permissions),
+            active_agent_permissions,
+            current_dir,
+            current_dir,
+            &permission_request,
+        )
     };
-    let permission_request =
-        build_permission_request(tool_registry.workspace_root(), &current_dir, &normalized_tool_name, tool_args);
-    let permission_decision = resolve_permission_decision(
-        &permissions_snapshot,
-        active_agent_permissions,
-        tool_registry.workspace_root(),
-        &current_dir,
-        &permission_request,
-    );
 
     if permission_decision == ResolvedPermissionDecision::Deny {
         return Ok(ToolPermissionFlow::Denied);
@@ -1097,7 +1101,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         && (raw_requires_rule_prompt || raw_requires_sandbox_prompt || policy_requires_prompt);
     let requires_rule_prompt = raw_requires_rule_prompt && !full_auto_allowlist_active;
     let auto_permission_classifier_review = (effective_permission_decision == ResolvedPermissionDecision::Auto
-        && !auto_permission_safe_builtin_allow(tool_registry.workspace_root(), &permission_request))
+        && !auto_permission_safe_builtin_allow(current_dir, &permission_request))
         || full_auto_promptable;
     let requires_sandbox_prompt = raw_requires_sandbox_prompt && !auto_permission_classifier_review;
     // Check saved approval regardless of permission-config "Ask" — the user's
@@ -1134,7 +1138,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     }
 
     if should_allow_without_prompt(
-        tool_registry.workspace_root(),
+        current_dir,
         &permission_request,
         effective_permission_decision,
         requires_rule_prompt,
@@ -1157,19 +1161,36 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     // auto-permission classifier must not override that decision — the
     // gateway's risk/destructive assessment is the authoritative signal.
     if auto_permission_classifier_review && !safety_requires_prompt {
-        match resolve_auto_permission(
-            renderer,
-            tool_registry,
-            &normalized_tool_name,
-            tool_args,
-            &permission_request,
-            &permissions_snapshot,
-            auto_permission_runtime,
-            session_stats,
-            !full_auto_allowlist_active,
-        )
-        .await?
-        {
+        let outcome = if let Some(state) = permissions_state {
+            let guard = state.read().await;
+            resolve_auto_permission(
+                renderer,
+                tool_registry,
+                &normalized_tool_name,
+                tool_args,
+                &permission_request,
+                &*guard,
+                auto_permission_runtime,
+                session_stats,
+                !full_auto_allowlist_active,
+            )
+            .await?
+        } else {
+            let default_permissions = PermissionsConfig::default();
+            resolve_auto_permission(
+                renderer,
+                tool_registry,
+                &normalized_tool_name,
+                tool_args,
+                &permission_request,
+                permissions_config.unwrap_or(&default_permissions),
+                auto_permission_runtime,
+                session_stats,
+                !full_auto_allowlist_active,
+            )
+            .await?
+        };
+        match outcome {
             AutoPermissionPermissionOutcome::Allow => {
                 return Ok(ToolPermissionFlow::Approved { updated_args: None });
             }
