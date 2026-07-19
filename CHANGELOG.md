@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.2 - 2026-07-19
+
+### Highlights
+#### Bug Fixes
+
+- Only exclude top-level prompts/ from crate tarball (6439c576) 
+### Other Changes
 ## 0.136.1 - 2026-07-19
 
 ### Highlights
