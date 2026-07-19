@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.4 - 2026-07-19
+
+### Highlights
+#### Documentation
+
+- Fix intra-doc links in tool format and conversion modules (fa71d449) (@vinhnx)
+#### Features
+
+- Execute update command and fix relaunch order (e82f82a0) 
+### Other Changes
+#### Other
+
+- Update TODO (6d119a86) 
+#### Refactors
+
+- Improve code quality and fix floating point comparisons (fc3deeae) 
+- Use VecDeque and LRU cache for session state and memory (98fbda32) 
 ## 0.136.3 - 2026-07-19
 
 ### Highlights
