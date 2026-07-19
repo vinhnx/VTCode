@@ -380,6 +380,12 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/refresh-oauth [provider]",
         "auth"
     ),
+    built_in_command_spec!(
+        "secret",
+        "Manage provider API keys in your OS keyring (usage: /secret [list|status [provider]|add <provider>|delete <provider]|help)",
+        "/secret [list|status [provider]|add <provider>|delete <provider]|help]",
+        "auth"
+    ),
 ];
 
 pub fn command_skill_specs() -> &'static [CommandSkillSpec] {

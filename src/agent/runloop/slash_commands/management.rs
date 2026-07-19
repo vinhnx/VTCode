@@ -3,8 +3,8 @@ use shell_words::split as shell_split;
 use vtcode_core::llm::providers::local_server::LocalProvider;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::rendering::{render_local_usage, render_mcp_usage};
-use super::{LocalServerAction, McpCommandAction, SlashCommandOutcome};
+use super::rendering::{render_local_usage, render_mcp_usage, render_secret_usage};
+use super::{LocalServerAction, McpCommandAction, SecretCommandAction, SlashCommandOutcome};
 
 pub(super) fn handle_mcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     if args.is_empty() {
@@ -173,6 +173,65 @@ pub(super) fn handle_local_command(args: &str, renderer: &mut AnsiRenderer) -> R
                 render_local_usage(renderer)?;
                 Ok(SlashCommandOutcome::Handled)
             }
+        }
+    }
+}
+
+/// Parse `/secret` subcommands into a [`SecretCommandAction`].
+///
+/// Mirrors the `/mcp` and `/local` parsing pattern: empty args → Interactive,
+/// unknown subcommand → render usage and return `Handled`.
+pub(super) fn handle_secret_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    if args.is_empty() {
+        return Ok(SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::Interactive });
+    }
+
+    let tokens = match shell_split(args) {
+        Ok(tokens) => tokens,
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &format!("Failed to parse arguments: {err}"))?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    if tokens.is_empty() {
+        return Ok(SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::Interactive });
+    }
+
+    let subcommand = tokens[0].to_ascii_lowercase();
+    match subcommand.as_str() {
+        "list" | "ls" => Ok(SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::List }),
+        "status" | "info" => {
+            let provider = tokens.get(1).map(|s| s.to_ascii_lowercase());
+            Ok(SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::Status { provider } })
+        }
+        "add" | "set" | "replace" | "update" => {
+            let Some(provider) = tokens.get(1) else {
+                renderer.line(MessageStyle::Error, "Usage: /secret add <provider>")?;
+                render_secret_usage(renderer)?;
+                return Ok(SlashCommandOutcome::Handled);
+            };
+            Ok(SlashCommandOutcome::ManageSecrets {
+                action: SecretCommandAction::Add { provider: provider.to_ascii_lowercase() },
+            })
+        }
+        "delete" | "remove" | "rm" | "clear" => {
+            let Some(provider) = tokens.get(1) else {
+                renderer.line(MessageStyle::Error, "Usage: /secret delete <provider>")?;
+                render_secret_usage(renderer)?;
+                return Ok(SlashCommandOutcome::Handled);
+            };
+            Ok(SlashCommandOutcome::ManageSecrets {
+                action: SecretCommandAction::Delete { provider: provider.to_ascii_lowercase() },
+            })
+        }
+        "help" | "--help" | "-h" => {
+            render_secret_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        _ => {
+            render_secret_usage(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
         }
     }
 }

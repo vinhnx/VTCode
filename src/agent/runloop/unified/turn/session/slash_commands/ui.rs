@@ -44,7 +44,7 @@ pub(super) fn ensure_selection_ui_available(ctx: &mut SlashCommandContext<'_>, a
     Ok(true)
 }
 
-pub(super) async fn wait_for_list_modal_selection(ctx: &mut SlashCommandContext<'_>) -> Option<InlineListSelection> {
+pub(crate) async fn wait_for_list_modal_selection(ctx: &mut SlashCommandContext<'_>) -> Option<InlineListSelection> {
     let outcome: OverlayWaitOutcome<InlineListSelection> =
         wait_for_overlay_submission(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify, |submission| {
             match submission {
@@ -63,7 +63,7 @@ pub(super) async fn wait_for_list_modal_selection(ctx: &mut SlashCommandContext<
     }
 }
 
-async fn close_list_modal(ctx: &mut SlashCommandContext<'_>) {
+pub(crate) async fn close_list_modal(ctx: &mut SlashCommandContext<'_>) {
     ctx.handle.close_modal();
     ctx.handle.force_redraw();
     task::yield_now().await;

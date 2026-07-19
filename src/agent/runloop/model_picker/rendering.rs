@@ -190,7 +190,7 @@ fn is_current_custom_provider(provider_key: &str, model_id: &str, current_provid
 
 fn custom_provider_subtitle(selection: &SelectionDetail, current_provider: &str, current_model: &str) -> String {
     let mut segments = Vec::new();
-    if let Some(context_window) = context_window_segment("openai", &selection.model_id) {
+    if let Some(context_window) = context_window_segment(&selection.provider_key, &selection.model_id) {
         segments.push(context_window);
     }
     if selection.reasoning_supported {
@@ -470,7 +470,7 @@ pub(super) fn render_step_one_plain(
             }
             first_section = false;
             renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-            renderer.line(MessageStyle::Info, "      Docs: https://huggingface.co/docs/inference-providers")?;
+            renderer.line(MessageStyle::Info, &format!("      Docs: {HUGGINGFACE_DOCS_URL}"))?;
             for option_index in provider_model_indexes {
                 let Some(option) = options.get(*option_index) else {
                     continue;
@@ -507,12 +507,13 @@ pub(super) fn render_step_one_plain(
         for selection in custom_providers {
             renderer.line(MessageStyle::Info, &format!("  {}", selection.provider_label))?;
             renderer.line(MessageStyle::Info, &format!("      {}", custom_provider_subtitle(selection, "", "")))?;
-            renderer.line(MessageStyle::Info, &format!("      env: {}", selection.env_key))?;
         }
     }
 
     Ok(())
 }
+
+const HUGGINGFACE_DOCS_URL: &str = "https://huggingface.co/docs/inference-providers";
 
 fn provider_group_divider_line() -> String {
     let modal_width = usize::from(ui::MODAL_MIN_WIDTH);

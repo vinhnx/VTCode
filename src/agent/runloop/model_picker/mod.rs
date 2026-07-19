@@ -1,3 +1,37 @@
+//! Model picker — interactive provider/model/reasoning/service-tier/API-key selection.
+//!
+//! ## Module map (interface guard rails)
+//!
+//! | Module | Responsibility | Public surface |
+//! |---|---|--|
+//! | `options` | Static model catalog + override-aware option list | `ModelOption`, `MODEL_OPTIONS`, `build_model_options_with_overrides`, `find_option_index`, `option_indexes_for_provider` |
+//! | `selection` | `SelectionDetail` construction from options, dynamic entries, custom providers, or raw input | `SelectionDetail`, `parse_model_selection`, `selection_from_option`, `selection_from_dynamic`, `selections_from_custom_provider` |
+//! | `dynamic_models` | Dynamic model inventory (Ollama, LM Studio, LlamaCpp, Copilot) with cache | `DynamicModelRegistry` |
+//! | `rendering` | Step-one list rendering (inline + plain) | `render_step_one_inline`, `render_step_one_plain`, `custom_provider_subtitle`, `static_model_subtitle`, `dynamic_model_subtitle` |
+//! | `rendering/prompts` | Per-step prompt text (reasoning, API key, service tier, MiMo auth) | `render_reasoning_inline`, `prompt_reasoning_plain`, `show_secure_api_modal`, `prompt_api_key_plain`, `render_service_tier_inline`, `prompt_service_tier_plain`, `render_mimo_auth_method_inline`, `prompt_mimo_auth_method_plain` |
+//! | `interaction` | Ratatui interactive list selection for reasoning, service tier, model list | `select_model_with_ratatui_list`, `select_reasoning_with_ratatui`, `select_service_tier_with_ratatui` |
+//! | `state_machine` | Step-transition logic: model → reasoning → MiMo auth → service tier → API key | `process_model_selection`, `handle_reasoning`, `handle_mimo_auth_method`, `handle_service_tier`, `handle_api_key`, `build_result` |
+//! | `config_persistence` | Persisting completed selection to `vtcode.toml` | `persist_selection` |
+//! | `lightweight_palette` | Lightweight model palette view | `LightweightModelPaletteView`, `prepare_lightweight_model_palette_view` |
+//!
+//! ## State machine contract
+//!
+//! `ModelPickerState` is the single owner of picker state. Step transitions follow this order:
+//!
+//! ```text
+//! AwaitModel -> AwaitReasoning -> AwaitMiMoAuthMethod -> AwaitServiceTier -> AwaitApiKey -> Completed
+//! ```
+//!
+//! Each step returns `ModelPickerProgress::InProgress` to stay in the picker,
+//! `Completed(result)` to finish, `Cancelled` to abort, or `NeedsRefresh` to reload dynamic models.
+//!
+//! ## Guard rails
+//!
+//! - `SelectionDetail` is the canonical selection representation — all entry points (static option, dynamic entry, custom provider, raw input) must produce it.
+//! - `ModelSelectionResult` is the persisted output — it is built by `build_result()` from the current step state.
+//! - Rendering functions are pure (no state mutation) and receive `&SelectionDetail` + current value.
+//! - State machine functions mutate `ModelPickerState` and return `ModelPickerProgress`.
+
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -296,6 +330,7 @@ impl ModelPickerState {
         self.selection = None;
         self.selected_reasoning = None;
         self.selected_service_tier = None;
+        self.selected_mimo_auth = None;
         self.pending_api_key = None;
         self.step = PickerStep::AwaitModel;
         if self.inline_enabled {
@@ -317,9 +352,7 @@ impl ModelPickerState {
                 &self.custom_providers,
                 &self.current_provider,
             )?;
-            if matches!(self.step, PickerStep::AwaitModel) {
-                prompt_custom_model_entry(renderer)?;
-            }
+            prompt_custom_model_entry(renderer)?;
         }
         Ok(())
     }
@@ -531,7 +564,7 @@ impl ModelPickerState {
         }
 
         if let Ok(provider) = Provider::from_str(provider_key.as_str()) {
-            if let Some(index) = find_option_index(provider, model_key) {
+            if let Some(index) = find_option_index(provider, model_key, &self.options) {
                 return Some(InlineListSelection::Model(index));
             }
             for entry_index in self.dynamic_models.indexes_for(provider) {
@@ -737,7 +770,7 @@ async fn select_subagent_model_target(
         search_value: Some("manual exact model id".to_string()),
     });
 
-    let selected = preferred_subagent_model_selection(dynamic_models, current_model)
+    let selected = preferred_subagent_model_selection(&options, dynamic_models, current_model)
         .or_else(|| items.first().and_then(|item| item.selection.clone()));
     handle.show_list_modal(
         "Subagent model".to_string(),
@@ -958,6 +991,7 @@ async fn prompt_subagent_model_id(
 }
 
 fn preferred_subagent_model_selection(
+    options: &[ModelOption],
     dynamic_models: &DynamicModelRegistry,
     current_model: &str,
 ) -> Option<InlineListSelection> {
@@ -969,7 +1003,7 @@ fn preferred_subagent_model_selection(
         return Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}")));
     }
     if let Ok(model_id) = current_trimmed.parse::<ModelId>()
-        && let Some(index) = find_option_index(model_id.provider(), &model_id.as_str())
+        && let Some(index) = find_option_index(model_id.provider(), &model_id.as_str(), options)
     {
         return Some(InlineListSelection::Model(index));
     }

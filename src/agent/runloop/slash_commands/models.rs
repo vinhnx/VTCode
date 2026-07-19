@@ -211,9 +211,40 @@ pub(crate) enum SlashCommandOutcome {
     ShowAuthStatus {
         provider: Option<String>,
     },
+    ManageSecrets {
+        action: SecretCommandAction,
+    },
     ShareLog {
         format: SessionLogExportFormat,
     },
+}
+
+/// Actions for the `/secret` API-key controller.
+///
+/// `/secret` (no args) and `/secret list` both render the status table of all
+/// providers and where their credential comes from (env var / OS keyring /
+/// OAuth / local / managed auth / none). `/secret add` and `/secret delete`
+/// operate on the OS keyring entry for a single provider — they do not touch
+/// environment variables (which the user controls in their shell) or the
+/// workspace `.env`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SecretCommandAction {
+    /// `/secret` with no args — render the status table (text mode) or open
+    /// the interactive action menu (inline UI mode).
+    Interactive,
+    /// `/secret list` — render the status table of all providers.
+    List,
+    /// `/secret status [provider]` — detailed status for one provider, or all
+    /// when no provider is given.
+    Status { provider: Option<String> },
+    /// `/secret add <provider>` (also replaces) — paste a key via the secure
+    /// prompt modal and store it in the OS keyring.
+    Add { provider: String },
+    /// `/secret delete <provider>` — clear the keyring entry for a provider.
+    Delete { provider: String },
+    /// `/secret help` — usage.
+    #[allow(dead_code)]
+    Help,
 }
 
 #[derive(Clone, Debug)]

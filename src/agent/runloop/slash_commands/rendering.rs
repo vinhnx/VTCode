@@ -27,6 +27,32 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
+pub(super) fn render_secret_usage(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer
+        .line(MessageStyle::Info, "Usage: /secret [list|status [provider]|add <provider>|delete <provider>|help]")?;
+    renderer.line(MessageStyle::Info, "  (no args)        – Show every provider and where its key comes from")?;
+    renderer.line(MessageStyle::Info, "  list             – Same as above (status table of all providers)")?;
+    renderer.line(MessageStyle::Info, "  status [provider]– Detailed status for one provider, or all")?;
+    renderer
+        .line(MessageStyle::Info, "  add <provider>   – Paste a key into the secure prompt (stored in OS keyring)")?;
+    renderer.line(MessageStyle::Info, "  delete <provider>– Clear the keyring entry for a provider")?;
+    renderer.line(MessageStyle::Info, "  help             – Show this help")?;
+    renderer.line(MessageStyle::Info, "")?;
+    renderer.line(
+        MessageStyle::Info,
+        "Keys are stored in your OS keyring (with encrypted-file fallback) — never in workspace .env.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Environment variables (e.g. OPENROUTER_API_KEY in ~/.zshrc) are read-only here; manage them in your shell.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Examples: /secret, /secret status openrouter, /secret add anthropic, /secret delete openai",
+    )?;
+    Ok(())
+}
+
 pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(MessageStyle::Info, "Usage: /local                          (open interactive manager)")?;
     renderer.line(MessageStyle::Info, "       /local status                   (check all local servers)")?;

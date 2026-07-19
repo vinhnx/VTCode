@@ -134,7 +134,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
 #[test]
 fn preferred_subagent_model_selection_canonicalizes_shortcuts() {
     let registry = DynamicModelRegistry::default();
-    let selection = preferred_subagent_model_selection(&registry, "HaIkU");
+    let selection = preferred_subagent_model_selection(&MODEL_OPTIONS, &registry, "HaIkU");
 
     assert_eq!(selection, Some(InlineListSelection::ConfigAction("subagent-model:shortcut:haiku".to_string())));
 }
@@ -302,8 +302,8 @@ fn static_picker_indexes_resolve_provider_models() {
     let openai_indexes = option_indexes_for_provider(Provider::OpenAI);
     assert!(!openai_indexes.is_empty());
 
-    let gpt54_index =
-        find_option_index(Provider::OpenAI, "GPT-5.4").expect("gpt-5.4 should be indexed case-insensitively");
+    let gpt54_index = find_option_index(Provider::OpenAI, "GPT-5.4", &MODEL_OPTIONS)
+        .expect("gpt-5.4 should be indexed case-insensitively");
     let option = MODEL_OPTIONS.get(gpt54_index).expect("indexed option should exist");
     assert_eq!(option.id, "gpt-5.4");
     assert_eq!(option.provider, Provider::OpenAI);

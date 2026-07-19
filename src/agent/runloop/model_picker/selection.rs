@@ -6,7 +6,7 @@ use vtcode_config::OpenAIServiceTier;
 use vtcode_config::VTCodeConfig;
 use vtcode_config::core::CustomProviderConfig;
 use vtcode_core::config::constants::reasoning;
-use vtcode_core::config::models::{ModelId, Provider, ProviderModelSupport};
+use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::{DynamicModelMeta, ModelAvailability, ModelResolver, ResolvedModel};
 
@@ -77,9 +77,15 @@ pub(super) fn parse_model_selection(
     input: &str,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<SelectionDetail> {
-    if let Ok(index) = input.parse::<usize>() {
-        if let Some(option) = options.get(index) {
+    let trimmed = input.trim();
+    if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
+        if let Some(option) = options.iter().find(|option| option.id.eq_ignore_ascii_case(trimmed)) {
             return Ok(selection_from_option(option));
+        }
+        if let Ok(index) = trimmed.parse::<usize>() {
+            if let Some(option) = options.get(index) {
+                return Ok(selection_from_option(option));
+            }
         }
         return Err(anyhow!("Invalid model selection. Use provider and model name (e.g., 'openai gpt-5')"));
     }
@@ -98,7 +104,7 @@ pub(super) fn parse_model_selection(
     let custom_provider = vt_cfg.and_then(|cfg| cfg.custom_provider(&provider_lower));
 
     if let Some(provider) = provider_enum
-        && let Some(option_index) = find_option_index(provider, model_token.trim())
+        && let Some(option_index) = find_option_index(provider, model_token.trim(), options)
         && let Some(option) = options.get(option_index)
     {
         return Ok(selection_from_option(option));
@@ -127,10 +133,10 @@ pub(super) fn parse_model_selection(
             model_id: model_token.trim().to_string(),
             model_display: model_token.trim().to_string(),
             known_model: false,
-            reasoning_supported: Provider::OpenAI.supports_reasoning_effort(model_token.trim()),
+            reasoning_supported: false,
             reasoning_optional: true,
             reasoning_off_model: None,
-            service_tier_supported: Provider::OpenAI.supports_service_tier(model_token.trim()),
+            service_tier_supported: false,
             requires_api_key: !uses_command_auth,
             uses_chatgpt_auth: false,
             env_key,
@@ -173,13 +179,15 @@ pub(super) fn parse_model_selection(
 
 pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
     let resolved = ModelResolver::resolve(Some(option.provider.as_ref()), &option.id, &[], None).unwrap_or_else(|| {
-        // Fallback: create a minimal ResolvedModel for static options
+        // Fallback: create a minimal ResolvedModel for static options.
+        // Use MissingCredential so the picker prompts for an API key instead of
+        // silently skipping credential steps for an unresolved model.
         ResolvedModel {
             provider: option.provider,
             model_id: option.id.clone(),
             catalog: None,
             dynamic: None,
-            availability: ModelAvailability::Available,
+            availability: ModelAvailability::MissingCredential,
         }
     });
     selection_from_resolved(
@@ -212,7 +220,9 @@ pub(super) fn selection_from_dynamic(
         }),
     )
     .unwrap_or_else(|| {
-        // Fallback: create a minimal ResolvedModel for dynamic models
+        // Fallback: create a minimal ResolvedModel for dynamic models.
+        // Use MissingCredential so the picker prompts for an API key instead of
+        // silently skipping credential steps for an unresolved model.
         ResolvedModel {
             provider,
             model_id: model_id.to_string(),
@@ -222,7 +232,7 @@ pub(super) fn selection_from_dynamic(
                 description: description.map(ToOwned::to_owned),
                 context_window,
             }),
-            availability: ModelAvailability::Available,
+            availability: ModelAvailability::MissingCredential,
         }
     });
     selection_from_resolved(
@@ -253,10 +263,10 @@ pub(super) fn selections_from_custom_provider(provider: &CustomProviderConfig) -
             model_id: model_id.clone(),
             model_display: model_id.clone(),
             known_model: false,
-            reasoning_supported: Provider::OpenAI.supports_reasoning_effort(&model_id),
+            reasoning_supported: false,
             reasoning_optional: true,
             reasoning_off_model: None,
-            service_tier_supported: Provider::OpenAI.supports_service_tier(&model_id),
+            service_tier_supported: false,
             requires_api_key: !provider.uses_command_auth(),
             uses_chatgpt_auth: false,
             env_key: env_key.clone(),
@@ -294,7 +304,8 @@ fn selection_from_resolved(
 
 pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => "None (Fast)",
+        ReasoningEffortLevel::None => "None (Fast)",
+        ReasoningEffortLevel::Unknown => "Unknown",
         ReasoningEffortLevel::Minimal => "Minimal (Fastest)",
         ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
         ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
@@ -357,7 +368,8 @@ pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None | ReasoningEffortLevel::Unknown => "No reasoning overhead - fastest responses",
+        ReasoningEffortLevel::None => "No reasoning overhead - fastest responses",
+        ReasoningEffortLevel::Unknown => "Reasoning capability could not be determined",
         ReasoningEffortLevel::Minimal => "Minimal reasoning overhead - very fast responses",
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
@@ -388,12 +400,13 @@ pub(super) fn derive_env_key(provider: &str) -> String {
     for ch in provider.chars() {
         if ch.is_ascii_alphanumeric() {
             key.push(ch.to_ascii_uppercase());
-        } else if !key.ends_with('_') {
+        } else {
             key.push('_');
         }
     }
+    key = key.trim_end_matches('_').to_string();
     if !key.ends_with("_API_KEY") {
-        if !key.ends_with('_') {
+        if !key.is_empty() && !key.ends_with('_') {
             key.push('_');
         }
         key.push_str("API_KEY");

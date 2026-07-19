@@ -1,6 +1,6 @@
 use super::builtins::{CheckupCommand, parse_checkup_args, parse_effort_args, parse_update_args};
 use super::{
-    AgentManagerAction, CompactConversationCommand, SessionLogExportFormat, SlashCommandOutcome,
+    AgentManagerAction, CompactConversationCommand, SecretCommandAction, SessionLogExportFormat, SlashCommandOutcome,
     SubprocessManagerAction, handle_slash_command,
 };
 use vtcode_core::compaction::ManualCompactionOptions;
@@ -928,5 +928,118 @@ async fn local_help_renders_usage() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
     let outcome = handle_slash_command("local help", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}
+
+#[tokio::test]
+async fn secret_no_args_is_interactive() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::Interactive }));
+}
+
+#[tokio::test]
+async fn secret_list() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret list", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::ManageSecrets { action: SecretCommandAction::List }));
+}
+
+#[tokio::test]
+async fn secret_status_no_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret status", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageSecrets {
+            action: SecretCommandAction::Status { provider: None }
+        }
+    ));
+}
+
+#[tokio::test]
+async fn secret_status_with_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret status anthropic", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageSecrets {
+            action: SecretCommandAction::Status { provider: Some(ref p) }
+        } if p == "anthropic"
+    ));
+}
+
+#[tokio::test]
+async fn secret_add_requires_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret add", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}
+
+#[tokio::test]
+async fn secret_add_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret add openai", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageSecrets {
+            action: SecretCommandAction::Add { ref provider }
+        } if provider == "openai"
+    ));
+}
+
+#[tokio::test]
+async fn secret_delete_requires_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret delete", &mut renderer, &workspace).await.unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}
+
+#[tokio::test]
+async fn secret_delete_provider() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret delete openai", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageSecrets {
+            action: SecretCommandAction::Delete { ref provider }
+        } if provider == "openai"
+    ));
+}
+
+#[tokio::test]
+async fn secret_unknown_provider_returns_manage_secrets() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret add notaprovider", &mut renderer, &workspace)
+        .await
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::ManageSecrets {
+            action: SecretCommandAction::Add { ref provider }
+        } if provider == "notaprovider"
+    ));
+}
+
+#[tokio::test]
+async fn secret_help_renders_usage() {
+    let mut renderer = renderer_for_tests();
+    let workspace = std::path::PathBuf::from("/tmp");
+    let outcome = handle_slash_command("secret help", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(outcome, SlashCommandOutcome::Handled));
 }

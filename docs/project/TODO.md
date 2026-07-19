@@ -55,3 +55,20 @@ reference and explore research /Users/vinhnguyenxuan/Developer/learn-by-doing/cl
 make the API keys manager controller in TUI easy to use and control in VT Code TUI. maybe introduct a new /secret tui interactive sercured api keys controller keyrin command to control it
 
 also maybe we should completley remove the .env file support completely and only use keyring
+
+===
+
+completley remove the .env file support completely and only use keyring
+
+.env removal — this is a broad breaking change. The current /secret command already directs users to secure storage instead of .env. Removing .env support entirely should be a separate decision with its own migration plan.
+
+==
+
+CRITICAL: on plan mode, vtcode propose plan summarization and never stop to request user confirmation. It keep proposing plan causing a infinite loop of plan proposals. The agent should propose a plan, then wait for user confirmation before proceeding to the next step. This will prevent the infinite loop and ensure that the user has control over the execution of the plan. THIS IS A CRITICAL BUG THAT MUST BE FIXED IMMEDIATELY. The agent should also provide a clear summary of the proposed plan and the expected outcomes, so that the user can make an informed decision before confirming the next step.
+
+logs:
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_713.json
+/Users/vinhnguyenxuan/.vtcode/sessions/session-vtcode-20260719T023044Z_064247-66413.json
+/Users/vinhnguyenxuan/.vtcode/sessions/atif-trajectory-session-vtcode-20260719T023044Z_064247-66413-20260719T023044Z.json
+/Users/vinhnguyenxuan/.vtcode/sessions/harness-session-vtcode-20260719T023044Z_064247-66413-20260719T023044Z.jsonl

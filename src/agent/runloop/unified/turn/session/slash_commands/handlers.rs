@@ -28,6 +28,8 @@ mod oauth;
 mod planning;
 #[path = "rewind.rs"]
 mod rewind;
+#[path = "secrets.rs"]
+mod secrets;
 #[path = "share_log.rs"]
 mod share_log;
 #[path = "skills.rs"]
@@ -68,6 +70,7 @@ pub(super) use oauth::{
 };
 pub(super) use planning::handle_toggle_planning_workflow;
 pub(super) use rewind::{handle_rewind_latest, handle_rewind_to_turn};
+pub(super) use secrets::handle_manage_secrets;
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{

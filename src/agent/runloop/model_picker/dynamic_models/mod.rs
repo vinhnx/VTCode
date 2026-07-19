@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 use reqwest::StatusCode;
 use serde::Deserialize;
+use tracing::warn;
 use vtcode_config::VTCodeConfig;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::models::Provider;
@@ -88,7 +89,9 @@ impl DynamicModelRegistry {
         } else {
             None
         };
-        let _ = cache_store.persist().await;
+        if let Err(err) = cache_store.persist().await {
+            warn!("Failed to persist dynamic model cache: {err}");
+        }
 
         let mut registry = Self::default();
         if let Some((openai_result, openai_warning)) = openai_fetch {

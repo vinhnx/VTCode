@@ -176,7 +176,7 @@ pub(crate) fn prompt_reasoning_plain(
 pub(crate) fn prompt_api_key_plain(
     renderer: &mut AnsiRenderer,
     selection: &SelectionDetail,
-    workspace: Option<&Path>,
+    _workspace: Option<&Path>,
 ) -> Result<()> {
     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
         renderer.line(
@@ -190,16 +190,13 @@ pub(crate) fn prompt_api_key_plain(
         return Ok(());
     }
 
-    let env_path_display = workspace
-        .map(vtcode_config::workspace_env_path_display)
-        .unwrap_or_else(|| "workspace .env".to_string());
-
     renderer.line(
         MessageStyle::Info,
         &format!("API key – enter a key for {} (env: {}).", selection.provider_label, selection.env_key),
     )?;
-    renderer.line(MessageStyle::Info, &format!("The key will be saved to {env_path_display} and OS keyring."))?;
+    renderer.line(MessageStyle::Info, "The key will be saved to secure storage (OS keyring or encrypted file).")?;
     renderer.line(MessageStyle::Info, "The key will NOT be stored in vtcode.toml for security.")?;
+    renderer.line(MessageStyle::Info, "Or run `/secret add <provider>` to manage keys separately.")?;
 
     if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
         renderer.line(
@@ -293,14 +290,9 @@ pub(crate) fn prompt_service_tier_plain(
 pub(crate) fn show_secure_api_modal(
     renderer: &mut AnsiRenderer,
     selection: &SelectionDetail,
-    workspace: Option<&Path>,
+    _workspace: Option<&Path>,
 ) {
-    let storage_line = workspace
-        .map(|root| {
-            let env_path = root.join(".env");
-            format!("Saved to keyring and {}.", env_path.display())
-        })
-        .unwrap_or_else(|| "Saved to keyring and workspace .env file.".to_string());
+    let storage_line = "Saved to secure storage (OS keyring or encrypted file).".to_string();
     let mask_preview = "●●●●●●";
     let lines = vec![
         format!("Bring your own key (BYOK) for {}.", selection.provider_label),

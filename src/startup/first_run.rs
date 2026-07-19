@@ -315,7 +315,7 @@ fn api_key_hint(provider: Provider) -> String {
                 format!("{} is ready.", provider.label())
             }
         },
-        None => format!("Set {} in your environment, or paste it with /model.", provider.default_api_key_env()),
+        None => format!("Set {} in your environment, or add it with `/secret`.", provider.default_api_key_env()),
     }
 }
 
@@ -349,7 +349,7 @@ fn render_discovery_summary(renderer: &mut AnsiRenderer, discovered: &[Discovere
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "No provider API keys found in your environment or OS keyring. You can paste a key next, export one (e.g. in ~/.zshrc) and re-run /init, or press Enter to skip.{local_hint}"
+                "No provider API keys found in your environment or OS keyring. You can add one with `/secret`, export one (e.g. in ~/.zshrc) and re-run /init, or press Enter to skip.{local_hint}"
             ),
         )?;
     } else {

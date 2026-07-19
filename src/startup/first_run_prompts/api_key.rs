@@ -119,7 +119,7 @@ fn prompt_paste_flow(renderer: &mut AnsiRenderer, provider: Provider, env_key: &
     renderer.line(MessageStyle::Status, &format!("Set up your {} API key (env: {env_key}).", provider.label()))?;
     renderer.line(
         MessageStyle::Info,
-        "Paste your API key now (input is hidden), or press Enter to skip. You can set it later with /model.",
+        "Paste your API key now (input is hidden), or press Enter to skip. You can also add it later with `/secret`.",
     )?;
     renderer.line(
         MessageStyle::Info,

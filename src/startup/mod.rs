@@ -397,12 +397,12 @@ fn missing_api_key_message(
         let env_var = custom_provider.resolved_api_key_env();
         if first_run_occurred {
             return format!(
-                "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml under [[custom_providers]]\n\nRun `/init` anytime to reconfigure."
+                "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml under [[custom_providers]], or\n  4. Run `/secret add {provider_name}` to store it in secure storage\n\nRun `/init` anytime to reconfigure."
             );
         }
 
         return format!(
-            "API key not found for custom provider '{provider_name}'. Set {env_var} environment variable (or add to .env file) or configure it in vtcode.toml under [[custom_providers]]."
+            "API key not found for custom provider '{provider_name}'. Set {env_var} environment variable (or add to .env file), configure it in vtcode.toml under [[custom_providers]], or run `/secret add {provider_name}`."
         );
     }
 
@@ -415,19 +415,20 @@ fn missing_api_key_message(
         .unwrap_or_else(|| api_key_env_var(&selection.provider));
     if selection.provider.eq_ignore_ascii_case("openai") {
         return format!(
-            "Authentication not found for OpenAI. Set {env_var}, configure it in vtcode.toml, or run `vtcode login openai`."
+            "Authentication not found for OpenAI. Set {env_var}, configure it in vtcode.toml, run `vtcode login openai`, or run `/secret add openai`."
         );
     }
 
     if first_run_occurred {
         format!(
-            "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml\n\nRun `/init` anytime to reconfigure."
+            "API key not found for {provider_name}. To fix:\n  1. Set {env_var} environment variable, or\n  2. Add to .env file, or\n  3. Configure in vtcode.toml, or\n  4. Run `/secret add {provider_name}` to store it in secure storage\n\nRun `/init` anytime to reconfigure."
         )
     } else {
         format!(
-            "API key not found for provider '{}'. Set {} environment variable (or add to .env file) or configure in vtcode.toml.",
+            "API key not found for provider '{}'. Set {} environment variable (or add to .env file), configure it in vtcode.toml, or run `/secret add {}`.",
             selection.provider,
-            api_key_env_var(&selection.provider)
+            api_key_env_var(&selection.provider),
+            selection.provider,
         )
     }
 }

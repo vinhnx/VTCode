@@ -224,7 +224,7 @@ impl ProgressLedger {
 
 /// Resolve the on-disk path of the progress ledger for a session.
 #[must_use]
-pub fn progress_path(workspace: &Path, session_id: &str) -> std::path::PathBuf {
+pub fn progress_path(workspace: &Path, session_id: &str) -> PathBuf {
     session_dir(workspace, session_id)
         .join(crate::DERIVED_DIR)
         .join("progress.json")
@@ -403,8 +403,11 @@ use std::time::Instant;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalPhase {
+    /// Goal is idle; no active planning or execution.
     Idle,
+    /// Planning phase is in progress.
     Planning,
+    /// Execution phase is in progress.
     Executing,
 }
 
@@ -424,16 +427,24 @@ pub enum GoalPhase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalStatus {
+    /// Goal is actively running.
     #[serde(alias = "Active")]
     Active,
+    /// Explicitly paused by the user.
     #[serde(alias = "Paused")]
     UserPaused,
+    /// Paused due to repeated classifier failures (back-off cap hit).
     BackOffPaused,
+    /// Paused because the verifier reported the same gaps with no progress.
     NoProgressPaused,
+    /// Paused due to an infrastructure error in a turn.
     InfraPaused,
+    /// Blocked; the model determined the goal is not achievable.
     Blocked,
+    /// Hit the token budget limit.
     #[serde(alias = "BudgetLimited")]
     BudgetLimited,
+    /// Goal completed successfully.
     #[serde(alias = "Complete")]
     Complete,
 }
@@ -480,10 +491,15 @@ impl GoalStatus {
 /// [`GoalStatus`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GoalPauseReason {
+    /// Paused by explicit user request.
     User,
+    /// Paused after repeated classifier failures hit the back-off cap.
     BackOff,
+    /// Paused because the verifier reported no progress on known gaps.
     NoProgress,
+    /// Paused because the verifier determined the goal is not achievable.
     Verification,
+    /// Paused due to an infrastructure error.
     Infra,
 }
 
@@ -513,7 +529,9 @@ impl GoalPauseReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalClassifierVerdict {
+    /// Goal was achieved.
     Achieved,
+    /// Goal was not achieved.
     NotAchieved,
 }
 
@@ -521,20 +539,35 @@ pub enum GoalClassifierVerdict {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalEvent {
+    /// Goal was created.
     GoalCreated,
+    /// Planning phase started.
     PlanningStarted,
+    /// Planning phase completed.
     PlanningCompleted,
+    /// Planning phase failed.
     PlanningFailed,
+    /// Worker started processing.
     WorkerStarted,
+    /// Worker completed successfully.
     WorkerCompleted,
+    /// Worker failed.
     WorkerFailed,
+    /// Context was rotated.
     ContextRotated,
+    /// Goal was paused.
     GoalPaused,
+    /// Goal was resumed.
     GoalResumed,
+    /// Goal completed successfully.
     GoalCompleted,
+    /// Goal was cleared.
     GoalCleared,
+    /// Budget was exceeded.
     BudgetExceeded,
+    /// Premature stop was detected.
     PrematureStopDetected,
+    /// Unknown or unrecognized event.
     #[serde(other)]
     Unknown,
 }
@@ -542,14 +575,20 @@ pub enum GoalEvent {
 /// A single history entry for a goal lifecycle event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoalHistoryEntry {
+    /// ISO-8601 timestamp of the event.
     pub timestamp: String,
+    /// Lifecycle event type.
     pub event: GoalEvent,
+    /// Optional human-readable detail string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// Optional round number associated with the event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub round: Option<u32>,
+    /// Optional token count at the time of the event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tokens_used: Option<i64>,
+    /// Unmet requirements or blockers recorded at this event.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unmet: Vec<String>,
 }
@@ -570,66 +609,102 @@ impl GoalHistoryEntry {
 /// Full persisted state for a goal orchestration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoalOrchestration {
+    /// Unique identifier for the goal.
     pub goal_id: String,
+    /// Human-readable objective description.
     pub objective: String,
+    /// Current lifecycle status.
     pub status: GoalStatus,
+    /// Current execution phase.
     pub phase: GoalPhase,
+    /// Optional token budget cap.
     pub token_budget: Option<i64>,
+    /// Elapsed wall-clock time in milliseconds.
     pub elapsed_ms: u64,
+    /// ISO-8601 creation timestamp.
     pub created_at: String,
+    /// Currently executing subagent ID, if any.
     pub current_subagent_id: Option<String>,
+    /// Role of the current subagent.
     pub current_subagent_role: Option<String>,
+    /// Total worker rounds executed.
     #[serde(default)]
     pub total_worker_rounds: u32,
+    /// Total verification rounds executed.
     #[serde(default)]
     pub total_verify_rounds: u32,
+    /// Whether the budget limit notification has already been emitted.
     #[serde(skip)]
     pub budget_limit_reported: bool,
+    /// Baseline token count when the goal started.
     #[serde(default)]
     pub token_baseline: i64,
+    /// High-water mark for tokens used.
     #[serde(default)]
     pub tokens_used_high_water: i64,
+    /// Tokens spent by the parent session before this goal started.
     #[serde(default)]
     pub parent_tokens_spent: i64,
+    /// Last observed session token count.
     #[serde(default)]
     pub last_session_tokens_seen: Option<i64>,
+    /// Ordered history of lifecycle events.
     pub history: Vec<GoalHistoryEntry>,
+    /// User-facing pause message, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pause_message: Option<String>,
+    /// Number of consecutive classifier stall detections.
     #[serde(default)]
     pub classifier_stall_count: u32,
+    /// Total classifier run attempts.
     #[serde(default)]
     pub classifier_runs_attempted: u32,
+    /// Rounds since the last verification pass.
     #[serde(default)]
     pub rounds_since_verify: u32,
+    /// Consecutive not-achieved verdicts.
     #[serde(default)]
     pub consecutive_not_achieved: u32,
+    /// Turn at which the strategist last fired.
     #[serde(default)]
     pub last_strategist_fired_at: u32,
+    /// Bonus tokens granted by the strategist.
     #[serde(default)]
     pub strategist_cap_bonus: u32,
+    /// Path of the last strategy recommendation, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_strategy_path: Option<String>,
+    /// Last strategy recommendation text, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_strategy_recommendation: Option<String>,
+    /// Commit hash at the last strategy change baseline, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changes_baseline_commit: Option<String>,
+    /// Fingerprint of the last gap signature, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_gap_fingerprint: Option<String>,
+    /// Live token count for active subagents.
     #[serde(skip)]
     pub live_subagent_tokens: u64,
+    /// Live token usage broken down by model.
     #[serde(skip)]
     pub live_tokens_by_model: Vec<(String, u64)>,
+    /// Live context window size in tokens.
     #[serde(skip)]
     pub live_context_window: u64,
+    /// Live context window utilization percentage (0-100).
     #[serde(skip)]
     pub live_context_pct: u8,
+    /// Live turn count for the current goal.
     #[serde(skip)]
     pub live_turn_count: u32,
+    /// Live tool call count for the current goal.
     #[serde(skip)]
     pub live_tool_call_count: u32,
+    /// Whether a planning pass is currently in flight.
     #[serde(skip)]
     pub planning_in_flight: bool,
+    /// Whether a verification pass is currently in flight.
     #[serde(skip)]
     pub verifying_in_flight: bool,
 }
@@ -652,12 +727,16 @@ impl GoalOrchestration {
 /// Pure state machine for goal tracking.
 #[derive(Debug)]
 pub struct GoalTracker {
+    /// Current goal orchestration state, if a goal is active.
     orchestration: Option<GoalOrchestration>,
+    /// Directory where progress snapshots are persisted.
     session_dir: PathBuf,
+    /// Instant when the goal became active.
     active_since: Option<Instant>,
 }
 
 impl GoalTracker {
+    /// Create a new tracker with no active goal.
     pub fn new(session_dir: PathBuf) -> Self {
         Self {
             orchestration: None,
@@ -666,7 +745,7 @@ impl GoalTracker {
         }
     }
 
-    /// Restore from a persisted snapshot.
+    /// Restore tracker state from a persisted snapshot.
     pub fn from_snapshot(session_dir: PathBuf, mut snapshot: GoalOrchestration) -> Self {
         match snapshot.phase {
             GoalPhase::Planning | GoalPhase::Executing => {
@@ -693,34 +772,42 @@ impl GoalTracker {
         }
     }
 
+    /// Return an immutable reference to the current orchestration snapshot.
     pub fn snapshot(&self) -> Option<&GoalOrchestration> {
         self.orchestration.as_ref()
     }
 
+    /// Return a mutable reference to the current orchestration snapshot.
     pub fn snapshot_mut(&mut self) -> Option<&mut GoalOrchestration> {
         self.orchestration.as_mut()
     }
 
+    /// `true` if a goal is currently active.
     pub fn is_active(&self) -> bool {
         self.orchestration.as_ref().is_some_and(|o| o.status == GoalStatus::Active)
     }
 
+    /// Current execution phase, if a goal is active.
     pub fn phase(&self) -> Option<GoalPhase> {
         self.orchestration.as_ref().map(|o| o.phase)
     }
 
+    /// Current lifecycle status, if a goal is active.
     pub fn status(&self) -> Option<GoalStatus> {
         self.orchestration.as_ref().map(|o| o.status)
     }
 
+    /// ID of the currently executing subagent, if any.
     pub fn current_subagent_id(&self) -> Option<&str> {
         self.orchestration.as_ref().and_then(|o| o.current_subagent_id.as_deref())
     }
 
+    /// Human-readable objective, if a goal is active.
     pub fn objective(&self) -> Option<&str> {
         self.orchestration.as_ref().map(|o| o.objective.as_str())
     }
 
+    /// Token budget cap, if set.
     pub fn token_budget(&self) -> Option<i64> {
         self.orchestration.as_ref().and_then(|o| o.token_budget)
     }
@@ -781,12 +868,14 @@ impl GoalTracker {
         self.record_event(GoalEvent::GoalCreated, None);
     }
 
+    /// Update the execution phase of the active goal.
     pub fn set_phase(&mut self, phase: GoalPhase) {
         if let Some(o) = &mut self.orchestration {
             o.phase = phase;
         }
     }
 
+    /// Update the current subagent ID and role.
     pub fn set_current_subagent(&mut self, id: Option<String>, role: Option<String>) {
         if let Some(o) = &mut self.orchestration {
             o.current_subagent_id = id;
@@ -982,6 +1071,7 @@ impl GoalTracker {
         }
     }
 
+    /// Append a history entry to the active goal, if any.
     pub fn append_history(&mut self, entry: GoalHistoryEntry) {
         if let Some(o) = &mut self.orchestration {
             o.history.push(entry);

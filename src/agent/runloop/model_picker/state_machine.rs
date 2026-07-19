@@ -330,49 +330,25 @@ impl ModelPickerState {
         if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
             renderer.line(
                 MessageStyle::Info,
-                "Hugging Face uses HF_TOKEN (stored in workspace .env) and honors HUGGINGFACE_BASE_URL (default: https://router.huggingface.co/v1).",
+                "Hugging Face uses HF_TOKEN (from environment variables or secure storage) and honors HUGGINGFACE_BASE_URL (default: https://router.huggingface.co/v1).",
             )?;
             if selection.requires_api_key {
                 renderer.line(
                     MessageStyle::Info,
-                    "No HF_TOKEN detected; you'll be prompted to paste it and we'll save it to your workspace .env.",
+                    "No HF_TOKEN detected; you'll be prompted to paste it and it will be saved to secure storage.",
                 )?;
             }
         }
 
         self.pending_api_key = None;
         self.selected_service_tier = None;
+        self.selected_mimo_auth = None;
         let mut selection = selection;
         if selection.requires_api_key {
             match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
-                Ok(Some(ExistingKey::OAuthToken)) => {
-                    selection.requires_api_key = false;
-                    if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
-                        selection.uses_chatgpt_auth = true;
-                    }
-                    renderer.line(MessageStyle::Info, &oauth_auth_message(&selection))?;
-                }
-                Ok(Some(ExistingKey::Environment)) => {
-                    selection.requires_api_key = false;
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Using existing environment variable {} for {}.",
-                            selection.env_key, selection.provider_label
-                        ),
-                    )?;
-                }
-                Ok(Some(ExistingKey::WorkspaceDotenv)) => {
-                    selection.requires_api_key = false;
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Loaded {} from workspace .env for {}.", selection.env_key, selection.provider_label),
-                    )?;
-                }
-                Ok(Some(ExistingKey::StoredCredential)) => {
-                    selection.requires_api_key = false;
-                    renderer
-                        .line(MessageStyle::Info, &format!("Using stored API key for {}.", selection.provider_label))?;
+                Ok(Some(existing)) => {
+                    finalize_existing_api_key(&mut selection, &existing);
+                    renderer.line(MessageStyle::Info, &existing_api_key_message(&selection, &existing))?;
                 }
                 Ok(None) => {}
                 Err(err) => {
@@ -515,79 +491,28 @@ impl ModelPickerState {
         }
 
         if input.eq_ignore_ascii_case("skip") {
+            if self.inline_enabled {
+                renderer.close_modal();
+            }
             match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
-                Ok(Some(ExistingKey::OAuthToken)) => {
-                    if self.inline_enabled {
-                        renderer.close_modal();
-                    }
-                    renderer.line(MessageStyle::Info, &oauth_auth_message(selection))?;
+                Ok(Some(existing)) => {
+                    let mut selection = selection.clone();
+                    finalize_existing_api_key(&mut selection, &existing);
+                    renderer.line(MessageStyle::Info, &existing_api_key_message(&selection, &existing))?;
                     self.pending_api_key = None;
                     if let Some(current) = self.selection.as_mut() {
-                        current.requires_api_key = false;
-                        if matches!(current.provider_enum, Some(Provider::OpenAI)) {
-                            current.uses_chatgpt_auth = true;
-                        }
-                    }
-                    let result = self.build_result();
-                    return Ok(ModelPickerProgress::Completed(result?));
-                }
-                Ok(Some(ExistingKey::Environment)) => {
-                    if self.inline_enabled {
-                        renderer.close_modal();
-                    }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Using existing environment variable {} for {}.",
-                            selection.env_key, selection.provider_label
-                        ),
-                    )?;
-                    self.pending_api_key = None;
-                    if let Some(current) = self.selection.as_mut() {
-                        current.requires_api_key = false;
-                    }
-                    let result = self.build_result();
-                    return Ok(ModelPickerProgress::Completed(result?));
-                }
-                Ok(Some(ExistingKey::WorkspaceDotenv)) => {
-                    if self.inline_enabled {
-                        renderer.close_modal();
-                    }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Loaded {} from workspace .env for {}.", selection.env_key, selection.provider_label),
-                    )?;
-                    self.pending_api_key = None;
-                    if let Some(current) = self.selection.as_mut() {
-                        current.requires_api_key = false;
-                    }
-                    let result = self.build_result();
-                    return Ok(ModelPickerProgress::Completed(result?));
-                }
-                Ok(Some(ExistingKey::StoredCredential)) => {
-                    if self.inline_enabled {
-                        renderer.close_modal();
-                    }
-                    renderer
-                        .line(MessageStyle::Info, &format!("Using stored API key for {}.", selection.provider_label))?;
-                    self.pending_api_key = None;
-                    if let Some(current) = self.selection.as_mut() {
-                        current.requires_api_key = false;
+                        current.requires_api_key = selection.requires_api_key;
+                        current.uses_chatgpt_auth = selection.uses_chatgpt_auth;
                     }
                     let result = self.build_result();
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
                 Ok(None) => {
-                    let env_path = self
-                        .workspace
-                        .as_deref()
-                        .map(vtcode_config::workspace_env_path_display)
-                        .unwrap_or_else(|| "workspace .env".to_string());
                     renderer.line(
                         MessageStyle::Error,
                         &format!(
-                            "No API key found for {}. To fix: set {} in {}, or paste a key below.",
-                            selection.provider_label, selection.env_key, env_path
+                            "No API key found for {}. Run `/secret add {}` to store one in secure storage, then type 'skip' to continue.",
+                            selection.provider_label, selection.provider_key
                         ),
                     )?;
                     prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
@@ -647,12 +572,39 @@ impl ModelPickerState {
     }
 }
 
+fn finalize_existing_api_key(selection: &mut SelectionDetail, existing: &ExistingKey) {
+    selection.requires_api_key = false;
+    match existing {
+        ExistingKey::OAuthToken => {
+            if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
+                selection.uses_chatgpt_auth = true;
+            }
+        }
+        ExistingKey::Environment | ExistingKey::WorkspaceDotenv | ExistingKey::StoredCredential => {}
+    }
+}
+
+fn existing_api_key_message(selection: &SelectionDetail, existing: &ExistingKey) -> String {
+    match existing {
+        ExistingKey::OAuthToken => oauth_auth_message(selection),
+        ExistingKey::Environment => {
+            format!("Using existing environment variable {} for {}.", selection.env_key, selection.provider_label)
+        }
+        ExistingKey::WorkspaceDotenv => {
+            format!("Loaded {} from environment for {}.", selection.env_key, selection.provider_label)
+        }
+        ExistingKey::StoredCredential => {
+            format!("Using stored API key for {}.", selection.provider_label)
+        }
+    }
+}
+
 fn oauth_auth_message(selection: &SelectionDetail) -> String {
     if matches!(selection.provider_enum, Some(Provider::OpenAI)) {
         "Using ChatGPT subscription for OpenAI.".to_string()
     } else if matches!(selection.provider_enum, Some(Provider::Copilot)) {
         "Using managed authentication via GitHub Copilot CLI.".to_string()
     } else {
-        format!("Using OAuth authentication for {}.", selection.provider_label)
+        format!("Using OAuth authentication for {}", selection.provider_label)
     }
 }

@@ -63,7 +63,8 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::StartOAuthProviderPicker { .. }
         | SlashCommandOutcome::OAuthLogout { .. }
         | SlashCommandOutcome::RefreshOAuth { .. }
-        | SlashCommandOutcome::ShowAuthStatus { .. }) => route_mode_and_auth_outcome(outcome, ctx).await,
+        | SlashCommandOutcome::ShowAuthStatus { .. }
+        | SlashCommandOutcome::ManageSecrets { .. }) => route_mode_and_auth_outcome(outcome, ctx).await,
     }
 }
 
@@ -175,6 +176,7 @@ async fn route_mode_and_auth_outcome(
         SlashCommandOutcome::OAuthLogout { provider } => handlers::handle_oauth_logout(ctx, provider).await,
         SlashCommandOutcome::RefreshOAuth { provider } => handlers::handle_refresh_oauth(ctx, provider).await,
         SlashCommandOutcome::ShowAuthStatus { provider } => handlers::handle_show_auth_status(ctx, provider).await,
+        SlashCommandOutcome::ManageSecrets { action } => handlers::handle_manage_secrets(ctx, action).await,
         _ => anyhow::bail!("unexpected mode/auth outcome"),
     }
 }

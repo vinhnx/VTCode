@@ -13,7 +13,8 @@ use super::rendering::{
 };
 use super::selection::{
     ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description, reasoning_level_label,
-    selection_from_option, service_tier_label, supports_max_reasoning, supports_xhigh_reasoning,
+    selection_from_option, service_tier_label, supports_gpt5_none_reasoning, supports_max_reasoning,
+    supports_xhigh_reasoning,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh dynamic model lists";
@@ -170,13 +171,18 @@ pub(super) fn select_reasoning_with_ratatui(
     )];
 
     let mut level_entries: Vec<(usize, ReasoningEffortLevel)> = Vec::new();
-    let mut levels = vec![
-        ReasoningEffortLevel::None,
+    let mut levels = Vec::new();
+
+    // For GPT-5.2 and GPT-5.3 Codex models, show "None" first as the default option (fastest)
+    if supports_gpt5_none_reasoning(&selection.model_id) {
+        levels.push(ReasoningEffortLevel::None);
+    }
+    levels.extend([
         ReasoningEffortLevel::Minimal,
         ReasoningEffortLevel::Low,
         ReasoningEffortLevel::Medium,
         ReasoningEffortLevel::High,
-    ];
+    ]);
 
     if supports_xhigh_reasoning(&selection.model_id) {
         levels.push(ReasoningEffortLevel::XHigh);

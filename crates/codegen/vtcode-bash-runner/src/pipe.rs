@@ -147,6 +147,10 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
     }
 
     #[cfg(unix)]
+    #[expect(
+        unsafe_code,
+        reason = "detach_from_tty only calls setpgrp/setpgid to detach the child process from the controlling terminal; it is a pure process-group operation with no undefined behavior"
+    )]
     unsafe {
         command.pre_exec(process_group::detach_from_tty);
     }
