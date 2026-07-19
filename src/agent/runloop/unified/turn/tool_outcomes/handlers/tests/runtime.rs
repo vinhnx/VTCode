@@ -728,3 +728,66 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
         message.role == uni::MessageRole::Tool && message.content.as_text().contains("\"reused_recent_result\":true")
     }));
 }
+
+#[tokio::test]
+async fn planning_mode_blocks_finish_planning_immediately() {
+    let mut backing = TestContextBacking::new(4).await;
+    backing.tool_registry.enable_planning();
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"plan": "<proposed_plan>\n- Step 1\n</proposed_plan>"});
+
+    let outcome =
+        enforce_blocked_tool_call_guard(&mut ctx, "finish_planning_blocked", tool_names::FINISH_PLANNING, &args);
+
+    assert!(
+        matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed))),
+        "Expected Break(Completed) for blocked finish_planning in planning mode"
+    );
+    assert!(
+        ctx.working_history
+            .iter()
+            .any(|message| message.content.as_text().contains("review the current plan or change approach"))
+    );
+    assert!(
+        !backing.tool_registry.is_planning_active(),
+        "Planning mode should be disabled after blocked finish_planning"
+    );
+}
+
+#[tokio::test]
+async fn planning_mode_allows_request_user_input_blocked_through_to_failure() {
+    let mut backing = TestContextBacking::new(4).await;
+    backing.tool_registry.enable_planning();
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"questions": [{"id": "q1", "header": "Q1", "question": "Test?"}]});
+
+    let outcome = enforce_blocked_tool_call_guard(&mut ctx, "interview_blocked", tool_names::REQUEST_USER_INPUT, &args);
+
+    assert!(
+        outcome.is_none(),
+        "Blocked request_user_input should flow through to handle_failure, not fast-exit from guard"
+    );
+    assert!(
+        !ctx.plan_session.is_interview_denied(),
+        "Interview denial is handled by handle_failure in execution_result.rs, not the guard"
+    );
+    assert_eq!(ctx.harness_state.consecutive_blocked_tool_calls, 1, "blocked call should be recorded");
+}
+
+#[tokio::test]
+async fn planning_mode_allows_non_planning_tool_blocked_calls() {
+    let mut backing = TestContextBacking::new(4).await;
+    backing.tool_registry.enable_planning();
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"path": "src/main.rs"});
+    let max_streak = max_consecutive_blocked_tool_calls_per_turn(&ctx);
+
+    for idx in 0..max_streak {
+        let outcome =
+            enforce_blocked_tool_call_guard(&mut ctx, &format!("blocked_{idx}"), tool_names::READ_FILE, &args);
+        assert!(outcome.is_none(), "non-planning blocked call {idx} should stay under cap");
+    }
+
+    let outcome = enforce_blocked_tool_call_guard(&mut ctx, "blocked_over_cap", tool_names::READ_FILE, &args);
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))));
+}

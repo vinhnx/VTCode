@@ -52,12 +52,6 @@ reference and explore research /Users/vinhnguyenxuan/Developer/learn-by-doing/cl
 
 ===
 
-make the API keys manager controller in TUI easy to use and control in VT Code TUI. maybe introduct a new /secret tui interactive sercured api keys controller keyrin command to control it
-
-also maybe we should completley remove the .env file support completely and only use keyring
-
-===
-
 completley remove the .env file support completely and only use keyring
 
 .env removal — this is a broad breaking change. The current /secret command already directs users to secure storage instead of .env. Removing .env support entirely should be a separate decision with its own migration plan.

@@ -63,7 +63,7 @@ impl StringInterner {
     pub fn with_capacity(string_bytes: usize, num_strings: usize) -> Self {
         Self {
             arena: Vec::with_capacity(string_bytes),
-            lookup: U64NoHashMap::with_capacity_and_hasher(num_strings, rustc_hash::FxBuildHasher::default()),
+            lookup: U64NoHashMap::with_capacity_and_hasher(num_strings, rustc_hash::FxBuildHasher),
             offsets: Vec::with_capacity(num_strings),
         }
     }
