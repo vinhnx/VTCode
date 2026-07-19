@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.3 - 2026-07-19
+
+### Highlights
+#### Bug Fixes
+
+- Wait for tag to exist before checkout in build workflows (5683a9a6) (@vinhnx)
+### Other Changes
+#### Refactors
+
+- Scope wrapper exec types to unix_impl (e802aa26) (@vinhnx)
 ## 0.136.2 - 2026-07-19
 
 ### Highlights
