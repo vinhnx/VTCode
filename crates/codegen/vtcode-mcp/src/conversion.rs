@@ -1,8 +1,8 @@
 //! Conversion between MCP tool descriptors and the canonical
-//! [`ToolDefinition`](vtcode_llm::provider::ToolDefinition) model.
+//! [`ToolDefinition`] model.
 //!
 //! MCP tools arrive as JSON Schema 2020-12 payloads (see
-//! [`McpToolInfo`](crate::types::McpToolInfo)) and have to be projected into the
+//! [`McpToolInfo`]) and have to be projected into the
 //! unified `ToolDefinition` so the runloop can hand them to whichever provider
 //! formatter is active. Historically this conversion happened inline inside the
 //! core registry (`crates/codegen/vtcode-core/src/tools/registry/mcp_facade.rs`); this module

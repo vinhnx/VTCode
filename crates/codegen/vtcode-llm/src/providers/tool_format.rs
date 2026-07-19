@@ -55,7 +55,7 @@ impl ProviderFamily {
 /// Trait implemented by every provider tool formatter.
 ///
 /// Implementations are expected to be stateless. Constructors live in
-/// [`formatters`] below.
+/// `formatters` below.
 pub trait ProviderToolFormatter: Send + Sync {
     /// Family this formatter belongs to (for diagnostics).
     fn family(&self) -> ProviderFamily;
