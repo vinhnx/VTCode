@@ -152,11 +152,9 @@ pub fn get_api_key(provider: &str, _sources: &ApiKeySources) -> Result<String> {
             "Codex authentication is managed by the official `codex app-server`. Run `vtcode login codex`."
         )),
         // All other providers: env var was already checked above, nothing more to do
-        _ => {
-            return Err(anyhow::anyhow!(
-                "{normalized_provider} API key not found. Export {inferred_env} in your shell, or paste it with `/model` (it is stored in your OS keyring, not a workspace .env).",
-            ));
-        }
+        _ => Err(anyhow::anyhow!(
+            "{normalized_provider} API key not found. Export {inferred_env} in your shell, or paste it with `/model` (it is stored in your OS keyring, not a workspace .env).",
+        )),
     };
 
     if provider_result.is_ok() {

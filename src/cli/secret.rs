@@ -113,7 +113,7 @@ async fn handle_add(provider: Provider) -> Result<()> {
     storage.store(&key, AuthCredentialsStoreMode::default())?;
     println!();
     println!("API key for {label} stored in secure storage.");
-    println!("The key will be used automatically on next provider/model reload.");
+    println!("The key will be used automatically.");
     Ok(())
 }
 
@@ -155,7 +155,7 @@ async fn handle_delete(provider: Provider) -> Result<()> {
     storage.clear(AuthCredentialsStoreMode::default())?;
     println!();
     println!("API key for {label} deleted from secure storage.");
-    println!("The change takes effect on next provider/model reload.");
+    println!("The change takes effect immediately.");
     Ok(())
 }
 

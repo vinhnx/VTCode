@@ -275,7 +275,7 @@ impl ErrorCategory {
 
     /// Build actionable guidance for authentication errors.
     ///
-    /// Returns provider-specific steps directing the user to `/secret` (API-key
+    /// Returns a single combined line directing the user to `/secret` (API-key
     /// providers) or `/login` (managed-auth providers). Env-var guidance is
     /// intentionally omitted — secure storage via `/secret` is the canonical
     /// path and env vars are a fallback only.
@@ -290,16 +290,15 @@ impl ErrorCategory {
             return vec![];
         }
 
-        let mut guidance = Vec::with_capacity(2);
-        guidance.push(format!("Authentication failed for {provider_label}."));
         if is_managed_auth {
-            guidance.push(format!("Run /login {provider_key} to re-authenticate."));
+            vec![format!(
+                "Authentication failed for {provider_label}. Run /login {provider_key} to re-authenticate."
+            )]
         } else {
-            guidance.push(format!(
-                "Run /secret add {provider_key} to store your API key in secure storage (OS keyring or encrypted file)."
-            ));
+            vec![format!(
+                "Authentication failed for {provider_label}. Run /secret add {provider_key} to store your API key in secure storage (OS keyring or encrypted file)."
+            )]
         }
-        guidance
     }
 }
 
@@ -935,20 +934,18 @@ mod tests {
     #[test]
     fn auth_recovery_guidance_api_key_provider_mentions_secret_add() {
         let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false);
-        assert_eq!(guidance.len(), 2);
-        assert_eq!(guidance[0], "Authentication failed for StepFun.");
+        assert_eq!(guidance.len(), 1);
         assert_eq!(
-            guidance[1],
-            "Run /secret add stepfun to store your API key in secure storage (OS keyring or encrypted file)."
+            guidance[0],
+            "Authentication failed for StepFun. Run /secret add stepfun to store your API key in secure storage (OS keyring or encrypted file)."
         );
     }
 
     #[test]
     fn auth_recovery_guidance_managed_auth_provider_mentions_login() {
         let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true);
-        assert_eq!(guidance.len(), 2);
-        assert_eq!(guidance[0], "Authentication failed for GitHub Copilot.");
-        assert_eq!(guidance[1], "Run /login copilot to re-authenticate.");
+        assert_eq!(guidance.len(), 1);
+        assert_eq!(guidance[0], "Authentication failed for GitHub Copilot. Run /login copilot to re-authenticate.");
     }
 
     #[test]

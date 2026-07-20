@@ -186,7 +186,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         // Without a list, handle_list_key_event returns NotHandled for all keys,
         // so we must handle the close/consume logic here to prevent keys from
         // falling through to normal input processing.
-        if modal.list.is_none() {
+        // Secure prompt modals are excluded: character input must reach the
+        // input handler so typed text and pasted content populate the field.
+        if modal.list.is_none() && modal.secure_prompt.is_none() {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter => {
                     session.close_overlay();

@@ -2,9 +2,10 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use vtcode_auth::AuthCredentialsStoreMode;
-use vtcode_config::api_keys::{CredentialSource, provider_credential_detail};
+use vtcode_config::api_keys::{ApiKeySources, CredentialSource, get_api_key, provider_credential_detail};
 use vtcode_config::workspace_env::{MigrationOutcome, migrate_workspace_env_keys, workspace_env_path};
 use vtcode_core::config::models::Provider;
+use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{InlineEvent, InlineListItem, InlineListSelection, TransientEvent};
 
@@ -124,16 +125,22 @@ async fn run_interactive_secret_manager(ctx: &mut SlashCommandContext<'_>) -> Re
                 render_secret_status_table(ctx.renderer, None)?;
             }
             "migrate" => {
-                handle_migrate_secrets(ctx, None).await?;
+                if !handle_migrate_secrets(ctx, None).await? {
+                    return Ok(());
+                }
             }
             _ => {
                 if let Some(provider_name) = action_key.strip_prefix("add:") {
                     if let Ok(provider) = Provider::from_str(provider_name) {
-                        handle_add_secret(ctx, provider).await?;
+                        if !handle_add_secret(ctx, provider).await? {
+                            return Ok(());
+                        }
                     }
                 } else if let Some(provider_name) = action_key.strip_prefix("delete:") {
                     if let Ok(provider) = Provider::from_str(provider_name) {
-                        handle_delete_secret(ctx, provider).await?;
+                        if !handle_delete_secret(ctx, provider).await? {
+                            return Ok(());
+                        }
                     }
                 }
             }
@@ -275,7 +282,33 @@ fn list_item(title: &str, subtitle: &str, action: String, search: &str) -> Inlin
     }
 }
 
-async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider) -> Result<()> {
+fn reload_provider_client_if_matching(ctx: &mut SlashCommandContext<'_>, provider: Provider) -> Result<()> {
+    let current_provider = ctx.config.provider.trim().to_lowercase();
+    if provider.as_ref().eq_ignore_ascii_case(&current_provider) {
+        let new_api_key = get_api_key(provider.as_ref(), &ApiKeySources::default()).unwrap_or_default();
+        ctx.config.api_key = new_api_key;
+        let new_provider = create_provider_with_config(
+            provider.as_ref(),
+            ProviderConfig {
+                api_key: Some(ctx.config.api_key.clone()),
+                openai_chatgpt_auth: ctx.config.openai_chatgpt_auth.clone(),
+                copilot_auth: ctx.vt_cfg.as_ref().map(|cfg| cfg.auth.copilot.clone()),
+                base_url: None,
+                model: Some(ctx.config.model.clone()),
+                prompt_cache: Some(ctx.config.prompt_cache.clone()),
+                timeouts: None,
+                openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
+                anthropic: None,
+                model_behavior: ctx.config.model_behavior.clone(),
+                workspace_root: Some(ctx.config.workspace.clone()),
+            },
+        )?;
+        *ctx.provider_client = new_provider;
+    }
+    Ok(())
+}
+
+async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider) -> Result<bool> {
     if provider.uses_managed_auth() {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -285,7 +318,7 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
                 provider.as_ref()
             ),
         )?;
-        return Ok(());
+        return Ok(true);
     }
     let label = provider.label();
     let env_key = provider.default_api_key_env();
@@ -309,13 +342,13 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
 
     let Some(key) = wait_for_secure_prompt_input(ctx).await else {
         ctx.renderer.line(MessageStyle::Info, "Secret entry cancelled.")?;
-        return Ok(());
+        return Ok(true);
     };
 
     let trimmed = key.trim();
     if trimmed.is_empty() {
         ctx.renderer.line(MessageStyle::Error, "API key cannot be empty.")?;
-        return Ok(());
+        return Ok(true);
     }
 
     let storage = vtcode_auth::CustomApiKeyStorage::new(provider.as_ref());
@@ -323,8 +356,8 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
         Ok(()) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("API key for {label} stored in secure storage."))?;
-            ctx.renderer
-                .line(MessageStyle::Output, "The key will be used automatically on next provider/model reload.")?;
+            ctx.renderer.line(MessageStyle::Output, "The key will be used automatically.")?;
+            reload_provider_client_if_matching(ctx, provider)?;
         }
         Err(err) => {
             tracing::warn!("Failed to store API key for {}: {}", label, err);
@@ -335,17 +368,17 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
         }
     }
 
-    Ok(())
+    Ok(false)
 }
 
-async fn handle_migrate_secrets(ctx: &mut SlashCommandContext<'_>, provider: Option<Provider>) -> Result<()> {
+async fn handle_migrate_secrets(ctx: &mut SlashCommandContext<'_>, provider: Option<Provider>) -> Result<bool> {
     if let Some(p) = provider {
         if p.uses_managed_auth() {
             ctx.renderer.line(
                 MessageStyle::Info,
                 &format!("{} uses managed auth (GitHub Copilot CLI). Run `/login {}` instead.", p.label(), p.as_ref()),
             )?;
-            return Ok(());
+            return Ok(true);
         }
     }
 
@@ -360,7 +393,7 @@ async fn handle_migrate_secrets(ctx: &mut SlashCommandContext<'_>, provider: Opt
     if !env_path.exists() {
         ctx.renderer
             .line(MessageStyle::Info, &format!("No .env file found at {}. Nothing to migrate.", env_path_display))?;
-        return Ok(());
+        return Ok(true);
     }
 
     let (summary, outcomes) =
@@ -396,13 +429,13 @@ async fn handle_migrate_secrets(ctx: &mut SlashCommandContext<'_>, provider: Opt
         ctx.renderer
             .line(MessageStyle::Output, "Keys moved from .env to secure storage (OS keyring or encrypted file).")?;
         ctx.renderer
-            .line(MessageStyle::Output, "Reload providers or restart VT Code for changes to take effect.")?;
+            .line(MessageStyle::Output, "The change takes effect immediately.")?;
     }
 
-    Ok(())
+    Ok(false)
 }
 
-async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider) -> Result<()> {
+async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider) -> Result<bool> {
     if provider.uses_managed_auth() {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -412,7 +445,7 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
                 provider.as_ref()
             ),
         )?;
-        return Ok(());
+        return Ok(true);
     }
     let label = provider.label();
 
@@ -421,7 +454,7 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
         Ok(None) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("No stored API key found for {label}."))?;
-            return Ok(());
+            return Ok(true);
         }
         Ok(Some(_)) => {}
         Err(err) => {
@@ -437,12 +470,12 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
 
     let Some(confirmation) = wait_for_secure_prompt_input(ctx).await else {
         ctx.renderer.line(MessageStyle::Info, "Deletion cancelled.")?;
-        return Ok(());
+        return Ok(true);
     };
 
     if confirmation.trim().ne("confirm") {
         ctx.renderer.line(MessageStyle::Info, "Deletion cancelled.")?;
-        return Ok(());
+        return Ok(true);
     }
 
     match storage.clear(AuthCredentialsStoreMode::default()) {
@@ -450,7 +483,8 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
             ctx.renderer
                 .line(MessageStyle::Info, &format!("API key for {label} deleted from secure storage."))?;
             ctx.renderer
-                .line(MessageStyle::Output, "The change takes effect on next provider/model reload.")?;
+                .line(MessageStyle::Output, "The change takes effect immediately.")?;
+            reload_provider_client_if_matching(ctx, provider)?;
         }
         Err(err) => {
             ctx.renderer
@@ -458,7 +492,7 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
         }
     }
 
-    Ok(())
+    Ok(false)
 }
 
 fn render_secret_status_table(renderer: &mut AnsiRenderer, filter: Option<Provider>) -> Result<()> {
