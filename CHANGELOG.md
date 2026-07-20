@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.5 - 2026-07-20
+
+### Highlights
+#### Bug Fixes
+
+- Prevent cursor overflow and enhance palette UI (1dee6554) 
+- Prevent double input when slash palette is open and adjust panel layout (c930a417) 
+#### Features
+
+- Add OAuth/managed auth detection and workspace env key removal (13f2f054) 
+- Improve agent palette rendering and layout safety (17adac16) 
+### Other Changes
 ## 0.136.4 - 2026-07-19
 
 ### Highlights
