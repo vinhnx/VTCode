@@ -100,20 +100,21 @@ vtcode dependencies install search-tools
 
 ## Quick Start
 
-### 1. Set Your API Key
+### 1. Set Your API Key (Recommended)
+
+Use VT Code's built-in secret management — keys are stored in your OS keyring, never in a workspace `.env`:
 
 ```bash
-# For Gemini (recommended)
-export GEMINI_API_KEY=your_api_key_here
+# From the TUI
+/secret add gemini
 
-# For OpenAI
-export OPENAI_API_KEY=your_api_key_here
-
-# For Anthropic
-export ANTHROPIC_API_KEY=your_api_key_here
+# Or from the command line
+vtcode secret add openai
 ```
 
-On first launch in a fresh workspace, VT Code auto-discovers any provider whose key is already in your shell environment (so if you `export OPENROUTER_API_KEY` in `~/.zshrc`, the setup wizard detects it and skips re-prompting). The wizard tells you exactly which environment variable it read — e.g. "Found credentials for: OpenRouter (OPENROUTER_API_KEY), Gemini (GOOGLE_API_KEY)." — so alternate env vars (such as `GOOGLE_API_KEY` for Gemini, or `DASHSCOPE_API_KEY` for Qwen) are surfaced explicitly. The provider picker shows ready providers first, marks each with `✓` (real credential) or `•` (local / managed-auth), and defaults the cursor to one you can use immediately. You can switch providers anytime with `/model`.
+The first-run wizard auto-discovers any key already in your shell environment (e.g. `~/.zshrc`) or in your OS keyring, and skips re-prompting. It tells you exactly which source it found — e.g. "Found OPENAI_API_KEY in environment" or "Found stored Gemini key in OS keyring."
+
+If you prefer env vars or `.env`, those still work — export them in your shell or add them to a workspace `.env` and the app reads them automatically.
 
 If no key is in your environment, the wizard lets you paste one now or skip and set it later via `/model`. The paste flow is built for safe input:
 

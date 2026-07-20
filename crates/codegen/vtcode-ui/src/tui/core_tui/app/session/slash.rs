@@ -274,7 +274,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
         return;
     };
 
-    let current_input = session.core.input_manager.content().to_owned();
+    let current_input = session.core.input_manager.content();
     let prefix = &current_input[..range.start];
     let suffix = &current_input[range.end..];
 
@@ -291,8 +291,9 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
         new_input.push_str(suffix);
     }
 
-    session.core.input_manager.set_content(new_input.clone());
-    session.core.input_manager.set_cursor(cursor_position.min(new_input.len()));
+    let cursor = cursor_position.min(new_input.len());
+    session.core.input_manager.set_content(new_input);
+    session.core.input_manager.set_cursor(cursor);
     session.mark_dirty();
 }
 

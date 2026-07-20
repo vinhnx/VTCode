@@ -92,7 +92,7 @@ pub(crate) fn local_agents_panel_layout(session: &Session) -> Option<ListPanelLa
     }
 
     let visible_entries = session.local_agents_state.entries().len().max(1);
-    let fixed_rows = fixed_section_rows_with_divider(2, 1, false, true);
+    let fixed_rows = fixed_section_rows_with_divider(1, 1, false, true);
     let desired_rows = rows_to_u16(visible_entries.min(ui::INLINE_LIST_MAX_ROWS));
     Some(ListPanelLayout::new(fixed_rows, desired_rows))
 }
@@ -158,17 +158,18 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         highlight_style,
     };
 
-    let [divider_area, header_area, info_area, body] = area
-        .try_layout(&Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(1),
-        ]))
-        .unwrap_or_else(|_| {
-            warn!(target: "vtcode::tui", height = area.height, "local agents panel layout fallback to zero rects");
-            [Rect::ZERO; 4]
-        });
+    let [divider_area, header_area, info_area, body] = match area.try_layout(&Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(1),
+    ])) {
+        Ok(areas) => areas,
+        Err(_) => {
+            warn!(target: "vtcode::tui", height = area.height, "local agents panel layout failed, skipping render");
+            return;
+        }
+    };
 
     let divider_style = local_agents_divider_style(session, selected_index, &entries);
     frame.render_widget(Fill::new("─").style(divider_style), divider_area);
@@ -205,7 +206,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         &mut list_model,
     );
 
-    session.local_agents_state.set_visible_rows(list_model.visible_rows.max(1));
+    session.local_agents_state.set_visible_rows(list_model.visible_rows);
     session.local_agents_state.set_scroll_offset(list_model.offset);
 
     let selected_entry = selected_index.and_then(|index| entries.get(index));

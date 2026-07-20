@@ -164,8 +164,12 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
 
     if let Some(palette) = session.agent_palette.as_mut() {
         if let Some(selected) = model.selected {
-            let global_idx = global_indices.get(selected).copied().unwrap_or(0);
-            palette.select_index(global_idx);
+            let global_idx = global_indices.get(selected).copied();
+            if let Some(global_idx) = global_idx {
+                palette.select_index(global_idx);
+            } else {
+                palette.set_selected(None);
+            }
         } else {
             palette.set_selected(None);
         }
@@ -368,7 +372,9 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
     }
 
     if palette.has_more_items() {
-        let remaining = palette.total_items().saturating_sub(palette.current_page_number() * 20);
+        let remaining = palette
+            .total_items()
+            .saturating_sub(palette.current_page_number() * palette.page_size());
         rows.push(AgentPaletteRenderRow {
             text: format!("... ({remaining} more items)"),
             subtitle: None,

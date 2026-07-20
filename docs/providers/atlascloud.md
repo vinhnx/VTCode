@@ -112,7 +112,7 @@ vtcode ask --model moonshotai/kimi-k2.6 "Review this patch at a high level"
 | Symptom | Resolution |
 | --- | --- |
 | `Unknown provider: atlascloud` | Use a VT Code build that includes custom provider registration in CLI flows. |
-| `API key not found for custom provider 'atlascloud'` | Confirm `ATLASCLOUD_API_KEY` is present in your shell or local `.env`. |
+| `API key not found for custom provider 'atlascloud'` | Run `vtcode secret add atlascloud` to store a key in your OS keyring, or set the `ATLASCLOUD_API_KEY` environment variable. |
 | `403` from chat completions | Verify the model slug against `GET /v1/models` and confirm the Atlas account can access chat generation. |
 | Model not found | Replace the sample model with the exact model ID returned by Atlas Cloud for your account. |
 

@@ -6,7 +6,7 @@ Canonical local setup for contributing to VT Code.
 
 - Rust toolchain (stable) via [rustup](https://rustup.rs/)
 - Git
-- One LLM provider API key for local interactive runs (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `STEPFUN_API_KEY`, or `MINIMAX_API_KEY`)
+- An LLM provider credential: either (a) a shell env var like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `STEPFUN_API_KEY`, or `MINIMAX_API_KEY`, or (b) an OAuth session for an auth-managed provider, or (c) a key stored via `vtcode secret add <provider>`.
 
 ## One-Time Setup
 
@@ -66,7 +66,9 @@ cargo doc --workspace --no-deps --document-private-items
 
 - `cargo nextest` missing:
   - Run `cargo install cargo-nextest --locked`
-- API key missing for interactive runs:
-  - Export one provider key, for example `export OPENAI_API_KEY="sk-..."`
+- No provider credential found:
+  - Run `vtcode secret add <provider>` to store a key in your OS keyring (recommended), or
+  - `export OPENAI_API_KEY="sk-..."` (or the equivalent env var for your provider) in your shell, or
+  - Run `vtcode login <provider>` for OAuth/managed-auth providers (copilot, openai, openrouter).
 - Script permissions:
   - Run `chmod +x scripts/*.sh`

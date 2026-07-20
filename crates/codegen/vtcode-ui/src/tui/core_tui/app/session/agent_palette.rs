@@ -157,6 +157,10 @@ impl AgentPalette {
         self.filtered_agents.len()
     }
 
+    pub fn page_size(&self) -> usize {
+        PAGE_SIZE
+    }
+
     pub fn is_empty(&self) -> bool {
         self.filtered_agents.is_empty()
     }

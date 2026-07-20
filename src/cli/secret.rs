@@ -265,6 +265,7 @@ async fn handle_migrate(args: MigrateArgs, workspace: &Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::let_unit_value)]
 fn prompt_hidden_input(prompt: &str) -> Result<String> {
     if !io::stdin().is_terminal() {
         anyhow::bail!("Cannot prompt for hidden input: stdin is not a terminal");

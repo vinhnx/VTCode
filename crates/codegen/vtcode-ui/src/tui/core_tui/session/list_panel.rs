@@ -254,7 +254,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     }
 
     if show_divider && idx < chunks.len() {
-        let divider_style = styles.divider_style.unwrap();
+        let divider_style = styles.divider_style.expect("show_divider is true but divider_style is None");
         frame.render_widget(
             Fill::new(crate::tui::config::constants::ui::INLINE_BLOCK_HORIZONTAL).style(divider_style),
             chunks[idx],
