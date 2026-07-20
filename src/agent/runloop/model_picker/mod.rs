@@ -58,10 +58,10 @@ use interaction::{
 };
 use options::{MODEL_OPTIONS, ModelOption, build_model_options_with_overrides, find_option_index};
 use rendering::{
-    CLOSE_THEME_MESSAGE, dynamic_model_subtitle, model_search_value, prompt_api_key_plain, prompt_custom_model_entry,
-    prompt_mimo_auth_method_plain, prompt_reasoning_plain, prompt_service_tier_plain, render_mimo_auth_method_inline,
-    render_reasoning_inline, render_service_tier_inline, render_step_one_inline, render_step_one_plain,
-    show_secure_api_modal, static_model_search_terms, static_model_subtitle,
+    CLOSE_THEME_MESSAGE, dynamic_model_subtitle, join_with_label, model_search_value, prompt_api_key_plain,
+    prompt_custom_model_entry, prompt_mimo_auth_method_plain, prompt_reasoning_plain, prompt_service_tier_plain,
+    render_mimo_auth_method_inline, render_reasoning_inline, render_service_tier_inline, render_step_one_inline,
+    render_step_one_plain, show_secure_api_modal, static_model_search_terms, static_model_subtitle,
 };
 use selection::{
     ExistingKey, ReasoningChoice, SelectionDetail, ServiceTierChoice, is_cancel_command, parse_model_selection,
@@ -697,10 +697,9 @@ async fn select_subagent_model_target(
         };
         items.push(InlineListItem {
             title: option.display.to_string(),
-            subtitle: Some(format!(
-                "{} • {}",
+            subtitle: Some(join_with_label(
                 option.provider.label(),
-                static_model_subtitle(option, current_provider, current_model)
+                static_model_subtitle(option, current_provider, current_model),
             )),
             badge: Some(option.provider.label().to_string()),
             indent: 0,
@@ -729,8 +728,7 @@ async fn select_subagent_model_target(
         };
         items.push(InlineListItem {
             title: detail.model_display.clone(),
-            subtitle: Some(format!(
-                "{} • {}",
+            subtitle: Some(join_with_label(
                 provider.label(),
                 dynamic_model_subtitle(
                     provider,
@@ -738,7 +736,7 @@ async fn select_subagent_model_target(
                     detail.reasoning_supported,
                     current_provider,
                     current_model,
-                )
+                ),
             )),
             badge: Some(provider.label().to_string()),
             indent: 0,
@@ -774,15 +772,11 @@ async fn select_subagent_model_target(
         .or_else(|| items.first().and_then(|item| item.selection.clone()));
     handle.show_list_modal(
         "Subagent model".to_string(),
-        vec![
-            "Choose a shortcut alias or a concrete VT Code model id for this subagent.".to_string(),
-            "This picker only stores `model` and `reasoning_effort`; it never prompts for API keys or service tier."
-                .to_string(),
-        ],
+        vec!["Pick a shortcut alias or concrete model id — stores only `model` and `reasoning_effort`.".to_string()],
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search subagent models".to_string(),
+            label: String::new(),
             placeholder: Some("shortcut, provider, model id".to_string()),
         }),
     );
@@ -880,7 +874,7 @@ async fn select_subagent_reasoning(
         items,
         Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep"))),
         Some(InlineListSearchConfig {
-            label: "Search reasoning".to_string(),
+            label: String::new(),
             placeholder: Some("keep, unset, high".to_string()),
         }),
     );

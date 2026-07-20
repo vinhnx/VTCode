@@ -11,32 +11,40 @@ impl Session {
             return;
         };
         let mut metrics = self.core.measure_frame(viewport);
-        let local_agents_captures_input = self.inline_lists_visible()
-            && matches!(self.visible_bottom_docked_surface(), Some(TransientSurface::LocalAgents));
+        // The slash palette renders its own focused search field with a visible
+        // cursor. Keeping the base input rendered alongside it produces a double
+        // input + double cursor, so hand the full input region to the panel and
+        // suppress the base input (and its status line) while it is open.
+        let panel_captures_input = self.inline_lists_visible()
+            && matches!(
+                self.visible_bottom_docked_surface(),
+                Some(TransientSurface::LocalAgents) | Some(TransientSurface::SlashPalette)
+            );
         let panel = resolve_bottom_panel_spec(
             self,
             viewport,
             metrics.header_height,
-            if local_agents_captures_input {
+            if panel_captures_input {
                 0
             } else {
                 metrics.input_core_height
             },
         );
-        if local_agents_captures_input {
+        if panel_captures_input {
             metrics.input_core_height = 0;
         }
         let layout = self.core.build_frame_layout(viewport, metrics, panel.height);
         self.core.set_modal_list_area(None);
         let transcript_area = layout.main_area;
-        let (input_area, bottom_panel_area) = if matches!(panel.kind, BottomPanelKind::LocalAgents) {
-            (
-                Rect::new(layout.input_area.x, layout.input_area.y, layout.input_area.width, 0),
-                Some(layout.input_area),
-            )
-        } else {
-            split_input_and_bottom_panel_area(layout.input_area, panel.height)
-        };
+        let (input_area, bottom_panel_area) =
+            if matches!(panel.kind, BottomPanelKind::LocalAgents | BottomPanelKind::SlashPalette) {
+                (
+                    Rect::new(layout.input_area.x, layout.input_area.y, layout.input_area.width, 0),
+                    Some(layout.input_area),
+                )
+            } else {
+                split_input_and_bottom_panel_area(layout.input_area, panel.height)
+            };
         self.core.set_bottom_panel_area(bottom_panel_area);
         self.core.render_base_frame(frame, &layout, transcript_area);
         self.core.render_input(frame, input_area);

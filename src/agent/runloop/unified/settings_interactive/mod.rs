@@ -31,7 +31,6 @@ use path::{PathToken, parse_path_tokens};
 
 const SETTINGS_TITLE: &str = "VT Code Settings";
 const SETTINGS_HINT: &str = "Enter open/apply • ←/→ adjust • Esc back";
-const SETTINGS_SEARCH_LABEL: &str = "Search settings";
 const SETTINGS_SEARCH_PLACEHOLDER: &str = "section, setting, or value";
 const ACTION_RELOAD: &str = "settings:reload";
 const ACTION_OPEN_ROOT: &str = "settings:open_root";
@@ -128,7 +127,7 @@ pub(crate) fn show_settings_palette(
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: SETTINGS_SEARCH_LABEL.to_string(),
+            label: String::new(),
             placeholder: Some(SETTINGS_SEARCH_PLACEHOLDER.to_string()),
         }),
     );

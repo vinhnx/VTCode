@@ -209,7 +209,7 @@ fn static_model_subtitle_formats_current_capabilities() {
 
     let subtitle = static_model_subtitle(option, "openai", "gpt-5.4");
 
-    assert_eq!(subtitle, "gpt-5.4 • Current • Context: 1M • Reasoning • Tools • Input: text, image");
+    assert_eq!(subtitle, Some("Current • 1M • Reasoning • Tools • image".to_string()));
 }
 
 #[test]
@@ -230,13 +230,13 @@ fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
     let subtitle =
         dynamic_model_subtitle(Provider::Ollama, "custom-local-model", false, "ollama", "custom-local-model");
 
-    assert_eq!(subtitle, "custom-local-model • Current • Local");
+    assert_eq!(subtitle, Some("Current • Local".to_string()));
 }
 
 #[test]
 fn current_model_line_shows_effective_anthropic_context_window() {
     let line = rendering::current_model_line("anthropic", "claude-sonnet-4-6");
-    assert_eq!(line, "Current: anthropic / claude-sonnet-4-6 • Context: 1M");
+    assert_eq!(line, "Current: anthropic / claude-sonnet-4-6 • 1M");
 }
 
 #[test]

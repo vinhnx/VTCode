@@ -577,7 +577,14 @@ pub(crate) fn render_modal_body(
     let mut constraints = Vec::new();
     for section in &sections {
         match section {
-            ModalSection::Search => constraints.push(Constraint::Length(2.min(area.height))),
+            ModalSection::Search => {
+                let rows = context
+                    .search
+                    .map(|s| if s.label.is_empty() { 1 } else { 2 })
+                    .unwrap_or(2)
+                    .min(area.height);
+                constraints.push(Constraint::Length(rows));
+            }
             ModalSection::Instructions => {
                 let visible_rows = instruction_row_count as u16;
                 constraints.push(Constraint::Length(visible_rows.min(area.height)));
@@ -1310,6 +1317,25 @@ mod tests {
             .expect("list item should render");
 
         assert!(search_index < item_index);
+    }
+
+    #[test]
+    fn modal_search_field_without_label_omits_title_row() {
+        // An empty label collapses the search field to a single row (prompt +
+        // placeholder), removing the redundant "Search …" title that restates
+        // the placeholder.
+        let lines = render_modal_lines(ModalSearchState {
+            label: String::new(),
+            placeholder: Some("provider, name, id".to_string()),
+            query: String::new(),
+        });
+
+        let placeholder_row = lines
+            .iter()
+            .position(|line| line.contains("provider, name, id"))
+            .expect("placeholder should render on the single search row");
+        // The prompt indicator marks the search row.
+        assert!(lines[placeholder_row].contains('>'), "search row should render the prompt indicator");
     }
 
     #[test]

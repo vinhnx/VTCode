@@ -28,13 +28,11 @@ use super::display::{persist_theme_preference, sync_runtime_theme_selection};
 const THEME_PALETTE_TITLE: &str = "Theme";
 const THEME_ACTIVE_BADGE: &str = "Active";
 const THEME_SELECT_HINT: &str = "↑/↓ choose • Enter apply • Esc cancel";
-const THEME_SEARCH_LABEL: &str = "Search themes";
 const THEME_SEARCH_PLACEHOLDER: &str = "name, id, or appearance";
 const SESSION_FORK_PALETTE_TITLE: &str = "Fork session";
 const SESSION_FORK_MODE_PALETTE_TITLE: &str = "Fork mode";
 const SESSION_RESUME_PALETTE_TITLE: &str = "Resume session";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
-const SESSIONS_SEARCH_LABEL: &str = "Search sessions";
 const SESSIONS_SEARCH_PLACEHOLDER: &str = "workspace, provider, model, date";
 const MODEL_TARGET_PALETTE_TITLE: &str = "Model";
 const LIGHTWEIGHT_MODEL_PALETTE_TITLE: &str = "Lightweight model";
@@ -43,7 +41,6 @@ pub(crate) const MODEL_TARGET_ACTION_LIGHTWEIGHT: &str = "model_target:lightweig
 pub(crate) const LIGHTWEIGHT_MODEL_ACTION_PREFIX: &str = "lightweight_model:";
 const MODE_PALETTE_TITLE: &str = "Agent mode";
 const MODE_SELECT_HINT: &str = "↑/↓ choose • Enter select • Esc cancel";
-const MODE_SEARCH_LABEL: &str = "Search agents";
 const MODE_SEARCH_PLACEHOLDER: &str = "name or description";
 pub(crate) const MODE_ACTION_PREFIX: &str = "mode:";
 
@@ -122,7 +119,7 @@ pub(crate) fn show_theme_palette(renderer: &mut AnsiRenderer, mode: ThemePalette
         items,
         Some(InlineListSelection::Theme(current_id)),
         Some(InlineListSearchConfig {
-            label: THEME_SEARCH_LABEL.to_string(),
+            label: String::new(),
             placeholder: Some(THEME_SEARCH_PLACEHOLDER.to_string()),
         }),
     );
@@ -178,7 +175,7 @@ pub(crate) fn show_mode_palette(
         items,
         Some(InlineListSelection::ConfigAction(format!("{MODE_ACTION_PREFIX}{canonical_current}"))),
         Some(InlineListSearchConfig {
-            label: MODE_SEARCH_LABEL.to_string(),
+            label: String::new(),
             placeholder: Some(MODE_SEARCH_PLACEHOLDER.to_string()),
         }),
     );
@@ -276,7 +273,7 @@ pub(crate) fn show_sessions_palette(
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: SESSIONS_SEARCH_LABEL.to_string(),
+            label: String::new(),
             placeholder: Some(SESSIONS_SEARCH_PLACEHOLDER.to_string()),
         }),
     );
@@ -384,7 +381,7 @@ pub(crate) fn show_lightweight_model_palette(
         view.items.clone(),
         selected.or_else(|| view.selected.clone()),
         Some(InlineListSearchConfig {
-            label: "Search lightweight models".to_string(),
+            label: String::new(),
             placeholder: Some("name, id, or capability".to_string()),
         }),
     );

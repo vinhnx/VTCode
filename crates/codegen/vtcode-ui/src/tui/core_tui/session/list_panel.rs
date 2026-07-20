@@ -68,20 +68,30 @@ pub(crate) fn rows_to_u16(rows: usize) -> u16 {
     rows.min(u16::MAX as usize) as u16
 }
 
-pub(crate) fn fixed_section_rows(header_rows: usize, info_rows: usize, has_search: bool) -> u16 {
-    fixed_section_rows_with_divider(header_rows, info_rows, has_search, false)
+pub(crate) fn fixed_section_rows(header_rows: usize, info_rows: usize, search_rows: u16) -> u16 {
+    fixed_section_rows_with_divider(header_rows, info_rows, search_rows, false)
 }
 
 pub(crate) fn fixed_section_rows_with_divider(
     header_rows: usize,
     info_rows: usize,
-    has_search: bool,
+    search_rows: u16,
     has_divider: bool,
 ) -> u16 {
     rows_to_u16(header_rows)
         .saturating_add(rows_to_u16(info_rows))
-        .saturating_add(if has_search { 2 } else { 0 })
+        .saturating_add(search_rows)
         .saturating_add(if has_divider { 1 } else { 0 })
+}
+
+/// Rows reserved by the search field: 0 when absent, 1 when the label is empty
+/// (prompt-only, no title row), 2 when a title label is rendered above the input.
+pub(crate) fn search_field_rows(field: Option<&SharedSearchField>) -> u16 {
+    match field {
+        Some(field) if field.label.is_empty() => 1,
+        Some(_) => 2,
+        None => 0,
+    }
 }
 
 pub(crate) struct ListPanelLayout {
@@ -213,12 +223,12 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
         constraints.push(Constraint::Length(info_rows));
     }
 
-    if sections.search.is_some() {
-        constraints.push(Constraint::Length(2));
+    let search_rows = search_field_rows(sections.search.as_ref());
+    if search_rows > 0 {
+        constraints.push(Constraint::Length(search_rows));
     }
-    let show_divider = styles.show_divider
-        && styles.divider_style.is_some()
-        && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
+    let show_divider =
+        styles.show_divider && styles.divider_style.is_some() && (header_rows > 0 || info_rows > 0 || search_rows > 0);
     if show_divider {
         constraints.push(Constraint::Length(1));
     }

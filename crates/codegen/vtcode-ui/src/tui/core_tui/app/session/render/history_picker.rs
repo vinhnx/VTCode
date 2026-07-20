@@ -96,7 +96,7 @@ pub(crate) fn history_picker_panel_layout(session: &Session) -> Option<ListPanel
         return None;
     }
 
-    let fixed_rows = fixed_section_rows(1, 1, true);
+    let fixed_rows = fixed_section_rows(1, 1, 1);
     let list_rows = if session.history_picker_state.matches.is_empty() {
         1_u16
     } else {
@@ -144,25 +144,14 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
     let default_style = default_style(session);
     let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
-    let total = matches.len();
-    let count_text = if total == 1 {
-        "1 match".to_owned()
-    } else {
-        format!("{total} matches")
-    };
-    let query_suffix = if query.is_empty() {
-        String::new()
-    } else {
-        format!(" matching '{query}'")
-    };
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled("History".to_owned(), highlight_style))],
         info: vec![Line::from(Span::styled(
-            format!("Ctrl+R open · Enter accept · Esc cancel · Showing {count_text}{query_suffix}"),
+            "↑↓ Navigate · Enter accept · Esc cancel".to_owned(),
             default_style,
         ))],
         search: Some(SharedSearchField {
-            label: "Search history".to_owned(),
+            label: String::new(),
             placeholder: Some("history text".to_owned()),
             query,
         }),

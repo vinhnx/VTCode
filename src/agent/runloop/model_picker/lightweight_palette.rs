@@ -87,10 +87,8 @@ pub(crate) fn build_lightweight_model_palette_view(
     }));
 
     let mut lines = vec![
-        "Choose the shared lightweight model VT Code should prefer for memory triage, prompt suggestions, and smaller delegated tasks.".to_string(),
-        format!("Current setting: {}", configured_label),
-        format!("Effective route: {}", effective_route),
-        "Selecting any option enables the shared lightweight route without changing the active main conversation model.".to_string(),
+        format!("Lightweight model · Current: {configured_label} · Route: {effective_route}"),
+        "Used for memory, suggestions, and small delegated tasks — doesn't change the main model.".to_string(),
     ];
 
     if let Some(provider) = provider {
@@ -128,7 +126,7 @@ fn provider_scoped_items(
         }
         items.push(InlineListItem {
             title: option.display.to_string(),
-            subtitle: Some(static_model_subtitle(option, current_provider, main_model)),
+            subtitle: static_model_subtitle(option, current_provider, main_model),
             badge: Some(model_badge(current_setting, &option.id, provider.label())),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}{}", &option.id))),
@@ -158,13 +156,13 @@ fn provider_scoped_items(
         }
         items.push(InlineListItem {
             title: detail.model_display.clone(),
-            subtitle: Some(dynamic_model_subtitle(
+            subtitle: dynamic_model_subtitle(
                 provider,
                 &detail.model_id,
                 detail.reasoning_supported,
                 current_provider,
                 main_model,
-            )),
+            ),
             badge: Some(model_badge(current_setting, &detail.model_id, provider.label())),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!("{action_prefix}{}", detail.model_id))),

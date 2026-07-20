@@ -29,7 +29,8 @@ pub(crate) fn agent_palette_panel_layout(session: &Session) -> Option<ListPanelL
     } else {
         1
     };
-    let fixed_rows = fixed_section_rows(1, info_rows, palette.has_agents());
+    let search_rows = if palette.has_agents() { 1 } else { 0 };
+    let fixed_rows = fixed_section_rows(1, info_rows, search_rows);
     let list_rows = if palette.has_agents() {
         let mut rows = palette.current_page_items().len().max(1);
         if palette.has_more_items() {
@@ -134,7 +135,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         header: vec![Line::from(Span::styled("Agents".to_owned(), highlight_style))],
         info: instructions,
         search: Some(SharedSearchField {
-            label: "Search agents".to_owned(),
+            label: String::new(),
             placeholder: Some("name or description".to_owned()),
             query: palette.filter_query().to_owned(),
         }),
@@ -189,7 +190,8 @@ pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLa
         1
     };
     let has_files = palette.has_files();
-    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_files, true);
+    let search_rows = if has_files { 1 } else { 0 };
+    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, search_rows, true);
     let list_rows: u16 = if has_files {
         palette.total_items().min(ui::INLINE_LIST_MAX_ROWS) as u16
     } else {
@@ -295,10 +297,9 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         .collect();
 
     let header = if palette.is_search_mode() {
-        vec![Line::from(Span::styled(
-            format!("Files  (search: '{}')", palette.filter_query()),
-            highlight_style,
-        ))]
+        // The active query is already visible in the search field, so the header
+        // only needs to label the panel — repeating `(search: '…')` here is clutter.
+        vec![Line::from(Span::styled("Files", highlight_style))]
     } else {
         vec![Line::from(vec![
             Span::styled("Files", highlight_style),
@@ -310,7 +311,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         header,
         info: file_palette_instructions(session, palette),
         search: Some(SharedSearchField {
-            label: "Search files".to_owned(),
+            label: String::new(),
             placeholder: Some("filename or path".to_owned()),
             query: palette.filter_query().to_owned(),
         }),
@@ -394,24 +395,10 @@ fn agent_palette_instructions(session: &Session, palette: &AgentPalette) -> Vec<
     if palette.is_empty() {
         lines.push(Line::from(Span::styled("No agents found matching filter".to_owned(), default_style(session))));
     } else {
-        let total = palette.total_items();
-        let count_text = if total == 1 {
-            "1 agent".to_owned()
-        } else {
-            format!("{total} agents")
-        };
-
-        let nav_hint = "↑↓ Navigate · Tab/Enter select · Esc close";
-        let query_suffix = if !palette.filter_query().is_empty() {
-            format!(" matching '{}'", palette.filter_query())
-        } else {
-            String::new()
-        };
-
-        lines.push(Line::from(vec![
-            Span::styled(nav_hint.to_owned(), default_style(session)),
-            Span::styled(format!(" • Showing {count_text}{query_suffix}"), default_style(session)),
-        ]));
+        lines.push(Line::from(Span::styled(
+            "↑↓ Navigate · Enter select · Esc close".to_owned(),
+            default_style(session),
+        )));
     }
 
     lines
@@ -423,29 +410,13 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
     if palette.is_empty() {
         lines.push(Line::from(Span::styled("No files found matching filter".to_owned(), default_style(session))));
     } else {
-        let total = palette.total_items();
-        let count_text = if total == 1 {
-            "1 item".to_owned()
-        } else {
-            format!("{total} items")
-        };
-
         let nav_hint = if palette.is_search_mode() {
-            "↑↓ Navigate · →/Enter open · ← Up · Type to refine · Esc close"
+            "↑↓ Navigate · → open · ← up · Type to refine · Esc close"
         } else {
-            "↑↓ Navigate · →/Enter open · ← Up · Type to filter · Esc close"
+            "↑↓ Navigate · → open · ← up · Type to filter · Esc close"
         };
 
-        let query_suffix = if !palette.filter_query().is_empty() {
-            format!(" matching '{}'", palette.filter_query())
-        } else {
-            String::new()
-        };
-
-        lines.push(Line::from(vec![
-            Span::styled(nav_hint.to_owned(), default_style(session)),
-            Span::styled(format!(" • Showing {count_text}{query_suffix}"), default_style(session)),
-        ]));
+        lines.push(Line::from(Span::styled(nav_hint.to_owned(), default_style(session))));
     }
 
     lines

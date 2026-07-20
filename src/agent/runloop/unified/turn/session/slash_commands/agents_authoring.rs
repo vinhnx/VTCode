@@ -533,7 +533,7 @@ fn show_authoring_menu(ctx: &mut SlashCommandContext<'_>, draft: &NativeAgentDra
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search fields".to_string(),
+            label: String::new(),
             placeholder: Some("name, tools, model, memory".to_string()),
         }),
     );
@@ -836,7 +836,7 @@ async fn edit_tools_checklist(
 ) -> Result<Option<Vec<String>>> {
     let mut selected = current_tools.iter().cloned().collect::<BTreeSet<_>>();
     let mut search_config = Some(InlineListSearchConfig {
-        label: "Search tools".to_string(),
+        label: String::new(),
         placeholder: Some("tool id or capability".to_string()),
     });
 
@@ -925,7 +925,7 @@ async fn edit_tools_checklist(
             selected.insert(tool_id.to_string());
         }
         search_config = Some(InlineListSearchConfig {
-            label: "Search tools".to_string(),
+            label: String::new(),
             placeholder: Some("tool id or capability".to_string()),
         });
     }
@@ -986,7 +986,7 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search native agents".to_string(),
+            label: String::new(),
             placeholder: Some("name, description, source".to_string()),
         }),
     );

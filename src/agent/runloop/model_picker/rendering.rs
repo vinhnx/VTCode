@@ -28,7 +28,6 @@ pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str = "Provide the provider name and
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
-const CONTEXT_LABEL: &str = "Context";
 const TOOLS_LABEL: &str = "Tools";
 const NO_TOOLS_LABEL: &str = "No tools";
 const CODEX_RUNTIME_NOTE: &str =
@@ -68,11 +67,19 @@ fn is_current_model(provider: Provider, model_id: &str, current_provider: &str, 
 }
 
 fn input_modalities_label(input_modalities: &[&str]) -> Option<String> {
-    if input_modalities.is_empty() {
+    // Skip the default "text" modality — it is implied. Only surface non-text
+    // modalities (image, file, audio, …) so a standard text+image model shows
+    // just "image" instead of the verbose "Input: text, image".
+    let non_text: Vec<&str> = input_modalities
+        .iter()
+        .copied()
+        .filter(|modality| *modality != "text")
+        .collect();
+    if non_text.is_empty() {
         return None;
     }
 
-    Some(format!("Input: {}", input_modalities.join(", ")))
+    Some(non_text.join(", "))
 }
 
 fn compact_context_window_label(context_window_size: usize) -> String {
@@ -90,7 +97,7 @@ fn context_window_segment(provider: &str, model_id: &str) -> Option<String> {
         .ok()
         .flatten()
         .filter(|context_window_size| *context_window_size > 0)
-        .map(|context_window_size| format!("{}: {}", CONTEXT_LABEL, compact_context_window_label(context_window_size)))
+        .map(compact_context_window_label)
 }
 
 fn static_model_capability_segments(option: &ModelOption) -> Vec<String> {
@@ -144,18 +151,35 @@ pub(super) fn static_model_search_terms(model: ModelId, supports_reasoning: bool
     terms
 }
 
-fn subtitle_from_segments(model_id: &str, current: bool, segments: Vec<String>) -> String {
-    let mut subtitle = vec![model_id.to_string()];
+fn subtitle_from_segments(current: bool, segments: Vec<String>) -> Option<String> {
+    let mut parts = Vec::new();
     if current {
-        subtitle.push(CURRENT_BADGE.to_string());
+        parts.push(CURRENT_BADGE.to_string());
     }
-    subtitle.extend(segments);
-    subtitle.join(" • ")
+    parts.extend(segments);
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" • "))
+    }
 }
 
-pub(super) fn static_model_subtitle(option: &ModelOption, current_provider: &str, current_model: &str) -> String {
+/// Compose `"label • subtitle"` when a subtitle is present, falling back to just
+/// `label` otherwise. Used by call sites that prefix the subtitle with a provider
+/// label (inline subagent picker, plain picker, interaction choices).
+pub(super) fn join_with_label(label: &str, subtitle: Option<String>) -> String {
+    match subtitle {
+        Some(s) if !s.is_empty() => format!("{label} • {s}"),
+        _ => label.to_string(),
+    }
+}
+
+pub(super) fn static_model_subtitle(
+    option: &ModelOption,
+    current_provider: &str,
+    current_model: &str,
+) -> Option<String> {
     subtitle_from_segments(
-        &option.id,
         is_current_model(option.provider, &option.id, current_provider, current_model),
         static_model_capability_segments(option),
     )
@@ -167,7 +191,7 @@ pub(super) fn dynamic_model_subtitle(
     reasoning_supported: bool,
     current_provider: &str,
     current_model: &str,
-) -> String {
+) -> Option<String> {
     let mut segments = Vec::new();
     let provider_key = provider.to_string();
     if let Some(context_window) = context_window_segment(&provider_key, model_id) {
@@ -180,7 +204,7 @@ pub(super) fn dynamic_model_subtitle(
         segments.push("Reasoning".to_string());
     }
 
-    subtitle_from_segments(model_id, is_current_model(provider, model_id, current_provider, current_model), segments)
+    subtitle_from_segments(is_current_model(provider, model_id, current_provider, current_model), segments)
 }
 
 fn is_current_custom_provider(provider_key: &str, model_id: &str, current_provider: &str, current_model: &str) -> bool {
@@ -188,7 +212,11 @@ fn is_current_custom_provider(provider_key: &str, model_id: &str, current_provid
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
-fn custom_provider_subtitle(selection: &SelectionDetail, current_provider: &str, current_model: &str) -> String {
+fn custom_provider_subtitle(
+    selection: &SelectionDetail,
+    current_provider: &str,
+    current_model: &str,
+) -> Option<String> {
     let mut segments = Vec::new();
     if let Some(context_window) = context_window_segment(&selection.provider_key, &selection.model_id) {
         segments.push(context_window);
@@ -198,7 +226,6 @@ fn custom_provider_subtitle(selection: &SelectionDetail, current_provider: &str,
     }
 
     subtitle_from_segments(
-        &selection.model_id,
         is_current_custom_provider(&selection.provider_key, &selection.model_id, current_provider, current_model),
         segments,
     )
@@ -234,10 +261,7 @@ fn should_show_codex_runtime_note(current_provider: &str) -> bool {
 }
 
 pub(super) fn step_one_header_lines(current_provider: &str, current_model: &str) -> Vec<String> {
-    let mut lines = vec![
-        current_model_line(current_provider, current_model),
-        "↑/↓ select • Enter choose • Esc cancel".to_string(),
-    ];
+    let mut lines = vec![current_model_line(current_provider, current_model)];
     if should_show_codex_runtime_note(current_provider) {
         lines.push(CODEX_RUNTIME_NOTE.to_string());
     }
@@ -271,7 +295,7 @@ pub(super) fn render_step_one_inline(
             };
             items.push(InlineListItem {
                 title: option.display.to_string(),
-                subtitle: Some(static_model_subtitle(option, current_provider, current_model)),
+                subtitle: static_model_subtitle(option, current_provider, current_model),
                 badge: Some(provider.label().to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::Model(*idx)),
@@ -300,13 +324,13 @@ pub(super) fn render_step_one_inline(
                     };
                     items.push(InlineListItem {
                         title: detail.model_display.clone(),
-                        subtitle: Some(dynamic_model_subtitle(
+                        subtitle: dynamic_model_subtitle(
                             provider,
                             &detail.model_id,
                             detail.reasoning_supported,
                             current_provider,
                             current_model,
-                        )),
+                        ),
                         badge: Some(provider.label().to_string()),
                         indent: 0,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
@@ -360,7 +384,7 @@ pub(super) fn render_step_one_inline(
         for (index, selection) in custom_providers.iter().enumerate() {
             items.push(InlineListItem {
                 title: selection.provider_label.clone(),
-                subtitle: Some(custom_provider_subtitle(selection, current_provider, current_model)),
+                subtitle: custom_provider_subtitle(selection, current_provider, current_model),
                 badge: Some("Custom".to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::CustomProvider(index)),
@@ -392,7 +416,7 @@ pub(super) fn render_step_one_inline(
     let lines = step_one_header_lines(current_provider, current_model);
 
     let search = InlineListSearchConfig {
-        label: "Search models".to_string(),
+        label: String::new(),
         placeholder: Some("provider, name, id, or capability".to_string()),
     };
     renderer.show_list_modal(STEP_ONE_TITLE, lines, items, selected, Some(search));
@@ -429,7 +453,9 @@ pub(super) fn render_step_one_plain(
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
+                if let Some(subtitle) = static_model_subtitle(option, "", "") {
+                    renderer.line(MessageStyle::Info, &format!("      {subtitle}"))?;
+                }
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
 
@@ -452,13 +478,11 @@ pub(super) fn render_step_one_plain(
                 for entry_index in dynamic_indexes {
                     if let Some(detail) = dynamic_models.detail(*entry_index) {
                         renderer.line(MessageStyle::Info, &format!("  {}", detail.model_display))?;
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!(
-                                "      {}",
-                                dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", "",)
-                            ),
-                        )?;
+                        if let Some(subtitle) =
+                            dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", "")
+                        {
+                            renderer.line(MessageStyle::Info, &format!("      {subtitle}"))?;
+                        }
                         renderer
                             .line(MessageStyle::Info, &format!("      Locally available {provider_label} model"))?;
                     }
@@ -476,7 +500,9 @@ pub(super) fn render_step_one_plain(
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
+                if let Some(subtitle) = static_model_subtitle(option, "", "") {
+                    renderer.line(MessageStyle::Info, &format!("      {subtitle}"))?;
+                }
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
         } else {
@@ -493,7 +519,9 @@ pub(super) fn render_step_one_plain(
                     continue;
                 };
                 renderer.line(MessageStyle::Info, &format!("  {}", option.display))?;
-                renderer.line(MessageStyle::Info, &format!("      {}", static_model_subtitle(option, "", "")))?;
+                if let Some(subtitle) = static_model_subtitle(option, "", "") {
+                    renderer.line(MessageStyle::Info, &format!("      {subtitle}"))?;
+                }
                 renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
             }
         }
@@ -506,7 +534,9 @@ pub(super) fn render_step_one_plain(
         renderer.line(MessageStyle::Info, "[Custom providers]")?;
         for selection in custom_providers {
             renderer.line(MessageStyle::Info, &format!("  {}", selection.provider_label))?;
-            renderer.line(MessageStyle::Info, &format!("      {}", custom_provider_subtitle(selection, "", "")))?;
+            if let Some(subtitle) = custom_provider_subtitle(selection, "", "") {
+                renderer.line(MessageStyle::Info, &format!("      {subtitle}"))?;
+            }
         }
     }
 

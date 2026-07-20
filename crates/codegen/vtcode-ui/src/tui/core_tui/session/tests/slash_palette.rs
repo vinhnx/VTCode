@@ -147,13 +147,20 @@ fn slash_trigger_auto_shows_inline_lists() {
 }
 
 #[test]
-fn slash_palette_keeps_base_input_and_cursor_active() {
+fn slash_palette_hides_base_input_while_open() {
     let mut session = session_with_slash_palette_commands();
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    assert!(session.slash_palette_visible());
 
-    assert!(session.core.input_enabled());
-    assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
+    let lines = rendered_app_session_lines(&mut session, 20);
+
+    // The slash palette owns the input region: the base composer and its status
+    // line must not render, leaving a single visible input (the palette's own
+    // search field) and a single cursor.
+    assert!(session.core.input_area().is_none(), "base input should not render while slash palette is open");
+    assert!(session.core.bottom_panel_area().is_some(), "slash panel should occupy the input region");
+    assert!(lines.iter().any(|line| line.contains('>')), "slash search field should render");
 }
 
 #[test]
@@ -170,8 +177,8 @@ fn slash_panel_renders_search_field_above_results() {
     let lines = rendered_app_session_lines(&mut session, 20);
     let search_index = lines
         .iter()
-        .position(|line| line.contains("Search commands"))
-        .expect("search commands field should render");
+        .position(|line| line.contains('>'))
+        .expect("search field should render");
     let item_index = lines
         .iter()
         .position(|line| line.contains("/review"))
@@ -181,7 +188,7 @@ fn slash_panel_renders_search_field_above_results() {
 }
 
 #[test]
-fn slash_palette_uses_full_width_header_background_and_divider() {
+fn slash_palette_uses_full_width_panel_background_and_divider() {
     let theme = InlineTheme {
         foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
         background: Some(AnsiColorEnum::Rgb(RgbColor(0x2B, 0x2D, 0x33))),
@@ -215,20 +222,20 @@ fn slash_palette_uses_full_width_header_background_and_divider() {
         .expect("failed to render slash palette");
 
     let lines = rendered_app_session_lines(&mut session, 20);
-    let title_row = lines
-        .iter()
-        .position(|line| line.contains("Slash Commands"))
-        .expect("slash title row");
+    // The "Slash Commands" title row was removed to reduce clutter; the first
+    // panel row is now the navigation hint, which must still carry the panel
+    // background across the full width.
+    let info_row = lines.iter().position(|line| line.contains("Navigate")).expect("slash info row");
     let divider_row_index = lines
         .iter()
         .position(|line| is_horizontal_rule(line))
         .expect("slash divider row");
     let panel_area = session.core.bottom_panel_area().expect("panel area");
     let buffer = terminal.backend().buffer();
-    let title_left = buffer.cell((panel_area.x, title_row as u16)).expect("title left cell");
-    let title_right = buffer
-        .cell((panel_area.x + panel_area.width.saturating_sub(1), title_row as u16))
-        .expect("title right cell");
+    let info_left = buffer.cell((panel_area.x, info_row as u16)).expect("info left cell");
+    let info_right = buffer
+        .cell((panel_area.x + panel_area.width.saturating_sub(1), info_row as u16))
+        .expect("info right cell");
     let divider_row = (0..panel_area.width)
         .filter_map(|x| buffer.cell((panel_area.x + x, divider_row_index as u16)))
         .map(|cell| cell.symbol().to_string())
@@ -236,8 +243,8 @@ fn slash_palette_uses_full_width_header_background_and_divider() {
         .trim_end()
         .to_string();
 
-    assert_eq!(title_left.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
-    assert_eq!(title_right.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
+    assert_eq!(info_left.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
+    assert_eq!(info_right.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
     assert_eq!(divider_row, ui::INLINE_BLOCK_HORIZONTAL.repeat(panel_area.width as usize));
 }
 

@@ -92,7 +92,7 @@ pub(crate) fn local_agents_panel_layout(session: &Session) -> Option<ListPanelLa
     }
 
     let visible_entries = session.local_agents_state.entries().len().max(1);
-    let fixed_rows = fixed_section_rows_with_divider(1, 1, false, true);
+    let fixed_rows = fixed_section_rows_with_divider(1, 1, 0, true);
     let desired_rows = rows_to_u16(visible_entries.min(ui::INLINE_LIST_MAX_ROWS));
     Some(ListPanelLayout::new(fixed_rows, desired_rows))
 }

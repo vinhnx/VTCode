@@ -8,7 +8,7 @@ use vtcode_ui::tui::ui::interactive_list::{SelectionEntry, run_interactive_selec
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
 use super::rendering::{
-    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION, dynamic_model_subtitle,
+    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION, dynamic_model_subtitle, join_with_label,
     static_model_subtitle,
 };
 use super::selection::{
@@ -55,7 +55,7 @@ pub(super) fn select_model_with_ratatui_list(
             let Some(option) = options.get(*option_index) else {
                 continue;
             };
-            let description = format!("{} • {}", provider.label(), static_model_subtitle(option, "", ""));
+            let description = join_with_label(provider.label(), static_model_subtitle(option, "", ""));
             choices.push(ModelSelectionChoice {
                 entry: SelectionEntry::new(
                     option.display.to_string(),
@@ -79,10 +79,9 @@ pub(super) fn select_model_with_ratatui_list(
             } else {
                 for entry_index in dynamic_indexes {
                     if let Some(detail) = dynamic_models.detail(*entry_index) {
-                        let description = format!(
-                            "{} • {}",
+                        let description = join_with_label(
                             provider.label(),
-                            dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", "",),
+                            dynamic_model_subtitle(provider, &detail.model_id, detail.reasoning_supported, "", ""),
                         );
                         choices.push(ModelSelectionChoice {
                             entry: SelectionEntry::new(

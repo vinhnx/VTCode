@@ -120,7 +120,7 @@ fn normalize_panel_height(raw_height: u16, max_panel_height: u16) -> u16 {
 fn split_inline_task_panel_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     let visible_lines = session.task_panel_lines.len().max(1);
     let desired_list_rows = list_panel::rows_to_u16(visible_lines.min(ui::INLINE_LIST_MAX_ROWS_MULTILINE));
-    let fixed_rows = list_panel::fixed_section_rows(1, 1, false);
+    let fixed_rows = list_panel::fixed_section_rows(1, 1, 0);
     list_panel::split_bottom_list_panel(area, fixed_rows, desired_list_rows)
 }
 

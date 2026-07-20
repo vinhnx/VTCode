@@ -229,7 +229,7 @@ pub(crate) async fn execute_recovery_prompt(
         .or_else(|| items.first().and_then(|item| item.selection.clone()));
 
     let search = Some(InlineListSearchConfig {
-        label: "Search options".to_string(),
+        label: String::new(),
         placeholder: Some("title, subtitle, or badge".to_string()),
     });
 

@@ -217,7 +217,7 @@ async fn show_agents_manager(mut ctx: SlashCommandContext<'_>) -> Result<SlashCo
         ],
         Some(InlineListSelection::ConfigAction(format!("{AGENT_ACTION_PREFIX}browse"))),
         Some(InlineListSearchConfig {
-            label: "Search subagent actions".to_string(),
+            label: String::new(),
             placeholder: Some("browse, create, edit, thread".to_string()),
         }),
     );
@@ -298,7 +298,7 @@ async fn show_agent_catalog(mut ctx: SlashCommandContext<'_>) -> Result<SlashCom
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search agents".to_string(),
+            label: String::new(),
             placeholder: Some("name, source, description".to_string()),
         }),
     );
@@ -445,7 +445,7 @@ async fn select_custom_agent_name(ctx: &mut SlashCommandContext<'_>, title: &str
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search custom agents".to_string(),
+            label: String::new(),
             placeholder: Some("name, description, source".to_string()),
         }),
     );

@@ -100,7 +100,7 @@ pub(super) async fn show_threads_modal(mut ctx: SlashCommandContext<'_>) -> Resu
             items,
             selected: selected.clone(),
             search: Some(InlineListSearchConfig {
-                label: "Search active agents".to_string(),
+                label: String::new(),
                 placeholder: Some("id, agent, source, status".to_string()),
             }),
             hotkeys: vec![

@@ -98,13 +98,13 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()).map(|prefix| {
             let filter = prefix.trim_start_matches('/');
             SharedSearchField {
-                label: "Search commands".to_owned(),
+                label: String::new(),
                 placeholder: Some("command name or description".to_owned()),
                 query: filter.to_owned(),
             }
         });
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("Slash Commands".to_owned(), highlight_style))],
+        header: Vec::new(),
         info: slash_palette_instructions(session),
         search: search_line,
     };
@@ -138,26 +138,8 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
-    let total = session.slash_palette.suggestions().len();
-    let count_text = if total == 1 {
-        "1 command".to_owned()
-    } else {
-        format!("{total} commands")
-    };
-    let prefix = session.core.input_manager.content();
-    let query_suffix = if let Some(f) = command_prefix(prefix, session.core.input_manager.cursor()) {
-        let q = f.trim_start_matches('/');
-        if q.is_empty() {
-            String::new()
-        } else {
-            format!(" matching '{q}'")
-        }
-    } else {
-        String::new()
-    };
-
     vec![Line::from(vec![Span::styled(
-        format!("↑↓ Navigate · Tab/Enter apply · Esc dismiss · Showing {count_text}{query_suffix}"),
+        "↑↓ Navigate · Enter apply · Esc dismiss".to_owned(),
         session.core.styles.default_style(),
     )])]
 }
@@ -170,7 +152,8 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
     let info_rows = slash_palette_instructions(session).len();
     let has_search_row =
         command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor()).is_some();
-    let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_search_row, true);
+    let search_rows = if has_search_row { 1 } else { 0 };
+    let fixed_rows = fixed_section_rows_with_divider(0, info_rows, search_rows, true);
     let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
@@ -512,10 +495,28 @@ fn slash_rows(session: &Session) -> Vec<SlashRow> {
         .map(|suggestion| match suggestion {
             slash_palette::SlashPaletteSuggestion::Static(command) => SlashRow {
                 name: command.name.to_owned(),
-                description: command.description.to_owned(),
+                description: trim_redundant_usage_command(&command.description, &command.name),
             },
         })
         .collect()
+}
+
+/// Drop the redundant `/command-name` token inside a `(usage: /name …)` hint —
+/// the command name is already shown at the start of the row, so repeating it
+/// in the usage hint is clutter. Only strip when `/name` is followed by a space
+/// (an argument signature follows), so multi-form hints like
+/// `/skills, /skills manager` and the no-arg `/foo)` case are left intact.
+fn trim_redundant_usage_command(description: &str, name: &str) -> String {
+    const USAGE_MARKER: &str = "(usage: ";
+    let Some(marker_start) = description.find(USAGE_MARKER) else {
+        return description.to_owned();
+    };
+    let token = format!("/{name} ");
+    let after_marker = marker_start + USAGE_MARKER.len();
+    let Some(stripped) = description[after_marker..].strip_prefix(token.as_str()) else {
+        return description.to_owned();
+    };
+    format!("{}{stripped}", &description[..after_marker])
 }
 
 fn slash_highlight_style(session: &Session) -> Style {
@@ -621,5 +622,25 @@ mod tests {
         assert!(text.contains("↑↓ Navigate"));
         assert!(text.contains("Esc dismiss"));
         assert!(!text.contains("Type to filter slash commands"));
+    }
+
+    #[test]
+    fn trim_redundant_usage_command_strips_command_name_before_args() {
+        let result = trim_redundant_usage_command("Guided workspace setup (usage: /init [--force])", "init");
+        assert_eq!(result, "Guided workspace setup (usage: [--force])");
+    }
+
+    #[test]
+    fn trim_redundant_usage_command_leaves_multiform_hints_intact() {
+        // "/skills, /skills manager" — the comma form must not become ", /skills manager".
+        let result =
+            trim_redundant_usage_command("Open interactive skills manager (usage: /skills, /skills manager)", "skills");
+        assert_eq!(result, "Open interactive skills manager (usage: /skills, /skills manager)");
+    }
+
+    #[test]
+    fn trim_redundant_usage_command_leaves_descriptions_without_usage_intact() {
+        let result = trim_redundant_usage_command("Review current diff", "review");
+        assert_eq!(result, "Review current diff");
     }
 }

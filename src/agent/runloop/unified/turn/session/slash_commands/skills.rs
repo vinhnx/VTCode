@@ -836,7 +836,7 @@ fn show_skills_list_modal(ctx: &mut SlashCommandContext<'_>, entries: &[Interact
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search skills".to_string(),
+            label: String::new(),
             placeholder: Some("Type skill name or description".to_string()),
         }),
     );
@@ -879,7 +879,7 @@ fn show_skill_picker_modal(
         items,
         selected,
         Some(InlineListSearchConfig {
-            label: "Search skills".to_string(),
+            label: String::new(),
             placeholder: Some("Type skill name or description".to_string()),
         }),
     );
