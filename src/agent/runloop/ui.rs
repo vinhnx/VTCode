@@ -18,6 +18,7 @@ use vtcode_ui::tui::core::ThemeConfigParser;
 
 use super::welcome::SessionBootstrap;
 use dirs::home_dir;
+use tokio::task;
 
 const MAX_VISIBLE_SUBAGENT_BADGES: usize = 3;
 const SUBAGENT_BADGE_FALLBACK_COLOR: &str = "blue";
@@ -251,7 +252,11 @@ pub(crate) async fn build_inline_header_context(
 ) -> Result<InlineHeaderContext> {
     let InlineStatusDetails { workspace_trust, mcp_status } =
         gather_inline_status_details(config, session_bootstrap).await?;
-    let workspace_signals = parse_workspace_header_signals(&config.workspace);
+    let workspace_signals = task::spawn_blocking({
+        let workspace = config.workspace.clone();
+        move || parse_workspace_header_signals(&workspace)
+    })
+    .await?;
 
     // Check if we're running in the home directory and add a warning if so
     let mut highlights = session_bootstrap.header_highlights.clone();
@@ -331,13 +336,19 @@ pub(crate) async fn build_inline_header_context(
         chain_entries.push(format!("Tip: {tip}"));
     }
 
+    let search_tools = task::spawn_blocking({
+        let workspace = config.workspace.clone();
+        move || Some(build_search_tools_badge(&workspace))
+    })
+    .await?;
+
     let context = InlineHeaderContext {
         app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: provider_value,
         model: model_value,
         context_window_size: Some(context_window_size),
         version,
-        search_tools: Some(build_search_tools_badge(&config.workspace)),
+        search_tools,
         persistent_memory,
         pr_review: None,
         editor_context: None,

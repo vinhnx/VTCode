@@ -110,6 +110,18 @@ impl AgentPalette {
         self.navigator.select_index(index)
     }
 
+    pub fn scroll_offset(&self) -> usize {
+        self.navigator.scroll_offset()
+    }
+
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.navigator.set_scroll_offset(offset);
+    }
+
+    pub fn set_selected(&mut self, selected: Option<usize>) {
+        self.navigator.set_selected(selected);
+    }
+
     pub fn current_page_items(&self) -> Vec<(usize, &AgentEntry, bool)> {
         let start = self.current_page_index() * PAGE_SIZE;
         let end = (start + PAGE_SIZE).min(self.filtered_agents.len());

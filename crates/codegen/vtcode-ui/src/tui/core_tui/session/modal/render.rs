@@ -237,6 +237,7 @@ pub fn render_modal_list(
             text_style: styles.detail,
             divider_style: Some(styles.border),
             input_styles: InputStyles::default(),
+            show_divider: false,
         },
         &mut panel_model,
     );

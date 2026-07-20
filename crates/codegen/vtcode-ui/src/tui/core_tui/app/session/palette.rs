@@ -132,7 +132,7 @@ impl AppSession {
             let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@agent-{agent_name}");
             let new_content = format!("{before}{reference_alias} {after}");
-            let new_cursor = start + reference_alias.len() + 1;
+            let new_cursor = start.saturating_add(reference_alias.len()).saturating_add(1);
 
             self.core.input_manager.set_content(new_content);
             self.core.input_manager.set_cursor(new_cursor);
@@ -270,7 +270,7 @@ impl AppSession {
             let after = &self.core.input_manager.content()[end..];
             let reference_alias = format!("@{file_path}");
             let new_content = format!("{before}{reference_alias} {after}");
-            let new_cursor = start + reference_alias.len() + 1;
+            let new_cursor = start.saturating_add(reference_alias.len()).saturating_add(1);
 
             self.core.input_manager.set_content(new_content);
             self.core.input_manager.set_cursor(new_cursor);

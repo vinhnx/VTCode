@@ -10,6 +10,7 @@ use crate::tui::ui::tui::session::modal::{
 use crate::tui::ui::tui::types::InlineListSelection;
 use anstyle::{Ansi256Color, Color as AnsiColorEnum};
 use ratatui::widgets::{Block, Clear, Fill, Paragraph, Wrap};
+use tracing::warn;
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
@@ -267,7 +268,10 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                 Constraint::Min(0),
                 Constraint::Length(1),
             ]))
-            .unwrap_or([Rect::ZERO; 4]);
+            .unwrap_or_else(|_| {
+                warn!(target: "vtcode::tui", height = area.height, "modal layout fallback to zero rects");
+                [Rect::ZERO; 4]
+            });
         let title_line = Line::from(Span::styled(title, styles.title));
         let (decorated_title, link_targets) = decorate_detected_link_lines(
             vec![title_line],

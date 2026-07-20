@@ -15,6 +15,7 @@ struct AgentPaletteRenderRow {
     style: Style,
     selectable: bool,
     selected: bool,
+    global_index: usize,
 }
 
 pub(crate) fn agent_palette_panel_layout(session: &Session) -> Option<ListPanelLayout> {
@@ -81,16 +82,18 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         return;
     }
 
-    let default_style = default_style(session);
-    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let base_style = default_style(session);
+    let dim_style = base_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
     let blank_gutter = selection_padding();
 
     let selected = rows.iter().position(|row| row.selectable && row.selected);
+    let mut global_indices = Vec::new();
     let rendered_rows = rows
         .into_iter()
         .enumerate()
         .map(|(idx, row)| {
+            global_indices.push(row.global_index);
             let is_selected = selected == Some(idx);
             let cursor = if is_selected {
                 format!("{} ", ui::MODAL_LIST_HIGHLIGHT_SYMBOL)
@@ -136,10 +139,11 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             query: palette.filter_query().to_owned(),
         }),
     };
+    let scroll_offset = palette.scroll_offset();
     let mut model = StaticRowsListPanelModel {
         rows: rendered_rows,
         selected,
-        offset: 0,
+        offset: scroll_offset,
         visible_rows: 0,
     };
 
@@ -150,12 +154,23 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         SharedListPanelStyles {
             base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: dim_style,
+            text_style: base_style,
             divider_style: None,
             input_styles: input_styles_from_theme(&session.core.theme),
+            show_divider: false,
         },
         &mut model,
     );
+
+    if let Some(palette) = session.agent_palette.as_mut() {
+        if let Some(selected) = model.selected {
+            let global_idx = global_indices.get(selected).copied().unwrap_or(0);
+            palette.select_index(global_idx);
+        } else {
+            palette.set_selected(None);
+        }
+        palette.set_scroll_offset(model.offset);
+    }
 }
 
 pub(crate) fn file_palette_panel_layout(session: &Session) -> Option<ListPanelLayout> {
@@ -213,8 +228,8 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         return;
     }
 
-    let default_style = default_style(session);
-    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let base_style = default_style(session);
+    let dim_style = base_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
     let accent = accent_style(session);
     let blank_gutter = selection_padding();
@@ -311,9 +326,10 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         SharedListPanelStyles {
             base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: dim_style,
+            text_style: base_style,
             divider_style: Some(session.core.styles.border_style()),
             input_styles: input_styles_from_theme(&session.core.theme),
+            show_divider: true,
         },
         &mut model,
     );
@@ -329,13 +345,14 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
     let mut rows = Vec::new();
     let default = default_style(session);
 
-    for (_global_idx, entry, selected) in palette.current_page_items() {
+    for (global_idx, entry, selected) in palette.current_page_items() {
         rows.push(AgentPaletteRenderRow {
             text: entry.display_name.clone(),
             subtitle: entry.description.clone(),
             style: default.add_modifier(Modifier::BOLD),
             selectable: true,
             selected,
+            global_index: global_idx,
         });
     }
 
@@ -346,6 +363,7 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
             style: default.add_modifier(Modifier::DIM),
             selectable: false,
             selected: false,
+            global_index: 0,
         });
     }
 
@@ -357,6 +375,7 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
             style: default.add_modifier(Modifier::DIM | Modifier::ITALIC),
             selectable: false,
             selected: false,
+            global_index: 0,
         });
     }
 
@@ -367,10 +386,7 @@ fn agent_palette_instructions(session: &Session, palette: &AgentPalette) -> Vec<
     let mut lines = vec![];
 
     if palette.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No agents found matching filter".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        )));
+        lines.push(Line::from(Span::styled("No agents found matching filter".to_owned(), default_style(session))));
     } else {
         let total = palette.total_items();
         let count_text = if total == 1 {
@@ -379,21 +395,16 @@ fn agent_palette_instructions(session: &Session, palette: &AgentPalette) -> Vec<
             format!("{total} agents")
         };
 
-        lines.push(Line::from(Span::styled(
-            "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select · Esc Close".to_owned(),
-            default_style(session),
-        )));
+        let nav_hint = "↑↓ Navigate · Tab/Enter select · Esc close";
+        let query_suffix = if !palette.filter_query().is_empty() {
+            format!(" matching '{}'", palette.filter_query())
+        } else {
+            String::new()
+        };
 
         lines.push(Line::from(vec![
-            Span::styled(format!("Showing {count_text}"), default_style(session).add_modifier(Modifier::DIM)),
-            Span::styled(
-                if !palette.filter_query().is_empty() {
-                    format!(" matching '{}'", palette.filter_query())
-                } else {
-                    String::new()
-                },
-                accent_style(session),
-            ),
+            Span::styled(nav_hint.to_owned(), default_style(session)),
+            Span::styled(format!(" • Showing {count_text}{query_suffix}"), default_style(session)),
         ]));
     }
 
@@ -404,13 +415,9 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
     let mut lines = vec![];
 
     if palette.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No files found matching filter".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        )));
+        lines.push(Line::from(Span::styled("No files found matching filter".to_owned(), default_style(session))));
     } else {
         let total = palette.total_items();
-        let _dir_count = palette.list_entries().iter().filter(|e| e.is_dir).count();
         let count_text = if total == 1 {
             "1 item".to_owned()
         } else {
@@ -418,23 +425,20 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
         };
 
         let nav_hint = if palette.is_search_mode() {
-            "↑↓ Navigate · →/Enter Open · ← Up · Type to refine · Esc Close"
+            "↑↓ Navigate · →/Enter open · ← Up · Type to refine · Esc close"
         } else {
-            "↑↓ Navigate · →/Enter Open · ← Up · Type to filter · Esc Close"
+            "↑↓ Navigate · →/Enter open · ← Up · Type to filter · Esc close"
         };
 
-        lines.push(Line::from(vec![Span::styled(nav_hint, default_style(session))]));
+        let query_suffix = if !palette.filter_query().is_empty() {
+            format!(" matching '{}'", palette.filter_query())
+        } else {
+            String::new()
+        };
 
         lines.push(Line::from(vec![
-            Span::styled(format!("Showing {count_text}"), default_style(session).add_modifier(Modifier::DIM)),
-            Span::styled(
-                if !palette.filter_query().is_empty() {
-                    format!(" matching '{}'", palette.filter_query())
-                } else {
-                    String::new()
-                },
-                accent_style(session),
-            ),
+            Span::styled(nav_hint.to_owned(), default_style(session)),
+            Span::styled(format!(" • Showing {count_text}{query_suffix}"), default_style(session)),
         ]));
     }
 

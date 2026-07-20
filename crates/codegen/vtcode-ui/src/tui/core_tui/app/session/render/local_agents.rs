@@ -2,8 +2,8 @@ use super::*;
 use crate::tui::config::constants::ui;
 use crate::tui::core_tui::ThemeConfigParser;
 use crate::tui::core_tui::session::list_panel::{
-    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows, input_styles_from_theme,
-    render_shared_list_panel, rows_to_u16,
+    ListPanelLayout, SharedListPanelSections, SharedListPanelStyles, fixed_section_rows_with_divider,
+    input_styles_from_theme, render_shared_list_panel, rows_to_u16,
 };
 use crate::tui::core_tui::session::{
     inline_list::{InlineListRow, selection_padding},
@@ -12,6 +12,7 @@ use crate::tui::core_tui::session::{
 use crate::tui::core_tui::style::ratatui_color_from_ansi;
 use crate::tui::core_tui::types::LocalAgentEntry;
 use ratatui::widgets::{Clear, Fill, Paragraph, Wrap};
+use tracing::warn;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 
 struct LocalAgentsPanelModel {
@@ -91,7 +92,7 @@ pub(crate) fn local_agents_panel_layout(session: &Session) -> Option<ListPanelLa
     }
 
     let visible_entries = session.local_agents_state.entries().len().max(1);
-    let fixed_rows = fixed_section_rows(2, 1, false);
+    let fixed_rows = fixed_section_rows_with_divider(2, 1, false, true);
     let desired_rows = rows_to_u16(visible_entries.min(ui::INLINE_LIST_MAX_ROWS));
     Some(ListPanelLayout::new(fixed_rows, desired_rows))
 }
@@ -136,15 +137,15 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         "Background subagents are opt-in. Configure one, then use Ctrl+B or /subprocesses.".to_string()
     } else {
         format!(
-            "{} local agent{} • Enter inspect • Alt+O transcript • Ctrl+K stop • Ctrl+X cancel • Esc close",
+            "↑↓ Navigate · Enter inspect · Alt+O transcript · Esc close · Showing {} local agent{}",
             entries.len(),
             if entries.len() == 1 { "" } else { "s" }
         )
     };
 
     let header_rows = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("Local Agents".to_owned(), dim_style))],
-        info: vec![Line::from(Span::styled(info_line, dim_style))],
+        header: vec![Line::from(Span::styled("Local Agents".to_owned(), highlight_style))],
+        info: vec![Line::from(Span::styled(info_line, default_style))],
         search: None,
     };
 
@@ -164,7 +165,10 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
             Constraint::Length(1),
             Constraint::Min(1),
         ]))
-        .unwrap_or([Rect::ZERO; 4]);
+        .unwrap_or_else(|_| {
+            warn!(target: "vtcode::tui", height = area.height, "local agents panel layout fallback to zero rects");
+            [Rect::ZERO; 4]
+        });
 
     let divider_style = local_agents_divider_style(session, selected_index, &entries);
     frame.render_widget(Fill::new("─").style(divider_style), divider_area);
@@ -193,14 +197,16 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         SharedListPanelStyles {
             base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: dim_style,
+            text_style: default_style,
             divider_style: None,
             input_styles: input_styles_from_theme(&session.core.theme),
+            show_divider: false,
         },
         &mut list_model,
     );
 
     session.local_agents_state.set_visible_rows(list_model.visible_rows.max(1));
+    session.local_agents_state.set_scroll_offset(list_model.offset);
 
     let selected_entry = selected_index.and_then(|index| entries.get(index));
     let preview_text = selected_entry

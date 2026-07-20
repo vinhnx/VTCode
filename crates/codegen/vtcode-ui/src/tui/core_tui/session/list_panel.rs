@@ -143,6 +143,7 @@ pub(crate) struct SharedListPanelStyles {
     pub text_style: Style,
     pub divider_style: Option<Style>,
     pub input_styles: InputStyles,
+    pub show_divider: bool,
 }
 
 /// Build `InputStyles` from the app's `InlineTheme`.
@@ -215,8 +216,9 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if sections.search.is_some() {
         constraints.push(Constraint::Length(2));
     }
-    let show_divider =
-        styles.divider_style.is_some() && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
+    let show_divider = styles.show_divider
+        && styles.divider_style.is_some()
+        && (header_rows > 0 || info_rows > 0 || sections.search.is_some());
     if show_divider {
         constraints.push(Constraint::Length(1));
     }
@@ -252,7 +254,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     }
 
     if show_divider && idx < chunks.len() {
-        let divider_style = styles.divider_style.expect("divider style");
+        let divider_style = styles.divider_style.unwrap();
         frame.render_widget(
             Fill::new(crate::tui::config::constants::ui::INLINE_BLOCK_HORIZONTAL).style(divider_style),
             chunks[idx],
@@ -333,6 +335,7 @@ mod tests {
                         text_style: Style::default(),
                         divider_style: Some(Style::default()),
                         input_styles: InputStyles::default(),
+                        show_divider: true,
                     },
                     &mut model,
                 );

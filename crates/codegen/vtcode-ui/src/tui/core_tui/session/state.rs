@@ -137,14 +137,14 @@ impl Session {
     pub fn invalidate_header_cache(&mut self) {
         self.header_lines_cache = None;
         self.header_height_cache.clear();
-        self.mark_dirty();
+        self.needs_redraw = true;
     }
 
     /// Invalidate only the sidebar cache (e.g. when queue changes)
     pub fn invalidate_sidebar_cache(&mut self) {
         self.queued_inputs_preview_cache = None;
         self.subprocess_entries_preview_cache = None;
-        self.mark_dirty();
+        self.needs_redraw = true;
     }
 
     pub(crate) fn set_local_agents(&mut self, entries: Vec<LocalAgentEntry>) {

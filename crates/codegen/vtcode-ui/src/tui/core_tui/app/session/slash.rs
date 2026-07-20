@@ -104,10 +104,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             }
         });
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled(
-            "Slash Commands".to_owned(),
-            session.core.section_title_style(),
-        ))],
+        header: vec![Line::from(Span::styled("Slash Commands".to_owned(), highlight_style))],
         info: slash_palette_instructions(session),
         search: search_line,
     };
@@ -122,11 +119,12 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         area,
         sections,
         SharedListPanelStyles {
-            base_style: dim_style,
+            base_style: session.core.styles.default_style(),
             selected_style: Some(highlight_style),
-            text_style: dim_style,
+            text_style: session.core.styles.default_style(),
             divider_style: Some(session.core.styles.border_style()),
             input_styles: input_styles_from_theme(&session.core.theme),
+            show_divider: true,
         },
         &mut model,
     );
@@ -140,10 +138,28 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
-    vec![Line::from(Span::styled(
-        "Navigation: ↑/↓ select • Enter apply • Esc dismiss".to_owned(),
+    let total = session.slash_palette.suggestions().len();
+    let count_text = if total == 1 {
+        "1 command".to_owned()
+    } else {
+        format!("{total} commands")
+    };
+    let prefix = session.core.input_manager.content();
+    let query_suffix = if let Some(f) = command_prefix(prefix, session.core.input_manager.cursor()) {
+        let q = f.trim_start_matches('/');
+        if q.is_empty() {
+            String::new()
+        } else {
+            format!(" matching '{q}'")
+        }
+    } else {
+        String::new()
+    };
+
+    vec![Line::from(vec![Span::styled(
+        format!("↑↓ Navigate · Tab/Enter apply · Esc dismiss · Showing {count_text}{query_suffix}"),
         session.core.styles.default_style(),
-    ))]
+    )])]
 }
 
 pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
@@ -276,7 +292,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     }
 
     session.core.input_manager.set_content(new_input.clone());
-    session.input_manager.set_cursor(cursor_position.min(new_input.len()));
+    session.core.input_manager.set_cursor(cursor_position.min(new_input.len()));
     session.mark_dirty();
 }
 
@@ -601,7 +617,8 @@ mod tests {
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect();
-        assert!(text.contains("Navigation:"));
+        assert!(text.contains("↑↓ Navigate"));
+        assert!(text.contains("Esc dismiss"));
         assert!(!text.contains("Type to filter slash commands"));
     }
 }

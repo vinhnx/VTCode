@@ -144,11 +144,22 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
     let default_style = default_style(session);
     let dim_style = default_style.add_modifier(Modifier::DIM);
     let highlight_style = modal_list_highlight_style(session);
+    let total = matches.len();
+    let count_text = if total == 1 {
+        "1 match".to_owned()
+    } else {
+        format!("{total} matches")
+    };
+    let query_suffix = if query.is_empty() {
+        String::new()
+    } else {
+        format!(" matching '{query}'")
+    };
     let sections = SharedListPanelSections {
-        header: vec![Line::from(Span::styled("History".to_owned(), dim_style))],
+        header: vec![Line::from(Span::styled("History".to_owned(), highlight_style))],
         info: vec![Line::from(Span::styled(
-            "Ctrl+R open • Enter accept • Esc cancel".to_owned(),
-            dim_style,
+            format!("Ctrl+R open · Enter accept · Esc cancel · Showing {count_text}{query_suffix}"),
+            default_style,
         ))],
         search: Some(SharedSearchField {
             label: "Search history".to_owned(),
@@ -177,9 +188,10 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         SharedListPanelStyles {
             base_style: dim_style,
             selected_style: Some(highlight_style),
-            text_style: dim_style,
+            text_style: default_style,
             divider_style: None,
             input_styles: input_styles_from_theme(&session.core.theme),
+            show_divider: false,
         },
         &mut panel_model,
     );

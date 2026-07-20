@@ -131,7 +131,7 @@ impl Session {
             }
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
-                self.mark_dirty();
+                self.mark_visual_dirty();
             }
             InlineCommand::SetSubprocessEntries { entries } => {
                 self.subprocess_entries = entries;

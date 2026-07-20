@@ -94,6 +94,10 @@ impl LocalAgentsState {
         self.navigator.scroll_offset()
     }
 
+    pub(super) fn set_scroll_offset(&mut self, offset: usize) {
+        self.navigator.set_scroll_offset(offset);
+    }
+
     pub(super) fn selected_entry(&self) -> Option<&LocalAgentEntry> {
         self.selected().and_then(|index| self.entries.get(index))
     }

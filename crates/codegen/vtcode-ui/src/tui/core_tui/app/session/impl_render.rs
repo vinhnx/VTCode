@@ -137,9 +137,10 @@ fn render_task_panel(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let styles = list_panel::SharedListPanelStyles {
         base_style: session.core.styles.default_style(),
         selected_style: Some(session.core.styles.modal_list_highlight_style()),
-        text_style: session.core.header_secondary_style(),
+        text_style: session.core.styles.default_style(),
         divider_style: None,
         input_styles: list_panel::input_styles_from_theme(&session.core.theme),
+        show_divider: false,
     };
     let mut model = list_panel::StaticRowsListPanelModel {
         rows,

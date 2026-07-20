@@ -33,13 +33,9 @@ const THEME_SEARCH_PLACEHOLDER: &str = "name, id, or appearance";
 const SESSION_FORK_PALETTE_TITLE: &str = "Fork session";
 const SESSION_FORK_MODE_PALETTE_TITLE: &str = "Fork mode";
 const SESSION_RESUME_PALETTE_TITLE: &str = "Resume session";
-const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
-const SESSIONS_FORK_HINT_SECONDARY: &str = "Enter to fork session • Esc to close.";
-const SESSIONS_RESUME_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 const SESSIONS_SEARCH_LABEL: &str = "Search sessions";
 const SESSIONS_SEARCH_PLACEHOLDER: &str = "workspace, provider, model, date";
-const FORK_MODE_HINT_SECONDARY: &str = "Enter to confirm • Esc to go back.";
 const MODEL_TARGET_PALETTE_TITLE: &str = "Model";
 const LIGHTWEIGHT_MODEL_PALETTE_TITLE: &str = "Lightweight model";
 pub(crate) const MODEL_TARGET_ACTION_MAIN: &str = "model_target:main";
@@ -223,8 +219,8 @@ pub(crate) fn show_sessions_palette(
     renderer: &mut AnsiRenderer,
     mode: SessionPaletteMode,
     listings: &[SessionListing],
-    limit: usize,
-    show_all: bool,
+    _limit: usize,
+    _show_all: bool,
 ) -> Result<bool> {
     if listings.is_empty() {
         renderer.line(MessageStyle::Info, "No archived sessions found.")?;
@@ -258,25 +254,19 @@ pub(crate) fn show_sessions_palette(
         });
     }
 
-    let scope_label = if show_all {
-        "across all workspaces"
-    } else {
-        "in the current workspace"
-    };
-    let hint_secondary = match mode {
-        SessionPaletteMode::Resume => SESSIONS_RESUME_HINT_SECONDARY,
-        SessionPaletteMode::Fork => SESSIONS_FORK_HINT_SECONDARY,
-    };
     let title = match mode {
         SessionPaletteMode::Resume => SESSION_RESUME_PALETTE_TITLE,
         SessionPaletteMode::Fork => SESSION_FORK_PALETTE_TITLE,
     };
 
-    let lines = vec![
-        format!("Showing {} of {} archived sessions {}", listings.len(), limit, scope_label),
-        SESSIONS_HINT_PRIMARY.to_string(),
-        hint_secondary.to_string(),
-    ];
+    let action = match mode {
+        SessionPaletteMode::Resume => "resume",
+        SessionPaletteMode::Fork => "fork",
+    };
+    let lines = vec![format!(
+        "{} archived sessions • ↑↓ browse • Enter {action} • Esc close",
+        listings.len()
+    )];
     let selected = listings
         .first()
         .map(|listing| InlineListSelection::Session(listing.identifier()));
@@ -319,11 +309,7 @@ pub(crate) fn show_fork_mode_palette(renderer: &mut AnsiRenderer, session_id: &s
         },
     ];
 
-    let lines = vec![
-        format!("Selected session: {session_id}"),
-        "Choose how the forked session should start.".to_string(),
-        FORK_MODE_HINT_SECONDARY.to_string(),
-    ];
+    let lines = vec![format!("Fork session {} • Enter confirm • Esc back", session_id)];
 
     renderer.show_list_modal(
         SESSION_FORK_MODE_PALETTE_TITLE,
@@ -378,14 +364,9 @@ pub(crate) fn show_model_target_palette(renderer: &mut AnsiRenderer) -> Result<b
 
     renderer.show_list_modal(
         MODEL_TARGET_PALETTE_TITLE,
-        vec![
-            "Choose which model target to edit.".to_string(),
-            "Main model changes the active conversation model. Lightweight model updates shared side-task routing only.".to_string(),
-        ],
+        vec!["Choose model target • Main = conversation • Lightweight = side tasks".to_string()],
         items,
-        Some(InlineListSelection::ConfigAction(
-            MODEL_TARGET_ACTION_MAIN.to_string(),
-        )),
+        Some(InlineListSelection::ConfigAction(MODEL_TARGET_ACTION_MAIN.to_string())),
         None,
     );
 
@@ -426,45 +407,44 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     session_bootstrap: &SessionBootstrap,
     _full_auto: bool,
 ) -> Result<()> {
-    if let Ok(runtime_manager) = ConfigManager::load_from_workspace(&config.workspace) {
-        let runtime_config = runtime_manager.config().clone();
-        *vt_cfg = Some(runtime_config.clone());
-        config.reasoning_effort = runtime_config.agent.reasoning_effort;
-        renderer.set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
-        vtcode_ui::tui::panic_hook::set_show_diagnostics(runtime_config.ui.show_diagnostics_in_transcript);
+    let runtime_manager = ConfigManager::load_from_workspace(&config.workspace)?;
+    let runtime_config = runtime_manager.config().clone();
+    *vt_cfg = Some(runtime_config.clone());
+    config.reasoning_effort = runtime_config.agent.reasoning_effort;
+    renderer.set_show_diagnostics_in_transcript(runtime_config.ui.show_diagnostics_in_transcript);
+    vtcode_ui::tui::panic_hook::set_show_diagnostics(runtime_config.ui.show_diagnostics_in_transcript);
 
-        let _ = theme::set_active_theme(&runtime_config.agent.theme);
-        let styles = theme::active_styles();
-        handle.set_theme(inline_theme_from_core_styles(&styles));
-        handle.set_appearance(to_tui_appearance(&runtime_config));
+    let _ = theme::set_active_theme(&runtime_config.agent.theme);
+    let styles = theme::active_styles();
+    handle.set_theme(inline_theme_from_core_styles(&styles));
+    handle.set_appearance(to_tui_appearance(&runtime_config));
 
-        let provider_label = {
-            let label =
-                crate::agent::runloop::unified::session_setup::resolve_provider_label(config, Some(&runtime_config));
-            if label.is_empty() {
-                provider_client.name().to_string()
-            } else {
-                label
-            }
-        };
-        let reasoning_label = config.reasoning_effort.as_str().to_string();
-        if let Ok(header_context) = build_inline_header_context(
-            config,
-            Some(&runtime_config),
-            session_bootstrap,
-            provider_label,
-            config.model.clone(),
-            provider_client.effective_context_size(&config.model),
-            reasoning_label,
-        )
-        .await
-        {
-            handle.set_header_context(header_context);
+    let provider_label = {
+        let label =
+            crate::agent::runloop::unified::session_setup::resolve_provider_label(config, Some(&runtime_config));
+        if label.is_empty() {
+            provider_client.name().to_string()
+        } else {
+            label
         }
-
-        apply_prompt_style(handle);
-        handle.force_redraw();
+    };
+    let reasoning_label = config.reasoning_effort.as_str().to_string();
+    if let Ok(header_context) = build_inline_header_context(
+        config,
+        Some(&runtime_config),
+        session_bootstrap,
+        provider_label,
+        config.model.clone(),
+        provider_client.effective_context_size(&config.model),
+        reasoning_label,
+    )
+    .await
+    {
+        handle.set_header_context(header_context);
     }
+
+    apply_prompt_style(handle);
+    handle.force_redraw();
 
     Ok(())
 }
