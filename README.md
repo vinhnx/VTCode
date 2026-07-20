@@ -94,6 +94,10 @@ VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible AP
 
 Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
+## OpenCode
+
+[OpenCode](https://opencode.ai/go?ref=JX80RKK5ND) is a coding agent I've been exploring alongside VT Code. If you're curious to try it, using this referral link gives new users $5 in credit — and it helps keep VT Code's development going.
+
 ## Local models (experimental)
 
 Run models entirely on your machine for privacy, offline use, or zero token

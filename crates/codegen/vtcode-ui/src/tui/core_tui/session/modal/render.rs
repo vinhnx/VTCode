@@ -1076,7 +1076,7 @@ pub fn modal_list_item_lines(
 
 fn modal_badge_style(badge: &str, styles: &ModalRenderStyles) -> Style {
     match badge {
-        "Active" | "Action" => styles.header.add_modifier(Modifier::BOLD),
+        "Active" | "Action" | "Current" => styles.header.add_modifier(Modifier::BOLD),
         "Read-only" => styles.detail.add_modifier(Modifier::ITALIC),
         _ => styles.badge,
     }

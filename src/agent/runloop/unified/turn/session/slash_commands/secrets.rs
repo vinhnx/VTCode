@@ -13,6 +13,7 @@ use crate::agent::runloop::slash_commands::SecretCommandAction;
 
 const SECRET_ACTION_PREFIX: &str = "secret:";
 const SECRET_ACTION_BACK: &str = "secret:back";
+const CURRENT_BADGE: &str = "Current";
 
 pub(crate) async fn handle_manage_secrets(
     mut ctx: SlashCommandContext<'_>,
@@ -137,6 +138,21 @@ async fn run_interactive_secret_manager(ctx: &mut SlashCommandContext<'_>) -> Re
 }
 
 fn show_secret_actions_modal(ctx: &mut SlashCommandContext<'_>) {
+    let current_provider = ctx.config.provider.trim().parse::<Provider>().ok();
+    let (items, selected) = build_secret_action_items(current_provider);
+    ctx.renderer.show_list_modal(
+        "Secrets",
+        vec![
+            "Manage API keys in secure storage (OS keyring or encrypted file).".to_string(),
+            "Keys are never written to vtcode.toml or workspace environment files.".to_string(),
+        ],
+        items,
+        Some(selected),
+        None,
+    );
+}
+
+fn build_secret_action_items(current_provider: Option<Provider>) -> (Vec<InlineListItem>, InlineListSelection) {
     let providers = Provider::all_providers();
     let mut items = vec![
         list_item(
@@ -165,7 +181,43 @@ fn show_secret_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         ),
     ];
 
+    let mut current_selection = None;
+
+    if let Some(provider) = current_provider {
+        if !provider.is_local() && !provider.uses_managed_auth() {
+            let detail = provider_credential_detail(provider);
+            if !matches!(detail.map(|d| d.source), Some(CredentialSource::OAuth)) {
+                let key = provider.as_ref();
+                let label = provider.label();
+                let add_action = format!("{SECRET_ACTION_PREFIX}add:{key}");
+                let delete_action = format!("{SECRET_ACTION_PREFIX}delete:{key}");
+                current_selection = Some(InlineListSelection::ConfigAction(add_action.clone()));
+                items.push(InlineListItem {
+                    title: format!("Add {label} key"),
+                    subtitle: Some(format!("{CURRENT_BADGE} • Store {label} API key in secure storage")),
+                    badge: Some(CURRENT_BADGE.to_string()),
+                    indent: 1,
+                    selection: Some(InlineListSelection::ConfigAction(add_action)),
+                    search_value: Some(format!("add {} api key", label.to_lowercase())),
+                });
+                items.push(InlineListItem {
+                    title: format!("Delete {label} key"),
+                    subtitle: Some(format!("{CURRENT_BADGE} • Remove stored {label} API key")),
+                    badge: Some(CURRENT_BADGE.to_string()),
+                    indent: 1,
+                    selection: Some(InlineListSelection::ConfigAction(delete_action)),
+                    search_value: Some(format!("delete {} api key", label.to_lowercase())),
+                });
+            }
+        }
+    }
+
     for provider in providers {
+        if let Some(current) = current_provider {
+            if provider == current {
+                continue;
+            }
+        }
         let label = provider.label();
         let key = provider.as_ref();
         if provider.is_local() || provider.uses_managed_auth() {
@@ -202,16 +254,10 @@ fn show_secret_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         search_value: Some("back close exit".to_string()),
     });
 
-    ctx.renderer.show_list_modal(
-        "Secrets",
-        vec![
-            "Manage API keys in secure storage (OS keyring or encrypted file).".to_string(),
-            "Keys are never written to vtcode.toml or workspace environment files.".to_string(),
-        ],
-        items,
-        Some(InlineListSelection::ConfigAction(format!("{SECRET_ACTION_PREFIX}list"))),
-        None,
-    );
+    let selected =
+        current_selection.unwrap_or_else(|| InlineListSelection::ConfigAction(format!("{SECRET_ACTION_PREFIX}list")));
+
+    (items, selected)
 }
 
 fn list_item(title: &str, subtitle: &str, action: String, search: &str) -> InlineListItem {
@@ -531,6 +577,101 @@ async fn wait_for_secure_prompt_input(ctx: &mut SlashCommandContext<'_>) -> Opti
                 return None;
             }
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_ui::tui::app::InlineListSelection;
+
+    fn item_titles(items: &[InlineListItem]) -> Vec<&str> {
+        items.iter().map(|i| i.title.as_str()).collect()
+    }
+
+    fn current_provider_item_indices(items: &[InlineListItem], provider_label: &str) -> Vec<usize> {
+        items
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| i.title.contains(provider_label) && i.badge.as_deref() == Some(CURRENT_BADGE))
+            .map(|(idx, _)| idx)
+            .collect()
+    }
+
+    #[test]
+    fn no_current_provider_uses_default_order_and_selection() {
+        let (items, selected) = build_secret_action_items(None);
+        let titles = item_titles(&items);
+        assert_eq!(titles[0], "List all secrets");
+        assert_eq!(titles[1], "Migrate .env keys");
+        assert_eq!(selected, InlineListSelection::ConfigAction("secret:list".to_string()));
+        assert!(items.iter().all(|i| i.badge.as_deref() != Some(CURRENT_BADGE)));
+    }
+
+    #[test]
+    fn current_provider_items_get_current_badge_and_come_first() {
+        let (items, selected) = build_secret_action_items(Some(Provider::DeepSeek));
+        let titles = item_titles(&items);
+        assert_eq!(titles[0], "List all secrets");
+        assert_eq!(titles[1], "Migrate .env keys");
+        let deepseek_indices = current_provider_item_indices(&items, "DeepSeek");
+        assert_eq!(deepseek_indices, vec![4, 5], "DeepSeek add/delete should be right after static actions");
+        for &idx in &deepseek_indices {
+            assert_eq!(items[idx].badge.as_deref(), Some(CURRENT_BADGE));
+            assert!(items[idx].subtitle.as_ref().unwrap().starts_with(CURRENT_BADGE));
+        }
+        assert_eq!(selected, InlineListSelection::ConfigAction("secret:add:deepseek".to_string()));
+    }
+
+    #[test]
+    fn current_provider_is_excluded_from_other_providers_section() {
+        let (items, _) = build_secret_action_items(Some(Provider::DeepSeek));
+        let deepseek_indices = current_provider_item_indices(&items, "DeepSeek");
+        assert_eq!(deepseek_indices.len(), 2, "DeepSeek should appear exactly once with Current badge");
+        let other_deepseek = items
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| i.title.contains("DeepSeek") && i.badge.as_deref() != Some(CURRENT_BADGE))
+            .count();
+        assert_eq!(other_deepseek, 0, "DeepSeek should not appear outside the Current section");
+    }
+
+    #[test]
+    fn invalid_current_provider_string_does_not_panic() {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build_secret_action_items(None)));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn local_current_provider_has_no_per_provider_items() {
+        let (items, selected) = build_secret_action_items(Some(Provider::Ollama));
+        let titles = item_titles(&items);
+        assert!(!titles.iter().any(|t| t.contains("Ollama")), "local provider should not appear");
+        assert_eq!(selected, InlineListSelection::ConfigAction("secret:list".to_string()));
+    }
+
+    #[test]
+    fn managed_auth_current_provider_has_no_per_provider_items() {
+        let (items, selected) = build_secret_action_items(Some(Provider::Copilot));
+        let titles = item_titles(&items);
+        assert!(!titles.iter().any(|t| t.contains("Copilot")), "managed-auth provider should not appear");
+        assert_eq!(selected, InlineListSelection::ConfigAction("secret:list".to_string()));
+    }
+
+    #[test]
+    fn non_current_oauth_provider_is_excluded_when_session_active() {
+        let (items, _) = build_secret_action_items(Some(Provider::DeepSeek));
+        let openai_titles: Vec<&str> = items
+            .iter()
+            .filter(|i| i.title.contains("OpenAI"))
+            .map(|i| i.title.as_str())
+            .collect();
+        if openai_titles.is_empty() {
+            return;
+        }
+        for title in &openai_titles {
+            assert!(title.starts_with("Add ") || title.starts_with("Delete "));
         }
     }
 }
