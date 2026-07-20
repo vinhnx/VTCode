@@ -87,6 +87,10 @@ pub(crate) async fn handle_manage_secrets(
                 MessageStyle::Info,
                 "Usage: /secret [list|status [provider]|add <provider>|delete <provider>|migrate [provider]|help]",
             )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                "Get your API key from the provider's platform page (e.g. https://platform.openai.com/api-keys).",
+            )?;
             Ok(SlashCommandControl::Continue)
         }
     }
@@ -287,9 +291,13 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
     let env_key = provider.default_api_key_env();
     let prompt_label = format!("{} API key ({})", label, env_key);
 
+    let platform_hint = provider
+        .platform_url()
+        .map(|url| format!("Get your key at {url}"))
+        .unwrap_or_else(|| format!("Get your {} API key from the provider's platform.", label));
     let lines = vec![
         format!("Bring your own key (BYOK) for {label}."),
-        format!("Expected env: {}", env_key),
+        platform_hint,
         "Secure display hint: \u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}".to_string(),
         "Key will be stored in secure storage (OS keyring or encrypted file).".to_string(),
         "Key will NOT be stored in vtcode.toml or workspace environment files.".to_string(),
@@ -485,6 +493,9 @@ fn render_secret_status_table(renderer: &mut AnsiRenderer, filter: Option<Provid
 
         if let Some(env_key) = detail.and_then(|d| d.env_var) {
             renderer.line(MessageStyle::Output, &format!("    Env var: {}", env_key))?;
+        }
+        if let Some(url) = provider.platform_url() {
+            renderer.line(MessageStyle::Output, &format!("    Platform: {}", url))?;
         }
 
         renderer.line(MessageStyle::Output, "")?;

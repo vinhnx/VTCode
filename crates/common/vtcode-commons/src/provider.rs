@@ -173,6 +173,32 @@ impl Provider {
     pub fn uses_managed_auth(&self) -> bool {
         matches!(self, Provider::Copilot)
     }
+
+    pub fn platform_url(&self) -> Option<&'static str> {
+        match self {
+            Provider::Gemini => Some("https://aistudio.google.com/app/apikey"),
+            Provider::OpenAI => Some("https://platform.openai.com/api-keys"),
+            Provider::Anthropic => Some("https://console.anthropic.com"),
+            Provider::Copilot => None,
+            Provider::DeepSeek => Some("https://platform.deepseek.com"),
+            Provider::OpenRouter => Some("https://openrouter.ai/api/v1/auth/keys"),
+            Provider::Ollama => None,
+            Provider::LmStudio => None,
+            Provider::LlamaCpp => None,
+            Provider::Moonshot => Some("https://platform.kimi.ai/console/api-keys"),
+            Provider::ZAI => Some("https://z.ai/docs"),
+            Provider::Minimax => Some("https://platform.minimax.io/docs"),
+            Provider::MiMo => Some("https://platform.xiaomimimo.com/docs/en-US/welcome"),
+            Provider::Mistral => Some("https://console.mistral.ai"),
+            Provider::HuggingFace => Some("https://huggingface.co/settings/tokens"),
+            Provider::OpenCodeZen => Some("https://opencode.ai/docs/zen/"),
+            Provider::OpenCodeGo => Some("https://opencode.ai/docs/go/"),
+            Provider::Qwen => Some("https://dashscope.console.aliyun.com"),
+            Provider::StepFun => Some("https://platform.stepfun.com"),
+            Provider::Evolink => Some("https://evolink.ai/dashboard/keys"),
+            Provider::Poolside => Some("https://poolside.ai"),
+        }
+    }
 }
 
 impl fmt::Display for Provider {

@@ -275,35 +275,30 @@ impl ErrorCategory {
 
     /// Build actionable guidance for authentication errors.
     ///
-    /// Returns provider-specific steps including the env var name and
-    /// workspace `.env` path so the user can fix the issue immediately.
+    /// Returns provider-specific steps directing the user to `/secret` (API-key
+    /// providers) or `/login` (managed-auth providers). Env-var guidance is
+    /// intentionally omitted — secure storage via `/secret` is the canonical
+    /// path and env vars are a fallback only.
     #[must_use]
     pub fn auth_recovery_guidance(
         &self,
         provider_label: &str,
-        env_key: &str,
-        workspace_env_path: Option<&str>,
+        provider_key: &str,
+        is_managed_auth: bool,
     ) -> Vec<String> {
         if !matches!(self, ErrorCategory::Authentication) {
             return vec![];
         }
 
-        let mut guidance = Vec::with_capacity(4);
+        let mut guidance = Vec::with_capacity(2);
         guidance.push(format!("Authentication failed for {provider_label}."));
-
-        if env_key.is_empty() {
-            guidance.push("This provider uses managed authentication — run the provider's login command.".to_string());
+        if is_managed_auth {
+            guidance.push(format!("Run /login {provider_key} to re-authenticate."));
         } else {
-            guidance.push(format!("To fix, set your API key ({env_key}):"));
-            guidance.push(format!("  1. Export: export {env_key}=your-key"));
-            if let Some(env_path) = workspace_env_path {
-                guidance.push(format!("  2. Or add to {env_path}: {env_key}=your-key"));
-            } else {
-                guidance.push(format!("  2. Or add to workspace .env: {env_key}=your-key"));
-            }
-            guidance.push("  3. Or run /model to enter a key interactively".to_string());
+            guidance.push(format!(
+                "Run /secret add {provider_key} to store your API key in secure storage (OS keyring or encrypted file)."
+            ));
         }
-
         guidance
     }
 }
@@ -933,6 +928,41 @@ mod tests {
     fn user_labels_are_non_empty() {
         assert!(!ErrorCategory::Network.user_label().is_empty());
         assert!(!ErrorCategory::ExecutionError.user_label().is_empty());
+    }
+
+    // --- auth_recovery_guidance ---
+
+    #[test]
+    fn auth_recovery_guidance_api_key_provider_mentions_secret_add() {
+        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false);
+        assert_eq!(guidance.len(), 2);
+        assert_eq!(guidance[0], "Authentication failed for StepFun.");
+        assert_eq!(
+            guidance[1],
+            "Run /secret add stepfun to store your API key in secure storage (OS keyring or encrypted file)."
+        );
+    }
+
+    #[test]
+    fn auth_recovery_guidance_managed_auth_provider_mentions_login() {
+        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true);
+        assert_eq!(guidance.len(), 2);
+        assert_eq!(guidance[0], "Authentication failed for GitHub Copilot.");
+        assert_eq!(guidance[1], "Run /login copilot to re-authenticate.");
+    }
+
+    #[test]
+    fn auth_recovery_guidance_non_auth_category_returns_empty() {
+        assert!(
+            ErrorCategory::Network
+                .auth_recovery_guidance("OpenAI", "openai", false)
+                .is_empty()
+        );
+        assert!(
+            ErrorCategory::Timeout
+                .auth_recovery_guidance("OpenAI", "openai", false)
+                .is_empty()
+        );
     }
 
     // --- Display ---

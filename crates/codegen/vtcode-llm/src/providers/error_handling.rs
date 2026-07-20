@@ -243,13 +243,19 @@ fn authentication_error_message(provider_name: &str, error_message: &str) -> Str
     let trimmed = error_message.trim();
     if provider_name.eq_ignore_ascii_case("Moonshot") {
         return format!(
-            "authentication failed: {trimmed}. use a MOONSHOT_API_KEY from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API"
+            "authentication failed: {trimmed}. get your API key from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API. store it with /secret add moonshot"
         );
     }
 
     if provider_name.eq_ignore_ascii_case("Qwen") {
         return format!(
-            "authentication failed: {trimmed}. set QWEN_API_KEY to your DashScope API key from https://dashscope.console.aliyun.com"
+            "authentication failed: {trimmed}. get your DashScope API key from https://dashscope.console.aliyun.com. store it with /secret add qwen"
+        );
+    }
+
+    if provider_name.eq_ignore_ascii_case("StepFun") {
+        return format!(
+            "authentication failed: {trimmed}. get your API key from https://platform.stepfun.com. store it with /secret add stepfun"
         );
     }
 
@@ -375,8 +381,8 @@ mod tests {
         match error {
             LLMError::Authentication { message, metadata } => {
                 assert!(message.contains("Invalid Authentication"));
-                assert!(message.contains("MOONSHOT_API_KEY"));
                 assert!(message.contains("platform.kimi.ai/console/api-keys"));
+                assert!(message.contains("/secret add moonshot"));
                 assert_eq!(metadata.as_ref().and_then(|meta| meta.code.as_deref()), Some("authentication_error"));
             }
             other => panic!("expected authentication error, got {other:?}"),
@@ -423,5 +429,71 @@ mod tests {
     fn extract_falls_back_for_unknown_json_schema() {
         let body = r#"{"code":500,"status":"error"}"#;
         assert_eq!(extract_human_error_message(body), body);
+    }
+
+    // --- authentication_error_message (via parse_api_error) ---
+
+    #[test]
+    fn stepfun_401_includes_platform_url_and_secret_hint() {
+        let err = parse_api_error(
+            "StepFun",
+            reqwest::StatusCode::UNAUTHORIZED,
+            r#"{"error":{"message":"Incorrect API key provided"}}"#,
+        );
+        match err {
+            LLMError::Authentication { message, .. } => {
+                assert!(message.contains("https://platform.stepfun.com"), "missing platform URL: {message}");
+                assert!(message.contains("/secret add stepfun"), "missing /secret hint: {message}");
+            }
+            _ => panic!("expected Authentication error, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn moonshot_401_includes_platform_url_and_secret_hint() {
+        let err = parse_api_error(
+            "Moonshot",
+            reqwest::StatusCode::UNAUTHORIZED,
+            r#"{"error":{"message":"Invalid API key"}}"#,
+        );
+        match err {
+            LLMError::Authentication { message, .. } => {
+                assert!(
+                    message.contains("https://platform.kimi.ai/console/api-keys"),
+                    "missing platform URL: {message}"
+                );
+                assert!(message.contains("/secret add moonshot"), "missing /secret hint: {message}");
+            }
+            _ => panic!("expected Authentication error, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn qwen_401_includes_platform_url_and_secret_hint() {
+        let err =
+            parse_api_error("Qwen", reqwest::StatusCode::UNAUTHORIZED, r#"{"error":{"message":"Invalid API key"}}"#);
+        match err {
+            LLMError::Authentication { message, .. } => {
+                assert!(message.contains("https://dashscope.console.aliyun.com"), "missing platform URL: {message}");
+                assert!(message.contains("/secret add qwen"), "missing /secret hint: {message}");
+            }
+            _ => panic!("expected Authentication error, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn openai_401_has_generic_auth_message() {
+        let err = parse_api_error(
+            "OpenAI",
+            reqwest::StatusCode::UNAUTHORIZED,
+            r#"{"error":{"message":"Incorrect API key provided"}}"#,
+        );
+        match err {
+            LLMError::Authentication { message, .. } => {
+                assert!(message.contains("authentication failed"), "missing auth prefix: {message}");
+                assert!(message.contains("Incorrect API key provided"));
+            }
+            _ => panic!("expected Authentication error, got: {err:?}"),
+        }
     }
 }

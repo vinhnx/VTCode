@@ -675,15 +675,19 @@ pub(crate) async fn run_turn_loop(
                     let err_cat = vtcode_commons::classify_anyhow_error(&err);
                     if matches!(err_cat, vtcode_commons::ErrorCategory::Authentication) {
                         // For auth errors, show actionable provider-specific guidance
-                        let provider_label = turn_processing_ctx
+                        let (provider_label, provider_key, is_managed_auth) = turn_processing_ctx
                             .config
                             .provider
                             .parse::<vtcode_core::config::models::Provider>()
-                            .map(|p| p.label().to_string())
-                            .unwrap_or_else(|_| turn_processing_ctx.config.provider.clone());
-                        let env_key = &turn_processing_ctx.config.api_key_env;
-                        let env_path = vtcode_config::workspace_env_path_display(&turn_processing_ctx.config.workspace);
-                        let guidance = err_cat.auth_recovery_guidance(&provider_label, env_key, Some(&env_path));
+                            .map(|p| (p.label().to_string(), p.as_ref().to_string(), p.uses_managed_auth()))
+                            .unwrap_or_else(|_| {
+                                (
+                                    turn_processing_ctx.config.provider.clone(),
+                                    turn_processing_ctx.config.provider.clone(),
+                                    false,
+                                )
+                            });
+                        let guidance = err_cat.auth_recovery_guidance(&provider_label, &provider_key, is_managed_auth);
                         for line in &guidance {
                             turn_processing_ctx.renderer.line(MessageStyle::Info, line)?;
                         }
