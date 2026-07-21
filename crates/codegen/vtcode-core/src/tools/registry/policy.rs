@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
@@ -95,17 +96,31 @@ impl PolicyCatalogueTestHooks {
 use super::ToolPermissionDecision;
 use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub(super) struct ToolPolicyGateway {
-    tool_policy: Arc<tokio::sync::Mutex<Option<ToolPolicyManager>>>,
-    preapproved_tools: Arc<tokio::sync::Mutex<FxHashSet<String>>>,
-    full_auto_allowlist: Option<FxHashSet<String>>,
-    full_auto_catalogue_config: Option<SessionToolsConfig>,
-    /// Serialises full-auto lifecycle changes with catalogue snapshots.
-    full_auto_catalogue_lifecycle: Arc<tokio::sync::Mutex<()>>,
+    tool_policy: Arc<Mutex<Option<ToolPolicyManager>>>,
+    preapproved_tools: Arc<Mutex<FxHashSet<String>>>,
+    full_auto_allowlist: Arc<Mutex<Option<FxHashSet<String>>>>,
+    full_auto_catalogue_config: Arc<Mutex<Option<SessionToolsConfig>>>,
+    full_auto_catalogue_lifecycle: Arc<Mutex<()>>,
     #[cfg(test)]
     full_auto_catalogue_test_hooks: Arc<PolicyCatalogueTestHooks>,
-    enforce_safe_mode_prompts: bool,
+    enforce_safe_mode_prompts: AtomicBool,
+}
+
+impl Clone for ToolPolicyGateway {
+    fn clone(&self) -> Self {
+        Self {
+            tool_policy: Arc::clone(&self.tool_policy),
+            preapproved_tools: Arc::clone(&self.preapproved_tools),
+            full_auto_allowlist: self.full_auto_allowlist.clone(),
+            full_auto_catalogue_config: self.full_auto_catalogue_config.clone(),
+            full_auto_catalogue_lifecycle: Arc::clone(&self.full_auto_catalogue_lifecycle),
+            #[cfg(test)]
+            full_auto_catalogue_test_hooks: Arc::clone(&self.full_auto_catalogue_test_hooks),
+            enforce_safe_mode_prompts: AtomicBool::new(self.enforce_safe_mode_prompts.load(Ordering::Relaxed)),
+        }
+    }
 }
 
 impl ToolPolicyGateway {
@@ -121,12 +136,12 @@ impl ToolPolicyGateway {
         Self {
             tool_policy: Arc::new(Mutex::new(tool_policy)),
             preapproved_tools: Arc::new(Mutex::new(FxHashSet::default())),
-            full_auto_allowlist: None,
-            full_auto_catalogue_config: None,
-            full_auto_catalogue_lifecycle: Arc::new(tokio::sync::Mutex::new(())),
+            full_auto_allowlist: Arc::new(Mutex::new(None)),
+            full_auto_catalogue_config: Arc::new(Mutex::new(None)),
+            full_auto_catalogue_lifecycle: Arc::new(Mutex::new(())),
             #[cfg(test)]
             full_auto_catalogue_test_hooks: Arc::new(PolicyCatalogueTestHooks::default()),
-            enforce_safe_mode_prompts: false,
+            enforce_safe_mode_prompts: AtomicBool::new(false),
         }
     }
 
@@ -134,21 +149,21 @@ impl ToolPolicyGateway {
         Self {
             tool_policy: Arc::new(Mutex::new(Some(manager))),
             preapproved_tools: Arc::new(Mutex::new(FxHashSet::default())),
-            full_auto_allowlist: None,
-            full_auto_catalogue_config: None,
-            full_auto_catalogue_lifecycle: Arc::new(tokio::sync::Mutex::new(())),
+            full_auto_allowlist: Arc::new(Mutex::new(None)),
+            full_auto_catalogue_config: Arc::new(Mutex::new(None)),
+            full_auto_catalogue_lifecycle: Arc::new(Mutex::new(())),
             #[cfg(test)]
             full_auto_catalogue_test_hooks: Arc::new(PolicyCatalogueTestHooks::default()),
-            enforce_safe_mode_prompts: false,
+            enforce_safe_mode_prompts: AtomicBool::new(false),
         }
     }
 
-    pub fn set_enforce_safe_mode_prompts(&mut self, enabled: bool) {
-        self.enforce_safe_mode_prompts = enabled;
+    pub fn set_enforce_safe_mode_prompts(&self, enabled: bool) {
+        self.enforce_safe_mode_prompts.store(enabled, Ordering::Relaxed);
     }
 
     fn requires_safe_mode_prompt(&self, safe_mode_prompt: bool) -> bool {
-        self.enforce_safe_mode_prompts && safe_mode_prompt
+        self.enforce_safe_mode_prompts.load(Ordering::Relaxed) && safe_mode_prompt
     }
 
     pub async fn has_policy_manager(&self) -> bool {
@@ -305,8 +320,8 @@ impl ToolPolicyGateway {
         }
     }
 
-    pub fn enable_full_auto_permission(
-        &mut self,
+    pub async fn enable_full_auto_permission(
+        &self,
         allowed_tools: &[String],
         available_tools: &[String],
         session_tools_config: SessionToolsConfig,
@@ -328,24 +343,24 @@ impl ToolPolicyGateway {
             }
         }
 
-        self.full_auto_allowlist = Some(normalized);
-        self.full_auto_catalogue_config = wildcard.then_some(session_tools_config);
+        *self.full_auto_allowlist.lock().await = Some(normalized);
+        *self.full_auto_catalogue_config.lock().await = wildcard.then_some(session_tools_config);
     }
 
-    pub fn disable_full_auto_permission(&mut self) {
-        self.full_auto_allowlist = None;
-        self.full_auto_catalogue_config = None;
+    pub async fn disable_full_auto_permission(&self) {
+        *self.full_auto_allowlist.lock().await = None;
+        *self.full_auto_catalogue_config.lock().await = None;
     }
 
-    pub fn full_auto_catalogue_config(&self) -> Option<SessionToolsConfig> {
-        self.full_auto_catalogue_config.clone()
+    pub async fn full_auto_catalogue_config(&self) -> Option<SessionToolsConfig> {
+        self.full_auto_catalogue_config.lock().await.clone()
     }
 
-    pub fn full_auto_catalogue_lifecycle(&self) -> Arc<tokio::sync::Mutex<()>> {
+    pub fn full_auto_catalogue_lifecycle(&self) -> Arc<Mutex<()>> {
         Arc::clone(&self.full_auto_catalogue_lifecycle)
     }
 
-    pub(crate) fn tool_policy_arc(&self) -> Arc<tokio::sync::Mutex<Option<ToolPolicyManager>>> {
+    pub(crate) fn tool_policy_arc(&self) -> Arc<Mutex<Option<ToolPolicyManager>>> {
         Arc::clone(&self.tool_policy)
     }
 
@@ -354,16 +369,16 @@ impl ToolPolicyGateway {
         Arc::clone(&self.full_auto_catalogue_test_hooks)
     }
 
-    pub fn refresh_full_auto_catalogue(
-        &mut self,
+    pub async fn refresh_full_auto_catalogue(
+        &self,
         session_tools_config: &SessionToolsConfig,
         available_tools: &[String],
     ) {
-        if self.full_auto_catalogue_config.as_ref() != Some(session_tools_config) {
+        if self.full_auto_catalogue_config.lock().await.as_ref() != Some(session_tools_config) {
             return;
         }
 
-        self.full_auto_allowlist = Some(
+        *self.full_auto_allowlist.lock().await = Some(
             available_tools
                 .iter()
                 .map(|tool| canonical_tool_name(tool).to_owned())
@@ -371,24 +386,32 @@ impl ToolPolicyGateway {
         );
     }
 
-    pub fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.full_auto_allowlist.as_ref().map(|set| {
+    pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
+        self.full_auto_allowlist.lock().await.as_ref().map(|set| {
             let mut items: Vec<String> = set.iter().cloned().collect();
             items.sort();
             items
         })
     }
 
-    pub fn is_allowed_in_full_auto(&self, name: &str) -> bool {
+    pub async fn is_allowed_in_full_auto(&self, name: &str) -> bool {
         let canonical = canonical_tool_name(name);
         self.full_auto_allowlist
+            .lock()
+            .await
             .as_ref()
             .map(|allowlist| allowlist.contains(canonical))
             .unwrap_or(true)
     }
 
-    pub fn has_full_auto_allowlist(&self) -> bool {
-        self.full_auto_allowlist.is_some()
+    pub async fn is_denied_in_full_auto(&self, name: &str) -> bool {
+        let allowlist = self.full_auto_allowlist.lock().await;
+        if allowlist.is_some() {
+            let canonical = canonical_tool_name(name);
+            !allowlist.as_ref().unwrap().contains(canonical)
+        } else {
+            false
+        }
     }
 
     pub async fn evaluate_tool_policy(
@@ -405,11 +428,14 @@ impl ToolPolicyGateway {
             return Ok(ToolPermissionDecision::Prompt);
         }
 
-        if self.full_auto_allowlist.is_some() {
-            if !self.is_allowed_in_full_auto(normalized) {
-                return Ok(ToolPermissionDecision::Deny);
-            }
+        let allowlist = self.full_auto_allowlist.lock().await;
+        let has_allowlist = allowlist.is_some();
+        if has_allowlist && !allowlist.as_ref().unwrap().contains(normalized) {
+            return Ok(ToolPermissionDecision::Deny);
+        }
+        drop(allowlist);
 
+        if has_allowlist {
             if let Some(policy_manager) = self.tool_policy.lock().await.as_mut() {
                 match policy_manager.get_policy(normalized) {
                     ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),

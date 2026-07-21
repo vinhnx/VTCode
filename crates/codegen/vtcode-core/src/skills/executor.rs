@@ -918,1091 +918,1083 @@ impl SkillExecutionContext {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::types::CapabilityLevel;
-    use crate::llm::provider::{
-        FinishReason, LLMError, LLMNormalizedStream, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent,
-        ToolCall,
-    };
-    use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
-    use crate::tools::registry::ToolRegistration;
-    use crate::tools::traits::Tool;
-    use futures::stream;
-    use serde_json::json;
-    use std::path::PathBuf;
-    use std::sync::Mutex;
-    use tempfile::tempdir;
+use super::*;
+use crate::config::types::CapabilityLevel;
+use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent, ToolCall};
+use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
+use crate::tools::registry::ToolRegistration;
+use crate::tools::traits::Tool;
+use futures::stream;
+use serde_json::json;
+use std::sync::Mutex;
+use tempfile::tempdir;
 
-    struct FakeForkExecutor;
+struct FakeForkExecutor;
 
-    struct EchoFirstUserProvider;
-    struct UnknownToolThenFinalizeProvider {
-        calls: Mutex<usize>,
-    }
-    struct RepeatToolThenFinalizeProvider {
-        tool_name: &'static str,
-        calls: Mutex<usize>,
-    }
-    struct MaxIterationsThenFinalizeProvider {
-        tool_names: Vec<String>,
-        calls: Mutex<usize>,
-    }
-    struct StreamingOnlySkillProvider {
-        stream_calls: Mutex<usize>,
-    }
-    struct EmptyFinalSkillProvider;
-    struct ToolOnlyThenFinalizeProvider {
-        tool_name: &'static str,
-        calls: Mutex<usize>,
-    }
-    struct StopWithToolCallsThenFinalizeProvider {
-        tool_name: &'static str,
-        calls: Mutex<usize>,
-    }
-    struct CountingSkillTool {
-        calls: Arc<Mutex<usize>>,
+struct EchoFirstUserProvider;
+struct UnknownToolThenFinalizeProvider {
+    calls: Mutex<usize>,
+}
+struct RepeatToolThenFinalizeProvider {
+    tool_name: &'static str,
+    calls: Mutex<usize>,
+}
+struct MaxIterationsThenFinalizeProvider {
+    tool_names: Vec<String>,
+    calls: Mutex<usize>,
+}
+struct StreamingOnlySkillProvider {
+    stream_calls: Mutex<usize>,
+}
+struct EmptyFinalSkillProvider;
+struct ToolOnlyThenFinalizeProvider {
+    tool_name: &'static str,
+    calls: Mutex<usize>,
+}
+struct StopWithToolCallsThenFinalizeProvider {
+    tool_name: &'static str,
+    calls: Mutex<usize>,
+}
+struct CountingSkillTool {
+    calls: Arc<Mutex<usize>>,
+}
+
+#[async_trait]
+impl LLMProvider for EchoFirstUserProvider {
+    fn name(&self) -> &str {
+        "echo-first-user"
     }
 
-    #[async_trait]
-    impl LLMProvider for EchoFirstUserProvider {
-        fn name(&self) -> &str {
-            "echo-first-user"
-        }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
 
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
 
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let first_message = request
+            .messages
+            .first()
+            .map(|message| message.content.as_text().to_string())
+            .unwrap_or_default();
 
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let first_message = request
-                .messages
-                .first()
-                .map(|message| message.content.as_text().to_string())
-                .unwrap_or_default();
+        Ok(LLMResponse {
+            content: Some(first_message),
+            model: request.model,
+            finish_reason: FinishReason::Stop,
+            ..Default::default()
+        })
+    }
+}
 
-            Ok(LLMResponse {
-                content: Some(first_message),
+#[async_trait]
+impl LLMProvider for UnknownToolThenFinalizeProvider {
+    fn name(&self) -> &str {
+        "unknown-tool-then-finalize"
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut calls = self.calls.lock().expect("provider calls mutex");
+        *calls += 1;
+
+        match *calls {
+            1 => Ok(LLMResponse {
+                content: Some(String::new()),
                 model: request.model,
-                finish_reason: FinishReason::Stop,
+                tool_calls: Some(vec![ToolCall::function(
+                    "call_unknown_tool".to_string(),
+                    "unified_diff".to_string(),
+                    "{}".to_string(),
+                )]),
+                finish_reason: FinishReason::ToolCalls,
                 ..Default::default()
-            })
+            }),
+            2 => {
+                assert!(request.tools.is_none());
+                let prompt = request
+                    .messages
+                    .last()
+                    .map(|message| message.content.as_text().to_string())
+                    .unwrap_or_default();
+                assert!(prompt.contains("unified_diff"));
+                assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+                Ok(LLMResponse {
+                    content: Some("finalized after unknown tool".to_string()),
+                    model: request.model,
+                    finish_reason: FinishReason::Stop,
+                    ..Default::default()
+                })
+            }
+            _ => panic!("unexpected provider call count: {}", *calls),
         }
     }
+}
 
-    #[async_trait]
-    impl LLMProvider for UnknownToolThenFinalizeProvider {
-        fn name(&self) -> &str {
-            "unknown-tool-then-finalize"
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
-
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
-
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let mut calls = self.calls.lock().expect("provider calls mutex");
-            *calls += 1;
-
-            match *calls {
-                1 => Ok(LLMResponse {
-                    content: Some(String::new()),
-                    model: request.model,
-                    tool_calls: Some(vec![ToolCall::function(
-                        "call_unknown_tool".to_string(),
-                        "unified_diff".to_string(),
-                        "{}".to_string(),
-                    )]),
-                    finish_reason: FinishReason::ToolCalls,
-                    ..Default::default()
-                }),
-                2 => {
-                    assert!(request.tools.is_none());
-                    let prompt = request
-                        .messages
-                        .last()
-                        .map(|message| message.content.as_text().to_string())
-                        .unwrap_or_default();
-                    assert!(prompt.contains("unified_diff"));
-                    assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
-
-                    Ok(LLMResponse {
-                        content: Some("finalized after unknown tool".to_string()),
-                        model: request.model,
-                        finish_reason: FinishReason::Stop,
-                        ..Default::default()
-                    })
-                }
-                _ => panic!("unexpected provider call count: {}", *calls),
-            }
-        }
+#[async_trait]
+impl LLMProvider for RepeatToolThenFinalizeProvider {
+    fn name(&self) -> &str {
+        "repeat-tool-then-finalize"
     }
 
-    #[async_trait]
-    impl LLMProvider for RepeatToolThenFinalizeProvider {
-        fn name(&self) -> &str {
-            "repeat-tool-then-finalize"
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
-
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
-
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let mut calls = self.calls.lock().expect("provider calls mutex");
-            *calls += 1;
-
-            match *calls {
-                1 | 2 => Ok(LLMResponse {
-                    content: Some(String::new()),
-                    model: request.model,
-                    tool_calls: Some(vec![ToolCall::function(
-                        format!("repeat_tool_call_{}", *calls),
-                        self.tool_name.to_string(),
-                        "{\"input\":\"same\"}".to_string(),
-                    )]),
-                    finish_reason: FinishReason::ToolCalls,
-                    ..Default::default()
-                }),
-                3 => {
-                    assert!(request.tools.is_none());
-                    let prompt = request
-                        .messages
-                        .last()
-                        .map(|message| message.content.as_text().to_string())
-                        .unwrap_or_default();
-                    assert!(prompt.contains("HARD STOP"));
-                    assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
-
-                    Ok(LLMResponse {
-                        content: Some("finalized after loop detection".to_string()),
-                        model: request.model,
-                        finish_reason: FinishReason::Stop,
-                        ..Default::default()
-                    })
-                }
-                _ => panic!("unexpected provider call count: {}", *calls),
-            }
-        }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
     }
 
-    #[async_trait]
-    impl LLMProvider for MaxIterationsThenFinalizeProvider {
-        fn name(&self) -> &str {
-            "max-iterations-then-finalize"
-        }
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
 
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut calls = self.calls.lock().expect("provider calls mutex");
+        *calls += 1;
 
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
-
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let mut calls = self.calls.lock().expect("provider calls mutex");
-            *calls += 1;
-
-            if *calls <= MAX_SKILL_LLM_ITERATIONS {
-                let tool_name = self.tool_names[*calls - 1].clone();
-                return Ok(LLMResponse {
-                    content: Some(String::new()),
-                    model: request.model,
-                    tool_calls: Some(vec![ToolCall::function(
-                        format!("max_iterations_tool_call_{}", *calls),
-                        tool_name,
-                        format!("{{\"step\":{}}}", *calls),
-                    )]),
-                    finish_reason: FinishReason::ToolCalls,
-                    ..Default::default()
-                });
-            }
-
-            assert_eq!(*calls, MAX_SKILL_LLM_ITERATIONS + 1);
-            assert!(request.tools.is_none());
-            let prompt = request
-                .messages
-                .last()
-                .map(|message| message.content.as_text().to_string())
-                .unwrap_or_default();
-            assert!(prompt.contains("maximum tool-call iterations"));
-            assert!(prompt.contains(&MAX_SKILL_LLM_ITERATIONS.to_string()));
-            assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
-
-            Ok(LLMResponse {
-                content: Some("finalized after max iterations".to_string()),
+        match *calls {
+            1 | 2 => Ok(LLMResponse {
+                content: Some(String::new()),
                 model: request.model,
-                finish_reason: FinishReason::Stop,
+                tool_calls: Some(vec![ToolCall::function(
+                    format!("repeat_tool_call_{}", *calls),
+                    self.tool_name.to_string(),
+                    "{\"input\":\"same\"}".to_string(),
+                )]),
+                finish_reason: FinishReason::ToolCalls,
                 ..Default::default()
-            })
+            }),
+            3 => {
+                assert!(request.tools.is_none());
+                let prompt = request
+                    .messages
+                    .last()
+                    .map(|message| message.content.as_text().to_string())
+                    .unwrap_or_default();
+                assert!(prompt.contains("HARD STOP"));
+                assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+                Ok(LLMResponse {
+                    content: Some("finalized after loop detection".to_string()),
+                    model: request.model,
+                    finish_reason: FinishReason::Stop,
+                    ..Default::default()
+                })
+            }
+            _ => panic!("unexpected provider call count: {}", *calls),
         }
     }
+}
 
-    #[async_trait]
-    impl LLMProvider for StreamingOnlySkillProvider {
-        fn name(&self) -> &str {
-            "streaming-only-skill"
-        }
-
-        fn supports_streaming(&self) -> bool {
-            true
-        }
-
-        fn supports_non_streaming(&self, _model: &str) -> bool {
-            false
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.2-codex".to_string()]
-        }
-
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
-
-        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            panic!("generate should not be called for streaming-only skill provider")
-        }
-
-        async fn stream_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
-            let mut stream_calls = self.stream_calls.lock().expect("stream calls mutex");
-            *stream_calls += 1;
-
-            Ok(Box::pin(stream::iter(vec![
-                Ok(NormalizedStreamEvent::TextDelta { delta: "streamed ".to_string() }),
-                Ok(NormalizedStreamEvent::TextDelta { delta: "skill result".to_string() }),
-                Ok(NormalizedStreamEvent::Done {
-                    response: Box::new(LLMResponse {
-                        content: None,
-                        model: request.model,
-                        finish_reason: FinishReason::Stop,
-                        ..Default::default()
-                    }),
-                }),
-            ])))
-        }
+#[async_trait]
+impl LLMProvider for MaxIterationsThenFinalizeProvider {
+    fn name(&self) -> &str {
+        "max-iterations-then-finalize"
     }
 
-    #[async_trait]
-    impl LLMProvider for EmptyFinalSkillProvider {
-        fn name(&self) -> &str {
-            "empty-final-skill"
-        }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
 
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
 
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut calls = self.calls.lock().expect("provider calls mutex");
+        *calls += 1;
 
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            Ok(LLMResponse {
-                content: None,
+        if *calls <= MAX_SKILL_LLM_ITERATIONS {
+            let tool_name = self.tool_names[*calls - 1].clone();
+            return Ok(LLMResponse {
+                content: Some(String::new()),
                 model: request.model,
-                finish_reason: FinishReason::Stop,
+                tool_calls: Some(vec![ToolCall::function(
+                    format!("max_iterations_tool_call_{}", *calls),
+                    tool_name,
+                    format!("{{\"step\":{}}}", *calls),
+                )]),
+                finish_reason: FinishReason::ToolCalls,
                 ..Default::default()
-            })
+            });
         }
+
+        assert_eq!(*calls, MAX_SKILL_LLM_ITERATIONS + 1);
+        assert!(request.tools.is_none());
+        let prompt = request
+            .messages
+            .last()
+            .map(|message| message.content.as_text().to_string())
+            .unwrap_or_default();
+        assert!(prompt.contains("maximum tool-call iterations"));
+        assert!(prompt.contains(&MAX_SKILL_LLM_ITERATIONS.to_string()));
+        assert!(prompt.contains(SKILL_TOOL_FREE_SYNTHESIS_PROMPT));
+
+        Ok(LLMResponse {
+            content: Some("finalized after max iterations".to_string()),
+            model: request.model,
+            finish_reason: FinishReason::Stop,
+            ..Default::default()
+        })
+    }
+}
+
+#[async_trait]
+impl LLMProvider for StreamingOnlySkillProvider {
+    fn name(&self) -> &str {
+        "streaming-only-skill"
     }
 
-    #[async_trait]
-    impl LLMProvider for ToolOnlyThenFinalizeProvider {
-        fn name(&self) -> &str {
-            "tool-only-then-finalize"
-        }
+    fn supports_streaming(&self) -> bool {
+        true
+    }
 
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
+    fn supports_non_streaming(&self, _model: &str) -> bool {
+        false
+    }
 
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.2-codex".to_string()]
+    }
 
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let mut calls = self.calls.lock().expect("provider calls mutex");
-            *calls += 1;
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
 
-            match *calls {
-                1 => Ok(LLMResponse {
+    async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        panic!("generate should not be called for streaming-only skill provider")
+    }
+
+    async fn stream_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
+        let mut stream_calls = self.stream_calls.lock().expect("stream calls mutex");
+        *stream_calls += 1;
+
+        Ok(Box::pin(stream::iter(vec![
+            Ok(NormalizedStreamEvent::TextDelta { delta: "streamed ".to_string() }),
+            Ok(NormalizedStreamEvent::TextDelta { delta: "skill result".to_string() }),
+            Ok(NormalizedStreamEvent::Done {
+                response: Box::new(LLMResponse {
                     content: None,
                     model: request.model,
-                    tool_calls: Some(vec![ToolCall::function(
-                        "tool_only_call".to_string(),
-                        self.tool_name.to_string(),
-                        "{}".to_string(),
-                    )]),
-                    finish_reason: FinishReason::ToolCalls,
-                    ..Default::default()
-                }),
-                2 => Ok(LLMResponse {
-                    content: Some("finalized after tool-only response".to_string()),
-                    model: request.model,
                     finish_reason: FinishReason::Stop,
                     ..Default::default()
                 }),
-                _ => panic!("unexpected provider call count: {}", *calls),
+            }),
+        ])))
+    }
+}
+
+#[async_trait]
+impl LLMProvider for EmptyFinalSkillProvider {
+    fn name(&self) -> &str {
+        "empty-final-skill"
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        Ok(LLMResponse {
+            content: None,
+            model: request.model,
+            finish_reason: FinishReason::Stop,
+            ..Default::default()
+        })
+    }
+}
+
+#[async_trait]
+impl LLMProvider for ToolOnlyThenFinalizeProvider {
+    fn name(&self) -> &str {
+        "tool-only-then-finalize"
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut calls = self.calls.lock().expect("provider calls mutex");
+        *calls += 1;
+
+        match *calls {
+            1 => Ok(LLMResponse {
+                content: None,
+                model: request.model,
+                tool_calls: Some(vec![ToolCall::function(
+                    "tool_only_call".to_string(),
+                    self.tool_name.to_string(),
+                    "{}".to_string(),
+                )]),
+                finish_reason: FinishReason::ToolCalls,
+                ..Default::default()
+            }),
+            2 => Ok(LLMResponse {
+                content: Some("finalized after tool-only response".to_string()),
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            }),
+            _ => panic!("unexpected provider call count: {}", *calls),
+        }
+    }
+}
+
+#[async_trait]
+impl LLMProvider for StopWithToolCallsThenFinalizeProvider {
+    fn name(&self) -> &str {
+        "stop-with-tool-calls-then-finalize"
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["gpt-5.1-codex".to_string()]
+    }
+
+    fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+        Ok(())
+    }
+
+    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut calls = self.calls.lock().expect("provider calls mutex");
+        *calls += 1;
+
+        match *calls {
+            1 => Ok(LLMResponse {
+                content: Some(String::new()),
+                model: request.model,
+                tool_calls: Some(vec![ToolCall::function(
+                    "stop_tool_call".to_string(),
+                    self.tool_name.to_string(),
+                    "{}".to_string(),
+                )]),
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            }),
+            2 => Ok(LLMResponse {
+                content: Some("finalized after stop tool call".to_string()),
+                model: request.model,
+                finish_reason: FinishReason::Stop,
+                ..Default::default()
+            }),
+            _ => panic!("unexpected provider call count: {}", *calls),
+        }
+    }
+}
+
+#[async_trait]
+impl ForkSkillExecutor for FakeForkExecutor {
+    async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
+        Ok(serde_json::json!({
+            "execution_context": "fork",
+            "status": "success",
+            "summary": format!("forked {}", skill.name()),
+            "artifact_paths": [],
+            "delegate_session_id": "child-session",
+            "echo": user_input,
+        }))
+    }
+}
+
+#[async_trait]
+impl Tool for CountingSkillTool {
+    async fn execute(&self, args: Value) -> Result<Value> {
+        let mut calls = self.calls.lock().expect("tool calls mutex");
+        *calls += 1;
+        Ok(json!({
+            "success": true,
+            "echo": args,
+        }))
+    }
+
+    fn name(&self) -> &str {
+        "counting_skill_tool"
+    }
+
+    fn description(&self) -> &str {
+        "Counts skill tool invocations"
+    }
+}
+
+#[tokio::test]
+async fn test_skill_tool_adapter_exposes_underlying_skill_name() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string()).expect("failed to create skill");
+
+    let adapter = SkillToolAdapter::new(skill);
+    assert_eq!(adapter.skill().name(), "test-skill");
+}
+
+#[tokio::test]
+async fn test_skill_tool_adapter_execute() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+
+    let adapter = SkillToolAdapter::new(skill);
+    let args = serde_json::json!({"test": "value"});
+    let result = adapter.execute(args).await;
+
+    assert!(result.is_ok());
+    let res = result.unwrap();
+    assert_eq!(res["skill_name"], "test-skill");
+    assert_eq!(res["status"], "executing");
+}
+
+#[tokio::test]
+async fn test_fork_skill_adapter_uses_fork_executor() {
+    let manifest = SkillManifest {
+        name: "fork-skill".to_string(),
+        description: "Forked skill".to_string(),
+        context: Some("fork".to_string()),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+
+    let adapter = SkillToolAdapter::with_fork_executor(skill, Arc::new(FakeForkExecutor));
+    let args = serde_json::json!({"task": "value"});
+    let result = adapter.execute(args.clone()).await.expect("fork execution");
+
+    assert_eq!(result["execution_context"], "fork");
+    assert_eq!(result["delegate_session_id"], "child-session");
+    assert_eq!(result["echo"], args);
+}
+
+#[tokio::test]
+async fn blank_skill_input_uses_default_prompt_for_sub_llm() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        String::new(),
+        &EchoFirstUserProvider,
+        &mut registry,
+        Vec::new(),
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("blank input should be normalized");
+
+    assert_eq!(result, EMPTY_SKILL_INPUT_PROMPT);
+}
+
+#[tokio::test]
+async fn non_empty_skill_input_is_preserved_for_sub_llm() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "security".to_string(),
+        &EchoFirstUserProvider,
+        &mut registry,
+        Vec::new(),
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("non-empty input should be preserved");
+
+    assert_eq!(result, "security");
+}
+
+#[tokio::test]
+async fn skill_executor_uses_normalized_stream_when_non_streaming_is_unsupported() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let provider = StreamingOnlySkillProvider { stream_calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &provider,
+        &mut registry,
+        Vec::new(),
+        "gpt-5.2-codex".to_string(),
+    )
+    .await
+    .expect("streaming-only skill execution should succeed");
+
+    assert_eq!(result, "streamed skill result");
+    assert_eq!(*provider.stream_calls.lock().expect("stream calls mutex"), 1);
+}
+
+#[tokio::test]
+async fn skill_executor_errors_when_final_response_has_no_visible_content() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+
+    let error = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &EmptyFinalSkillProvider,
+        &mut registry,
+        Vec::new(),
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect_err("empty final response should be visible as an error");
+
+    assert!(error.to_string().contains("completed without a visible final response"));
+}
+
+#[tokio::test]
+async fn skill_executor_allows_tool_only_response_before_final_content() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let tool_name = "tool_only_skill_test_tool";
+    let tool_calls = Arc::new(Mutex::new(0usize));
+    registry
+        .register_tool(ToolRegistration::from_tool_instance(
+            tool_name,
+            CapabilityLevel::CodeSearch,
+            CountingSkillTool { calls: Arc::clone(&tool_calls) },
+        ))
+        .await
+        .expect("register tool");
+    registry.allow_all_tools().await.expect("allow tools");
+    let provider = ToolOnlyThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &provider,
+        &mut registry,
+        vec![ToolDefinition::function(
+            tool_name.to_string(),
+            "Tool-only test tool".to_string(),
+            json!({"type": "object"}),
+        )],
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("tool-only response should continue to final content");
+
+    assert_eq!(result, "finalized after tool-only response");
+    assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
+}
+
+#[tokio::test]
+async fn skill_executor_continues_after_stop_response_with_tool_calls() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let tool_name = "stop_finish_reason_skill_test_tool";
+    let tool_calls = Arc::new(Mutex::new(0usize));
+    registry
+        .register_tool(ToolRegistration::from_tool_instance(
+            tool_name,
+            CapabilityLevel::CodeSearch,
+            CountingSkillTool { calls: Arc::clone(&tool_calls) },
+        ))
+        .await
+        .expect("register tool");
+    registry.allow_all_tools().await.expect("allow tools");
+    let provider = StopWithToolCallsThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &provider,
+        &mut registry,
+        vec![ToolDefinition::function(
+            tool_name.to_string(),
+            "Stop finish reason test tool".to_string(),
+            json!({"type": "object"}),
+        )],
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("stop response with tool calls should continue to final content");
+
+    assert_eq!(result, "finalized after stop tool call");
+    assert_eq!(*provider.calls.lock().expect("provider calls mutex"), 2);
+    assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
+}
+
+#[tokio::test]
+async fn skill_executor_forces_final_synthesis_after_unknown_tool() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    registry.allow_all_tools().await.expect("allow tools");
+    let provider = UnknownToolThenFinalizeProvider { calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &provider,
+        &mut registry,
+        vec![ToolDefinition::function(
+            "read_file".to_string(),
+            "Read".to_string(),
+            json!({"type": "object"}),
+        )],
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("unknown tool should trigger final synthesis");
+
+    assert_eq!(result, "finalized after unknown tool");
+}
+
+#[tokio::test]
+async fn skill_executor_skips_repeated_tool_call_and_finalizes() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let tool_name = "skill_loop_test_tool";
+    let tool_calls = Arc::new(Mutex::new(0usize));
+    registry
+        .register_tool(ToolRegistration::from_tool_instance(
+            tool_name,
+            CapabilityLevel::CodeSearch,
+            CountingSkillTool { calls: Arc::clone(&tool_calls) },
+        ))
+        .await
+        .expect("register tool");
+    registry.allow_all_tools().await.expect("allow tools");
+    let provider = RepeatToolThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "review".to_string(),
+        &provider,
+        &mut registry,
+        vec![ToolDefinition::function(
+            tool_name.to_string(),
+            "Loop test tool".to_string(),
+            json!({"type": "object"}),
+        )],
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("looping tool calls should force a final synthesis");
+
+    assert_eq!(result, "finalized after loop detection");
+    assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
+}
+
+#[tokio::test]
+async fn skill_executor_forces_final_synthesis_after_max_iterations() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string()).expect("failed to create skill");
+    let workspace = tempdir().expect("temp workspace");
+    let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let tool_calls = Arc::new(Mutex::new(0usize));
+    let mut available_tools = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
+    let mut tool_names = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
+
+    for index in 0..MAX_SKILL_LLM_ITERATIONS {
+        let tool_name = format!("skill_iteration_test_tool_{index}");
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                tool_name.as_str(),
+                CapabilityLevel::CodeSearch,
+                CountingSkillTool { calls: Arc::clone(&tool_calls) },
+            ))
+            .await
+            .unwrap_or_else(|error| panic!("register tool {tool_name}: {error}"));
+        available_tools.push(ToolDefinition::function(
+            tool_name.clone(),
+            format!("Iteration tool {index}"),
+            json!({"type": "object"}),
+        ));
+        tool_names.push(tool_name);
+    }
+
+    registry.allow_all_tools().await.expect("allow tools");
+    let provider = MaxIterationsThenFinalizeProvider { tool_names, calls: Mutex::new(0) };
+
+    let result = execute_skill_with_sub_llm(
+        &skill,
+        "analyze".to_string(),
+        &provider,
+        &mut registry,
+        available_tools,
+        "gpt-5.1-codex".to_string(),
+    )
+    .await
+    .expect("max-iteration recovery should force a final synthesis");
+
+    assert_eq!(result, "finalized after max iterations");
+    assert_eq!(*tool_calls.lock().expect("tool calls mutex"), MAX_SKILL_LLM_ITERATIONS);
+}
+
+#[test]
+fn test_filter_tools_no_network_policy() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: None,
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
+
+    let tools = vec![
+        ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
+        ToolDefinition::web_search(serde_json::json!({})),
+        ToolDefinition::function("web_search".to_string(), "Search".to_string(), serde_json::json!({})),
+    ];
+    let filtered = filter_tools_for_skill(&skill, tools);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].function.as_ref().unwrap().name, "read_file");
+}
+
+#[test]
+fn test_filter_tools_with_network_policy_updates_native_web_search() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: Some(
+            SkillNetworkPolicy {
+                allowed_domains: vec!["api.example.com".to_string()],
+                denied_domains: vec!["blocked.example.com".to_string()],
             }
-        }
-    }
+            .into(),
+        ),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
-    #[async_trait]
-    impl LLMProvider for StopWithToolCallsThenFinalizeProvider {
-        fn name(&self) -> &str {
-            "stop-with-tool-calls-then-finalize"
-        }
+    let tools = vec![ToolDefinition::web_search(serde_json::json!({
+        "user_location": "US"
+    }))];
+    let filtered = filter_tools_for_skill(&skill, tools);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].tool_type, "web_search");
+    assert_eq!(
+        filtered[0].web_search.as_ref(),
+        Some(&serde_json::json!({
+            "user_location": "US",
+            "allowed_domains": ["api.example.com"],
+            "blocked_domains": ["blocked.example.com"]
+        }))
+    );
+}
 
-        fn supported_models(&self) -> Vec<String> {
-            vec!["gpt-5.1-codex".to_string()]
-        }
+#[test]
+fn test_filter_tools_no_network_policy_removes_gemini_native_network_tools() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: None,
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
-        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
-            Ok(())
-        }
+    let tools = vec![
+        ToolDefinition::google_maps(serde_json::json!({})),
+        ToolDefinition::url_context(serde_json::json!({})),
+        ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
+    ];
 
-        async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let mut calls = self.calls.lock().expect("provider calls mutex");
-            *calls += 1;
+    let filtered = filter_tools_for_skill(&skill, tools);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].function_name(), "read_file");
+}
 
-            match *calls {
-                1 => Ok(LLMResponse {
-                    content: Some(String::new()),
-                    model: request.model,
-                    tool_calls: Some(vec![ToolCall::function(
-                        "stop_tool_call".to_string(),
-                        self.tool_name.to_string(),
-                        "{}".to_string(),
-                    )]),
-                    finish_reason: FinishReason::Stop,
-                    ..Default::default()
-                }),
-                2 => Ok(LLMResponse {
-                    content: Some("finalized after stop tool call".to_string()),
-                    model: request.model,
-                    finish_reason: FinishReason::Stop,
-                    ..Default::default()
-                }),
-                _ => panic!("unexpected provider call count: {}", *calls),
+#[test]
+fn test_filter_tools_with_network_policy_drops_gemini_native_network_tools() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: Some(
+            SkillNetworkPolicy {
+                allowed_domains: vec!["example.com".to_string()],
+                denied_domains: vec![],
             }
-        }
-    }
+            .into(),
+        ),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
-    #[async_trait]
-    impl ForkSkillExecutor for FakeForkExecutor {
-        async fn execute(&self, skill: &Skill, user_input: Value) -> Result<Value> {
-            Ok(serde_json::json!({
-                "execution_context": "fork",
-                "status": "success",
-                "summary": format!("forked {}", skill.name()),
-                "artifact_paths": [],
-                "delegate_session_id": "child-session",
-                "echo": user_input,
-            }))
-        }
-    }
-
-    #[async_trait]
-    impl Tool for CountingSkillTool {
-        async fn execute(&self, args: Value) -> Result<Value> {
-            let mut calls = self.calls.lock().expect("tool calls mutex");
-            *calls += 1;
-            Ok(json!({
-                "success": true,
-                "echo": args,
-            }))
-        }
-
-        fn name(&self) -> &str {
-            "counting_skill_tool"
-        }
-
-        fn description(&self) -> &str {
-            "Counts skill tool invocations"
-        }
-    }
-
-    #[tokio::test]
-    async fn test_skill_tool_adapter_exposes_underlying_skill_name() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string()).expect("failed to create skill");
-
-        let adapter = SkillToolAdapter::new(skill);
-        assert_eq!(adapter.skill().name(), "test-skill");
-    }
-
-    #[tokio::test]
-    async fn test_skill_tool_adapter_execute() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-
-        let adapter = SkillToolAdapter::new(skill);
-        let args = serde_json::json!({"test": "value"});
-        let result = adapter.execute(args).await;
-
-        assert!(result.is_ok());
-        let res = result.unwrap();
-        assert_eq!(res["skill_name"], "test-skill");
-        assert_eq!(res["status"], "executing");
-    }
-
-    #[tokio::test]
-    async fn test_fork_skill_adapter_uses_fork_executor() {
-        let manifest = SkillManifest {
-            name: "fork-skill".to_string(),
-            description: "Forked skill".to_string(),
-            context: Some("fork".to_string()),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-
-        let adapter = SkillToolAdapter::with_fork_executor(skill, Arc::new(FakeForkExecutor));
-        let args = serde_json::json!({"task": "value"});
-        let result = adapter.execute(args.clone()).await.expect("fork execution");
-
-        assert_eq!(result["execution_context"], "fork");
-        assert_eq!(result["delegate_session_id"], "child-session");
-        assert_eq!(result["echo"], args);
-    }
-
-    #[tokio::test]
-    async fn blank_skill_input_uses_default_prompt_for_sub_llm() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            String::new(),
-            &EchoFirstUserProvider,
-            &mut registry,
-            Vec::new(),
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("blank input should be normalized");
-
-        assert_eq!(result, EMPTY_SKILL_INPUT_PROMPT);
-    }
-
-    #[tokio::test]
-    async fn non_empty_skill_input_is_preserved_for_sub_llm() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "security".to_string(),
-            &EchoFirstUserProvider,
-            &mut registry,
-            Vec::new(),
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("non-empty input should be preserved");
-
-        assert_eq!(result, "security");
-    }
-
-    #[tokio::test]
-    async fn skill_executor_uses_normalized_stream_when_non_streaming_is_unsupported() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let provider = StreamingOnlySkillProvider { stream_calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &provider,
-            &mut registry,
-            Vec::new(),
-            "gpt-5.2-codex".to_string(),
-        )
-        .await
-        .expect("streaming-only skill execution should succeed");
-
-        assert_eq!(result, "streamed skill result");
-        assert_eq!(*provider.stream_calls.lock().expect("stream calls mutex"), 1);
-    }
-
-    #[tokio::test]
-    async fn skill_executor_errors_when_final_response_has_no_visible_content() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-
-        let error = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &EmptyFinalSkillProvider,
-            &mut registry,
-            Vec::new(),
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect_err("empty final response should be visible as an error");
-
-        assert!(error.to_string().contains("completed without a visible final response"));
-    }
-
-    #[tokio::test]
-    async fn skill_executor_allows_tool_only_response_before_final_content() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let tool_name = "tool_only_skill_test_tool";
-        let tool_calls = Arc::new(Mutex::new(0usize));
-        registry
-            .register_tool(ToolRegistration::from_tool_instance(
-                tool_name,
-                CapabilityLevel::CodeSearch,
-                CountingSkillTool { calls: Arc::clone(&tool_calls) },
-            ))
-            .await
-            .expect("register tool");
-        registry.allow_all_tools().await.expect("allow tools");
-        let provider = ToolOnlyThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &provider,
-            &mut registry,
-            vec![ToolDefinition::function(
-                tool_name.to_string(),
-                "Tool-only test tool".to_string(),
-                json!({"type": "object"}),
-            )],
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("tool-only response should continue to final content");
-
-        assert_eq!(result, "finalized after tool-only response");
-        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
-    }
-
-    #[tokio::test]
-    async fn skill_executor_continues_after_stop_response_with_tool_calls() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let tool_name = "stop_finish_reason_skill_test_tool";
-        let tool_calls = Arc::new(Mutex::new(0usize));
-        registry
-            .register_tool(ToolRegistration::from_tool_instance(
-                tool_name,
-                CapabilityLevel::CodeSearch,
-                CountingSkillTool { calls: Arc::clone(&tool_calls) },
-            ))
-            .await
-            .expect("register tool");
-        registry.allow_all_tools().await.expect("allow tools");
-        let provider = StopWithToolCallsThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &provider,
-            &mut registry,
-            vec![ToolDefinition::function(
-                tool_name.to_string(),
-                "Stop finish reason test tool".to_string(),
-                json!({"type": "object"}),
-            )],
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("stop response with tool calls should continue to final content");
-
-        assert_eq!(result, "finalized after stop tool call");
-        assert_eq!(*provider.calls.lock().expect("provider calls mutex"), 2);
-        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
-    }
-
-    #[tokio::test]
-    async fn skill_executor_forces_final_synthesis_after_unknown_tool() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        registry.allow_all_tools().await.expect("allow tools");
-        let provider = UnknownToolThenFinalizeProvider { calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &provider,
-            &mut registry,
-            vec![ToolDefinition::function(
-                "read_file".to_string(),
-                "Read".to_string(),
-                json!({"type": "object"}),
-            )],
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("unknown tool should trigger final synthesis");
-
-        assert_eq!(result, "finalized after unknown tool");
-    }
-
-    #[tokio::test]
-    async fn skill_executor_skips_repeated_tool_call_and_finalizes() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let tool_name = "skill_loop_test_tool";
-        let tool_calls = Arc::new(Mutex::new(0usize));
-        registry
-            .register_tool(ToolRegistration::from_tool_instance(
-                tool_name,
-                CapabilityLevel::CodeSearch,
-                CountingSkillTool { calls: Arc::clone(&tool_calls) },
-            ))
-            .await
-            .expect("register tool");
-        registry.allow_all_tools().await.expect("allow tools");
-        let provider = RepeatToolThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "review".to_string(),
-            &provider,
-            &mut registry,
-            vec![ToolDefinition::function(
-                tool_name.to_string(),
-                "Loop test tool".to_string(),
-                json!({"type": "object"}),
-            )],
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("looping tool calls should force a final synthesis");
-
-        assert_eq!(result, "finalized after loop detection");
-        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), 1);
-    }
-
-    #[tokio::test]
-    async fn skill_executor_forces_final_synthesis_after_max_iterations() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
-        let workspace = tempdir().expect("temp workspace");
-        let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let tool_calls = Arc::new(Mutex::new(0usize));
-        let mut available_tools = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
-        let mut tool_names = Vec::with_capacity(MAX_SKILL_LLM_ITERATIONS);
-
-        for index in 0..MAX_SKILL_LLM_ITERATIONS {
-            let tool_name = format!("skill_iteration_test_tool_{index}");
-            registry
-                .register_tool(ToolRegistration::from_tool_instance(
-                    tool_name.as_str(),
-                    CapabilityLevel::CodeSearch,
-                    CountingSkillTool { calls: Arc::clone(&tool_calls) },
-                ))
-                .await
-                .unwrap_or_else(|error| panic!("register tool {tool_name}: {error}"));
-            available_tools.push(ToolDefinition::function(
-                tool_name.clone(),
-                format!("Iteration tool {index}"),
-                json!({"type": "object"}),
-            ));
-            tool_names.push(tool_name);
-        }
-
-        registry.allow_all_tools().await.expect("allow tools");
-        let provider = MaxIterationsThenFinalizeProvider { tool_names, calls: Mutex::new(0) };
-
-        let result = execute_skill_with_sub_llm(
-            &skill,
-            "analyze".to_string(),
-            &provider,
-            &mut registry,
-            available_tools,
-            "gpt-5.1-codex".to_string(),
-        )
-        .await
-        .expect("max-iteration recovery should force a final synthesis");
-
-        assert_eq!(result, "finalized after max iterations");
-        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), MAX_SKILL_LLM_ITERATIONS);
-    }
-
-    #[test]
-    fn test_filter_tools_no_network_policy() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: None,
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
-
-        let tools = vec![
-            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
-            ToolDefinition::web_search(serde_json::json!({})),
-            ToolDefinition::function("web_search".to_string(), "Search".to_string(), serde_json::json!({})),
-        ];
-        let filtered = filter_tools_for_skill(&skill, tools);
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].function.as_ref().unwrap().name, "read_file");
-    }
-
-    #[test]
-    fn test_filter_tools_with_network_policy_updates_native_web_search() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: Some(
-                SkillNetworkPolicy {
-                    allowed_domains: vec!["api.example.com".to_string()],
-                    denied_domains: vec!["blocked.example.com".to_string()],
-                }
-                .into(),
-            ),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
-
-        let tools = vec![ToolDefinition::web_search(serde_json::json!({
-            "user_location": "US"
-        }))];
-        let filtered = filter_tools_for_skill(&skill, tools);
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].tool_type, "web_search");
-        assert_eq!(
-            filtered[0].web_search.as_ref(),
-            Some(&serde_json::json!({
-                "user_location": "US",
-                "allowed_domains": ["api.example.com"],
-                "blocked_domains": ["blocked.example.com"]
-            }))
-        );
-    }
-
-    #[test]
-    fn test_filter_tools_no_network_policy_removes_gemini_native_network_tools() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: None,
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
-
-        let tools = vec![
+    let filtered = filter_tools_for_skill(
+        &skill,
+        vec![
             ToolDefinition::google_maps(serde_json::json!({})),
             ToolDefinition::url_context(serde_json::json!({})),
-            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
-        ];
+        ],
+    );
 
-        let filtered = filter_tools_for_skill(&skill, tools);
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].function_name(), "read_file");
-    }
+    assert!(filtered.is_empty());
+}
 
-    #[test]
-    fn test_filter_tools_with_network_policy_drops_gemini_native_network_tools() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: Some(
-                SkillNetworkPolicy {
-                    allowed_domains: vec!["example.com".to_string()],
-                    denied_domains: vec![],
-                }
-                .into(),
-            ),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
+#[test]
+fn test_filter_tools_drops_function_style_network_tools_when_policy_is_present() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: Some(
+            SkillNetworkPolicy {
+                allowed_domains: vec!["api.example.com".to_string()],
+                denied_domains: vec![],
+            }
+            .into(),
+        ),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
-        let filtered = filter_tools_for_skill(
-            &skill,
-            vec![
-                ToolDefinition::google_maps(serde_json::json!({})),
-                ToolDefinition::url_context(serde_json::json!({})),
-            ],
-        );
+    let tools = vec![
+        ToolDefinition::function("read_web_page".to_string(), "Read web page".to_string(), serde_json::json!({})),
+        ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
+    ];
+    let filtered = filter_tools_for_skill(&skill, tools);
 
-        assert!(filtered.is_empty());
-    }
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].function_name(), "read_file");
+}
 
-    #[test]
-    fn test_filter_tools_drops_function_style_network_tools_when_policy_is_present() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: Some(
-                SkillNetworkPolicy {
-                    allowed_domains: vec!["api.example.com".to_string()],
-                    denied_domains: vec![],
-                }
-                .into(),
-            ),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
+#[test]
+fn test_filter_tools_fails_closed_for_unrepresentable_web_search_policy() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test".to_string(),
+        network_policy: Some(
+            SkillNetworkPolicy {
+                allowed_domains: vec!["docs.rs".to_string()],
+                denied_domains: vec!["example.com".to_string()],
+            }
+            .into(),
+        ),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
 
-        let tools = vec![
-            ToolDefinition::function("read_web_page".to_string(), "Read web page".to_string(), serde_json::json!({})),
-            ToolDefinition::function("read_file".to_string(), "Read".to_string(), serde_json::json!({})),
-        ];
-        let filtered = filter_tools_for_skill(&skill, tools);
+    let mut anthropic_web_search = ToolDefinition::web_search(serde_json::json!({}));
+    anthropic_web_search.tool_type = "web_search_20250305".to_string();
 
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].function_name(), "read_file");
-    }
+    let filtered = filter_tools_for_skill(&skill, vec![anthropic_web_search]);
 
-    #[test]
-    fn test_filter_tools_fails_closed_for_unrepresentable_web_search_policy() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test".to_string(),
-            network_policy: Some(
-                SkillNetworkPolicy {
-                    allowed_domains: vec!["docs.rs".to_string()],
-                    denied_domains: vec!["example.com".to_string()],
-                }
-                .into(),
-            ),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string()).expect("failed to create skill");
+    assert!(filtered.is_empty());
+}
 
-        let mut anthropic_web_search = ToolDefinition::web_search(serde_json::json!({}));
-        anthropic_web_search.tool_type = "web_search_20250305".to_string();
+#[test]
+fn test_skill_execution_context() {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
 
-        let filtered = filter_tools_for_skill(&skill, vec![anthropic_web_search]);
+    let skill =
+        Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string()).expect("failed to create skill");
 
-        assert!(filtered.is_empty());
-    }
+    let tools = vec!["file_ops".to_string(), "shell".to_string()];
+    let input = serde_json::json!({"test": "input"});
 
-    #[test]
-    fn test_skill_execution_context() {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
+    let ctx = SkillExecutionContext::new(&skill, input, tools);
+    assert_eq!(ctx.skill_name, "test-skill");
+    assert_eq!(ctx.available_tools.len(), 2);
+}
 
-        let skill =
-            Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string()).expect("failed to create skill");
+fn test_skill_with_permissions(permission_profile: Option<SkillPermissionProfile>) -> Skill {
+    let manifest = SkillManifest {
+        name: "test-skill".to_string(),
+        description: "Test skill".to_string(),
+        permissions: permission_profile.map(Into::into),
+        vtcode_native: Some(true),
+        ..Default::default()
+    };
 
-        let tools = vec!["file_ops".to_string(), "shell".to_string()];
-        let input = serde_json::json!({"test": "input"});
+    Skill::new(manifest, PathBuf::from("/tmp/test-skill"), "Instructions".to_string()).expect("failed to create skill")
+}
 
-        let ctx = SkillExecutionContext::new(&skill, input, tools);
-        assert_eq!(ctx.skill_name, "test-skill");
-        assert_eq!(ctx.available_tools.len(), 2);
-    }
+#[test]
+fn skill_command_permissions_inject_additional_permissions() {
+    let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+        file_system: Some(
+            SkillFileSystemPermissions {
+                read: vec![PathBuf::from("references")],
+                write: vec![PathBuf::from("outputs")],
+            }
+            .into(),
+        ),
+    }));
 
-    fn test_skill_with_permissions(permission_profile: Option<SkillPermissionProfile>) -> Skill {
-        let manifest = SkillManifest {
-            name: "test-skill".to_string(),
-            description: "Test skill".to_string(),
-            permissions: permission_profile.map(Into::into),
-            vtcode_native: Some(true),
-            ..Default::default()
-        };
+    let merged = merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
 
-        Skill::new(manifest, PathBuf::from("/tmp/test-skill"), "Instructions".to_string())
-            .expect("failed to create skill")
-    }
+    assert_eq!(merged["sandbox_permissions"], serde_json::json!("with_additional_permissions"));
+    assert_eq!(merged["additional_permissions"]["fs_read"], serde_json::json!(["/tmp/test-skill/references"]));
+    assert_eq!(merged["additional_permissions"]["fs_write"], serde_json::json!(["/tmp/test-skill/outputs"]));
+}
 
-    #[test]
-    fn skill_command_permissions_inject_additional_permissions() {
-        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(
-                SkillFileSystemPermissions {
-                    read: vec![PathBuf::from("references")],
-                    write: vec![PathBuf::from("outputs")],
-                }
-                .into(),
-            ),
-        }));
+#[test]
+fn skill_command_permissions_merge_existing_permissions() {
+    let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+        file_system: Some(
+            SkillFileSystemPermissions {
+                read: vec![PathBuf::from("references")],
+                write: vec![PathBuf::from("outputs")],
+            }
+            .into(),
+        ),
+    }));
 
-        let merged = merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
-
-        assert_eq!(merged["sandbox_permissions"], serde_json::json!("with_additional_permissions"));
-        assert_eq!(merged["additional_permissions"]["fs_read"], serde_json::json!(["/tmp/test-skill/references"]));
-        assert_eq!(merged["additional_permissions"]["fs_write"], serde_json::json!(["/tmp/test-skill/outputs"]));
-    }
-
-    #[test]
-    fn skill_command_permissions_merge_existing_permissions() {
-        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(
-                SkillFileSystemPermissions {
-                    read: vec![PathBuf::from("references")],
-                    write: vec![PathBuf::from("outputs")],
-                }
-                .into(),
-            ),
-        }));
-
-        let merged = merge_skill_command_permissions(
-            &skill,
-            "shell",
-            serde_json::json!({
-                "command": "pwd",
-                "sandbox_permissions": "with_additional_permissions",
-                "additional_permissions": {
-                    "fs_read": ["/tmp/existing-read"],
-                    "fs_write": ["/tmp/existing-write"]
-                }
-            }),
-        );
-
-        assert_eq!(
-            merged["additional_permissions"]["fs_read"],
-            serde_json::json!(["/tmp/existing-read", "/tmp/test-skill/references"])
-        );
-        assert_eq!(
-            merged["additional_permissions"]["fs_write"],
-            serde_json::json!(["/tmp/existing-write", "/tmp/test-skill/outputs"])
-        );
-    }
-
-    #[test]
-    fn skill_command_permissions_ignore_require_escalated() {
-        let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
-            file_system: Some(
-                SkillFileSystemPermissions {
-                    read: Vec::new(),
-                    write: vec![PathBuf::from("outputs")],
-                }
-                .into(),
-            ),
-        }));
-        let original = serde_json::json!({
+    let merged = merge_skill_command_permissions(
+        &skill,
+        "shell",
+        serde_json::json!({
             "command": "pwd",
-            "sandbox_permissions": "require_escalated",
-            "justification": "Do you want to run this command without sandbox restrictions?"
-        });
+            "sandbox_permissions": "with_additional_permissions",
+            "additional_permissions": {
+                "fs_read": ["/tmp/existing-read"],
+                "fs_write": ["/tmp/existing-write"]
+            }
+        }),
+    );
 
-        let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
+    assert_eq!(
+        merged["additional_permissions"]["fs_read"],
+        serde_json::json!(["/tmp/existing-read", "/tmp/test-skill/references"])
+    );
+    assert_eq!(
+        merged["additional_permissions"]["fs_write"],
+        serde_json::json!(["/tmp/existing-write", "/tmp/test-skill/outputs"])
+    );
+}
 
-        assert_eq!(merged, original);
-    }
+#[test]
+fn skill_command_permissions_ignore_require_escalated() {
+    let skill = test_skill_with_permissions(Some(SkillPermissionProfile {
+        file_system: Some(
+            SkillFileSystemPermissions {
+                read: Vec::new(),
+                write: vec![PathBuf::from("outputs")],
+            }
+            .into(),
+        ),
+    }));
+    let original = serde_json::json!({
+        "command": "pwd",
+        "sandbox_permissions": "require_escalated",
+        "justification": "Do you want to run this command without sandbox restrictions?"
+    });
 
-    #[test]
-    fn skill_command_permissions_ignore_empty_skill_permissions() {
-        let skill = test_skill_with_permissions(None);
-        let original = serde_json::json!({"command": "pwd"});
+    let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
 
-        let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
+    assert_eq!(merged, original);
+}
 
-        assert_eq!(merged, original);
-    }
+#[test]
+fn skill_command_permissions_ignore_empty_skill_permissions() {
+    let skill = test_skill_with_permissions(None);
+    let original = serde_json::json!({"command": "pwd"});
+
+    let merged = merge_skill_command_permissions(&skill, "shell", original.clone());
+
+    assert_eq!(merged, original);
 }

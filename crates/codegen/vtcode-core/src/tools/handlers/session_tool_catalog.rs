@@ -7,6 +7,7 @@ use crate::config::types::CapabilityLevel;
 use crate::llm::provider::{ToolDefinition, ToolNamespace, ToolSearchAlgorithm};
 use crate::llm::providers::gemini::wire::FunctionDeclaration;
 use crate::tool_policy::ToolPolicy;
+use crate::tools::handlers::compact::{MCP_TOOL_DESCRIPTION_MAX_LEN, compact_parameters, compact_tool_description};
 use crate::tools::mcp::MCP_QUALIFIED_TOOL_PREFIX;
 use crate::tools::registry::{ToolHandler as RegistryToolHandler, ToolRegistration};
 use crate::tools::tool_intent::ToolSurfaceKind;
@@ -575,7 +576,13 @@ impl ToolCatalogEntry {
     fn from_registration(registration: &ToolRegistration) -> Option<Self> {
         let metadata = registration.metadata();
         let description = metadata.description()?.to_string();
-        let parameters = metadata.parameter_schema().cloned().unwrap_or_else(default_parameter_schema);
+        let parameters = metadata.parameter_schema().cloned().unwrap_or_else(|| {
+            json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            })
+        });
         let default_permission = metadata.default_permission().unwrap_or(ToolPolicy::Prompt);
         let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
         let aliases = metadata.aliases().to_vec();
@@ -821,84 +828,8 @@ fn registration_supports_parallel_tool_calls(registration: &ToolRegistration) ->
     }
 }
 
-fn default_parameter_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {},
-        "additionalProperties": true
-    })
-}
-
-/// Default max description length for MCP tool descriptions in Full mode.
-/// MCP tools from external servers can have arbitrarily long descriptions;
-/// capping them prevents token inflation.
-const MCP_TOOL_DESCRIPTION_MAX_LEN: usize = 512;
-
-fn compact_tool_description(original: &str, mode: ToolDocumentationMode, per_tool_max: Option<usize>) -> String {
-    let mode_max = match mode {
-        ToolDocumentationMode::Minimal => 64,
-        ToolDocumentationMode::Progressive => 120,
-        ToolDocumentationMode::Full => usize::MAX,
-    };
-    // Per-tool cap takes precedence over mode default
-    let max_len = per_tool_max.unwrap_or(mode_max);
-
-    let sentence = original
-        .split('.')
-        .next()
-        .unwrap_or(original)
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    if sentence.len() <= max_len {
-        sentence
-    } else {
-        let target = max_len.saturating_sub(1);
-        let end = sentence
-            .char_indices()
-            .map(|(index, _)| index)
-            .rfind(|&index| index <= target)
-            .unwrap_or(0);
-        format!("{}…", &sentence[..end])
-    }
-}
-
-fn compact_parameters(parameters: Value, mode: ToolDocumentationMode) -> Value {
-    if matches!(mode, ToolDocumentationMode::Full) {
-        return parameters;
-    }
-
-    let mut compacted = parameters;
-    remove_schema_descriptions(&mut compacted);
-    compacted
-}
-
-fn remove_schema_descriptions(value: &mut Value) {
-    remove_schema_descriptions_impl(value, false);
-}
-
-fn remove_schema_descriptions_impl(value: &mut Value, inside_properties_map: bool) {
-    match value {
-        Value::Object(map) => {
-            if !inside_properties_map {
-                map.remove("description");
-            }
-            for (key, nested) in map.iter_mut() {
-                remove_schema_descriptions_impl(nested, key == "properties");
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                remove_schema_descriptions_impl(item, false);
-            }
-        }
-        _ => {}
-    }
-}
-
 #[cfg(test)]
-pub(crate) use vtcode_utility_tool_specs::{apply_patch_parameters, exec_command_parameters, list_files_parameters};
+use vtcode_utility_tool_specs::{apply_patch_parameters, exec_command_parameters, list_files_parameters};
 
 #[cfg(test)]
 mod tests {

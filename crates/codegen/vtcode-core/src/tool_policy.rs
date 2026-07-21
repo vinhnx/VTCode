@@ -35,8 +35,12 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     // Whitelist the core execution tool itself; individual shell commands remain
     // gated by command/sandbox approval policy.
     tools::UNIFIED_EXEC,
-    // Legacy PTY helpers stay compatibility-only and are no longer auto-seeded
-    // into default policy files.
+    // Internal PTY helpers used by tests and internal workflows.
+    tools::RUN_PTY_CMD,
+    tools::CREATE_PTY_SESSION,
+    tools::LIST_PTY_SESSIONS,
+    tools::SEND_PTY_INPUT,
+    tools::CLOSE_PTY_SESSION,
     "cargo_check",
     "cargo_test",
     "git_status",
@@ -889,12 +893,22 @@ impl ToolPolicyManager {
 
     /// Allow all tools
     pub async fn allow_all_tools(&mut self) -> Result<()> {
+        self.allow_all_tools_for_tools(&[]).await
+    }
+
+    pub async fn allow_all_tools_for_tools(&mut self, all_tools: &[String]) -> Result<()> {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Allow;
         }
         for provider in self.config.mcp.providers.values_mut() {
             for policy in provider.tools.values_mut() {
                 *policy = ToolPolicy::Allow;
+            }
+        }
+        for tool in all_tools {
+            let canonical = canonical_tool_name(tool);
+            if !self.config.policies.contains_key(canonical) {
+                self.config.policies.insert(canonical.to_owned(), ToolPolicy::Allow);
             }
         }
         self.save_config().await

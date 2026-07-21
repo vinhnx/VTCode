@@ -10,9 +10,11 @@ pub mod few_shot;
 pub mod guidelines;
 pub mod harness_limits;
 pub mod output_styles;
+pub mod render;
 pub mod resources;
 pub mod runtime_contract;
 pub mod sections;
+pub mod static_prompts;
 pub mod system;
 pub mod system_prompt_cache;
 pub mod templates;
@@ -33,6 +35,10 @@ pub use resources::{
     find_prompt_template, resolve_system_prompt_layers,
 };
 pub use runtime_contract::{RuntimePromptContract, append_runtime_mode_sections};
+pub use static_prompts::{
+    agent_identity_label, default_lightweight_prompt, default_system_prompt, minimal_instruction_text,
+    specialized_instruction_text, specialized_system_prompt,
+};
 pub use system::SystemPromptReport;
 pub use system::{
     apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,

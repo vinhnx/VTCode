@@ -148,7 +148,7 @@ impl ToolRegistry {
         let registry = Self {
             inventory,
             edited_file_monitor,
-            policy_gateway: Arc::new(tokio::sync::Mutex::new(policy_gateway)),
+            policy_gateway: Arc::new(policy_gateway),
             pty_sessions,
             exec_sessions,
             mcp_client: Arc::new(parking_lot::RwLock::new(None)),

@@ -124,6 +124,7 @@ pub mod safety;
 pub mod serde_helpers;
 pub mod session_archive;
 pub mod session_debug;
+pub mod session_transcript_norm;
 pub mod style_helpers;
 pub mod terminal_color_probe;
 pub mod tokens;

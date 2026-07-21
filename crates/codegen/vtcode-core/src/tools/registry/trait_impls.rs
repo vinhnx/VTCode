@@ -57,6 +57,10 @@ impl ToolSecurity for ToolRegistry {
         self.is_allowed_in_full_auto(tool_name).await
     }
 
+    async fn is_denied_in_full_auto(&self, tool_name: &str) -> bool {
+        self.is_denied_in_full_auto(tool_name).await
+    }
+
     async fn apply_config_policies(&self, tools_config: &crate::config::ToolsConfig) -> Result<()> {
         self.apply_config_policies(tools_config).await
     }

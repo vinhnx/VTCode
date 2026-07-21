@@ -177,9 +177,7 @@ impl AgentRunner {
             }
         }
 
-        if self.tool_registry.current_full_auto_allowlist().await.is_some()
-            && !self.tool_registry.is_allowed_in_full_auto(tool_name).await
-        {
+        if self.tool_registry.is_denied_in_full_auto(tool_name).await {
             return false;
         }
 

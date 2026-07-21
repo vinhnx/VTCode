@@ -118,11 +118,10 @@ impl ToolRegistry {
     ///
     /// Returns `None` if allowed, or `Some(error_message)` if denied.
     pub async fn check_full_auto_denied(&self, tool_name: &str, display_name: &str) -> Option<String> {
-        // Delegate to the existing method on ToolSecurity (implemented via trait_impls).
-        if self.is_allowed_in_full_auto(tool_name).await {
-            None
-        } else {
+        if self.is_denied_in_full_auto(tool_name).await {
             Some(format!("Tool '{display_name}' is not permitted while full-auto permission review is active"))
+        } else {
+            None
         }
     }
 }

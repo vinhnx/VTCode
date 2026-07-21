@@ -10,7 +10,7 @@ use super::{ToolLatencyStats, ToolRegistry, ToolTimeoutCategory};
 impl ToolRegistry {
     pub(super) async fn sync_policy_catalog(&self) {
         let lifecycle = {
-            let policy_gateway = self.policy_gateway.lock().await;
+            let policy_gateway = self.policy_gateway.clone();
             policy_gateway.full_auto_catalogue_lifecycle()
         };
         let _lifecycle_guard = lifecycle.lock().await;
@@ -30,7 +30,7 @@ impl ToolRegistry {
                 .map(|registration| registration.name().to_string()),
         );
         let mcp_keys = self.mcp_policy_keys().await;
-        let full_auto_catalogue_config = self.policy_gateway.lock().await.full_auto_catalogue_config();
+        let full_auto_catalogue_config = self.policy_gateway.full_auto_catalogue_config().await;
         let full_auto_visible_policy_names = if let Some(config) = &full_auto_catalogue_config {
             Some(self.visible_policy_names(config.clone()).await)
         } else {
@@ -38,20 +38,18 @@ impl ToolRegistry {
         };
         #[cfg(test)]
         {
-            let test_hooks = self.policy_gateway.lock().await.full_auto_catalogue_test_hooks();
+            let test_hooks = self.policy_gateway.full_auto_catalogue_test_hooks();
             test_hooks.pause_after_refresh_snapshot().await;
         }
         {
-            let policy_gateway = self.policy_gateway.lock().await;
-            let cloned = policy_gateway.clone();
-            drop(policy_gateway);
-            cloned.sync_available_tools(available, &mcp_keys).await;
+            let policy_gateway = self.policy_gateway.clone();
+            policy_gateway.sync_available_tools(available, &mcp_keys).await;
         }
         if let (Some(config), Some(visible_policy_names)) =
             (full_auto_catalogue_config.as_ref(), full_auto_visible_policy_names.as_ref())
         {
-            let mut policy_gateway = self.policy_gateway.lock().await;
-            policy_gateway.refresh_full_auto_catalogue(config, visible_policy_names);
+            let policy_gateway = self.policy_gateway.clone();
+            policy_gateway.refresh_full_auto_catalogue(config, visible_policy_names).await;
         }
 
         // Seed default permissions from tool metadata when policy manager is present
@@ -63,29 +61,34 @@ impl ToolRegistry {
                 .map(|(name, metadata)| (name.clone(), metadata.clone()))
                 .collect::<Vec<_>>()
         };
-        let policy_arc = {
-            let gateway = self.policy_gateway.lock().await;
-            gateway.tool_policy_arc()
-        };
-        let mut policy_lock = policy_arc.lock().await;
-        let policy_guard = match policy_lock.as_mut() {
-            Some(guard) => guard,
-            None => return,
-        };
-        let mut seeded = 0usize;
-        for (name, metadata) in policy_seeds {
-            if let Some(default_policy) = metadata.default_permission() {
-                let current = policy_guard.get_policy(&name);
-                if matches!(current, ToolPolicy::Prompt) {
-                    if let Err(err) = policy_guard.seed_default_policy(&name, default_policy.clone()).await {
-                        tracing::warn!(
-                            tool = %name,
-                            error = %err,
-                            "Failed to seed default policy from tool metadata"
-                        );
-                    } else {
-                        seeded += 1;
+        let policy_arc = self.policy_gateway.tool_policy_arc();
+        let mut seeds_to_apply: Vec<(String, ToolPolicy)> = Vec::new();
+        {
+            let mut policy_lock = policy_arc.lock().await;
+            let policy_guard = match policy_lock.as_mut() {
+                Some(guard) => guard,
+                None => return,
+            };
+            for (name, metadata) in &policy_seeds {
+                if let Some(default_policy) = metadata.default_permission() {
+                    if matches!(policy_guard.get_policy(name), ToolPolicy::Prompt) {
+                        seeds_to_apply.push((name.clone(), default_policy.clone()));
                     }
+                }
+            }
+        }
+        let mut seeded = 0usize;
+        for (name, policy) in seeds_to_apply {
+            let mut policy_lock = policy_arc.lock().await;
+            if let Some(policy_guard) = policy_lock.as_mut() {
+                if let Err(err) = policy_guard.seed_default_policy(&name, policy).await {
+                    tracing::warn!(
+                        tool = %name,
+                        error = %err,
+                        "Failed to seed default policy from tool metadata"
+                    );
+                } else {
+                    seeded += 1;
                 }
             }
         }

@@ -1187,9 +1187,11 @@ impl ToolRegistry {
         }
 
         let full_auto_denied = {
-            let gateway = self.policy_gateway.lock().await;
-            gateway.has_full_auto_allowlist() && !gateway.is_allowed_in_full_auto(&tool_name)
+            let gateway = self.policy_gateway.clone();
+            let tool_name_ref = &tool_name;
+            async move { gateway.is_denied_in_full_auto(tool_name_ref).await }
         };
+        let full_auto_denied = full_auto_denied.await;
         if full_auto_denied {
             let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
@@ -1214,19 +1216,12 @@ impl ToolRegistry {
                 .context("tool denied by full-auto allowlist"));
         }
 
-        let skip_policy_prompt = {
-            let gateway = self.policy_gateway.lock().await;
-            gateway.take_preapproved(&tool_name).await
-        };
+        let skip_policy_prompt = self.policy_gateway.take_preapproved(&tool_name).await;
 
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
-            let cloned_gateway = {
-                let gateway = self.policy_gateway.lock().await;
-                gateway.clone()
-            };
-            cloned_gateway.should_execute_tool(&tool_name).await?
+            self.policy_gateway.should_execute_tool(&tool_name).await?
         };
 
         if !decision.is_allowed() {
@@ -1257,7 +1252,7 @@ impl ToolRegistry {
         }
 
         let args = match {
-            let gateway = self.policy_gateway.lock().await;
+            let gateway = self.policy_gateway.clone();
             gateway.apply_policy_constraints(&tool_name, args).await
         } {
             Ok(processed_args) => processed_args,

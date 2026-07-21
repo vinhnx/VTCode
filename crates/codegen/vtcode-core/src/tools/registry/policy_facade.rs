@@ -92,13 +92,13 @@ impl ToolRegistry {
     ) {
         #[cfg(test)]
         let test_hooks = {
-            let policy_gateway = self.policy_gateway.lock().await;
+            let policy_gateway = self.policy_gateway.clone();
             policy_gateway.full_auto_catalogue_test_hooks()
         };
         #[cfg(test)]
         test_hooks.pause_before_enable_lifecycle().await;
         let lifecycle = {
-            let policy_gateway = self.policy_gateway.lock().await;
+            let policy_gateway = self.policy_gateway.clone();
             policy_gateway.full_auto_catalogue_lifecycle()
         };
         let _lifecycle_guard = lifecycle.lock().await;
@@ -109,84 +109,67 @@ impl ToolRegistry {
         let visible_policy_names = self.visible_policy_names(session_tools_config.clone()).await;
         #[cfg(test)]
         test_hooks.pause_after_enable_snapshot().await;
-        self.policy_gateway.lock().await.enable_full_auto_permission(
-            &normalized_allowed_tools,
-            &visible_policy_names,
-            session_tools_config,
-        );
+        self.policy_gateway
+            .enable_full_auto_permission(&normalized_allowed_tools, &visible_policy_names, session_tools_config)
+            .await;
     }
 
     pub async fn disable_full_auto_permission(&self) {
         #[cfg(test)]
         let test_hooks = {
-            let policy_gateway = self.policy_gateway.lock().await;
+            let policy_gateway = self.policy_gateway.clone();
             policy_gateway.full_auto_catalogue_test_hooks()
         };
         #[cfg(test)]
         test_hooks.pause_before_disable_lifecycle().await;
         let lifecycle = {
-            let policy_gateway = self.policy_gateway.lock().await;
+            let policy_gateway = self.policy_gateway.clone();
             policy_gateway.full_auto_catalogue_lifecycle()
         };
         let _lifecycle_guard = lifecycle.lock().await;
-        self.policy_gateway.lock().await.disable_full_auto_permission();
+        self.policy_gateway.disable_full_auto_permission().await;
     }
 
     pub async fn set_enforce_safe_mode_prompts(&self, enabled: bool) {
-        self.policy_gateway.lock().await.set_enforce_safe_mode_prompts(enabled);
+        self.policy_gateway.set_enforce_safe_mode_prompts(enabled);
     }
 
     pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.policy_gateway.lock().await.current_full_auto_allowlist()
+        self.policy_gateway.current_full_auto_allowlist().await
     }
 
     pub async fn is_allowed_in_full_auto(&self, tool_name: &str) -> bool {
         self.policy_gateway
-            .lock()
-            .await
             .is_allowed_in_full_auto(&self.resolve_runtime_policy_name(tool_name))
+            .await
+    }
+
+    pub async fn is_denied_in_full_auto(&self, tool_name: &str) -> bool {
+        self.policy_gateway
+            .is_denied_in_full_auto(&self.resolve_runtime_policy_name(tool_name))
+            .await
     }
 
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_policy_manager(manager).await;
+        self.policy_gateway.set_policy_manager(manager).await;
         self.sync_policy_catalog().await;
     }
 
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let normalized_name = self.resolve_runtime_policy_name(tool_name);
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_tool_policy(&normalized_name, policy).await
+        self.policy_gateway.set_tool_policy(&normalized_name, policy).await
     }
 
     pub async fn persist_approval_cache_key(&self, approval_key: &str) -> Result<()> {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.add_approval_cache_key(approval_key).await
+        self.policy_gateway.add_approval_cache_key(approval_key).await
     }
 
     pub async fn persist_approval_cache_prefix(&self, prefix_entry: &str) -> Result<()> {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.add_approval_cache_prefix(prefix_entry).await
+        self.policy_gateway.add_approval_cache_prefix(prefix_entry).await
     }
 
     pub async fn has_persisted_approval(&self, approval_key: &str) -> bool {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.has_approval_cache_key(approval_key).await
+        self.policy_gateway.has_approval_cache_key(approval_key).await
     }
 
     pub async fn find_persisted_shell_approval_prefix(
@@ -194,76 +177,49 @@ impl ToolRegistry {
         command_words: &[String],
         scope_signature: &str,
     ) -> Option<String> {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway
+        self.policy_gateway
             .matching_shell_approval_prefix(command_words, scope_signature)
             .await
     }
 
     pub async fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway
+        self.policy_gateway
             .get_tool_policy(&self.resolve_runtime_policy_name(tool_name))
             .await
     }
 
     pub async fn reset_tool_policies(&self) -> Result<()> {
-        let manager = {
-            let guard = self.policy_gateway.lock().await;
-            guard.policy_manager().await
-        };
+        let manager = self.policy_gateway.policy_manager().await;
         let mut manager = manager.ok_or_else(|| anyhow::anyhow!("Tool policy manager not available"))?;
         manager.reset_all_to_prompt().await?;
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_policy_manager(manager).await;
+        self.policy_gateway.set_policy_manager(manager).await;
         Ok(())
     }
 
     pub async fn allow_all_tools(&self) -> Result<()> {
-        let manager = {
-            let guard = self.policy_gateway.lock().await;
-            guard.policy_manager().await
-        };
+        let manager = self.policy_gateway.policy_manager().await;
         let mut manager = manager.ok_or_else(|| anyhow::anyhow!("Tool policy manager not available"))?;
-        manager.allow_all_tools().await?;
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_policy_manager(manager).await;
+        let all_tools: Vec<String> = self
+            .inventory
+            .registrations_snapshot()
+            .into_iter()
+            .map(|registration| registration.name().to_string())
+            .collect();
+        manager.allow_all_tools_for_tools(&all_tools).await?;
+        self.policy_gateway.set_policy_manager(manager).await;
         Ok(())
     }
 
     pub async fn deny_all_tools(&self) -> Result<()> {
-        let manager = {
-            let guard = self.policy_gateway.lock().await;
-            guard.policy_manager().await
-        };
+        let manager = self.policy_gateway.policy_manager().await;
         let mut manager = manager.ok_or_else(|| anyhow::anyhow!("Tool policy manager not available"))?;
         manager.deny_all_tools().await?;
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_policy_manager(manager).await;
+        self.policy_gateway.set_policy_manager(manager).await;
         Ok(())
     }
 
     pub async fn print_policy_status(&self) {
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.print_policy_status().await;
+        self.policy_gateway.print_policy_status().await;
     }
 
     pub async fn apply_config_policies(&self, tools_config: &ToolsConfig) -> Result<()> {
@@ -279,16 +235,12 @@ impl ToolRegistry {
         self.sync_policy_catalog().await;
 
         let manager = {
-            let guard = self.policy_gateway.lock().await;
+            let guard = self.policy_gateway.clone();
             guard.policy_manager().await
         };
         let mut manager = manager.ok_or_else(|| anyhow::anyhow!("Tool policy manager not available"))?;
         manager.apply_tools_config(&normalized_tools_config).await?;
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway.set_policy_manager(manager).await;
+        self.policy_gateway.set_policy_manager(manager).await;
 
         let detect_window = super::DEFAULT_LOOP_DETECT_WINDOW
             .max(normalized_tools_config.max_repeated_tool_calls.saturating_mul(2))
@@ -349,7 +301,7 @@ impl ToolRegistry {
             .unwrap_or((ToolPolicy::Prompt, false));
 
         let has_policy_manager = {
-            let gateway = self.policy_gateway.lock().await;
+            let gateway = self.policy_gateway.clone();
             gateway.has_policy_manager().await
         };
 
@@ -361,11 +313,7 @@ impl ToolRegistry {
             });
         }
 
-        let cloned_gateway = {
-            let guard = self.policy_gateway.lock().await;
-            guard.clone()
-        };
-        cloned_gateway
+        self.policy_gateway
             .evaluate_tool_policy(&resolved_name, safe_mode_prompt, default_permission)
             .await
     }
@@ -380,15 +328,14 @@ impl ToolRegistry {
         };
 
         {
-            let gateway = self.policy_gateway.lock().await;
-            // Check full-auto allowlist first (aligned with policy_gateway behavior)
-            if gateway.has_full_auto_allowlist() && !gateway.is_allowed_in_full_auto(full_name) {
+            let gateway = self.policy_gateway.clone();
+            if gateway.is_denied_in_full_auto(full_name).await {
                 return Ok(ToolPermissionDecision::Deny);
             }
         }
 
         let mcp_decision = {
-            let gateway = self.policy_gateway.lock().await;
+            let gateway = self.policy_gateway.clone();
             let policy_arc = gateway.tool_policy_arc();
             drop(gateway);
             let policy_guard = policy_arc.lock().await;
@@ -399,11 +346,7 @@ impl ToolRegistry {
         };
         match mcp_decision {
             ToolPolicy::Allow => {
-                let cloned_gateway = {
-                    let gateway = self.policy_gateway.lock().await;
-                    gateway.clone()
-                };
-                cloned_gateway.preapprove(full_name).await;
+                self.policy_gateway.preapprove(full_name).await;
                 Ok(ToolPermissionDecision::Allow)
             }
             ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
@@ -415,8 +358,7 @@ impl ToolRegistry {
     /// flow already granted it.
     pub async fn mark_tool_preapproved(&self, name: &str) {
         let normalized_name = self.resolve_runtime_policy_name(name);
-        let gateway = self.policy_gateway.lock().await;
-        gateway.preapprove(&normalized_name).await;
+        self.policy_gateway.preapprove(&normalized_name).await;
         tracing::trace!(tool = %normalized_name, "Preapproved tool after explicit approval");
     }
 
@@ -440,10 +382,6 @@ impl ToolRegistry {
             return Ok(());
         };
 
-        self.policy_gateway
-            .lock()
-            .await
-            .persist_mcp_tool_policy(&provider, &tool_name, policy)
-            .await
+        self.policy_gateway.persist_mcp_tool_policy(&provider, &tool_name, policy).await
     }
 }

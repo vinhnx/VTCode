@@ -58,6 +58,7 @@ pub mod tool_orchestrator;
 pub mod turn_diff_tracker;
 
 // Handler implementations
+pub mod compact;
 pub mod list_dir_handler;
 pub mod planning_task_tracker;
 pub mod planning_workflow;

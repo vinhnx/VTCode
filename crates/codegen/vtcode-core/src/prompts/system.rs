@@ -11,9 +11,14 @@ use crate::project_doc::read_project_doc;
 use crate::prompts::context::PromptContext;
 use crate::prompts::guidelines::{generate_tool_guidelines_for_profile, render_shell_profile_guidance};
 use crate::prompts::output_styles::OutputStyleApplier;
+use crate::prompts::render::render_environment_addenda;
 use crate::prompts::resources::{apply_system_prompt_layers, resolve_system_prompt_layers};
+pub use crate::prompts::static_prompts::{
+    agent_identity_label, default_lightweight_prompt, default_system_prompt, lightweight_instruction_text,
+    minimal_instruction_text, minimal_system_prompt, specialized_instruction_text, specialized_system_prompt,
+    static_profile_prompt,
+};
 use crate::prompts::system_prompt_cache::PROMPT_CACHE;
-use crate::prompts::temporal::generate_temporal_context;
 use crate::skills::render::render_prompt_skills_section;
 use std::env;
 use std::path::Path;
@@ -63,49 +68,12 @@ pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str = "`task_tracker` remains av
 /// Shared reminder appended when presenting plans while still in Planning workflow.
 pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is active with read-only permissions. Say “implement” to present the plan for user approval, or “stay in planning workflow” to revise. Calling `finish_planning` only presents the plan; mutating tools stay disabled until the user approves the plan. If a write tool is unavailable because planning workflow is active, do not emit the full artifact content in the chat. Instead, summarize the blocker briefly and ask the user to save the content, or call `finish_planning` to present the plan for approval.";
 
-const PROMPT_TITLE: &str = "# VT Code";
-const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
-const CONTRACT_HEADER: &str = "## Contract";
-
-/// Agent identity labels for the system prompt.
-/// Maps agent names to human-readable identity strings that combine VT Code
-/// with the active agent mode, so the LLM knows its role.
-fn agent_identity_label(agent_name: &str) -> String {
-    match agent_name {
-        "build" => "VT Code (Build mode)".to_string(),
-        "auto" => "VT Code (Auto mode)".to_string(),
-        "duck" => "VT Code (Duck mode)".to_string(),
-        "plan" => "VT Code (Plan mode)".to_string(),
-        "explorer" => "VT Code (Explorer mode)".to_string(),
-        "worker" => "VT Code (Worker mode)".to_string(),
-        other => format!("VT Code ({other})"),
-    }
-}
-
-const OPENAI_GPT55_CONTRACT_HEADER: &str = "## GPT-5.5 OpenAI Addendum";
-const OPENAI_GPT55_CONTRACT_LINES: &[&str] = &[
-    "State the outcome, constraints, evidence, and output shape up front; avoid over-prescribing the path unless the exact steps matter.",
-    "If context is missing, say so plainly; use the smallest missing detail that would change the result, and finish any unblocked portion first.",
-    "Verify changes yourself with the smallest relevant check; never claim a check passed unless you ran it.",
-    "Before multi-step tool work, send a brief progress update that names the first step.",
-    "Use retrieved evidence for citation-sensitive work; use the minimum evidence sufficient to answer correctly, then stop.",
-];
-
-const OPENAI_GPT56_CONTRACT_HEADER: &str = "## GPT-5.6 OpenAI Addendum";
-const OPENAI_GPT56_CONTRACT_LINES: &[&str] = &[
-    "State the outcome, constraints, evidence, and output shape up front; avoid over-prescribing the path unless the exact steps matter.",
-    "If context is missing, say so plainly; use the smallest missing detail that would change the result, and finish any unblocked portion first.",
-    "Verify changes yourself with the smallest relevant check; never claim a check passed unless you ran it.",
-    "Before multi-step tool work, send a brief progress update that names the first step.",
-    "Use retrieved evidence for citation-sensitive work; use the minimum evidence sufficient to answer correctly, then stop.",
-    "Lead with the conclusion. Include the evidence needed to support it, any material caveat, and the next action. Omit secondary detail and repetition.",
-    "Keep all required facts, decisions, caveats, and next steps. Trim introductions, repetition, generic reassurance, and optional background first.",
-    "Do not use generic brevity instructions such as 'Be concise' or 'Keep it short' — the model already compresses naturally. Instead, prioritize completeness: include all material facts, decisions, and next steps.",
-    "Be direct and tactful. Acknowledge friction specifically when relevant. Avoid canned reassurance and unnecessary sign-offs.",
-];
+pub const PROMPT_TITLE: &str = "# VT Code";
+pub const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
+pub const CONTRACT_HEADER: &str = "## Contract";
 
 /// Contract rules shared across all prompt modes.
-const SHARED_CONTRACT_LINES: &[&str] = &[
+pub const SHARED_CONTRACT_LINES: &[&str] = &[
     "If context is missing, say so, do not guess, finish unblocked slices.",
     "Do not use emoji in responses.",
     "Use retrieved evidence when citation-sensitive.",
@@ -115,7 +83,7 @@ const SHARED_CONTRACT_LINES: &[&str] = &[
 ];
 
 /// Default/Lightweight/Specialized mode: expanded contract lines beyond shared rules.
-const DEFAULT_SPECIFIC_LINES: &[&str] = &[
+pub const DEFAULT_SPECIFIC_LINES: &[&str] = &[
     "Start with existing `AGENTS.md` and `CLAUDE.md`; inspect code first and match local patterns.",
     "Take safe, reversible steps; recover from tool errors with corrected parameters, smaller scope, or one focused clarification.",
     "Ask only for material behavior, API, UX, or credential changes.",
@@ -127,13 +95,13 @@ const DEFAULT_SPECIFIC_LINES: &[&str] = &[
 ];
 
 /// Minimal mode: additional contract lines beyond shared rules.
-const MINIMAL_SPECIFIC_LINES: &[&str] = &[
+pub const MINIMAL_SPECIFIC_LINES: &[&str] = &[
     "Use existing `AGENTS.md` and `CLAUDE.md`; inspect code first.",
     "Take safe, reversible steps; verify changes yourself.",
     "Keep delegation and skills bounded, explicit, and narrow.",
 ];
 
-const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
+pub const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
 - Put normal shell commands in `exec_command.cmd`; they are not separate function tools. Follow the active shell profile's syntax.
@@ -141,19 +109,19 @@ const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 - When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
 
-const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
+pub const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Stay precise; use `task_tracker` once work stops being trivial.
-- Treat completion language as a checkpoint, not proof.
+- Treat completion language as a checkpoint.
 - Use `AGENTS.md` and `CLAUDE.md` as the map; open repo docs only when structural rules matter."#;
 
-const LIGHTWEIGHT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
+pub const LIGHTWEIGHT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Act and verify in one thread.
 - Completion language is a checkpoint.
 - Use `task_tracker` for nontrivial work."#;
 
-const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
+pub const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
 - Explore, plan, then execute.
 - Use `task_tracker` for multi-step work and Planning workflow when scope or verification is still open.
@@ -165,66 +133,6 @@ static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
 static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
 static DEFAULT_LIGHTWEIGHT_PROMPT: OnceLock<String> = OnceLock::new();
 static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
-
-pub fn default_system_prompt() -> &'static str {
-    static_profile_prompt(SystemPromptMode::Default)
-}
-
-pub fn minimal_system_prompt() -> &'static str {
-    static_profile_prompt(SystemPromptMode::Minimal)
-}
-
-pub fn default_lightweight_prompt() -> &'static str {
-    static_profile_prompt(SystemPromptMode::Lightweight)
-}
-
-pub fn specialized_system_prompt() -> &'static str {
-    static_profile_prompt(SystemPromptMode::Specialized)
-}
-
-pub fn minimal_instruction_text() -> String {
-    minimal_system_prompt().to_string()
-}
-
-pub fn lightweight_instruction_text() -> String {
-    default_lightweight_prompt().to_string()
-}
-
-pub fn specialized_instruction_text() -> String {
-    specialized_system_prompt().to_string()
-}
-
-pub fn openai_gpt55_contract_addendum() -> String {
-    let lines_len = OPENAI_GPT55_CONTRACT_LINES.iter().map(|line| line.len()).sum::<usize>();
-    let mut prompt = String::with_capacity(
-        OPENAI_GPT55_CONTRACT_HEADER.len() + lines_len + OPENAI_GPT55_CONTRACT_LINES.len() * 3 + 8,
-    );
-    prompt.push_str(OPENAI_GPT55_CONTRACT_HEADER);
-    prompt.push_str("\n\n");
-    for line in OPENAI_GPT55_CONTRACT_LINES {
-        prompt.push_str("- ");
-        prompt.push_str(line);
-        prompt.push('\n');
-    }
-    prompt.pop();
-    prompt
-}
-
-pub fn openai_gpt56_contract_addendum() -> String {
-    let lines_len = OPENAI_GPT56_CONTRACT_LINES.iter().map(|line| line.len()).sum::<usize>();
-    let mut prompt = String::with_capacity(
-        OPENAI_GPT56_CONTRACT_HEADER.len() + lines_len + OPENAI_GPT56_CONTRACT_LINES.len() * 3 + 8,
-    );
-    prompt.push_str(OPENAI_GPT56_CONTRACT_HEADER);
-    prompt.push_str("\n\n");
-    for line in OPENAI_GPT56_CONTRACT_LINES {
-        prompt.push_str("- ");
-        prompt.push_str(line);
-        prompt.push('\n');
-    }
-    prompt.pop();
-    prompt
-}
 
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
 ## Structured Reasoning
@@ -596,130 +504,6 @@ fn apply_agent_identity(prompt: &str, agent_label: &str) -> String {
     result
 }
 
-fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
-    match prompt_mode {
-        SystemPromptMode::Default => DEFAULT_SYSTEM_PROMPT.get_or_init(|| {
-            build_profile_prompt(
-                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
-                DEFAULT_OPERATING_PROFILE_DELTA,
-            )
-        }),
-        SystemPromptMode::Minimal => MINIMAL_SYSTEM_PROMPT.get_or_init(|| {
-            build_profile_prompt(
-                &build_contract_prompt(&[SHARED_CONTRACT_LINES, MINIMAL_SPECIFIC_LINES]),
-                MINIMAL_OPERATING_PROFILE_DELTA,
-            )
-        }),
-        SystemPromptMode::Lightweight => DEFAULT_LIGHTWEIGHT_PROMPT.get_or_init(|| {
-            build_profile_prompt(
-                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
-                LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
-            )
-        }),
-        SystemPromptMode::Specialized => DEFAULT_SPECIALIZED_PROMPT.get_or_init(|| {
-            build_profile_prompt(
-                &build_contract_prompt(&[SHARED_CONTRACT_LINES, DEFAULT_SPECIFIC_LINES]),
-                SPECIALIZED_OPERATING_PROFILE_DELTA,
-            )
-        }),
-    }
-}
-
-fn build_contract_prompt(contract_groups: &[&[&str]]) -> String {
-    let total_lines: usize = contract_groups.iter().map(|g| g.len()).sum();
-    let lines_len: usize = contract_groups.iter().flat_map(|g| g.iter()).map(|l| l.len()).sum();
-    let mut prompt = String::with_capacity(
-        PROMPT_TITLE.len() + PROMPT_INTRO.len() + CONTRACT_HEADER.len() + lines_len + total_lines * 3 + 8,
-    );
-    prompt.push_str(PROMPT_TITLE);
-    prompt.push_str("\n\n");
-    prompt.push_str(PROMPT_INTRO);
-    prompt.push_str("\n\n");
-    prompt.push_str(CONTRACT_HEADER);
-    prompt.push_str("\n\n");
-
-    for group in contract_groups {
-        for line in *group {
-            prompt.push_str("- ");
-            prompt.push_str(line);
-            prompt.push('\n');
-        }
-    }
-
-    if total_lines > 0 {
-        prompt.pop();
-    }
-    prompt
-}
-
-fn build_profile_prompt(base_prompt: &str, profile_delta: &str) -> String {
-    let mut prompt = String::with_capacity(base_prompt.len() + profile_delta.len() + 2);
-    prompt.push_str(base_prompt);
-    prompt.push_str("\n\n");
-    prompt.push_str(profile_delta);
-    prompt
-}
-
-fn render_environment_addenda(
-    vtcode_config: Option<&crate::config::VTCodeConfig>,
-    prompt_context: Option<&PromptContext>,
-) -> Option<String> {
-    let mut lines = Vec::new();
-
-    if let Some(ctx) = prompt_context
-        && !ctx.languages.is_empty()
-    {
-        lines.push(format!("- Languages: {}. Match structural-search `lang` when needed.", ctx.languages.join(", ")));
-    }
-
-    if let Some(cfg) = vtcode_config {
-        if let Some(interaction_line) = render_interaction_addendum(cfg) {
-            lines.push(interaction_line);
-        }
-
-        if cfg.mcp.enabled {
-            lines.push("- Sources: prefer MCP before external fetches when available.".to_string());
-        }
-
-        if cfg.agent.include_temporal_context && !cfg.prompt_cache.cache_friendly_prompt_shaping {
-            lines.push(
-                generate_temporal_context(cfg.agent.temporal_context_use_utc)
-                    .trim()
-                    .replacen("Current date and time", "- Time", 1)
-                    .to_string(),
-            );
-        }
-
-        if cfg.agent.include_working_directory
-            && let Some(ctx) = prompt_context
-            && let Some(cwd) = &ctx.current_directory
-        {
-            lines.push(format!("- Working directory: {}", cwd.display()));
-        }
-    }
-
-    if lines.is_empty() {
-        None
-    } else {
-        Some(format!("## Environment\n{}", lines.join("\n")))
-    }
-}
-
-fn render_interaction_addendum(cfg: &crate::config::VTCodeConfig) -> Option<String> {
-    match (cfg.security.human_in_the_loop, cfg.chat.ask_questions.enabled) {
-        (true, true) => None,
-        (true, false) => Some(
-            "- Interaction: approval may gate sensitive actions; no `request_user_input`, so make reasonable assumptions unless Planning workflow needs follow-up.".to_string(),
-        ),
-        (false, true) => Some(
-            "- Interaction: approval reduced by config; use `request_user_input` for material blockers.".to_string(),
-        ),
-        (false, false) => Some(
-            "- Interaction: approval reduced by config; no `request_user_input`, so make reasonable assumptions unless Planning workflow needs follow-up.".to_string(),
-        ),
-    }
-}
-
 fn should_include_structured_reasoning(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
     mode: SystemPromptMode,
@@ -896,7 +680,7 @@ mod tests {
     use super::*;
     use crate::config::VTCodeConfig;
     use crate::config::constants::tools;
-    use crate::config::types::{ResolvedShellPromptProfile, SystemPromptMode};
+    use crate::config::types::ResolvedShellPromptProfile;
     use std::path::PathBuf;
 
     const REMOVED_MODEL_FACING_TOOL_NAMES: &[&str] = &[
@@ -1404,34 +1188,6 @@ mod tests {
             "Runtime prompt should omit the accuracy optimization section"
         );
         assert!(prompt.contains("do not guess"), "Prompt should still preserve the uncertainty guardrail");
-    }
-
-    #[test]
-    fn test_openai_gpt55_contract_addendum_is_specific() {
-        let addendum = openai_gpt55_contract_addendum();
-
-        assert!(addendum.contains(OPENAI_GPT55_CONTRACT_HEADER));
-        assert!(addendum.contains("outcome, constraints, evidence, and output shape"));
-        assert!(addendum.contains("smallest missing detail"));
-        assert!(addendum.contains("brief progress update"));
-        assert!(addendum.contains("minimum evidence sufficient"));
-        assert!(!default_system_prompt().contains(OPENAI_GPT55_CONTRACT_HEADER));
-    }
-
-    #[test]
-    fn test_openai_gpt56_contract_addendum_is_specific() {
-        let addendum = openai_gpt56_contract_addendum();
-
-        assert!(addendum.contains(OPENAI_GPT56_CONTRACT_HEADER));
-        assert!(addendum.contains("outcome, constraints, evidence, and output shape"));
-        assert!(addendum.contains("smallest missing detail"));
-        assert!(addendum.contains("brief progress update"));
-        assert!(addendum.contains("minimum evidence sufficient"));
-        assert!(addendum.contains("Lead with the conclusion"));
-        assert!(addendum.contains("Trim introductions, repetition"));
-        assert!(addendum.contains("Do not use generic brevity instructions"));
-        assert!(addendum.contains("Be direct and tactful"));
-        assert!(!default_system_prompt().contains(OPENAI_GPT56_CONTRACT_HEADER));
     }
 
     #[tokio::test]

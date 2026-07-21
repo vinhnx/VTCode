@@ -57,6 +57,9 @@ pub trait ToolSecurity: Send + Sync {
     /// Check if a tool is allowed in full-auto mode.
     async fn is_allowed_in_full_auto(&self, tool_name: &str) -> bool;
 
+    /// Check if a tool is denied by the full-auto allowlist.
+    async fn is_denied_in_full_auto(&self, tool_name: &str) -> bool;
+
     /// Apply tool policies from configuration.
     async fn apply_config_policies(&self, tools_config: &crate::config::ToolsConfig) -> Result<()>;
 
