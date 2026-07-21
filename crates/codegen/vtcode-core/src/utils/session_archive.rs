@@ -8,15 +8,14 @@ use crate::utils::file_utils::{
     ensure_dir_exists, read_json_file, read_json_file_sync, write_json_file, write_json_file_sync,
 };
 use crate::utils::session_transcript_norm::{
-    collapse_whitespace, format_repeated_summary, is_tool_detail_line, normalize_distinct_tools_for_summary,
-    normalize_recovery_line, normalize_session_tool_name, normalized_transcript_key, push_clean_transcript_line,
-    should_drop_transcript_line, summarize_tool_block, summarize_tool_detail,
+    format_repeated_summary, normalize_distinct_tools_for_summary, normalize_recovery_line, normalized_transcript_key,
+    push_clean_transcript_line, should_drop_transcript_line, summarize_tool_block,
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use regex::RegexBuilder;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -129,9 +129,13 @@ pub const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 - End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
 - Use `AGENTS.md`, `CLAUDE.md`, and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
 
+#[allow(dead_code)]
 static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
+#[allow(dead_code)]
 static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
+#[allow(dead_code)]
 static DEFAULT_LIGHTWEIGHT_PROMPT: OnceLock<String> = OnceLock::new();
+#[allow(dead_code)]
 static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
 
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"

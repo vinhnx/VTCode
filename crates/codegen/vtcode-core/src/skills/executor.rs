@@ -840,7 +840,7 @@ impl SkillToolAdapter {
 }
 
 #[async_trait]
-impl crate::tools::traits::Tool for SkillToolAdapter {
+impl Tool for SkillToolAdapter {
     async fn execute(&self, args: Value) -> Result<Value> {
         info!("Skill tool executing: {}", self.skill.name());
 
@@ -918,43 +918,49 @@ impl SkillExecutionContext {
     }
 }
 
-use super::*;
-use crate::config::types::CapabilityLevel;
 use crate::llm::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent, ToolCall};
-use crate::skills::types::{SkillFileSystemPermissions, SkillManifest, SkillPermissionProfile};
-use crate::tools::registry::ToolRegistration;
+use crate::skills::types::{SkillManifest, SkillPermissionProfile};
 use crate::tools::traits::Tool;
 use futures::stream;
 use serde_json::json;
 use std::sync::Mutex;
-use tempfile::tempdir;
 
+#[allow(dead_code)]
 struct FakeForkExecutor;
 
+#[allow(dead_code)]
 struct EchoFirstUserProvider;
+#[allow(dead_code)]
 struct UnknownToolThenFinalizeProvider {
     calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct RepeatToolThenFinalizeProvider {
     tool_name: &'static str,
     calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct MaxIterationsThenFinalizeProvider {
     tool_names: Vec<String>,
     calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct StreamingOnlySkillProvider {
     stream_calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct EmptyFinalSkillProvider;
+#[allow(dead_code)]
 struct ToolOnlyThenFinalizeProvider {
     tool_name: &'static str,
     calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct StopWithToolCallsThenFinalizeProvider {
     tool_name: &'static str,
     calls: Mutex<usize>,
 }
+#[allow(dead_code)]
 struct CountingSkillTool {
     calls: Arc<Mutex<usize>>,
 }
@@ -1901,6 +1907,7 @@ fn test_skill_execution_context() {
     assert_eq!(ctx.available_tools.len(), 2);
 }
 
+#[allow(dead_code)]
 fn test_skill_with_permissions(permission_profile: Option<SkillPermissionProfile>) -> Skill {
     let manifest = SkillManifest {
         name: "test-skill".to_string(),
