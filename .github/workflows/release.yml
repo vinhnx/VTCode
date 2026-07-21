@@ -219,6 +219,10 @@ jobs:
         with:
           key: x86_64-pc-windows-msvc
 
+      - name: Fetch dependencies
+        run: cargo fetch --target x86_64-pc-windows-msvc
+        shell: bash
+
       - name: Build (x86_64-pc-windows-msvc)
         run: cargo build --frozen --profile release-fast-windows --target x86_64-pc-windows-msvc --jobs 2
         shell: bash
