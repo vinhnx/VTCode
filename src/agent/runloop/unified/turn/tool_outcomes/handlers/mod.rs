@@ -351,7 +351,9 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    if let Some(notice) = ctx.harness_state.record_tool_budget_exhaustion_notice() {
+    let is_plan_finalization = tool_name == tool_names::FINISH_PLANNING;
+
+    if !is_plan_finalization && let Some(notice) = ctx.harness_state.record_tool_budget_exhaustion_notice() {
         // Mirror the wall-clock exhaustion contract: reject the call with a
         // policy error (full message once, compact stub for later calls in
         // the batch) and let `flush_budget_synthesis_directives` push a single
@@ -368,7 +370,7 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    if let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() {
+    if !is_plan_finalization && let Some(notice) = ctx.harness_state.record_wall_clock_exhaustion_notice() {
         // Emit the full policy message once (first notice); subsequent rejected
         // calls in the same batch get a compact stub to avoid repeating it N
         // times. The "synthesize now" system directive is pushed after the whole

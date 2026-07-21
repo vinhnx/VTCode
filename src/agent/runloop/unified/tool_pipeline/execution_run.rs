@@ -117,7 +117,9 @@ pub(crate) async fn run_tool_call_with_args(
     let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
-        if let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion() {
+        if requested_name != tools::FINISH_PLANNING
+            && let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion()
+        {
             return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
                 error: structured_failure_from_message(requested_name, exhaustion.policy_violation_message()),
             }));

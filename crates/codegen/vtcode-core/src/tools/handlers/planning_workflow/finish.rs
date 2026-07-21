@@ -9,6 +9,7 @@ use crate::config::constants::tools;
 use crate::tools::handlers::planning_workflow::artifacts::{
     merge_plan_content, tracker_file_for_plan_file, validate_plan_content,
 };
+use crate::tools::handlers::planning_workflow::persistence::persist_plan_draft;
 use crate::tools::handlers::planning_workflow::state::PlanningWorkflowState;
 use crate::tools::traits::Tool;
 use crate::ui::tui::PlanContent;
@@ -20,6 +21,10 @@ pub(super) struct FinishPlanningArgs {
     /// Optional: Reason for exiting (e.g., "planning complete", "need more info")
     #[serde(default)]
     pub(super) reason: Option<String>,
+    /// Optional inline plan emitted by models that cannot persist the draft
+    /// before requesting confirmation.
+    #[serde(default)]
+    pub(super) plan: Option<String>,
 }
 
 /// Tool for exiting planning workflow
@@ -36,7 +41,8 @@ impl FinishPlanningTool {
 #[async_trait]
 impl Tool for FinishPlanningTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: FinishPlanningArgs = serde_json::from_value(args).unwrap_or(FinishPlanningArgs { reason: None });
+        let args: FinishPlanningArgs =
+            serde_json::from_value(args).unwrap_or(FinishPlanningArgs { reason: None, plan: None });
         let auto_trigger = args
             .reason
             .as_deref()
@@ -48,6 +54,13 @@ impl Tool for FinishPlanningTool {
                 "status": "not_active",
                 "message": "Planning workflow is not currently active."
             }));
+        }
+
+        // Some providers put the proposed plan in the tool arguments instead
+        // of writing the plan artifact first. Persist it before validation so
+        // finish_planning remains useful and the confirmation UI has content.
+        if let Some(plan) = args.plan.as_deref().filter(|plan| !plan.trim().is_empty()) {
+            persist_plan_draft(&self.state, plan).await?;
         }
 
         // Get the current plan file
@@ -226,6 +239,10 @@ impl Tool for FinishPlanningTool {
                 "reason": {
                     "type": "string",
                     "description": "Optional reason for exiting planning workflow (e.g., 'planning complete', 'need clarification from user')"
+                },
+                "plan": {
+                    "type": "string",
+                    "description": "Optional complete proposed plan in Markdown; persisted before validation"
                 }
             },
             "required": []
