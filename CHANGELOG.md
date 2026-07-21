@@ -2,6 +2,32 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.6 - 2026-07-21
+
+### Highlights
+#### Bug Fixes
+
+- Use standard release profile for macOS builds (bfef032c) 
+- Allow secure prompt input and consolidate auth guidance (152c91e3) 
+#### Features
+
+- Add current provider badge and refactor modal (8d2b370a) 
+- Enhance authentication error messages and add StepFun provider hint (16a3fd5a) 
+### Other Changes
+#### CI
+
+- Enable frozen builds and optimize build configuration (f697b7d0) 
+#### Other
+
+- Fix linter (5478b9b8) (@vinhnx)
+- Fix warnings (f919ee90) (@vinhnx)
+- Update TODO (16119c6d) 
+#### Refactors
+
+- Move secrets to public module, update API key error (45a1089d) 
+- Simplify Arc usage in agent runner message handling (d1695582) 
+- Add SectionKind enum and static prompts module (6693c010) 
+- Suppress dead code warnings for unused items (05073e9f) 
 ## 0.136.5 - 2026-07-20
 
 ### Highlights
