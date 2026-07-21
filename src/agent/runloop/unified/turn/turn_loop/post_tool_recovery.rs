@@ -73,6 +73,22 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
         return Ok(PostToolFailureRecovery::NotApplicable);
     }
 
+    // If we are in planning mode and the assistant has already successfully written
+    // a non-empty text response (e.g. a plan draft) during this turn before the LLM
+    // call failed (e.g. streaming disconnected at the very end), do not trigger recovery.
+    // Completing the turn preserves the generated plan for the user to confirm/edit.
+    let has_plan_in_history = planning_active && working_history
+        .get(turn_history_start_len..)
+        .is_some_and(|recent| {
+            recent.iter().any(|msg| {
+                msg.role == uni::MessageRole::Assistant
+                    && !msg.content.as_text().trim().is_empty()
+            })
+        });
+    if has_plan_in_history {
+        return Ok(PostToolFailureRecovery::StopAfterDirective);
+    }
+
     let err_cat = vtcode_commons::classify_anyhow_error(err);
     let transient_hint = if err_cat.is_retryable() {
         " (transient — may resolve on retry)"
