@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.137.0 - 2026-07-21
+
+### Highlights
+#### Bug Fixes
+
+- Fetch deps before frozen windows build (d316486e) (@vinhnx)
+- Bypass confirmation overlays when inline UI is not supported to avoid hangs (7e76bf6a) 
+- Avoid duplicate recovery plans when plan draft is already written (1da76708) 
+- Handle planning synthesis in reasoning channel and allow finish_planning call (e13aba8e) 
+#### Features
+
+- Add gemini-3.5-flash-lite and gemini-3.6-flash under gemini and openrouter (33355a36) 
+- Accept inline plan in finish_planning and bypass budget exhaustion (dd0691a3) 
+- Add independent interview policy line (9aec496e) 
+- Auto-accept plan when approval requested, improve streaming feedback (1b6025bb) 
+### Other Changes
+#### Other
+
+- Fix doc lints (982df229) (@vinhnx)
+- Fix CI log viewer (415c83c2) (@vinhnx)
+- _processing.rs (ff377597) 
 ## 0.136.7 - 2026-07-21
 
 ### Highlights
