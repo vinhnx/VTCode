@@ -15,6 +15,7 @@
 
 use crate::config::VTCodeConfig;
 use crate::config::models::ModelId;
+use crate::config::types::CapabilityLevel;
 use crate::core::agent::runner::{AgentRunner, RunnerSettings};
 use crate::core::agent::task::Task;
 use crate::core::agent::types::AgentType;
@@ -22,11 +23,11 @@ use crate::core::loop_detector::LoopDetector;
 use crate::llm::collect_single_response;
 use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::sandboxing::{AdditionalPermissions, SandboxPermissions};
-use crate::skills::types::{Skill, SkillNetworkPolicy};
+use crate::skills::types::{Skill, SkillFileSystemPermissions, SkillNetworkPolicy};
 use crate::tool_policy::ToolPolicy;
-use crate::tools::ToolRegistry;
 use crate::tools::registry::{ToolErrorType, ToolExecutionError};
 use crate::tools::tool_intent;
+use crate::tools::{ToolRegistry, registry::ToolRegistration};
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
@@ -36,6 +37,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tempfile::tempdir;
 use tracing::{debug, info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
