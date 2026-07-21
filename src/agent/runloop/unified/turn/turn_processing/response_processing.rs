@@ -107,6 +107,14 @@ pub(crate) fn process_llm_response(
         proposed_plan = Some(text.trim().to_string());
     }
 
+    // A completed plan is a terminal planning response. Providers sometimes
+    // attach exploratory tool calls after the plan text; executing them would
+    // bypass the confirmation gate and continue the turn. Drop those calls so
+    // the user sees the plan and can explicitly approve it.
+    if planning_active && proposed_plan.is_some() {
+        tool_calls.clear();
+    }
+
     // Strip DSML markup from text before rendering to prevent raw tags
     // from leaking into the user-visible output.
     if let Some(ref text) = final_text
