@@ -227,7 +227,7 @@ fn register_code_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegi
         ToolRegistry::code_search_executor,
     )
     .with_description(
-        "Search workspace code with one literal query. Use optional path, file_types, result_types, and max_results filters to find definitions, syntactic usages, text matches, and matching paths.",
+        "Search workspace code with one literal query (or `|`-separated literal alternatives like \"tokio|async-std|runtime\"). Use optional path, file_types, result_types, and max_results filters to find definitions, syntactic usages, text matches, and matching paths.",
     )
     .with_parameter_schema(code_search_parameters())
     .with_permission(ToolPolicy::Allow)

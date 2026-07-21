@@ -213,7 +213,10 @@ pub(crate) async fn run_tool_call_with_args(
     }
 
     let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
-        .request_user_input_enabled(ctx.tool_registry.is_planning_active(), ctx.renderer.supports_inline_ui());
+        .request_user_input_enabled(ctx.tool_registry.is_planning_active(), ctx.renderer.supports_inline_ui())
+        // Also reject if the interview was permanently denied this session
+        // (prevents a hallucinated tool call from reaching the HITL path).
+        && !ctx.plan_session.is_interview_denied();
     if let Some(hitl_result) = execute_hitl_tool(
         name,
         ctx.handle,

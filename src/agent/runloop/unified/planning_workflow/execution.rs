@@ -240,9 +240,12 @@ async fn handle_pending_confirmation(
         .get("draft_incomplete")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
-    let confirmation_outcome =
+    let confirmation_outcome = if ctx.renderer.supports_inline_ui() {
         execute_plan_confirmation(ctx.handle, ctx.session, plan_content, draft_incomplete, ctrl_c_state, ctrl_c_notify)
-            .await;
+            .await
+    } else {
+        Ok(PlanConfirmationOutcome::Execute)
+    };
 
     let (final_output, agent_switch) = match confirmation_outcome {
         Ok(outcome) => {
@@ -328,18 +331,22 @@ async fn handle_enter_pending_confirmation(
     let description = output.get("description").and_then(Value::as_str).map(|s| s.to_string());
     let plan_file = output.get("plan_file").and_then(Value::as_str).map(|s| s.to_string());
 
-    let decision = match present_start_planning_confirmation(
-        ctx.handle,
-        ctx.session,
-        description.as_deref(),
-        plan_file.as_deref(),
-        ctrl_c_state,
-        ctrl_c_notify,
-    )
-    .await
-    {
-        Ok(decision) => decision,
-        Err(_) => StartPlanningDecision::Stay,
+    let decision = if ctx.renderer.supports_inline_ui() {
+        match present_start_planning_confirmation(
+            ctx.handle,
+            ctx.session,
+            description.as_deref(),
+            plan_file.as_deref(),
+            ctrl_c_state,
+            ctrl_c_notify,
+        )
+        .await
+        {
+            Ok(decision) => decision,
+            Err(_) => StartPlanningDecision::Stay,
+        }
+    } else {
+        StartPlanningDecision::Enter
     };
 
     if decision == StartPlanningDecision::Stay {

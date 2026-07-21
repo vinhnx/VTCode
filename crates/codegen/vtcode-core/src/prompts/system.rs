@@ -1846,7 +1846,7 @@ Use tags when helpful: `<analysis>` facts/options, `<plan>` steps, `<uncertainty
 - Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing.
 - Use `exec_command.cmd` for build tools, test tools, `git diff -- <path>`, and shell-only tasks.
 - Completion is a checkpoint: keep verification resolved.
-- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case. If results are truncated, narrow a filter in another call. Use `exec_command` or a specialised skill for arbitrary syntax-pattern work.
+- Advanced `code_search` takes `query` plus optional `path`, `file_types`, `result_types`, and `max_results`; results are recognised definitions, exact syntactic usages that are not resolved references, literal text, and matching paths. Queries use literal smart-case and support `|`-separated literal alternatives. If results are truncated, narrow a filter in another call. Use `exec_command` or a specialised skill for arbitrary syntax-pattern work.
 - If calls repeat, re-plan instead of retrying.
 - Run independent tools in parallel when their inputs do not depend on each other.
 

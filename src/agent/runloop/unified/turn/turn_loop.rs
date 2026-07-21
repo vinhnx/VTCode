@@ -116,9 +116,14 @@ const PLANNING_RECOVERY_SYNTHESIS_FALLBACK: &str = "Planning research completed,
 /// (`PlanningWorkflowSessionState::is_interview_denied`). The transient-error
 /// variant above falsely promises "the planning interview will be presented
 /// on the next turn" — a denial recurs on every attempt, so no interview will
-/// ever be shown again. This tells the user the plan will be finalized from
-/// gathered research instead (checkpoint turn_655/turn_660).
-const PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW: &str = "Planning research completed, but the final synthesis failed (transient provider error). Interactive questions are unavailable in this runtime, so the plan will be finalized from the research already gathered — re-state your request or type `implement` / `keep planning` to continue.";
+/// ever be shown again. This presents a clean yes/no/edit HITL prompt to the
+/// user instead of a confusing "synthesis failed" message (checkpoint
+/// turn_655/turn_660/turn_725). The plan draft from gathered research is
+/// preserved in the session plan file; the user picks one of three paths:
+///   - `yes`/`implement` → exit plan mode and start implementation
+///   - `no` → abandon the plan
+///   - `edit`/`keep planning` → refine the plan (user re-states what to revise)
+const PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW: &str = "Plan draft ready (interactive questions are unavailable in this runtime, so the plan was finalized from the research already gathered). Review the plan above, then choose one of:\n  • type `yes` (or `implement`) to start implementation\n  • type `no` to abandon this plan\n  • type `edit` (or `keep planning`) to refine — describe what to revise";
 /// Plan-mode fallback when the session budget is exhausted. Unlike the
 /// transient-error variant, this tells the agent to finalize the plan NOW
 /// from the evidence already gathered — the budget is spent and no further
@@ -470,7 +475,12 @@ pub(crate) async fn run_turn_loop(
     }
 
     // Optimization: Extract all frequently accessed config values once
-    let turn_config = extract_turn_config(ctx.vt_cfg, ctx.is_planning_active(), ctx.renderer.supports_inline_ui());
+    let mut turn_config = extract_turn_config(ctx.vt_cfg, ctx.is_planning_active(), ctx.renderer.supports_inline_ui());
+    // After a permanent `request_user_input` denial, suppress the tool for the
+    // rest of the session so the model stops retrying it across turns.
+    if ctx.plan_session.is_interview_denied() {
+        turn_config.request_user_input_enabled = false;
+    }
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;

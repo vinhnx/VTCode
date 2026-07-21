@@ -134,22 +134,71 @@ async fn read_bounded_record<R: AsyncBufRead + Unpin>(
 }
 
 /// Run a fixed-string smart-case ripgrep stream with request-scoped bounds.
+/// Split a `code_search` query on `|` into trimmed, non-empty literal terms.
+///
+/// Returns an empty vec for an empty/whitespace query, a single-element vec
+/// when there is no alternation, and one entry per term otherwise. Terms that
+/// are empty after trimming (e.g. `a||b`, `|foo`, `bar|`) are dropped so the
+/// alternation is well-formed.
+fn split_alternation(query: &str) -> Vec<String> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    if !trimmed.contains('|') {
+        return vec![trimmed.to_string()];
+    }
+    let terms: Vec<String> = trimmed
+        .split('|')
+        .map(str::trim)
+        .filter(|term| !term.is_empty())
+        .map(str::to_string)
+        .collect();
+    terms
+}
+
 pub(crate) async fn search_literal_bounded(
     query: &str,
     search_path: &Path,
     languages: &[AstGrepLanguage],
     candidate_cap: usize,
 ) -> Result<LiteralSearchOutcome> {
+    // Support `|`-separated alternation (e.g. "tokio|async-std|runtime"), the
+    // most common plan-mode exploration pattern. Without this, alternation
+    // queries silently return 0 results because `--fixed-strings` treats the
+    // whole query as one literal substring. Single-term queries keep
+    // `--fixed-strings` so literal metacharacters stay non-magic; multi-term
+    // queries join `regex::escape`-ed terms with `|` as a regex alternation.
+    let alternation_terms = split_alternation(query);
+    let alternation_regex = (alternation_terms.len() >= 2).then(|| {
+        alternation_terms
+            .iter()
+            .map(|term| regex::escape(term))
+            .collect::<Vec<_>>()
+            .join("|")
+    });
+    let (pattern_arg, use_fixed_strings) = match alternation_regex {
+        Some(regex_pattern) => (regex_pattern, false),
+        None => match alternation_terms.as_slice() {
+            [single] => (single.clone(), true),
+            // Empty query (or only empty terms): fall back to the trimmed
+            // original so ripgrep surfaces a clear "no matches" result.
+            _ => (query.trim().to_string(), true),
+        },
+    };
+
     let mut command = TokioCommand::new("rg");
     command
         .arg("--json")
-        .arg("--fixed-strings")
         .arg("--smart-case")
         .arg("--sort=path")
         .arg("--hidden")
         .arg("--no-messages")
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    if use_fixed_strings {
+        command.arg("--fixed-strings");
+    }
     for pattern in DEFAULT_IGNORE_GLOBS {
         command.arg("--glob").arg(format!("!{pattern}"));
     }
@@ -158,7 +207,7 @@ pub(crate) async fn search_literal_bounded(
             command.arg("--iglob").arg(glob);
         }
     }
-    command.arg(query).arg(search_path);
+    command.arg(&pattern_arg).arg(search_path);
 
     let mut child = command
         .spawn()
@@ -1055,6 +1104,74 @@ mod tests {
             candidate.path.ends_with("DOCKERFILE")
                 && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Dockerfile)
         }));
+    }
+
+    #[tokio::test]
+    async fn code_search_literal_alternation_matches_each_term() {
+        // Reproduces the plan-mode failure in turn_724: a `|`-alternation
+        // query used to return 0 because `--fixed-strings` treated the whole
+        // string as one literal substring.
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(workspace.path().join("a.rs"), "tokio\n").expect("fixture a");
+        std::fs::write(workspace.path().join("b.rs"), "async-std\n").expect("fixture b");
+        std::fs::write(workspace.path().join("c.rs"), "runtime\n").expect("fixture c");
+        std::fs::write(workspace.path().join("d.rs"), "unrelated\n").expect("fixture d");
+
+        let outcome = search_literal_bounded("tokio|async-std|runtime", workspace.path(), &[], 20)
+            .await
+            .expect("alternation search");
+
+        let matched_paths: Vec<String> = outcome
+            .candidates
+            .iter()
+            .map(|candidate| {
+                candidate
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
+        assert!(matched_paths.contains(&"a.rs".to_string()), "tokio term should match: {matched_paths:?}");
+        assert!(matched_paths.contains(&"b.rs".to_string()), "async-std term should match: {matched_paths:?}");
+        assert!(matched_paths.contains(&"c.rs".to_string()), "runtime term should match: {matched_paths:?}");
+        assert!(
+            !matched_paths.contains(&"d.rs".to_string()),
+            "unrelated fixture should not match: {matched_paths:?}"
+        );
+        assert!(!outcome.truncated);
+    }
+
+    #[tokio::test]
+    async fn code_search_literal_single_term_still_uses_fixed_strings() {
+        // A single-term query with regex metacharacters must stay literal so
+        // e.g. `fn main()` is not interpreted as a regex group.
+        let workspace = TempDir::new().expect("workspace");
+        std::fs::write(workspace.path().join("src.rs"), "fn main() {}\n").expect("fixture");
+
+        let outcome = search_literal_bounded("fn main()", workspace.path(), &[], 20)
+            .await
+            .expect("single-term literal search");
+
+        assert_eq!(outcome.candidates.len(), 1);
+        assert!(outcome.candidates[0].path.ends_with("src.rs"));
+    }
+
+    #[test]
+    fn split_alternation_handles_edge_cases() {
+        assert_eq!(split_alternation(""), Vec::<String>::new());
+        assert_eq!(split_alternation("   "), Vec::<String>::new());
+        assert_eq!(split_alternation("Widget"), vec!["Widget".to_string()]);
+        assert_eq!(split_alternation("  Widget  "), vec!["Widget".to_string()]);
+        assert_eq!(
+            split_alternation("tokio|async-std|runtime"),
+            vec!["tokio".to_string(), "async-std".to_string(), "runtime".to_string()]
+        );
+        // Empty terms are dropped.
+        assert_eq!(split_alternation("|foo|"), vec!["foo".to_string()]);
+        assert_eq!(split_alternation("a||b"), vec!["a".to_string(), "b".to_string()]);
+        // A single non-empty term after splitting stays single (no alternation).
+        assert_eq!(split_alternation("||"), Vec::<String>::new());
     }
 
     #[test]

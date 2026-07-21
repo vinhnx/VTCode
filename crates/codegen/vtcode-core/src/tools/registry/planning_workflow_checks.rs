@@ -196,7 +196,7 @@ mod tests {
                 &json!({"action": "write", "path": "foo.txt", "content": "x"})
             )
         );
-        assert!(!registry.is_retry_safe_call(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"})));
+        assert!(!registry.is_retry_safe_call(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "cargo build"})));
         assert!(!registry.is_retry_safe_call(tools::WRITE_FILE, &json!({"path": "foo.txt", "content": "x"})));
 
         Ok(())
@@ -225,9 +225,30 @@ mod tests {
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "npm install --dry-run"})
         ));
+        // `echo` is now in the read-only allow-list — it's harmless and
+        // commonly used in exploration (e.g. `ls -la && echo '---' && ls -la
+        // crates/`). Redirections (`echo hi > file.txt`) are still rejected
+        // by `is_readonly_command_string`.
         assert!(
-            !registry.is_planning_active_allowed(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}))
+            registry.is_planning_active_allowed(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}))
         );
+        // `&&`-chained read-only commands are now allowed in plan mode
+        // (checkpoint turn_726: this pattern was blocked, forcing the model
+        // to fall back to `request_user_input` which was also denied).
+        assert!(registry.is_planning_active_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "ls -la && echo '---' && ls -la crates/"})
+        ));
+        // Destructive commands in `&&` chains are still rejected.
+        assert!(!registry.is_planning_active_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "ls -la && rm foo.txt"})
+        ));
+        // Redirections are still rejected.
+        assert!(!registry.is_planning_active_allowed(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "echo hi > file.txt"})
+        ));
 
         Ok(())
     }

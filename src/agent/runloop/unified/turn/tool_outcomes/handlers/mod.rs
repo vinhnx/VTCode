@@ -537,6 +537,17 @@ pub(crate) async fn validate_tool_call<'a>(
             Ok(ValidationResult::Proceed(prepared))
         }
         Ok(ToolPermissionFlow::Denied) => {
+            // A permanent `request_user_input` denial (non-interactive runtime,
+            // inline UI unavailable, etc.) must be recorded so the planning
+            // workflow stops re-forcing the interview AND the tool is suppressed
+            // from subsequent catalogs. Without this, the model sees a generic
+            // "execution denied by policy" and retries across turns —
+            // checkpoint turn_724 shows 7 retries. `handle_failure` is NOT
+            // reached on this path (permission denial returns Blocked, not
+            // Failure), so we must call `mark_interview_denied()` here too.
+            if canonical_tool_name == tool_names::REQUEST_USER_INPUT {
+                ctx.plan_session.mark_interview_denied();
+            }
             let denial = if let Some(denial) = ctx.session_stats.last_auto_permission_denial() {
                 serde_json::json!({
                     "error": format!("Auto permission review blocked tool '{}': {}", prepared.canonical_name, denial.reason),

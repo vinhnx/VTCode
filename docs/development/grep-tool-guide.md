@@ -14,7 +14,8 @@ commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 Use **ripgrep** (`rg`) through `exec_command.cmd` for fast text and regex
 search across codebases. Use shell `grep` only when `rg` is unavailable or when
 you need a host-specific grep feature. The advanced profile also provides
-`code_search` for one bounded literal query across definitions, syntactic
+`code_search` for one bounded literal query (or `|`-separated literal
+alternatives, e.g. `tokio|async-std|runtime`) across definitions, syntactic
 usages, text, and paths.
 
 ## Architecture
@@ -289,7 +290,11 @@ Omitting `result_types` enables all four categories:
 | `path` | A matching existing filename or path. |
 
 A wholly lower-case query matches without case sensitivity. A query containing
-an upper-case character is case-sensitive. Query punctuation is literal.
+an upper-case character is case-sensitive. Query punctuation is literal. A
+query containing `|` is split into trimmed literal alternatives (empty terms
+are dropped), so `tokio|async-std|runtime` matches any of the three terms;
+each term is escaped as a literal, so `|` is the only character with special
+meaning.
 
 ```json
 {"query":"ToolRegistration","path":"crates/codegen/vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}

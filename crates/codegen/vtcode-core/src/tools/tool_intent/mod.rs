@@ -88,10 +88,18 @@ mod tests {
 
     #[test]
     fn command_session_run_is_mutating_and_destructive() {
-        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}));
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "rm -rf /tmp/test"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn command_session_run_echo_is_read_only() {
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}));
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
     }
 
     #[test]
@@ -156,7 +164,7 @@ mod tests {
 
     #[test]
     fn command_session_run_pipelines_with_unsafe_segments_are_mutating() {
-        for cmd in ["cat a.txt | tee b.txt", "echo hi | cat", "grep x src | rm -rf"] {
+        for cmd in ["cat a.txt | tee b.txt", "python script.py | cat", "grep x src | rm -rf"] {
             let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "run", "command": cmd}));
             assert!(intent.mutating, "expected '{cmd}' to be mutating because a pipeline segment is unsafe");
         }
@@ -190,7 +198,7 @@ mod tests {
 
     #[test]
     fn command_session_cmd_alias_infers_run() {
-        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "echo hi"}));
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "rm -rf /tmp/test"}));
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);

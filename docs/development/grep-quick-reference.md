@@ -2,8 +2,8 @@
 
 > **Note:** legacy text-search dispatcher names are internal implementation
 > details. Use `exec_command.cmd` with `rg` for flexible shell text search.
-> Advanced `code_search` provides bounded literal search across definitions,
-> syntactic usages, text, and paths.
+> Advanced `code_search` provides bounded literal search (with `|`-separated
+> alternation support) across definitions, syntactic usages, text, and paths.
 
 Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
 use the Unix-like profile by default; native Windows uses PowerShell. VT Code
@@ -107,9 +107,12 @@ matches. Path results match filenames or paths.
 
 Literal smart-case applies to content and exact symbol-name matching: wholly
 lower-case queries are case-insensitive, while queries containing an upper-case
-character are case-sensitive. Path matching is fuzzy and case-insensitive. If a
-response is truncated, narrow a filter in another call. No exact repository-wide
-total is implied.
+character are case-sensitive. A query containing `|` is split into trimmed
+literal alternatives (empty terms dropped), so `tokio|async-std|runtime`
+matches any of the three terms; each term is escaped, so `|` is the only
+special character. Path matching is fuzzy and case-insensitive. If a response
+is truncated, narrow a filter in another call. No exact repository-wide total
+is implied.
 
 ```json
 {"query":"Widget","path":"src","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}

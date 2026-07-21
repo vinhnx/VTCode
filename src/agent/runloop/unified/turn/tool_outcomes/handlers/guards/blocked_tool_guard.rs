@@ -69,8 +69,8 @@ fn build_blocked_tool_call_messages(
 /// `finish_planning` is the only planning tool that gets a fast-exit here:
 /// if presenting the plan for approval is blocked, the workflow cannot make
 /// progress. `request_user_input` is intentionally omitted so it flows through
-/// normal tool execution and the existing `handle_failure` path can mark the
-/// interview as denied permanently.
+/// normal tool execution where the permission-denial path (and `handle_failure`)
+/// both call `mark_interview_denied()` to permanently suppress the tool.
 ///
 /// Returns `Some(TurnHandlerOutcome)` when the guard should trip, or `None`
 /// when planning is not active or the tool is not `finish_planning`.

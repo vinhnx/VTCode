@@ -263,24 +263,38 @@ pub fn is_readonly_command_string(args: &Value) -> bool {
     }
 
     // Deny shell operators that produce side effects or hide them.
-    // Matches: >, >>, >|, <(, >(, ;, &&, ||, $() backticks handled below.
+    // Matches: >, >>, >|, <(, >(, ;, ||, $() backticks handled below.
+    // `&&` is allowed when every segment passes the same safety checks
+    // (no redirections, substitutions, or destructive commands) — see
+    // `is_readonly_chained_segments` in `readonly.rs` for the per-segment
+    // allow-list verification. This lets plan-mode run harmless exploration
+    // like `ls -la && echo '---' && ls -la crates/` (checkpoint turn_726:
+    // the `&&` rejection blocked all chained read-only inspection in plan
+    // mode, forcing the model to fall back to `request_user_input` which was
+    // also denied, dead-ending the turn).
     // Pipelines are allowed here but validated segment-by-segment by the caller.
     if trimmed.contains('>')
         || trimmed.contains("<(")
         || trimmed.contains(">(")
         || trimmed.contains(';')
-        || trimmed.contains("&&")
         || trimmed.contains("||")
     {
         return false;
     }
 
     // Deny command substitution and process redirection that can run arbitrary code.
-    if trimmed.contains("$(") || trimmed.contains('`') || trimmed.contains("$((") {
-        return false;
+    // Check each `&&`-separated segment individually so a substitution hidden in
+    // one segment is still caught.
+    let chain_segments: Vec<&str> = trimmed.split("&&").map(str::trim).collect();
+    for segment in &chain_segments {
+        if segment.contains("$(") || segment.contains('`') || segment.contains("$((") {
+            return false;
+        }
     }
 
     // Deny common destructive commands outright, regardless of flags.
+    // Check the full command (catches destructive commands in any segment) AND
+    // each segment individually (catches segment-starting destructive commands).
     let lower = trimmed.to_ascii_lowercase();
     for destructive in [
         " rm ",
@@ -338,6 +352,29 @@ pub fn is_readonly_command_string(args: &Value) -> bool {
         || lower.starts_with("srm ")
     {
         return false;
+    }
+
+    // Also check each `&&`-separated segment for destructive commands that
+    // start at the beginning of a segment (e.g. `ls -la && rm foo.txt`).
+    for segment in &chain_segments {
+        let seg_lower = segment.to_ascii_lowercase();
+        if seg_lower.starts_with("rm ")
+            || seg_lower.starts_with("shred ")
+            || seg_lower.starts_with("truncate ")
+            || seg_lower.starts_with("tee ")
+            || seg_lower.starts_with("mv ")
+            || seg_lower.starts_with("cp ")
+            || seg_lower.starts_with("install ")
+            || seg_lower.starts_with("chmod ")
+            || seg_lower.starts_with("chown ")
+            || seg_lower.starts_with("chattr ")
+            || seg_lower.starts_with("mkfs")
+            || seg_lower.starts_with("dd ")
+            || seg_lower.starts_with("wipe ")
+            || seg_lower.starts_with("srm ")
+        {
+            return false;
+        }
     }
 
     // Deny in-place editing commands (sed -i, perl -i, ruby -i) which modify files
@@ -693,6 +730,27 @@ mod tests {
         // segment against an allow-list of safe commands.
         assert!(is_readonly_command_string(&json!({"command": "diff a b | wc -l"})));
         assert!(is_readonly_command_string(&json!({"command": "grep x src | sort | uniq"})));
+    }
+
+    #[test]
+    fn is_readonly_command_string_allows_and_chains() {
+        // `&&`-chained read-only commands are allowed when every segment is
+        // safe (no redirections, substitutions, or destructive commands).
+        // The per-segment allow-list check is handled by the caller via
+        // `is_readonly_chained_segments` (checkpoint turn_726).
+        assert!(is_readonly_command_string(&json!({"command": "ls -la && echo '---' && ls -la crates/"})));
+        assert!(is_readonly_command_string(&json!({"command": "pwd && ls src/"})));
+        assert!(is_readonly_command_string(&json!({"command": "true && cat foo.txt"})));
+    }
+
+    #[test]
+    fn is_readonly_command_string_rejects_destructive_and_chains() {
+        // Destructive commands in `&&` chains are still rejected.
+        assert!(!is_readonly_command_string(&json!({"command": "ls -la && rm foo.txt"})));
+        assert!(!is_readonly_command_string(&json!({"command": "true && mv a b"})));
+        assert!(!is_readonly_command_string(&json!({"command": "cat x && cp a b"})));
+        // Substitutions in any `&&` segment are still rejected.
+        assert!(!is_readonly_command_string(&json!({"command": "ls && echo $(date)"})));
     }
 
     #[test]

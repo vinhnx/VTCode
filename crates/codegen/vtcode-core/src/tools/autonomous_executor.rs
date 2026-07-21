@@ -649,8 +649,12 @@ mod tests {
             AutonomousPolicy::RequireConfirmation
         );
         assert_eq!(
-            executor.get_policy(tools::UNIFIED_EXEC, &json!({"cmd": "echo hi"})),
+            executor.get_policy(tools::UNIFIED_EXEC, &json!({"cmd": "cargo build"})),
             AutonomousPolicy::VerifyThenExecute
+        );
+        assert_eq!(
+            executor.get_policy(tools::UNIFIED_EXEC, &json!({"cmd": "echo hi"})),
+            AutonomousPolicy::AutoExecute
         );
         assert_eq!(
             executor.get_policy(
@@ -666,11 +670,11 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         assert_eq!(
-            executor.get_policy(tools::EXEC_COMMAND, &json!({"cmd": "echo hi"})),
+            executor.get_policy(tools::EXEC_COMMAND, &json!({"cmd": "cargo build"})),
             AutonomousPolicy::VerifyThenExecute
         );
         assert_eq!(
-            executor.get_policy(tools::RUN_PTY_CMD, &json!({"command": "echo hi"})),
+            executor.get_policy(tools::RUN_PTY_CMD, &json!({"command": "cargo build"})),
             AutonomousPolicy::VerifyThenExecute
         );
     }

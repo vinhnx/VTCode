@@ -47,7 +47,11 @@ pub(crate) fn detect_planning_intent(text: &str, assistant_prompted_implementati
     let trimmed = normalized.trim();
 
     // Priority 1: Explicit stay-in-planning phrases override everything.
-    if planning::matches_stay_intent(&normalized) {
+    // Includes the bare token `edit`/`revise` — short-form replies to the
+    // yes/no/edit HITL prompt surfaced when `request_user_input` is
+    // unavailable (checkpoint turn_725). These route the user back into
+    // planning revision without requiring the longer "keep planning" phrase.
+    if planning::matches_stay_intent(&normalized) || is_stay_token(trimmed) {
         return PlanningIntent::StayInPlanning;
     }
 
@@ -126,6 +130,17 @@ fn is_short_confirmation(trimmed: &str) -> bool {
     confirmation_tokens.contains(&trimmed)
 }
 
+/// Check if text is a bare stay-in-planning token. These are the short-form
+/// replies to the yes/no/edit HITL prompt (`edit`, `revise`) — the longer
+/// phrases are caught by `matches_stay_intent`, but the bare tokens need
+/// exact matching here so `edit` alone routes to revision (checkpoint
+/// turn_725). `no` is intentionally NOT a stay token — it abandons the plan
+/// and falls through to `PlanningIntent::None`, letting the model respond
+/// naturally to the user's "no" rather than forcing them back into planning.
+fn is_stay_token(trimmed: &str) -> bool {
+    matches!(trimmed, "edit" | "revise")
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -179,6 +194,23 @@ mod tests {
     #[test]
     fn disapprove_is_not_exit_intent() {
         assert_eq!(detect_planning_intent("I disapprove, keep planning", false), PlanningIntent::StayInPlanning);
+    }
+
+    #[test]
+    fn bare_edit_token_routes_to_stay_in_planning() {
+        // The yes/no/edit HITL prompt (surfaced when request_user_input is
+        // unavailable) must route the bare `edit` reply back to planning
+        // revision without requiring the longer "keep planning" phrase.
+        assert_eq!(detect_planning_intent("edit", false), PlanningIntent::StayInPlanning);
+        assert_eq!(detect_planning_intent("revise", false), PlanningIntent::StayInPlanning);
+        assert_eq!(detect_planning_intent("Edit the plan please", false), PlanningIntent::StayInPlanning);
+    }
+
+    #[test]
+    fn bare_no_token_does_not_force_stay_in_planning() {
+        // `no` abandons the plan — it falls through to None so the model can
+        // respond naturally to the user's "no" rather than forcing them back.
+        assert_eq!(detect_planning_intent("no", false), PlanningIntent::None);
     }
 
     #[test]

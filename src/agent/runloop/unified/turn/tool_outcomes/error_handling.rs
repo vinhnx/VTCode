@@ -46,6 +46,22 @@ pub(crate) fn tool_denial_diagnostic(tool_name: &str) -> Option<serde_json::Valu
                 "note": "After changing the files, restart the session for the policy to take effect."
             }
         })),
+        // `request_user_input` is permanently unavailable in non-interactive
+        // runtimes (e.g. headless sessions). Without this directive, the model
+        // sees a generic "execution denied by policy" and retries the call
+        // across turns — checkpoint turn_724 shows 7 retries. The explicit
+        // STOP instruction tells the model to proceed without asking the user.
+        // The `present_plan` directive tells the model to surface the plan it
+        // has gathered and offer a simple yes/no/edit HITL choice in plain text
+        // — the user replies in the next turn and `detect_planning_intent`
+        // routes `yes`/`implement` to implementation, `keep planning`/`edit` to
+        // revision. This is the text-mode equivalent of the interactive modal.
+        "request_user_input" => Some(serde_json::json!({
+            "cause": "The 'request_user_input' tool is permanently unavailable in this runtime (non-interactive session or the inline UI is not supported).",
+            "impact": "You cannot ask the user clarifying questions via a modal in this session.",
+            "directive": "STOP calling request_user_input. Do not retry it — the denial is permanent for this session.",
+            "present_plan": "Instead of asking, finalize the plan from the evidence already gathered and present it to the user in plain text. End your message by offering a simple choice: type `yes` (or `implement`) to start implementation, `no` to abandon, or `edit` (or `keep planning`) to refine — if the user picks edit, they will describe what to revise in their next message."
+        })),
         _ => None,
     }
 }
@@ -429,4 +445,46 @@ fn extract_background_subagent_name_from_error(error_msg: &str) -> Option<String
     let remaining = &error_msg[start..];
     let end = remaining.find('\'')?;
     Some(remaining[..end].to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tool_denial_diagnostic;
+
+    #[test]
+    fn request_user_input_denial_directive_tells_model_to_stop() {
+        let diagnostic =
+            tool_denial_diagnostic("request_user_input").expect("request_user_input should have a diagnostic");
+        let directive = diagnostic
+            .get("directive")
+            .and_then(serde_json::Value::as_str)
+            .expect("diagnostic should have a directive field");
+        assert!(
+            directive.contains("STOP") && directive.contains("Do not retry"),
+            "directive must explicitly tell the model to stop retrying: {directive}"
+        );
+        let present_plan = diagnostic
+            .get("present_plan")
+            .and_then(serde_json::Value::as_str)
+            .expect("diagnostic should have a present_plan field");
+        assert!(
+            present_plan.contains("yes") && present_plan.contains("no") && present_plan.contains("edit"),
+            "present_plan must offer the user a yes/no/edit choice: {present_plan}"
+        );
+        assert!(
+            present_plan.contains("finalize the plan"),
+            "present_plan must tell the model to finalize the plan from gathered evidence: {present_plan}"
+        );
+    }
+
+    #[test]
+    fn exec_command_denial_still_returns_config_fix() {
+        let diagnostic = tool_denial_diagnostic("exec_command").expect("exec_command should have a diagnostic");
+        assert!(diagnostic.get("fix").is_some(), "exec_command diagnostic should still have a fix field");
+    }
+
+    #[test]
+    fn unknown_tool_returns_no_diagnostic() {
+        assert!(tool_denial_diagnostic("some_unknown_tool").is_none());
+    }
 }

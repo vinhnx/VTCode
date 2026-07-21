@@ -73,6 +73,10 @@ pub const EXIT_TRIGGER_PHRASES: &[&str] = &[
 ];
 
 /// Phrases that explicitly keep the user in plan mode (highest priority).
+/// `edit` and `revise` are the short-form replies to the yes/no/edit HITL
+/// prompt surfaced when `request_user_input` is unavailable — they route the
+/// user back into planning revision without requiring the longer "keep
+/// planning" phrase (checkpoint turn_725).
 pub const STAY_PHRASES: &[&str] = &[
     "stay in planning workflow",
     "keep in planning workflow",
@@ -83,6 +87,10 @@ pub const STAY_PHRASES: &[&str] = &[
     "not ready to implement",
     "don t exit planning workflow",
     "do not exit planning workflow",
+    "edit the plan",
+    "edit plan",
+    "revise the plan",
+    "revise plan",
 ];
 
 /// Phrases that enter plan mode (does not include the `/plan` slash command,

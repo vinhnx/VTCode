@@ -667,6 +667,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tool_free_recovery_finalizes_with_yes_no_edit_when_interview_denied() {
+        // When `request_user_input` is permanently denied (non-interactive
+        // runtime), the recovery fallback must surface a clean yes/no/edit
+        // HITL prompt instead of promising an interview that will never come
+        // (checkpoint turn_725). The user-visible final answer must contain
+        // all three choices so `detect_planning_intent` can route the reply.
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let mut plan_session = PlanningWorkflowSessionState::default();
+        plan_session.mark_interview_denied();
+
+        let result = complete_turn_after_failed_tool_free_recovery(
+            &mut working_history,
+            "stage",
+            Some(&transient_err()),
+            None,
+            Some(&mut plan_session),
+            None,
+        )
+        .await;
+
+        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(
+            !plan_session.interview_pending(),
+            "interview-denied must not re-force the interview (would recur forever)"
+        );
+        let text = working_history
+            .iter()
+            .rev()
+            .find(|m| m.role == uni::MessageRole::Assistant)
+            .expect("a final answer must be pushed")
+            .content
+            .as_text();
+        assert!(
+            text.contains("`yes`") && text.contains("`no`") && text.contains("`edit`"),
+            "interview-denied fallback must offer yes/no/edit choices: {text}"
+        );
+        assert!(
+            !text.contains("interview will be presented"),
+            "interview-denied fallback must NOT promise a future interview: {text}"
+        );
+    }
+
+    #[tokio::test]
     async fn plan_mode_recovery_rejects_garbled_tool_call_salvage() {
         // When the tool-free synthesis fails and the only "salvage" is a
         // rambling monologue with tool-call markup stripped out (no real
