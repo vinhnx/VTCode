@@ -21,3 +21,7 @@ error: failed to publish vtcode-core v0.136.6 to registry at https://crates.io
 Caused by:
 [6] Couldn't resolve host name (Could not resolve host: crates.io)
 ERROR: Crate publishing failed. Remaining release steps (GitHub Release, binaries, Homebrew) will continue.
+
+--
+
+check and apply stash ebbbf6d285356429eb2799464e43b859b567ba80 if needed

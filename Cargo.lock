@@ -7377,7 +7377,6 @@ name = "vtcode-commons"
 version = "0.136.6"
 dependencies = [
  "anstyle",
- "anstyle-query",
  "anyhow",
  "base64",
  "chrono",

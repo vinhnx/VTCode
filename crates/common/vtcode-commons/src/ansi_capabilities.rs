@@ -1,9 +1,35 @@
 //! ANSI terminal capabilities detection and feature support
 
 use crate::color_policy::no_color_env_active;
-use anstyle_query::{clicolor, clicolor_force, term_supports_color};
 use once_cell::sync::Lazy;
+use std::io::IsTerminal;
 use std::sync::atomic::{AtomicU8, Ordering};
+
+/// Check if `CLICOLOR` environment variable is set to a non-zero value.
+fn clicolor() -> Option<bool> {
+    match std::env::var("CLICOLOR") {
+        Ok(val) => Some(!val.is_empty() && val != "0"),
+        Err(_) => None,
+    }
+}
+
+/// Check if `CLICOLOR_FORCE` environment variable is set to a non-zero value.
+fn clicolor_force() -> bool {
+    std::env::var("CLICOLOR_FORCE").is_ok_and(|val| !val.is_empty() && val != "0")
+}
+
+/// Check if the terminal supports ANSI color output.
+fn term_supports_color() -> bool {
+    if !std::io::stdout().is_terminal() {
+        return false;
+    }
+    if let Ok(term) = std::env::var("TERM") {
+        if term == "dumb" || term == "emacs" {
+            return false;
+        }
+    }
+    true
+}
 
 /// Color depth support level detected for the terminal
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
