@@ -4,7 +4,7 @@ pub(crate) enum SectionBoundaryMode {
     BracketOrMarkdown,
 }
 
-/// Identifies which layer of the system prompt a [`PromptSection`] belongs to.
+/// Identifies which layer of the system prompt a `PromptSection` belongs to.
 ///
 /// Variants mirror the layers `compose_system_instruction_text` actually
 /// assembles today. Agent identity is not a separate variant: it is applied
@@ -33,7 +33,7 @@ pub enum SectionKind {
 }
 
 impl SectionKind {
-    /// Static section name used in [`SystemPromptReport::trimmed_sections`].
+    /// Static section name used in [`crate::prompts::SystemPromptReport::trimmed_sections`].
     pub const fn name(self) -> &'static str {
         match self {
             Self::BaseContract => "base_contract",
