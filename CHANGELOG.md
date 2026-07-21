@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.136.7 - 2026-07-21
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update TODO (151a68c0) (@vinhnx)
+#### Refactors
+
+- Remove anstyle-query dependency by inlining terminal color detection (fd350b03) 
 ## 0.136.6 - 2026-07-21
 
 ### Highlights
