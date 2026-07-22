@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, sync::Arc, time::Instant};
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
@@ -365,6 +369,10 @@ pub(crate) struct ThinkingRunIndex {
     /// `None` when no reasoning is actively streaming. Because the transcript
     /// only ever appends lines, this index stays valid until `clear_screen`.
     active_start: Option<usize>,
+    /// Start timestamps keyed by run-start line index.
+    start_times: std::collections::HashMap<usize, Instant>,
+    /// Elapsed run durations keyed by run-start line index.
+    durations: std::collections::HashMap<usize, Duration>,
 }
 
 impl ThinkingRunIndex {
@@ -382,11 +390,31 @@ impl ThinkingRunIndex {
     /// Record the start of a newly begun reasoning run.
     pub(crate) fn begin_run(&mut self, start: usize) {
         self.active_start = Some(start);
+        self.start_times.entry(start).or_insert_with(Instant::now);
     }
 
     /// End the active reasoning run (a non-reasoning line was appended).
     pub(crate) fn end_run(&mut self) {
+        if let Some(start) = self.active_start {
+            if let Some(start_time) = self.start_times.get(&start) {
+                let duration = start_time.elapsed();
+                self.durations.insert(start, duration);
+            }
+        }
         self.active_start = None;
+    }
+
+    /// Whether the reasoning run starting at `start` is currently active (streaming).
+    pub(crate) fn is_active(&self, start: usize) -> bool {
+        self.active_start == Some(start)
+    }
+
+    /// Duration of the reasoning run starting at `start`, if recorded.
+    pub(crate) fn duration(&self, start: usize) -> Option<Duration> {
+        self.durations
+            .get(&start)
+            .copied()
+            .or_else(|| self.start_times.get(&start).map(|t| t.elapsed()))
     }
 
     /// Start line index of the reasoning run currently streaming, if any.
@@ -397,6 +425,8 @@ impl ThinkingRunIndex {
     /// Reset all tracked runs (e.g. on `clear_screen`).
     pub(crate) fn clear(&mut self) {
         self.collapsed.clear();
+        self.start_times.clear();
+        self.durations.clear();
         self.active_start = None;
     }
 }

@@ -38,7 +38,6 @@ pub use std::sync::{
     LazyLock, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
-pub use std::time::Duration;
 pub use tokio::sync::mpsc;
 pub use tokio::sync::mpsc::UnboundedSender;
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
