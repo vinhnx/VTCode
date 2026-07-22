@@ -163,6 +163,149 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     process_key_with_clipboard_image_reader(session, key, read_clipboard_image)
 }
 
+/// Key handler for a secure-prompt modal (text-only, masked input such as an
+/// API-key entry). See `process_key_with_clipboard_image_reader` for why this
+/// exists separately from the normal composer handler.
+///
+/// Every key is handled here — editing keys mutate the shared input manager,
+/// Enter submits and closes the modal, Esc cancels and closes it, and anything
+/// else is consumed so no composer shortcut leaks through while a secret is
+/// being typed.
+fn handle_secure_prompt_key(
+    session: &mut Session,
+    key: KeyEvent,
+    has_control: bool,
+    has_shift: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> Option<InlineEvent> {
+    match key.code {
+        KeyCode::Esc => {
+            session.core.input_manager.clear();
+            session.close_overlay();
+            session.mark_dirty();
+            None
+        }
+        // Plain Enter and Cmd+Enter submit. Shift/Ctrl+Alt line-feed combos are
+        // not meaningful for a single-line secret, so require no shift/alt/control.
+        KeyCode::Enter if !has_control && !has_shift && !has_alt => {
+            let submitted = session.core.input_manager.content().trim().to_string();
+            if submitted.is_empty() {
+                return None;
+            }
+            session.core.input_manager.clear();
+            session.close_overlay();
+            session.mark_dirty();
+            Some(InlineEvent::Submit(submitted.into()))
+        }
+        KeyCode::Backspace => {
+            if has_alt {
+                session.delete_word_backward();
+            } else if has_command {
+                session.delete_to_start_of_line();
+            } else {
+                session.delete_char();
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Delete => {
+            if has_command {
+                session.delete_to_end_of_line();
+            } else {
+                session.delete_char_forward();
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Left => {
+            if has_command {
+                session.move_to_start();
+            } else if has_alt {
+                session.move_left_word();
+            } else {
+                session.move_left();
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Right => {
+            if has_command {
+                session.move_to_end();
+            } else if has_alt {
+                session.move_right_word();
+            } else {
+                session.move_right();
+            }
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Home => {
+            session.move_to_start();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::End => {
+            session.move_to_end();
+            session.mark_dirty();
+            None
+        }
+        KeyCode::Char(ch) => {
+            // Readline-style Ctrl+<ch> editing/navigation (no Alt/Cmd).
+            if has_control && !has_alt && !has_command {
+                match ch {
+                    'a' | 'A' => {
+                        session.move_to_start();
+                        session.mark_dirty();
+                    }
+                    'e' | 'E' => {
+                        session.move_to_end();
+                        session.mark_dirty();
+                    }
+                    'b' | 'B' => {
+                        session.move_left();
+                        session.mark_dirty();
+                    }
+                    'f' | 'F' => {
+                        session.move_right();
+                        session.mark_dirty();
+                    }
+                    'w' | 'W' => {
+                        session.delete_word_backward();
+                        session.mark_dirty();
+                    }
+                    'u' | 'U' => {
+                        session.delete_to_start_of_line();
+                        session.mark_dirty();
+                    }
+                    'k' | 'K' => {
+                        session.delete_to_end_of_line();
+                        session.mark_dirty();
+                    }
+                    'h' | 'H' => {
+                        // Ctrl+H is backspace on many terminals.
+                        session.delete_char();
+                        session.mark_dirty();
+                    }
+                    _ => {}
+                }
+                return None;
+            }
+            // Plain character insertion (Shift is allowed — produces the shifted
+            // glyph). Control characters (Tab, newline, etc.) are ignored so the
+            // field stays a single-line secret.
+            if !has_control && !has_alt && !has_command && !ch.is_control() {
+                session.insert_char(ch);
+                session.mark_dirty();
+            }
+            None
+        }
+        // Consume everything else (function keys, Tab, modifiers, …) so the
+        // secure prompt stays focused and no composer shortcut fires.
+        _ => None,
+    }
+}
+
 pub(super) fn process_key_with_clipboard_image_reader(
     session: &mut Session,
     key: KeyEvent,
@@ -190,6 +333,23 @@ pub(super) fn process_key_with_clipboard_image_reader(
         return None;
     }
 
+    // Secure prompt modals own their own key handling. They render as
+    // `FloatingOverlay` (Modal focus policy), which disables the regular
+    // composer via `core.input_enabled() == false`. The normal key handler
+    // gates every character insertion on `input_enabled()`, so without this
+    // dedicated handler typed characters would never reach the masked input
+    // field. The handler edits the shared input manager directly — the modal
+    // renderer reads `input_manager.content()` / `cursor()` to display the
+    // masked value — and scopes accepted keys to text editing plus
+    // submit/cancel, so composer shortcuts (Ctrl+M, Alt+S, …) do not leak
+    // through while the user is entering a secret.
+    if session
+        .modal_state_mut()
+        .is_some_and(|m| m.list.is_none() && m.secure_prompt.is_some())
+    {
+        return handle_secure_prompt_key(session, key, has_control, has_shift, has_alt, has_command);
+    }
+
     if let Some(modal) = session.modal_state_mut() {
         let modal_modifiers = ModalKeyModifiers {
             control: has_control,
@@ -203,8 +363,10 @@ pub(super) fn process_key_with_clipboard_image_reader(
             return Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(action.into()))));
         }
 
-        // Text-only modals (no list): close on Esc or any keypress.
-        if modal.list.is_none() {
+        // Text-only modals (no list, no secure prompt): close on Esc or any
+        // keypress. Secure prompt modals are handled above and excluded here
+        // so character input can flow through to the normal input handler.
+        if modal.list.is_none() && modal.secure_prompt.is_none() {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter => {
                     session.close_overlay();
@@ -1474,7 +1636,10 @@ pub(super) fn handle_diff_preview_key(session: &mut Session, key: &KeyEvent) -> 
 mod tests {
     use super::*;
     use crate::tui::config::constants::ui;
-    use crate::tui::core_tui::types::{InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme};
+    use crate::tui::core_tui::app::types::{ModalOverlayRequest, TransientRequest};
+    use crate::tui::core_tui::types::{
+        InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, SecurePromptConfig,
+    };
     use std::sync::Arc;
 
     fn build_session() -> Session {
@@ -1635,5 +1800,134 @@ mod tests {
         );
 
         assert_eq!(session.core.scroll_offset(), initial_offset);
+    }
+
+    fn build_session_with_secure_prompt() -> Session {
+        let mut session = build_session();
+        session.show_transient(TransientRequest::Modal(ModalOverlayRequest {
+            title: "Secure API key setup".to_string(),
+            lines: vec!["Paste the key — it will be auto-detected and saved securely.".to_string()],
+            secure_prompt: Some(SecurePromptConfig {
+                label: "API key".to_string(),
+                placeholder: None,
+                mask_input: true,
+            }),
+        }));
+        assert!(session.has_active_overlay(), "secure prompt modal should be open");
+        session
+    }
+
+    #[test]
+    fn secure_prompt_modal_typing_populates_input_buffer() {
+        let mut session = build_session_with_secure_prompt();
+
+        // Typed characters must reach the input buffer, not be silently consumed.
+        for ch in ['s', 'k', '-', 't', 'e', 's', 't'] {
+            let event = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+            assert!(event.is_none(), "character '{ch}' should not emit an event");
+        }
+
+        assert_eq!(session.core.input_manager.content(), "sk-test");
+        assert!(session.has_active_overlay(), "modal should remain open while typing");
+    }
+
+    #[test]
+    fn secure_prompt_modal_enter_submits_and_closes() {
+        let mut session = build_session_with_secure_prompt();
+
+        for ch in ['s', 'k', '-', 't', 'e', 's', 't'] {
+            let _ = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+
+        let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        match event {
+            Some(InlineEvent::Submit(input)) => {
+                assert_eq!(&*input, "sk-test", "Enter should submit the typed API key");
+            }
+            other => panic!("Enter should emit Submit, got {other:?}"),
+        }
+        assert!(!session.has_active_overlay(), "modal should be closed after Enter");
+        assert!(session.core.input_manager.content().is_empty(), "input buffer should be cleared after submit");
+    }
+
+    #[test]
+    fn secure_prompt_modal_esc_cancels_and_closes() {
+        let mut session = build_session_with_secure_prompt();
+
+        for ch in ['s', 'k', '-', 't', 'e', 's', 't'] {
+            let _ = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+
+        let event = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        assert!(event.is_none(), "Esc should not emit a submit event, got {event:?}");
+        assert!(!session.has_active_overlay(), "modal should be closed after Esc");
+        assert!(session.core.input_manager.content().is_empty(), "input buffer should be cleared after Esc");
+    }
+
+    #[test]
+    fn secure_prompt_modal_paste_auto_submits_and_closes() {
+        let mut session = build_session_with_secure_prompt();
+
+        let event = handle_paste(&mut session, "sk-pasted-key\n");
+
+        match event {
+            Some(InlineEvent::Submit(input)) => {
+                assert_eq!(&*input, "sk-pasted-key", "paste should auto-submit trimmed key");
+            }
+            other => panic!("paste should emit Submit, got {other:?}"),
+        }
+        assert!(!session.has_active_overlay(), "modal should be closed after paste");
+    }
+
+    #[test]
+    fn secure_prompt_modal_enter_with_empty_input_does_not_close() {
+        let mut session = build_session_with_secure_prompt();
+
+        // Pressing Enter without typing anything should not close the modal.
+        let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(event.is_none(), "Enter with empty input should not emit an event");
+        assert!(session.has_active_overlay(), "modal should remain open when input is empty");
+    }
+
+    #[test]
+    fn secure_prompt_modal_backspace_and_ctrl_u_edit_input() {
+        let mut session = build_session_with_secure_prompt();
+
+        for ch in ['s', 'k', '-', 't', 'e', 's', 't'] {
+            let _ = session.process_key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE));
+        }
+        assert_eq!(session.core.input_manager.content(), "sk-test");
+
+        // Backspace deletes the last character.
+        let event = session.process_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert!(event.is_none(), "Backspace should not emit an event");
+        assert_eq!(session.core.input_manager.content(), "sk-tes");
+        assert!(session.has_active_overlay(), "modal should remain open while editing");
+
+        // Ctrl+U clears from cursor to start of line.
+        let event = session.process_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert!(event.is_none(), "Ctrl+U should not emit an event");
+        assert!(session.core.input_manager.content().is_empty(), "Ctrl+U should clear the buffer");
+        assert!(session.has_active_overlay(), "modal should remain open after Ctrl+U");
+    }
+
+    #[test]
+    fn secure_prompt_modal_consumes_composer_shortcuts() {
+        let mut session = build_session_with_secure_prompt();
+
+        // Ctrl+M would normally submit "/model" from the composer; inside a secure
+        // prompt it must be consumed so the modal stays open and no event leaks.
+        let event = session.process_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::CONTROL));
+        assert!(event.is_none(), "Ctrl+M must not leak through the secure prompt, got {event:?}");
+        assert!(session.has_active_overlay(), "modal should remain open when Ctrl+M is pressed");
+
+        // Tab is consumed (not inserted, no agent cycling) while the secure prompt is open.
+        let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert!(event.is_none(), "Tab must not leak through the secure prompt, got {event:?}");
+        assert!(session.core.input_manager.content().is_empty(), "Tab must not insert a character");
+        assert!(session.has_active_overlay(), "modal should remain open when Tab is pressed");
     }
 }

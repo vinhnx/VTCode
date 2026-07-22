@@ -247,7 +247,27 @@ impl CredentialStorage {
         match mode.effective_mode() {
             AuthCredentialsStoreMode::Keyring => match self.store_keyring(value) {
                 Ok(()) => {
-                    let _ = self.clear_file();
+                    // Keep the encrypted file in sync as a reliability fallback.
+                    // The macOS Keychain (and other OS keyrings) can have
+                    // transient read failures — the security daemon may be
+                    // busy, the keychain may be momentarily locked, or the
+                    // first-access authorization prompt may time out. When
+                    // that happens, `load_with_mode` falls back to the
+                    // encrypted file. If we cleared the file on successful
+                    // keyring store (as we did previously), a transient
+                    // keyring read failure would find an empty file and the
+                    // key would be silently "lost" for that session, causing
+                    // the user to be re-prompted. The file is AES-256-GCM
+                    // encrypted with a machine-derived key, so keeping it
+                    // does not reduce security.
+                    if let Err(err) = self.store_file(value) {
+                        tracing::warn!(
+                            "Failed to write encrypted file backup for {}/{}: {}",
+                            self.service,
+                            self.user,
+                            err
+                        );
+                    }
                     Ok(())
                 }
                 Err(err) => {
@@ -840,6 +860,60 @@ mod tests {
 
         let metadata = fs::metadata(path).expect("read credential metadata");
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+    }
+
+    #[test]
+    #[serial]
+    fn keyring_store_keeps_encrypted_file_as_fallback() {
+        // Reliability contract: after storing via keyring mode, the encrypted
+        // file must remain present and readable so a later transient keyring
+        // read failure (busy keychain, momentary lock, auth-prompt timeout) can
+        // recover. Previously the file was cleared on keyring success, which
+        // silently lost the key when the keyring later failed to read.
+        let _guard = TestAuthDirGuard::new();
+        let storage = CredentialStorage::new("vtcode", "reliability_key");
+
+        storage
+            .store_with_mode("rk-secret", AuthCredentialsStoreMode::Keyring)
+            .expect("store credential");
+
+        // A keyring-mode load must fall back to the encrypted file and return
+        // the key (the keyring is unavailable under the test harness).
+        let loaded_keyring = storage
+            .load_with_mode(AuthCredentialsStoreMode::Keyring)
+            .expect("load credential");
+        assert_eq!(loaded_keyring.as_deref(), Some("rk-secret"));
+
+        // The encrypted file must still exist and be independently loadable.
+        let loaded_file = storage
+            .load_with_mode(AuthCredentialsStoreMode::File)
+            .expect("load file credential");
+        assert_eq!(loaded_file.as_deref(), Some("rk-secret"));
+    }
+
+    #[test]
+    #[serial]
+    fn custom_api_key_storage_isolates_keys_per_provider() {
+        // Multiple providers must each keep an independent key, and clearing one
+        // must not disturb another — so revisiting a provider does not re-prompt.
+        let _guard = TestAuthDirGuard::new();
+        let anthropic = CustomApiKeyStorage::new("anthropic");
+        let openrouter = CustomApiKeyStorage::new("openrouter");
+
+        anthropic
+            .store("anthropic-key", AuthCredentialsStoreMode::File)
+            .expect("store anthropic key");
+        openrouter
+            .store("openrouter-key", AuthCredentialsStoreMode::File)
+            .expect("store openrouter key");
+
+        assert_eq!(anthropic.load(AuthCredentialsStoreMode::File).unwrap().as_deref(), Some("anthropic-key"));
+        assert_eq!(openrouter.load(AuthCredentialsStoreMode::File).unwrap().as_deref(), Some("openrouter-key"));
+
+        // Clearing one provider must not affect the other.
+        anthropic.clear(AuthCredentialsStoreMode::File).expect("clear anthropic key");
+        assert_eq!(anthropic.load(AuthCredentialsStoreMode::File).unwrap(), None);
+        assert_eq!(openrouter.load(AuthCredentialsStoreMode::File).unwrap().as_deref(), Some("openrouter-key"));
     }
 
     #[test]
