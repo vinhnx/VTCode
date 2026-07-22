@@ -99,19 +99,7 @@ impl Session {
         let run_len = self.thinking_run_len(start);
         let accent = ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
 
-        let is_active = self.thinking_runs.is_active(start);
-        let header_text = if is_active {
-            "Thinking...".to_string()
-        } else {
-            let secs = self.thinking_runs.duration(start).map(|d| d.as_secs()).unwrap_or(0);
-            if secs > 0 {
-                format!("Thought for {}s", secs)
-            } else {
-                "Thought for 1s".to_string()
-            }
-        };
-
-        let header = Line::from(vec![Span::styled("• ", accent), Span::styled(header_text, accent)]);
+        let header = Line::from(Span::styled("Thinking", accent));
         let mut result = vec![transcript_line_with_detected_links(
             header,
             self.workspace_root.as_deref(),
@@ -120,34 +108,37 @@ impl Session {
         if !collapsed {
             let content_width = match width {
                 0 => None,
-                w => Some((w as usize).saturating_sub(2).max(10)),
+                w => Some(w as usize),
             };
 
-            let mut is_first_body_line = true;
+            let mut combined_spans: Vec<Span<'static>> = Vec::new();
             for idx in start..start + run_len {
-                let spans = render::render_message_spans(self, idx);
-                if spans.is_empty() || (spans.len() == 1 && spans[0].content.is_empty()) {
-                    let line = Line::from(vec![Span::raw("  ")]);
-                    result.push(transcript_line_with_detected_links(line, self.workspace_root.as_deref()));
+                if self.lines[idx].segments.is_empty() {
                     continue;
                 }
-
-                let mut wrapped = match content_width {
-                    None => vec![Line::from(spans)],
-                    Some(cw) => text_utils::wrap_line(Line::from(spans), cw),
-                };
-
-                for (line_idx, line) in wrapped.iter_mut().enumerate() {
-                    trim_leading_whitespace(line);
-                    let prefix_span = if is_first_body_line && line_idx == 0 {
-                        is_first_body_line = false;
-                        Span::styled("└ ", accent)
-                    } else {
-                        Span::raw("  ")
-                    };
-                    line.spans.insert(0, prefix_span);
-                    result.push(transcript_line_with_detected_links(line.clone(), self.workspace_root.as_deref()));
+                let spans = render::render_message_spans(self, idx);
+                if !combined_spans.is_empty()
+                    && !spans.is_empty()
+                    && !combined_spans
+                        .last()
+                        .is_some_and(|last| last.content.ends_with(char::is_whitespace))
+                {
+                    combined_spans.push(Span::raw(" ".to_owned()));
                 }
+                combined_spans.extend(spans);
+            }
+            if combined_spans.is_empty() {
+                combined_spans.push(Span::raw(String::new()));
+            }
+            let mut wrapped = match content_width {
+                None => vec![Line::from(combined_spans)],
+                Some(cw) => text_utils::wrap_line(Line::from(combined_spans), cw),
+            };
+            for line in &mut wrapped {
+                trim_leading_whitespace(line);
+            }
+            for line in wrapped {
+                result.push(transcript_line_with_detected_links(line, self.workspace_root.as_deref()));
             }
         }
 

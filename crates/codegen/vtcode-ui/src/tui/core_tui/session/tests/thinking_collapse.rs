@@ -42,10 +42,7 @@ fn collapsed_by_default_renders_summary_line() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let joined = all_text(&transcript);
 
-    assert!(
-        joined.contains("Thinking") || joined.contains("Thought"),
-        "collapsed summary should mention Thinking/Thought, got: {joined:?}"
-    );
+    assert!(joined.contains("Thinking"), "collapsed summary should mention Thinking, got: {joined:?}");
     assert!(
         !joined.contains("reasoning step one"),
         "collapsed render must not include the body, got: {joined:?}"
@@ -63,10 +60,7 @@ fn extended_config_renders_full_body() {
     let joined = all_text(&transcript);
 
     assert!(joined.contains("reasoning step one"), "extended render should include the body, got: {joined:?}");
-    assert!(
-        joined.contains("Thinking") || joined.contains("Thought"),
-        "expanded render must have a Thinking/Thought header, got: {joined:?}"
-    );
+    assert!(joined.starts_with("Thinking"), "expanded render must have a Thinking header, got: {joined:?}");
 }
 
 #[test]
@@ -78,7 +72,7 @@ fn toggle_flips_collapse_state() {
 
     // Default is collapsed.
     let collapsed = session.reflow_message_lines(start, 100, true);
-    assert!(all_text(&collapsed).contains("Thinking") || all_text(&collapsed).contains("Thought"));
+    assert!(all_text(&collapsed).contains("Thinking"));
 
     // Locate the summary row via the reflow cache.
     let summary_row = {
@@ -97,7 +91,7 @@ fn toggle_flips_collapse_state() {
     let toggled_again = session.toggle_thinking_block_at_row(100, summary_row);
     assert!(toggled_again);
     let collapsed_again = session.reflow_message_lines(start, 100, true);
-    assert!(all_text(&collapsed_again).contains("Thinking") || all_text(&collapsed_again).contains("Thought"));
+    assert!(all_text(&collapsed_again).contains("Thinking"));
 }
 
 #[test]
@@ -191,7 +185,7 @@ fn collapsed_thinking_separated_from_agent_message() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let lines: Vec<String> = transcript.iter().map(line_text).collect();
 
-    assert!(lines[0].contains("Thinking") || lines[0].contains("Thought"));
+    assert_eq!(lines[0], "Thinking");
     assert!(
         lines[1].trim().is_empty(),
         "expected a blank line between the thinking block and the agent message, got: {:?}",
@@ -235,7 +229,7 @@ fn thinking_block_layout_snapshot() {
     let start = session.lines.len() - 2;
     let collapsed = session.reflow_message_lines(start, 100, true);
     let collapsed_lines: Vec<String> = collapsed.iter().map(line_text).collect();
-    assert!(collapsed_lines[0].contains("Thinking") || collapsed_lines[0].contains("Thought"));
+    assert_eq!(collapsed_lines[0], "Thinking");
 
     // Expanded: header followed by the body lines.
     let mut session = Session::new(InlineTheme::default(), None, 24);
@@ -244,9 +238,9 @@ fn thinking_block_layout_snapshot() {
     let start = session.lines.len() - 2;
     let expanded = session.reflow_message_lines(start, 100, true);
     let expanded_lines: Vec<String> = expanded.iter().map(line_text).collect();
-    assert!(expanded_lines[0].contains("Thinking") || expanded_lines[0].contains("Thought"));
+    assert_eq!(expanded_lines[0], "Thinking");
     assert!(expanded_lines[1].contains("reasoning step one"));
-    assert!(expanded_lines[2].contains("reasoning step two"));
+    assert!(expanded_lines[1].contains("reasoning step two"));
 }
 
 #[test]
@@ -334,7 +328,7 @@ fn expanded_view_skips_trailing_empty_policy_line() {
     let transcript = session.reflow_message_lines(start, 100, true);
     let body: Vec<String> = transcript.iter().map(line_text).collect();
 
-    assert!(body[0].contains("Thinking") || body[0].contains("Thought"), "header should be Thinking/Thought");
+    assert_eq!(body[0], "Thinking", "header should be Thinking");
     // The two content lines should be rendered.
     assert!(body.iter().any(|l| l.contains("reasoning one")), "first reasoning line should appear");
     assert!(body.iter().any(|l| l.contains("reasoning two")), "second reasoning line should appear");
@@ -377,14 +371,14 @@ fn reasoning_stream_expands_run_len() {
 
     let pre = session.ensure_reflow_cache(100);
     let pre_text = all_text(&pre.messages[start].lines);
-    assert!(pre_text.contains("Thinking") || pre_text.contains("Thought"));
+    assert!(pre_text.contains("Thinking"));
 
     // Stream a second reasoning line without clicking.
     push_policy_lines(&mut session, &["second reasoning line"]);
 
     let post = session.ensure_reflow_cache(100);
     let post_text = all_text(&post.messages[start].lines);
-    assert!(post_text.contains("Thinking") || post_text.contains("Thought"));
+    assert!(post_text.contains("Thinking"));
 }
 #[test]
 fn expanded_thinking_wraps_at_word_boundaries() {
@@ -443,13 +437,6 @@ fn expanded_thinking_strips_leading_whitespace_for_consistent_indent() {
     let transcript = session.reflow_message_lines(start, 40, true);
     let body_lines: Vec<String> = transcript.iter().skip(1).map(line_text).collect();
     for line in &body_lines {
-        let content = if let Some(stripped) = line.strip_prefix("└ ") {
-            stripped
-        } else if let Some(stripped) = line.strip_prefix("  ") {
-            stripped
-        } else {
-            line.as_str()
-        };
-        assert!(!content.starts_with(' '), "body line content must not have leading whitespace, got: {content:?}");
+        assert!(!line.starts_with(' '), "body line must not have leading whitespace, got: {line:?}");
     }
 }
