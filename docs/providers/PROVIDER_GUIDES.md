@@ -2,6 +2,28 @@
 
 This index collects provider-specific guides for configuring VT Code with different LLM backends.
 
+## Provider whitelisting
+
+Use `providers_whitelist` in `vtcode.toml` to restrict which providers VT Code may access. This is a governance control for environments where only approved inference endpoints should be reachable — for example, a corporate gateway or an air-gapped setup.
+
+```toml
+# Allow only corporate gateways + Gemini
+providers_whitelist = ["opencode-zen", "opencode-go", "gemini"]
+```
+
+When `providers_whitelist` is non-empty:
+
+- The `/model` picker shows only the listed providers.
+- The first-run wizard offers only the listed providers.
+- The startup validator rejects `agent.provider` values not in the list.
+- Saving a model selection that falls outside the list is blocked.
+
+When `providers_whitelist` is empty (the default), all built-in providers and `[[custom_providers]]` entries are available.
+
+Whitelist entries may be a built-in provider key or a `name` from `[[custom_providers]]`. Matching is case-insensitive.
+
+See the [Configuration guide](../config/config.md#provider-whitelisting) for full details.
+
 ## Google Gemini
 
 -   Configuration details are covered in the main [Getting Started guide](../user-guide/getting-started.md#api-requirements).
@@ -204,3 +226,16 @@ VT Code provides compatibility with the Anthropic Messages API to help connect e
 -   **Setup:** Set `POOLSIDE_API_KEY` from Poolside platform, then configure `provider = "poolside"` in `vtcode.toml`
 
 > ℹ Additional provider-specific guides will be added as new integrations land in VT Code.
+
+## Next release (v0.139)
+
+Provider whitelisting will gain tighter first-run and `/model` picker integration in the next release. If you need to restrict available providers today, use `providers_whitelist` in `vtcode.toml` as documented above.
+
+## For the original poster
+
+If you landed here from an issue or support request:
+
+1. Confirm your `vtcode.toml` has the correct `provider` and (if required) the matching API key environment variable.
+2. Run `vtcode doctor` (or `vtcode check`) to validate config before opening the model picker.
+3. If the picker still shows the wrong provider, check `docs/config/CONFIG_FIELD_REFERENCE.md` for the latest `providers_whitelist` semantics and `[[custom_providers]]` shape.
+4. Ping the maintainer with your `vtcode.toml` (redacted) and the output of `vtcode doctor` so the fix can be verified quickly.

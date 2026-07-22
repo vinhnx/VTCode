@@ -392,7 +392,10 @@ pub(super) fn service_tier_label(service_tier: Option<OpenAIServiceTier>) -> &'s
 }
 
 pub(super) fn is_cancel_command(input: &str) -> bool {
-    matches!(input.to_ascii_lowercase().as_str(), "cancel" | "/cancel" | "abort" | "quit")
+    input.eq_ignore_ascii_case("cancel")
+        || input.eq_ignore_ascii_case("/cancel")
+        || input.eq_ignore_ascii_case("abort")
+        || input.eq_ignore_ascii_case("quit")
 }
 
 pub(super) fn derive_env_key(provider: &str) -> String {

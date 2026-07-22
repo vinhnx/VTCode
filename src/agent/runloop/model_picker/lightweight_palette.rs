@@ -135,7 +135,7 @@ fn provider_scoped_items(
                 &option.display,
                 &option.id,
                 Some(&option.description),
-                &static_model_search_terms(option.model.clone(), option.supports_reasoning),
+                &static_model_search_terms(&option.model, option.supports_reasoning),
             )),
         });
     }
@@ -413,6 +413,7 @@ mod tests {
             provider_models: hashbrown::HashMap::from([(Provider::OpenAI, vec![0]), (Provider::Ollama, vec![1])]),
             provider_errors: hashbrown::HashMap::new(),
             provider_warnings: hashbrown::HashMap::new(),
+            seen_model_ids: hashbrown::HashSet::from(["gpt-5.4-experimental".to_string(), "llama-local".to_string()]),
         };
 
         let view = build_lightweight_model_palette_view("lightweight_model:", &config, Some(&vt_cfg), &registry);

@@ -594,6 +594,8 @@ python3 scripts/generate_config_field_reference.py
 | `provider_overrides.*.base_url` | `null \| string` | no | `-` | Optional base URL override for the provider endpoint. When set, custom models from this override are routed to the specified endpoint instead of the provider's default. |
 | `provider_overrides.*.models` | `array` | no | `[]` | Additional model identifiers to offer for this built-in provider. These models are appended to the provider's hardcoded model list and appear in the `/model` picker alongside built-in entries. |
 | `provider_overrides.*.models[]` | `string` | no | `-` | - |
+| `providers_whitelist` | `array` | no | `[]` | Restrict which providers may be used. When non-empty, only listed providers are visible in the model picker, selectable at first-run, and instantiable at runtime. Empty (default) allows all built-in and custom providers. |
+| `providers_whitelist[]` | `string` | no | `-` | Built-in provider key (e.g. "openai", "anthropic", "gemini", "opencode-zen") or a name from `[[custom_providers]]`. |
 | `pty.command_timeout_seconds` | `integer` | no | `300` | Command timeout in seconds (prevents hanging commands) |
 | `pty.default_cols` | `integer` | no | `80` | Default terminal columns for PTY sessions |
 | `pty.default_rows` | `integer` | no | `24` | Default terminal rows for PTY sessions |

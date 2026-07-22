@@ -1,7 +1,10 @@
 use once_cell::sync::Lazy;
-
-use std::collections::BTreeMap;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
+use tracing::warn;
+
+use vtcode_config::VTCodeConfig;
 use vtcode_config::core::ProviderOverrideConfig;
 use vtcode_core::config::models::{ModelId, Provider};
 
@@ -16,9 +19,6 @@ pub(super) struct ModelOption {
     pub(super) reasoning_alternative: Option<ModelId>,
 }
 
-/// Check if a model should be filtered out from the picker.
-///
-/// Currently filters out Copilot models except for CopilotAuto.
 fn should_filter_model(provider: Provider, model: &ModelId) -> bool {
     provider == Provider::Copilot && !matches!(model, ModelId::CopilotAuto)
 }
@@ -44,23 +44,41 @@ pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     options
 });
 
-/// Build model options list with user-defined provider overrides.
-///
-/// Merges the hardcoded model list with custom models defined in
-/// `[providers.<name>]` config sections. Custom models are appended
-/// to the list as `ModelId::Custom` variants.
+static PROVIDER_OPTION_INDEXES: Lazy<HashMap<Provider, Box<[usize]>>> = Lazy::new(|| {
+    let mut map = HashMap::<Provider, Vec<usize>>::with_capacity(64);
+    for (index, option) in MODEL_OPTIONS.iter().enumerate() {
+        map.entry(option.provider).or_default().push(index);
+    }
+    map.into_iter().map(|(k, v)| (k, v.into_boxed_slice())).collect()
+});
+
+static PICKER_PROVIDER_ORDER: Lazy<Box<[Provider]>> = Lazy::new(|| {
+    Provider::all_providers()
+        .into_iter()
+        .filter(|p| !matches!(p, Provider::Ollama | Provider::LlamaCpp))
+        .chain([Provider::LlamaCpp, Provider::Ollama])
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
+});
+
 pub(super) fn build_model_options_with_overrides(
     overrides: &BTreeMap<String, ProviderOverrideConfig>,
-) -> Vec<ModelOption> {
+) -> Cow<'static, [ModelOption]> {
     if overrides.is_empty() {
-        return MODEL_OPTIONS.clone();
+        return Cow::Borrowed(MODEL_OPTIONS.as_slice());
     }
 
     let models = ModelId::all_models_with_overrides(overrides);
     let mut options = Vec::with_capacity(models.len());
     for model in models {
         let provider = match &model {
-            ModelId::Custom(provider_key, _) => Provider::from_str(provider_key).unwrap_or(Provider::OpenAI),
+            ModelId::Custom(provider_key, _) => match Provider::from_str(provider_key) {
+                Ok(parsed) => parsed,
+                Err(_) => {
+                    warn!("Unknown provider key '{}' in provider_overrides; defaulting to OpenAI", provider_key);
+                    Provider::OpenAI
+                }
+            },
             _ => model.provider(),
         };
         if should_filter_model(provider, &model) {
@@ -76,16 +94,11 @@ pub(super) fn build_model_options_with_overrides(
             provider,
         });
     }
-    options
+    Cow::Owned(options)
 }
 
 pub(super) fn option_indexes_for_provider(provider: Provider) -> &'static [usize] {
-    MODEL_OPTIONS
-        .iter()
-        .enumerate()
-        .filter_map(|(index, option)| (option.provider == provider).then_some(index))
-        .collect::<Vec<_>>()
-        .leak()
+    PROVIDER_OPTION_INDEXES.get(&provider).map_or(&[], Box::as_ref)
 }
 
 pub(super) fn find_option_index(provider: Provider, model_id: &str, options: &[ModelOption]) -> Option<usize> {
@@ -98,12 +111,45 @@ pub(super) fn find_option_index(provider: Provider, model_id: &str, options: &[M
     })
 }
 
-pub(super) fn picker_provider_order() -> Vec<Provider> {
-    let mut providers: Vec<Provider> = Provider::all_providers()
-        .into_iter()
-        .filter(|provider| !matches!(provider, Provider::Ollama | Provider::LlamaCpp))
+pub(super) fn build_filtered_options(vt_cfg: Option<&VTCodeConfig>) -> Cow<'static, [ModelOption]> {
+    let Some(cfg) = vt_cfg else {
+        return Cow::Borrowed(MODEL_OPTIONS.as_slice());
+    };
+    let opts: Cow<'static, [ModelOption]> = if !cfg.provider_overrides.is_empty() {
+        build_model_options_with_overrides(&cfg.provider_overrides)
+    } else {
+        Cow::Borrowed(MODEL_OPTIONS.as_slice())
+    };
+    filter_options_by_whitelist(opts, &cfg.providers_whitelist)
+}
+
+pub(super) fn picker_provider_order() -> &'static [Provider] {
+    PICKER_PROVIDER_ORDER.as_ref()
+}
+
+pub(super) fn picker_provider_order_with_whitelist(whitelist: &[String]) -> Vec<Provider> {
+    if whitelist.is_empty() {
+        return PICKER_PROVIDER_ORDER.to_vec();
+    }
+    PICKER_PROVIDER_ORDER
+        .iter()
+        .copied()
+        .filter(|p| whitelist.iter().any(|w| w.eq_ignore_ascii_case(p.as_ref())))
+        .collect()
+}
+
+pub(super) fn filter_options_by_whitelist(
+    options: Cow<'static, [ModelOption]>,
+    whitelist: &[String],
+) -> Cow<'static, [ModelOption]> {
+    if whitelist.is_empty() {
+        return options;
+    }
+    let allowed: HashSet<String> = whitelist.iter().map(|w| w.to_ascii_lowercase()).collect();
+    let filtered: Vec<ModelOption> = options
+        .iter()
+        .filter(|opt| allowed.contains(&opt.provider.as_ref().to_ascii_lowercase()))
+        .cloned()
         .collect();
-    providers.push(Provider::LlamaCpp);
-    providers.push(Provider::Ollama);
-    providers
+    Cow::Owned(filtered)
 }

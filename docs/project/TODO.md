@@ -6,7 +6,7 @@ reference and explore research /Users/vinhnguyenxuan/Developer/learn-by-doing/cl
 
 ==
 
-add https://docs.x.ai/overview
+add grok model https://docs.x.ai/overview
 
 ===
 

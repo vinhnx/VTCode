@@ -24,32 +24,62 @@ pub(crate) fn resolve_initial_provider(config: &VTCodeConfig, discovered: &[Disc
         Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::OpenAI);
 
     if !configured.is_empty() {
-        return Provider::from_str(configured).unwrap_or(hardcoded_default);
+        let parsed = Provider::from_str(configured).unwrap_or(hardcoded_default);
+        if config.providers_whitelist.is_empty()
+            || config
+                .providers_whitelist
+                .iter()
+                .any(|w| w.eq_ignore_ascii_case(parsed.as_ref()))
+        {
+            return parsed;
+        }
     }
 
-    // Prefer the first discovered non-local, non-managed provider (a real
-    // API-key/OAuth credential). Local providers are always "discovered" but
-    // are rarely what a user wants as the default on first run.
-    if let Some(first_ready) = discovered
-        .iter()
-        .find(|d| !matches!(d.source, CredentialSource::Local | CredentialSource::ManagedAuth))
-    {
+    if config.providers_whitelist.is_empty() {
+        if let Some(first_ready) = discovered
+            .iter()
+            .find(|d| !matches!(d.source, CredentialSource::Local | CredentialSource::ManagedAuth))
+        {
+            return first_ready.provider;
+        }
+        return hardcoded_default;
+    }
+
+    let whitelisted: Vec<Provider> = Provider::all_providers()
+        .into_iter()
+        .filter(|p| config.providers_whitelist.iter().any(|w| w.eq_ignore_ascii_case(p.as_ref())))
+        .collect();
+
+    if let Some(first_ready) = discovered.iter().find(|d| {
+        !matches!(d.source, CredentialSource::Local | CredentialSource::ManagedAuth)
+            && whitelisted.contains(&d.provider)
+    }) {
         return first_ready.provider;
     }
 
-    hardcoded_default
+    if let Some(first_ready) = discovered.iter().find(|d| whitelisted.contains(&d.provider)) {
+        return first_ready.provider;
+    }
+
+    whitelisted.into_iter().next().unwrap_or(hardcoded_default)
 }
 
 pub(crate) fn prompt_provider(
     renderer: &mut AnsiRenderer,
     default: Provider,
     discovered: &[DiscoveredProvider],
+    whitelist: &[String],
 ) -> Result<Provider> {
     renderer.line(MessageStyle::Status, "Choose your default provider:")?;
-    // Surface ready providers first so a user with one exported key doesn't
-    // have to scroll past 20 unconfigured providers. Stable within each tier
-    // (preserves `Provider::all_providers()` order).
-    let providers = sort_providers_by_readiness(Provider::all_providers(), discovered);
+    let all = Provider::all_providers();
+    let available: Vec<Provider> = if whitelist.is_empty() {
+        all
+    } else {
+        all.into_iter()
+            .filter(|p| whitelist.iter().any(|w| w.eq_ignore_ascii_case(p.as_ref())))
+            .collect()
+    };
+    let providers = sort_providers_by_readiness(available, discovered);
 
     match select_provider_with_ratatui(&providers, default, discovered) {
         Ok(provider) => Ok(provider),

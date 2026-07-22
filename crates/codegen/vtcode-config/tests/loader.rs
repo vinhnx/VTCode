@@ -330,3 +330,53 @@ fn use_root_config_from_file_discards_lower_precedence_layers() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn providers_whitelist_validation_rejects_unknown_provider() {
+    let toml = r#"
+providers_whitelist = ["openai", "nonexistent-provider"]
+
+[agent]
+provider = "openai"
+default_model = "gpt-5"
+"#;
+    let config: vtcode_config::VTCodeConfig = toml::from_str(toml).unwrap();
+    let result = config.validate();
+    assert!(result.is_err(), "unknown whitelist entry should fail validation");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("nonexistent-provider"), "error should name the bad entry: {err_msg}");
+}
+
+#[test]
+#[serial]
+fn providers_whitelist_validation_accepts_known_providers() {
+    let toml = r#"
+providers_whitelist = ["openai", "anthropic", "gemini"]
+
+[agent]
+provider = "openai"
+default_model = "gpt-5"
+"#;
+    let config: vtcode_config::VTCodeConfig = toml::from_str(toml).unwrap();
+    assert!(config.validate().is_ok(), "known providers should pass validation");
+}
+
+#[test]
+#[serial]
+fn providers_whitelist_validation_accepts_custom_provider_names() {
+    let toml = r#"
+providers_whitelist = ["mycorp"]
+
+[agent]
+provider = "mycorp"
+default_model = "gpt-5"
+
+[[custom_providers]]
+name = "mycorp"
+display_name = "MyCorp"
+base_url = "https://api.mycorp.example.com/v1"
+"#;
+    let config: vtcode_config::VTCodeConfig = toml::from_str(toml).unwrap();
+    assert!(config.validate().is_ok(), "custom provider name in whitelist should pass");
+}

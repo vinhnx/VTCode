@@ -6,7 +6,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_ui::tui::ui::interactive_list::{SelectionEntry, run_interactive_selection};
 
 use super::dynamic_models::DynamicModelRegistry;
-use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
+use super::options::{ModelOption, option_indexes_for_provider};
 use super::rendering::{
     CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION, dynamic_model_subtitle, join_with_label,
     static_model_subtitle,
@@ -44,13 +44,15 @@ pub(super) fn select_model_with_ratatui_list(
     _current_reasoning: ReasoningEffortLevel,
     dynamic_models: &DynamicModelRegistry,
     custom_providers: &[SelectionDetail],
+    provider_order: &[Provider],
 ) -> Result<ModelSelectionListOutcome> {
     if options.is_empty() {
         return Err(anyhow!("No models available for selection"));
     }
 
-    let mut choices = Vec::new();
-    for provider in picker_provider_order() {
+    let estimated = options.len() + dynamic_models.entries.len() + custom_providers.len() + 5;
+    let mut choices = Vec::with_capacity(estimated);
+    for &provider in provider_order {
         for option_index in option_indexes_for_provider(provider) {
             let Some(option) = options.get(*option_index) else {
                 continue;

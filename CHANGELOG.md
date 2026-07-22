@@ -8,6 +8,7 @@ All notable changes to vtcode will be documented in this file.
 #### Features
 
 - Add Poolside Laguna S 2.1 model and set as default (62ac704a) 
+- Add `providers_whitelist` config option to restrict accessible LLM providers (issue #705)
 ### Other Changes
 ## 0.137.0 - 2026-07-21
 

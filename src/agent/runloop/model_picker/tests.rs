@@ -12,7 +12,7 @@ use vtcode_core::config::models::ModelId;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
-use self::options::{find_option_index, option_indexes_for_provider};
+use self::options::{MODEL_OPTIONS, find_option_index, option_indexes_for_provider};
 
 fn has_model(options: &[ModelOption], model: ModelId) -> bool {
     let id = model.as_str();
@@ -107,7 +107,7 @@ fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
 #[test]
 fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
     let shortcut = SubagentModelTarget::Shortcut { model: "Haiku".to_string() };
-    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("high")), Some("high".to_string()));
+    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("high")), Some(ReasoningEffortLevel::High));
     assert_eq!(normalized_subagent_reasoning(&shortcut, Some("xhigh")), None);
     assert_eq!(normalized_subagent_reasoning(&shortcut, Some("max")), None);
     assert_eq!(normalized_subagent_reasoning(&shortcut, Some("bogus")), None);
@@ -119,7 +119,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
         None,
     ));
-    assert_eq!(normalized_subagent_reasoning(&concrete, Some("xhigh")), Some("xhigh".to_string()));
+    assert_eq!(normalized_subagent_reasoning(&concrete, Some("xhigh")), Some(ReasoningEffortLevel::XHigh));
 
     let sonnet = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::Anthropic,
@@ -128,7 +128,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
         None,
     ));
-    assert_eq!(normalized_subagent_reasoning(&sonnet, Some("max")), Some("max".to_string()));
+    assert_eq!(normalized_subagent_reasoning(&sonnet, Some("max")), Some(ReasoningEffortLevel::Max));
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn static_model_subtitle_formats_current_capabilities() {
 
 #[test]
 fn static_model_search_terms_include_modalities_and_tool_state() {
-    let terms = static_model_search_terms(ModelId::OpenRouterOpenAIGpt5Chat, false);
+    let terms = static_model_search_terms(&ModelId::OpenRouterOpenAIGpt5Chat, false);
 
     assert!(terms.iter().any(|term| term == "no tools"));
     assert!(terms.iter().any(|term| term == "no-tools"));
@@ -252,7 +252,7 @@ fn step_one_header_lines_explain_codex_runtime_configuration() {
 
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {
     ModelPickerState {
-        options: std::borrow::Cow::Borrowed(MODEL_OPTIONS.as_slice()),
+        options: Cow::Borrowed(MODEL_OPTIONS.as_slice()),
         step: PickerStep::AwaitModel,
         inline_enabled: true,
         vt_cfg: None,
@@ -271,6 +271,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         ctrl_c_notify: None,
         dynamic_models: DynamicModelRegistry::default(),
         plain_mode_active: false,
+        provider_order: picker_provider_order().to_vec(),
     }
 }
 
@@ -519,4 +520,39 @@ async fn openai_login_stays_in_picker_when_ctrl_c_cancels_auth() {
 
     assert!(matches!(progress, ModelPickerProgress::InProgress));
     assert!(picker.pending_api_key.is_none());
+}
+
+#[test]
+fn picker_provider_order_with_whitelist_filters_to_allowed() {
+    use crate::agent::runloop::model_picker::options::picker_provider_order_with_whitelist;
+
+    let order = picker_provider_order_with_whitelist(&["openai".to_string(), "anthropic".to_string()]);
+    assert!(order.contains(&Provider::OpenAI));
+    assert!(order.contains(&Provider::Anthropic));
+    assert!(!order.contains(&Provider::Gemini));
+}
+
+#[test]
+fn picker_provider_order_with_whitelist_empty_returns_all() {
+    use crate::agent::runloop::model_picker::options::picker_provider_order_with_whitelist;
+
+    let order = picker_provider_order_with_whitelist(&[]);
+    assert_eq!(order.len(), Provider::all_providers().len());
+}
+
+#[test]
+fn filter_options_by_whitelist_keeps_only_allowed_providers() {
+    use crate::agent::runloop::model_picker::options::filter_options_by_whitelist;
+
+    let filtered = filter_options_by_whitelist(Cow::Borrowed(MODEL_OPTIONS.as_slice()), &["openai".to_string()]);
+    assert!(filtered.iter().all(|o| o.provider == Provider::OpenAI));
+    assert!(!filtered.is_empty());
+}
+
+#[test]
+fn filter_options_by_whitelist_empty_returns_all() {
+    use crate::agent::runloop::model_picker::options::filter_options_by_whitelist;
+
+    let filtered = filter_options_by_whitelist(Cow::Borrowed(MODEL_OPTIONS.as_slice()), &[]);
+    assert_eq!(filtered.len(), MODEL_OPTIONS.len());
 }

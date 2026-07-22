@@ -124,6 +124,17 @@ If no key is in your environment, the wizard lets you paste one now or skip and 
 
 If you have no provider key at all, the wizard still offers a path forward: local providers like Ollama, LM Studio, and llama.cpp need no key.
 
+#### Restrict accessible providers (optional)
+
+In corporate or air-gapped environments, use `providers_whitelist` to prevent accidental use of public APIs:
+
+```toml
+# vtcode.toml
+providers_whitelist = ["opencode-zen", "opencode-go", "gemini"]
+```
+
+When set, the `/model` picker, first-run wizard, and config validator all respect the list. Leave it empty (the default) to allow every built-in and custom provider.
+
 ### 2. Confirm Workspace Context
 
 `WORKSPACE_DIR` tells VT Code which project folder to treat as its primary context. The CLI sets this automatically when you launch inside a directory, but you can override or verify it explicitly:

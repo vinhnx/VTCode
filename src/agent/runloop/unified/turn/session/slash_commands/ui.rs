@@ -361,6 +361,9 @@ pub(super) async fn start_model_picker(ctx: SlashCommandContext<'_>) -> Result<S
                     .line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
             }
         }
+        Ok(ModelPickerStart::Exit) => {
+            *ctx.model_picker_state = None;
+        }
         Err(err) => {
             ctx.renderer
                 .line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;

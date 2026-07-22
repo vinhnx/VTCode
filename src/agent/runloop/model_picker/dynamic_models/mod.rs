@@ -3,8 +3,11 @@ mod endpoints;
 
 use hashbrown::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
+use once_cell::sync::Lazy;
+use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use tracing::warn;
@@ -24,22 +27,31 @@ use super::selection::{SelectionDetail, selection_from_dynamic};
 
 type StaticModelIndex = HashMap<Provider, HashSet<String>>;
 
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
+
 #[derive(Clone, Default)]
 pub(crate) struct DynamicModelRegistry {
     pub(super) entries: Vec<SelectionDetail>,
     pub(super) provider_models: HashMap<Provider, Vec<usize>>,
     pub(super) provider_errors: HashMap<Provider, String>,
     pub(super) provider_warnings: HashMap<Provider, String>,
+    pub(super) seen_model_ids: HashSet<String>,
 }
 
 impl DynamicModelRegistry {
     pub(super) async fn load(options: &[ModelOption], workspace: Option<&Path>, vt_cfg: Option<&VTCodeConfig>) -> Self {
         let static_index = build_static_model_index(options);
+        let mut registry = Self {
+            seen_model_ids: static_index.values().flatten().cloned().collect(),
+            ..Self::default()
+        };
         let (endpoints, mut cache_store) =
             tokio::join!(ProviderEndpointConfig::gather(workspace), CachedDynamicModelStore::load());
-        let workspace_root = workspace
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let workspace_root = Arc::new(
+            workspace
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
+        );
 
         let openai_base_url = endpoints.resolved_base_url(Provider::OpenAI);
         let openai_auth = resolve_openai_dynamic_auth(vt_cfg);
@@ -68,16 +80,16 @@ impl DynamicModelRegistry {
             .fetch_with_cache(Provider::LmStudio, endpoints.base_url(Provider::LmStudio), fetch_lmstudio_models)
             .await;
 
-        let copilot_auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
+        let copilot_auth_cfg = Arc::new(vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default());
         let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&workspace_root)).await;
         let copilot_fetch = if matches!(copilot_status.kind, CopilotAuthStatusKind::Authenticated) {
             let (result, warning) = cache_store
                 .fetch_with_cache(Provider::Copilot, Some(copilot_cache_base(&copilot_auth_cfg)), {
-                    let copilot_auth_cfg = copilot_auth_cfg.clone();
-                    let workspace_root = workspace_root.clone();
+                    let copilot_auth_cfg = Arc::clone(&copilot_auth_cfg);
+                    let workspace_root = Arc::clone(&workspace_root);
                     move |_| {
-                        let copilot_auth_cfg = copilot_auth_cfg.clone();
-                        let workspace_root = workspace_root.clone();
+                        let copilot_auth_cfg = Arc::clone(&copilot_auth_cfg);
+                        let workspace_root = Arc::clone(&workspace_root);
                         async move {
                             let models = list_available_models(&copilot_auth_cfg, &workspace_root).await?;
                             Ok(models.into_iter().map(|model| model.id).collect())
@@ -93,7 +105,6 @@ impl DynamicModelRegistry {
             warn!("Failed to persist dynamic model cache: {err}");
         }
 
-        let mut registry = Self::default();
         if let Some((openai_result, openai_warning)) = openai_fetch {
             registry.process_fetch(Provider::OpenAI, openai_result, openai_base_url, &static_index);
             if let Some(warning) = openai_warning {
@@ -192,7 +203,7 @@ impl DynamicModelRegistry {
             if static_index.get(&provider).is_some_and(|set| set.contains(&lower)) {
                 continue;
             }
-            if self.has_model(provider, trimmed) {
+            if !self.seen_model_ids.insert(lower) {
                 continue;
             }
             if provider == Provider::Ollama && (trimmed.contains(":cloud") || trimmed.contains("-cloud")) {
@@ -207,19 +218,6 @@ impl DynamicModelRegistry {
         let index = self.entries.len();
         self.entries.push(detail);
         self.provider_models.entry(provider).or_default().push(index);
-    }
-
-    fn has_model(&self, provider: Provider, candidate: &str) -> bool {
-        if let Some(indexes) = self.provider_models.get(&provider) {
-            for index in indexes {
-                if let Some(entry) = self.entries.get(*index)
-                    && entry.model_id.eq_ignore_ascii_case(candidate)
-                {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     fn record_error(&mut self, provider: Provider, message: String) {
@@ -278,7 +276,7 @@ async fn fetch_openai_models(base_url: Option<String>, api_key: String) -> Resul
         .trim_end_matches('/')
         .to_string();
     let models_url = format!("{resolved_base}/models");
-    let response = reqwest::Client::new()
+    let response = HTTP_CLIENT
         .get(&models_url)
         .bearer_auth(api_key)
         .send()

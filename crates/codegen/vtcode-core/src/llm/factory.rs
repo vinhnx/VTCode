@@ -74,7 +74,15 @@ impl LLMFactory {
         &self,
         provider_name: &str,
         config: ProviderConfig,
+        whitelist: &[String],
     ) -> Result<Box<dyn LLMProvider>, LLMError> {
+        if !whitelist.is_empty() && !whitelist.iter().any(|w| w.eq_ignore_ascii_case(provider_name)) {
+            return Err(LLMError::InvalidRequest {
+                message: format!("Provider '{}' is not in providers_whitelist", provider_name),
+                metadata: None,
+            });
+        }
+
         let factory_fn = self.providers.get(provider_name).ok_or_else(|| LLMError::InvalidRequest {
             message: format!("Unknown provider: {provider_name}"),
             metadata: None,
@@ -182,6 +190,7 @@ pub fn create_provider_for_model(
             model_behavior,
             workspace_root: None,
         },
+        &[],
     )
 }
 
@@ -194,7 +203,7 @@ pub fn create_provider_with_config(
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
     })?;
-    factory.create_provider(provider_name, config)
+    factory.create_provider(provider_name, config, &[])
 }
 
 /// Register custom OpenAI-compatible providers from config into the global factory.
@@ -353,6 +362,7 @@ mod tests {
                     model_behavior: None,
                     workspace_root: None,
                 },
+                &[],
             )
             .expect("built-in cgp registration should build");
 
@@ -378,6 +388,7 @@ mod tests {
                     model_behavior: None,
                     workspace_root: None,
                 },
+                &[],
             )
             .expect("openai cgp registration should build");
 
@@ -406,6 +417,7 @@ mod tests {
                     model_behavior: None,
                     workspace_root: None,
                 },
+                &[],
             )
             .expect("anthropic cgp registration should build");
 
@@ -443,6 +455,7 @@ mod tests {
                     model_behavior: None,
                     workspace_root: None,
                 },
+                &[],
             )
             .expect("custom provider should still register");
         let builtin = factory
@@ -461,6 +474,7 @@ mod tests {
                     model_behavior: None,
                     workspace_root: None,
                 },
+                &[],
             )
             .expect("builtin provider should still build");
 

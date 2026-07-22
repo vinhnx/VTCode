@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::fmt::Write;
 
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::models::{ModelId, Provider};
@@ -8,7 +9,7 @@ use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelectio
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::dynamic_models::DynamicModelRegistry;
-use super::options::{ModelOption, option_indexes_for_provider, picker_provider_order};
+use super::options::{ModelOption, option_indexes_for_provider};
 use super::selection::SelectionDetail;
 
 mod prompts;
@@ -43,11 +44,14 @@ pub(super) fn model_search_value(
     extra_terms: &[String],
 ) -> String {
     let provider_label = provider.label();
-    let provider_key = provider.to_string();
-    let provider_model_name = format!("{provider_key} {model_display}");
-    let provider_model_id = format!("{provider_key}/{model_id}");
-    let mut value =
-        format!("{provider_label} {provider_key} {model_display} {model_id} {provider_model_name} {provider_model_id}");
+    let provider_key = provider.as_ref();
+    let mut value = String::with_capacity(128);
+    write!(
+        value,
+        "{} {} {} {} {provider_key}/{model_id}",
+        provider_label, provider_key, model_display, model_id
+    )
+    .unwrap();
     if let Some(description_text) = description {
         value.push(' ');
         value.push_str(description_text);
@@ -62,7 +66,7 @@ pub(super) fn model_search_value(
 }
 
 fn is_current_model(provider: Provider, model_id: &str, current_provider: &str, current_model: &str) -> bool {
-    provider.to_string().eq_ignore_ascii_case(current_provider.trim())
+    provider.as_ref().eq_ignore_ascii_case(current_provider.trim())
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
@@ -102,8 +106,7 @@ fn context_window_segment(provider: &str, model_id: &str) -> Option<String> {
 
 fn static_model_capability_segments(option: &ModelOption) -> Vec<String> {
     let mut segments = Vec::new();
-    let provider_key = option.provider.to_string();
-    if let Some(context_window) = context_window_segment(&provider_key, &option.id) {
+    if let Some(context_window) = context_window_segment(option.provider.as_ref(), &option.id) {
         segments.push(context_window);
     }
 
@@ -124,7 +127,7 @@ fn static_model_capability_segments(option: &ModelOption) -> Vec<String> {
     segments
 }
 
-pub(super) fn static_model_search_terms(model: ModelId, supports_reasoning: bool) -> Vec<String> {
+pub(super) fn static_model_search_terms(model: &ModelId, supports_reasoning: bool) -> Vec<String> {
     let mut terms = Vec::new();
     if supports_reasoning {
         terms.push("reasoning".to_string());
@@ -193,8 +196,7 @@ pub(super) fn dynamic_model_subtitle(
     current_model: &str,
 ) -> Option<String> {
     let mut segments = Vec::new();
-    let provider_key = provider.to_string();
-    if let Some(context_window) = context_window_segment(&provider_key, model_id) {
+    if let Some(context_window) = context_window_segment(provider.as_ref(), model_id) {
         segments.push(context_window);
     }
     if provider.is_local() {
@@ -277,9 +279,11 @@ pub(super) fn render_step_one_inline(
     current_provider: &str,
     current_model: &str,
     custom_providers: &[SelectionDetail],
+    provider_order: &[Provider],
 ) -> Result<()> {
-    let mut items = Vec::new();
-    for provider in picker_provider_order() {
+    let estimated = options.len() + dynamic_models.entries.len() + custom_providers.len() + 2;
+    let mut items = Vec::with_capacity(estimated);
+    for &provider in provider_order {
         let provider_model_indexes = option_indexes_for_provider(provider);
         let dynamic_indexes = dynamic_models.indexes_for(provider);
         let has_error = dynamic_models.error_for(provider).is_some();
@@ -304,7 +308,7 @@ pub(super) fn render_step_one_inline(
                     &option.display,
                     &option.id,
                     Some(&option.description),
-                    &static_model_search_terms(option.model.clone(), option.supports_reasoning),
+                    &static_model_search_terms(&option.model, option.supports_reasoning),
                 )),
             });
         }
@@ -430,6 +434,7 @@ pub(super) fn render_step_one_plain(
     dynamic_models: &DynamicModelRegistry,
     custom_providers: &[SelectionDetail],
     current_provider: &str,
+    provider_order: &[Provider],
 ) -> Result<()> {
     renderer.line(MessageStyle::Info, "Model picker: select the model you want to use.")?;
     renderer.line(MessageStyle::Info, "Type '<provider> <model-id>' to select a model.")?;
@@ -440,7 +445,7 @@ pub(super) fn render_step_one_plain(
     }
 
     let mut first_section = true;
-    for provider in picker_provider_order() {
+    for &provider in provider_order {
         let provider_model_indexes = option_indexes_for_provider(provider);
         if provider.is_local() {
             if !first_section {

@@ -199,6 +199,31 @@ base_url = "https://my-proxy.example.com/v1"
 api_key_env = "MY_PROXY_KEY"
 ```
 
+### Provider whitelisting
+
+Use `providers_whitelist` to restrict which providers VT Code may access. This is a governance control for environments where only approved inference endpoints should be reachable — for example, a corporate gateway or an air-gapped setup.
+
+```toml
+# Allow only corporate gateways + Gemini
+providers_whitelist = ["opencode-zen", "opencode-go", "gemini"]
+```
+
+When `providers_whitelist` is non-empty:
+
+- The `/model` picker shows only the listed providers.
+- The first-run wizard offers only the listed providers.
+- The startup validator rejects `agent.provider` values not in the list.
+- Saving a model selection that falls outside the list is blocked.
+
+When `providers_whitelist` is empty (the default), all built-in providers and `[[custom_providers]]` entries are available — this is the backward-compatible default.
+
+Whitelist entries may be:
+
+- A built-in provider key (`openai`, `anthropic`, `gemini`, `opencode-zen`, `opencode-go`, `ollama`, `lmstudio`, `llamacpp`, `copilot`, `deepseek`, `openrouter`, `moonshot`, `zai`, `minimax`, `mimo`, `mistral`, `huggingface`, `qwen`, `stepfun`, `evolink`, `poolside`).
+- A `name` from a `[[custom_providers]]` entry.
+
+Matching is case-insensitive.
+
 ### Model-specific settings
 
 You can also configure model-specific behavior:

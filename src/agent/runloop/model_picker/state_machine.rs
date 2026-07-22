@@ -234,7 +234,7 @@ impl ModelPickerState {
     }
 
     pub(super) fn apply_reasoning_off_choice(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
-        let Some(current_selection) = self.selection.clone() else {
+        let Some(current_selection) = self.selection.as_ref() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
 
@@ -277,7 +277,7 @@ impl ModelPickerState {
             return Ok(ModelPickerProgress::InProgress);
         };
 
-        self.selected_reasoning = None;
+        self.selected_reasoning = Some(ReasoningEffortLevel::None);
         let mut new_selection = selection_from_option(option);
         if new_selection.provider_label != current_selection.provider_label {
             new_selection.provider_label = current_selection.provider_label.clone();
@@ -422,111 +422,13 @@ impl ModelPickerState {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("API key requested before selecting a model"));
         };
-        if input.eq_ignore_ascii_case("login") && matches!(selection.provider_enum, Some(Provider::OpenAI)) {
-            if let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() {
-                if ctrl_c_state.is_exit_requested() {
-                    return Ok(ModelPickerProgress::Exit);
-                }
-                if ctrl_c_state.is_cancel_requested() {
-                    ctrl_c_state.mark_cancel_handled();
-                    renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
-                    return Ok(ModelPickerProgress::InProgress);
-                }
-            }
 
-            let prepared = prepare_openai_login(self.vt_cfg.as_ref())?;
-            let auth_url = prepared.auth_url.clone();
-            match request_external_url_open(url_guard, &auth_url).await? {
-                ExternalUrlOpenOutcome::Opened => {
-                    renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
-                    renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
-                }
-                ExternalUrlOpenOutcome::OpenFailed(err) => {
-                    renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
-                    renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
-                    renderer.line(MessageStyle::Error, &format!("Failed to open browser automatically: {err}"))?;
-                    renderer.line(MessageStyle::Info, "Please open the URL manually in your browser.")?;
-                }
-                ExternalUrlOpenOutcome::Cancelled => {
-                    renderer.line(MessageStyle::Info, "Cancelled opening authentication link.")?;
-                    return Ok(ModelPickerProgress::InProgress);
-                }
-                ExternalUrlOpenOutcome::Exit => {
-                    return Ok(ModelPickerProgress::Exit);
-                }
-                ExternalUrlOpenOutcome::Unsupported => {
-                    renderer.line(MessageStyle::Error, "Blocked unsupported authentication link target.")?;
-                    return Ok(ModelPickerProgress::InProgress);
-                }
-            }
-            let started = crate::cli::auth::begin_openai_login(prepared).await?;
-            let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() else {
-                return Err(anyhow!("OAuth login requires Ctrl+C state"));
-            };
-            let Some(ctrl_c_notify) = self.ctrl_c_notify.as_ref() else {
-                return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
-            };
-            match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await {
-                Ok(_) => {}
-                Err(err) if is_oauth_flow_cancelled(&err) => {
-                    if ctrl_c_state.is_exit_requested() {
-                        return Ok(ModelPickerProgress::Exit);
-                    }
-                    renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
-                    return Ok(ModelPickerProgress::Cancelled);
-                }
-                Err(err) => return Err(err),
-            }
-            if self.inline_enabled {
-                renderer.close_modal();
-            }
-            renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
-            self.pending_api_key = None;
-            if let Some(current) = self.selection.as_mut() {
-                current.requires_api_key = false;
-                current.uses_chatgpt_auth = true;
-            }
-            let result = self.build_result();
-            return Ok(ModelPickerProgress::Completed(result?));
+        if input.eq_ignore_ascii_case("login") && matches!(selection.provider_enum, Some(Provider::OpenAI)) {
+            return self.handle_openai_login(renderer, url_guard).await;
         }
 
         if input.eq_ignore_ascii_case("skip") {
-            if self.inline_enabled {
-                renderer.close_modal();
-            }
-            match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
-                Ok(Some(existing)) => {
-                    let mut selection = selection.clone();
-                    finalize_existing_api_key(&mut selection, &existing);
-                    renderer.line(MessageStyle::Info, &existing_api_key_message(&selection, &existing))?;
-                    self.pending_api_key = None;
-                    if let Some(current) = self.selection.as_mut() {
-                        current.requires_api_key = selection.requires_api_key;
-                        current.uses_chatgpt_auth = selection.uses_chatgpt_auth;
-                    }
-                    let result = self.build_result();
-                    return Ok(ModelPickerProgress::Completed(result?));
-                }
-                Ok(None) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!(
-                            "No API key found for {}. Run `/secret add {}` to store one in secure storage, then type 'skip' to continue.",
-                            selection.provider_label, selection.provider_key
-                        ),
-                    )?;
-                    prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
-                    return Ok(ModelPickerProgress::InProgress);
-                }
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to inspect stored credentials for {}: {}", selection.provider_label, err),
-                    )?;
-                    prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
-                    return Ok(ModelPickerProgress::InProgress);
-                }
-            }
+            return self.handle_skip_api_key(renderer, selection.clone()).await;
         }
 
         self.pending_api_key = Some(input.to_string());
@@ -535,6 +437,121 @@ impl ModelPickerState {
         }
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
+    }
+
+    async fn handle_openai_login(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        url_guard: ExternalUrlGuardContext<'_>,
+    ) -> Result<ModelPickerProgress> {
+        if let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() {
+            if ctrl_c_state.is_exit_requested() {
+                return Ok(ModelPickerProgress::Exit);
+            }
+            if ctrl_c_state.is_cancel_requested() {
+                ctrl_c_state.mark_cancel_handled();
+                renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
+                return Ok(ModelPickerProgress::InProgress);
+            }
+        }
+
+        let prepared = prepare_openai_login(self.vt_cfg.as_ref())?;
+        let auth_url = prepared.auth_url.clone();
+        match request_external_url_open(url_guard, &auth_url).await? {
+            ExternalUrlOpenOutcome::Opened => {
+                renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
+                renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
+            }
+            ExternalUrlOpenOutcome::OpenFailed(err) => {
+                renderer.line(MessageStyle::Info, "Opening browser for OpenAI ChatGPT authentication...")?;
+                renderer.hyperlink_line(MessageStyle::Response, &auth_url)?;
+                renderer.line(MessageStyle::Error, &format!("Failed to open browser automatically: {err}"))?;
+                renderer.line(MessageStyle::Info, "Please open the URL manually in your browser.")?;
+            }
+            ExternalUrlOpenOutcome::Cancelled => {
+                renderer.line(MessageStyle::Info, "Cancelled opening authentication link.")?;
+                return Ok(ModelPickerProgress::InProgress);
+            }
+            ExternalUrlOpenOutcome::Exit => {
+                return Ok(ModelPickerProgress::Exit);
+            }
+            ExternalUrlOpenOutcome::Unsupported => {
+                renderer.line(MessageStyle::Error, "Blocked unsupported authentication link target.")?;
+                return Ok(ModelPickerProgress::InProgress);
+            }
+        }
+        let started = crate::cli::auth::begin_openai_login(prepared).await?;
+        let Some(ctrl_c_state) = self.ctrl_c_state.as_ref() else {
+            return Err(anyhow!("OAuth login requires Ctrl+C state"));
+        };
+        let Some(ctrl_c_notify) = self.ctrl_c_notify.as_ref() else {
+            return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
+        };
+        match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await {
+            Ok(_) => {}
+            Err(err) if is_oauth_flow_cancelled(&err) => {
+                if ctrl_c_state.is_exit_requested() {
+                    return Ok(ModelPickerProgress::Exit);
+                }
+                renderer.line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
+                return Ok(ModelPickerProgress::Cancelled);
+            }
+            Err(err) => return Err(err),
+        }
+        if self.inline_enabled {
+            renderer.close_modal();
+        }
+        renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
+        self.pending_api_key = None;
+        if let Some(current) = self.selection.as_mut() {
+            current.requires_api_key = false;
+            current.uses_chatgpt_auth = true;
+        }
+        let result = self.build_result();
+        Ok(ModelPickerProgress::Completed(result?))
+    }
+
+    async fn handle_skip_api_key(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: SelectionDetail,
+    ) -> Result<ModelPickerProgress> {
+        if self.inline_enabled {
+            renderer.close_modal();
+        }
+        match self.find_existing_api_key(&selection.provider_key, &selection.env_key) {
+            Ok(Some(existing)) => {
+                let mut selection = selection.clone();
+                finalize_existing_api_key(&mut selection, &existing);
+                renderer.line(MessageStyle::Info, &existing_api_key_message(&selection, &existing))?;
+                self.pending_api_key = None;
+                if let Some(current) = self.selection.as_mut() {
+                    current.requires_api_key = selection.requires_api_key;
+                    current.uses_chatgpt_auth = selection.uses_chatgpt_auth;
+                }
+                let result = self.build_result();
+                Ok(ModelPickerProgress::Completed(result?))
+            }
+            Ok(None) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!(
+                        "No API key found for {}. Run `/secret add {}` to store one in secure storage, then type 'skip' to continue.",
+                        selection.provider_label, selection.provider_key
+                    ),
+                )?;
+                prompt_api_key_plain(renderer, &selection, self.workspace.as_deref())?;
+                Ok(ModelPickerProgress::InProgress)
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to inspect stored credentials for {}: {}", selection.provider_label, err),
+                )?;
+                prompt_api_key_plain(renderer, &selection, self.workspace.as_deref())?;
+                Ok(ModelPickerProgress::InProgress)
+            }
+        }
     }
 
     fn find_existing_api_key(&self, provider: &str, env_key: &str) -> Result<Option<ExistingKey>> {

@@ -26,6 +26,7 @@ VT Code is a Rust coding agent built for long-running autonomous workflows, with
 - **Extensibility** - [Agent Skills](https://agentskills.io), [Model Context Protocol](https://modelcontextprotocol.io/) MCP client/server, lifecycle hooks, subagents, custom providers, [Agent Client Protocol](https://agentclientprotocol.com) (ACP).
 - **Model providers** - 21+ LLM providers: Anthropic, OpenAI, Gemini, OpenRouter, **local inference via Ollama, LM Studio, and llama.cpp** (managed with the `/local` command), and more
 - **Safety** - Restricted shell sandbox, tool guardrails, subprocess isolation, full audit logging
+- **Provider governance** - `providers_whitelist` restricts which LLM providers are accessible, preventing accidental data leakage to unapproved endpoints
 - **Protocols** - Open Responses, Agent2Agent (A2A), ATIF, Anthropic Messages API
 - **Loop engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state, cost guardrails
 - **Planning workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent, then hand off to `build`/`auto` via a structured review gate
@@ -94,9 +95,16 @@ VT Code supports 21+ LLM providers out of the box, plus any OpenAI-compatible AP
 
 Read: [Provider Guides](./docs/providers/PROVIDER_GUIDES.md).
 
-## OpenCode
+### Provider governance
 
-[OpenCode](https://opencode.ai/go?ref=JX80RKK5ND) is a coding agent I've been exploring alongside VT Code. If you're curious to try it, using this referral link gives new users $5 in credit — and it helps keep VT Code's development going.
+Use `providers_whitelist` in `vtcode.toml` to restrict which LLM providers VT Code may access. This prevents accidental data leakage to unapproved endpoints in corporate or air-gapped environments.
+
+```toml
+# vtcode.toml
+providers_whitelist = ["opencode-zen", "opencode-go", "gemini"]
+```
+
+Leave it empty (the default) to allow all built-in and custom providers. See [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) and [Getting Started](./docs/user-guide/getting-started.md) for full setup instructions.
 
 ## Local models (experimental)
 
@@ -132,11 +140,11 @@ cd vtcode
 
 Rust stable, edition 2024, MSRV 1.93.0. Workspace of ~30 crates:
 
-| Layer          | Crates                                                                     |
-| -------------- | -------------------------------------------------------------------------- |
-| Binary         | `vtcode`                                                                   |
-| Common         | `vtcode-commons`, `vtcode-exec-events`, `vtcode-macros`, `vtcode-utility-tool-specs` |
-| Codegen        | `vtcode-core`, `vtcode-ui`, `vtcode-config`, `vtcode-llm`, `vtcode-skills`, `vtcode-safety`, `vtcode-a2a`, `vtcode-mcp`, `vtcode-auth`, `vtcode-acp`, `vtcode-indexer`, `vtcode-bash-runner`, `vtcode-memory`, `vtcode-eval` |
+| Layer   | Crates                                                                                                                                                                                                                       |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Binary  | `vtcode`                                                                                                                                                                                                                     |
+| Common  | `vtcode-commons`, `vtcode-exec-events`, `vtcode-macros`, `vtcode-utility-tool-specs`                                                                                                                                         |
+| Codegen | `vtcode-core`, `vtcode-ui`, `vtcode-config`, `vtcode-llm`, `vtcode-skills`, `vtcode-safety`, `vtcode-a2a`, `vtcode-mcp`, `vtcode-auth`, `vtcode-acp`, `vtcode-indexer`, `vtcode-bash-runner`, `vtcode-memory`, `vtcode-eval` |
 
 Want to use VT Code as a library? See [`vtcode-battery-pack`](https://github.com/vinhnx/vtcode-battery-pack) for a curated set of crates you can add to your own Rust projects.
 

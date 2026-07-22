@@ -580,6 +580,9 @@ impl<'a> ModelPickerCoordinator<'a> {
                     renderer.line(MessageStyle::Error, &format!("Failed to apply model selection: {err}"))?;
                 }
             }
+            Ok(ModelPickerStart::Exit) => {
+                *self.state = None;
+            }
             Err(err) => {
                 renderer.line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;
             }

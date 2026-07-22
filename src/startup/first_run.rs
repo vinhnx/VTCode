@@ -94,7 +94,7 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
             renderer.line(MessageStyle::Info, "")?;
 
             let provider = resolve_initial_provider(config, &discovered);
-            let provider = prompt_provider(&mut renderer, provider, &discovered)?;
+            let provider = prompt_provider(&mut renderer, provider, &discovered, &config.providers_whitelist)?;
             renderer.line(MessageStyle::Info, "")?;
 
             // Interactive API key entry — skips the paste prompt when the key is

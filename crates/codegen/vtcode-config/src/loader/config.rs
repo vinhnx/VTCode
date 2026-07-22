@@ -250,6 +250,14 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub provider_overrides: BTreeMap<String, ProviderOverrideConfig>,
 
+    /// Restrict which providers may be used.
+    ///
+    /// When non-empty, only providers listed here are visible in the model
+    /// picker, selectable at first-run, and instantiable at runtime.  Empty
+    /// (the default) means all built-in and custom providers are available.
+    #[serde(default)]
+    pub providers_whitelist: Vec<String>,
+
     /// Output style configuration
     #[serde(default)]
     pub output_style: OutputStyleConfig,
@@ -301,6 +309,7 @@ impl Default for VTCodeConfig {
             skills: SkillsConfig::default(),
             custom_providers: Vec::new(),
             provider_overrides: BTreeMap::new(),
+            providers_whitelist: Vec::new(),
             output_style: OutputStyleConfig::default(),
             dotfile_protection: DotfileProtectionConfig::default(),
             workspace: WorkspaceConfig::default(),
@@ -359,6 +368,17 @@ impl VTCodeConfig {
                      openrouter, ollama, lmstudio, llamacpp, moonshot, zai, minimax, \
                      mimo, mistral, huggingface, opencodezen, opencodego, qwen, \
                      stepfun, evolink, poolside"
+                );
+            }
+        }
+
+        // Validate providers_whitelist entries
+        for entry in &self.providers_whitelist {
+            let known = Provider::from_str(entry).is_ok() || self.custom_providers.iter().any(|cp| cp.name == *entry);
+            if !known {
+                anyhow::bail!(
+                    "providers_whitelist: unknown provider `{entry}`; \
+                     must be a built-in provider or a name from custom_providers"
                 );
             }
         }

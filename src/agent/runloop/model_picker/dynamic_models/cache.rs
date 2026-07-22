@@ -79,7 +79,10 @@ impl CachedDynamicModelStore {
             }
         }
 
-        let resolved_base = base_url.clone().unwrap_or_else(|| default_provider_base(provider).to_string());
+        let resolved_base = base_url
+            .as_deref()
+            .unwrap_or_else(|| default_provider_base(provider))
+            .to_string();
         let key = Self::cache_key(provider, &resolved_base);
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 
@@ -89,7 +92,7 @@ impl CachedDynamicModelStore {
             return (Ok(entry.models.clone()), None);
         }
 
-        match fetch_fn(base_url.clone()).await {
+        match fetch_fn(base_url).await {
             Ok(models) => {
                 self.entries.insert(
                     key,

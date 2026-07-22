@@ -18,7 +18,17 @@ pub(super) async fn persist_selection(
     selection: &ModelSelectionResult,
 ) -> Result<VTCodeConfig> {
     let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
-    let mut config = manager.config().clone();
+    let config = manager.config();
+    if !config.providers_whitelist.is_empty()
+        && !config
+            .providers_whitelist
+            .iter()
+            .any(|w| w.eq_ignore_ascii_case(&selection.provider))
+    {
+        anyhow::bail!("Cannot persist selection: provider '{}' is not in providers_whitelist", selection.provider);
+    }
+
+    let mut config = config.clone();
     config.agent.provider = selection.provider.clone();
     apply_api_key_state(&mut config, selection);
     config.agent.default_model = selection.model.clone();

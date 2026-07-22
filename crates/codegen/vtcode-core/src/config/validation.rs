@@ -102,6 +102,19 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
     // Validate agent model exists
     validate_agent_model(&config.agent.provider, &config.agent.default_model, &mut result);
 
+    // Validate provider is in whitelist (if configured)
+    if !config.providers_whitelist.is_empty()
+        && !config
+            .providers_whitelist
+            .iter()
+            .any(|w| w.eq_ignore_ascii_case(&config.agent.provider))
+    {
+        result.add_error(format!(
+            "Provider '{}' is not in providers_whitelist: {:?}",
+            config.agent.provider, config.providers_whitelist
+        ));
+    }
+
     // Validate context window if specified
     validate_context_window(config, &mut result);
 
@@ -286,5 +299,42 @@ mod tests {
         result.add_warning("Warning 1".to_owned());
         assert_eq!(result.warnings.len(), 1);
         assert!(result.is_valid); // Warnings don't invalidate
+    }
+
+    #[test]
+    fn whitelist_allows_configured_provider() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.default_model = "gpt-5".to_string();
+        config.providers_whitelist = vec!["openai".to_string()];
+
+        let result = validate_config(&config, Path::new(".")).expect("validation should run");
+        assert!(result.errors.is_empty(), "openai should pass when whitelisted: {:?}", result.errors);
+    }
+
+    #[test]
+    fn whitelist_blocks_non_whitelisted_provider() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.default_model = "gpt-5".to_string();
+        config.providers_whitelist = vec!["anthropic".to_string()];
+
+        let result = validate_config(&config, Path::new(".")).expect("validation should run");
+        assert!(
+            result.errors.iter().any(|e| e.contains("not in providers_whitelist")),
+            "expected whitelist error, got: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
+    fn empty_whitelist_allows_all_providers() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.default_model = "gpt-5".to_string();
+        config.providers_whitelist.clear();
+
+        let result = validate_config(&config, Path::new(".")).expect("validation should run");
+        assert!(result.errors.is_empty(), "empty whitelist should allow all: {:?}", result.errors);
     }
 }
