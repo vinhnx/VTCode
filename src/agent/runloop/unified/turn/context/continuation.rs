@@ -664,7 +664,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -686,7 +686,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -740,7 +740,7 @@ mod tests {
             .expect("recovery response should be handled");
 
         assert!(
-            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
+            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })),
             "tool-free recovery text with continuation intent must end the turn, \
              not re-enable tools and loop"
         );
@@ -943,7 +943,7 @@ mod tests {
             .await
             .expect("completed text response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         let last_assistant = ctx
             .working_history
             .iter()
@@ -1020,7 +1020,7 @@ mod tests {
             .await
             .expect("repo overview response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         let last_assistant = ctx
             .working_history
             .iter()

@@ -94,7 +94,7 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
             ctx.ctrl_c_state.reset();
             Ok(())
         }
-        TurnLoopResult::Completed => {
+        TurnLoopResult::Completed { .. } => {
             if let Some(manager) = ctx.checkpoint_manager {
                 let conversation_snapshot: Vec<SessionMessage> =
                     ctx.conversation_history.iter().map(SessionMessage::from).collect();
@@ -183,9 +183,10 @@ mod tests {
         let mut next_checkpoint_turn = 1usize;
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
-            result: TurnLoopResult::Completed,
+            result: TurnLoopResult::Completed { plan_approved_execution_pending: false },
             turn_modified_files: BTreeSet::new(),
             pending_primary_agent: None,
+            plan_approved_execution_pending: false,
         };
         conversation_history.push(uni::Message::assistant("done".to_string()));
 
@@ -228,7 +229,9 @@ mod tests {
             result: TurnLoopResult::Cancelled,
             turn_modified_files: BTreeSet::new(),
             pending_primary_agent: None,
+            plan_approved_execution_pending: false,
         };
+        conversation_history.push(uni::Message::assistant("done".to_string()));
 
         apply_turn_outcome(
             outcome,
@@ -266,9 +269,10 @@ mod tests {
         let mut next_checkpoint_turn = 1usize;
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
-            result: TurnLoopResult::Completed,
+            result: TurnLoopResult::Completed { plan_approved_execution_pending: false },
             turn_modified_files: BTreeSet::new(),
             pending_primary_agent: None,
+            plan_approved_execution_pending: false,
         };
         conversation_history.push(uni::Message::assistant("done".to_string()));
 

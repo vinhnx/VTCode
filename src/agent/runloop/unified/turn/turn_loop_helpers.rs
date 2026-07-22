@@ -519,12 +519,12 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
     {
         Ok(_) if ctx.is_planning_active() => Ok(false),
         Ok(_) => {
-            *result = TurnLoopResult::Completed;
+            *result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
             Ok(true)
         }
         Err(err) => {
             display_error(ctx.renderer, "Failed to enter Planning workflow", &err)?;
-            *result = TurnLoopResult::Completed;
+            *result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
             Ok(true)
         }
     }
@@ -818,7 +818,7 @@ mod tests {
         backing.set_steering_receiver(receiver);
 
         let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed;
+        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
         let handled = {
             let mut ctx = backing.turn_loop_context();
             handle_steering_messages(&mut ctx, &mut working_history, &mut result)
@@ -827,7 +827,7 @@ mod tests {
         };
 
         assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["first".to_string(), "second".to_string()]);
     }
@@ -848,7 +848,7 @@ mod tests {
         backing.set_steering_receiver(receiver);
 
         let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed;
+        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
         let handled = {
             let mut ctx = backing.turn_loop_context();
             handle_steering_messages(&mut ctx, &mut working_history, &mut result)
@@ -858,7 +858,7 @@ mod tests {
         resume_task.await.expect("resume task");
 
         assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["refine search".to_string()]);
     }
@@ -875,7 +875,7 @@ mod tests {
         backing.set_steering_receiver(receiver);
 
         let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed;
+        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
         let handled = {
             let mut ctx = backing.turn_loop_context();
             handle_steering_messages(&mut ctx, &mut working_history, &mut result)
@@ -884,7 +884,7 @@ mod tests {
         };
 
         assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         let inputs = backing.deferred_follow_up_inputs();
         assert_eq!(inputs, vec!["use the queued note".to_string()]);
     }
@@ -900,7 +900,7 @@ mod tests {
         backing.set_steering_receiver(receiver);
 
         let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed;
+        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
         let handled = {
             let mut ctx = backing.turn_loop_context();
             handle_steering_messages(&mut ctx, &mut working_history, &mut result)

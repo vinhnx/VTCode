@@ -553,6 +553,13 @@ impl AgentRuntime {
         Some(input)
     }
 
+    /// Queue a follow-up input to be consumed by `run_until_idle` on the next
+    /// iteration, causing the session loop to start a new turn with this input
+    /// without waiting for the user to type anything.
+    pub fn queue_follow_up_input(&mut self, input: String) {
+        self.steering.queue_follow_up_input(input);
+    }
+
     /// Poll the steering channel for control signals during the current turn.
     pub async fn poll_turn_control(&mut self) -> RuntimeControl {
         self.steering.poll_turn_control().await

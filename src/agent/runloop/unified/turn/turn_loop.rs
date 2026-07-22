@@ -208,6 +208,11 @@ pub(crate) struct TurnLoopOutcome {
     /// When set, the interaction loop should switch the active primary agent
     /// to this name after the turn completes.
     pub pending_primary_agent: Option<String>,
+    /// When true, the plan was approved via the inline confirmation overlay
+    /// inside the turn loop and the session loop must push an execution
+    /// directive before starting the next turn so the model begins
+    /// implementation immediately.
+    pub plan_approved_execution_pending: bool,
 }
 
 pub(crate) struct TurnLoopContext<'a> {
@@ -464,7 +469,7 @@ pub(crate) async fn run_turn_loop(
     };
 
     // Initialize the outcome result
-    let mut result = TurnLoopResult::Completed;
+    let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
     let mut turn_modified_files = BTreeSet::new();
     let mut pending_primary_agent: Option<String> = None;
     *ctx.auto_finish_planning_attempted = false;
@@ -594,7 +599,7 @@ pub(crate) async fn run_turn_loop(
                 MessageStyle::Warning,
                 "Recovery loop detected: capping repeated assistant responses to avoid wasted context.",
             );
-            result = TurnLoopResult::Completed;
+            result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
             break;
         }
 
@@ -767,7 +772,7 @@ pub(crate) async fn run_turn_loop(
                                 MessageStyle::Warning,
                                 "Budget exhausted during planning workflow. Finalizing plan from gathered evidence.",
                             );
-                            result = TurnLoopResult::Completed;
+                            result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
                         } else {
                             result = TurnLoopResult::Blocked {
                                 reason: Some(format!(
@@ -1013,7 +1018,7 @@ pub(crate) async fn run_turn_loop(
                 // Plan-mode "switch to build/auto agent" decision: end the turn
                 // normally and let the interaction loop perform the handoff.
                 pending_primary_agent = Some(agent);
-                result = TurnLoopResult::Completed;
+                result = TurnLoopResult::Completed { plan_approved_execution_pending: true };
                 break;
             }
             TurnHandlerOutcome::Break(outcome_result) => {
@@ -1084,7 +1089,12 @@ pub(crate) async fn run_turn_loop(
 
     // Final outcome with the correct result status
     ctx.session_stats.record_turn_completed();
-    Ok(TurnLoopOutcome { result, turn_modified_files, pending_primary_agent })
+    Ok(TurnLoopOutcome {
+        result,
+        turn_modified_files,
+        pending_primary_agent,
+        plan_approved_execution_pending: false,
+    })
 }
 
 /// Finalize the turn: terminate sessions if needed, emit outcome events,
@@ -1103,7 +1113,7 @@ async fn finalize_turn(
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
         let event = match result {
-            TurnLoopResult::Completed | TurnLoopResult::Exit => turn_completed_event(turn_usage.clone()),
+            TurnLoopResult::Completed { .. } | TurnLoopResult::Exit => turn_completed_event(turn_usage.clone()),
             TurnLoopResult::Aborted => {
                 turn_failed_event("turn aborted", has_turn_usage(turn_usage).then_some(turn_usage.clone()))
             }

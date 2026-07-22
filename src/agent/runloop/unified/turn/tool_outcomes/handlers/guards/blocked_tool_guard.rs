@@ -96,7 +96,7 @@ fn handle_planning_blocked_tool(
     push_guard_failure_messages(ctx, tool_call_id, tool_name, error_content, &block_reason);
     ctx.tool_registry.disable_planning();
 
-    Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+    Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }))
 }
 
 /// Enforce the blocked tool call guard.

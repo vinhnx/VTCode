@@ -598,7 +598,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -636,7 +636,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
+        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
         assert!(!ctx.is_recovery_active());
         assert!(backing.is_hard_limit_exceeded(tool_names::CODE_SEARCH));
     }

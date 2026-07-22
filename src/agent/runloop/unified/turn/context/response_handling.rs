@@ -249,24 +249,104 @@ impl<'a> TurnProcessingContext<'a> {
         if self.is_planning_active()
             && let Some(plan_text) = proposed_plan
         {
-            // Streaming providers may render reasoning/tool activity but leave
-            // the final synthesized plan out of the terminal response path.
-            // Render the persisted plan explicitly so planning never appears
-            // to stop with only a "Thinking" transcript on screen.
-            if response_streamed {
-                use vtcode_core::utils::ansi::MessageStyle;
-                self.renderer.line(MessageStyle::Info, "Plan ready for approval:")?;
-                self.renderer.line(MessageStyle::Response, &plan_text)?;
-                self.renderer.line(
-                    MessageStyle::Info,
-                    "Type `approve` or `implement` to begin execution, or `edit` to revise the plan.",
-                )?;
-            }
+            use vtcode_core::utils::ansi::MessageStyle;
+            self.renderer.line(MessageStyle::Info, "Plan ready for approval:")?;
+            self.renderer.line(MessageStyle::Response, &plan_text)?;
             self.emit_plan_events(&plan_text).await;
             let _persisted = persist_plan_draft(&self.tool_registry.planning_workflow_state(), &plan_text).await?;
+
+            let require_confirmation = self.vt_cfg.map(|cfg| cfg.agent.require_plan_confirmation).unwrap_or(true);
+            if require_confirmation && !self.plan_session.approval_requested() && self.renderer.supports_inline_ui() {
+                return self.present_plan_confirmation_overlay(&plan_text).await;
+            }
+
+            self.renderer.line(
+                MessageStyle::Info,
+                "Type `approve` or `implement` to begin execution, or `edit` to revise the plan.",
+            )?;
         }
 
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: true }))
+    }
+
+    /// Show the inline plan-confirmation overlay and act on the user's choice.
+    ///
+    /// Interactive equivalent of the text "type `approve`/`edit`" hint: when the
+    /// agent presents a proposed plan as a text response during the Planning
+    /// workflow and the renderer supports the inline UI, surface the same
+    /// `execute_plan_confirmation` modal used by the `finish_planning` tool path
+    /// so the user can Approve / Edit / Cancel with a keystroke instead of
+    /// typing a magic word. The outcome maps onto the same planning-workflow
+    /// transitions as `handle_pending_confirmation` in the tool path.
+    async fn present_plan_confirmation_overlay(&mut self, plan_text: &str) -> anyhow::Result<TurnHandlerOutcome> {
+        use crate::agent::runloop::unified::planning_workflow::{PlanConfirmationOutcome, execute_plan_confirmation};
+        use crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow;
+        use vtcode_config::{builtin_primary_auto_agent, builtin_primary_build_agent};
+        use vtcode_ui::tui::app::PlanContent;
+
+        let plan_content = PlanContent::from_markdown("Implementation Plan".to_string(), plan_text, None);
+        let outcome = execute_plan_confirmation(
+            self.handle,
+            self.session,
+            plan_content,
+            false,
+            self.ctrl_c_state,
+            self.ctrl_c_notify,
+        )
+        .await;
+
+        match outcome {
+            Ok(PlanConfirmationOutcome::Execute) => {
+                finish_planning_workflow(self.tool_registry, self.plan_session, self.handle, true).await;
+                self.handle.set_skip_confirmations(false);
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User approved plan via inline overlay (manual edit approvals); enabling mutating tools"
+                );
+                Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: true }))
+            }
+            Ok(PlanConfirmationOutcome::AutoAccept) => {
+                finish_planning_workflow(self.tool_registry, self.plan_session, self.handle, true).await;
+                self.handle.set_skip_confirmations(true);
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User approved plan via inline overlay (auto-accept); enabling mutating tools"
+                );
+                Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: true }))
+            }
+            Ok(PlanConfirmationOutcome::SwitchBuild) => {
+                finish_planning_workflow(self.tool_registry, self.plan_session, self.handle, true).await;
+                self.handle.set_skip_confirmations(false);
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User handed plan to build agent via inline overlay; switching primary agent"
+                );
+                Ok(TurnHandlerOutcome::SwitchPrimaryAgent(builtin_primary_build_agent().name))
+            }
+            Ok(PlanConfirmationOutcome::SwitchAuto) => {
+                finish_planning_workflow(self.tool_registry, self.plan_session, self.handle, true).await;
+                self.handle.set_skip_confirmations(true);
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User handed plan to auto agent via inline overlay; switching primary agent"
+                );
+                Ok(TurnHandlerOutcome::SwitchPrimaryAgent(builtin_primary_auto_agent().name))
+            }
+            Ok(PlanConfirmationOutcome::EditPlan) => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User chose to revise the plan via inline overlay; remaining in Planning workflow"
+                );
+                Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }))
+            }
+            Ok(PlanConfirmationOutcome::Cancel) | Err(_) => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "User dismissed the plan via inline overlay; remaining in Planning workflow"
+                );
+                Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }))
+            }
+        }
     }
 
     async fn emit_plan_events(&self, plan_text: &str) {

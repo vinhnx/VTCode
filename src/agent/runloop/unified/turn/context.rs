@@ -50,11 +50,16 @@ pub(crate) use self::runtime_context::{
 
 #[derive(Clone, Debug)]
 pub(crate) enum TurnLoopResult {
-    Completed,
+    Completed {
+        #[allow(dead_code)]
+        plan_approved_execution_pending: bool,
+    },
     Aborted,
     Cancelled,
     Exit,
-    Blocked { reason: Option<String> },
+    Blocked {
+        reason: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug)]

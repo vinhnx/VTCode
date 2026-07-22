@@ -281,7 +281,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
                 interview_denied = plan_session.is_interview_denied(),
                 "Plan-mode tool-free recovery failed; finalizing plan from gathered evidence."
             );
-            return TurnLoopResult::Completed;
+            return TurnLoopResult::Completed { plan_approved_execution_pending: false };
         }
         plan_session.mark_interview_pending();
         let planning_fallback =
@@ -292,7 +292,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
             transient_error = is_transient_error,
             "Plan-mode tool-free recovery failed; marking interview pending for next turn."
         );
-        return TurnLoopResult::Completed;
+        return TurnLoopResult::Completed { plan_approved_execution_pending: false };
     }
 
     // Prefer prose salvaged from a rejected synthesis response over the
@@ -308,7 +308,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
             stage = failure_stage,
             "Tool-free recovery failed; concluding turn with salvaged synthesis prose."
         );
-        return TurnLoopResult::Completed;
+        return TurnLoopResult::Completed { plan_approved_execution_pending: false };
     }
 
     let fallback = build_recovery_fallback(working_history, RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
@@ -320,7 +320,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery(
         "Final tool-free recovery pass failed; concluding turn with deterministic fallback answer."
     );
 
-    TurnLoopResult::Completed
+    TurnLoopResult::Completed { plan_approved_execution_pending: false }
 }
 
 /// Push an `Assistant` `FinalAnswer` message only if the tail of
@@ -499,7 +499,7 @@ pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>)
                 )
                 .await
             } else {
-                TurnLoopResult::Completed
+                TurnLoopResult::Completed { plan_approved_execution_pending: false }
             };
             Ok(PostToolFailureAction::Break(result))
         }
@@ -586,7 +586,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         assert!(
             plan_session.interview_pending(),
             "transient error must keep planning alive by re-forcing the interview"
@@ -609,7 +609,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         assert!(
             plan_session.interview_pending(),
             "any tool-free recovery failure must keep planning alive (not dead-end)"
@@ -669,7 +669,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         assert!(
             !plan_session.interview_pending(),
             "budget-exhausted must not re-force the interview (would loop forever)"
@@ -701,7 +701,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         assert!(
             !plan_session.interview_pending(),
             "interview-denied must not re-force the interview (would recur forever)"
@@ -743,7 +743,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         assert!(plan_session.interview_pending(), "non-exhausted plan failure must re-force the interview");
         let text = working_history
             .iter()
@@ -777,7 +777,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         let text = working_history
             .iter()
             .rev()
@@ -819,7 +819,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, TurnLoopResult::Completed));
+        assert!(matches!(result, TurnLoopResult::Completed { .. }));
         let content =
             std::fs::read_to_string(&plan_file).expect("salvaged plan must be persisted to the session plan file");
         assert!(

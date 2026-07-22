@@ -740,7 +740,7 @@ async fn planning_mode_blocks_finish_planning_immediately() {
         enforce_blocked_tool_call_guard(&mut ctx, "finish_planning_blocked", tool_names::FINISH_PLANNING, &args);
 
     assert!(
-        matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed))),
+        matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. }))),
         "Expected Break(Completed) for blocked finish_planning in planning mode"
     );
     assert!(

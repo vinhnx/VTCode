@@ -302,7 +302,7 @@ async fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
         None,
     )
     .await;
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     let fallback_count = history
         .iter()
         .filter(|message| {
@@ -315,7 +315,7 @@ async fn complete_turn_after_failed_tool_free_recovery_appends_fallback_once() {
 
     let outcome_again =
         complete_turn_after_failed_tool_free_recovery(&mut history, "test.stage", None, None, None, None).await;
-    assert!(matches!(outcome_again, TurnLoopResult::Completed));
+    assert!(matches!(outcome_again, TurnLoopResult::Completed { .. }));
     let fallback_count_again = history
         .iter()
         .filter(|message| {
@@ -339,7 +339,7 @@ async fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() 
         None,
     )
     .await;
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     let last = history.last().unwrap();
     assert_eq!(last.role, uni::MessageRole::Assistant);
     assert_eq!(last.phase, Some(uni::AssistantPhase::FinalAnswer));
@@ -358,7 +358,7 @@ async fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() 
         None,
     )
     .await;
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     assert_eq!(history.last().unwrap().content.as_text(), RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
 }
 
@@ -377,7 +377,7 @@ async fn normalize_tool_free_recovery_break_outcome_converts_contract_violation_
     )
     .await;
 
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     assert!(history.iter().any(|message| {
         message.role == uni::MessageRole::Assistant
             && message.phase == Some(uni::AssistantPhase::FinalAnswer)
@@ -432,7 +432,7 @@ async fn plan_mode_recovery_fallback_marks_interview_pending_and_preserves_resea
     )
     .await;
 
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     // Planning session must survive the failed recovery so the next turn
     // re-forces the interview instead of dead-ending.
     assert!(plan_session.interview_pending());
@@ -473,7 +473,7 @@ async fn plan_mode_recovery_exhausted_finalizes_instead_of_reforcing_interview()
     )
     .await;
 
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     // Must NOT re-force the interview — that is what caused the infinite loop.
     assert!(!plan_session.interview_pending());
     // Must conclude with the USER-facing recovery-exhausted notice (not the
@@ -510,7 +510,7 @@ async fn plan_mode_recovery_rejects_non_plan_salvage() {
     )
     .await;
 
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     assert!(plan_session.interview_pending());
     let last = history.last().unwrap();
     // The garbled/non-plan salvage must NOT be injected as the plan; the
@@ -549,7 +549,7 @@ async fn plan_mode_recovery_fallback_lists_files_read_when_present() {
     )
     .await;
 
-    assert!(matches!(outcome, TurnLoopResult::Completed));
+    assert!(matches!(outcome, TurnLoopResult::Completed { .. }));
     assert!(plan_session.interview_pending());
     let last = history.last().unwrap();
     let text = last.content.as_text();

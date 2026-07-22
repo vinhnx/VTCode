@@ -718,6 +718,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             result: RunLoopTurnLoopResult::Aborted,
                             turn_modified_files: std::collections::BTreeSet::new(),
                             pending_primary_agent: None,
+                            plan_approved_execution_pending: false,
                         }
                     }
                 };
@@ -744,6 +745,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 runtime.state.messages = working_history;
                 let outcome_result = outcome.result.clone();
                 let switch_primary_agent = outcome.pending_primary_agent.clone();
+                let plan_approved_execution_pending = outcome.plan_approved_execution_pending;
                 let turn_elapsed = turn_started_at.elapsed();
                 let show_turn_timer = vt_cfg.as_ref().map(|cfg| cfg.ui.show_turn_timer).unwrap_or(true);
                 let harness_snapshot = tool_registry.harness_context_snapshot();
@@ -813,6 +815,19 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         }
                     }
                 }
+                if plan_approved_execution_pending {
+                    let plan_seed = load_active_plan_seed(&tool_registry).await;
+                    let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
+                    if let Some(seed) = plan_seed {
+                        execution_directive.push_str("\n\nApproved plan context:\n");
+                        execution_directive.push_str(&seed);
+                    }
+                    runtime
+                        .state
+                        .messages_mut()
+                        .push(vtcode_core::llm::provider::Message::system(execution_directive));
+                    runtime.queue_follow_up_input(PLAN_APPROVED_EXECUTION_INPUT.to_string());
+                }
                 if let Err(err) = crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(
                     config.workspace.as_path(),
                     &harness_snapshot.session_id,
@@ -834,7 +849,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     timeout_secs: harness_config.max_tool_wall_clock_secs,
                     elapsed_ms: turn_elapsed.as_millis(),
                     outcome: match &outcome_result {
-                        RunLoopTurnLoopResult::Completed => "completed",
+                        RunLoopTurnLoopResult::Completed { .. } => "completed",
                         RunLoopTurnLoopResult::Aborted => "aborted",
                         RunLoopTurnLoopResult::Cancelled => "cancelled",
                         RunLoopTurnLoopResult::Exit => "exit",
