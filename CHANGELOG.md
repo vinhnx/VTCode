@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.138.1 - 2026-07-22
+
+### Highlights
+#### Bug Fixes
+
+- Keep encrypted file as fallback on keyring store to prevent silent key loss (bc514a5f) 
+#### Features
+
+- Track reasoning run duration and update header display (d1466b43) 
+- Add follow-up input queuing and plan approval tracking (ad253a29) 
+### Other Changes
+#### Other
+
+- [Fixes #705] Restrict accessible LLM providers via providers_whitelist (8e519bde) 
 ## 0.138.0 - 2026-07-22
 
 ### Highlights
