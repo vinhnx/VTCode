@@ -2,6 +2,24 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.138.3 - 2026-07-23
+
+### Highlights
+#### Bug Fixes
+
+- Strip examples from function schemas  (3455ad9f) (@TuanLe-bk18)
+- Preserve existing tool policies and increase planning tool call floor (e0fc164e) 
+#### Documentation
+
+- Update contributor list and commit counts in README (36471ae1) 
+### Other Changes
+#### Other
+
+- Update TODO (77996bbc) 
+#### Refactors
+
+- Improve error handling and performance in transport and executor (7c8c92f1) 
+- Replace keyring_entry function with keyring module (eace3672) 
 ## 0.138.2 - 2026-07-23
 
 ### Highlights
