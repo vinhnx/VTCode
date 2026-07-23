@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.138.2"
+version = "0.138.3"
 edition = "2024"
 rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -103,27 +103,27 @@ opentelemetry = { version = "0.32", default-features = false, features = ["trace
 tracing-opentelemetry = "0.33"
 
 # Internal workspace crates
-vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.138.2" }
-vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.138.2" }
-vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.138.2" }
-vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.138.2" }
-vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.138.2" }
-vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.138.2" }
-vtcode-indexer = { path = "crates/codegen/vtcode-indexer", version = "0.138.2" }
-vtcode-bash-runner = { path = "crates/codegen/vtcode-bash-runner", version = "0.138.2" }
-vtcode-exec-events = { path = "crates/common/vtcode-exec-events", version = "0.138.2" }
-vtcode-safety = { path = "crates/codegen/vtcode-safety", version = "0.138.2" }
-vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.138.2" }
-vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.138.2" }
-vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.138.2" }
-vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.138.2" }
-vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.138.2" }
-vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.138.2" }
-vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.138.2" }
-vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.138.2" }
+vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.138.3" }
+vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.138.3" }
+vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.138.3" }
+vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.138.3" }
+vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.138.3" }
+vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.138.3" }
+vtcode-indexer = { path = "crates/codegen/vtcode-indexer", version = "0.138.3" }
+vtcode-bash-runner = { path = "crates/codegen/vtcode-bash-runner", version = "0.138.3" }
+vtcode-exec-events = { path = "crates/common/vtcode-exec-events", version = "0.138.3" }
+vtcode-safety = { path = "crates/codegen/vtcode-safety", version = "0.138.3" }
+vtcode-a2a = { path = "crates/codegen/vtcode-a2a", version = "0.138.3" }
+vtcode-mcp = { path = "crates/codegen/vtcode-mcp", version = "0.138.3" }
+vtcode-llm = { path = "crates/codegen/vtcode-llm", version = "0.138.3" }
+vtcode-skills = { path = "crates/codegen/vtcode-skills", version = "0.138.3" }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.138.3" }
+vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.138.3" }
+vtcode-macros = { path = "crates/common/vtcode-macros", version = "0.138.3" }
+vtcode-utility-tool-specs = { path = "crates/common/vtcode-utility-tool-specs", version = "0.138.3" }
 
 [workspace.package]
-version = "0.138.2"
+version = "0.138.3"
 edition = "2024"
 rust-version = "1.93.0"
 license = "MIT OR Apache-2.0"
@@ -262,14 +262,14 @@ allow_attributes_without_reason = "allow"  # TODO: Phase in after suppression au
 
 
 [dependencies]
-vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.138.2" }
-vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.138.2" }
-vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.138.2" }
-vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.138.2" }
-vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.138.2" }
-vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.138.2", default-features = false }
-vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.138.2" }
-vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.138.2" }
+vtcode-acp = { path = "crates/codegen/vtcode-acp", version = "0.138.3" }
+vtcode-commons = { path = "crates/common/vtcode-commons", version = "0.138.3" }
+vtcode-ui = { path = "crates/codegen/vtcode-ui", version = "0.138.3" }
+vtcode-config = { path = "crates/codegen/vtcode-config", version = "0.138.3" }
+vtcode-auth = { path = "crates/codegen/vtcode-auth", version = "0.138.3" }
+vtcode-core = { path = "crates/codegen/vtcode-core", version = "0.138.3", default-features = false }
+vtcode-memory = { path = "crates/codegen/vtcode-memory", version = "0.138.3" }
+vtcode-eval = { path = "crates/codegen/vtcode-eval", version = "0.138.3" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
