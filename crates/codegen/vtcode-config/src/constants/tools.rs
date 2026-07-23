@@ -123,8 +123,6 @@ pub const CRON_DELETE: &str = "cron_delete";
 // ============================================================
 /// Start planning - enables read-only tools and planning workflow.
 pub const START_PLANNING: &str = "start_planning";
-/// Finish planning - triggers confirmation modal before execution.
-pub const FINISH_PLANNING: &str = "finish_planning";
 /// Task tracker / plan manager - tracks checklist progress during complex tasks.
 pub const TASK_TRACKER: &str = "task_tracker";
 
@@ -258,7 +256,6 @@ const _: () = {
 
     // Planning workflow
     validate_tool_name(START_PLANNING);
-    validate_tool_name(FINISH_PLANNING);
     validate_tool_name(TASK_TRACKER);
 
     // Subagent collaboration

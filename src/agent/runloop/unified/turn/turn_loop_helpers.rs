@@ -1,12 +1,8 @@
 use anyhow::Result;
 use serde_json::json;
 
-use crate::agent::runloop::unified::planning_workflow::{
-    PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent, detect_planning_intent,
-};
-use crate::agent::runloop::unified::planning_workflow_state::short_confirmation_hint_with_fallback;
+use crate::agent::runloop::unified::planning_workflow::detect_enter_planning_intent;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{push_tool_response, tool_output_from_outcome};
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use vtcode_core::config::constants::defaults::{
@@ -89,7 +85,6 @@ const PLANNING_WORKFLOW_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
 const PLANNING_WORKFLOW_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
 const PLANNING_WORKFLOW_ENTER_TRIGGER_STATUS: &str =
     "Planning workflow: explicit planning request detected. Entering read-only planning before continuing this turn.";
-const PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS: &str = "Planning workflow: implementation intent detected from your message. Running `finish_planning` for plan confirmation; once approved, VT Code will switch to the selected primary agent and execute.";
 
 fn resolve_tool_loop_limit(configured_limit: usize, planning_active: bool) -> usize {
     if configured_limit == 0 {
@@ -101,21 +96,13 @@ fn resolve_tool_loop_limit(configured_limit: usize, planning_active: bool) -> us
     }
 }
 
-fn planning_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
-    !ctx.tool_registry.is_planning_active() && !ctx.tool_registry.planning_workflow_state().is_active()
-}
-
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
     let configured = ctx
         .vt_cfg
         .map(|cfg| cfg.tools.max_tool_loops)
         .filter(|limit| *limit > 0)
         .unwrap_or(DEFAULT_MAX_TOOL_LOOPS);
-    if ctx.is_planning_active() {
-        configured.max(PLANNING_WORKFLOW_MIN_TOOL_LOOPS)
-    } else {
-        configured
-    }
+    resolve_tool_loop_limit(configured, ctx.is_planning_active())
 }
 
 fn tool_loop_hard_cap(base_limit: usize, planning_active: bool) -> usize {
@@ -327,142 +314,6 @@ async fn handle_pause_signal(
     }
 }
 
-pub(super) async fn maybe_handle_planning_exit_trigger(
-    ctx: &mut TurnLoopContext<'_>,
-    working_history: &mut Vec<uni::Message>,
-    step_count: usize,
-    pending_primary_agent: &mut Option<String>,
-) -> Result<bool> {
-    if !ctx.is_planning_active() {
-        return Ok(false);
-    }
-
-    // Guard: prevent repeated finish_planning calls within the same turn.
-    // Without this, the loop re-detects implementation intent from the same
-    // user message on every iteration and calls finish_planning repeatedly,
-    // accumulating plan context and wasting tokens.
-    if *ctx.auto_finish_planning_attempted {
-        return Ok(false);
-    }
-
-    let Some(last_user_msg) = working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User) else {
-        return Ok(false);
-    };
-
-    let text = last_user_msg.content.as_text();
-    let assistant_prompted = assistant_recently_prompted_implementation(working_history);
-    let intent = detect_planning_intent(&text, assistant_prompted);
-
-    match intent {
-        PlanningIntent::ExitAndImplement => {
-            // Mark that we've attempted finish_planning this turn to prevent re-entry.
-            *ctx.auto_finish_planning_attempted = true;
-            ctx.plan_session.request_approval();
-
-            display_status(ctx.renderer, PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS)?;
-            // Continue with finish_planning logic below...
-        }
-        PlanningIntent::StayInPlanning => {
-            // User explicitly wants to stay in planning - show hint.
-            display_status(ctx.renderer, &short_confirmation_hint_with_fallback())?;
-            return Ok(false);
-        }
-        PlanningIntent::None => {
-            // No planning intent detected - continue turn.
-            return Ok(false);
-        }
-    }
-
-    use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
-    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-        FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION, build_finish_planning_args,
-        build_step_finish_planning_call_id,
-    };
-    use vtcode_core::llm::provider::ToolCall;
-
-    let args = build_finish_planning_args(FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION);
-    let call = ToolCall::function(
-        build_step_finish_planning_call_id(step_count),
-        tool_names::FINISH_PLANNING.to_string(),
-        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string()),
-    );
-    let ctrl_c_state = ctx.ctrl_c_state;
-    let ctrl_c_notify = ctx.ctrl_c_notify;
-    let default_placeholder = ctx.default_placeholder.clone();
-    let lifecycle_hooks = ctx.lifecycle_hooks;
-    let vt_cfg = ctx.vt_cfg;
-    // This helper is entered only after the user explicitly typed an approval
-    // intent (`approve`, `implement`, etc.). Do not open the plan-confirmation
-    // overlay a second time; that would consume the approval turn and leave
-    // the agent apparently idle. The finish tool still performs the normal
-    // planning-state transition and execution policy checks.
-    ctx.handle.set_skip_confirmations(true);
-    let mut run_ctx = ctx.as_run_loop_context();
-
-    let outcome = run_tool_call(
-        &mut run_ctx,
-        &call,
-        ctrl_c_state,
-        ctrl_c_notify,
-        default_placeholder,
-        lifecycle_hooks,
-        true,
-        vt_cfg,
-        step_count,
-        false,
-    )
-    .await;
-
-    match outcome {
-        Ok(pipe_outcome) => {
-            // Add tool output to history so the model can see the result
-            // (validation blockers, confirmation outcome, etc.) and respond.
-            if let Some(output) = tool_output_from_outcome(&pipe_outcome) {
-                // Inject a synthetic assistant tool_use so the history is well-formed:
-                //   user(intent) → assistant(tool_use: finish_planning) → user(tool_result)
-                // Without this the tool_result is orphaned and the LLM generates
-                // confused repeated output when called on the next turn.
-                working_history.push(uni::Message::assistant_with_tools(String::new(), vec![call]));
-                push_tool_response(
-                    working_history,
-                    build_step_finish_planning_call_id(step_count),
-                    Some(tool_names::FINISH_PLANNING),
-                    serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string()),
-                );
-            }
-
-            // Propagate a plan-mode agent handoff (SwitchBuild/SwitchAuto from the
-            // HITL confirmation) so the interaction loop actually switches the
-            // active agent instead of silently staying in plan mode. This field
-            // was previously discarded because the function only returned a bool.
-            if let Some(agent) = pipe_outcome.pending_primary_agent.clone() {
-                *pending_primary_agent = Some(agent);
-            }
-
-            if !planning_fully_disabled(ctx) {
-                // Planning still active (waiting for user confirmation via HITL overlay).
-                // Break the loop so the UI can present the confirmation dialog.
-                // Without this break, the loop re-enters on the next iteration and
-                // would call finish_planning again (blocked by the guard above),
-                // but also wastes an LLM round-trip.
-                return Ok(true);
-            }
-
-            // Planning was fully disabled (auto-accept on user's approval intent).
-            // Break the turn loop to avoid an unnecessary LLM round-trip that
-            // would see the synthetic finish_planning tool artifacts in the
-            // history and could produce confusing or duplicate output. The exit
-            // trigger status above already informed the user; no additional
-            // message is needed here.
-            return Ok(true);
-        }
-        Err(err) => {
-            display_error(ctx.renderer, "Failed to exit Planning workflow", &err)?;
-            Ok(false)
-        }
-    }
-}
-
 pub(super) async fn maybe_handle_planning_enter_trigger(
     ctx: &mut TurnLoopContext<'_>,
     working_history: &mut [uni::Message],
@@ -608,9 +459,8 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS, PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS,
-        clamp_tool_loop_increment, extract_turn_config, handle_steering_messages, resolve_safety_tool_call_limits,
-        resolve_tool_loop_limit, tool_loop_hard_cap,
+        PLANNING_WORKFLOW_MIN_TOOL_LOOPS, UNLIMITED_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
+        handle_steering_messages, resolve_safety_tool_call_limits, resolve_tool_loop_limit, tool_loop_hard_cap,
     };
     use crate::agent::runloop::unified::planning_workflow::{
         PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
@@ -732,14 +582,6 @@ mod tests {
         assert_eq!(detect_planning_intent("yes", false), PlanningIntent::ExitAndImplement);
     }
 
-    #[test]
-    fn planning_exit_trigger_status_mentions_exit_tool_and_transition() {
-        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("finish_planning"));
-        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("selected primary agent"));
-        assert!(PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS.contains("implementation intent"));
-    }
-
-    #[test]
     fn tool_loop_hard_cap_scales_and_bounds() {
         assert_eq!(tool_loop_hard_cap(20, false), 60);
         assert_eq!(tool_loop_hard_cap(40, false), 120);

@@ -88,7 +88,6 @@ fn maybe_force_planning_workflow_interview_appends_reminder_when_plan_ready() {
 
 #[test]
 fn planning_workflow_reminder_includes_manual_switch_fallback() {
-    assert!(PLANNING_WORKFLOW_REMINDER.contains("finish_planning"));
     assert!(!PLANNING_WORKFLOW_REMINDER.contains(&format!("/{}", "mode")));
     assert!(PLANNING_WORKFLOW_REMINDER.contains("implement"));
 }

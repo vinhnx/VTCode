@@ -17,7 +17,7 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
-use crate::tools::handlers::{FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool};
+use crate::tools::handlers::{PlanningWorkflowState, StartPlanningTool, TaskTrackerTool};
 use crate::tools::native_memory;
 use crate::tools::registry::distributed::tool_config;
 use crate::tools::registry::pack::BUILTIN_PACKS;
@@ -106,7 +106,6 @@ impl ToolPack for PlanningPack {
         let plan_state = Clone::clone(plan_state);
         let factory_state = Arc::new(plan_state.clone());
         let start_factory = Arc::clone(&factory_state);
-        let finish_factory = Arc::clone(&factory_state);
         let tracker_factory = Arc::clone(&factory_state);
         let registrations = vec![
             ToolRegistration::from_tool_instance(
@@ -117,15 +116,6 @@ impl ToolPack for PlanningPack {
             .with_native_cgp_factory(native_cgp_tool_factory(move || {
                 let state = Arc::clone(&start_factory);
                 StartPlanningTool::new(state.as_ref().clone())
-            })),
-            ToolRegistration::from_tool_instance(
-                tools::FINISH_PLANNING,
-                CapabilityLevel::Basic,
-                FinishPlanningTool::new(plan_state.clone()),
-            )
-            .with_native_cgp_factory(native_cgp_tool_factory(move || {
-                let state = Arc::clone(&finish_factory);
-                FinishPlanningTool::new(state.as_ref().clone())
             })),
             ToolRegistration::from_tool_instance(
                 tools::TASK_TRACKER,

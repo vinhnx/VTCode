@@ -56,7 +56,6 @@ items = ["project", "spinner", "app-name", "git-branch"]
 [tools.policies]
 # Add only the overrides you want to differ from defaults.
 start_planning = "prompt"
-finish_planning = "prompt"
 planning_task_tracker = "prompt"
 request_user_input = "allow"
 task_tracker = "prompt"

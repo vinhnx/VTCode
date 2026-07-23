@@ -11,7 +11,7 @@ use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tool_policy::ToolPolicy;
 use crate::tools::defuddle::{DEFUDDLE_FETCH_DESCRIPTION, DefuddleTool};
-use crate::tools::handlers::{FinishPlanningTool, PlanningWorkflowState, StartPlanningTool, TaskTrackerTool};
+use crate::tools::handlers::{PlanningWorkflowState, StartPlanningTool, TaskTrackerTool};
 use crate::tools::native_memory;
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::tool_intent::builtin_tool_behavior;
@@ -133,20 +133,6 @@ fn register_start_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolRe
         StartPlanningTool::new(plan_state),
     )
     .with_native_cgp_factory(native_cgp_tool_factory(move || StartPlanningTool::new(factory_state.clone())))
-}
-
-#[distributed_slice(BUILTIN_TOOLS)]
-fn register_finish_planning(plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let plan_state = plan_state
-        .cloned()
-        .unwrap_or_else(|| PlanningWorkflowState::new(PathBuf::new()));
-    let factory_state = plan_state.clone();
-    ToolRegistration::from_tool_instance(
-        tools::FINISH_PLANNING,
-        CapabilityLevel::Basic,
-        FinishPlanningTool::new(plan_state),
-    )
-    .with_native_cgp_factory(native_cgp_tool_factory(move || FinishPlanningTool::new(factory_state.clone())))
 }
 
 // ---------------------------------------------------------------------------
@@ -582,12 +568,7 @@ mod tests {
         let plan_state = PlanningWorkflowState::new(PathBuf::from("/workspace"));
         let registrations = builtin_tool_registrations(Some(&plan_state));
 
-        for tool_name in [
-            tools::REQUEST_USER_INPUT,
-            tools::START_PLANNING,
-            tools::FINISH_PLANNING,
-            tools::TASK_TRACKER,
-        ] {
+        for tool_name in [tools::REQUEST_USER_INPUT, tools::START_PLANNING, tools::TASK_TRACKER] {
             let registration = registrations
                 .iter()
                 .find(|registration| registration.name() == tool_name)
@@ -826,7 +807,6 @@ mod tests {
             tools::MCP_GET_TOOL_DETAILS,
             tools::MCP_SEARCH_TOOLS,
             tools::TASK_TRACKER,
-            tools::FINISH_PLANNING,
             tools::START_PLANNING,
             tools::CODE_SEARCH,
         ];

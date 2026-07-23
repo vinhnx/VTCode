@@ -103,7 +103,6 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
             | tools::MCP_GET_TOOL_DETAILS
             | tools::MCP_LIST_SERVERS
             | tools::START_PLANNING
-            | tools::FINISH_PLANNING
             | tools::TASK_TRACKER
             | tools::AGENT
             | tools::SPAWN_AGENT

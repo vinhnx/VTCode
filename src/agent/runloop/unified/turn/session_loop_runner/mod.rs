@@ -578,7 +578,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     }
                     InteractionOutcome::PlanApproved { auto_accept } => {
                         let plan_seed = load_active_plan_seed(&tool_registry).await;
-                        crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
+                        crate::agent::runloop::unified::planning_workflow::finish_planning_workflow(
                             &tool_registry,
                             &mut plan_session,
                             &handle,

@@ -301,7 +301,9 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     fallback_chars = final_fallback.len(),
                     "Recovery pass returned no content; emitted deterministic fallback answer."
                 );
-                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }));
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed {
+                    plan_approved_execution_pending: false,
+                }));
             }
 
             let recovery_mode = empty_response_recovery_mode(params.ctx.working_history);
@@ -460,7 +462,10 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })));
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })
+        ));
         assert!(backing.last_history_message_contains(
             "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
         ));
@@ -494,7 +499,10 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })));
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })
+        ));
         assert!(backing.last_history_message_contains("Latest user request: tell me more"));
         assert!(backing.last_history_message_contains("Tool output 1: second tool output"));
         assert!(backing.last_history_message_contains("Tool output 2: first tool output"));
@@ -544,7 +552,10 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })));
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })
+        ));
         assert!(backing.last_history_message_contains("source_path: src/main.rs"));
         assert!(backing.last_history_message_contains("fallback-line-1"));
         assert!(backing.last_history_message_contains("Spool excerpt:"));
@@ -574,7 +585,10 @@ mod tests {
         .await
         .expect("recovery retry empty response should be handled");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })));
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })
+        ));
         assert!(
             backing.last_history_message_contains(
                 "I couldn't continue because the model returned no answer twice in a row."
@@ -661,7 +675,10 @@ Please re-run with tools enabled."#
         .await
         .expect("recovery textual tool markup should be stripped");
 
-        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })));
+        assert!(matches!(
+            outcome,
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: _ })
+        ));
         assert!(
             backing.last_history_message_contains("The requested change was not applied because tools were disabled.")
         );

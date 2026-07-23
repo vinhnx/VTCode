@@ -31,7 +31,7 @@ pub const PLANNING_WORKFLOW_READ_ONLY_HEADER: &str = "# PLANNING WORKFLOW (READ-
 pub const PLANNING_WORKFLOW_READ_ONLY_NOTICE_LINE: &str = "Mutating file edits are blocked, including `apply_patch`. Use `exec_command.cmd` only for read-only repository inspection with the active shell profile's syntax; keep `task_tracker` current. Plan artifacts under `.vtcode/plans/` are allowed.";
 /// Shared Planning workflow instruction line for transitioning to implementation.
 pub const PLANNING_WORKFLOW_EXIT_INSTRUCTION_LINE: &str =
-    "Call `finish_planning` to present the plan. Mutating tools stay disabled until user approves.";
+    "The plan is ready for user approval. Mutating tools stay disabled until the user approves.";
 /// Compact, spec-like plan quality line. The previous wording ("summary,
 /// steps, test cases, assumptions") let the model emit verbosely large plans
 /// that blew the generation token budget and were cut off mid-`<proposed_plan>`
@@ -66,7 +66,7 @@ pub const PLANNING_WORKFLOW_HINT: &str =
 
 pub const PLANNING_WORKFLOW_TASK_TRACKER_LINE: &str = "`task_tracker` remains available while planning.";
 /// Shared reminder appended when presenting plans while still in Planning workflow.
-pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is active with read-only permissions. Say “implement” to present the plan for user approval, or “stay in planning workflow” to revise. Calling `finish_planning` only presents the plan; mutating tools stay disabled until the user approves the plan. If a write tool is unavailable because planning workflow is active, do not emit the full artifact content in the chat. Instead, summarize the blocker briefly and ask the user to save the content, or call `finish_planning` to present the plan for approval.";
+pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is active with read-only permissions. Say “implement” to present the plan for user approval, or “stay in planning workflow” to revise. The plan will be shown to the user for approval; mutating tools stay disabled until the user approves the plan. If a write tool is unavailable because planning workflow is active, do not emit the full artifact content in the chat. Instead, summarize the blocker briefly and ask the user to save the content.";
 
 pub const PROMPT_TITLE: &str = "# VT Code";
 pub const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";

@@ -25,10 +25,9 @@ pub mod agent_execution {
              - Search code: exec_command with rg or other readonly search commands\n\
              - Use task_tracker\n\n\
              To start implementation:\n\
-             1. Call `finish_planning` tool to show the user your plan for approval\n\
-             2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
-             3. After approval, use apply_patch for file edits\n\n\
-             Fallback if automatic planning handoff keeps failing: call `finish_planning` to present the plan again."
+             1. Wait for the user to review and approve the plan in the UI\n\
+             2. After approval, use apply_patch for file edits\n\n\
+             Fallback if automatic planning handoff keeps failing: type `implement` to present the plan again."
         )
     }
 
@@ -82,7 +81,6 @@ mod tests {
     fn test_agent_execution_message_helpers() {
         let planning_msg = agent_execution::planning_workflow_denial_message("write_file");
         assert!(agent_execution::is_planning_active_denial(&planning_msg));
-        assert!(planning_msg.contains("finish_planning"));
         assert!(planning_msg.contains("MUTATING"));
         assert!(planning_msg.contains("cargo check"));
         assert!(planning_msg.contains("exec_command"));

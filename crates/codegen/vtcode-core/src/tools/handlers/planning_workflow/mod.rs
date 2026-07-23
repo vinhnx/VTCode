@@ -11,10 +11,8 @@
 //!   validation-command detection.
 //! - [`state`]: [`PlanningWorkflowState`] shared permission state.
 //! - [`start`]: `start_planning` tool (enter planning workflow).
-//! - [`finish`]: `finish_planning` tool (exit planning workflow, pending HITL confirmation).
 
 pub mod artifacts;
-pub mod finish;
 pub mod persistence;
 pub mod start;
 pub mod state;
@@ -26,7 +24,6 @@ pub use artifacts::{
     PlanValidationReport, generate_tracker_markdown_from_plan, merge_plan_content, plan_file_for_tracker_file,
     tracker_file_for_plan_file, validate_plan_content,
 };
-pub use finish::FinishPlanningTool;
 pub use persistence::{PersistedPlanDraft, persist_plan_draft, sync_tracker_into_plan_file};
 pub use start::StartPlanningTool;
 pub use state::PlanningWorkflowState;
@@ -125,146 +122,6 @@ mod tests {
         assert!(hints.build_and_lint.contains("pnpm run build"));
         assert!(hints.build_and_lint.contains("pnpm run lint"));
         assert_eq!(hints.tests, "`pnpm run test`");
-    }
-
-    #[tokio::test]
-    async fn test_finish_planning() {
-        let temp_dir = TempDir::new().unwrap();
-        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-
-        // Set up planning workflow
-        state.enable();
-        let plans_dir = state.plans_dir();
-        std::fs::create_dir_all(&plans_dir).unwrap();
-        let plan_file = plans_dir.join("test.md");
-        std::fs::write(
-            &plan_file,
-            "# Test Plan\n\n## Summary\nTest summary\n\n## Implementation Steps\n1. Prepare the change -> files: [src/main.rs] -> verify: [cargo test]\n2. Ship the update -> files: [src/lib.rs] -> verify: [cargo check]\n\n## Test Cases and Validation\n1. Run `cargo test`\n2. Run `cargo check`\n\n## Assumptions and Defaults\n1. The current task scope stays unchanged during review.\n",
-        )
-        .unwrap();
-        state.set_plan_file(Some(plan_file)).await;
-
-        let tool = FinishPlanningTool::new(state.clone());
-
-        // Exit planning workflow
-        let result = tool
-            .execute(json!({
-                "reason": "planning complete"
-            }))
-            .await
-            .unwrap();
-
-        // Planning workflow should still be active - waiting for user confirmation (HITL)
-        assert!(state.is_active());
-        assert_eq!(result["status"], "pending_confirmation");
-        assert!(result["requires_confirmation"].as_bool().unwrap());
-        assert!(result["plan_content"].as_str().unwrap().contains("Test Plan"));
-        // Verify structured plan summary is included
-        assert!(result["plan_summary"].is_object());
-        let summary = &result["plan_summary"];
-        assert!(summary["total_steps"].as_u64().unwrap_or_default() >= 2);
-        assert_eq!(summary["completed_steps"], 0);
-    }
-
-    #[tokio::test]
-    async fn test_finish_planning_merges_plan_tracker_sidecar_content() {
-        let temp_dir = TempDir::new().unwrap();
-        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-
-        state.enable();
-        let plans_dir = state.plans_dir();
-        std::fs::create_dir_all(&plans_dir).unwrap();
-        let plan_file = plans_dir.join("merge-test.md");
-        std::fs::write(
-            &plan_file,
-            "# Test Plan\n\n## Summary\nMerge tracker sidecar into the canonical review artifact.\n\n## Implementation Steps\n1. Keep the base plan content -> files: [src/base.rs] -> verify: [cargo test]\n\n## Test Cases and Validation\n1. Run `cargo test`\n\n## Assumptions and Defaults\n1. Tracker sidecar content should remain visible during review.\n",
-        )
-        .unwrap();
-        let tracker_file = plans_dir.join("merge-test.tasks.md");
-        std::fs::write(&tracker_file, "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n").unwrap();
-        state.set_plan_file(Some(plan_file)).await;
-
-        let tool = FinishPlanningTool::new(state.clone());
-        let result = tool.execute(json!({ "reason": "merge test" })).await.unwrap();
-
-        assert_eq!(result["status"], "pending_confirmation");
-        assert_eq!(result["plan_tracker_file"], tracker_file.display().to_string());
-        let plan_content = result["plan_content"].as_str().unwrap_or_default();
-        assert!(plan_content.contains("Keep the base plan content"));
-        assert!(plan_content.contains("Tracker step"));
-    }
-
-    #[tokio::test]
-    async fn test_finish_planning_not_ready_without_actionable_steps() {
-        let temp_dir = TempDir::new().unwrap();
-        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-
-        state.enable();
-        let plans_dir = state.plans_dir();
-        std::fs::create_dir_all(&plans_dir).unwrap();
-        let plan_file = plans_dir.join("test.md");
-        std::fs::write(
-            &plan_file,
-            "# Test Plan\n\n## Plan of Work\n(Describe the sequence of edits and additions. For each edit, name the file and location.)\n",
-        )
-        .unwrap();
-        state.set_plan_file(Some(plan_file)).await;
-
-        let tool = FinishPlanningTool::new(state.clone());
-        let result = tool.execute(json!({})).await.unwrap();
-
-        assert_eq!(result["status"], "not_ready");
-        assert_eq!(result["requires_confirmation"], false);
-        assert!(
-            result["validation"]["missing_sections"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|value| value.as_str() == Some("Summary"))
-        );
-    }
-
-    #[tokio::test]
-    async fn test_finish_planning_auto_trigger_incomplete() {
-        let temp_dir = TempDir::new().unwrap();
-        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-
-        state.enable();
-        let plans_dir = state.plans_dir();
-        std::fs::create_dir_all(&plans_dir).unwrap();
-        let plan_file = plans_dir.join("draft.md");
-        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Draft step\n").unwrap();
-        state.set_plan_file(Some(plan_file)).await;
-
-        let tool = FinishPlanningTool::new(state.clone());
-        let result = tool.execute(json!({ "reason": "auto_trigger_on_plan_ready" })).await.unwrap();
-
-        assert_eq!(result["status"], "pending_confirmation");
-        assert_eq!(result["requires_confirmation"], true);
-        assert_eq!(result["draft_incomplete"], true);
-    }
-
-    #[tokio::test]
-    async fn test_finish_planning_not_ready_when_plan_not_updated_since_baseline() {
-        let temp_dir = TempDir::new().unwrap();
-        let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-        let tool = StartPlanningTool::new(state.clone());
-
-        let result = tool.execute(json!({ "plan_name": "baseline-test" })).await.unwrap();
-        assert_eq!(result["status"], "success");
-
-        let plan_file = state.get_plan_file().await.unwrap();
-        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Step one\n").unwrap();
-
-        // Reset baseline to simulate no updates after template creation.
-        let baseline = std::fs::metadata(&plan_file).and_then(|meta| meta.modified()).unwrap();
-        state.set_plan_baseline(Some(baseline)).await;
-
-        let exit_tool = FinishPlanningTool::new(state.clone());
-        let exit_result = exit_tool.execute(json!({})).await.unwrap();
-
-        assert_eq!(exit_result["status"], "not_ready");
-        assert_eq!(exit_result["requires_confirmation"], false);
     }
 
     #[tokio::test]
@@ -442,10 +299,9 @@ Persist a concrete draft and seed tracker state.
 
         let temp_dir = TempDir::new().unwrap();
         let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
-        let start_tool = StartPlanningTool::new(state.clone());
-        let finish_tool = FinishPlanningTool::new(state);
+        let start_tool = StartPlanningTool::new(state);
 
-        for description in [start_tool.description(), finish_tool.description()] {
+        for description in [start_tool.description()] {
             assert!(!description.contains(&internal_unified_tool_name("file")));
             assert!(!description.contains(&internal_unified_tool_name("exec")));
             assert!(!description.contains(&internal_unified_tool_name("search")));

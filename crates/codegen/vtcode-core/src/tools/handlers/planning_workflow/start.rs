@@ -217,7 +217,7 @@ impl Tool for StartPlanningTool {
                 "1. Explore files and capture repository facts before drafting the plan",
                 "2. Ask or close only material blocking decisions",
                 "3. Emit one compact <proposed_plan> spec (fit ~1500 tokens; steps as `Action -> files -> verify:`, file:symbol refs over prose) and persist it to the plan file",
-                "4. Use finish_planning when ready for the user to review and approve"
+                "4. Emit one compact <proposed_plan> spec (fit ~1500 tokens; steps as `Action -> files/symbols -> verify:`, file:symbol refs over prose) and persist it to the plan file"
             ],
             "workflow_phases": [
                 "Phase A: Explore facts",

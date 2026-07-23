@@ -28,7 +28,7 @@ use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_prompt::resolve_file_conflict_status;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::validation::{SafetyValidationFailure, validate_tool_call_with_limit_prompt};
-use crate::agent::runloop::unified::planning_workflow::{handle_finish_planning, handle_start_planning};
+use crate::agent::runloop::unified::planning_workflow::handle_start_planning;
 use vtcode_commons::canonicalize;
 
 fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, String) {
@@ -117,9 +117,7 @@ pub(crate) async fn run_tool_call_with_args(
     let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
     if !prevalidated {
-        if requested_name != tools::FINISH_PLANNING
-            && let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion()
-        {
+        if let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion() {
             return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
                 error: structured_failure_from_message(requested_name, exhaustion.policy_violation_message()),
             }));
@@ -265,30 +263,6 @@ pub(crate) async fn run_tool_call_with_args(
         );
         return Ok(outcome);
     }
-    if let Some(outcome) = handle_finish_planning(
-        ctx,
-        name,
-        effective_args.as_ref(),
-        ctrl_c_state,
-        ctrl_c_notify,
-        max_tool_retries,
-        vt_cfg,
-    )
-    .await
-    {
-        emit_tool_completion_for_status(
-            harness_emitter,
-            tool_started_emitted,
-            true,
-            &harness_item_id,
-            tool_call_id,
-            name,
-            effective_args.as_ref(),
-            &outcome.status,
-        );
-        return Ok(outcome);
-    }
-
     let execution = execute_with_cache_and_streaming(
         ctx.tool_registry,
         ctx.tool_result_cache,

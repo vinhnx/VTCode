@@ -31,7 +31,6 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// the planning session, falling back to autonomous plan synthesis
     /// instead of looping (see checkpoint turn_655/turn_660).
     interview_denied: bool,
-    approval_requested: bool,
 }
 
 impl PlanningWorkflowSessionState {
@@ -45,15 +44,6 @@ impl PlanningWorkflowSessionState {
         self.budget_exhausted = false;
         self.recovery_exhausted = false;
         self.interview_denied = false;
-        self.approval_requested = false;
-    }
-
-    pub(crate) fn request_approval(&mut self) {
-        self.approval_requested = true;
-    }
-
-    pub(crate) fn approval_requested(&self) -> bool {
-        self.approval_requested
     }
 
     pub(crate) fn exit(&mut self) {
@@ -61,7 +51,6 @@ impl PlanningWorkflowSessionState {
         self.budget_exhausted = false;
         self.recovery_exhausted = false;
         self.interview_denied = false;
-        self.approval_requested = false;
     }
 
     #[allow(dead_code)]
@@ -92,11 +81,6 @@ impl PlanningWorkflowSessionState {
     #[allow(dead_code)]
     pub(crate) fn mark_interview_pending(&mut self) {
         self.interview_pending = true;
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn clear_interview_pending(&mut self) {
-        self.interview_pending = false;
     }
 
     pub(crate) fn record_interview_result(&mut self, answered_questions: usize, cancelled: bool) {
@@ -158,7 +142,7 @@ pub(crate) const PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT: &str = "Planning wor
 pub(crate) const PLANNING_WORKFLOW_KEEP_PLANNING_HINT: &str =
     "To keep planning, say `keep planning` and describe what to revise.";
 pub(crate) const PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT: &str =
-    "If automatic planning handoff fails, call `finish_planning` to present the plan again.";
+    "If the plan is not shown automatically, type `implement` to present it for approval.";
 
 pub(crate) fn short_confirmation_hint_with_fallback() -> String {
     format!("{PLANNING_WORKFLOW_SHORT_CONFIRMATION_HINT} {PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT}")

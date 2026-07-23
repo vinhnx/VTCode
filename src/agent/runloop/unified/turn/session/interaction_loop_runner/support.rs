@@ -974,7 +974,7 @@ pub(crate) async fn handle_select_primary_agent(
             // Deactivate planning workflow when switching away from the plan
             // agent so the state does not leak into other modes.
             if !is_plan_agent && ctx.tool_registry.is_planning_active() {
-                crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
+                crate::agent::runloop::unified::planning_workflow::finish_planning_workflow(
                     ctx.tool_registry,
                     ctx.plan_session,
                     ctx.handle,

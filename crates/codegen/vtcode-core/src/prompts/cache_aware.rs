@@ -9,7 +9,6 @@ const PRIORITY_TOOLS: &[&str] = &[
     tools::WRITE_STDIN,
     tools::REQUEST_USER_INPUT,
     tools::TASK_TRACKER,
-    tools::FINISH_PLANNING,
 ];
 
 /// Sort tool definitions with priority grouping to improve LLM attention.

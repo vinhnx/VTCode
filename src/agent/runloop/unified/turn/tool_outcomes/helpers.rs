@@ -6,8 +6,6 @@ use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::names::canonical_tool_name;
 
-pub(crate) const FINISH_PLANNING_REASON_USER_REQUESTED_IMPLEMENTATION: &str = "user_requested_implementation";
-
 /// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
 /// warning fires. NL2Repo-Bench recommends verifying after every few edits.
 pub(crate) const BLIND_EDITING_THRESHOLD: usize = 4;
@@ -388,16 +386,6 @@ pub(crate) fn push_invalid_tool_args_response<S>(
     push_tool_response(history, tool_call_id, Some(tool_name), payload.to_string());
 }
 
-pub(crate) fn build_finish_planning_args(reason: &str) -> serde_json::Value {
-    serde_json::json!({
-        "reason": reason
-    })
-}
-
-pub(crate) fn build_step_finish_planning_call_id(step_count: usize) -> String {
-    format!("call_{step_count}_finish_planning")
-}
-
 /// Generate a tool signature key with predictable structure for loop tracking.
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
     // Keep keys compact on hot paths: hash bounded argument bytes instead of
@@ -627,17 +615,6 @@ pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
         s.to_string()
     } else {
         serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
-    }
-}
-
-/// Extract the JSON output from a successful `ToolPipelineOutcome`.
-///
-/// Returns `Some(&Value)` for successful executions, `None` for failures,
-/// timeouts, and cancellations.
-pub(crate) fn tool_output_from_outcome(outcome: &ToolPipelineOutcome) -> Option<&serde_json::Value> {
-    match &outcome.status {
-        ToolExecutionStatus::Success { output, .. } => Some(output),
-        _ => None,
     }
 }
 

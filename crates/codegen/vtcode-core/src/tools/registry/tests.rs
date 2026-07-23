@@ -1114,8 +1114,10 @@ async fn preflight_rejects_removed_planning_finish_aliases() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let outcome = registry.preflight_validate_call(tools::FINISH_PLANNING, &json!({}))?;
-    assert_eq!(outcome.normalized_tool_name, tools::FINISH_PLANNING);
+    let outcome = registry
+        .preflight_validate_call("finish_planning", &json!({}))
+        .expect_err("removed finish_planning tool should be rejected");
+    assert!(outcome.to_string().contains("Unknown tool"));
 
     let old_finish_name = ["exit", "plan", "mode"].join("_");
     let old_name = registry

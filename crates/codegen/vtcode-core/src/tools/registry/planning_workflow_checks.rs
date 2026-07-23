@@ -75,14 +75,6 @@ impl ToolRegistry {
             return true;
         }
 
-        // Finalizing a plan is a planning-workflow control operation. It may
-        // persist the inline plan draft and open confirmation, but it must be
-        // callable while planning is active; treating it as a mutating tool
-        // blocks every model-generated `finish_planning` call at preflight.
-        if canonical == tools::FINISH_PLANNING {
-            return true;
-        }
-
         if !intent.mutating {
             return true;
         }

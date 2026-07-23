@@ -16,7 +16,6 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use super::super::build_failure_error_content;
 use super::common::push_guard_failure_messages;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext};
-use vtcode_core::config::constants::tools as tool_names;
 
 /// Get the max consecutive blocked tool calls per turn from config.
 pub(crate) fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
@@ -64,41 +63,6 @@ fn build_blocked_tool_call_messages(
     (block_reason, error_content)
 }
 
-/// Handle a blocked planning tool during an active planning workflow.
-///
-/// `finish_planning` is the only planning tool that gets a fast-exit here:
-/// if presenting the plan for approval is blocked, the workflow cannot make
-/// progress. `request_user_input` is intentionally omitted so it flows through
-/// normal tool execution where the permission-denial path (and `handle_failure`)
-/// both call `mark_interview_denied()` to permanently suppress the tool.
-///
-/// Returns `Some(TurnHandlerOutcome)` when the guard should trip, or `None`
-/// when planning is not active or the tool is not `finish_planning`.
-fn handle_planning_blocked_tool(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_call_id: &str,
-    tool_name: &str,
-    args: &Value,
-) -> Option<TurnHandlerOutcome> {
-    if !ctx.is_planning_active() {
-        return None;
-    }
-
-    if tool_name != tool_names::FINISH_PLANNING {
-        return None;
-    }
-
-    let display_tool = tool_action_label(tool_name, args);
-    let block_reason = format!(
-        "Planning tool '{display_tool}' was blocked by policy. Ending turn so you can review the current plan or change approach."
-    );
-    let error_content = build_failure_error_content(format!("Blocked planning tool: {tool_name}"), "planning_blocked");
-    push_guard_failure_messages(ctx, tool_call_id, tool_name, error_content, &block_reason);
-    ctx.tool_registry.disable_planning();
-
-    Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false }))
-}
-
 /// Enforce the blocked tool call guard.
 ///
 /// Returns `Some(TurnHandlerOutcome)` when the guard trips (turn should stop),
@@ -109,13 +73,6 @@ pub(crate) fn enforce_blocked_tool_call_guard(
     tool_name: &str,
     args: &Value,
 ) -> Option<TurnHandlerOutcome> {
-    // Planning-mode fast-exit: if a planning tool is blocked, continuing only
-    // regenerates the same plan proposal or re-asks the same interview. Break
-    // immediately so the turn ends cleanly and the user can decide next.
-    if let Some(outcome) = handle_planning_blocked_tool(ctx, tool_call_id, tool_name, args) {
-        return Some(outcome);
-    }
-
     let streak = ctx.record_blocked_tool_call();
     let blocked_total = ctx.blocked_tool_calls();
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(ctx);

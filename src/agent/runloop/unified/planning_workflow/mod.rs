@@ -13,16 +13,18 @@
 
 pub(crate) mod confirmation;
 pub(crate) mod execution;
+pub(crate) mod exit_trigger;
 pub(crate) mod intent;
+pub(crate) mod plan_approval;
 pub(crate) mod recovery;
+pub(crate) mod start_confirmation;
 
 // --- Stable interface (the only planning symbols the runloop should name) ---
 
-pub(crate) use confirmation::{
-    PlanConfirmationOutcome, StartPlanningDecision, execute_plan_confirmation, plan_confirmation_outcome_to_json,
-    present_start_planning_confirmation,
-};
-pub(crate) use execution::{handle_finish_planning, handle_start_planning};
+pub(crate) use super::planning_workflow_state::finish_planning_workflow;
+pub(crate) use confirmation::{StartPlanningDecision, execute_plan_approval, present_start_planning_confirmation};
+pub(crate) use execution::handle_start_planning;
+pub(crate) use exit_trigger::maybe_handle_planning_exit_trigger;
 pub(crate) use intent::{
     PlanningIntent, assistant_recently_prompted_implementation, detect_enter_planning_intent, detect_planning_intent,
 };

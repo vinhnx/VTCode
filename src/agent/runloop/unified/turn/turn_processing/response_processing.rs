@@ -246,8 +246,14 @@ pub(crate) fn process_llm_response(
 
 fn looks_like_structured_plan(text: &str) -> bool {
     let normalized = text.to_ascii_lowercase();
-    normalized.contains("summary:")
-        && (normalized.contains("steps:") || normalized.contains("validation:") || normalized.contains("assumptions:"))
+    let has_summary = normalized.contains("summary");
+    let has_steps = normalized.contains("steps")
+        || normalized.contains("step ")
+        || normalized.contains("1. ")
+        || normalized.contains("2. ");
+    let has_validation =
+        normalized.contains("validation") || normalized.contains("verification") || normalized.contains("verify:");
+    has_summary && (has_steps || has_validation)
 }
 
 pub(crate) fn prepare_tool_calls(
@@ -1005,5 +1011,34 @@ Open questions for alignment:
             }
             _ => panic!("Expected text response when tool calls are disabled"),
         }
+    }
+
+    #[test]
+    fn looks_like_structured_plan_detects_plain_text_plan_without_tags() {
+        let text = r#"
+ •   Summary
+     Focus on the startup configuration/validation path.
+
+     1. Measure baseline
+       - Action: Add a high-resolution startup timer.
+       - Files/symbols: main entry.
+       - Verify: `cargo run --release` prints phase durations.
+
+     2. Trim binary size
+       - Action: Audit Cargo.toml for large crates.
+       - Verify: `cargo build --locked --release` size drops.
+
+     Validation
+
+     •   Build: cargo check --locked
+     •   Tests: targeted tests in src/startup/.
+        "#;
+        assert!(looks_like_structured_plan(text));
+    }
+
+    #[test]
+    fn looks_like_structured_plan_rejects_plain_conversation() {
+        let text = "Here is a quick update: I searched the codebase and found nothing relevant.";
+        assert!(!looks_like_structured_plan(text));
     }
 }

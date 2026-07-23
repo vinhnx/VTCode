@@ -27,10 +27,20 @@ where
     S: UiSession + ?Sized,
     F: FnMut(TransientSubmission) -> Option<T>,
 {
+    tracing::info!(
+        target: "vtcode.planning_workflow",
+        "show_overlay_and_wait: showing transient request"
+    );
     handle.show_transient(request);
     handle.force_redraw();
     task::yield_now().await;
-    wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, map_submission).await
+    let result = wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, map_submission).await;
+    tracing::info!(
+        target: "vtcode.planning_workflow",
+        overlay_result = "completed",
+        "show_overlay_and_wait: completed"
+    );
+    result
 }
 
 pub(crate) async fn wait_for_overlay_submission<S, T, F>(
@@ -51,10 +61,19 @@ where
         }
 
         let notify = ctrl_c_notify.clone();
+        tracing::info!(
+            target: "vtcode.planning_workflow",
+            "wait_for_overlay_submission: waiting for event"
+        );
         let maybe_event = tokio::select! {
             _ = notify.notified() => None,
             event = session.next_event() => event,
         };
+        tracing::info!(
+            target: "vtcode.planning_workflow",
+            event_received = true,
+            "wait_for_overlay_submission: event received"
+        );
 
         let Some(event) = maybe_event else {
             close_overlay(handle).await;
@@ -66,31 +85,51 @@ where
 
         match event {
             InlineEvent::Interrupt => {
-                // Esc / Ctrl+C from the TUI.  `request_local_stop()` sets
-                // CancelRequested so the turn loop detects the interruption.
-                // Single Ctrl+C closes the overlay; double Ctrl+C exits.
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "wait_for_overlay_submission: interrupt event"
+                );
                 crate::agent::runloop::unified::stop_requests::request_local_stop(ctrl_c_state, ctrl_c_notify);
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Interrupted);
             }
             InlineEvent::Transient(TransientEvent::Submitted(submission)) => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    submission = "received",
+                    "wait_for_overlay_submission: submitted event"
+                );
                 ctrl_c_state.reset();
                 if let Some(mapped) = map_submission(submission) {
                     return Ok(OverlayWaitOutcome::Submitted(mapped));
                 }
             }
             InlineEvent::Transient(TransientEvent::Cancelled) | InlineEvent::Cancel => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "wait_for_overlay_submission: cancelled event"
+                );
                 ctrl_c_state.reset();
                 return Ok(OverlayWaitOutcome::Cancelled);
             }
             InlineEvent::Exit => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    "wait_for_overlay_submission: exit event"
+                );
                 ctrl_c_state.reset();
                 close_overlay(handle).await;
                 return Ok(OverlayWaitOutcome::Exit);
             }
             InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => continue,
             InlineEvent::Transient(_) => {}
-            _ => {}
+            _ => {
+                tracing::info!(
+                    target: "vtcode.planning_workflow",
+                    event_type = "other",
+                    "wait_for_overlay_submission: other event"
+                );
+            }
         }
     }
 }

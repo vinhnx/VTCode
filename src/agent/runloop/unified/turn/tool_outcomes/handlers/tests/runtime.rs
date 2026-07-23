@@ -730,31 +730,6 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
 }
 
 #[tokio::test]
-async fn planning_mode_blocks_finish_planning_immediately() {
-    let mut backing = TestContextBacking::new(4).await;
-    backing.tool_registry.enable_planning();
-    let mut ctx = backing.turn_processing_context();
-    let args = json!({"plan": "<proposed_plan>\n- Step 1\n</proposed_plan>"});
-
-    let outcome =
-        enforce_blocked_tool_call_guard(&mut ctx, "finish_planning_blocked", tool_names::FINISH_PLANNING, &args);
-
-    assert!(
-        matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. }))),
-        "Expected Break(Completed) for blocked finish_planning in planning mode"
-    );
-    assert!(
-        ctx.working_history
-            .iter()
-            .any(|message| message.content.as_text().contains("review the current plan or change approach"))
-    );
-    assert!(
-        !backing.tool_registry.is_planning_active(),
-        "Planning mode should be disabled after blocked finish_planning"
-    );
-}
-
-#[tokio::test]
 async fn planning_mode_allows_request_user_input_blocked_through_to_failure() {
     let mut backing = TestContextBacking::new(4).await;
     backing.tool_registry.enable_planning();

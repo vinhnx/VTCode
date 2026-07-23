@@ -12,10 +12,9 @@
     "web_fetch": "prompt",
     "web_search": "prompt",
     "task_tracker": "prompt",
-    "finish_planning": "prompt",
+    "memory": "allow",
     "request_user_input": "allow",
     "start_planning": "prompt",
-    "memory": "allow",
     "code_search": "allow",
     "mcp": "allow"
   },

@@ -497,10 +497,8 @@ impl AgentRunner {
             .filter(|tool_name| {
                 let canonical = crate::tools::names::canonical_tool_name(tool_name);
 
-                !matches!(
-                    canonical,
-                    tools::REQUEST_USER_INPUT | tools::TASK_TRACKER | tools::START_PLANNING | tools::FINISH_PLANNING
-                ) && !self.tool_registry.is_mutating_tool(tool_name)
+                !matches!(canonical, tools::REQUEST_USER_INPUT | tools::TASK_TRACKER | tools::START_PLANNING)
+                    && !self.tool_registry.is_mutating_tool(tool_name)
             })
             .cloned()
             .collect()

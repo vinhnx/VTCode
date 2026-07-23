@@ -64,9 +64,10 @@ You can steer the workflow with short phrases instead of the review-gate UI:
 
 - To **exit planning and present the plan** for approval, type `implement`,
   `approve`, `lgtm`, `ship it`, `yes`/`continue`/`go`/`start`, or select
-  **Execute** / **Auto-accept** in the review gate. Approving triggers
-  `finish_planning` and the execution confirmation — the agent will not
-  self-approve by editing the plan file and staying in plan mode.
+  **Execute** / **Auto-accept** in the review gate. The plan is shown in an
+  inline confirmation overlay (or a text prompt in non-interactive mode);
+  the agent will not self-approve by editing the plan file and staying in
+  plan mode.
 - To **stay in planning**, type `stay in planning` (or revise the
   `<proposed_plan>` block). This overrides any exit phrase.
 
@@ -162,8 +163,8 @@ Approval options:
 - **Cancel** — discard the plan without executing.
 
 Handoff options perform a true primary-agent switch: the chosen agent becomes active and
-executes the approved plan. `finish_planning` is invoked either way, disabling planning
-mode and enabling mutating tools.
+executes the approved plan. The planning workflow is disabled and mutating tools are enabled
+once the user approves the plan.
 
 ## Budget Exhaustion
 

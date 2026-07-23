@@ -56,7 +56,7 @@ pub(crate) async fn handle_toggle_planning_workflow(
         )?;
         crate::agent::runloop::unified::planning_workflow_state::render_planning_workflow_next_step_hint(ctx.renderer)?;
     } else {
-        crate::agent::runloop::unified::planning_workflow_state::finish_planning_workflow(
+        crate::agent::runloop::unified::planning_workflow::finish_planning_workflow(
             ctx.tool_registry,
             ctx.plan_session,
             ctx.handle,

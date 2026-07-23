@@ -17,6 +17,7 @@ use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::inline_events::harness::{
     turn_completed_event, turn_failed_event, turn_started_event,
 };
+use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
@@ -25,7 +26,7 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages, maybe_handle_planning_enter_trigger,
-    maybe_handle_planning_exit_trigger, maybe_handle_tool_loop_limit, resolve_safety_tool_call_limits,
+    maybe_handle_tool_loop_limit, resolve_safety_tool_call_limits,
 };
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -521,8 +522,20 @@ pub(crate) async fn run_turn_loop(
             break;
         }
 
-        if maybe_handle_planning_exit_trigger(&mut ctx, working_history, step_count, &mut pending_primary_agent).await?
-        {
+        let transition = maybe_handle_planning_exit_trigger(
+            &mut ctx.renderer,
+            ctx.tool_registry,
+            ctx.plan_session,
+            ctx.handle,
+            working_history,
+            &mut ctx.auto_finish_planning_attempted,
+        )
+        .await?;
+
+        if transition.should_break() {
+            let (loop_result, agent) = transition.into_result_and_agent();
+            result = loop_result;
+            pending_primary_agent = agent;
             break;
         }
 
