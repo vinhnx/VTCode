@@ -44,7 +44,7 @@ impl OpenAIProvider {
             return self.stream_chat_completions_normalized(&request).await;
         }
 
-        let url = format!("{}/responses", self.base_url);
+        let url = &self.responses_url[..];
         loop {
             let model = request.model.clone();
             let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
@@ -57,7 +57,7 @@ impl OpenAIProvider {
                     headers::apply_turn_metadata(
                         headers::apply_client_request_id(
                             headers::apply_responses_beta(
-                                self.authorize_with_api_key(self.http_client.post(&url), auth),
+                                self.authorize_with_api_key(self.http_client.post(url), auth),
                             ),
                             &client_request_id,
                         ),
@@ -146,7 +146,7 @@ impl OpenAIProvider {
             return self.stream_chat_completions(&request).await;
         }
 
-        let url = format!("{}/responses", self.base_url);
+        let url = &self.responses_url[..];
         loop {
             let model = request.model.clone();
             let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
@@ -159,7 +159,7 @@ impl OpenAIProvider {
                     headers::apply_turn_metadata(
                         headers::apply_client_request_id(
                             headers::apply_responses_beta(
-                                self.authorize_with_api_key(self.http_client.post(&url), auth),
+                                self.authorize_with_api_key(self.http_client.post(url), auth),
                             ),
                             &client_request_id,
                         ),
@@ -231,14 +231,14 @@ impl OpenAIProvider {
         if is_native_openai {
             openai_request["stream_options"] = json!({ "include_usage": true });
         }
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = &self.chat_completions_url[..];
         let client_request_id = Self::new_client_request_id();
 
         let response = self
             .send_authorized(|auth| {
                 headers::apply_turn_metadata(
                     headers::apply_client_request_id(
-                        self.authorize_with_api_key(self.http_client.post(&url), auth),
+                        self.authorize_with_api_key(self.http_client.post(url), auth),
                         &client_request_id,
                     ),
                     &request.metadata,

@@ -36,7 +36,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub use super::credentials::AuthCredentialsStoreMode;
-use super::credentials::keyring_entry;
+use super::credentials::keyring;
 use super::pkce::PkceChallenge;
 use crate::storage_paths::{auth_storage_dir, write_private_file};
 
@@ -299,7 +299,7 @@ pub fn save_oauth_token_with_mode(token: &OpenRouterToken, mode: AuthCredentials
 
 /// Save token to OS keyring.
 fn save_oauth_token_keyring(token: &OpenRouterToken) -> Result<()> {
-    let entry = keyring_entry("vtcode", "openrouter_oauth").context("Failed to access OS keyring")?;
+    let entry = keyring::entry("vtcode", "openrouter_oauth").context("Failed to access OS keyring")?;
 
     // Serialize the entire token to JSON for storage
     let token_json = serde_json::to_string(token).context("Failed to serialize token for keyring")?;
@@ -344,7 +344,7 @@ pub fn load_oauth_token_with_mode(mode: AuthCredentialsStoreMode) -> Result<Opti
 
 /// Load token from OS keyring.
 fn load_oauth_token_keyring() -> Result<Option<OpenRouterToken>> {
-    let entry = match keyring_entry("vtcode", "openrouter_oauth") {
+    let entry = match keyring::entry("vtcode", "openrouter_oauth") {
         Ok(e) => e,
         Err(_) => return Ok(None),
     };
@@ -427,7 +427,7 @@ pub fn load_oauth_token() -> Result<Option<OpenRouterToken>> {
 
 /// Clear token from OS keyring.
 fn clear_oauth_token_keyring() -> Result<()> {
-    let entry = match keyring_entry("vtcode", "openrouter_oauth") {
+    let entry = match keyring::entry("vtcode", "openrouter_oauth") {
         Ok(e) => e,
         Err(_) => return Ok(()),
     };

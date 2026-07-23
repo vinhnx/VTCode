@@ -279,12 +279,16 @@ impl ErrorCategory {
     /// providers) or `/login` (managed-auth providers). Env-var guidance is
     /// intentionally omitted — secure storage via `/secret` is the canonical
     /// path and env vars are a fallback only.
+    ///
+    /// `has_stored_credential` distinguishes "no key at all" (needs `/secret add`)
+    /// from "key stored but rejected by the API" (needs verification).
     #[must_use]
     pub fn auth_recovery_guidance(
         &self,
         provider_label: &str,
         provider_key: &str,
         is_managed_auth: bool,
+        has_stored_credential: bool,
     ) -> Vec<String> {
         if !matches!(self, ErrorCategory::Authentication) {
             return vec![];
@@ -293,6 +297,10 @@ impl ErrorCategory {
         if is_managed_auth {
             vec![format!(
                 "Authentication failed for {provider_label}. Run /login {provider_key} to re-authenticate."
+            )]
+        } else if has_stored_credential {
+            vec![format!(
+                "Authentication failed for {provider_label}. The stored API key was rejected — run /secret add {provider_key} to replace it with a valid key."
             )]
         } else {
             vec![format!(
@@ -932,8 +940,8 @@ mod tests {
     // --- auth_recovery_guidance ---
 
     #[test]
-    fn auth_recovery_guidance_api_key_provider_mentions_secret_add() {
-        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false);
+    fn auth_recovery_guidance_no_credential_mentions_secret_add() {
+        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, false);
         assert_eq!(guidance.len(), 1);
         assert_eq!(
             guidance[0],
@@ -942,8 +950,18 @@ mod tests {
     }
 
     #[test]
+    fn auth_recovery_guidance_credential_stored_mentions_overwrite() {
+        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("StepFun", "stepfun", false, true);
+        assert_eq!(guidance.len(), 1);
+        assert_eq!(
+            guidance[0],
+            "Authentication failed for StepFun. The stored API key was rejected — run /secret add stepfun to replace it with a valid key."
+        );
+    }
+
+    #[test]
     fn auth_recovery_guidance_managed_auth_provider_mentions_login() {
-        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true);
+        let guidance = ErrorCategory::Authentication.auth_recovery_guidance("GitHub Copilot", "copilot", true, false);
         assert_eq!(guidance.len(), 1);
         assert_eq!(guidance[0], "Authentication failed for GitHub Copilot. Run /login copilot to re-authenticate.");
     }
@@ -952,12 +970,12 @@ mod tests {
     fn auth_recovery_guidance_non_auth_category_returns_empty() {
         assert!(
             ErrorCategory::Network
-                .auth_recovery_guidance("OpenAI", "openai", false)
+                .auth_recovery_guidance("OpenAI", "openai", false, false)
                 .is_empty()
         );
         assert!(
             ErrorCategory::Timeout
-                .auth_recovery_guidance("OpenAI", "openai", false)
+                .auth_recovery_guidance("OpenAI", "openai", false, false)
                 .is_empty()
         );
     }

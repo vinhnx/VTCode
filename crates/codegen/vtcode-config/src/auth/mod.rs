@@ -9,7 +9,7 @@ pub use vtcode_auth::{
     generate_pkce_challenge, get_auth_status, get_auth_status_with_mode, get_auth_url, get_openai_chatgpt_auth_status,
     get_openai_chatgpt_auth_status_with_mode, get_openai_chatgpt_auth_url, load_custom_api_keys, load_oauth_token,
     load_oauth_token_with_mode, load_openai_chatgpt_session, load_openai_chatgpt_session_with_mode,
-    migrate_custom_api_keys_to_keyring, refresh_openai_chatgpt_session_with_mode, resolve_openai_auth,
+    migrate_custom_api_keys, refresh_openai_chatgpt_session_with_mode, resolve_openai_auth,
     run_auth_code_callback_server, save_oauth_token, save_oauth_token_with_mode, save_openai_chatgpt_session,
     save_openai_chatgpt_session_with_mode, start_auth_code_callback_server, summarize_openai_credentials,
 };

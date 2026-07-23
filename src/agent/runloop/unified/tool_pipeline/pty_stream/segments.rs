@@ -463,11 +463,7 @@ pub(super) fn line_to_segments(line: &str, styles: &PtyLineStyles) -> (Vec<Inlin
     if let Some(command_text) = line.strip_prefix("• Ran ") {
         let mut segments = vec![
             InlineSegment {
-                text: "• ".to_string(),
-                style: Arc::clone(&styles.glyph),
-            },
-            InlineSegment {
-                text: "Ran".to_string(),
+                text: "• Ran".to_string(),
                 style: Arc::clone(&styles.verb),
             },
             InlineSegment {

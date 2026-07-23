@@ -65,10 +65,7 @@ use selection::{
     selection_from_option, selections_from_custom_provider,
 };
 #[cfg(test)]
-use selection::{
-    reasoning_level_description, reasoning_level_label, service_tier_label, supports_gpt5_none_reasoning,
-    supports_max_reasoning, supports_xhigh_reasoning,
-};
+use selection::{supports_gpt5_none_reasoning, supports_max_reasoning, supports_xhigh_reasoning};
 #[cfg(test)]
 use subagent::{
     SubagentModelTarget, normalized_subagent_reasoning, parseable_subagent_dynamic_indexes,

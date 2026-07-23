@@ -79,8 +79,8 @@ pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str
     let hang_width = if stripped.starts_with("  └ ") || stripped.starts_with("  │ ") || stripped.starts_with("    ")
     {
         4
-    } else if stripped.starts_with("• Ran ") {
-        "• Ran ".chars().count()
+    } else if let Some((_, prefix)) = super::reflow::parse_tool_call_prefix(&stripped) {
+        prefix.chars().count() + 1
     } else {
         0
     };

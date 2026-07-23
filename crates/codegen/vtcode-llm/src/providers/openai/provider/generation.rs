@@ -220,13 +220,13 @@ impl OpenAIProvider {
                 }
             }
         }
-        let url = format!("{}/responses/compact", self.base_url);
+        let url = &self.responses_compact_url[..];
         let client_request_id = Self::new_client_request_id();
 
         let response = self
             .send_authorized(|auth| {
                 headers::apply_client_request_id(
-                    headers::apply_responses_beta(self.authorize_with_api_key(self.http_client.post(&url), auth)),
+                    headers::apply_responses_beta(self.authorize_with_api_key(self.http_client.post(url), auth)),
                     &client_request_id,
                 )
                 .json(&compact_payload)
@@ -308,7 +308,7 @@ impl OpenAIProvider {
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             // Skip flex tier if it was previously rejected for this model
             let openai_request = self.maybe_strip_flex_service_tier(&request.model, &openai_request);
-            let url = format!("{}/responses", self.base_url);
+            let url = &self.responses_url[..];
             let client_request_id = Self::new_client_request_id();
 
             let response = self
@@ -316,7 +316,7 @@ impl OpenAIProvider {
                     headers::apply_turn_metadata(
                         headers::apply_client_request_id(
                             headers::apply_responses_beta(
-                                self.authorize_with_api_key(self.http_client.post(&url), auth),
+                                self.authorize_with_api_key(self.http_client.post(url), auth),
                             ),
                             &client_request_id,
                         ),
@@ -344,7 +344,7 @@ impl OpenAIProvider {
                     );
 
                     let (retry_response, retry_client_request_id) = self
-                        .retry_without_service_tier(&url, &request.metadata, &openai_request, true)
+                        .retry_without_service_tier(url, &request.metadata, &openai_request, true)
                         .await?;
                     effective_client_request_id = retry_client_request_id;
 
@@ -389,7 +389,7 @@ impl OpenAIProvider {
                                     headers::apply_turn_metadata(
                                         headers::apply_client_request_id(
                                             headers::apply_responses_beta(
-                                                self.authorize_with_api_key(self.http_client.post(&url), auth),
+                                                self.authorize_with_api_key(self.http_client.post(url), auth),
                                             ),
                                             &retry_client_request_id,
                                         ),
@@ -477,14 +477,14 @@ impl OpenAIProvider {
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let model = request.model.clone();
         let openai_request = self.convert_to_openai_format(request)?;
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = &self.chat_completions_url[..];
         let client_request_id = Self::new_client_request_id();
 
         let response = self
             .send_authorized(|auth| {
                 headers::apply_turn_metadata(
                     headers::apply_client_request_id(
-                        self.authorize_with_api_key(self.http_client.post(&url), auth),
+                        self.authorize_with_api_key(self.http_client.post(url), auth),
                         &client_request_id,
                     ),
                     &request.metadata,
@@ -510,7 +510,7 @@ impl OpenAIProvider {
                 );
 
                 let (retry_response, retry_client_request_id) = self
-                    .retry_without_service_tier(&url, &request.metadata, &openai_request, false)
+                    .retry_without_service_tier(url, &request.metadata, &openai_request, false)
                     .await?;
                 effective_client_request_id = retry_client_request_id;
 

@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 use super::super::*;
 use super::helpers::*;
-use crate::tui::ui::tui::style::ratatui_style_from_inline;
+use crate::tui::core_tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 
 // ---------------------------------------------------------------------------
 // Common test helpers extracted from repeated patterns
@@ -471,6 +471,52 @@ fn agent_omitted_code_lines_keep_hanging_indent_when_wrapped() {
     assert!(
         second.starts_with(&expected_prefix),
         "wrapped omitted-line continuation should keep gutter indent, got: {second:?}"
+    );
+}
+
+#[test]
+fn pty_command_header_verb_uses_tool_color_bullet_uses_theme_foreground() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Pty,
+        vec![
+            InlineSegment {
+                text: "• Ran".to_string(),
+                style: Arc::new(InlineTextStyle::default()),
+            },
+            InlineSegment {
+                text: " cat file".to_string(),
+                style: Arc::new(InlineTextStyle::default()),
+            },
+        ],
+    );
+
+    let rendered = session.reflow_pty_lines(0, 80);
+    let spans: Vec<_> = rendered.iter().flat_map(|line| line.line.spans.iter()).collect();
+
+    // Bullet "• " → theme foreground, no bold
+    let bullet_span = spans.iter().find(|s| s.content.as_ref() == "• ").expect("expected • span");
+    assert!(
+        !bullet_span.style.add_modifier.contains(Modifier::BOLD),
+        "• bullet should NOT be bold, got modifiers: {:?}",
+        bullet_span.style.add_modifier,
+    );
+
+    let theme_fg = InlineTheme::default().foreground.map(ratatui_color_from_ansi);
+    assert_eq!(bullet_span.style.fg, theme_fg, "bullet fg should be theme foreground");
+
+    // Verb "Ran" → tool color (Red for "run" normalized) + bold
+    let verb_span = spans.iter().find(|s| s.content.as_ref() == "Ran").expect("expected verb span");
+    assert!(
+        verb_span.style.add_modifier.contains(Modifier::BOLD),
+        "verb should be bold, got modifiers: {:?}",
+        verb_span.style.add_modifier,
+    );
+    assert_eq!(
+        verb_span.style.fg,
+        Some(Color::Red),
+        "Ran verb should be Red (tool color), got {:?}",
+        verb_span.style.fg,
     );
 }
 

@@ -200,7 +200,8 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         }
         Commands::Secret(args) => {
             let command = args.command.unwrap_or(vtcode_core::cli::args::SecretSubcommand::List);
-            secret::handle_secret_command(command, &startup.workspace).await?;
+            secret::handle_secret_command(command, &startup.workspace, startup.config.agent.credential_storage_mode)
+                .await?;
         }
         Commands::Check { command } => {
             check::handle_check_command(&startup.workspace, command).await?;

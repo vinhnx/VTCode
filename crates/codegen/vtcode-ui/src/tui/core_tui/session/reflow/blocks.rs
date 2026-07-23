@@ -2,7 +2,9 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
-use super::super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_ansi, ratatui_style_from_inline};
+use super::super::super::style::{
+    ratatui_color_from_ansi, ratatui_pty_style_from_inline, ratatui_style_from_ansi, ratatui_style_from_inline,
+};
 use super::super::super::types::{InlineLinkRange, InlineMessageKind};
 use super::super::message::RenderedTranscriptLink;
 use super::super::styling::tool_inline_style_for;
@@ -375,9 +377,10 @@ impl Session {
         // and apply a consistent dimmed style for terminal output.
         let pty_fallback = self.text_fallback(InlineMessageKind::Pty).or(self.theme.foreground);
 
-        // Command header lines ("• Ran ...") use full-brightness styling so
-        // the command name and arguments are visually distinct.
-        let is_command_header = is_start && combined.starts_with("• Ran ");
+        // Command header lines ("• Ran ...", "• Read ...", "• Write ...", etc.)
+        // use full-brightness tool-colored styling so the tool name and arguments
+        // are visually distinct from dimmed PTY body text.
+        let is_command_header = is_start && parse_tool_call_prefix(&combined).is_some();
 
         let mut body_spans = Vec::with_capacity(line.segments.len() + 1);
         for (i, segment) in line.segments.iter().enumerate() {
@@ -385,10 +388,24 @@ impl Session {
 
             if is_command_header && i == 0 {
                 if let Some((action, prefix)) = parse_tool_call_prefix(&stripped_text) {
-                    let tool_style = tool_inline_style_for(action, &self.theme);
-                    let tool_fallback = self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground);
-                    let ansi_style = tool_style.to_ansi_style(tool_fallback);
-                    body_spans.push(Span::styled(prefix.to_owned(), ratatui_style_from_ansi(ansi_style)));
+                    let fg = self.theme.foreground.map(ratatui_color_from_ansi);
+                    let bg = self.theme.background.map(ratatui_color_from_ansi);
+
+                    let mut bullet_style = Style::default();
+                    if let Some(c) = fg {
+                        bullet_style = bullet_style.fg(c);
+                    }
+                    if let Some(c) = bg {
+                        bullet_style = bullet_style.bg(c);
+                    }
+                    let bullet = &prefix[..prefix.len() - action.len()];
+                    body_spans.push(Span::styled(bullet.to_owned(), bullet_style));
+
+                    let verb_style = tool_inline_style_for(action, &self.theme);
+                    let verb_fallback = self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground);
+                    body_spans
+                        .push(Span::styled(action.to_owned(), ratatui_style_from_inline(&verb_style, verb_fallback)));
+
                     let rest = &stripped_text[prefix.len()..];
                     if !rest.is_empty() {
                         body_spans.push(Span::styled(

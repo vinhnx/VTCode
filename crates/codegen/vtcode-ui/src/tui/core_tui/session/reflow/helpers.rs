@@ -45,7 +45,7 @@ pub(super) fn has_summary_prefix(text: &str) -> bool {
     stripped.starts_with("• ") || stripped.starts_with("  └ ") || stripped.starts_with("  │ ")
 }
 
-pub(super) fn parse_tool_call_prefix(text: &str) -> Option<(&str, &str)> {
+pub(crate) fn parse_tool_call_prefix(text: &str) -> Option<(&str, &str)> {
     let rest = text.strip_prefix("• ")?;
     let verb_end = rest.find(|c: char| c.is_whitespace()).unwrap_or(rest.len());
     if verb_end == 0 {

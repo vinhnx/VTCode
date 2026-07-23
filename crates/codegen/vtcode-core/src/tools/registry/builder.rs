@@ -180,6 +180,7 @@ impl ToolRegistry {
             output_spooler,
 
             planning_workflow_state,
+            planning_mode_policy_overrides: Arc::new(parking_lot::RwLock::new(None)),
             safety_gateway: Arc::new(SafetyGateway::default()),
             cgp_runtime_mode: Arc::new(RwLock::new(None)),
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),

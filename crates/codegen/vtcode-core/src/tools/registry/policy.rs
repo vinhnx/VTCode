@@ -14,6 +14,8 @@ use crate::tools::handlers::SessionToolsConfig;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::tool_intent::file_operation_action_is;
 
+const ERR_POLICY_MANAGER_NOT_INITIALIZED: &str = "Tool policy manager not initialized";
+
 #[cfg(test)]
 #[derive(Clone, Default)]
 pub(super) struct PolicyCatalogueTestPause {
@@ -262,7 +264,7 @@ impl ToolPolicyGateway {
         if let Some(ref mut manager) = *self.tool_policy.lock().await {
             manager.set_policy(canonical, policy).await
         } else {
-            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+            Err(anyhow!(ERR_POLICY_MANAGER_NOT_INITIALIZED))
         }
     }
 
@@ -270,7 +272,7 @@ impl ToolPolicyGateway {
         if let Some(ref mut manager) = *self.tool_policy.lock().await {
             manager.add_approval_cache_key_with_segments(approval_key).await
         } else {
-            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+            Err(anyhow!(ERR_POLICY_MANAGER_NOT_INITIALIZED))
         }
     }
 
@@ -278,7 +280,7 @@ impl ToolPolicyGateway {
         if let Some(ref mut manager) = *self.tool_policy.lock().await {
             manager.add_approval_cache_prefix(prefix_entry).await
         } else {
-            Err(anyhow::anyhow!("Tool policy manager not initialized"))
+            Err(anyhow!(ERR_POLICY_MANAGER_NOT_INITIALIZED))
         }
     }
 
@@ -316,7 +318,7 @@ impl ToolPolicyGateway {
         if let Some(tp) = self.tool_policy.lock().await.as_ref() {
             tp.print_status();
         } else {
-            tracing::warn!("Tool policy manager not available");
+            tracing::warn!("{}", ERR_POLICY_MANAGER_NOT_INITIALIZED);
         }
     }
 

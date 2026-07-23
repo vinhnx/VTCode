@@ -3,8 +3,12 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
+use once_cell::sync::Lazy;
 use tokio::process::{Child, Command};
 use vtcode_config::auth::CopilotAuthConfig;
+
+static WHICH_CACHE: Lazy<std::sync::Mutex<std::collections::HashMap<String, bool>>> =
+    Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 const DEFAULT_PROGRAM: &str = "copilot";
 const ENV_OVERRIDE: &str = "VTCODE_COPILOT_COMMAND";
@@ -80,7 +84,27 @@ pub fn copilot_command_available(resolved: &ResolvedCopilotCommand) -> bool {
         return Path::new(&resolved.program).exists();
     }
 
-    which::which(&resolved.program).is_ok()
+    cached_which(&resolved.program)
+}
+
+/// Cached `which::which` lookup to avoid re-scanning `$PATH` for the same
+/// binary during a single process execution. Startup auth probing calls
+/// `which` multiple times for `copilot`/`gh`; each scan walks every PATH
+/// entry, so caching the result pays for itself on the second call.
+pub fn cached_which(program: &str) -> bool {
+    if let Ok(cache) = WHICH_CACHE.lock() {
+        if let Some(&cached) = cache.get(program) {
+            return cached;
+        }
+    }
+
+    let result = which::which(program).is_ok();
+
+    if let Ok(mut cache) = WHICH_CACHE.lock() {
+        cache.insert(program.to_owned(), result);
+    }
+
+    result
 }
 
 pub fn spawn_copilot_acp_process(

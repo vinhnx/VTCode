@@ -208,7 +208,7 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, provider: Provider
     }
 
     let storage = vtcode_auth::CustomApiKeyStorage::new(provider.as_ref());
-    match storage.store(trimmed, AuthCredentialsStoreMode::default()) {
+    match storage.store(trimmed, storage_mode(ctx)) {
         Ok(()) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("API key for {label} stored in secure storage."))?;
@@ -257,8 +257,7 @@ async fn handle_migrate_secrets(
         return Ok(SlashCommandControl::Continue);
     }
 
-    let (summary, outcomes) =
-        migrate_workspace_env_keys(&ctx.config.workspace, &targets, AuthCredentialsStoreMode::default())?;
+    let (summary, outcomes) = migrate_workspace_env_keys(&ctx.config.workspace, &targets, storage_mode(ctx))?;
 
     for (provider, outcome) in outcomes {
         let env_key = provider.default_api_key_env();
@@ -311,7 +310,7 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
     let label = provider.label();
 
     let storage = vtcode_auth::CustomApiKeyStorage::new(provider.as_ref());
-    match storage.load(AuthCredentialsStoreMode::default()) {
+    match storage.load(storage_mode(ctx)) {
         Ok(None) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("No stored API key found for {label}."))?;
@@ -339,7 +338,7 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, provider: Provi
         return Ok(SlashCommandControl::Continue);
     }
 
-    match storage.clear(AuthCredentialsStoreMode::default()) {
+    match storage.clear(storage_mode(ctx)) {
         Ok(()) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("API key for {label} deleted from secure storage."))?;
@@ -367,7 +366,7 @@ fn reload_provider_client_if_matching(ctx: &mut SlashCommandContext<'_>, provide
     }
 
     let storage = vtcode_auth::CustomApiKeyStorage::new(provider.as_ref());
-    let mode = AuthCredentialsStoreMode::default();
+    let mode = storage_mode(ctx);
     let new_api_key = match storage.load(mode) {
         Ok(Some(key)) => key,
         Ok(None) => {
@@ -408,6 +407,15 @@ fn reload_provider_client_if_matching(ctx: &mut SlashCommandContext<'_>, provide
     };
     *ctx.provider_client = new_provider;
     Ok(())
+}
+
+/// Resolve the storage mode from the user config, falling back to the
+/// platform-aware default ([`AuthCredentialsStoreMode::default()`]).
+fn storage_mode(ctx: &SlashCommandContext<'_>) -> AuthCredentialsStoreMode {
+    ctx.vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.credential_storage_mode)
+        .unwrap_or_default()
 }
 
 // --- Input ---

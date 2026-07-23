@@ -20,12 +20,33 @@ pub(crate) fn auth_storage_dir() -> Result<PathBuf> {
         return Ok(path);
     }
 
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static CACHED_PATH: OnceLock<PathBuf> = OnceLock::new();
+    static DIR_CREATED: AtomicBool = AtomicBool::new(false);
+
+    // Use cached path if already resolved (fast path, no fs access).
+    if let Some(dir) = CACHED_PATH.get() {
+        if !DIR_CREATED.load(Ordering::Acquire) {
+            fs::create_dir_all(dir).context("failed to create auth directory")?;
+            DIR_CREATED.store(true, Ordering::Release);
+        }
+        return Ok(dir.clone());
+    }
+
+    // First call: resolve the path, ensure it exists, then cache it.
     let auth_dir = dirs::home_dir()
         .ok_or_else(|| anyhow!("could not determine home directory"))?
         .join(".vtcode")
         .join("auth");
 
     fs::create_dir_all(&auth_dir).context("failed to create auth directory")?;
+
+    // Cache for subsequent calls. If another thread set it first, discard ours.
+    let _ = CACHED_PATH.set(auth_dir.clone());
+    DIR_CREATED.store(true, Ordering::Release);
+
     Ok(auth_dir)
 }
 
@@ -40,12 +61,11 @@ pub(crate) fn legacy_auth_storage_path() -> Result<PathBuf> {
         return Ok(path.join("auth.json"));
     }
 
-    let base_dir = dirs::home_dir()
-        .ok_or_else(|| anyhow!("could not determine home directory"))?
-        .join(".vtcode");
-
-    fs::create_dir_all(&base_dir).context("failed to create auth directory")?;
-    Ok(base_dir.join("auth.json"))
+    // Reuse the auth_storage_dir parent so the home-dir + .vtcode resolution
+    // is not duplicated.
+    let auth_dir = auth_storage_dir()?;
+    let vtcode_dir = auth_dir.parent().ok_or_else(|| anyhow!("auth storage has no parent"))?;
+    Ok(vtcode_dir.join("auth.json"))
 }
 
 pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {

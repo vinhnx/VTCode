@@ -703,19 +703,30 @@ pub(crate) async fn run_turn_loop(
                     let err_cat = vtcode_commons::classify_anyhow_error(&err);
                     if matches!(err_cat, vtcode_commons::ErrorCategory::Authentication) {
                         // For auth errors, show actionable provider-specific guidance
-                        let (provider_label, provider_key, is_managed_auth) = turn_processing_ctx
-                            .config
-                            .provider
-                            .parse::<vtcode_core::config::models::Provider>()
-                            .map(|p| (p.label().to_string(), p.as_ref().to_string(), p.uses_managed_auth()))
-                            .unwrap_or_else(|_| {
-                                (
-                                    turn_processing_ctx.config.provider.clone(),
-                                    turn_processing_ctx.config.provider.clone(),
-                                    false,
-                                )
-                            });
-                        let guidance = err_cat.auth_recovery_guidance(&provider_label, &provider_key, is_managed_auth);
+                        // that distinguishes "no key stored" from "stored key rejected".
+                        let (provider_label, provider_key, is_managed_auth, has_stored_credential) =
+                            turn_processing_ctx
+                                .config
+                                .provider
+                                .parse::<vtcode_core::config::models::Provider>()
+                                .map(|p| {
+                                    let has = vtcode_config::api_keys::provider_credential_detail(p).is_some();
+                                    (p.label().to_string(), p.as_ref().to_string(), p.uses_managed_auth(), has)
+                                })
+                                .unwrap_or_else(|_| {
+                                    (
+                                        turn_processing_ctx.config.provider.clone(),
+                                        turn_processing_ctx.config.provider.clone(),
+                                        false,
+                                        false,
+                                    )
+                                });
+                        let guidance = err_cat.auth_recovery_guidance(
+                            &provider_label,
+                            &provider_key,
+                            is_managed_auth,
+                            has_stored_credential,
+                        );
                         for line in &guidance {
                             turn_processing_ctx.renderer.line(MessageStyle::Info, line)?;
                         }

@@ -16,7 +16,7 @@ pub use auth_service::OpenAIAccountAuthService;
 pub use config::{AuthConfig, CopilotAuthConfig, OpenAIAuthConfig, OpenAIPreferredMethod};
 pub use credentials::{
     AuthCredentialsStoreMode, CredentialStorage, CustomApiKeyStorage, clear_custom_api_keys, load_custom_api_keys,
-    migrate_custom_api_keys_to_keyring,
+    migrate_custom_api_keys,
 };
 pub use mcp_oauth::{
     McpOAuthConfig, McpOAuthLoginCompletion, McpOAuthPreparedLogin, McpOAuthService, McpOAuthStatus, McpOAuthToken,

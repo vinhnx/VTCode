@@ -30,7 +30,7 @@ use crate::storage_paths::{auth_storage_dir, write_private_file};
 use crate::{OpenAIAuthConfig, OpenAIPreferredMethod};
 
 pub use super::credentials::AuthCredentialsStoreMode;
-use super::credentials::keyring_entry;
+use super::credentials::keyring;
 use super::pkce::PkceChallenge;
 
 const OPENAI_AUTH_URL: &str = "https://auth.openai.com/oauth/authorize";
@@ -694,7 +694,7 @@ fn clear_session_from_all_stores() -> Result<()> {
 }
 
 fn save_session_to_keyring(serialized: &str) -> Result<()> {
-    let entry = keyring_entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER)
+    let entry = keyring::entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER)
         .context("failed to access keyring for openai session")?;
     entry
         .set_password(serialized)
@@ -757,7 +757,7 @@ fn load_preferred_openai_chatgpt_session(mode: AuthCredentialsStoreMode) -> Resu
 }
 
 fn load_session_from_keyring() -> Result<Option<String>> {
-    let entry = match keyring_entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER) {
+    let entry = match keyring::entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER) {
         Ok(entry) => entry,
         Err(_) => return Ok(None),
     };
@@ -770,7 +770,7 @@ fn load_session_from_keyring() -> Result<Option<String>> {
 }
 
 fn clear_session_from_keyring() -> Result<()> {
-    let entry = match keyring_entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER) {
+    let entry = match keyring::entry(OPENAI_STORAGE_SERVICE, OPENAI_STORAGE_USER) {
         Ok(entry) => entry,
         Err(_) => return Ok(()),
     };

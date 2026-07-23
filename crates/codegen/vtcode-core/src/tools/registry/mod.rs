@@ -106,11 +106,13 @@ use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
+use crate::tool_policy::ToolPolicy;
 use crate::tools::exec_session::ExecSessionManager;
 use crate::tools::handlers::PlanningWorkflowState;
 pub(super) use crate::tools::pty::PtyManager;
 use crate::tools::result::ToolResult as SplitToolResult;
 use crate::tools::safety_gateway::SafetyGateway;
+use indexmap::IndexMap;
 use parking_lot::Mutex; // Use parking_lot for better performance
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, Weak};
@@ -196,6 +198,10 @@ pub struct ToolRegistry {
     /// and read-only enforcement. This is the single source of truth for planning workflow;
     /// use `is_planning_active()` / `enable_planning()` / `disable_planning()` as accessors.
     planning_workflow_state: PlanningWorkflowState,
+    /// Saved policies for tools whose permissions are overridden during planning
+    /// workflow entry, so they can be restored on exit without disturbing other
+    /// user-configured policies.
+    planning_mode_policy_overrides: Arc<parking_lot::RwLock<Option<IndexMap<String, ToolPolicy>>>>,
     /// Canonical safety gateway shared across registry execution surfaces.
     safety_gateway: Arc<SafetyGateway>,
     /// Active CGP runtime mode for wrapping registrations added after startup.

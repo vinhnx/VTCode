@@ -27,24 +27,6 @@ implement thinking ui/ux, remove the italic style text implement 2 state thinkin
 
 ===
 
-colorirze the tool overview header. example
-
-• Ran sed -n 178,190p src/main_helpers/bootstrap.rs
-
-• Ran rg -n use std::time::Instant|startup_ms|vtcode\.startup
-
-1. colorize the verb "Ran" in theme's accent color
-2. for command line ex: `sed -n 178,190p src/main_helpers/bootstrap.rs` or `rg -n use std::time::Instant|startup_ms|vtcode\.startup` use vtcode's existing bash grammar syntax highlighting to colorize the command line text.
-
-Note: for command that has cargo, `• Ran cargo check --locked -p vtcode`. not sure why it's has colorized already, but for other command the colorized doesn't apply -> fix and implement for all
-
-the tools call header still not get colroized --> fix.
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-07-23 at 16.07.39.png'
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-07-23 at 16.07.35.png'
-
-===
-
 improve agent's message with better formatting, colorization, and styling markdown, follow vtcode system prompt style and formatting, and apply to all agent's message.
 
 the summarization message is showing just plain text without proper heading, bold, italic text, causing the message to be hard to read and understand. improve the summarization message with better formatting, colorization, and styling markdown, follow vtcode system prompt style and formatting, and apply to all agent's message.
@@ -86,5 +68,15 @@ VT Code should also able to trigger plan mode on demand for demanding and comple
 check and relax plan mode tools policy permission so that VT Code can use read tools to read and explore file, currently it is being blocked
 
 "• I can’t open files directly here because exec_command is blocked by tool policy"
+" I cannot currently open files directly because shell execution is denied by
+policy and the code search index appears unavailable in this session."
+
+log:
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_795.json
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_801.json
+
+===
+
+pull code main, then run and fetch contributor listing and update README contributor list again

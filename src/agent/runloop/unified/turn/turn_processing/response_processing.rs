@@ -152,7 +152,7 @@ pub(crate) fn process_llm_response(
             };
             crate::agent::runloop::unified::turn::turn_helpers::display_status(renderer, &notice)?;
             let call_id = format!("call_textual_{conversation_len}");
-            tool_calls.push(uni::ToolCall::function(call_id.clone(), name.clone(), args_json.clone()));
+            tool_calls.push(uni::ToolCall::function(call_id, name, args_json));
             interpreted_textual_call = true;
             final_text = None;
         }

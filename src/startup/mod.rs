@@ -281,22 +281,21 @@ async fn resolve_codex_fallback_selection(
         provider: "openai".to_string(),
         model_source: selection.model_source,
     };
-    if resolve_runtime_provider_auth(config, workspace, &openai_candidate, first_run_occurred, None)
-        .await
-        .is_ok()
-    {
-        return Ok(openai_candidate);
-    }
-
     let copilot_candidate = RuntimeModelSelection {
         model: vtcode_core::config::constants::models::copilot::DEFAULT_MODEL.to_string(),
         provider: "copilot".to_string(),
         model_source: selection.model_source,
     };
-    if resolve_runtime_provider_auth(config, workspace, &copilot_candidate, first_run_occurred, None)
-        .await
-        .is_ok()
-    {
+
+    let (openai_result, copilot_result) = tokio::join!(
+        resolve_runtime_provider_auth(config, workspace, &openai_candidate, first_run_occurred, None),
+        resolve_runtime_provider_auth(config, workspace, &copilot_candidate, first_run_occurred, None)
+    );
+
+    if openai_result.is_ok() {
+        return Ok(openai_candidate);
+    }
+    if copilot_result.is_ok() {
         return Ok(copilot_candidate);
     }
 

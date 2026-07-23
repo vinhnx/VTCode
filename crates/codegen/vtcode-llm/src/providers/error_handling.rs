@@ -243,20 +243,18 @@ fn authentication_error_message(provider_name: &str, error_message: &str) -> Str
     let trimmed = error_message.trim();
     if provider_name.eq_ignore_ascii_case("Moonshot") {
         return format!(
-            "authentication failed: {trimmed}. get your API key from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API. store it with /secret add moonshot"
+            "authentication failed: {trimmed}. get your API key from https://platform.kimi.ai/console/api-keys; Kimi web or app login credentials do not work for the API."
         );
     }
 
     if provider_name.eq_ignore_ascii_case("Qwen") {
         return format!(
-            "authentication failed: {trimmed}. get your DashScope API key from https://dashscope.console.aliyun.com. store it with /secret add qwen"
+            "authentication failed: {trimmed}. get your DashScope API key from https://dashscope.console.aliyun.com."
         );
     }
 
     if provider_name.eq_ignore_ascii_case("StepFun") {
-        return format!(
-            "authentication failed: {trimmed}. get your API key from https://platform.stepfun.com. store it with /secret add stepfun"
-        );
+        return format!("authentication failed: {trimmed}. get your API key from https://platform.stepfun.com.");
     }
 
     format!("authentication failed: {trimmed}")
@@ -382,7 +380,7 @@ mod tests {
             LLMError::Authentication { message, metadata } => {
                 assert!(message.contains("Invalid Authentication"));
                 assert!(message.contains("platform.kimi.ai/console/api-keys"));
-                assert!(message.contains("/secret add moonshot"));
+                assert!(!message.contains("/secret add"), "raw error should not embed CLI hint: {message}");
                 assert_eq!(metadata.as_ref().and_then(|meta| meta.code.as_deref()), Some("authentication_error"));
             }
             other => panic!("expected authentication error, got {other:?}"),
@@ -434,7 +432,7 @@ mod tests {
     // --- authentication_error_message (via parse_api_error) ---
 
     #[test]
-    fn stepfun_401_includes_platform_url_and_secret_hint() {
+    fn stepfun_401_includes_platform_url_and_no_cli_hint() {
         let err = parse_api_error(
             "StepFun",
             reqwest::StatusCode::UNAUTHORIZED,
@@ -443,14 +441,14 @@ mod tests {
         match err {
             LLMError::Authentication { message, .. } => {
                 assert!(message.contains("https://platform.stepfun.com"), "missing platform URL: {message}");
-                assert!(message.contains("/secret add stepfun"), "missing /secret hint: {message}");
+                assert!(!message.contains("/secret add"), "raw error should not embed CLI hint: {message}");
             }
             _ => panic!("expected Authentication error, got: {err:?}"),
         }
     }
 
     #[test]
-    fn moonshot_401_includes_platform_url_and_secret_hint() {
+    fn moonshot_401_includes_platform_url_and_no_cli_hint() {
         let err = parse_api_error(
             "Moonshot",
             reqwest::StatusCode::UNAUTHORIZED,
@@ -462,20 +460,20 @@ mod tests {
                     message.contains("https://platform.kimi.ai/console/api-keys"),
                     "missing platform URL: {message}"
                 );
-                assert!(message.contains("/secret add moonshot"), "missing /secret hint: {message}");
+                assert!(!message.contains("/secret add"), "raw error should not embed CLI hint: {message}");
             }
             _ => panic!("expected Authentication error, got: {err:?}"),
         }
     }
 
     #[test]
-    fn qwen_401_includes_platform_url_and_secret_hint() {
+    fn qwen_401_includes_platform_url_and_no_cli_hint() {
         let err =
             parse_api_error("Qwen", reqwest::StatusCode::UNAUTHORIZED, r#"{"error":{"message":"Invalid API key"}}"#);
         match err {
             LLMError::Authentication { message, .. } => {
                 assert!(message.contains("https://dashscope.console.aliyun.com"), "missing platform URL: {message}");
-                assert!(message.contains("/secret add qwen"), "missing /secret hint: {message}");
+                assert!(!message.contains("/secret add"), "raw error should not embed CLI hint: {message}");
             }
             _ => panic!("expected Authentication error, got: {err:?}"),
         }

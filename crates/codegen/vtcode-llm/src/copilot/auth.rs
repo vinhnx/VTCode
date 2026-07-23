@@ -20,7 +20,7 @@ use vtcode_config::auth::CopilotAuthConfig;
 
 use vtcode_commons::ansi::strip_ansi;
 
-use super::command::{ResolvedCopilotCommand, copilot_command_available, resolve_copilot_command};
+use super::command::{ResolvedCopilotCommand, cached_which, copilot_command_available, resolve_copilot_command};
 use super::types::{COPILOT_AUTH_DOC_PATH, CopilotAuthEvent, CopilotAuthStatus};
 
 const DEFAULT_HOST_URL: &str = "https://github.com";
@@ -112,11 +112,6 @@ pub async fn probe_auth_status(config: &CopilotAuthConfig, workspace_root: Optio
         Err(err) => return CopilotAuthStatus::auth_flow_failed(err.to_string()),
     };
 
-    let auth_source = match detect_auth_source(&host, workspace_root).await {
-        Ok(source) => source,
-        Err(err) => return CopilotAuthStatus::auth_flow_failed(err.to_string()),
-    };
-
     let resolved = match resolve_copilot_command(config) {
         Ok(resolved) => resolved,
         Err(err) => return CopilotAuthStatus::auth_flow_failed(err.to_string()),
@@ -124,11 +119,15 @@ pub async fn probe_auth_status(config: &CopilotAuthConfig, workspace_root: Optio
 
     if !copilot_command_available(&resolved) {
         return CopilotAuthStatus::server_unavailable(format!(
-            "GitHub Copilot CLI command `{}` was not found. Install `copilot`, set `VTCODE_COPILOT_COMMAND`, or configure `[auth.copilot].command`.{source_suffix}",
+            "GitHub Copilot CLI command `{}` was not found. Install `copilot`, set `VTCODE_COPILOT_COMMAND`, or configure `[auth.copilot].command`.",
             resolved.display(),
-            source_suffix = auth_source.as_ref().map(auth_source_suffix).unwrap_or_default(),
         ));
     }
+
+    let auth_source = match detect_auth_source(&host, workspace_root).await {
+        Ok(source) => source,
+        Err(err) => return CopilotAuthStatus::auth_flow_failed(err.to_string()),
+    };
 
     match auth_source {
         Some(source) => CopilotAuthStatus::authenticated(Some(source.message(&host))),
@@ -664,7 +663,7 @@ fn missing_copilot_command_help_lines(config: &CopilotAuthConfig) -> Result<Opti
     Ok(missing_copilot_command_help_lines_with(
         &resolved.display(),
         copilot_command_available(&resolved),
-        which::which("gh").is_ok(),
+        cached_which("gh"),
     ))
 }
 
@@ -773,7 +772,7 @@ fn stored_auth_source(host: &CopilotHost) -> Result<Option<CopilotAuthSource>> {
 }
 
 async fn github_cli_auth_available(host: &CopilotHost, workspace_root: Option<&Path>) -> Result<bool> {
-    if which::which("gh").is_err() {
+    if !cached_which("gh") {
         return Ok(false);
     }
 
@@ -812,10 +811,6 @@ fn copilot_config_path() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".copilot")))?;
     Some(base_dir.join("config.json"))
-}
-
-fn auth_source_suffix(source: &CopilotAuthSource) -> String {
-    format!(" {}.", source.short_label())
 }
 
 fn resolve_copilot_host(config: &CopilotAuthConfig) -> Result<CopilotHost> {
@@ -919,14 +914,6 @@ enum CopilotAuthSource {
 }
 
 impl CopilotAuthSource {
-    fn short_label(&self) -> String {
-        match self {
-            Self::Environment(name) => format!("Authentication source detected via {name}"),
-            Self::StoredCredentials { .. } => "Stored Copilot CLI credentials were detected".to_string(),
-            Self::GitHubCli => "GitHub CLI authentication was detected".to_string(),
-        }
-    }
-
     fn message(&self, host: &CopilotHost) -> String {
         match self {
             Self::Environment(name) => format!("Using {name} for GitHub Copilot authentication."),

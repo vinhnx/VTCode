@@ -26,6 +26,7 @@ mod formatting;
 mod helpers;
 mod thinking;
 
+pub(super) use helpers::parse_tool_call_prefix;
 use helpers::{agent_code_continuation_prefix, is_info_box_line, is_tool_summary_line, rule_fill};
 
 impl Session {

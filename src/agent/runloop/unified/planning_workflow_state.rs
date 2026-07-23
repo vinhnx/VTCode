@@ -165,6 +165,7 @@ pub(crate) async fn transition_to_planning_workflow(
     reset_plan_baseline: bool,
 ) {
     tool_registry.enable_planning();
+    tool_registry.apply_planning_mode_policy_overrides().await;
     let plan_state = tool_registry.planning_workflow_state();
     // `enable_planning()` above already sets the active flag on
     // `PlanningWorkflowState` (the single source of truth), so we do not call
@@ -188,6 +189,7 @@ pub(crate) async fn finish_planning_workflow(
     clear_plan_file: bool,
 ) {
     tool_registry.disable_planning();
+    tool_registry.restore_post_planning_policies().await;
     let plan_state = tool_registry.planning_workflow_state();
     plan_state.disable();
     if clear_plan_file {

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::auth::migrate_custom_api_keys_to_keyring;
+use crate::auth::migrate_custom_api_keys;
 use crate::defaults::{self};
 use crate::loader::config::VTCodeConfig;
 use crate::loader::layers::{
@@ -65,46 +65,57 @@ impl ConfigManager {
         let path_res_duration = t0.elapsed();
 
         let t1 = std::time::Instant::now();
-        let mut layer_stack = ConfigLayerStack::default();
+
+        // Collect layer sources in precedence order so we can load them
+        // concurrently and then push results while preserving order.
+        let mut layer_sources: Vec<ConfigLayerSource> = Vec::with_capacity(5);
 
         // 1. System config (e.g., /etc/vtcode/vtcode.toml)
         #[cfg(unix)]
         {
-            let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::System { file: system_config }) {
-                layer_stack.push(layer);
-            }
+            layer_sources.push(ConfigLayerSource::System { file: PathBuf::from("/etc/vtcode/vtcode.toml") });
         }
 
         // 2. User home config (~/.vtcode/vtcode.toml)
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::User { file: home_config_path }) {
-                layer_stack.push(layer);
-            }
+            layer_sources.push(ConfigLayerSource::User { file: home_config_path });
         }
 
         // 3. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
-        if let Some(project_config_path) = Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
-            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Project { file: project_config_path })
-        {
-            layer_stack.push(layer);
+        if let Some(project_config_path) = Self::project_config_path(&config_dir, &workspace_root, &config_file_name) {
+            layer_sources.push(ConfigLayerSource::Project { file: project_config_path });
         }
 
         // 4. Config directory fallback (.vtcode/vtcode.toml)
         let fallback_path = config_dir.join(&config_file_name);
         let workspace_config_path = workspace_root.join(&config_file_name);
-        if fallback_path != workspace_config_path
-            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Workspace { file: fallback_path })
-        {
-            layer_stack.push(layer);
+        if fallback_path != workspace_config_path {
+            layer_sources.push(ConfigLayerSource::Workspace { file: fallback_path });
         }
 
         // 5. Workspace config (vtcode.toml in workspace root)
-        if let Some(layer) =
-            Self::load_optional_layer(ConfigLayerSource::Workspace { file: workspace_config_path.clone() })
-        {
+        layer_sources.push(ConfigLayerSource::Workspace { file: workspace_config_path.clone() });
+
+        // Load all layers concurrently. Each load is independent I/O, so
+        // spawning threads overlaps the disk reads and canonicalization
+        // syscalls. The results are collected in source order to preserve
+        // layer precedence.
+        let raw_layers: Vec<Option<ConfigLayerEntry>> = std::thread::scope(|s| {
+            let handles = layer_sources
+                .into_iter()
+                .map(|source| s.spawn(move || Self::load_optional_layer(source)))
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("config layer thread panicked"))
+                .collect()
+        });
+
+        let mut layer_stack = ConfigLayerStack::default();
+        for layer in raw_layers.into_iter().flatten() {
             layer_stack.push(layer);
         }
+
         let layer_load_duration = t1.elapsed();
 
         // If no layers found, use default config
@@ -233,7 +244,7 @@ impl ConfigManager {
             }
         };
 
-        // Single-pass disk read: attempt reading directly to avoid redundant stat calls on probed layers
+        // Read first so missing files return None without a redundant canonicalize.
         let content = match fs::read_to_string(file) {
             Ok(content) => content,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
@@ -656,7 +667,7 @@ fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
         tracing::info!("Detected plain-text API keys in config, migrating to secure storage...");
 
         // Migrate keys to secure storage
-        let migration_results = migrate_custom_api_keys_to_keyring(&config.agent.custom_api_keys, storage_mode)?;
+        let migration_results = migrate_custom_api_keys(&config.agent.custom_api_keys, storage_mode)?;
 
         // Clear keys from config (keep provider names for tracking)
         let mut migrated_count = 0;

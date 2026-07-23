@@ -3,11 +3,11 @@
 use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::future::Future;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio::task::Id as TokioTaskId;
 use tracing::{trace, warn};
@@ -125,10 +125,8 @@ fn tool_error_value_to_string(value: &Value) -> String {
 
 /// Global reentrancy stacks for tokio tasks.
 ///
-/// Uses `std::sync::Mutex` because:
-/// 1. Critical section is very short (just push/pop on Vec)
-/// 2. Only used for tokio tasks (non-tokio uses thread-local storage)
-/// 3. No async operations occur inside the lock
+/// Uses `parking_lot::Mutex` for lower overhead on short critical sections.
+/// Each entry/exit is a single Vec push/pop under a task ID key.
 ///
 /// If contention becomes an issue under high concurrency, consider:
 /// - Using a concurrent hash map (e.g., `dashmap`)
@@ -140,8 +138,8 @@ thread_local! {
     static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
-fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
-    TOOL_REENTRANCY_STACKS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+fn lock_reentrancy_stacks() -> parking_lot::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
+    TOOL_REENTRANCY_STACKS.lock()
 }
 
 #[derive(Debug)]
@@ -346,6 +344,7 @@ impl ToolRegistry {
     }
 
     async fn execute_tool_request_internal(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
+        let tool_name = &request.tool_name;
         let policy = request.policy.clone();
         let mut retry_policy = crate::retry::RetryPolicy::from_retries(
             policy.max_retries as u32,
@@ -362,31 +361,31 @@ impl ToolRegistry {
         while attempt_index < max_attempts {
             if !policy.safety_prevalidated
                 && let Some(safety_error) = self
-                    .check_safety_for_request(request.tool_name.as_str(), &request.args, policy.invocation_id.clone())
+                    .check_safety_for_request(tool_name, &request.args, policy.invocation_id.clone())
                     .await
             {
                 let decorated = safety_error
-                    .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                    .with_tool_call_context(tool_name, &request.args)
                     .with_attempt(attempt_index + 1)
                     .with_surface("tool_registry");
                 if let Some(terminal) = Self::classify_and_step(
                     decorated,
                     &retry_policy,
-                    request.tool_name.as_str(),
+                    tool_name,
                     &mut attempt_index,
                     max_attempts,
                     &mut last_error,
                 )
                 .await
                 {
-                    return ToolExecutionOutcome::failure(request.tool_name.clone(), attempt_index + 1, terminal);
+                    return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal);
                 }
                 continue;
             }
 
             let result = self
                 .execute_public_tool_ref_dispatch(
-                    request.tool_name.as_str(),
+                    tool_name,
                     &request.args,
                     policy.prevalidated,
                     execution_kernel::DispatchMode::Harness,
@@ -398,33 +397,29 @@ impl ToolRegistry {
                 Ok(output) => {
                     if let Some(structured_error) = ToolExecutionError::from_tool_output(&output) {
                         let decorated = structured_error
-                            .with_tool_call_context(request.tool_name.as_str(), &request.args)
+                            .with_tool_call_context(tool_name, &request.args)
                             .with_attempt(attempt_index + 1)
                             .with_surface("tool_registry");
                         if let Some(terminal) = Self::classify_and_step(
                             decorated,
                             &retry_policy,
-                            request.tool_name.as_str(),
+                            tool_name,
                             &mut attempt_index,
                             max_attempts,
                             &mut last_error,
                         )
                         .await
                         {
-                            return ToolExecutionOutcome::failure(
-                                request.tool_name.clone(),
-                                attempt_index + 1,
-                                terminal,
-                            );
+                            return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal);
                         }
                         continue;
                     }
 
-                    return ToolExecutionOutcome::success(request.tool_name.clone(), attempt_index + 1, output);
+                    return ToolExecutionOutcome::success(tool_name, attempt_index + 1, output);
                 }
                 Err(error) => {
                     let mut base = ToolExecutionError::from_anyhow(
-                        request.tool_name.clone(),
+                        tool_name,
                         &error,
                         attempt_index,
                         false,
@@ -445,14 +440,14 @@ impl ToolRegistry {
                     if let Some(terminal) = Self::classify_and_step(
                         base,
                         &retry_policy,
-                        request.tool_name.as_str(),
+                        tool_name,
                         &mut attempt_index,
                         max_attempts,
                         &mut last_error,
                     )
                     .await
                     {
-                        return ToolExecutionOutcome::failure(request.tool_name.clone(), attempt_index + 1, terminal);
+                        return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal);
                     }
                     continue;
                 }
@@ -460,16 +455,13 @@ impl ToolRegistry {
         }
 
         ToolExecutionOutcome::failure(
-            request.tool_name.clone(),
+            tool_name,
             max_attempts,
             last_error.unwrap_or_else(|| {
                 ToolExecutionError::new(
-                    request.tool_name.clone(),
+                    tool_name,
                     ToolErrorType::ExecutionError,
-                    format!(
-                        "Tool '{}' failed after {} attempts with no structured error",
-                        request.tool_name, max_attempts
-                    ),
+                    format!("Tool '{}' failed after {} attempts with no structured error", tool_name, max_attempts),
                 )
                 .with_surface("tool_registry")
             }),

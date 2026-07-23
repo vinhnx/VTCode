@@ -15,19 +15,23 @@ use vtcode_config::workspace_env::{
 use vtcode_core::cli::args::{MigrateArgs, SecretProvider, SecretSubcommand};
 use vtcode_core::config::models::Provider;
 
-pub async fn handle_secret_command(command: SecretSubcommand, workspace: &Path) -> Result<()> {
+pub async fn handle_secret_command(
+    command: SecretSubcommand,
+    workspace: &Path,
+    storage_mode: AuthCredentialsStoreMode,
+) -> Result<()> {
     match command {
         SecretSubcommand::List => render_secret_status_table(None),
         SecretSubcommand::Status { provider_name } => {
             render_secret_status_table(provider_name.map(secret_provider_to_provider))
         }
         SecretSubcommand::Add { provider_name } => {
-            handle_add(secret_provider_to_provider(provider_name), workspace).await
+            handle_add(secret_provider_to_provider(provider_name), workspace, storage_mode).await
         }
         SecretSubcommand::Delete { provider_name } => {
-            handle_delete(secret_provider_to_provider(provider_name), workspace).await
+            handle_delete(secret_provider_to_provider(provider_name), workspace, storage_mode).await
         }
-        SecretSubcommand::Migrate(args) => handle_migrate(args, workspace).await,
+        SecretSubcommand::Migrate(args) => handle_migrate(args, workspace, storage_mode).await,
     }
 }
 
@@ -80,7 +84,7 @@ fn render_secret_status_table(filter: Option<Provider>) -> Result<()> {
     Ok(())
 }
 
-async fn handle_add(provider: Provider, workspace: &Path) -> Result<()> {
+async fn handle_add(provider: Provider, workspace: &Path, storage_mode: AuthCredentialsStoreMode) -> Result<()> {
     if provider.uses_managed_auth() {
         println!(
             "{} uses managed auth (GitHub Copilot CLI). Run `vtcode login {}` instead.",
@@ -115,7 +119,7 @@ async fn handle_add(provider: Provider, workspace: &Path) -> Result<()> {
     }
 
     let storage = CustomApiKeyStorage::new(provider.as_ref());
-    storage.store(&key, AuthCredentialsStoreMode::default())?;
+    storage.store(&key, storage_mode)?;
 
     // Purge stale entry from workspace .env so it doesn't shadow the
     // keyring entry (env var takes priority in get_api_key resolution).
@@ -132,7 +136,7 @@ async fn handle_add(provider: Provider, workspace: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn handle_delete(provider: Provider, workspace: &Path) -> Result<()> {
+async fn handle_delete(provider: Provider, workspace: &Path, storage_mode: AuthCredentialsStoreMode) -> Result<()> {
     if provider.uses_managed_auth() {
         println!(
             "{} uses managed auth (GitHub Copilot CLI). Run `vtcode login {}` instead.",
@@ -145,7 +149,7 @@ async fn handle_delete(provider: Provider, workspace: &Path) -> Result<()> {
     let env_key = provider.default_api_key_env();
 
     let storage = CustomApiKeyStorage::new(provider.as_ref());
-    match storage.load(AuthCredentialsStoreMode::default()) {
+    match storage.load(storage_mode) {
         Ok(None) => {
             println!("No stored API key found for {label}.");
             return Ok(());
@@ -168,7 +172,7 @@ async fn handle_delete(provider: Provider, workspace: &Path) -> Result<()> {
         return Ok(());
     }
 
-    storage.clear(AuthCredentialsStoreMode::default())?;
+    storage.clear(storage_mode)?;
 
     // Also purge the env var from workspace .env to prevent stale entries.
     if !env_key.is_empty() {
@@ -184,7 +188,7 @@ async fn handle_delete(provider: Provider, workspace: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn handle_migrate(args: MigrateArgs, workspace: &Path) -> Result<()> {
+async fn handle_migrate(args: MigrateArgs, workspace: &Path, storage_mode: AuthCredentialsStoreMode) -> Result<()> {
     let env_path = workspace_env_path(workspace);
     if !env_path.exists() {
         println!("No .env file found at {}. Nothing to migrate.", env_path.display());
@@ -267,7 +271,7 @@ async fn handle_migrate(args: MigrateArgs, workspace: &Path) -> Result<()> {
         }
 
         let value = env_values.get(env_key).map(|s| s.as_str());
-        match migrate_single_env_key(workspace, provider, AuthCredentialsStoreMode::default(), value)? {
+        match migrate_single_env_key(workspace, provider, storage_mode, value)? {
             MigrationOutcome::Migrated => {
                 println!("Migrated {} to secure storage.", env_key);
                 migrated += 1;
