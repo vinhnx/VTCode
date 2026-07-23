@@ -155,6 +155,7 @@ pub struct MemoryPoolConfig {
 /// Tool registry optimization configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ToolRegistryConfig {
     /// Enable optimized registry
     pub use_optimized_registry: bool,

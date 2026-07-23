@@ -306,14 +306,12 @@ impl ConfigManager {
         }
 
         // 3. The specific file provided (Workspace layer)
+        let file = path.to_path_buf();
         match Self::load_toml_from_file(path) {
-            Ok(toml) => {
-                layer_stack.push(ConfigLayerEntry::new(ConfigLayerSource::Workspace { file: path.to_path_buf() }, toml))
+            Ok(toml) => layer_stack.push(ConfigLayerEntry::new(ConfigLayerSource::Workspace { file }, toml)),
+            Err(error) => {
+                layer_stack.push(Self::disabled_layer_from_error(ConfigLayerSource::Workspace { file }, error))
             }
-            Err(error) => layer_stack.push(Self::disabled_layer_from_error(
-                ConfigLayerSource::Workspace { file: path.to_path_buf() },
-                error,
-            )),
         }
 
         // If the provided file sets workspace.use_root_config = true, discard
@@ -565,17 +563,13 @@ impl ConfigManager {
 
     fn project_config_path(config_dir: &Path, workspace_root: &Path, config_file_name: &str) -> Option<PathBuf> {
         let project_name = Self::identify_current_project(workspace_root)?;
-        let project_config_path = config_dir
-            .join("projects")
-            .join(project_name)
-            .join("config")
-            .join(config_file_name);
-
-        if project_config_path.exists() {
-            Some(project_config_path)
-        } else {
-            None
-        }
+        Some(
+            config_dir
+                .join("projects")
+                .join(project_name)
+                .join("config")
+                .join(config_file_name),
+        )
     }
 
     fn identify_current_project(workspace_root: &Path) -> Option<String> {

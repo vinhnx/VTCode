@@ -58,18 +58,35 @@ pub(super) fn parse_cli_config_entries(entries: &[String]) -> (Option<PathBuf>, 
     (config_path, overrides)
 }
 
+fn expand_tilde(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if !s.starts_with('~') {
+        return path.to_path_buf();
+    }
+    if s == "~" {
+        return dirs::home_dir().unwrap_or_else(|| path.to_path_buf());
+    }
+    if let Some(rest) = s.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    path.to_path_buf()
+}
+
 pub(super) fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf {
+    let candidate = expand_tilde(candidate);
     if candidate.is_absolute() {
-        return candidate.to_path_buf();
+        return candidate;
     }
 
-    let workspace_candidate = workspace.join(candidate);
+    let workspace_candidate = workspace.join(&candidate);
     if workspace_candidate.exists() {
         return workspace_candidate;
     }
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| workspace.to_path_buf());
-    let cwd_candidate = cwd.join(candidate);
+    let cwd_candidate = cwd.join(&candidate);
     if cwd_candidate.exists() {
         cwd_candidate
     } else {

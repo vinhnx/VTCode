@@ -253,9 +253,9 @@ impl ModelPickerState {
         let Some(ref target_model) = current_selection.reasoning_off_model else {
             renderer.line(MessageStyle::Error, "This model does not have a non-reasoning variant.")?;
             if self.inline_enabled {
-                render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
+                render_reasoning_inline(renderer, current_selection, self.current_reasoning)?;
             } else {
-                prompt_reasoning_plain(renderer, &current_selection, self.current_reasoning)?;
+                prompt_reasoning_plain(renderer, current_selection, self.current_reasoning)?;
             }
             return Ok(ModelPickerProgress::InProgress);
         };
@@ -270,9 +270,9 @@ impl ModelPickerState {
                 &format!("Unable to locate the non-reasoning variant {}.", target_model.as_str()),
             )?;
             if self.inline_enabled {
-                render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
+                render_reasoning_inline(renderer, current_selection, self.current_reasoning)?;
             } else {
-                prompt_reasoning_plain(renderer, &current_selection, self.current_reasoning)?;
+                prompt_reasoning_plain(renderer, current_selection, self.current_reasoning)?;
             }
             return Ok(ModelPickerProgress::InProgress);
         };

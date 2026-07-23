@@ -523,12 +523,12 @@ pub(crate) async fn run_turn_loop(
         }
 
         let transition = maybe_handle_planning_exit_trigger(
-            &mut ctx.renderer,
+            ctx.renderer,
             ctx.tool_registry,
             ctx.plan_session,
             ctx.handle,
             working_history,
-            &mut ctx.auto_finish_planning_attempted,
+            ctx.auto_finish_planning_attempted,
         )
         .await?;
 

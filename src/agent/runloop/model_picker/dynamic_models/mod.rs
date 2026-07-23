@@ -27,7 +27,7 @@ use super::selection::{SelectionDetail, selection_from_dynamic};
 
 type StaticModelIndex = HashMap<Provider, HashSet<String>>;
 
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 #[derive(Clone, Default)]
 pub(crate) struct DynamicModelRegistry {

@@ -168,10 +168,22 @@ pub fn get_data_dir() -> Option<PathBuf> {
 }
 
 fn default_home_paths(config_file_name: &str) -> Vec<PathBuf> {
-    get_config_dir()
-        .map(|config_dir| config_dir.join(config_file_name))
-        .into_iter()
-        .collect()
+    let mut paths = Vec::with_capacity(2);
+
+    // 1. Legacy fallback (lower precedence) — ~/.vtcode/vtcode.toml
+    if let Some(home_dir) = dirs::home_dir() {
+        paths.push(home_dir.join(DEFAULT_CONFIG_DIR_NAME).join(config_file_name));
+    }
+
+    // 2. XDG-compliant config path (higher precedence) — ~/.config/vtcode/vtcode.toml
+    if let Some(config_dir) = get_config_dir() {
+        let xdg_path = config_dir.join(config_file_name);
+        if !paths.iter().any(|p| p == &xdg_path) {
+            paths.push(xdg_path);
+        }
+    }
+
+    paths
 }
 
 fn default_syntax_languages() -> Vec<String> {

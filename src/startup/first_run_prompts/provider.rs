@@ -18,12 +18,32 @@ use super::common::{prompt_with_placeholder, run_selection};
 ///    `OPENROUTER_API_KEY` is not defaulted into OpenAI (which they may have
 ///    no key for).
 /// 3. The built-in default provider.
+fn whitelist_has_only_custom_providers(config: &VTCodeConfig) -> bool {
+    if config.providers_whitelist.is_empty() {
+        return false;
+    }
+    config.providers_whitelist.iter().all(|w| {
+        Provider::from_str(w).is_err() && config.custom_providers.iter().any(|cp| cp.name.eq_ignore_ascii_case(w))
+    })
+}
+
 pub(crate) fn resolve_initial_provider(config: &VTCodeConfig, discovered: &[DiscoveredProvider]) -> Provider {
     let configured = config.agent.provider.trim();
     let hardcoded_default =
         Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER).unwrap_or(Provider::OpenAI);
 
     if !configured.is_empty() {
+        // Custom provider names don't have a Provider enum variant.
+        // If the configured provider is a custom provider, return the
+        // hardcoded default as the UI cursor default; the runtime will
+        // resolve the actual provider string from config directly.
+        if config
+            .custom_providers
+            .iter()
+            .any(|cp| cp.name.eq_ignore_ascii_case(configured))
+        {
+            return hardcoded_default;
+        }
         let parsed = Provider::from_str(configured).unwrap_or(hardcoded_default);
         if config.providers_whitelist.is_empty()
             || config
@@ -33,6 +53,19 @@ pub(crate) fn resolve_initial_provider(config: &VTCodeConfig, discovered: &[Disc
         {
             return parsed;
         }
+    }
+
+    // When the whitelist only contains custom provider names (no built-in
+    // Provider variants match), treat it as non-restrictive for the
+    // built-in provider picker since custom providers are handled separately.
+    if whitelist_has_only_custom_providers(config) {
+        if let Some(first_ready) = discovered
+            .iter()
+            .find(|d| !matches!(d.source, CredentialSource::Local | CredentialSource::ManagedAuth))
+        {
+            return first_ready.provider;
+        }
+        return hardcoded_default;
     }
 
     if config.providers_whitelist.is_empty() {

@@ -10,7 +10,7 @@ use vtcode_core::llm::{
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
 
 use super::DynamicModelRegistry;
-use super::options::{MODEL_OPTIONS, option_indexes_for_provider};
+use super::options::{ModelOption, build_filtered_options};
 use super::rendering::{dynamic_model_subtitle, model_search_value, static_model_search_terms, static_model_subtitle};
 
 #[derive(Clone)]
@@ -33,8 +33,8 @@ pub(crate) async fn prepare_lightweight_model_palette_view(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> LightweightModelPaletteView {
-    let dynamic_models =
-        DynamicModelRegistry::load(MODEL_OPTIONS.as_slice(), Some(config.workspace.as_path()), vt_cfg).await;
+    let filtered_options = build_filtered_options(vt_cfg);
+    let dynamic_models = DynamicModelRegistry::load(&filtered_options, Some(config.workspace.as_path()), vt_cfg).await;
     build_lightweight_model_palette_view(action_prefix, config, vt_cfg, &dynamic_models)
 }
 
@@ -62,6 +62,7 @@ pub(crate) fn build_lightweight_model_palette_view(
     let main_model = main_route.model;
     let auto_model = auto_lightweight_model(&provider_name, &main_model);
     let provider = Provider::from_str(&provider_name).ok();
+    let options = build_filtered_options(vt_cfg);
 
     let items = match provider {
         Some(provider) => provider_scoped_items(
@@ -71,6 +72,7 @@ pub(crate) fn build_lightweight_model_palette_view(
             &provider_name,
             &main_model,
             &auto_model,
+            &options,
             dynamic_models,
         ),
         None => custom_provider_items(action_prefix, &current_setting, &provider_name, &main_model, &auto_model),
@@ -113,14 +115,12 @@ fn provider_scoped_items(
     current_provider: &str,
     main_model: &str,
     auto_model: &str,
+    options: &[ModelOption],
     dynamic_models: &DynamicModelRegistry,
 ) -> Vec<InlineListItem> {
     let mut items = base_items(action_prefix, current_setting, current_provider, main_model, auto_model);
 
-    for option_index in option_indexes_for_provider(provider) {
-        let Some(option) = MODEL_OPTIONS.get(*option_index) else {
-            continue;
-        };
+    for option in options.iter().filter(|o| o.provider == provider) {
         if option.id.eq_ignore_ascii_case(main_model) || option.id.eq_ignore_ascii_case(auto_model) {
             continue;
         }
