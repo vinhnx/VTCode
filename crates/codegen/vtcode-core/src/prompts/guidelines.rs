@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn test_codex_default_guidance_omits_task_tracker() {
+    fn test_vt_code_guidance_omits_task_tracker() {
         let tools = vec![
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_WRITE_STDIN.to_string(),

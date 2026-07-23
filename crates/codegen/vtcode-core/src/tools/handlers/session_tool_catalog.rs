@@ -285,7 +285,7 @@ impl SessionToolsConfig {
             model_capabilities,
             deferred_tool_policy: DeferredToolPolicy::default(),
             anthropic_native_memory_enabled: false,
-            tool_profile: ToolProfile::CodexDefault,
+            tool_profile: ToolProfile::VtCode,
         }
     }
 
@@ -720,7 +720,7 @@ impl ToolCatalogEntry {
 
 fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: bool) -> bool {
     match profile {
-        ToolProfile::CodexDefault => {
+        ToolProfile::VtCode => {
             matches!(tool_name, tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH)
                 || (planning_active && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
         }
@@ -1175,7 +1175,7 @@ mod tests {
             model_capabilities: ToolModelCapabilities::default(),
             deferred_tool_policy: DeferredToolPolicy::default(),
             anthropic_native_memory_enabled: false,
-            tool_profile: ToolProfile::CodexDefault,
+            tool_profile: ToolProfile::VtCode,
         });
 
         assert!(names.is_empty());

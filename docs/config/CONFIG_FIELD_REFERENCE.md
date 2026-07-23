@@ -715,7 +715,7 @@ python3 scripts/generate_config_field_reference.py
 | `tools.plugins.manifests[]` | `string` | no | `-` | - |
 | `tools.policies` | `object` | no | `{}` | Specific tool policies |
 | `tools.policies.*` | `string` | no | `-` | Tool execution policy |
-| `tools.profile` | `string` | no | `"codex_default"` | Model-facing tool profile. |
+| `tools.profile` | `string` | no | `"vt_code"` | Model-facing tool profile. |
 | `tools.web_fetch.allowed_domains` | `array` | no | `[]` | Inline whitelist - Domains to allow in restricted mode |
 | `tools.web_fetch.allowed_domains[]` | `string` | no | `-` | - |
 | `tools.web_fetch.blocked_domains` | `array` | no | `[]` | Inline blocklist - Additional domains to block |

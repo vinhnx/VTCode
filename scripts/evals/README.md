@@ -52,8 +52,8 @@ Test cases are defined in JSON format:
 }
 ```
 
-An optional `profile` selects `codex_default` or `advanced_vtcode`. Cases that
-omit it run with an explicit `codex_default` override.
+An optional `profile` selects `vt_code` or `advanced_vtcode`. Cases that
+omit it run with an explicit `vt_code` override.
 
 The focused advanced-profile code-search cases live in
 [`docs/development/ai-tool-surface-eval-cases.json`](../docs/development/ai-tool-surface-eval-cases.json).

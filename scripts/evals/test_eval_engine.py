@@ -32,10 +32,10 @@ class EvaluationEngineCommandTests(unittest.TestCase):
 
     def test_default_profile_is_explicit(self):
         command = self.engine.build_command(
-            "list files", "codex_default", "/tmp/final-message.txt"
+            "list files", "vt_code", "/tmp/final-message.txt"
         )
 
-        self.assertIn("tools.profile=codex_default", command)
+        self.assertIn("tools.profile=vt_code", command)
 
     def test_unknown_profile_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unsupported eval profile"):
@@ -57,7 +57,7 @@ class EvaluationEngineCommandTests(unittest.TestCase):
         self.assertEqual(len(cases), 7)
         self.assertEqual(
             {case["profile"] for case in cases},
-            {"codex_default", "advanced_vtcode"},
+            {"vt_code", "advanced_vtcode"},
         )
         self.assertNotIn(
             "tool_surface_archived_baseline_unavailable",

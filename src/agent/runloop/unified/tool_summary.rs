@@ -2,9 +2,10 @@ use hashbrown::HashSet;
 
 use std::path::Path;
 
-use anstyle::Color;
+use anstyle::{Color, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
+use vtcode_commons::color_policy;
 use vtcode_commons::formatting::wrap_text_words;
 
 use vtcode_core::config::constants::tools as tool_names;
@@ -13,6 +14,7 @@ use vtcode_core::tools::tool_intent;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
+use vtcode_ui::tui::ui::syntax_highlight;
 
 use crate::agent::runloop::tool_output::render_tree_detail;
 use crate::agent::runloop::unified::tool_summary_helpers::{
@@ -174,7 +176,7 @@ pub(crate) fn render_tool_call_summary(
 
     renderer.line(MessageStyle::Info, &line)?;
 
-    render_continuation_lines(renderer, &wrapped_run_segments, &palette)?;
+    render_continuation_lines(renderer, &wrapped_run_segments, main_color, &palette)?;
     render_command_line(renderer, &data.command_line, &palette)?;
     render_details(renderer, &data.details)?;
 
@@ -233,9 +235,9 @@ fn render_bullet_line(
         let wrapped = wrap_text_words(command, RUN_SUMMARY_FIRST_WIDTH, RUN_SUMMARY_CONTINUATION_WIDTH);
         let first_segment = wrapped.first().cloned().unwrap_or_else(|| "command".to_string());
         wrapped_run_segments = Some(wrapped);
-        line.push_str(&render_styled("Ran", palette.accent, Some("bold".to_string())));
+        line.push_str(&render_styled("Ran", main_color, Some("bold".to_string())));
         line.push(' ');
-        line.push_str(&render_run_command_segment(&first_segment, main_color, palette.muted));
+        line.push_str(&render_command_segment(&first_segment, main_color, palette.muted, true));
     } else {
         line.push_str(&render_summary_with_highlights(
             &data.summary,
@@ -263,6 +265,7 @@ fn render_bullet_line(
 fn render_continuation_lines(
     renderer: &mut AnsiRenderer,
     wrapped_run_segments: &Option<Vec<String>>,
+    main_color: Color,
     palette: &ColorPalette,
 ) -> Result<()> {
     if let Some(wrapped) = wrapped_run_segments {
@@ -271,7 +274,7 @@ fn render_continuation_lines(
             continuation.push_str("  ");
             continuation.push_str(&render_styled("│", palette.muted, Some("dim".to_string())));
             continuation.push(' ');
-            continuation.push_str(&render_styled(segment, palette.muted, None));
+            continuation.push_str(&render_command_segment(segment, main_color, palette.muted, false));
             renderer.line(MessageStyle::Info, &continuation)?;
         }
     }
@@ -345,6 +348,72 @@ fn render_summary_with_highlights(
     }
 
     rendered
+}
+
+/// Render a command-line segment using the bash grammar syntax highlighter.
+///
+/// Tries the syntect bash grammar first (the same engine used by the live PTY
+/// stream). When the grammar produces distinct foreground colors the result is
+/// converted to ANSI escape sequences with `args_color` merged in for tokens
+/// that have no explicit color. Falls back to a simple command-name / args
+/// two-color scheme when the grammar is unavailable or yields a single color.
+fn render_command_segment(segment: &str, command_color: Color, args_color: Color, expect_command: bool) -> String {
+    if !color_policy::color_output_enabled() {
+        return segment.to_string();
+    }
+
+    if let Some(highlighted) = try_bash_grammar_ansi(segment, args_color) {
+        return highlighted;
+    }
+
+    // Fallback: simple two-color scheme.
+    if expect_command {
+        render_run_command_segment(segment, command_color, args_color)
+    } else {
+        render_styled(segment, args_color, None)
+    }
+}
+
+/// Convert a command string to ANSI-highlighted text via the syntect bash
+/// grammar, returning `None` when highlighting is unavailable or produces no
+/// distinct foreground colors (in which case the caller should fall back).
+fn try_bash_grammar_ansi(command: &str, fallback_color: Color) -> Option<String> {
+    let theme_name = syntax_highlight::get_active_syntax_theme();
+    let segments = syntax_highlight::highlight_line_to_anstyle_segments(command, Some("bash"), theme_name, true)?;
+    if segments.is_empty() {
+        return None;
+    }
+
+    // Reject results that altered the source text (syntect should be
+    // purely additive with styling, but guard against grammar quirks).
+    let reconstructed: String = segments.iter().map(|(_, text)| text.as_str()).collect();
+    if reconstructed != command {
+        return None;
+    }
+
+    // Only use the grammar result when it produces at least two distinct
+    // foreground colors among non-whitespace tokens — a single color means
+    // the grammar added no semantic value, so the two-color fallback is
+    // more informative.
+    let non_ws: Vec<&(AnsiStyle, String)> = segments.iter().filter(|(_, t)| !t.trim().is_empty()).collect();
+    if non_ws.len() > 1 {
+        let colors: HashSet<Option<Color>> = non_ws.iter().map(|(style, _)| style.get_fg_color()).collect();
+        if colors.len() <= 1 {
+            return None;
+        }
+    }
+
+    let mut output = String::with_capacity(command.len() + segments.len() * 12);
+    for (style, text) in &segments {
+        let mut effective = *style;
+        if effective.get_fg_color().is_none() {
+            effective = effective.fg_color(Some(fallback_color));
+        }
+        output.push_str(&effective.to_string());
+        output.push_str(text);
+        output.push_str(&Reset.to_string());
+    }
+    Some(output)
 }
 
 fn render_run_command_segment(segment: &str, command_color: Color, args_color: Color) -> String {
@@ -710,5 +779,80 @@ mod tests {
             describe_tool_action(tool_names::APPLY_PATCH, &json!({"input": "not a patch"}), None);
         assert_eq!(description, "Apply workspace patch");
         assert!(used_keys.is_empty());
+    }
+
+    #[test]
+    fn try_bash_grammar_ansi_highlights_cargo_command() {
+        let result = super::try_bash_grammar_ansi(
+            "cargo check --locked -p vtcode",
+            anstyle::Color::Ansi(anstyle::AnsiColor::White),
+        );
+        assert!(result.is_some(), "cargo command should get bash grammar highlighting");
+        let ansi = result.unwrap();
+        // ANSI escape sequences present (ESC = 0x1b)
+        assert!(ansi.contains('\u{1b}'), "output should contain ANSI escape codes");
+        // Plain text is preserved when ANSI codes are stripped
+        let stripped = vtcode_commons::ansi::strip_ansi_codes(&ansi);
+        assert_eq!(stripped, "cargo check --locked -p vtcode");
+    }
+
+    #[test]
+    fn try_bash_grammar_ansi_highlights_sed_command() {
+        let result = super::try_bash_grammar_ansi(
+            "sed -n 178,190p src/main_helpers/bootstrap.rs",
+            anstyle::Color::Ansi(anstyle::AnsiColor::White),
+        );
+        assert!(result.is_some(), "sed command should get bash grammar highlighting");
+        let ansi = result.unwrap();
+        assert!(ansi.contains('\u{1b}'));
+        let stripped = vtcode_commons::ansi::strip_ansi_codes(&ansi);
+        assert_eq!(stripped, "sed -n 178,190p src/main_helpers/bootstrap.rs");
+    }
+
+    #[test]
+    fn try_bash_grammar_ansi_highlights_rg_command() {
+        let result = super::try_bash_grammar_ansi(
+            "rg -n use std::time::Instant",
+            anstyle::Color::Ansi(anstyle::AnsiColor::White),
+        );
+        assert!(result.is_some(), "rg command should get bash grammar highlighting");
+        let ansi = result.unwrap();
+        assert!(ansi.contains('\u{1b}'));
+        let stripped = vtcode_commons::ansi::strip_ansi_codes(&ansi);
+        assert_eq!(stripped, "rg -n use std::time::Instant");
+    }
+
+    #[test]
+    fn render_command_segment_falls_back_for_empty() {
+        let result = super::render_command_segment(
+            "",
+            anstyle::Color::Ansi(anstyle::AnsiColor::Green),
+            anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlack),
+            true,
+        );
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn render_command_segment_produces_highlighted_output() {
+        // Force color output on. The color policy uses a Lazy initializer that
+        // reads NO_COLOR from the env; we must trigger it first, then override.
+        // (nextest runs each test in its own process, so this is safe.)
+        let _ = vtcode_commons::color_policy::current_color_output_policy();
+        vtcode_commons::color_policy::set_color_output_policy(vtcode_commons::color_policy::ColorOutputPolicy {
+            enabled: true,
+            source: vtcode_commons::color_policy::ColorOutputPolicySource::CliColorAlways,
+        });
+
+        let result = super::render_command_segment(
+            "cargo check --locked -p vtcode",
+            anstyle::Color::Ansi(anstyle::AnsiColor::Green),
+            anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlack),
+            true,
+        );
+        // Should contain ANSI escape codes from bash grammar highlighting
+        assert!(result.contains('\u{1b}'), "command segment should be syntax-highlighted");
+        let stripped = vtcode_commons::ansi::strip_ansi_codes(&result);
+        assert_eq!(stripped.as_ref(), "cargo check --locked -p vtcode");
     }
 }

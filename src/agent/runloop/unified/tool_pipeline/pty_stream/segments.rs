@@ -28,12 +28,15 @@ impl PtyLineStyles {
                 .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
                 .effects(Effects::BOLD),
         ));
+        // The "Ran" verb uses the theme's accent (primary) color so it stays
+        // consistent with the summary-path rendering and the active theme.
+        let accent_bold = Arc::new(convert_style(theme_styles.primary | Effects::BOLD));
         let yellow = Arc::new(convert_style(AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow)))));
 
         Self {
             output: Arc::clone(&dimmed),
             glyph: dimmed,
-            verb: Arc::clone(&magenta_bold),
+            verb: accent_bold,
             command: Arc::new(convert_style(
                 AnsiStyle::new()
                     .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Green)))

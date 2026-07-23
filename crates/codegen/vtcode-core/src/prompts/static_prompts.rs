@@ -5,8 +5,8 @@ use std::sync::OnceLock;
 use crate::config::types::SystemPromptMode;
 use crate::prompts::system::{
     CONTRACT_HEADER, DEFAULT_OPERATING_PROFILE_DELTA, DEFAULT_SPECIFIC_LINES, LIGHTWEIGHT_OPERATING_PROFILE_DELTA,
-    MINIMAL_OPERATING_PROFILE_DELTA, MINIMAL_SPECIFIC_LINES, PROMPT_INTRO, PROMPT_TITLE, SHARED_CONTRACT_LINES,
-    SPECIALIZED_OPERATING_PROFILE_DELTA,
+    MINIMAL_OPERATING_PROFILE_DELTA, MINIMAL_SPECIFIC_LINES, PROMPT_INTRO, PROMPT_ROLE_PARAGRAPH, PROMPT_TITLE,
+    SHARED_CONTRACT_LINES, SPECIALIZED_OPERATING_PROFILE_DELTA,
 };
 
 /// Agent identity labels for the system prompt.
@@ -64,6 +64,8 @@ pub fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
             prompt.push_str(PROMPT_TITLE);
             prompt.push_str("\n\n");
             prompt.push_str(PROMPT_INTRO);
+            prompt.push_str("\n\n");
+            prompt.push_str(PROMPT_ROLE_PARAGRAPH);
             prompt.push_str("\n\n");
             prompt.push_str(CONTRACT_HEADER);
             prompt.push_str("\n\n");
@@ -142,6 +144,8 @@ pub fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
             prompt.push_str(PROMPT_TITLE);
             prompt.push_str("\n\n");
             prompt.push_str(PROMPT_INTRO);
+            prompt.push_str("\n\n");
+            prompt.push_str(PROMPT_ROLE_PARAGRAPH);
             prompt.push_str("\n\n");
             prompt.push_str(CONTRACT_HEADER);
             prompt.push_str("\n\n");

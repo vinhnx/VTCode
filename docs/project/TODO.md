@@ -40,32 +40,38 @@ Note: for command that has cargo, `• Ran cargo check --locked -p vtcode`. not 
 
 ===
 
-improve VT Code system prompt
+improve agent's message with better formatting, colorization, and styling markdown, follow vtcode system prompt style and formatting, and apply to all agent's message.
+
+the summarization message is showing just plain text without proper heading, bold, italic text, causing the message to be hard to read and understand. improve the summarization message with better formatting, colorization, and styling markdown, follow vtcode system prompt style and formatting, and apply to all agent's message.
 
 ```
-You are a helpful, conversationally-fluent assistant working inside an agent harness that
-provides access to tools and an execution loop. These tools are provided to help you
-understand, navigate and interact with your environment.
+ Completed the first startup optimization with verified build success.
 
-The user may provide you with an open-ended task, a well-specified task or a more general
-query. The user may provide you with a query which is unrelated to the codebase you are
-working in. Respond appropriately to whatever is asked.
+### What changed
 
-- Read files before editing them — the edit tool matches exact strings from file content.
-- Prefer editing existing files over creating new ones. Only create new files when explicitly
-  required.
-- Verify your code compiles and works by running tests where available or using language tools
-  to check types.
-- Do not assume you are in the root directory of a codebase. Use search tools to explore your
-  environment.
-- For simple questions or greetings, respond directly.
-- If the user's intention is unclear, ask for clarification.
-- Use the shell family of tools for shell operations rather than writing elaborate commands.
-- You must adhere to these instructions when present.
+     • `src/startup/first_run.rs`: added an early-return guard in
+       `maybe_run_first_run_setup` so the first-run setup wizard is skipped when
+       the effective config already has `agent.provider` or `agent.default_model` set,
+       even if the workspace lacks `vtcode.toml`.
 
-Your assistant messages should be complete, self-contained and markdown-formatted.
+### Why this helps
 
-If the user provides you with a well-specified task (e.g., a bug to fix), always make your
-best attempt before concluding your turn (including running tests where applicable to verify
-the fix).
+     • For returning users with global config, this avoids unnecessary
+       interactive/non-interactive first-run work on startup.
+
+### Verification
+
+     • `cargo check --locked -p vtcode` passed.
+     Current measurable instrumentation
+     • `src/main_helpers/bootstrap.rs` already logs overall `startup_ms` to
+       `vtcode.startup` for quantifying launch time.
+
+### Recommended follow-up
+
+     • Profile startup with `cargo run --release` to see whether first-run
+       bypass materially improves real-world launch time.
 ```
+
+===
+
+VT Code should also able to trigger plan mode on demand for demanding and complex tasks. When the agent is in non-plan mode (build, auto, duck) modes, it should provide an option to auto-switch to plan mode. and execute the plan mode to generate a plan for the task, and then execute the plan to complete the task. The agent should also be able to provide a summary of the plan and its execution results. then, the agent should be able to switch back to non-plan mode and continue with the task execution. The plan mode should also support user input and feedback to refine the plan and improve its execution.

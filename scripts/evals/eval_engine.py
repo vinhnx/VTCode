@@ -9,7 +9,7 @@ from datetime import datetime
 from metrics import CodeValidity, ContainsMatch, ExactMatch, LLMGrader
 
 TOOL_PROFILE_CONFIG = {
-    "codex_default": "codex_default",
+    "vt_code": "vt_code",
     "advanced_vtcode": "advanced_vtcode",
 }
 
@@ -86,7 +86,7 @@ class EvaluationEngine:
         print(f"Running test case: {test_case['id']} - {test_case['task']}")
 
         start_time = time.time()
-        profile = test_case.get("profile", "codex_default")
+        profile = test_case.get("profile", "vt_code")
         response_json = self.run_command(test_case['task'], profile)
         latency = time.time() - start_time
 

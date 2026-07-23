@@ -2,7 +2,7 @@
   {
     "id": "tool_surface_discovery_default",
     "category": "tool_surface",
-    "profile": "codex_default",
+    "profile": "vt_code",
     "capability": "ordinary_file_discovery",
     "task": "Inspect this repository and list every crate-level AGENTS.md path. Report the total count and the exact shell command used to discover them.",
     "metric": "llm_grader",
@@ -11,7 +11,7 @@
   {
     "id": "tool_surface_text_search_default",
     "category": "tool_surface",
-    "profile": "codex_default",
+    "profile": "vt_code",
     "capability": "text_search",
     "task": "Find the Rust declaration of ToolTaskTelemetrySnapshot. Report its repository-relative file path and declaration line, quote the names of its first two public fields, and show the exact shell search command used.",
     "metric": "llm_grader",
@@ -47,7 +47,7 @@
   {
     "id": "tool_surface_patch_default",
     "category": "tool_surface",
-    "profile": "codex_default",
+    "profile": "vt_code",
     "capability": "patch_editing",
     "task": "Make a minimal patch to a temporary fixture file that changes one line, then explain the patch result without touching repository source files.",
     "metric": "contains_match",
@@ -56,7 +56,7 @@
   {
     "id": "tool_surface_interactive_default",
     "category": "tool_surface",
-    "profile": "codex_default",
+    "profile": "vt_code",
     "capability": "interactive_command_continuation",
     "task": "Start an interactive shell command that waits for input, send one input line, and report the final output.",
     "metric": "contains_match",

@@ -986,7 +986,7 @@ mod tests {
         config.tools.profile = ToolProfile::AdvancedVtCode;
 
         assert_eq!(configured_tool_profile(Some(&config)), ToolProfile::AdvancedVtCode);
-        assert_eq!(configured_tool_profile(None), ToolProfile::CodexDefault);
+        assert_eq!(configured_tool_profile(None), ToolProfile::VtCode);
     }
 
     #[tokio::test]

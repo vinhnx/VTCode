@@ -70,6 +70,17 @@ pub const PLANNING_WORKFLOW_IMPLEMENT_REMINDER: &str = "• Planning workflow is
 
 pub const PROMPT_TITLE: &str = "# VT Code";
 pub const PROMPT_INTRO: &str = "VT Code. Be concise and safe.";
+
+/// Natural-language role framing inserted between the identity tagline and the
+/// contract for the Default and Specialized profiles. Supplies what the terse
+/// tagline cannot: the senior-engineer role, the
+/// read/plan/implement/verify/report loop, and effort calibration. Omitted
+/// from Minimal and Lightweight modes to respect their compact prompt budgets
+/// (see the parent-ratio guard in `subagents/config.rs` and the per-mode size
+/// guardrails in `tests`). The text intentionally contains no `VT Code`
+/// substring so `apply_agent_identity` leaves it untouched when substituting
+/// the tagline.
+pub const PROMPT_ROLE_PARAGRAPH: &str = "You are a senior software engineer in the user's codebase via tools and an execution loop: read, plan, implement, verify, then report what changed. Scale effort to the ask: answer simple or non-code questions directly without tools.";
 pub const CONTRACT_HEADER: &str = "## Contract";
 
 /// Contract rules shared across all prompt modes.
@@ -103,10 +114,10 @@ pub const MINIMAL_SPECIFIC_LINES: &[&str] = &[
 
 pub const DEFAULT_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 
-- Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
+- Core tools are `exec_command`, `write_stdin`, and `apply_patch`; `code_search` unlocks during Planning workflow.
 - Put normal shell commands in `exec_command.cmd`; they are not separate function tools. Follow the active shell profile's syntax.
 - Treat completion language as a checkpoint, not proof; only stop when verification is resolved.
-- When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
+- When tools are available, read and search before answering; implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit."#;
 
 pub const MINIMAL_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
@@ -1743,6 +1754,8 @@ mod tests {
 
 VT Code (Build mode). Be concise and safe.
 
+You are a senior software engineer in the user's codebase via tools and an execution loop: read, plan, implement, verify, then report what changed. Scale effort to the ask: answer simple or non-code questions directly without tools.
+
 ## Contract
 
 - If context is missing, say so, do not guess, finish unblocked slices.
@@ -1762,10 +1775,10 @@ VT Code (Build mode). Be concise and safe.
 
 ## Operating Profile
 
-- Available tools in the default profile are `exec_command`, `write_stdin`, and `apply_patch`.
+- Core tools are `exec_command`, `write_stdin`, and `apply_patch`; `code_search` unlocks during Planning workflow.
 - Put normal shell commands in `exec_command.cmd`; they are not separate function tools. Follow the active shell profile's syntax.
 - Treat completion language as a checkpoint, not proof; only stop when verification is resolved.
-- When tools are available, read files and search the codebase before answering; use tools to implement directly rather than describing what should be done.
+- When tools are available, read and search before answering; implement directly rather than describing what should be done.
 - Use Planning workflow for research/spec work; stay read-only until implementation intent is explicit.
 
 ## Shell Profile
