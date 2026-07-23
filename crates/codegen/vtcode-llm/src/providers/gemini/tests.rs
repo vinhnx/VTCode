@@ -691,6 +691,24 @@ fn sanitize_function_parameters_removes_additional_properties() {
 }
 
 #[test]
+fn sanitize_function_parameters_removes_examples() {
+    let parameters = json!({
+        "type": "object",
+        "examples": [{ "path": "src/lib.rs" }],
+        "properties": {
+            "path": {
+                "type": "string",
+                "examples": ["src/lib.rs"]
+            }
+        }
+    });
+
+    let sanitized = sanitize_function_parameters(parameters);
+    assert!(sanitized.get("examples").is_none());
+    assert!(sanitized["properties"]["path"].get("examples").is_none());
+}
+
+#[test]
 fn sanitize_function_parameters_removes_exclusive_min_max() {
     // Test case for the bug: exclusiveMaximum and exclusiveMinimum in nested properties
     let parameters = json!({

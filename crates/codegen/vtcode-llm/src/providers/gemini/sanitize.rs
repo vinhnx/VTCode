@@ -43,6 +43,7 @@ fn sanitize_function_parameters_impl(parameters: Value, inside_properties_map: b
                 "not",
                 "contentMediaType",
                 "contentEncoding",
+                "examples",
             ];
 
             let alias_description_property = inside_properties_map && should_alias_description_property(&map);
