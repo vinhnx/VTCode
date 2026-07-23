@@ -194,8 +194,8 @@ impl CommandExecutor for ProcessCommandExecutor {
 
         Ok(CommandOutput {
             status: CommandStatus::from(output.status),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            stdout: String::from_utf8(output.stdout).unwrap_or_else(|e| e.to_string()),
+            stderr: String::from_utf8(output.stderr).unwrap_or_else(|e| e.to_string()),
         })
     }
 }
@@ -422,7 +422,11 @@ where
 
     fn next_id(&self) -> String {
         let value = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
-        format!("{}{}", self.id_prefix, value)
+        let mut id = String::with_capacity(self.id_prefix.len() + 10);
+        id.push_str(&self.id_prefix);
+        use std::fmt::Write;
+        let _ = write!(id, "{value}");
+        id
     }
 
     fn emit_event(&self, event: ThreadEvent) {

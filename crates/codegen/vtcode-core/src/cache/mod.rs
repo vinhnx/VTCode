@@ -135,7 +135,7 @@ where
         }
 
         let state = {
-            let inner = self.inner.read().ok()?;
+            let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
             let ttl = inner.ttl;
 
             match inner.entries.get(key) {

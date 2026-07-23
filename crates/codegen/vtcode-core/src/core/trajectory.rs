@@ -156,7 +156,9 @@ fn rotate_current_trajectory(dir: &Path) {
     let timestamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
     let rotated_name = format!("{TRAJECTORY_PREFIX}{timestamp}.{TRAJECTORY_EXTENSION}");
     let rotated_path = dir.join(rotated_name);
-    let _ = fs::rename(&current, &rotated_path);
+    if let Err(e) = fs::rename(&current, &rotated_path) {
+        tracing::warn!("Failed to rotate trajectory {} -> {}: {e}", current.display(), rotated_path.display());
+    }
 }
 
 fn is_trajectory_file(path: &Path) -> bool {

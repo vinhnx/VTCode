@@ -9,7 +9,8 @@ use vtcode_config::api_keys::{
 };
 use vtcode_config::auth::{AuthCredentialsStoreMode, CustomApiKeyStorage};
 use vtcode_config::workspace_env::{
-    MigrationOutcome, migrate_single_env_key, read_workspace_env_values, workspace_env_path,
+    MigrationOutcome, migrate_single_env_key, read_workspace_env_value, read_workspace_env_values,
+    remove_workspace_env_value, workspace_env_path,
 };
 use vtcode_core::cli::args::{MigrateArgs, SecretProvider, SecretSubcommand};
 use vtcode_core::config::models::Provider;
@@ -20,8 +21,12 @@ pub async fn handle_secret_command(command: SecretSubcommand, workspace: &Path) 
         SecretSubcommand::Status { provider_name } => {
             render_secret_status_table(provider_name.map(secret_provider_to_provider))
         }
-        SecretSubcommand::Add { provider_name } => handle_add(secret_provider_to_provider(provider_name)).await,
-        SecretSubcommand::Delete { provider_name } => handle_delete(secret_provider_to_provider(provider_name)).await,
+        SecretSubcommand::Add { provider_name } => {
+            handle_add(secret_provider_to_provider(provider_name), workspace).await
+        }
+        SecretSubcommand::Delete { provider_name } => {
+            handle_delete(secret_provider_to_provider(provider_name), workspace).await
+        }
         SecretSubcommand::Migrate(args) => handle_migrate(args, workspace).await,
     }
 }
@@ -75,7 +80,7 @@ fn render_secret_status_table(filter: Option<Provider>) -> Result<()> {
     Ok(())
 }
 
-async fn handle_add(provider: Provider) -> Result<()> {
+async fn handle_add(provider: Provider, workspace: &Path) -> Result<()> {
     if provider.uses_managed_auth() {
         println!(
             "{} uses managed auth (GitHub Copilot CLI). Run `vtcode login {}` instead.",
@@ -111,13 +116,23 @@ async fn handle_add(provider: Provider) -> Result<()> {
 
     let storage = CustomApiKeyStorage::new(provider.as_ref());
     storage.store(&key, AuthCredentialsStoreMode::default())?;
+
+    // Purge stale entry from workspace .env so it doesn't shadow the
+    // keyring entry (env var takes priority in get_api_key resolution).
+    if !env_key.is_empty() {
+        if let Ok(Some(_)) = read_workspace_env_value(workspace, env_key) {
+            remove_workspace_env_value(workspace, env_key)?;
+            println!("Removed stale {env_key} from workspace .env to avoid conflicts.");
+        }
+    }
+
     println!();
     println!("API key for {label} stored in secure storage.");
     println!("The key will be used automatically.");
     Ok(())
 }
 
-async fn handle_delete(provider: Provider) -> Result<()> {
+async fn handle_delete(provider: Provider, workspace: &Path) -> Result<()> {
     if provider.uses_managed_auth() {
         println!(
             "{} uses managed auth (GitHub Copilot CLI). Run `vtcode login {}` instead.",
@@ -127,6 +142,7 @@ async fn handle_delete(provider: Provider) -> Result<()> {
         return Ok(());
     }
     let label = provider.label();
+    let env_key = provider.default_api_key_env();
 
     let storage = CustomApiKeyStorage::new(provider.as_ref());
     match storage.load(AuthCredentialsStoreMode::default()) {
@@ -153,6 +169,15 @@ async fn handle_delete(provider: Provider) -> Result<()> {
     }
 
     storage.clear(AuthCredentialsStoreMode::default())?;
+
+    // Also purge the env var from workspace .env to prevent stale entries.
+    if !env_key.is_empty() {
+        if let Ok(Some(_)) = read_workspace_env_value(workspace, env_key) {
+            remove_workspace_env_value(workspace, env_key)?;
+            println!("Also removed {env_key} from workspace .env.");
+        }
+    }
+
     println!();
     println!("API key for {label} deleted from secure storage.");
     println!("The change takes effect immediately.");

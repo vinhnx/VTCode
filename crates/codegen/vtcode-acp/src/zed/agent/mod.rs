@@ -126,7 +126,7 @@ impl ZedAgent {
 
     /// Borrow the SACP `cx` handle, if one is attached.
     pub(crate) fn client(&self) -> Option<Arc<ConnectionHandle>> {
-        self.client.lock().ok().and_then(|guard| guard.as_ref().cloned())
+        self.client.lock().unwrap_or_else(|e| e.into_inner()).as_ref().cloned()
     }
 
     /// Optional human-readable title used during `initialize`.

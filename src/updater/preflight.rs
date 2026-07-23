@@ -21,7 +21,7 @@ pub(crate) fn set_preflight_notice(notice: Option<StartupUpdateNotice>) {
 }
 
 pub(crate) fn get_preflight_notice() -> Option<StartupUpdateNotice> {
-    PREFLIGHT_NOTICE.lock().ok().and_then(|guard| guard.clone())
+    PREFLIGHT_NOTICE.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// Run a preflight update check at binary startup.

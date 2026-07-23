@@ -57,7 +57,15 @@ impl GeminiProvider {
     const HISTORY_DIRECTIVES_SECTION_HEADER: &str = "[History Directives]";
 
     pub(super) fn is_gemini_3_pro_model(model: &str) -> bool {
-        model.contains("gemini-3") && model.contains("pro") && !model.contains("flash")
+        let rest = match model.strip_prefix("gemini-") {
+            Some(r) => r,
+            None => return false,
+        };
+        let version_part = rest.split('-').next().unwrap_or("");
+        let Some(major_str) = version_part.split('.').next() else {
+            return false;
+        };
+        major_str == "3" && model.contains("pro") && !model.contains("flash")
     }
 
     /// Check if model supports context caching
@@ -94,6 +102,36 @@ impl GeminiProvider {
     /// Only Gemini 3 Flash supports these additional levels
     pub fn supports_extended_thinking(model: &str) -> bool {
         model.contains("gemini-3-flash")
+    }
+
+    /// Determine whether a Gemini model uses the latest API behavior that
+    /// deprecates sampling parameters (`temperature`, `top_p`, `top_k`) and
+    /// disallows prefilled model turns (last turn with role `"model"`).
+    ///
+    /// Affected: all `gemini-3.5+` models and all future model releases.
+    pub(super) fn uses_latest_gemini_api(model: &str) -> bool {
+        // Extract version from model name like "gemini-3.5-flash-lite" -> "3.5"
+        let rest = match model.strip_prefix("gemini-") {
+            Some(r) => r,
+            None => return false,
+        };
+        let version_part = rest.split('-').next().unwrap_or("");
+        let mut parts = version_part.splitn(2, '.');
+        let major: u32 = match parts.next().and_then(|s| s.parse().ok()) {
+            Some(m) => m,
+            None => return false,
+        };
+        if major > 3 {
+            return true;
+        }
+        if major < 3 {
+            return false;
+        }
+        // major == 3: check minor >= 5 (3.5, 3.6, and all future 3.x)
+        match parts.next().and_then(|s| s.parse::<u32>().ok()) {
+            Some(minor) => minor >= 5,
+            None => false,
+        }
     }
 
     /// Get supported thinking levels for a model
@@ -204,6 +242,11 @@ impl GeminiProvider {
                     parts,
                 });
             }
+        }
+
+        // Latest Gemini models reject prefilled model turns (last turn with role "model")
+        if Self::uses_latest_gemini_api(&request.model) && contents.last().is_some_and(|c| c.role == "model") {
+            contents.pop();
         }
 
         let tool_spec = collect_gemini_tool_spec(request.tools.as_deref().map(|v| v.as_slice()));
@@ -607,7 +650,7 @@ impl GeminiProvider {
 
         match event_type {
             "interaction.start" | "interaction.status_update" | "interaction.complete" => {
-                let interaction = interaction_object(payload);
+                let interaction = interaction_object(payload)?;
                 if let Some(id) = interaction.get("id").and_then(Value::as_str) {
                     state.interaction_id = Some(id.to_string());
                 }
@@ -1013,11 +1056,12 @@ fn collect_gemini_tool_spec(definitions: Option<&[ToolDefinition]>) -> GeminiToo
 }
 
 fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> GenerationConfig {
+    let uses_latest = GeminiProvider::uses_latest_gemini_api(&request.model);
     let mut generation_config = GenerationConfig {
         max_output_tokens: request.max_tokens,
-        temperature: request.temperature,
-        top_p: request.top_p,
-        top_k: request.top_k,
+        temperature: if uses_latest { None } else { request.temperature },
+        top_p: if uses_latest { None } else { request.top_p },
+        top_k: if uses_latest { None } else { request.top_k },
         presence_penalty: request.presence_penalty,
         frequency_penalty: request.frequency_penalty,
         stop_sequences: request.stop_sequences.clone(),
@@ -1104,7 +1148,12 @@ fn build_interaction_input(request: &LLMRequest) -> Result<InteractionInput, LLM
     } else {
         request.messages.as_ref().clone()
     };
-    let turns = build_interaction_turns(&relevant_messages, &request.messages)?;
+    let mut turns = build_interaction_turns(&relevant_messages, &request.messages)?;
+
+    // Latest Gemini models reject prefilled model turns (last turn with role "model")
+    if GeminiProvider::uses_latest_gemini_api(&request.model) && turns.last().is_some_and(|t| t.role == "model") {
+        turns.pop();
+    }
 
     if request.previous_response_id.is_none() {
         if let [turn] = turns.as_slice()
@@ -1135,8 +1184,7 @@ fn interaction_delta_messages(messages: &[Message]) -> Vec<Message> {
         .iter()
         .rposition(|message| message.role == MessageRole::Assistant)
         .map_or(0, |index| index.saturating_add(1));
-    let delta = messages[start..].to_vec();
-    if delta.is_empty() { messages.to_vec() } else { delta }
+    messages[start..].to_vec()
 }
 
 fn build_interaction_turns(messages: &[Message], full_messages: &[Message]) -> Result<Vec<InteractionTurn>, LLMError> {
@@ -1261,12 +1309,15 @@ fn interaction_result_content_array(value: &Value) -> Option<Vec<InteractionCont
     Some(content)
 }
 
-fn interaction_object(payload: &Value) -> &Map<String, Value> {
+fn interaction_object(payload: &Value) -> Result<&Map<String, Value>, LLMError> {
     payload
         .get("interaction")
         .and_then(Value::as_object)
         .or_else(|| payload.as_object())
-        .expect("stream payload should be an object")
+        .ok_or_else(|| LLMError::Provider {
+            message: "Gemini interaction stream payload is not an object".into(),
+            metadata: None,
+        })
 }
 
 fn apply_interaction_delta(

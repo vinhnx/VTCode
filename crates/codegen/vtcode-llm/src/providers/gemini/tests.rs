@@ -1227,6 +1227,100 @@ fn convert_to_gemini_request_includes_advanced_parameters() {
 }
 
 #[test]
+fn convert_to_gemini_request_strips_sampling_params_for_latest_models() {
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_3_6_FLASH.to_string(),
+        temperature: Some(0.7),
+        top_p: Some(0.9),
+        top_k: Some(40),
+        presence_penalty: Some(0.6),
+        frequency_penalty: Some(0.5),
+        stop_sequences: Some(vec!["STOP".to_string()]),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+    let config = gemini_request.generation_config.expect("generation_config should be present");
+
+    assert_eq!(config.temperature, None, "temperature should be stripped for gemini-3.6-flash");
+    assert_eq!(config.top_p, None, "top_p should be stripped for gemini-3.6-flash");
+    assert_eq!(config.top_k, None, "top_k should be stripped for gemini-3.6-flash");
+    assert_eq!(config.presence_penalty, Some(0.6), "presence_penalty should still be sent");
+    assert_eq!(config.frequency_penalty, Some(0.5), "frequency_penalty should still be sent");
+    assert_eq!(
+        config.stop_sequences.as_ref().and_then(|s| s.first().cloned()),
+        Some("STOP".to_string()),
+        "stop_sequences should still be sent"
+    );
+}
+
+#[test]
+fn convert_to_gemini_request_strips_sampling_params_for_3_5_flash_lite() {
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_3_5_FLASH_LITE.to_string(),
+        temperature: Some(0.5),
+        top_p: Some(0.8),
+        top_k: Some(30),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+    let config = gemini_request.generation_config.expect("generation_config should be present");
+
+    assert_eq!(config.temperature, None, "temperature should be stripped for gemini-3.5-flash-lite");
+    assert_eq!(config.top_p, None, "top_p should be stripped for gemini-3.5-flash-lite");
+    assert_eq!(config.top_k, None, "top_k should be stripped for gemini-3.5-flash-lite");
+}
+
+#[test]
+fn latest_model_strips_prefilled_model_turn() {
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Last message is an assistant (model) turn — should be stripped for latest models
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("hello".to_string()),
+            Message::assistant("prefilled response".to_string()),
+        ]
+        .into(),
+        model: models::google::GEMINI_3_6_FLASH.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+    assert_eq!(gemini_request.contents.len(), 1, "should strip the prefilled model turn, leaving only user message");
+    assert_eq!(gemini_request.contents[0].role, "user");
+}
+
+#[test]
+fn prefilled_turn_preserved_for_older_models() {
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Last message is an assistant (model) turn — should be preserved for older models
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("hello".to_string()),
+            Message::assistant("prefilled response".to_string()),
+        ]
+        .into(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+    assert_eq!(gemini_request.contents.len(), 2, "should preserve the prefilled model turn for older models");
+    assert_eq!(gemini_request.contents[1].role, "model");
+}
+
+#[test]
 fn convert_to_gemini_request_includes_json_mode() {
     use vtcode_config::constants::models;
 

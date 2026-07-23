@@ -184,8 +184,6 @@ pub mod lightweight_routing;
 pub mod mock_client;
 /// Model resolution, availability checks, and dynamic metadata.
 pub mod model_resolver;
-/// Optimized client with connection pooling and request deduplication.
-pub mod optimized_client;
 /// Core LLM provider trait and error types.
 pub mod provider;
 /// Shared provider utilities to eliminate duplicate code.
@@ -223,7 +221,6 @@ pub use lightweight_routing::{
     resolve_lightweight_route,
 };
 pub use model_resolver::{DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel};
-pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
     AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider, ZAIProvider,

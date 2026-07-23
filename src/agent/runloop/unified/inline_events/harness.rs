@@ -182,7 +182,7 @@ impl HarnessEventEmitter {
     /// Returns (prompt_tokens, completion_tokens, cached_tokens) from the
     /// already-computed ATIF metrics — zero clones, zero telemetry lock.
     pub(crate) fn finish_atif(&self) -> (u64, u64, u64) {
-        let state = self.inner.atif.lock().ok().and_then(|mut g| g.take());
+        let state = self.inner.atif.lock().unwrap_or_else(|e| e.into_inner()).take();
         let Some(state) = state else {
             return (0, 0, 0);
         };

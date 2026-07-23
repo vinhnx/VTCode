@@ -47,7 +47,9 @@ impl GatekeeperPolicy {
             warn_on_quarantine: config.warn_on_quarantine,
             auto_clear_quarantine: config.auto_clear_quarantine,
             auto_clear_paths,
-            cache: Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(GATEKEEPER_CACHE_MAX_ENTRIES).unwrap()))),
+            cache: Arc::new(Mutex::new(LruCache::new(
+                NonZeroUsize::new(GATEKEEPER_CACHE_MAX_ENTRIES).expect("GATEKEEPER_CACHE_MAX_ENTRIES = 1024 > 0"),
+            ))),
         }
     }
 
@@ -56,7 +58,7 @@ impl GatekeeperPolicy {
     }
 
     fn cache_entry(&self, path: &Path) -> Option<GatekeeperCacheEntry> {
-        self.cache.lock().ok().and_then(|mut cache| cache.get(path).cloned())
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).get(path).cloned()
     }
 
     fn update_cache(&self, path: PathBuf, entry: GatekeeperCacheEntry) {

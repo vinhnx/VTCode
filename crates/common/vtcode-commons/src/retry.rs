@@ -27,17 +27,19 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    pub fn new(max_attempts: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
+    pub const DEFAULT: Self = Self::from_retries(2, Duration::from_secs(1), Duration::from_secs(60), 2.0);
+
+    pub const fn new(max_attempts: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self {
-            max_attempts: max_attempts.max(1),
+            max_attempts: if max_attempts < 1 { 1 } else { max_attempts },
             initial_delay,
             max_delay,
-            multiplier: multiplier.max(1.0),
+            multiplier: if multiplier < 1.0 { 1.0 } else { multiplier },
             jitter: 0.0,
         }
     }
 
-    pub fn from_retries(max_retries: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
+    pub const fn from_retries(max_retries: u32, initial_delay: Duration, max_delay: Duration, multiplier: f64) -> Self {
         Self::new(max_retries.saturating_add(1), initial_delay, max_delay, multiplier)
     }
 

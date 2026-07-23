@@ -14,7 +14,7 @@ mod test_env_overrides {
     static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
     pub(super) fn get(key: &str) -> Option<Option<String>> {
-        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
+        OVERRIDES.lock().unwrap_or_else(|e| e.into_inner()).get(key).cloned()
     }
 
     pub(super) fn set(key: &str, value: Option<&str>) {

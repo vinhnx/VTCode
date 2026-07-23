@@ -420,7 +420,9 @@ impl AgentSessionState {
     pub fn adjust_token_count(&mut self, delta: isize) {
         if delta >= 0 {
             // `delta >= 0` is checked above, so the conversion is infallible
-            self.cached_total_tokens = self.cached_total_tokens.saturating_add(usize::try_from(delta).unwrap());
+            self.cached_total_tokens = self
+                .cached_total_tokens
+                .saturating_add(usize::try_from(delta).expect("delta >= 0 checked above"));
         } else {
             self.cached_total_tokens = self.cached_total_tokens.saturating_sub(delta.unsigned_abs());
         }

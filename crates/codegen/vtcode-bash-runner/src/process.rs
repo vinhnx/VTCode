@@ -137,7 +137,7 @@ impl ProcessHandle {
     /// Returns the exit code if the process has exited.
     #[inline]
     pub fn exit_code(&self) -> Option<i32> {
-        self.exit_code.lock().ok().and_then(|guard| *guard)
+        *self.exit_code.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// True once the stdout/stderr reader task has drained the child streams.

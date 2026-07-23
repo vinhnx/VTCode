@@ -160,7 +160,12 @@ impl WebSearchTool {
         let cache_key = format!("{max_results}::{query}");
 
         // Fast path: cache hit. Avoid the network entirely.
-        if let Some(cached) = self.state.lock().ok().and_then(|guard| guard.cache_get(&cache_key, cache_ttl)) {
+        if let Some(cached) = self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cache_get(&cache_key, cache_ttl)
+        {
             return Ok(mark_cached(cached));
         }
 
@@ -173,7 +178,11 @@ impl WebSearchTool {
             if let Some(last) = state.last_request_at {
                 let elapsed = last.elapsed();
                 if elapsed < cooldown {
-                    return Ok(cooldown_response(&query, cooldown.checked_sub(elapsed).unwrap()));
+                    // `elapsed < cooldown` is checked above, so subtraction is safe
+                    return Ok(cooldown_response(
+                        &query,
+                        cooldown.checked_sub(elapsed).expect("elapsed < cooldown checked above"),
+                    ));
                 }
             }
         }

@@ -57,7 +57,7 @@ static SESSION_HISTORY_SETTINGS: OnceLock<Mutex<SessionHistorySettings>> = OnceL
 fn session_history_settings() -> SessionHistorySettings {
     SESSION_HISTORY_SETTINGS
         .get()
-        .and_then(|settings| settings.lock().ok().map(|guard| *guard))
+        .map(|settings| *settings.lock().unwrap_or_else(|e| e.into_inner()))
         .unwrap_or_default()
 }
 

@@ -49,7 +49,11 @@ impl AsyncLineWriter {
         }
 
         // Create the file eagerly so callers can observe it immediately.
-        let _ = OpenOptions::new().create(true).append(true).open(&path);
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .with_context(|| format!("Failed to create log file: {}", path.display()))?;
 
         let (sender, receiver) = mpsc::channel(defaults::DEFAULT_TRAJECTORY_LOG_CHANNEL_CAPACITY);
 

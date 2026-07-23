@@ -67,14 +67,26 @@ impl ToolRegistry {
 
     /// Increment active PTY sessions count
     pub fn increment_active_pty_sessions(&self) {
-        if let Some(counter) = self.active_pty_sessions.read().ok().and_then(|g| g.as_ref().map(Arc::clone)) {
+        if let Some(counter) = self
+            .active_pty_sessions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(Arc::clone)
+        {
             counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     /// Decrement active PTY sessions count
     pub fn decrement_active_pty_sessions(&self) {
-        if let Some(counter) = self.active_pty_sessions.read().ok().and_then(|g| g.as_ref().map(Arc::clone)) {
+        if let Some(counter) = self
+            .active_pty_sessions
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(Arc::clone)
+        {
             counter.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         }
     }

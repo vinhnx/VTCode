@@ -110,7 +110,7 @@ fn fallback_theme() -> Theme {
 }
 
 fn plain_text_line_segments(code: &str) -> Vec<Vec<(syntect::highlighting::Style, String)>> {
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(code.lines().count() + 1);
     let mut ends_with_newline = false;
     for line in LinesWithEndings::from(code) {
         ends_with_newline = line.ends_with('\n');
@@ -296,7 +296,7 @@ fn highlight_code_to_line_segments_with_theme(
 
     let syntax = select_syntax(language);
     let mut highlighter = syntect::easy::HighlightLines::new(syntax, theme);
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(code.lines().count() + 1);
     let mut ends_with_newline = false;
 
     for line in LinesWithEndings::from(code) {

@@ -92,11 +92,12 @@ fn render_diff_content(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewS
             }
             DiffDisplayKind::Context | DiffDisplayKind::Addition | DiffDisplayKind::Deletion => {
                 let line_num_str = format!("{:>4} ", display_line.line_number.unwrap_or(0));
-                let line_type = match display_line.kind {
-                    DiffDisplayKind::Context => DiffLineType::Context,
-                    DiffDisplayKind::Addition => DiffLineType::Insert,
-                    DiffDisplayKind::Deletion => DiffLineType::Delete,
-                    DiffDisplayKind::Metadata | DiffDisplayKind::HunkHeader => unreachable!(),
+                let line_type = if display_line.kind == DiffDisplayKind::Context {
+                    DiffLineType::Context
+                } else if display_line.kind == DiffDisplayKind::Addition {
+                    DiffLineType::Insert
+                } else {
+                    DiffLineType::Delete
                 };
 
                 let gutter_style = style_gutter(line_type, style_context);

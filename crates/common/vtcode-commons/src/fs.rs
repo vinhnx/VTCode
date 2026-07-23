@@ -249,18 +249,7 @@ pub fn is_image_path(path: &Path) -> bool {
         return false;
     };
 
-    matches!(
-        extension,
-        _ if extension.eq_ignore_ascii_case("png")
-            || extension.eq_ignore_ascii_case("jpg")
-            || extension.eq_ignore_ascii_case("jpeg")
-            || extension.eq_ignore_ascii_case("gif")
-            || extension.eq_ignore_ascii_case("bmp")
-            || extension.eq_ignore_ascii_case("webp")
-            || extension.eq_ignore_ascii_case("tiff")
-            || extension.eq_ignore_ascii_case("tif")
-            || extension.eq_ignore_ascii_case("svg")
-    )
+    matches!(extension, "bmp" | "gif" | "jpeg" | "jpg" | "png" | "svg" | "tif" | "tiff" | "webp")
 }
 
 /// Check whether a string is a Windows absolute path (e.g., `C:\...` or `C:/...`).

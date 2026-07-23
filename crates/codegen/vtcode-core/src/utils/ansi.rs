@@ -36,7 +36,7 @@ pub fn apply_file_opener_config(file_opener: vtcode_config::FileOpener) {
 fn current_file_opener() -> vtcode_config::FileOpener {
     FILE_OPENER
         .get()
-        .and_then(|cell| cell.lock().ok().map(|guard| *guard))
+        .map(|cell| *cell.lock().unwrap_or_else(|e| e.into_inner()))
         .unwrap_or(vtcode_config::FileOpener::None)
 }
 

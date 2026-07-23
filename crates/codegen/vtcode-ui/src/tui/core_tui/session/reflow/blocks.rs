@@ -2,11 +2,12 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
-use super::super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_inline};
+use super::super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_ansi, ratatui_style_from_inline};
 use super::super::super::types::{InlineLinkRange, InlineMessageKind};
 use super::super::message::RenderedTranscriptLink;
+use super::super::styling::tool_inline_style_for;
 use super::super::{Session, TranscriptLine, render, text_utils};
-use super::helpers::{has_summary_prefix, is_tool_summary_line, split_tool_spans};
+use super::helpers::{has_summary_prefix, is_tool_summary_line, parse_tool_call_prefix, split_tool_spans};
 use crate::tui::config::constants::ui;
 
 impl Session {
@@ -233,11 +234,32 @@ impl Session {
             let is_summary = has_summary_prefix(&line_text);
 
             if is_summary {
-                // For tool call summaries, preserve inline colors and add padded borders.
+                // Style the tool call prefix ("• <Action>") with tool-specific ANSI color + bold.
+                let mut styled_spans = Vec::with_capacity(line_spans.len() + 1);
+                for (i, span) in line_spans.into_iter().enumerate() {
+                    if i == 0 {
+                        let text = span.content.clone().into_owned();
+                        let style = span.style;
+                        if let Some((action, prefix)) = parse_tool_call_prefix(&text) {
+                            let tool_style = tool_inline_style_for(action, &self.theme);
+                            let tool_fallback = self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground);
+                            let ansi_style = tool_style.to_ansi_style(tool_fallback);
+                            styled_spans.push(Span::styled(prefix.to_owned(), ratatui_style_from_ansi(ansi_style)));
+                            let rest = &text[prefix.len()..];
+                            if !rest.is_empty() {
+                                styled_spans.push(Span::styled(rest.to_owned(), style));
+                            }
+                        } else {
+                            styled_spans.push(Span::styled(text, style));
+                        }
+                    } else {
+                        styled_spans.push(span);
+                    }
+                }
                 lines.extend(self.wrap_block_lines(
                     summary_prefix,
                     summary_prefix,
-                    line_spans,
+                    styled_spans,
                     max_width,
                     border_style,
                 ));
@@ -338,9 +360,9 @@ impl Session {
 
         let is_start = !prev_is_pty;
 
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(line.segments.len());
 
-        let mut combined = String::new();
+        let mut combined = String::with_capacity(line.segments.iter().map(|s| s.text.len()).sum());
         for segment in &line.segments {
             combined.push_str(segment.text.as_str());
         }
@@ -357,9 +379,27 @@ impl Session {
         // the command name and arguments are visually distinct.
         let is_command_header = is_start && combined.starts_with("• Ran ");
 
-        let mut body_spans = Vec::new();
-        for segment in &line.segments {
+        let mut body_spans = Vec::with_capacity(line.segments.len() + 1);
+        for (i, segment) in line.segments.iter().enumerate() {
             let stripped_text = render::strip_ansi_codes(&segment.text);
+
+            if is_command_header && i == 0 {
+                if let Some((action, prefix)) = parse_tool_call_prefix(&stripped_text) {
+                    let tool_style = tool_inline_style_for(action, &self.theme);
+                    let tool_fallback = self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground);
+                    let ansi_style = tool_style.to_ansi_style(tool_fallback);
+                    body_spans.push(Span::styled(prefix.to_owned(), ratatui_style_from_ansi(ansi_style)));
+                    let rest = &stripped_text[prefix.len()..];
+                    if !rest.is_empty() {
+                        body_spans.push(Span::styled(
+                            rest.to_owned(),
+                            ratatui_style_from_inline(&segment.style, pty_fallback),
+                        ));
+                    }
+                    continue;
+                }
+            }
+
             let style = if is_command_header {
                 ratatui_style_from_inline(&segment.style, pty_fallback)
             } else {

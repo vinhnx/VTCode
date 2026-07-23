@@ -69,8 +69,7 @@ fn snap_split_idx_to_tool_boundaries(conversation: &[Message], mut split_idx: us
     }
     if split_idx < n
         && let Some(msg) = conversation.get(split_idx)
-        && msg.tool_calls.is_some()
-        && !msg.tool_calls.as_ref().unwrap().is_empty()
+        && msg.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
     {
         split_idx += 1;
         while split_idx < n {
@@ -121,8 +120,7 @@ fn snap_split_idx_to_tool_boundaries(conversation: &[Message], mut split_idx: us
         }
         if candidate > 0
             && let Some(msg) = conversation.get(candidate)
-            && msg.tool_calls.is_some()
-            && !msg.tool_calls.as_ref().unwrap().is_empty()
+            && msg.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
         {
             if conversation.get(candidate + 1).map(|m| m.tool_call_id.is_some()) == Some(true) {
                 split_idx = candidate;
@@ -134,8 +132,7 @@ fn snap_split_idx_to_tool_boundaries(conversation: &[Message], mut split_idx: us
             }
             if conversation
                 .get(i)
-                .map(|m| m.tool_calls.is_some() && !m.tool_calls.as_ref().unwrap().is_empty())
-                == Some(true)
+                .is_some_and(|m| m.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty()))
             {
                 split_idx = i;
             }
@@ -445,7 +442,7 @@ mod tests {
         ];
         let split = split_conversation_for_two_pass(&conv, 0.9);
         if let Some(msg) = split.prefix.last() {
-            if msg.tool_calls.is_some() && !msg.tool_calls.as_ref().unwrap().is_empty() {
+            if msg.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty()) {
                 assert!(!matches!(split.tail.first(), Some(m) if m.tool_call_id.is_some()));
             }
         }

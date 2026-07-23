@@ -150,7 +150,7 @@ impl StdioTransport {
         });
         if let Err(e) = self.send_raw(payload) {
             // Clean up the pending entry so it doesn't linger until timeout.
-            self.pending.lock().ok().map(|mut g| g.remove(&id));
+            self.pending.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
             return Err(e);
         }
 
@@ -299,7 +299,7 @@ fn spawn_reader(
             // Extract tx before releasing the lock so `tx.send` runs lock-free.
             if let Some(id) = response_id(&message) {
                 let result = extract_rpc_result(&message);
-                let tx = pending.lock().ok().and_then(|mut g| g.remove(&id));
+                let tx = pending.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
                 if let Some(tx) = tx {
                     let _ = tx.send(result);
                 }
@@ -308,7 +308,7 @@ fn spawn_reader(
 
             // Clone the handler Arc out of the lock so the lock is released
             // before the handler runs (prevents re-entrancy / call-site latency).
-            if let Some(handler) = notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
+            if let Some(handler) = notification_handler.lock().unwrap_or_else(|e| e.into_inner()).as_ref().cloned()
                 && let Err(e) = handler(message)
             {
                 tracing::warn!("stdio transport: notification handler error: {e}");

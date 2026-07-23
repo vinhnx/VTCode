@@ -22,7 +22,6 @@ use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use crate::skills::render::render_prompt_skills_section;
 use std::env;
 use std::path::Path;
-use std::sync::OnceLock;
 use tracing::warn;
 
 /// Shared Planning workflow header used by both static and incremental prompt builders.
@@ -139,15 +138,6 @@ pub const SPECIALIZED_OPERATING_PROFILE_DELTA: &str = r#"## Operating Profile
 - Treat completion language as a checkpoint, not proof; only stop when tracker state, verification, and resumable state agree.
 - End plan work with one `<proposed_plan>` block; if a path stalls, re-plan into smaller verified slices.
 - Use `AGENTS.md`, `CLAUDE.md`, and `docs/harness/ARCHITECTURAL_INVARIANTS.md` when repo-wide invariants matter."#;
-
-#[allow(dead_code)]
-static DEFAULT_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
-#[allow(dead_code)]
-static MINIMAL_SYSTEM_PROMPT: OnceLock<String> = OnceLock::new();
-#[allow(dead_code)]
-static DEFAULT_LIGHTWEIGHT_PROMPT: OnceLock<String> = OnceLock::new();
-#[allow(dead_code)]
-static DEFAULT_SPECIALIZED_PROMPT: OnceLock<String> = OnceLock::new();
 
 const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
 ## Structured Reasoning
@@ -503,17 +493,32 @@ fn apply_token_budget(
 /// knows its role (e.g., "VT Code (Build mode)" or "VT Code (Auto mode)").
 fn apply_agent_identity(prompt: &str, agent_label: &str) -> String {
     let mut result = prompt.to_string();
-
-    // Replace the title line: "# VT Code" -> "# {agent_label}"
     let old_title = PROMPT_TITLE;
-    if let Some(pos) = result.find(old_title) {
-        result.replace_range(pos..pos + old_title.len(), &format!("# {agent_label}"));
-    }
-
-    // Replace the intro line: "VT Code. Be concise and safe." -> "{agent_label}. Be concise and safe."
     let old_intro = PROMPT_INTRO;
-    if let Some(pos) = result.find(old_intro) {
+
+    let title_found = if let Some(pos) = result.find(old_title) {
+        result.replace_range(pos..pos + old_title.len(), &format!("# {agent_label}"));
+        true
+    } else {
+        warn!("Could not find prompt title '{}' to apply agent identity", old_title);
+        false
+    };
+
+    let intro_found = if let Some(pos) = result.find(old_intro) {
         result.replace_range(pos..pos + old_intro.len(), &format!("{agent_label}. Be concise and safe."));
+        true
+    } else {
+        warn!("Could not find prompt intro '{}' to apply agent identity", old_intro);
+        false
+    };
+
+    if !title_found || !intro_found {
+        warn!(
+            agent_label = %agent_label,
+            title_replaced = title_found,
+            intro_replaced = intro_found,
+            "agent identity partially applied"
+        );
     }
 
     result

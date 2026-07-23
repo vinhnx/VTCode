@@ -335,7 +335,7 @@ async fn handle_refresh_request(
     id: Value,
     params: Value,
 ) {
-    let refresh_handler = refresh_handler.lock().ok().and_then(|handler| handler.clone());
+    let refresh_handler = refresh_handler.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let Some(refresh_handler) = refresh_handler else {
         let _ = transport.respond_error_value(
             id,

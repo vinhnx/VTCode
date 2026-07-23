@@ -301,11 +301,10 @@ Persist a concrete draft and seed tracker state.
         let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         let start_tool = StartPlanningTool::new(state);
 
-        for description in [start_tool.description()] {
-            assert!(!description.contains(&internal_unified_tool_name("file")));
-            assert!(!description.contains(&internal_unified_tool_name("exec")));
-            assert!(!description.contains(&internal_unified_tool_name("search")));
-        }
+        let description = start_tool.description();
+        assert!(!description.contains(&internal_unified_tool_name("file")));
+        assert!(!description.contains(&internal_unified_tool_name("exec")));
+        assert!(!description.contains(&internal_unified_tool_name("search")));
 
         assert!(start_tool.description().contains("exec_command"));
         assert!(start_tool.description().contains("apply_patch"));

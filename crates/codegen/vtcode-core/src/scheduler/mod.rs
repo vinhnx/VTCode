@@ -42,7 +42,7 @@ mod test_env_overrides {
     static DISABLE_CRON: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 
     pub(super) fn get() -> Option<String> {
-        DISABLE_CRON.lock().ok().and_then(|value| value.clone())
+        DISABLE_CRON.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub(super) fn set(value: Option<&str>) {

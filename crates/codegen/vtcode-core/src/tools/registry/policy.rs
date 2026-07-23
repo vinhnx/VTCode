@@ -406,9 +406,9 @@ impl ToolPolicyGateway {
 
     pub async fn is_denied_in_full_auto(&self, name: &str) -> bool {
         let allowlist = self.full_auto_allowlist.lock().await;
-        if allowlist.is_some() {
+        if let Some(allowlist) = &*allowlist {
             let canonical = canonical_tool_name(name);
-            !allowlist.as_ref().unwrap().contains(canonical)
+            !allowlist.contains(canonical)
         } else {
             false
         }
@@ -430,7 +430,9 @@ impl ToolPolicyGateway {
 
         let allowlist = self.full_auto_allowlist.lock().await;
         let has_allowlist = allowlist.is_some();
-        if has_allowlist && !allowlist.as_ref().unwrap().contains(normalized) {
+        if let Some(allowlist) = &*allowlist
+            && !allowlist.contains(normalized)
+        {
             return Ok(ToolPermissionDecision::Deny);
         }
         drop(allowlist);

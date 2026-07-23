@@ -416,10 +416,11 @@ impl StreamingLifecycleBridge {
 
     fn update_reasoning_stage(&mut self, stage: String) {
         let stage_changed = self.reasoning_stage.as_deref() != Some(stage.as_str());
-        self.reasoning_stage = Some(stage);
-        if !stage_changed || !self.lifecycle.set_reasoning_stage(self.reasoning_stage.clone()) {
+        if !stage_changed || !self.lifecycle.set_reasoning_stage(Some(stage.clone())) {
+            self.reasoning_stage = Some(stage);
             return;
         }
+        self.reasoning_stage = Some(stage);
 
         if !self.lifecycle.reasoning_started() || !self.should_emit_reasoning_update(true) {
             return;

@@ -139,7 +139,7 @@ static MANAGED_PROCESSES: LazyLock<Mutex<HashMap<LocalProvider, ManagedProcess>>
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn take_managed_child(provider: LocalProvider) -> Option<Child> {
-    let mut guard = MANAGED_PROCESSES.lock().ok()?;
+    let mut guard = MANAGED_PROCESSES.lock().unwrap_or_else(|e| e.into_inner());
     guard.get_mut(&provider)?.child.take()
 }
 

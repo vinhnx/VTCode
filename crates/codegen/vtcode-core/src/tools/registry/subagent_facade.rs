@@ -11,7 +11,7 @@ impl ToolRegistry {
     }
 
     pub fn subagent_controller(&self) -> Option<Arc<SubagentController>> {
-        self.subagent_controller.read().ok().and_then(|slot| slot.clone())
+        self.subagent_controller.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn has_subagent_controller(&self) -> bool {

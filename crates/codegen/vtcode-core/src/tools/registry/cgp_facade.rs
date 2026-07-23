@@ -385,7 +385,7 @@ pub enum CgpRuntimeMode {
 
 impl ToolRegistry {
     pub(crate) fn current_cgp_mode(&self) -> Option<CgpRuntimeMode> {
-        self.cgp_runtime_mode.read().ok().and_then(|mode| *mode)
+        *self.cgp_runtime_mode.read().unwrap_or_else(|e| e.into_inner())
     }
 
     fn set_cgp_runtime_mode(&self, mode: CgpRuntimeMode) {

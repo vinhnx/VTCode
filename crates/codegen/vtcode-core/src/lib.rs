@@ -184,7 +184,6 @@ pub mod notifications;
 pub mod open_responses {
     pub use vtcode_llm::open_responses::*;
 }
-pub mod orchestrator;
 pub mod permissions;
 pub mod persistent_memory;
 pub mod planning; // Plan-mode enter/exit phrase sets (single source of truth)
@@ -297,9 +296,6 @@ pub use notifications::{
     apply_global_notification_config_from_vtcode, get_global_notification_manager, init_global_notification_manager,
     init_global_notification_manager_with_config, notify_command_failure, notify_error, notify_human_in_the_loop,
     notify_tool_failure, notify_tool_success, send_global_notification,
-};
-pub use orchestrator::{
-    DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork, WorkExecutor,
 };
 pub use pods::*;
 pub use prompts::SystemPromptReport;

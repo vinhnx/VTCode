@@ -27,7 +27,7 @@ pub fn normalize_tool_name(tool_name: &str) -> &'static str {
         "list" | "ls" | "dir" | tools::LIST_FILES => "list",
         "read" | "cat" | "file" | tools::READ_FILE => "read",
         "write" | "edit" | "save" | "insert" | tools::EDIT_FILE => "write",
-        "run" | "command" | "bash" | "sh" => "run",
+        "run" | "command" | "bash" | "sh" | "ran" => "run",
         _ => "other",
     }
 }

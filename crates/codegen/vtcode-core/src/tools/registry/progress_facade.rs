@@ -23,7 +23,7 @@ impl ToolRegistry {
 
     /// Get the current progress callback if set
     pub fn progress_callback(&self) -> Option<ToolProgressCallback> {
-        self.progress_callback.read().ok().and_then(|g| g.clone())
+        self.progress_callback.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 

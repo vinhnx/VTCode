@@ -107,7 +107,7 @@ impl ConfigWatcher {
             tracing::warn!("Failed to reload config: {}", err);
         }
 
-        self.current_config.lock().ok().and_then(|current| current.clone())
+        self.current_config.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     async fn should_reload(&self) -> bool {

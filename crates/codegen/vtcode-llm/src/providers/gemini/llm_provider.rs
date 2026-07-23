@@ -133,7 +133,8 @@ impl LLMProvider for GeminiProvider {
                         buf.extend_from_slice(decoder.push(&chunk).as_bytes());
 
                         while let Some((split_idx, delimiter_len)) = find_sse_boundary_bytes(&buf, offset) {
-                            let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
+                            let event = std::str::from_utf8(&buf[offset..split_idx])
+                                .map_err(|e| StreamAssemblyError::InvalidPayload(format!("non-utf-8 stream data: {e}")).into_llm_error("Gemini"))?;
                             offset = split_idx + delimiter_len;
 
                             let Some(data_payload) = extract_data_payload(event) else {
@@ -289,6 +290,18 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+        if GeminiProvider::uses_latest_gemini_api(&request.model) {
+            if request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some() {
+                tracing::warn!(
+                    model = %request.model,
+                    temperature = ?request.temperature,
+                    top_p = ?request.top_p,
+                    top_k = ?request.top_k,
+                    "Sampling parameters (temperature, top_p, top_k) are deprecated for this Gemini model and will be ignored by the API"
+                );
+            }
+        }
+
         if request.previous_response_id.is_some() && request.response_store == Some(false) {
             let formatted_error = error_display::format_llm_error(
                 "Gemini",

@@ -45,6 +45,17 @@ pub(super) fn has_summary_prefix(text: &str) -> bool {
     stripped.starts_with("• ") || stripped.starts_with("  └ ") || stripped.starts_with("  │ ")
 }
 
+pub(super) fn parse_tool_call_prefix(text: &str) -> Option<(&str, &str)> {
+    let rest = text.strip_prefix("• ")?;
+    let verb_end = rest.find(|c: char| c.is_whitespace()).unwrap_or(rest.len());
+    if verb_end == 0 {
+        return None;
+    }
+    let verb = &rest[..verb_end];
+    let prefix_len = "• ".len() + verb.len();
+    Some((verb, &text[..prefix_len]))
+}
+
 pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {
     let text: String = message.segments.iter().map(|segment| segment.text.as_str()).collect();
     has_summary_prefix(&text)
@@ -123,8 +134,8 @@ fn numbered_code_gutter_prefix(text: &str) -> Option<String> {
 }
 
 pub(super) fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'static>>> {
-    let mut lines: Vec<Vec<Span<'static>>> = Vec::new();
-    let mut current: Vec<Span<'static>> = Vec::new();
+    let mut lines: Vec<Vec<Span<'static>>> = Vec::with_capacity(spans.len());
+    let mut current: Vec<Span<'static>> = Vec::with_capacity(spans.len());
 
     for span in spans {
         let style = span.style;

@@ -431,7 +431,7 @@ struct ShellCommand {
 
 impl ShellCommand {
     fn new(shell: ShellKind) -> Self {
-        Self { shell, parts: Vec::with_capacity(6) }
+        Self { shell, parts: Vec::new() }
     }
 
     /// Append the command verb (first token).

@@ -628,7 +628,7 @@ impl ToolExecutionHistory {
         mode: ReplayMode,
         mut matches: impl FnMut(&ToolExecutionRecord) -> Option<()>,
     ) -> Option<Value> {
-        let records = self.records.read().ok()?;
+        let records = self.records.read().unwrap_or_else(|e| e.into_inner());
         let now = SystemTime::now();
         let mut later_mutated_paths = Vec::new();
         let mut later_pathless_mutation = false;
@@ -784,7 +784,7 @@ impl ToolExecutionHistory {
     /// Returns `(next_offset, chunk_limit)` when the recent call indicates more chunks are
     /// available (`spool_chunked=true`, `has_more=true`).
     pub fn find_recent_read_file_spool_progress(&self, path: &str, max_age: Duration) -> Option<(usize, usize)> {
-        let records = self.records.read().ok()?;
+        let records = self.records.read().unwrap_or_else(|e| e.into_inner());
         let now = SystemTime::now();
         let expected_path = path.trim();
 
@@ -833,7 +833,7 @@ impl ToolExecutionHistory {
 
     /// Total number of execution records currently stored.
     pub fn len(&self) -> usize {
-        self.records.read().ok().map(|r| r.len()).unwrap_or(0)
+        self.records.read().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Whether no execution records are currently stored.

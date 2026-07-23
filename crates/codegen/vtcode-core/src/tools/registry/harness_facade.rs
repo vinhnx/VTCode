@@ -40,7 +40,7 @@ impl ToolRegistry {
 
     /// Return the shared per-tool circuit breaker when configured.
     pub fn shared_circuit_breaker(&self) -> Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>> {
-        self.shared_circuit_breaker.read().ok().and_then(|g| g.clone())
+        self.shared_circuit_breaker.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Execute a harness-owned verification command through the same exec/sandbox

@@ -48,7 +48,7 @@ impl StringId {
 pub struct StringInterner {
     arena: Vec<u8>,
     lookup: U64NoHashMap<SmallVec<[StringId; 1]>>,
-    offsets: Vec<(u32, u16)>,
+    offsets: Vec<(u32, u32)>,
 }
 
 impl StringInterner {
@@ -81,7 +81,7 @@ impl StringInterner {
         }
 
         let start = self.arena.len() as u32;
-        let len = s.len() as u16;
+        let len = s.len() as u32;
         self.arena.extend_from_slice(s);
         let id = StringId::new(self.offsets.len() as u32);
         self.offsets.push((start, len));
@@ -116,7 +116,7 @@ impl StringInterner {
 
     /// Get the raw bytes for a StringId.
     pub fn get_bytes(&self, id: StringId) -> Option<&[u8]> {
-        let (start, len) = *self.offsets.get(id.0 as usize)?;
+        let (start, len) = self.offsets[id.0 as usize];
         self.arena.get(start as usize..(start as usize + len as usize))
     }
 

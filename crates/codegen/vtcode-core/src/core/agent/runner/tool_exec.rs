@@ -343,7 +343,6 @@ impl AgentRunner {
             );
             return Ok(RunnerCallAdmission::Rejected);
         }
-        let args_for_error = args.clone();
         let prepared = match self.admit_tool_call(&requested_name, args, &mut runtime.state) {
             Ok(prepared) => prepared,
             Err(err) => {
@@ -353,7 +352,7 @@ impl AgentRunner {
                     agent_prefix,
                     &requested_name,
                     call.id.as_str(),
-                    Some(&args_for_error),
+                    None,
                     &err,
                     is_gemini,
                     "Tool admission failed",

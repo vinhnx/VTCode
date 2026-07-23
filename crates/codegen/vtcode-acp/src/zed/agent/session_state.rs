@@ -132,7 +132,7 @@ impl ZedAgent {
     }
 
     pub(crate) fn session_handle(&self, session_id: &acp::SessionId) -> Option<SessionHandle> {
-        self.sessions.lock().ok().and_then(|guard| guard.get(session_id).cloned())
+        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).get(session_id).cloned()
     }
 
     pub(super) fn push_message(&self, session: &SessionHandle, message: Message) {

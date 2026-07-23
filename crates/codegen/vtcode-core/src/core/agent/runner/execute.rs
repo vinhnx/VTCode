@@ -1045,9 +1045,12 @@ impl AgentRunner {
 
                 // Refresh tool definitions if the catalog was mutated during tool
                 // execution (e.g. tools.load / tools.unload / skill activation).
-                let _ = self
+                if self
                     .refresh_runtime_prompt_bundle_if_catalog_changed(&mut prompt_bundle, is_simple_task)
-                    .await?;
+                    .await?
+                {
+                    tracing::debug!("runtime prompt bundle refreshed after tool catalog mutation");
+                }
 
                 // --- Emit tool latency events ---
                 if !runtime.state.turn_tool_latencies.is_empty() {

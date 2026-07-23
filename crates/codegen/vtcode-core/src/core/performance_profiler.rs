@@ -90,6 +90,9 @@ pub struct ResourceMonitor {
 
     /// Whether monitoring is active
     is_monitoring: Arc<RwLock<bool>>,
+
+    /// Handle to the background monitoring task, cancelled on drop.
+    monitor_task: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl PerformanceProfiler {
@@ -288,6 +291,14 @@ pub struct ComparisonReport {
     pub is_improvement: bool,
 }
 
+impl Drop for ResourceMonitor {
+    fn drop(&mut self) {
+        if let Some(handle) = self.monitor_task.try_lock().ok().and_then(|mut h| h.take()) {
+            handle.abort();
+        }
+    }
+}
+
 impl ResourceMonitor {
     /// Create a new resource monitor with the specified polling interval.
     pub fn new(monitor_interval: Duration) -> Self {
@@ -295,6 +306,7 @@ impl ResourceMonitor {
             current_metrics: Arc::new(RwLock::new(ResourceMetrics::default())),
             monitor_interval,
             is_monitoring: Arc::new(RwLock::new(false)),
+            monitor_task: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -311,7 +323,7 @@ impl ResourceMonitor {
         let is_monitoring_flag = Arc::clone(&self.is_monitoring);
         let interval = self.monitor_interval;
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
 
             while *is_monitoring_flag.read().await {
@@ -321,6 +333,8 @@ impl ResourceMonitor {
                 *current_metrics.write().await = metrics;
             }
         });
+
+        *self.monitor_task.lock().await = Some(handle);
 
         Ok(())
     }

@@ -128,6 +128,6 @@ impl CachedDynamicModelStore {
 }
 
 fn dynamic_model_cache_path() -> Option<PathBuf> {
-    let manager = get_dot_manager().ok()?.lock().ok()?.clone();
+    let manager = get_dot_manager().ok()?.lock().unwrap_or_else(|e| e.into_inner()).clone();
     Some(manager.cache_dir("models").join(DYNAMIC_MODEL_CACHE_FILENAME))
 }

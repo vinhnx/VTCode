@@ -70,7 +70,7 @@ impl Session {
             previous_theme.pty_body.as_ref(),
         ];
 
-        let mut changed_indices = Vec::new();
+        let mut changed_indices = Vec::with_capacity(self.lines.len());
         for (line_index, line) in self.lines.iter_mut().enumerate() {
             match line.kind {
                 InlineMessageKind::Tool | InlineMessageKind::Pty => continue,

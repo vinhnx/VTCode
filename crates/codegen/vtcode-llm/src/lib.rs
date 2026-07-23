@@ -14,7 +14,6 @@ pub mod factory_types;
 pub mod http_client;
 pub mod model_resolver;
 pub mod open_responses;
-pub mod optimized_client;
 pub mod provider;
 pub mod provider_base;
 pub mod provider_config_types;
@@ -35,7 +34,6 @@ pub use config_adapter::{
 };
 pub use factory_types::{ProviderConfig, infer_provider_from_model};
 pub use model_resolver::{DynamicModelMeta, DynamicModelRef, ModelAvailability, ModelResolver, ResolvedModel};
-pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedResponse};
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use provider_config_types::ProviderConfig as ProviderConfigData;
 pub use tool_bridge::{

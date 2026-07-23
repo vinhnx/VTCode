@@ -318,13 +318,7 @@ pub fn decision_for_vtcode_error(
     tool_name: Option<&str>,
     policy_override: Option<&RetryPolicy>,
 ) -> RetryDecision {
-    let owned_policy;
-    let policy = if let Some(policy) = policy_override {
-        policy
-    } else {
-        owned_policy = RetryPolicy::default();
-        &owned_policy
-    };
+    let policy = policy_override.unwrap_or(&RetryPolicy::DEFAULT);
     policy.decision_for_vtcode_error(error, attempt_index, tool_name)
 }
 
@@ -334,13 +328,7 @@ pub fn decision_for_anyhow_error(
     tool_name: Option<&str>,
     policy_override: Option<&RetryPolicy>,
 ) -> RetryDecision {
-    let owned_policy;
-    let policy = if let Some(policy) = policy_override {
-        policy
-    } else {
-        owned_policy = RetryPolicy::default();
-        &owned_policy
-    };
+    let policy = policy_override.unwrap_or(&RetryPolicy::DEFAULT);
     policy.decision_for_anyhow(error, attempt_index, tool_name)
 }
 

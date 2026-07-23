@@ -149,7 +149,7 @@ pub async fn resolve_local_model(
 
 async fn cached_models(provider: LocalProvider, base_url: Option<&str>) -> Option<Vec<String>> {
     {
-        let guard = READINESS_CACHE.lock().ok()?;
+        let guard = READINESS_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = guard.get(&provider)
             && entry.verified_at.elapsed() < READINESS_CACHE_TTL
         {
