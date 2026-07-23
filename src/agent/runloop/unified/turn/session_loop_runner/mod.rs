@@ -3,6 +3,7 @@ mod execution_policy;
 mod metrics;
 mod plan_seed;
 mod support;
+mod task_tracker_auto_create;
 
 use super::*;
 use crate::agent::runloop::git::{compute_session_code_change_delta, normalize_workspace_path};
@@ -32,6 +33,7 @@ use support::{
     latest_assistant_result_text, live_reload_preserves_session_config, prepare_resume_bootstrap_without_archive,
     prompt_startup_planning_workflow, remove_transient_system_notes, take_pending_resumed_user_prompt,
 };
+use task_tracker_auto_create::auto_create_task_tracker_from_plan;
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::utils::session_archive;
@@ -827,6 +829,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .messages_mut()
                         .push(vtcode_core::llm::provider::Message::system(execution_directive));
                     runtime.queue_follow_up_input(PLAN_APPROVED_EXECUTION_INPUT.to_string());
+                }
+                if plan_approved_execution_pending {
+                    let _ = auto_create_task_tracker_from_plan(&tool_registry, &mut renderer).await;
                 }
                 if let Err(err) = crate::agent::runloop::unified::turn::compaction::refresh_session_memory_envelope(
                     config.workspace.as_path(),

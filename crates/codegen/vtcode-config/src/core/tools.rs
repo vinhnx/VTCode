@@ -10,9 +10,12 @@ use crate::core::plugins::PluginRuntimeConfig;
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolProfile {
-    /// Codex-compatible baseline: exec_command, write_stdin, and apply_patch.
+    /// VT Code standard baseline: exec_command, write_stdin, and apply_patch.
     #[default]
-    CodexDefault,
+    #[serde(rename = "vt_code")]
+    #[serde(alias = "codex_default")]
+    #[cfg_attr(feature = "schema", schemars(rename = "vt_code"))]
+    VtCode,
     /// VTCode specialised tools, including code_search and eligible dynamic tools.
     #[serde(rename = "advanced_vtcode")]
     #[cfg_attr(feature = "schema", schemars(rename = "advanced_vtcode"))]
@@ -434,8 +437,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tools_config_defaults_to_codex_profile() {
-        assert_eq!(ToolsConfig::default().profile, ToolProfile::CodexDefault);
+    fn tools_config_defaults_to_vt_code_profile() {
+        assert_eq!(ToolsConfig::default().profile, ToolProfile::VtCode);
+    }
+
+    #[test]
+    fn vt_code_profile_round_trips_through_toml() {
+        let config: ToolsConfig = toml::from_str("profile = \"vt_code\"").expect("vt_code tool profile should parse");
+        assert_eq!(config.profile, ToolProfile::VtCode);
+
+        let serialised = toml::to_string(&config).expect("tools config should serialise");
+        assert!(serialised.contains("profile = \"vt_code\""));
+
+        let round_tripped: ToolsConfig = toml::from_str(&serialised).expect("serialised tools config should parse");
+        assert_eq!(round_tripped.profile, ToolProfile::VtCode);
     }
 
     #[test]
@@ -468,7 +483,7 @@ mod tests {
             .to_string();
 
         assert!(error.contains("unknown variant `experimental`"), "{error}");
-        assert!(error.contains("`codex_default`"), "{error}");
+        assert!(error.contains("`vt_code`"), "{error}");
         assert!(error.contains("`advanced_vtcode`"), "{error}");
     }
 
@@ -480,7 +495,7 @@ mod tests {
         let schema_text = serde_json::to_string(&schema_json).expect("schema should stringify");
 
         assert!(schema_json["properties"].get("profile").is_some());
-        assert!(schema_text.contains("codex_default"));
+        assert!(schema_text.contains("vt_code"));
         assert!(schema_text.contains("advanced_vtcode"));
     }
 
