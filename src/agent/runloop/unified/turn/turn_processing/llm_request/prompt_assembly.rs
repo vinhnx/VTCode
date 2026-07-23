@@ -11,6 +11,7 @@
 //! this module's output is used to build a wire request.
 
 use std::fmt::Write as _;
+use std::sync::Arc;
 
 use anyhow::Result;
 use dirs::home_dir;
@@ -215,23 +216,20 @@ fn append_active_primary_agent_skills(
         return;
     };
 
-    let mut lines = Vec::with_capacity(2 + agent.skills.len());
-    lines.push("## Active Primary Agent Skills".to_string());
-    lines.push("These skills are scoped to the active primary agent for this request.".to_string());
+    let _ = writeln!(system_prompt, "\n## Active Primary Agent Skills");
+    let _ = writeln!(system_prompt, "These skills are scoped to the active primary agent for this request.");
 
     if prompt_context.available_skill_metadata.is_empty() {
         for skill in &agent.skills {
-            lines.push(format!("- {skill}"));
+            let _ = writeln!(system_prompt, "- {skill}");
         }
     } else {
         let mut skills: Vec<_> = prompt_context.available_skill_metadata.iter().collect();
         skills.sort_by(|left, right| left.name.cmp(&right.name));
         for skill in skills {
-            lines.push(format!("- {}: {}", skill.name, skill.description));
+            let _ = writeln!(system_prompt, "- {}: {}", skill.name, skill.description);
         }
     }
-
-    let _ = writeln!(system_prompt, "\n{}", lines.join("\n"));
 }
 
 fn validate_prompt_output_alignment(
@@ -251,13 +249,13 @@ async fn validate_prompt_output_with_rebuild(
     turn: &TurnRequestSnapshot,
     prompt_output: PromptAssemblyOutput,
 ) -> Result<PromptAssemblyOutput> {
-    let rebuild_turn = turn.clone();
+    let rebuild_turn = Arc::new(turn.clone());
     prompt_alignment::rebuild_once_on_alignment_mismatch(
         ctx,
         prompt_output,
         move |ctx| {
-            let turn = rebuild_turn.clone();
-            Box::pin(async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &turn }).await })
+            let arc_for_call = rebuild_turn.clone();
+            Box::pin(async move { build_prompt_output(ctx, PromptAssemblyInput { turn: &arc_for_call }).await })
         },
         |_, prompt_output| validate_prompt_output_alignment(prompt_output, turn),
         "prompt/catalog alignment mismatch during unified request assembly; rebuilding prompt",
@@ -274,46 +272,43 @@ pub(super) async fn render_primary_agent_runtime_context(
     reasoning_effort: Option<vtcode_core::config::types::ReasoningEffortLevel>,
     agent_prompt_context: Option<&PromptContext>,
 ) -> String {
-    // Upper bound on the number of lines pushed below (two static headers
-    // plus a bounded set of conditional runtime-state lines).
-    let mut lines = Vec::with_capacity(16);
-    lines.push("## Active Primary Agent Runtime State".to_string());
-    lines.push(format!("- Active agent: {}", agent.display_name));
-    lines.push(format!("- Spec name: {}", agent.identity.name));
-    lines.push(format!("- Request model: {}", turn_snapshot.active_model));
+    let mut buf = String::with_capacity(1024);
+    let _ = writeln!(buf, "## Active Primary Agent Runtime State");
+    let _ = writeln!(buf, "- Active agent: {}", agent.display_name);
+    let _ = writeln!(buf, "- Spec name: {}", agent.identity.name);
+    let _ = writeln!(buf, "- Request model: {}", turn_snapshot.active_model);
     if let Some(model) = agent
         .model
         .as_deref()
         .map(str::trim)
         .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("inherit"))
     {
-        lines.push(format!("- Agent model: {model}"));
+        let _ = writeln!(buf, "- Agent model: {model}");
     }
     if let Some(effort) = reasoning_effort {
-        lines.push(format!("- Request reasoning effort: {}", effort.as_str()));
+        let _ = writeln!(buf, "- Request reasoning effort: {}", effort.as_str());
     }
     if let Some(raw_effort) = agent.reasoning_effort {
-        lines.push(format!("- Agent reasoning effort: {}", raw_effort.as_str()));
+        let _ = writeln!(buf, "- Agent reasoning effort: {}", raw_effort.as_str());
     }
-    lines.push(format!(
+    let _ = writeln!(
+        buf,
         "- Session state: planning_workflow={}, auto_permission={}, full_auto={}",
         turn_snapshot.planning_active, turn_snapshot.auto_permission, turn_snapshot.full_auto
-    ));
-    lines.push(format!(
-        "- Active primary permission default: {}",
-        permission_default_label(agent.permissions.default)
-    ));
-    lines.push(format!("- Effective request tools: {}", render_tool_names(tool_snapshot)));
+    );
+    let _ =
+        writeln!(buf, "- Active primary permission default: {}", permission_default_label(agent.permissions.default));
+    let _ = writeln!(buf, "- Effective request tools: {}", render_tool_names(tool_snapshot));
     if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
-        lines.push(format!("- Primary-agent tool allow-list: {}", tools.join(", ")));
+        let _ = writeln!(buf, "- Primary-agent tool allow-list: {}", tools.join(", "));
     }
     if !agent.disallowed_tools.is_empty() {
-        lines.push(format!("- Primary-agent disallowed tools: {}", agent.disallowed_tools.join(", ")));
+        let _ = writeln!(buf, "- Primary-agent disallowed tools: {}", agent.disallowed_tools.join(", "));
     }
     if !agent.skills.is_empty() {
         if let Some(prompt_context) = agent_prompt_context {
             if prompt_context.available_skill_metadata.is_empty() {
-                lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
+                let _ = writeln!(buf, "- Active primary skills: {}", agent.skills.join(", "));
             } else {
                 let mut names = prompt_context
                     .available_skill_metadata
@@ -321,25 +316,25 @@ pub(super) async fn render_primary_agent_runtime_context(
                     .map(|skill| skill.name.as_str())
                     .collect::<Vec<_>>();
                 names.sort_unstable();
-                lines.push(format!("- Active primary skills: {}", names.join(", ")));
+                let _ = writeln!(buf, "- Active primary skills: {}", names.join(", "));
             }
         } else {
-            lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
+            let _ = writeln!(buf, "- Active primary skills: {}", agent.skills.join(", "));
         }
     }
     if let Some(cfg) = ctx.vt_cfg
         && cfg.agent.include_temporal_context
     {
-        lines.push(generate_temporal_context(cfg.agent.temporal_context_use_utc).trim().to_string());
+        let _ = writeln!(buf, "{}", generate_temporal_context(cfg.agent.temporal_context_use_utc).trim());
     }
 
-    lines.push("### Instructions".to_string());
-    lines.push(agent.instructions.trim().to_string());
+    let _ = writeln!(buf, "### Instructions");
+    let _ = writeln!(buf, "{}", agent.instructions.trim());
     if let Some(memory_appendix) = active_primary_agent_memory_appendix(ctx, agent) {
-        lines.push("### Memory Appendix".to_string());
-        lines.push(memory_appendix);
+        let _ = writeln!(buf, "### Memory Appendix");
+        let _ = writeln!(buf, "{memory_appendix}");
     }
-    lines.join("\n")
+    buf
 }
 
 fn active_primary_agent_memory_appendix(ctx: &TurnProcessingContext<'_>, agent: &ActivePrimaryAgent) -> Option<String> {

@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor as ClapAnsiColor, Effects as ClapEffects};
 use clap::{ColorChoice as CliColorChoice, CommandFactory};
+use std::time::Instant;
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::Cli;
 

@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::fmt::Write;
 use vtcode_core::tools::registry::ToolExecutionError;
 
 /// Result of a tool execution
@@ -181,20 +182,37 @@ impl ToolBatchOutcome {
         if s.succeeded == s.total {
             return format!("all {} tools succeeded", s.total);
         }
-        let mut parts = Vec::new();
+        let mut buf = String::with_capacity(64);
+        let mut first = true;
         if s.succeeded > 0 {
-            parts.push(format!("{} succeeded", s.succeeded));
+            if !first {
+                buf.push_str(", ");
+            }
+            let _ = write!(buf, "{} succeeded", s.succeeded);
+            first = false;
         }
         if s.failed > 0 {
-            parts.push(format!("{} failed", s.failed));
+            if !first {
+                buf.push_str(", ");
+            }
+            let _ = write!(buf, "{} failed", s.failed);
+            first = false;
         }
         if s.timed_out > 0 {
-            parts.push(format!("{} timed out", s.timed_out));
+            if !first {
+                buf.push_str(", ");
+            }
+            let _ = write!(buf, "{} timed out", s.timed_out);
+            first = false;
         }
         if s.cancelled > 0 {
-            parts.push(format!("{} cancelled", s.cancelled));
+            if !first {
+                buf.push_str(", ");
+            }
+            let _ = write!(buf, "{} cancelled", s.cancelled);
         }
-        format!("{}/{} tools: {}", s.total, s.total, parts.join(", "))
+        let _ = write!(buf, " ({}/{} tools)", s.total, s.total);
+        buf
     }
 }
 

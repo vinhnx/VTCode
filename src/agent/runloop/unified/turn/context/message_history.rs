@@ -84,14 +84,18 @@ pub(super) fn should_suppress_redundant_diff_recap(history: &[uni::Message], ass
 
 fn is_redundant_diff_recap_text(text: &str) -> bool {
     let trimmed = text.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    lower.starts_with("diff for ")
-        || lower.starts_with("the diff shows")
-        || lower.starts_with("changes in ")
-        || lower.starts_with("```diff")
-        || lower.starts_with("diff preview changes")
-        || lower.contains("\n**diff preview changes**")
+    starts_with_ignore_case(trimmed, "diff for ")
+        || starts_with_ignore_case(trimmed, "the diff shows")
+        || starts_with_ignore_case(trimmed, "changes in ")
+        || trimmed.starts_with("```diff")
+        || starts_with_ignore_case(trimmed, "diff preview changes")
+        || trimmed.contains("\n**diff preview changes**")
         || (trimmed.contains("```") && is_diff_like_fenced_recap(trimmed))
+}
+
+#[inline]
+fn starts_with_ignore_case(s: &str, prefix: &str) -> bool {
+    s.get(..prefix.len()).map(|head| head.eq_ignore_ascii_case(prefix)) == Some(true)
 }
 
 fn is_diff_like_fenced_recap(text: &str) -> bool {
