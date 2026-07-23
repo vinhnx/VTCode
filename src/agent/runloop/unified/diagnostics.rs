@@ -538,6 +538,7 @@ fn api_key_env_hint(provider: &str) -> String {
         "minimax" => "MINIMAX_API_KEY".to_string(),
         "huggingface" => "HF_TOKEN".to_string(),
         "ollama" => "OLLAMA_API_KEY".to_string(),
+        "ollama-cloud" => "OLLAMA_API_KEY".to_string(),
         "lmstudio" => "LMSTUDIO_API_KEY".to_string(),
         "llamacpp" => "LLAMACPP_API_KEY".to_string(),
         other => format!("{}_API_KEY", other.to_ascii_uppercase()),

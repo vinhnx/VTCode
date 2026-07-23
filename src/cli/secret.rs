@@ -378,6 +378,7 @@ fn secret_provider_to_provider(p: SecretProvider) -> Provider {
         SecretProvider::Evolink => Provider::Evolink,
         SecretProvider::Poolside => Provider::Poolside,
         SecretProvider::Ollama => Provider::Ollama,
+        SecretProvider::OllamaCloud => Provider::OllamaCloud,
         SecretProvider::LMStudio => Provider::LmStudio,
         SecretProvider::Copilot => Provider::Copilot,
     }

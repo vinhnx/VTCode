@@ -78,6 +78,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::DeepSeek => "deepseek",
         Provider::OpenRouter => "openrouter",
         Provider::Ollama => "ollama",
+        Provider::OllamaCloud => "ollama-cloud",
         Provider::LmStudio => "lmstudio",
         Provider::LlamaCpp => "llamacpp",
         Provider::Moonshot => "moonshot",

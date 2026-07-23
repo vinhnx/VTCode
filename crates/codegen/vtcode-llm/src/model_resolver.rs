@@ -327,20 +327,22 @@ fn provider_precedence(provider: Provider) -> usize {
         Provider::HuggingFace => 9,
         Provider::Copilot => 10,
         Provider::Ollama => 11,
-        Provider::LmStudio => 12,
-        Provider::LlamaCpp => 13,
-        Provider::OpenCodeZen => 14,
-        Provider::OpenCodeGo => 15,
-        Provider::MiMo => 16,
-        Provider::Qwen => 17,
-        Provider::StepFun => 18,
-        Provider::Evolink => 19,
-        Provider::Poolside => 20,
+        Provider::OllamaCloud => 12,
+        Provider::LmStudio => 13,
+        Provider::LlamaCpp => 14,
+        Provider::OpenCodeZen => 15,
+        Provider::OpenCodeGo => 16,
+        Provider::MiMo => 17,
+        Provider::Qwen => 18,
+        Provider::StepFun => 19,
+        Provider::Evolink => 20,
+        Provider::Poolside => 21,
     }
 }
 
 fn local_model_requires_remote_auth(provider: Provider, model: &str) -> bool {
-    provider == Provider::Ollama && (model.contains(":cloud") || model.contains("-cloud"))
+    provider == Provider::OllamaCloud
+        || (provider == Provider::Ollama && (model.contains(":cloud") || model.contains("-cloud")))
 }
 
 fn has_env_value(env_key: &str) -> bool {

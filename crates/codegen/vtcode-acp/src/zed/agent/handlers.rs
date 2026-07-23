@@ -209,6 +209,7 @@ fn env_api_keys() -> Vec<acp::AuthEnvVar> {
         ("MISTRAL_API_KEY", "Mistral", false),
         ("GOOGLE_API_KEY", "Google (alt)", true),
         ("OLLAMA_API_KEY", "Ollama", true),
+        ("OLLAMA_API_KEY", "Ollama Cloud", false),
         ("LMSTUDIO_API_KEY", "LM Studio", true),
     ];
     ENTRIES

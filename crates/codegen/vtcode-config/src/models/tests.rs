@@ -90,7 +90,7 @@ fn test_model_providers() {
     assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
     assert_eq!(ModelId::OpenCodeGoMinimaxM27.provider(), Provider::OpenCodeGo);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
-    assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
+    assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::OllamaCloud);
     assert_eq!(ModelId::OpenRouterAnthropicClaudeSonnet46.provider(), Provider::OpenRouter);
 
     for entry in openrouter_generated::ENTRIES {
@@ -243,13 +243,15 @@ fn test_models_for_provider() {
 
     let ollama_models = ModelId::models_for_provider(Provider::Ollama);
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
-    assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4FlashCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaDeepseekV4ProCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM27Cloud));
-    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM3Cloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGlm51Cloud));
+
+    let ollama_cloud_models = ModelId::models_for_provider(Provider::OllamaCloud);
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss20bCloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss120bCloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaDeepseekV4FlashCloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaDeepseekV4ProCloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM27Cloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM3Cloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaGlm51Cloud));
 
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
     assert!(hf_models.contains(&ModelId::HuggingFaceGlm51ZaiOrg));
@@ -259,7 +261,7 @@ fn test_models_for_provider() {
 fn test_ollama_cloud_models() {
     use crate::constants::models;
 
-    // Test parsing of new Ollama cloud models
+    // Test parsing of Ollama cloud models
     let model_pairs = vec![
         (ModelId::OllamaGptOss20bCloud, models::ollama::GPT_OSS_20B_CLOUD),
         (ModelId::OllamaGptOss120bCloud, models::ollama::GPT_OSS_120B_CLOUD),
@@ -268,12 +270,14 @@ fn test_ollama_cloud_models() {
         (ModelId::OllamaMinimaxM27Cloud, models::ollama::MINIMAX_M27_CLOUD),
         (ModelId::OllamaMinimaxM3Cloud, models::ollama::MINIMAX_M3_CLOUD),
         (ModelId::OllamaGlm51Cloud, models::ollama::GLM_5_1_CLOUD),
+        (ModelId::OllamaKimiK26Cloud, models::ollama::KIMI_K2_6_CLOUD),
+        (ModelId::OllamaKimiK27CodeCloud, models::ollama::KIMI_K2_7_CODE_CLOUD),
     ];
 
     for (model_id, expected_str) in model_pairs {
         assert_eq!(model_id.as_str(), expected_str);
         assert_eq!(ModelId::from_str(expected_str).unwrap(), model_id);
-        assert_eq!(model_id.provider(), Provider::Ollama);
+        assert_eq!(model_id.provider(), Provider::OllamaCloud);
 
         // Verify display names are not empty
         assert!(!model_id.display_name().is_empty());

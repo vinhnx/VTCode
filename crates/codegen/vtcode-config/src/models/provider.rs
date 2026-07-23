@@ -41,6 +41,7 @@ impl ProviderModelSupport for Provider {
                 models::openrouter::REASONING_MODELS.contains(&model)
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
+            Provider::OllamaCloud => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => models::lmstudio::REASONING_MODELS.contains(&model),
             Provider::LlamaCpp => models::llamacpp::REASONING_MODELS.contains(&model),
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),

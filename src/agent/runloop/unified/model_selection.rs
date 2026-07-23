@@ -301,6 +301,7 @@ async fn resolve_runtime_api_key(
 ) -> Result<(String, Option<vtcode_config::auth::OpenAIChatGptAuthHandle>)> {
     if let Some(key) = selection.api_key.as_ref() {
         write_workspace_env_value(workspace, &selection.env_key, key)?;
+        vtcode_commons::env_lock::set_var(&selection.env_key, key);
         return Ok((key.clone(), None));
     }
 

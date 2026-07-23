@@ -206,6 +206,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::Minimax => presets::minimax_presets(),
         Provider::OpenRouter => presets::openrouter_presets(),
         Provider::Ollama => presets::ollama_presets(),
+        Provider::OllamaCloud => presets::ollama_presets(),
         Provider::LmStudio => presets::lmstudio_presets(),
         Provider::LlamaCpp => presets::llamacpp_presets(),
         Provider::Moonshot => presets::moonshot_presets(),

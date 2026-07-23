@@ -39,6 +39,8 @@ pub enum SecretProvider {
     Poolside,
     #[value(name = "ollama")]
     Ollama,
+    #[value(name = "ollama-cloud")]
+    OllamaCloud,
     #[value(name = "lmstudio")]
     LMStudio,
     #[value(name = "copilot")]
@@ -66,6 +68,7 @@ impl SecretProvider {
             SecretProvider::Evolink => "evolink",
             SecretProvider::Poolside => "poolside",
             SecretProvider::Ollama => "ollama",
+            SecretProvider::OllamaCloud => "ollama-cloud",
             SecretProvider::LMStudio => "lmstudio",
             SecretProvider::Copilot => "copilot",
         }

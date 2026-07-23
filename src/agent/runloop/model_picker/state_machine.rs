@@ -340,7 +340,15 @@ impl ModelPickerState {
             }
         }
 
-        self.pending_api_key = None;
+        // Only clear the API key when switching to a different provider
+        let provider_changed = self
+            .selection
+            .as_ref()
+            .map(|prev| prev.provider_key != selection.provider_key)
+            .unwrap_or(true);
+        if provider_changed {
+            self.pending_api_key = None;
+        }
         self.selected_service_tier = None;
         self.selected_mimo_auth = None;
         let mut selection = selection;
@@ -432,9 +440,7 @@ impl ModelPickerState {
         }
 
         self.pending_api_key = Some(input.to_string());
-        if self.inline_enabled {
-            renderer.close_modal();
-        }
+        renderer.close_modal();
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
     }

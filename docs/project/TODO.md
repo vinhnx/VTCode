@@ -38,6 +38,11 @@ colorirze the tool overview header. example
 
 Note: for command that has cargo, `• Ran cargo check --locked -p vtcode`. not sure why it's has colorized already, but for other command the colorized doesn't apply -> fix and implement for all
 
+the tools call header still not get colroized --> fix.
+
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-07-23 at 16.07.39.png'
+'/Users/vinhnguyenxuan/Documents/vtcode-resources/bugs/Screenshot 2026-07-23 at 16.07.35.png'
+
 ===
 
 improve agent's message with better formatting, colorization, and styling markdown, follow vtcode system prompt style and formatting, and apply to all agent's message.
@@ -75,3 +80,11 @@ the summarization message is showing just plain text without proper heading, bol
 ===
 
 VT Code should also able to trigger plan mode on demand for demanding and complex tasks. When the agent is in non-plan mode (build, auto, duck) modes, it should provide an option to auto-switch to plan mode. and execute the plan mode to generate a plan for the task, and then execute the plan to complete the task. The agent should also be able to provide a summary of the plan and its execution results. then, the agent should be able to switch back to non-plan mode and continue with the task execution. The plan mode should also support user input and feedback to refine the plan and improve its execution.
+
+===
+
+check and relax plan mode tools policy permission so that VT Code can use read tools to read and explore file, currently it is being blocked
+
+"• I can’t open files directly here because exec_command is blocked by tool policy"
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_795.json

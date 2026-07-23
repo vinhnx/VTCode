@@ -40,6 +40,7 @@ pub(crate) fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::HuggingFace => models::huggingface::DEFAULT_MODEL,
         Provider::OpenRouter => models::openrouter::DEFAULT_MODEL,
         Provider::Ollama => models::ollama::DEFAULT_MODEL,
+        Provider::OllamaCloud => models::ollama::DEFAULT_CLOUD_MODEL,
         Provider::LmStudio => models::lmstudio::DEFAULT_MODEL,
         Provider::LlamaCpp => models::llamacpp::DEFAULT_MODEL,
         Provider::Moonshot => models::moonshot::DEFAULT_MODEL,

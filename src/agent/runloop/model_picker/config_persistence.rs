@@ -81,14 +81,10 @@ fn uses_provider_api_key(selection: &ModelSelectionResult) -> bool {
     }
 
     match selection.provider_enum {
-        Some(Provider::Ollama) => is_cloud_ollama_model(&selection.model),
-        Some(Provider::LmStudio | Provider::LlamaCpp) => false,
+        Some(Provider::OllamaCloud) => true,
+        Some(Provider::LmStudio | Provider::LlamaCpp | Provider::Ollama) => false,
         _ => true,
     }
-}
-
-fn is_cloud_ollama_model(model: &str) -> bool {
-    model.contains(":cloud") || model.contains("-cloud")
 }
 
 fn sync_stored_api_key(config: &mut VTCodeConfig, selection: &ModelSelectionResult) {
@@ -118,9 +114,7 @@ fn clear_stored_api_key(config: &mut VTCodeConfig, provider: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        is_cloud_ollama_model, persist_lightweight_selection, synced_openai_service_tier, uses_provider_api_key,
-    };
+    use super::{persist_lightweight_selection, synced_openai_service_tier, uses_provider_api_key};
     use crate::agent::runloop::model_picker::ModelSelectionResult;
     use vtcode_config::OpenAIServiceTier;
     use vtcode_config::VTCodeConfig;
@@ -151,20 +145,13 @@ mod tests {
     }
 
     #[test]
-    fn detects_cloud_ollama_models() {
-        assert!(is_cloud_ollama_model("llama3:cloud"));
-        assert!(is_cloud_ollama_model("deepseek-cloud"));
-        assert!(!is_cloud_ollama_model("llama3"));
-    }
-
-    #[test]
     fn local_ollama_models_skip_provider_api_key_state() {
         assert!(!uses_provider_api_key(&selection(Some(Provider::Ollama), "ollama", "qwen3-coder")));
     }
 
     #[test]
-    fn cloud_ollama_models_keep_provider_api_key_state() {
-        assert!(uses_provider_api_key(&selection(Some(Provider::Ollama), "ollama", "qwen3-coder:cloud")));
+    fn ollama_cloud_models_keep_provider_api_key_state() {
+        assert!(uses_provider_api_key(&selection(Some(Provider::OllamaCloud), "ollama-cloud", "qwen3-coder:cloud")));
     }
 
     #[test]

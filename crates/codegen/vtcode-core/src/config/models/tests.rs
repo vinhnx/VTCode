@@ -82,7 +82,7 @@ fn test_model_providers() {
     assert_eq!(ModelId::OpenCodeZenGPT54.provider(), Provider::OpenCodeZen);
     assert_eq!(ModelId::OpenCodeGoMinimaxM27.provider(), Provider::OpenCodeGo);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
-    assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
+    assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::OllamaCloud);
 }
 
 #[test]
