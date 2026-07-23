@@ -2,6 +2,26 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.138.2 - 2026-07-23
+
+### Highlights
+#### Bug Fixes
+
+- Wire task_tracker_auto_create, add serde alias for ToolProfile (5c0db2f9) 
+#### Features
+
+- Improve startup instrumentation and first-run detection (df5e3792) 
+- Add role paragraph and refine operating profile for Default/Specialized modes (45f6fc5d) 
+- Add Ollama Cloud as separate provider for cloud-hosted models (452368ff) 
+- Add PlanApprovalDiscuss variant for plan discussion in chat (9e60d0ce) 
+- Add XDG config path support with fallback and serde defaults (62b2873a) 
+### Other Changes
+#### Performance
+
+- Reduce allocations in hot paths (335c3473) 
+#### Refactors
+
+- Remove finish_planning tool to simplify planning workflow (263a849c) 
 ## 0.138.1 - 2026-07-22
 
 ### Highlights
