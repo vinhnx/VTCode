@@ -67,6 +67,11 @@ VT Code should also able to trigger plan mode on demand for demanding and comple
 
 check and relax plan mode tools policy permission so that VT Code can use read tools to read and explore file, currently it is being blocked
 
+ALSO CRITICAL: extend plan mode tools call limit
+" Safety validation failed: Per-turn tool limit reached (max: 48). Wait or adjust config."
+" Shell execution is blocked"
+log: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_804.json
+
 "• I can’t open files directly here because exec_command is blocked by tool policy"
 " I cannot currently open files directly because shell execution is denied by
 policy and the code search index appears unavailable in this session."
@@ -76,7 +81,3 @@ log:
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_795.json
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/checkpoints/turn_801.json
-
-===
-
-pull code main, then run and fetch contributor listing and update README contributor list again
