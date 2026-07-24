@@ -52,6 +52,7 @@ regex = { workspace = true }
 dirs = { workspace = true }
 portable-pty = { version = "0.9.0", optional = true }
 ratatui = { workspace = true }
+hotpath = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs = { workspace = true }
@@ -63,6 +64,7 @@ default = []
 http-server = ["dep:tokio-stream"]
 copilot = ["dep:portable-pty"]
 anthropic-api = ["dep:axum", "dep:tower-http", "dep:tokio-stream"]
+profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu"]
 
 [package.metadata.docs.rs]
 all-features = true

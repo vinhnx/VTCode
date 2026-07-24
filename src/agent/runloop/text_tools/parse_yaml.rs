@@ -3,6 +3,7 @@ use serde_json::{Map, Value};
 use crate::agent::runloop::text_tools::parse_args::parse_scalar_value;
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
+#[hotpath::measure]
 pub(super) fn parse_yaml_tool_call(text: &str) -> Option<(String, Value)> {
     for segment in text.split("```") {
         if segment.trim().is_empty() {
@@ -50,7 +51,7 @@ fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
         if trimmed.starts_with('#') {
             continue;
         }
-        if LANGUAGE_HINTS.contains(&trimmed.to_ascii_lowercase().as_str()) {
+        if LANGUAGE_HINTS.iter().any(|hint| hint.eq_ignore_ascii_case(trimmed)) {
             continue;
         }
         name = Some(trimmed.trim_end_matches(':').to_string());

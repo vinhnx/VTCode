@@ -6,10 +6,6 @@ reference and explore research /Users/vinhnguyenxuan/Developer/learn-by-doing/cl
 
 ===
 
-https://github.com/astral-sh/hawk
-
-===
-
 reference and support accessibility research and best practices to apply to vtcode codebase.
 
 https://code.claude.com/docs/en/accessibility

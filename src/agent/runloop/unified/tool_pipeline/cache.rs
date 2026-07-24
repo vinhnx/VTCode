@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::Path;
 
 use serde_json::Value;
@@ -61,33 +62,33 @@ pub(super) fn create_enhanced_cache_key(
     ToolCacheKey::from_json(tool_name, args, &enhanced_target)
 }
 
-pub(super) fn cache_target_path(tool_name: &str, args: &Value) -> String {
+pub(super) fn cache_target_path<'a>(tool_name: &str, args: &'a Value) -> Cow<'a, str> {
     if tool_name == tools::CODE_SEARCH {
         return args
             .get("path")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|path| !path.is_empty())
-            .unwrap_or(".")
-            .to_string();
+            .map(Cow::Borrowed)
+            .unwrap_or(Cow::Borrowed("."));
     }
     if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-        return path.to_string();
+        return Cow::Borrowed(path);
     }
     if let Some(root) = args.get("root").and_then(|v| v.as_str()) {
-        return root.to_string();
+        return Cow::Borrowed(root);
     }
     if let Some(target) = args.get("target_path").and_then(|v| v.as_str()) {
-        return target.to_string();
+        return Cow::Borrowed(target);
     }
     if let Some(dir) = args.get("dir").and_then(|v| v.as_str()) {
-        return dir.to_string();
+        return Cow::Borrowed(dir);
     }
     if let Some(diff_target) = extract_git_diff_cache_target(tool_name, args) {
-        return diff_target;
+        return Cow::Owned(diff_target);
     }
 
-    tool_name.to_string()
+    Cow::Owned(tool_name.to_string())
 }
 
 fn extract_git_diff_cache_target(tool_name: &str, args: &Value) -> Option<String> {

@@ -78,11 +78,11 @@ impl StreamSanitizer {
     pub(crate) fn new() -> Self {
         Self {
             harmony_mode: false,
-            harmony_raw: String::new(),
-            harmony_visible: String::new(),
+            harmony_raw: String::with_capacity(4096),
+            harmony_visible: String::with_capacity(4096),
             noise_mode: false,
-            noise_raw: String::new(),
-            noise_visible: String::new(),
+            noise_raw: String::with_capacity(4096),
+            noise_visible: String::with_capacity(4096),
         }
     }
 

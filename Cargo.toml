@@ -88,6 +88,7 @@ dunce = "1.0"
 itertools = "0.15.0"
 memchr = "2.8"
 url = "2.5"
+hotpath = "0.21"
 agent-client-protocol = { version = "=1.0.1", features = ["unstable_auth_methods"] }
 uuid = "1.23.2"
 ignore = "0.4"
@@ -314,11 +315,15 @@ axum = { version = "0.8" }
 serde-saphyr = { workspace = true }
 mimalloc = { version = "0.1", default-features = false }
 tikv-jemallocator = { version = "0.6", optional = true, features = ["background_threads"] }
+hotpath = { workspace = true, optional = true }
 
 [features]
 default = ["tool-chat", "desktop-notifications"]
 tool-chat = []
-profiling = []
+profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "vtcode-core/profiling"]
+hotpath = ["dep:hotpath", "hotpath/hotpath"]
+hotpath-alloc = ["dep:hotpath", "hotpath/hotpath-alloc"]
+hotpath-cpu = ["dep:hotpath", "hotpath/hotpath-cpu"]
 # Opt into jemalloc (background-thread purging) on any platform. Recommended for
 # Linux servers/containers, where it returns memory to the OS between bursty/sparse
 # idle gaps. On macOS `background_thread` is unsupported, so jemalloc pins like

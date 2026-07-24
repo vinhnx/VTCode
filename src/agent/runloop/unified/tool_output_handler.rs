@@ -159,7 +159,8 @@ fn task_tracker_item_preview(item: &serde_json::Value) -> Option<String> {
 }
 
 fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
-    let mut lines = vec!["• Task tracker".to_string()];
+    let mut lines = Vec::with_capacity(8);
+    lines.push("• Task tracker".to_string());
 
     if let Some(action) = args_val.get("action").and_then(serde_json::Value::as_str) {
         lines.push(format!("  └ Action: {action}"));

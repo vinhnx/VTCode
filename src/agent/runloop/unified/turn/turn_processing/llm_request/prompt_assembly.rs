@@ -80,6 +80,7 @@ fn append_copilot_runtime_guidance(system_prompt: &mut String) {
     );
 }
 
+#[hotpath::measure]
 pub(super) async fn assemble_prompt(
     ctx: &mut TurnProcessingContext<'_>,
     input: PromptAssemblyInput<'_>,
@@ -359,16 +360,19 @@ fn render_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> String {
         return "none".to_string();
     }
 
-    tools
-        .iter()
-        .map(|tool| {
+    let mut result = String::new();
+    for (i, tool) in tools.iter().enumerate() {
+        if i > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(
             tool.function
                 .as_ref()
                 .map(|function| function.name.as_str())
-                .unwrap_or(tool.tool_type.as_str())
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
+                .unwrap_or(tool.tool_type.as_str()),
+        );
+    }
+    result
 }
 
 fn permission_default_label(default: vtcode_config::core::permissions::PermissionDefault) -> &'static str {

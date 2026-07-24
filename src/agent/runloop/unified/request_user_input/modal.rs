@@ -18,6 +18,7 @@ use super::schema::{
 #[cfg(test)]
 use super::suggestions::generate_suggested_options;
 
+#[hotpath::measure]
 pub(crate) async fn execute_request_user_input_tool(
     handle: &InlineHandle,
     session: &mut InlineSession,

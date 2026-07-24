@@ -151,6 +151,10 @@ tower = { version = "0.5", optional = true }
 strsim = { workspace = true }
 smallvec = "1.15.1"
 
+[dependencies.hotpath]
+workspace = true
+optional = true
+
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = { workspace = true }
 
@@ -180,6 +184,8 @@ anthropic-api = ["http-server", "vtcode-llm/anthropic-api"]
 http-server = ["dep:axum", "dep:tower"]
 desktop-notifications = ["dep:notify-rust"]
 sqlite = ["dep:rusqlite"]
+hotpath = ["dep:hotpath"]
+profiling = ["hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "vtcode-llm/profiling"]
 
 [package.metadata.cargo-machete]
 ignored = ["toml_edit", "tower"]

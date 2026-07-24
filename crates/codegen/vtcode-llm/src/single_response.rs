@@ -1,6 +1,7 @@
 use super::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent};
 use futures::StreamExt as _;
 
+#[hotpath::measure]
 pub async fn collect_single_response(
     provider: &(impl LLMProvider + ?Sized),
     request: LLMRequest,
@@ -10,8 +11,8 @@ pub async fn collect_single_response(
     }
 
     let mut stream = provider.stream_normalized(request).await?;
-    let mut streamed_content = String::new();
-    let mut streamed_reasoning = String::new();
+    let mut streamed_content = String::with_capacity(4096);
+    let mut streamed_reasoning = String::with_capacity(1024);
     let mut streamed_usage = None;
     let mut completed = None;
 

@@ -95,6 +95,7 @@ fn finish_streaming_bridge_success(ctx: &mut TurnProcessingContext<'_>, stream_b
 }
 
 /// Execute an LLM request and return the response.
+#[hotpath::measure]
 pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,

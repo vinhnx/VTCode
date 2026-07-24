@@ -72,6 +72,7 @@ fn extract_idle_config(vt_cfg: Option<&VTCodeConfig>) -> IdleDetectionConfig {
         })
 }
 
+#[hotpath::measure]
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     _vt_cfg: Option<VTCodeConfig>,

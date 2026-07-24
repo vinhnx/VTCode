@@ -4,6 +4,10 @@ use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, Tex
 
 const DSML_TAG_PREFIX: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
 const DSML_CLOSE_PREFIX: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}";
+const DSML_INVOKE_OPEN: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke name=\"";
+const DSML_INVOKE_CLOSE: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}invoke>";
+const DSML_PARAM_OPEN: &str = "<\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter";
+const DSML_PARAM_CLOSE: &str = "</\u{ff5c}\u{ff5c}DSML\u{ff5c}\u{ff5c}parameter>";
 
 /// Strips DSML markup from text, removing all `<||DSML||...>` and `</||DSML||...>` tags
 /// while preserving non-tag content (including parameter values).
@@ -37,14 +41,10 @@ fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
     parse_dsml_tool_call_raw(text)
 }
 
+#[hotpath::measure]
 fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
-    let invoke_open = format!("{DSML_TAG_PREFIX}invoke name=\"");
-    let invoke_close = format!("{DSML_CLOSE_PREFIX}invoke>");
-    let param_open = format!("{DSML_TAG_PREFIX}parameter");
-    let param_close = format!("{DSML_CLOSE_PREFIX}parameter>");
-
-    let invoke_start = text.find(&invoke_open)?;
-    let after_prefix = &text[invoke_start + invoke_open.len()..];
+    let invoke_start = text.find(DSML_INVOKE_OPEN)?;
+    let after_prefix = &text[invoke_start + DSML_INVOKE_OPEN.len()..];
 
     let name_end = after_prefix.find('"')?;
     let name = after_prefix[..name_end].trim().to_string();
@@ -56,14 +56,14 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
     let tag_close = after_name.find('>')?;
     let rest = &after_name[tag_close + 1..];
 
-    let content_end = rest.find(&invoke_close)?;
+    let content_end = rest.find(DSML_INVOKE_CLOSE)?;
     let content = &rest[..content_end];
 
     let mut object = Map::new();
     let mut remaining = content;
 
-    while let Some(param_start) = remaining.find(&param_open) {
-        let after_tag = &remaining[param_start + param_open.len()..];
+    while let Some(param_start) = remaining.find(DSML_PARAM_OPEN) {
+        let after_tag = &remaining[param_start + DSML_PARAM_OPEN.len()..];
 
         let name_keyword = after_tag.find("name=\"")?;
         let name_content = &after_tag[name_keyword + "name=\"".len()..];
@@ -75,7 +75,7 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
         let is_string = after_param_name[..gt_pos].contains("string=\"true\"");
 
         let after_gt = &after_param_name[gt_pos + 1..];
-        let value_end = after_gt.find(&param_close)?;
+        let value_end = after_gt.find(DSML_PARAM_CLOSE)?;
         let raw_value = after_gt[..value_end].trim();
 
         let value = if is_string {
@@ -87,7 +87,7 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
         object.insert(param_name, value);
 
         let consumed = param_start
-            + param_open.len()
+            + DSML_PARAM_OPEN.len()
             + name_keyword
             + "name=\"".len()
             + name_end
@@ -95,7 +95,7 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
             + gt_pos
             + 1
             + value_end
-            + param_close.len();
+            + DSML_PARAM_CLOSE.len();
         remaining = &remaining[consumed..];
     }
 
@@ -108,15 +108,13 @@ fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
 
 /// Collects DSML invoke regions for stripping.
 pub(super) fn collect_dsml_regions(text: &str, regions: &mut Vec<(usize, usize)>) {
-    let invoke_open = format!("{DSML_TAG_PREFIX}invoke name=\"");
-    let invoke_close = format!("{DSML_CLOSE_PREFIX}invoke>");
     let mut search_start = 0usize;
-    while let Some(relative_start) = text[search_start..].find(&invoke_open) {
+    while let Some(relative_start) = text[search_start..].find(DSML_INVOKE_OPEN) {
         let start = search_start + relative_start;
-        let content_start = start + invoke_open.len();
+        let content_start = start + DSML_INVOKE_OPEN.len();
         let end = text[content_start..]
-            .find(&invoke_close)
-            .map(|idx| content_start + idx + invoke_close.len())
+            .find(DSML_INVOKE_CLOSE)
+            .map(|idx| content_start + idx + DSML_INVOKE_CLOSE.len())
             .unwrap_or(text.len());
         if start < end && end <= text.len() {
             regions.push((start, end));

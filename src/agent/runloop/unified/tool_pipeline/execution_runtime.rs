@@ -153,6 +153,7 @@ impl CacheLookupPhase {
     }
 }
 
+#[hotpath::measure]
 #[allow(clippy::too_many_arguments)] // pipeline function, all params needed
 pub(super) async fn execute_with_cache_and_streaming(
     registry: &mut ToolRegistry,

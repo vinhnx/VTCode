@@ -75,6 +75,7 @@ pub(crate) async fn handle_direct_tool_execution(
     execute_direct_tool_call(input, &tool_name_str, args, is_bang_prefix, ctx).await
 }
 
+#[hotpath::measure]
 pub(crate) async fn execute_direct_tool_call(
     input: &str,
     tool_name: &str,

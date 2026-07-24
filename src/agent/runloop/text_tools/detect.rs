@@ -40,6 +40,7 @@ fn default_parser_registry() -> &'static TextualToolParserRegistry {
     })
 }
 
+#[hotpath::measure]
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     let registry = default_parser_registry();
 

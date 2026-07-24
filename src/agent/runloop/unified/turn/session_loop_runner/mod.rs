@@ -39,6 +39,7 @@ use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::utils::session_archive;
 use vtcode_ui::tui::app::ArchivedPromptEntry;
 
+#[hotpath::measure]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,

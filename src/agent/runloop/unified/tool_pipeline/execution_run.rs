@@ -50,6 +50,7 @@ fn structured_failure(tool_name: &str, error: &anyhow::Error) -> ToolExecutionEr
     ToolExecutionError::from_anyhow(tool_name, error, 0, false, false, Some("unified_runloop"))
 }
 
+#[hotpath::measure]
 #[allow(clippy::too_many_arguments)] // pipeline entry point, all params needed
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
@@ -96,6 +97,7 @@ pub(crate) async fn run_tool_call(
     .await
 }
 
+#[hotpath::measure]
 #[allow(clippy::too_many_arguments)] // pipeline entry point, all params needed
 pub(crate) async fn run_tool_call_with_args(
     ctx: &mut RunLoopContext<'_>,
@@ -112,7 +114,7 @@ pub(crate) async fn run_tool_call_with_args(
     prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let mut effective_args = std::borrow::Cow::Borrowed(args_val);
-    let mut canonical_name = requested_name.to_string();
+    let mut canonical_name = None;
     let tool_call_id = tool_item_id.as_str();
     let (safety_invocation_id, fallback_harness_item_id) = resolve_harness_item_identity(&tool_item_id);
 
@@ -125,7 +127,7 @@ pub(crate) async fn run_tool_call_with_args(
 
         match ctx.tool_registry.admit_public_tool_call(requested_name, args_val) {
             Ok(prepared) => {
-                canonical_name = prepared.canonical_name;
+                canonical_name = Some(prepared.canonical_name);
                 effective_args = std::borrow::Cow::Owned(prepared.effective_args);
             }
             Err(err) => {
@@ -135,9 +137,9 @@ pub(crate) async fn run_tool_call_with_args(
             }
         }
     } else if let Some(tool) = ctx.tool_registry.get_tool(requested_name) {
-        canonical_name = tool.name().to_string();
+        canonical_name = Some(tool.name().to_string());
     }
-    let name = canonical_name.as_str();
+    let name = canonical_name.as_deref().unwrap_or(requested_name);
 
     let harness_emitter = ctx.harness_emitter;
     let streamed_harness_item_id = ctx.harness_state.take_streamed_tool_call_item_id(tool_call_id);

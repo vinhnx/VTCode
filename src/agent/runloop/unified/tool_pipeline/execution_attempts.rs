@@ -84,6 +84,7 @@ async fn execute_tool_with_timeout_ref_inner(
     .await
 }
 
+#[hotpath::measure]
 pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
     registry: &ToolRegistry,
     name: &str,

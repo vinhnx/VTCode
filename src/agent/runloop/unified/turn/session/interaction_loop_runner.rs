@@ -39,6 +39,7 @@ const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or abo
 const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
 const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+#[hotpath::measure]
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,

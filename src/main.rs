@@ -53,6 +53,7 @@ enum BootstrapOutcome {
     Ready(Box<BootstrapReady>),
 }
 
+#[hotpath::main]
 fn main() -> std::process::ExitCode {
     // Apply process hardening before any other operations.
     // This disables core dumps, caps RLIMIT_STACK (defense-in-depth complement

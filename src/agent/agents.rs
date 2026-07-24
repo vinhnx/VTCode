@@ -122,6 +122,7 @@ pub(crate) async fn load_resume_session(
     Ok(Some(SessionContinuation::from_listing(&listing, intent)))
 }
 
+#[hotpath::measure]
 pub(crate) async fn run_single_agent_loop(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
