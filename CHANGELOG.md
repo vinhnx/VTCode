@@ -2,6 +2,20 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.140.0 - 2026-07-24
+
+### Highlights
+#### Bug Fixes
+
+- Add serde(default) to config structs and suppress warnings (0600e369) 
+#### Features
+
+- Add Claude Opus 5 and new Anthropic features (d9c1b6a5) 
+- Add hotpath-futures feature and update profiling dependencies (c9f1b6e2) 
+### Other Changes
+#### Refactors
+
+- Tighten visibility of agent card and related structs (4968ec5d) 
 ## 0.139.0 - 2026-07-24
 
 ### Highlights
