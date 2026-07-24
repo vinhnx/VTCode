@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.139.0 - 2026-07-24
+
+### Highlights
+#### Features
+
+- Add xAI provider and Grok model family support (befac07c) 
+### Other Changes
+#### Other
+
+- Update TODO (23bf6679) 
 ## 0.138.3 - 2026-07-23
 
 ### Highlights
