@@ -2002,7 +2002,7 @@
       "glm-5.2": {
         "id": "glm-5.2",
         "name": "GLM-5.2 (OpenCode Go)",
-        "description": "GLM-5.2 — flagship Z.AI model included with the OpenCode Go subscription for long-horizon coding.",
+        "description": "GLM-5.2 \u2014 flagship Z.AI model included with the OpenCode Go subscription for long-horizon coding.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2044,7 +2044,7 @@
       "kimi-k2.7-code": {
         "id": "kimi-k2.7-code",
         "name": "Kimi K2.7 Code (OpenCode Go)",
-        "description": "Kimi K2.7 Code — Moonshot's most capable coding model included with the OpenCode Go subscription.",
+        "description": "Kimi K2.7 Code \u2014 Moonshot's most capable coding model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2060,7 +2060,7 @@
       "kimi-k2.6": {
         "id": "kimi-k2.6",
         "name": "Kimi K2.6 (OpenCode Go)",
-        "description": "Kimi K2.6 — Moonshot's 1T MoE general-purpose model included with the OpenCode Go subscription.",
+        "description": "Kimi K2.6 \u2014 Moonshot's 1T MoE general-purpose model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2076,7 +2076,7 @@
       "mimo-v2.5": {
         "id": "mimo-v2.5",
         "name": "MiMo-V2.5 (OpenCode Go)",
-        "description": "MiMo-V2.5 — Xiaomi's omnimodal high-volume model included with the OpenCode Go subscription.",
+        "description": "MiMo-V2.5 \u2014 Xiaomi's omnimodal high-volume model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2092,7 +2092,7 @@
       "mimo-v2.5-pro": {
         "id": "mimo-v2.5-pro",
         "name": "MiMo-V2.5-Pro (OpenCode Go)",
-        "description": "MiMo-V2.5-Pro — Xiaomi's flagship reasoning model included with the OpenCode Go subscription.",
+        "description": "MiMo-V2.5-Pro \u2014 Xiaomi's flagship reasoning model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2108,7 +2108,7 @@
       "minimax-m3": {
         "id": "minimax-m3",
         "name": "MiniMax M3 (OpenCode Go)",
-        "description": "MiniMax M3 — frontier multimodal coding model included with the OpenCode Go subscription.",
+        "description": "MiniMax M3 \u2014 frontier multimodal coding model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2140,7 +2140,7 @@
       "qwen3.7-max": {
         "id": "qwen3.7-max",
         "name": "Qwen3.7 Max (OpenCode Go)",
-        "description": "Qwen3.7 Max — highest capability Qwen tier included with the OpenCode Go subscription.",
+        "description": "Qwen3.7 Max \u2014 highest capability Qwen tier included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2156,7 +2156,7 @@
       "qwen3.7-plus": {
         "id": "qwen3.7-plus",
         "name": "Qwen3.7 Plus (OpenCode Go)",
-        "description": "Qwen3.7 Plus — balanced Qwen coding model included with the OpenCode Go subscription.",
+        "description": "Qwen3.7 Plus \u2014 balanced Qwen coding model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2172,7 +2172,7 @@
       "qwen3.6-plus": {
         "id": "qwen3.6-plus",
         "name": "Qwen3.6 Plus (OpenCode Go)",
-        "description": "Qwen3.6 Plus — cost-effective Qwen coding model included with the OpenCode Go subscription.",
+        "description": "Qwen3.6 Plus \u2014 cost-effective Qwen coding model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2188,7 +2188,7 @@
       "deepseek-v4-pro": {
         "id": "deepseek-v4-pro",
         "name": "DeepSeek V4 Pro (OpenCode Go)",
-        "description": "DeepSeek V4 Pro — high-quality reasoning model included with the OpenCode Go subscription.",
+        "description": "DeepSeek V4 Pro \u2014 high-quality reasoning model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2204,7 +2204,7 @@
       "deepseek-v4-flash": {
         "id": "deepseek-v4-flash",
         "name": "DeepSeek V4 Flash (OpenCode Go)",
-        "description": "DeepSeek V4 Flash — fast, low-cost coding model included with the OpenCode Go subscription.",
+        "description": "DeepSeek V4 Flash \u2014 fast, low-cost coding model included with the OpenCode Go subscription.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -4136,6 +4136,109 @@
           ]
         },
         "context": 131072,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      }
+    }
+  },
+  "xai": {
+    "id": "xai",
+    "env": [
+      "XAI_API_KEY"
+    ],
+    "api": "https://api.x.ai/v1",
+    "name": "xAI",
+    "doc": "https://docs.x.ai",
+    "default_model": "grok-build-0.1",
+    "models": {
+      "grok-build-0.1": {
+        "id": "grok-build-0.1",
+        "name": "Grok Build 0.1",
+        "description": "xAI's fast coding model for agentic software engineering (256k context)",
+        "version": "build-0.1",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "grok-4.5": {
+        "id": "grok-4.5",
+        "name": "Grok 4.5",
+        "description": "xAI's flagship reasoning model with reasoning_effort support (500k context)",
+        "version": "4.5",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 500000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "grok-4.3": {
+        "id": "grok-4.3",
+        "name": "Grok 4.3",
+        "description": "xAI's balanced model with 1M context for complex tasks",
+        "version": "4.3",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": true
+        }
+      },
+      "grok-4.20-0309-reasoning": {
+        "id": "grok-4.20-0309-reasoning",
+        "name": "Grok 4.20 Reasoning",
+        "description": "xAI's reasoning-optimized model with chain-of-thought (1M context)",
+        "version": "4.20",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
         "capabilities": {
           "streaming": true,
           "function_calling": true,

@@ -12,7 +12,7 @@ pub use vtcode_llm::providers::{
     LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
     OllamaProvider, OpenAIProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
     PoolsideProvider, QwenProvider, StepFunProvider, StreamingProgressBuilder, StreamingProgressCallback,
-    StreamingProgressTracker, TagStreamSanitizer, ZAIProvider, clean_reasoning_text, reasoning,
+    StreamingProgressTracker, TagStreamSanitizer, XAIProvider, ZAIProvider, clean_reasoning_text, reasoning,
 };
 
 // Re-export commonly used constants from vtcode-commons::tool_types

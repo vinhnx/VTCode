@@ -23,6 +23,7 @@ pub enum BackendKind {
     StepFun,
     Evolink,
     Poolside,
+    Xai,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

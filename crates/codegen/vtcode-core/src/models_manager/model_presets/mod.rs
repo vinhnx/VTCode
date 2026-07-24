@@ -188,6 +188,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // StepFun presets
     presets.extend(presets::stepfun_presets());
 
+    // xAI presets
+    presets.extend(presets::xai_presets());
+
     // Evolink presets
     presets.extend(presets::evolink_presets());
 
@@ -219,6 +222,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::StepFun => presets::stepfun_presets(),
         Provider::Evolink => presets::evolink_presets(),
         Provider::Poolside => presets::poolside_presets(),
+        Provider::XAI => presets::xai_presets(),
     }
 }
 

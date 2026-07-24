@@ -36,6 +36,7 @@ const BUILTIN_PROVIDER_KEYS: &[&str] = &[
     "stepfun",
     "evolink",
     "poolside",
+    "xai",
 ];
 
 /// LLM provider factory and registry
@@ -338,6 +339,7 @@ mod tests {
                 "poolside",
                 "qwen",
                 "stepfun",
+                "xai",
                 "zai",
             ]
         );

@@ -27,6 +27,7 @@ pub mod qwen;
 pub mod stepfun;
 pub mod streaming_progress;
 pub mod tool_format;
+pub mod xai;
 pub mod zai;
 
 pub mod common;
@@ -67,4 +68,5 @@ pub use poolside::PoolsideProvider;
 pub use qwen::QwenProvider;
 pub use stepfun::StepFunProvider;
 pub use streaming_progress::{StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker};
+pub use xai::XAIProvider;
 pub use zai::ZAIProvider;

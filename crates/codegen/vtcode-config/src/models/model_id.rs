@@ -327,6 +327,16 @@ pub enum ModelId {
     /// Laguna S 2.1 - Poolside's 118B MoE coding agent model with 1M context, optimized for long-horizon agentic tasks
     PoolsideLagunaS21,
 
+    // xAI models
+    /// Grok Build 0.1 - xAI's fast coding model for agentic software engineering
+    XaiGrokBuild01,
+    /// Grok 4.5 - xAI's flagship reasoning model with reasoning_effort support (500k context)
+    XaiGrok45,
+    /// Grok 4.3 - xAI's balanced model with 1M context
+    XaiGrok43,
+    /// Grok 4.20 0309 Reasoning - xAI's reasoning-optimized model with chain-of-thought
+    XaiGrok420Reasoning,
+
     /// User-defined model not in the hardcoded catalog.
     /// Carries the provider key string and model identifier string.
     Custom(String, String),

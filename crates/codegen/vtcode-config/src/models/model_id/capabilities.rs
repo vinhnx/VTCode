@@ -64,6 +64,8 @@ fn catalog_provider_key(provider: &str) -> &str {
         "evolink"
     } else if provider.eq_ignore_ascii_case("poolside") {
         "poolside"
+    } else if provider.eq_ignore_ascii_case("xai") {
+        "xai"
     } else {
         provider
     }
@@ -93,6 +95,7 @@ fn capability_provider_key(provider: Provider) -> &'static str {
         Provider::StepFun => "stepfun",
         Provider::Evolink => "evolink",
         Provider::Poolside => "poolside",
+        Provider::XAI => "xai",
     }
 }
 
@@ -173,6 +176,7 @@ impl ModelId {
             | ModelId::EvolinkClaudeSonnet46
             | ModelId::EvolinkClaudeOpus48
             | ModelId::EvolinkClaudeHaiku45 => None,
+            ModelId::XaiGrok45 | ModelId::XaiGrok420Reasoning => Some(ModelId::XaiGrokBuild01),
             ModelId::PoolsideLagunaM1 => Some(ModelId::PoolsideLagunaXs2),
             ModelId::PoolsideLagunaS21 => Some(ModelId::PoolsideLagunaXs2),
             _ => None,
@@ -233,6 +237,7 @@ impl ModelId {
             | ModelId::ClaudeMythos5
             | ModelId::ClaudeOpus48
             | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
+            ModelId::XaiGrok420Reasoning => Some(ModelId::XaiGrokBuild01),
             ModelId::MinimaxM27 => None,
             _ => None,
         };
@@ -313,6 +318,8 @@ impl ModelId {
                 | ModelId::MoonshotKimiK27Code
                 | ModelId::PoolsideLagunaM1
                 | ModelId::PoolsideLagunaS21
+                | ModelId::XaiGrok45
+                | ModelId::XaiGrok420Reasoning
         )
     }
 
@@ -337,6 +344,7 @@ impl ModelId {
                 | ModelId::OpenCodeGoQwen37Plus
                 | ModelId::OpenCodeGoQwen36Plus
                 | ModelId::OpenCodeGoDeepseekV4Flash
+                | ModelId::XaiGrokBuild01
         )
     }
 
@@ -394,6 +402,8 @@ impl ModelId {
                 | ModelId::PoolsideLagunaM1
                 | ModelId::PoolsideLagunaS21
                 | ModelId::OllamaGlm52Cloud
+                | ModelId::XaiGrok45
+                | ModelId::XaiGrok420Reasoning
         )
     }
 
@@ -498,6 +508,11 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV4ProTogether => "v4-pro",
             ModelId::HuggingFaceDeepseekV4ProNovita => "v4-pro",
             ModelId::HuggingFaceStep35Flash => "3.5",
+            // xAI models
+            ModelId::XaiGrokBuild01 => "build-0.1",
+            ModelId::XaiGrok45 => "4.5",
+            ModelId::XaiGrok43 => "4.3",
+            ModelId::XaiGrok420Reasoning => "4.20",
             // Poolside models
             ModelId::PoolsideLagunaM1 => "laguna-m.1",
             ModelId::PoolsideLagunaXs2 => "laguna-xs.2",

@@ -65,6 +65,8 @@ pub enum Provider {
     Evolink,
     /// Poolside AI models
     Poolside,
+    /// xAI Grok models
+    XAI,
 }
 
 impl Provider {
@@ -93,6 +95,7 @@ impl Provider {
             Provider::StepFun => "STEPFUN_API_KEY",
             Provider::Evolink => "EVOLINK_API_KEY",
             Provider::Poolside => "POOLSIDE_API_KEY",
+            Provider::XAI => "XAI_API_KEY",
         }
     }
 
@@ -121,6 +124,7 @@ impl Provider {
             Provider::StepFun,
             Provider::Evolink,
             Provider::Poolside,
+            Provider::XAI,
         ]
     }
 
@@ -149,6 +153,7 @@ impl Provider {
             Provider::StepFun => "StepFun",
             Provider::Evolink => "Evolink",
             Provider::Poolside => "Poolside",
+            Provider::XAI => "xAI",
         }
     }
 
@@ -203,6 +208,7 @@ impl Provider {
             Provider::StepFun => Some("https://platform.stepfun.com"),
             Provider::Evolink => Some("https://evolink.ai/dashboard/keys"),
             Provider::Poolside => Some("https://poolside.ai"),
+            Provider::XAI => Some("https://docs.x.ai"),
         }
     }
 }
@@ -232,6 +238,7 @@ impl fmt::Display for Provider {
             Provider::StepFun => write!(f, "stepfun"),
             Provider::Evolink => write!(f, "evolink"),
             Provider::Poolside => write!(f, "poolside"),
+            Provider::XAI => write!(f, "xai"),
         }
     }
 }
@@ -261,6 +268,7 @@ impl AsRef<str> for Provider {
             Provider::StepFun => "stepfun",
             Provider::Evolink => "evolink",
             Provider::Poolside => "poolside",
+            Provider::XAI => "xai",
         }
     }
 }
@@ -292,6 +300,7 @@ impl FromStr for Provider {
             "stepfun" => Ok(Provider::StepFun),
             "evolink" => Ok(Provider::Evolink),
             "poolside" => Ok(Provider::Poolside),
+            "xai" => Ok(Provider::XAI),
             _ => Err(ProviderParseError::InvalidProvider(s.to_string())),
         }
     }

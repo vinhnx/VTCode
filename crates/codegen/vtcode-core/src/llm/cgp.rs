@@ -16,13 +16,14 @@ use super::provider_config::{
     GeminiProviderConfig, HuggingFaceProviderConfig, LlamaCppProviderConfig, LmStudioProviderConfig,
     MiMoProviderConfig, MinimaxProviderConfig, MistralProviderConfig, MoonshotProviderConfig, OllamaProviderConfig,
     OpenAIProviderConfig, OpenCodeGoProviderConfig, OpenCodeZenProviderConfig, OpenResponsesProviderConfig,
-    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, ZAIProviderConfig,
+    OpenRouterProviderConfig, PoolsideProviderConfig, QwenProviderConfig, StepFunProviderConfig, XAIProviderConfig,
+    ZAIProviderConfig,
 };
 use super::providers::{
     AnthropicProvider, CopilotProvider, DeepSeekProvider, EvolinkProvider, GeminiProvider, HuggingFaceProvider,
     LlamaCppProvider, LmStudioProvider, MiMoProvider, MinimaxProvider, MistralProvider, MoonshotProvider,
     OllamaProvider, OpenCodeGoProvider, OpenCodeZenProvider, OpenResponsesProvider, OpenRouterProvider,
-    PoolsideProvider, QwenProvider, StepFunProvider, ZAIProvider,
+    PoolsideProvider, QwenProvider, StepFunProvider, XAIProvider, ZAIProvider,
 };
 use vtcode_commons::cgp::{ComponentProvider, HasComponent};
 use vtcode_config::TimeoutsConfig;
@@ -260,6 +261,7 @@ impl_standard_provider_constructor!(
     StepFunProvider,
     EvolinkProvider,
     PoolsideProvider,
+    XAIProvider,
 );
 
 crate::delegate_components!(GeminiProviderConfig {
@@ -350,6 +352,10 @@ crate::delegate_components!(PoolsideProviderConfig {
     ProviderMetadataComponent => PoolsideProviderConfig,
     ProviderBuildComponent => StandardProviderBuild<PoolsideProvider>,
 });
+crate::delegate_components!(XAIProviderConfig {
+    ProviderMetadataComponent => XAIProviderConfig,
+    ProviderBuildComponent => StandardProviderBuild<XAIProvider>,
+});
 
 /// Register all built-in provider contexts into the runtime factory.
 pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
@@ -375,6 +381,7 @@ pub fn register_builtin_cgp_providers(factory: &mut LLMFactory) {
     factory.register_cgp_provider::<StepFunProviderConfig>();
     factory.register_cgp_provider::<EvolinkProviderConfig>();
     factory.register_cgp_provider::<PoolsideProviderConfig>();
+    factory.register_cgp_provider::<XAIProviderConfig>();
 }
 
 #[cfg(test)]
@@ -484,6 +491,7 @@ mod tests {
                 "poolside",
                 "qwen",
                 "stepfun",
+                "xai",
                 "zai",
             ]
         );

@@ -53,6 +53,7 @@ impl ModelId {
             Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Evolink => ModelId::EvolinkGpt52,
             Provider::Poolside => ModelId::PoolsideLagunaS21,
+            Provider::XAI => ModelId::XaiGrok45,
         }
     }
 
@@ -81,6 +82,7 @@ impl ModelId {
             Provider::StepFun => ModelId::StepFun37Flash,
             Provider::Evolink => ModelId::EvolinkGpt52,
             Provider::Poolside => ModelId::PoolsideLagunaXs2,
+            Provider::XAI => ModelId::XaiGrokBuild01,
         }
     }
 }

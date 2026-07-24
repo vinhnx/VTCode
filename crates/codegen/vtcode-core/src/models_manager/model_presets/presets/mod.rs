@@ -48,6 +48,8 @@ mod qwen;
 pub(crate) use qwen::qwen_presets;
 mod stepfun;
 pub(crate) use stepfun::stepfun_presets;
+mod xai;
+pub(crate) use xai::xai_presets;
 mod evolink;
 pub(crate) use evolink::evolink_presets;
 mod moonshot;

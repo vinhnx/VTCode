@@ -812,6 +812,35 @@ model_id_table! {
         display: "MiniMax-M2.7",
         description: "Beginning the journey of recursive self-improvement with 204.8K context and strong reasoning/coding performance",
     },
+    // xAI models
+    XaiGrokBuild01 {
+        provider: XAI,
+        id: models::xai::GROK_BUILD_0_1,
+        parse: [models::xai::GROK_BUILD_0_1],
+        display: "Grok Build 0.1",
+        description: "xAI's fast coding model for agentic software engineering (256k context)",
+    },
+    XaiGrok45 {
+        provider: XAI,
+        id: models::xai::GROK_4_5,
+        parse: [models::xai::GROK_4_5],
+        display: "Grok 4.5",
+        description: "xAI's flagship reasoning model with reasoning_effort support (500k context)",
+    },
+    XaiGrok43 {
+        provider: XAI,
+        id: models::xai::GROK_4_3,
+        parse: [models::xai::GROK_4_3],
+        display: "Grok 4.3",
+        description: "xAI's balanced model with 1M context for complex tasks",
+    },
+    XaiGrok420Reasoning {
+        provider: XAI,
+        id: models::xai::GROK_4_20_REASONING,
+        parse: [models::xai::GROK_4_20_REASONING],
+        display: "Grok 4.20 Reasoning",
+        description: "xAI's reasoning-optimized model with chain-of-thought (1M context)",
+    },
     // Poolside models
     PoolsideLagunaM1 {
         provider: Poolside,

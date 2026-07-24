@@ -242,6 +242,16 @@ define_provider_config!(
     ()
 );
 define_provider_config!(
+    /// Provider configuration for xAI (Grok).
+    XAIProviderConfig,
+    "xai",
+    "xAI",
+    crate::config::constants::models::xai::DEFAULT_MODEL,
+    crate::config::constants::urls::XAI_API_BASE,
+    Some(crate::config::constants::env_vars::XAI_BASE_URL),
+    ()
+);
+define_provider_config!(
     /// Provider configuration for Poolside.
     PoolsideProviderConfig,
     "poolside",

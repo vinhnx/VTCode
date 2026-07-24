@@ -136,6 +136,11 @@ impl ModelId {
             ModelId::OpenRouterMoonshotaiKimiK27Code,
             ModelId::OpenRouterZaiGlm51,
             ModelId::OpenRouterZaiGlm52,
+            // xAI models
+            ModelId::XaiGrokBuild01,
+            ModelId::XaiGrok45,
+            ModelId::XaiGrok43,
+            ModelId::XaiGrok420Reasoning,
             // Poolside models
             ModelId::PoolsideLagunaM1,
             ModelId::PoolsideLagunaXs2,

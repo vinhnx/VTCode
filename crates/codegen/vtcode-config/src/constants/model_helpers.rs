@@ -21,6 +21,7 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         "stepfun" => Some(models::stepfun::SUPPORTED_MODELS),
         "evolink" => Some(models::evolink::SUPPORTED_MODELS),
         "poolside" => Some(models::poolside::SUPPORTED_MODELS),
+        "xai" => Some(models::xai::SUPPORTED_MODELS),
         _ => None,
     }
 }
@@ -46,6 +47,7 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         "stepfun" => Some(models::stepfun::DEFAULT_MODEL),
         "evolink" => Some(models::evolink::DEFAULT_MODEL),
         "poolside" => Some(models::poolside::DEFAULT_MODEL),
+        "xai" => Some(models::xai::DEFAULT_MODEL),
         _ => None,
     }
 }

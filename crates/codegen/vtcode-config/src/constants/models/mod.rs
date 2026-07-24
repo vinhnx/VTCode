@@ -19,6 +19,7 @@ pub mod openrouter;
 pub mod poolside;
 pub mod qwen;
 pub mod stepfun;
+pub mod xai;
 pub mod zai;
 
 // Backwards compatibility - keep old constants working
