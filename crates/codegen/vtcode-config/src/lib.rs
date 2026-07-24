@@ -1,4 +1,4 @@
-#![allow(clippy::expect_used, clippy::unreachable, missing_docs)]
+#![allow(clippy::expect_used, clippy::unreachable, missing_docs, dead_code, unused_imports)]
 #![cfg_attr(not(test), allow(clippy::map_err_ignore))]
 //! Shared configuration loader utilities for VT Code and downstream integrations.
 //!

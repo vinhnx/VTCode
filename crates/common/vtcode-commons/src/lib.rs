@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::expect_used)]
+#![allow(missing_docs, clippy::expect_used, dead_code, unused_imports)]
 //! Shared primitives and helper types reused across VT Code crates.
 //!
 //! This crate provides the foundational building blocks that both the core

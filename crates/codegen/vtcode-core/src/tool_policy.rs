@@ -599,9 +599,7 @@ impl ToolPolicyManager {
         let tools: Vec<_> = self.config.available_tools.to_vec();
         for tool in tools {
             let canonical = canonical_tool_name(&tool);
-            if tools_config.policies.contains_key(canonical) {
-                self.apply_config_policy(&tool, Self::resolve_config_policy(tools_config, &tool));
-            } else if !self.config.policies.contains_key(canonical) {
+            if tools_config.policies.contains_key(canonical) || !self.config.policies.contains_key(canonical) {
                 self.apply_config_policy(&tool, Self::resolve_config_policy(tools_config, &tool));
             }
         }

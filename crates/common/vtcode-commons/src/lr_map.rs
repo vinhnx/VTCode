@@ -95,7 +95,7 @@ where
         reader.enter().map(|m| m.len()).unwrap_or(0)
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 }

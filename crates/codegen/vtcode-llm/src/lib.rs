@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::expect_used)]
+#![allow(missing_docs, clippy::expect_used, dead_code, unused_imports)]
 //! # vtcode-llm - LLM Provider Abstraction
 //!
 //! Provides a unified interface for multiple LLM providers including

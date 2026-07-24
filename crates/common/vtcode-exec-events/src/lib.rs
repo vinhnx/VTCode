@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! Structured execution telemetry events shared across VT Code crates.
 //!
 //! This crate exposes the serialized schema for thread lifecycle updates,

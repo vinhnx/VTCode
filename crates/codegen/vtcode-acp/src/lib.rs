@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! ACP (Agent Communication Protocol) support for VT Code.
 //!
 //! This crate exposes both the ACP client library and the VT Code Zed bridge.

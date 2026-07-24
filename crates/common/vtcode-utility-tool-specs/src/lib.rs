@@ -1,8 +1,8 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
+
 //! Passive JSON schemas for utility, file, scheduling, and collaboration tool surfaces.
 
 #![recursion_limit = "256"]
-
 use serde_json::{Value, json};
 
 mod collaboration;

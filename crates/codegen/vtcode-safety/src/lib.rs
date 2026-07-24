@@ -1,4 +1,4 @@
-#![allow(missing_docs, clippy::expect_used)]
+#![allow(missing_docs, clippy::expect_used, dead_code, unused_imports)]
 //! Command safety detection, execution policies, and sandboxing for VT Code.
 //!
 //! This crate provides the safety subsystem extracted from `vtcode-core`:

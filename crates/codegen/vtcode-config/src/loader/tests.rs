@@ -582,6 +582,23 @@ use_root_config = true
 }
 
 #[test]
+fn partial_optimization_agent_execution_uses_defaults() {
+    let toml_str = r#"
+[optimization.agent_execution]
+max_execution_time_secs = 300
+state_history_size = 100
+resource_monitor_interval_ms = 5000
+max_memory_mb = 4096
+idle_timeout_ms = 30000
+idle_backoff_ms = 1000
+"#;
+    let config: VTCodeConfig = toml::from_str(toml_str).expect("parse partial agent_execution config");
+    assert_eq!(config.optimization.agent_execution.max_execution_time_secs, 300);
+    assert_eq!(config.optimization.agent_execution.idle_timeout_ms, 30000);
+    assert_eq!(config.optimization.agent_execution.idle_backoff_ms, 1000);
+}
+
+#[test]
 fn test_config_loader_phase_timing_recorded() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let manager = ConfigManager::load_from_workspace(temp_dir.path()).expect("load workspace config");

@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports)]
 //! Unified per-session state store for VT Code.
 //!
 //! This crate is the single source of truth for an agent session's state,

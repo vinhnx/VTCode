@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! # vtcode-skills - Skill Types, Discovery, and Validation
 //!
 //! Provides the core skill system for VT Code including skill manifests,

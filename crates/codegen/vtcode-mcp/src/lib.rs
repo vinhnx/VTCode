@@ -1,5 +1,4 @@
-#![allow(clippy::large_futures)]
-#![allow(missing_docs)]
+#![allow(clippy::large_futures, missing_docs, dead_code, unused_imports)]
 //! Model Context Protocol (MCP) client management.
 //!
 //! This crate adapts reference MCP client, server, and type definitions

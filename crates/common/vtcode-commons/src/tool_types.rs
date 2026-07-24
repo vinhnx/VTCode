@@ -116,7 +116,7 @@ pub enum ResultCompleteness {
 
 impl ResultCompleteness {
     /// Deprecated: prefer using the `Display` impl; `ToString` is derived from Display.
-    fn to_static_str(&self) -> &'static str {
+    fn to_static_str(self) -> &'static str {
         match self {
             Self::Complete => "complete",
             Self::Partial => "partial",

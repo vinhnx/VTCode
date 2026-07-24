@@ -1,5 +1,5 @@
 #![allow(clippy::unreachable, clippy::map_err_ignore)]
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! Shared authentication and OAuth flows for VT Code.
 
 mod auth_service;

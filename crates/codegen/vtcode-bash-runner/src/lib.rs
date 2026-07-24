@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! Cross-platform command runner modeled after VT Code's original bash
 //! wrapper. The crate exposes a trait-based executor so downstream
 //! applications can swap the underlying process strategy (system shell,

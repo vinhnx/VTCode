@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, unused_imports)]
 //! Workspace-friendly file indexer and file utilities for VT Code.
 //!
 //! `vtcode-indexer` provides:

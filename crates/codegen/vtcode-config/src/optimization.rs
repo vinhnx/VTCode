@@ -90,6 +90,7 @@ fn default_rl_latency_weight() -> f64 {
 /// File read cache configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FileReadCacheConfig {
     /// Enable file read caching
     pub enabled: bool,
@@ -121,6 +122,7 @@ fn default_max_read_lines() -> usize {
 /// Read-only command cache configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CommandCacheConfig {
     /// Enable command caching
     pub enabled: bool,
@@ -138,6 +140,7 @@ pub struct CommandCacheConfig {
 /// Memory pool configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MemoryPoolConfig {
     /// Enable memory pool (can be disabled for debugging)
     pub enabled: bool,
@@ -178,6 +181,7 @@ pub struct ToolRegistryConfig {
 /// Async pipeline configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AsyncPipelineConfig {
     /// Enable request batching
     enable_batching: bool,
@@ -198,6 +202,7 @@ pub struct AsyncPipelineConfig {
 /// LLM client optimization configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LLMClientConfig {
     /// Enable connection pooling
     enable_connection_pooling: bool,
@@ -227,6 +232,7 @@ pub struct LLMClientConfig {
 /// Agent execution optimization configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AgentExecutionConfig {
     /// Enable optimized agent execution loop
     use_optimized_loop: bool,
@@ -261,6 +267,7 @@ pub struct AgentExecutionConfig {
 /// Performance profiling configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ProfilingConfig {
     /// Enable performance profiling
     enabled: bool,
