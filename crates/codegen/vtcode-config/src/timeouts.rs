@@ -94,7 +94,7 @@ impl TimeoutsConfig {
         }
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         ensure!(
             self.warning_threshold_percent > 0 && self.warning_threshold_percent < 100,
             "timeouts.warning_threshold_percent must be between 1 and 99",

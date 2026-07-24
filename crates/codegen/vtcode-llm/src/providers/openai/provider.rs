@@ -149,11 +149,11 @@ impl OpenAIProvider {
         )
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(api_key, None, model, None, None, TimeoutsConfig::default(), None, None)
     }
 
-    pub fn new_with_client(
+    pub(crate) fn new_with_client(
         api_key: String,
         openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
         model: String,
@@ -353,13 +353,13 @@ impl OpenAIProvider {
         self.provider_key_override.is_none() && self.backend_setup.is_native_openai_api()
     }
 
-    pub(crate) fn supports_manual_openai_compaction_for_model(&self, model: &str) -> bool {
+    fn supports_manual_openai_compaction_for_model(&self, model: &str) -> bool {
         self.is_native_openai_api()
             && !self.uses_chatgpt_auth()
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 
-    pub(crate) fn manual_openai_compaction_unavailable_message_for_model(&self, model: &str) -> String {
+    fn manual_openai_compaction_unavailable_message_for_model(&self, model: &str) -> String {
         let requested = if model.trim().is_empty() {
             self.model.as_ref()
         } else {
@@ -664,7 +664,7 @@ impl OpenAIProvider {
         request_builder::build_chat_request(request, &ctx)
     }
 
-    pub(crate) fn convert_to_openai_responses_format(
+    fn convert_to_openai_responses_format(
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {

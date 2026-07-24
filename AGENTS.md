@@ -107,6 +107,8 @@ Session-independent knowledge lives in `.vtcode/memory/` (gitignored): `gotchas.
 | Harness PTY/TUI | `./scripts/check.sh harness` |
 | Release/PR | `./scripts/check.sh` |
 | Ast-grep rules | `vtcode check ast-grep` |
+| Hawk dead-code/visibility | `./scripts/hawk.sh` |  
+| Hawk (deny warnings) | `./scripts/hawk.sh --deny` |
 | Ast-grep scan | `ast-grep scan` (requires `sgconfig.yml` + `rules/`) |
 
 Narrow commands: `cargo check`, `cargo nextest run`, `cargo nextest run --profile quick`, `cargo fmt`, `cargo clippy`. **Never use `cargo test` — always use `cargo nextest run`.**

@@ -73,11 +73,11 @@ pub enum StreamEventType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamEvent {
     #[serde(rename = "type")]
-    pub event_type: String,
+    event_type: String,
     #[serde(default)]
-    pub sequence_number: u32,
+    sequence_number: u32,
     #[serde(flatten)]
-    pub data: StreamEventData,
+    data: StreamEventData,
 }
 
 /// Data payload for different streaming events.
@@ -104,67 +104,67 @@ pub enum StreamEventData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseEventData {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response: Option<Value>,
+    response: Option<Value>,
 }
 
 /// Data for output item events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputItemEventData {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub item: Option<Value>,
+    item: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_index: Option<u32>,
+    output_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub item_id: Option<String>,
+    item_id: Option<String>,
 }
 
 /// Data for text delta events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextDeltaEventData {
-    pub delta: String,
+    delta: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub item_id: Option<String>,
+    item_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_index: Option<u32>,
+    output_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_index: Option<u32>,
+    content_index: Option<u32>,
 }
 
 /// Data for function call argument delta events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCallDeltaEventData {
-    pub delta: String,
+    delta: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub item_id: Option<String>,
+    item_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_index: Option<u32>,
+    output_index: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub call_id: Option<String>,
+    call_id: Option<String>,
 }
 
 /// Data for reasoning content delta events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningContentDeltaEventData {
-    pub delta: String,
+    delta: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub item_id: Option<String>,
+    item_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_index: Option<u32>,
+    output_index: Option<u32>,
 }
 
 /// Data for error events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorEventData {
-    pub error: StreamError,
+    error: StreamError,
 }
 
 /// Error details in streaming.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamError {
-    pub code: String,
-    pub message: String,
+    code: String,
+    message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub param: Option<String>,
+    param: Option<String>,
 }
 
 // ============================================================================
@@ -172,7 +172,7 @@ pub struct StreamError {
 // ============================================================================
 
 /// Parse a Server-Sent Events (SSE) line into a stream event.
-pub fn parse_sse_event(line: &str) -> Option<StreamEvent> {
+fn parse_sse_event(line: &str) -> Option<StreamEvent> {
     // SSE format: "data: {...}"
     let line = line.trim();
     if line.is_empty() || line == "[DONE]" {
@@ -201,44 +201,44 @@ pub fn extract_event_type(line: &str) -> Option<String> {
 /// Accumulator for building responses from streaming events.
 #[derive(Debug, Default)]
 pub struct StreamAccumulator {
-    pub text_content: String,
-    pub reasoning_content: String,
-    pub reasoning_summary: String,
-    pub function_calls: Vec<AccumulatedFunctionCall>,
-    pub current_function_call: Option<AccumulatingFunctionCall>,
-    pub output_items: Vec<Value>,
-    pub response_id: Option<String>,
-    pub model: Option<String>,
-    pub usage: Option<Value>,
-    pub is_complete: bool,
-    pub error: Option<StreamError>,
+    text_content: String,
+    reasoning_content: String,
+    reasoning_summary: String,
+    function_calls: Vec<AccumulatedFunctionCall>,
+    current_function_call: Option<AccumulatingFunctionCall>,
+    output_items: Vec<Value>,
+    response_id: Option<String>,
+    model: Option<String>,
+    usage: Option<Value>,
+    is_complete: bool,
+    error: Option<StreamError>,
 }
 
 /// A function call being accumulated from streaming deltas.
 #[derive(Debug, Clone, Default)]
 pub struct AccumulatingFunctionCall {
-    pub id: String,
-    pub call_id: String,
-    pub name: String,
-    pub arguments: String,
+    id: String,
+    call_id: String,
+    name: String,
+    arguments: String,
 }
 
 /// A completed accumulated function call.
 #[derive(Debug, Clone)]
 pub struct AccumulatedFunctionCall {
-    pub id: String,
-    pub call_id: String,
-    pub name: String,
-    pub arguments: String,
+    id: String,
+    call_id: String,
+    name: String,
+    arguments: String,
 }
 
 impl StreamAccumulator {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
     /// Process a streaming event and update the accumulator state.
-    pub fn process_event(&mut self, event: &StreamEvent) {
+    fn process_event(&mut self, event: &StreamEvent) {
         match event.event_type.as_str() {
             "response.created" | "response.in_progress" => {
                 if let StreamEventData::Response(data) = &event.data

@@ -36,7 +36,7 @@ pub(crate) const MAX_TOTAL_READONLY_CALLS: usize = 30;
 
 /// Subagent-specific read-only budget. Subagents should do focused work and
 /// need less exploration headroom than the main agent.
-pub(crate) const SUBAGENT_MAX_TOTAL_READONLY_CALLS: usize = 20;
+const SUBAGENT_MAX_TOTAL_READONLY_CALLS: usize = 20;
 
 /// Navigation streak thresholds -- warning and hard stop.
 /// Subagents get tighter limits to force earlier synthesis.

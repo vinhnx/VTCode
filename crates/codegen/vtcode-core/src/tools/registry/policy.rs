@@ -25,7 +25,7 @@ pub(super) struct PolicyCatalogueTestPause {
 
 #[cfg(test)]
 impl PolicyCatalogueTestPause {
-    pub(super) async fn pause(&self) {
+    async fn pause(&self) {
         self.reached.notify_one();
         self.resume.notified().await;
     }

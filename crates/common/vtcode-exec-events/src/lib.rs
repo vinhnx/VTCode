@@ -27,9 +27,9 @@ pub const EVENT_SCHEMA_VERSION: &str = "0.8.0";
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct VersionedThreadEvent {
     /// Semantic version describing the schema of the nested event payload.
-    pub schema_version: String,
+    schema_version: String,
     /// Concrete event emitted by the agent runtime.
-    pub event: ThreadEvent,
+    event: ThreadEvent,
 }
 
 impl VersionedThreadEvent {
@@ -71,7 +71,7 @@ where
 
 /// JSON helper utilities for serializing and deserializing thread events.
 #[cfg(feature = "serde-json")]
-pub mod json {
+pub(crate) mod json {
     use super::{ThreadEvent, VersionedThreadEvent};
 
     /// Converts an event into a `serde_json::Value`.
@@ -80,7 +80,7 @@ pub mod json {
     }
 
     /// Serializes an event into a JSON string.
-    pub fn to_string(event: &ThreadEvent) -> serde_json::Result<String> {
+    pub(crate) fn to_string(event: &ThreadEvent) -> serde_json::Result<String> {
         serde_json::to_string(event)
     }
 
@@ -90,12 +90,12 @@ pub mod json {
     }
 
     /// Serializes a [`VersionedThreadEvent`] wrapper.
-    pub fn versioned_to_string(event: &ThreadEvent) -> serde_json::Result<String> {
+    pub(crate) fn versioned_to_string(event: &ThreadEvent) -> serde_json::Result<String> {
         serde_json::to_string(&VersionedThreadEvent::new(event.clone()))
     }
 
     /// Deserializes a [`VersionedThreadEvent`] wrapper.
-    pub fn versioned_from_str(payload: &str) -> serde_json::Result<VersionedThreadEvent> {
+    pub(crate) fn versioned_from_str(payload: &str) -> serde_json::Result<VersionedThreadEvent> {
         serde_json::from_str(payload)
     }
 }
@@ -230,13 +230,12 @@ mod otel_support {
     ///
     /// # Usage
     ///
-    /// ```rust,no_run
-    /// use vtcode_exec_events::OtelEmitter;
-    /// use opentelemetry::trace::TracerProvider;
-    ///
-    /// let provider = TracerProvider::default();
-    /// let tracer = provider.tracer("vtcode");
-    /// let mut emitter = OtelEmitter::new(tracer);
+    /// ```rust,ignore
+    /// // Requires concrete SDK type (e.g. opentelemetry_sdk::trace::SdkTracerProvider)
+    /// # use vtcode_exec_events::OtelEmitter;
+    /// # let tracer = opentelemetry_sdk::trace::SdkTracerProvider::default()
+    /// #     .tracer("vtcode");
+    /// # let mut emitter = OtelEmitter::new(tracer);
     /// ```
     pub struct OtelEmitter<T: Tracer> {
         tracer: T,
@@ -524,7 +523,7 @@ pub struct TurnStartedEvent {
     /// downstream consumers can attribute token overhead without inventing
     /// parallel event types.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_breakdown: Option<TokenBreakdown>,
+    token_breakdown: Option<TokenBreakdown>,
 }
 
 /// Per-request token-budget breakdown for the assembled first-request prefix.
@@ -532,22 +531,22 @@ pub struct TurnStartedEvent {
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TokenBreakdown {
     /// System prompt text tokens.
-    pub system_prompt_tokens: u64,
+    system_prompt_tokens: u64,
     /// On-wire tool schema tokens.
-    pub tool_schema_tokens: u64,
+    tool_schema_tokens: u64,
     /// Instruction file tokens included in the prompt.
-    pub instruction_file_tokens: u64,
+    instruction_file_tokens: u64,
     /// Message history text tokens.
-    pub message_history_tokens: u64,
+    message_history_tokens: u64,
     /// Cache read tokens (served from prior turns).
-    pub cache_read_tokens: u64,
+    cache_read_tokens: u64,
     /// Cache write tokens (new cache entries created this turn).
-    pub cache_write_tokens: u64,
+    cache_write_tokens: u64,
     /// Tokens that missed cache (neither read nor written).
-    pub cache_miss_tokens: u64,
+    cache_miss_tokens: u64,
     /// Subagent bootstrap tokens, if this turn spawned a child agent.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub subagent_bootstrap_tokens: Option<u64>,
+    subagent_bootstrap_tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -593,7 +592,7 @@ impl Usage {
     /// count (uncached + cached + cache-creation), so both cached and
     /// cache-creation tokens are subtracted out here.
     #[must_use]
-    pub fn uncached_input_tokens(&self) -> u64 {
+    fn uncached_input_tokens(&self) -> u64 {
         self.input_tokens
             .saturating_sub(self.cached_input_tokens)
             .saturating_sub(self.cache_creation_tokens)

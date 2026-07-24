@@ -68,7 +68,7 @@ impl PlanProgress {
         !self.entries.is_empty()
     }
 
-    pub(crate) fn update_status(&mut self, index: usize, status: acp::PlanEntryStatus) -> bool {
+    fn update_status(&mut self, index: usize, status: acp::PlanEntryStatus) -> bool {
         if discriminant(&self.entries[index].status) == discriminant(&status) {
             return false;
         }

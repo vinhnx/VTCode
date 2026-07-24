@@ -64,7 +64,7 @@ pub struct SessionEventLog {
 impl SessionEventLog {
     /// Open the log for `session_id`, creating the session directory tree and
     /// rebuilding the index from `events.jsonl` if it already exists.
-    pub fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<Self, SessionStoreError> {
+    pub(crate) fn open(workspace: &Path, session_id: &str, max_events: usize) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
         std::fs::create_dir_all(dir.join(crate::DERIVED_DIR))
             .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
@@ -224,7 +224,7 @@ impl SessionEventLog {
     }
 
     /// Reconstruct every event belonging to `turn`.
-    pub fn reconstruct_turn(&self, turn: u64) -> Result<Vec<ThreadEvent>, SessionStoreError> {
+    pub(crate) fn reconstruct_turn(&self, turn: u64) -> Result<Vec<ThreadEvent>, SessionStoreError> {
         let entry = {
             let st = self.state.lock().map_err(poison)?;
             st.index
@@ -263,7 +263,7 @@ impl SessionEventLog {
 
     /// Number of turns recorded.
     #[must_use]
-    pub fn turn_count(&self) -> u64 {
+    pub(crate) fn turn_count(&self) -> u64 {
         self.state.lock().map_err(poison).map_or(0, |s| s.manifest.turn_count)
     }
 
@@ -290,7 +290,7 @@ impl SessionEventLog {
     }
 
     /// Mark the session completed and flush metadata.
-    pub fn complete(&self) -> Result<(), SessionStoreError> {
+    pub(crate) fn complete(&self) -> Result<(), SessionStoreError> {
         let mut st = self.state.lock().map_err(poison)?;
         st.manifest.status = "completed".to_string();
         st.manifest.updated_at = now_rfc3339();
@@ -434,7 +434,7 @@ pub struct SessionManifest {
     /// Stable session identifier (directory name).
     pub session_id: String,
     /// Layout schema version (`SESSION_STORE_SCHEMA_VERSION`).
-    pub schema_version: u32,
+    schema_version: u32,
     /// RFC3339 creation timestamp.
     pub created_at: String,
     /// RFC3339 last-update timestamp.
@@ -450,7 +450,7 @@ pub struct SessionManifest {
 impl SessionManifest {
     /// Create a fresh manifest for a session.
     #[must_use]
-    pub fn new(session_id: &str) -> Self {
+    pub(crate) fn new(session_id: &str) -> Self {
         let ts = now_rfc3339();
         Self {
             session_id: session_id.to_string(),
@@ -468,22 +468,22 @@ impl SessionManifest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TurnIndexEntry {
     /// Turn ordinal (1-based).
-    pub turn_number: u64,
+    turn_number: u64,
     /// Byte offset of the turn's first event.
-    pub start_offset: u64,
+    start_offset: u64,
     /// Byte offset just past the turn's last event.
-    pub end_offset: u64,
+    end_offset: u64,
     /// Number of events in the turn.
-    pub event_count: u64,
+    event_count: u64,
     /// RFC3339 timestamp of turn start.
-    pub ts: String,
+    ts: String,
 }
 
 /// Ordered index of all turns in a session.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TurnIndex {
     /// Turn entries in ordinal order.
-    pub entries: VecDeque<TurnIndexEntry>,
+    entries: VecDeque<TurnIndexEntry>,
 }
 
 impl TurnIndex {

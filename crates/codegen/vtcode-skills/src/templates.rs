@@ -36,66 +36,66 @@ pub enum TemplateType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateVariable {
     /// Variable name
-    pub name: String,
+    name: String,
 
     /// Variable description
-    pub description: String,
+    description: String,
 
     /// Default value
-    pub default_value: Option<String>,
+    default_value: Option<String>,
 
     /// Whether variable is required
-    pub required: bool,
+    required: bool,
 
     /// Validation pattern (regex)
-    pub validation_pattern: Option<String>,
+    validation_pattern: Option<String>,
 
     /// Example values
-    pub examples: Vec<String>,
+    examples: Vec<String>,
 }
 
 /// Skill template configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillTemplate {
     /// Template name
-    pub name: String,
+    name: String,
 
     /// Template type
-    pub template_type: TemplateType,
+    template_type: TemplateType,
 
     /// Template description
-    pub description: String,
+    description: String,
 
     /// Template version
-    pub version: String,
+    version: String,
 
     /// Variables for customization
-    pub variables: Vec<TemplateVariable>,
+    variables: Vec<TemplateVariable>,
 
     /// File structure template
-    pub file_structure: FileStructure,
+    file_structure: FileStructure,
 
     /// Default metadata
-    pub default_metadata: HashMap<String, String>,
+    default_metadata: HashMap<String, String>,
 
     /// Instructions template
-    pub instructions_template: String,
+    instructions_template: String,
 
     /// Example usage
-    pub example_usage: String,
+    example_usage: String,
 }
 
 /// File structure template
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileStructure {
     /// Directories to create
-    pub directories: Vec<String>,
+    directories: Vec<String>,
 
     /// Files to create with templates
-    pub files: HashMap<String, String>,
+    files: HashMap<String, String>,
 
     /// Executable files (scripts, tools)
-    pub executables: HashMap<String, String>,
+    executables: HashMap<String, String>,
 }
 
 /// Template engine for skill generation
@@ -105,7 +105,7 @@ pub struct TemplateEngine {
 
 impl TemplateEngine {
     /// Create new template engine with built-in templates
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut engine = Self { templates: HashMap::new() };
 
         // Register built-in templates
@@ -425,12 +425,12 @@ impl TemplateEngine {
     }
 
     /// Get template by name
-    pub fn get_template(&self, name: &str) -> Option<&SkillTemplate> {
+    fn get_template(&self, name: &str) -> Option<&SkillTemplate> {
         self.templates.get(name)
     }
 
     /// Generate skill from template
-    pub fn generate_skill(
+    fn generate_skill(
         &self,
         template_name: &str,
         variables: HashMap<String, String>,
@@ -660,16 +660,16 @@ impl TemplateEngine {
 /// Template statistics
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TemplateStats {
-    pub total_templates: u32,
-    pub traditional_templates: u32,
-    pub cli_tool_templates: u32,
-    pub code_generator_templates: u32,
-    pub data_processor_templates: u32,
-    pub testing_utility_templates: u32,
-    pub documentation_generator_templates: u32,
-    pub build_automation_templates: u32,
-    pub custom_templates: u32,
-    pub total_variables: u32,
+    total_templates: u32,
+    traditional_templates: u32,
+    cli_tool_templates: u32,
+    code_generator_templates: u32,
+    data_processor_templates: u32,
+    testing_utility_templates: u32,
+    documentation_generator_templates: u32,
+    build_automation_templates: u32,
+    custom_templates: u32,
+    total_variables: u32,
 }
 
 /// Skill template builder for programmatic template creation
@@ -687,7 +687,7 @@ pub struct SkillTemplateBuilder {
 
 impl SkillTemplateBuilder {
     /// Create new template builder
-    pub fn new(name: impl Into<String>, template_type: TemplateType) -> Self {
+    fn new(name: impl Into<String>, template_type: TemplateType) -> Self {
         Self {
             name: name.into(),
             template_type,
@@ -706,13 +706,13 @@ impl SkillTemplateBuilder {
     }
 
     /// Set description
-    pub fn description(mut self, description: impl Into<String>) -> Self {
+    fn description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
         self
     }
 
     /// Set version
-    pub fn version(mut self, version: impl Into<String>) -> Self {
+    fn version(mut self, version: impl Into<String>) -> Self {
         self.version = version.into();
         self
     }
@@ -724,43 +724,43 @@ impl SkillTemplateBuilder {
     }
 
     /// Add directory
-    pub fn directory(mut self, dir: impl Into<String>) -> Self {
+    fn directory(mut self, dir: impl Into<String>) -> Self {
         self.file_structure.directories.push(dir.into());
         self
     }
 
     /// Add file
-    pub fn file(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
+    fn file(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
         self.file_structure.files.insert(path.into(), content.into());
         self
     }
 
     /// Add executable
-    pub fn executable(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
+    fn executable(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
         self.file_structure.executables.insert(path.into(), content.into());
         self
     }
 
     /// Add default metadata
-    pub fn metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    fn metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.default_metadata.insert(key.into(), value.into());
         self
     }
 
     /// Set instructions template
-    pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
+    fn instructions(mut self, instructions: impl Into<String>) -> Self {
         self.instructions_template = instructions.into();
         self
     }
 
     /// Set example usage
-    pub fn example_usage(mut self, example: impl Into<String>) -> Self {
+    fn example_usage(mut self, example: impl Into<String>) -> Self {
         self.example_usage = example.into();
         self
     }
 
     /// Build template
-    pub fn build(self) -> SkillTemplate {
+    fn build(self) -> SkillTemplate {
         SkillTemplate {
             name: self.name,
             template_type: self.template_type,

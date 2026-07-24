@@ -41,12 +41,12 @@ pub enum TaskState {
 
 impl TaskState {
     /// Check if this is a terminal state
-    pub fn is_terminal(&self) -> bool {
+    fn is_terminal(&self) -> bool {
         matches!(self, TaskState::Completed | TaskState::Failed | TaskState::Canceled | TaskState::Rejected)
     }
 
     /// Check if the task can be canceled from this state
-    pub fn is_cancelable(&self) -> bool {
+    fn is_cancelable(&self) -> bool {
         matches!(self, TaskState::Submitted | TaskState::Working | TaskState::InputRequired)
     }
 }
@@ -60,17 +60,17 @@ pub struct TaskStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<Message>,
     /// ISO-8601 timestamp of the status update
-    pub timestamp: DateTime<Utc>,
+    pub(crate) timestamp: DateTime<Utc>,
 }
 
 impl TaskStatus {
     /// Create a new task status
-    pub fn new(state: TaskState) -> Self {
+    pub(crate) fn new(state: TaskState) -> Self {
         Self { state, message: None, timestamp: Utc::now() }
     }
 
     /// Create a new task status with a message
-    pub fn with_message(state: TaskState, message: Message) -> Self {
+    pub(crate) fn with_message(state: TaskState, message: Message) -> Self {
         Self {
             state,
             message: Some(message),
@@ -109,24 +109,24 @@ pub struct Message {
     pub parts: Vec<Part>,
     /// Unique message identifier
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_id: Option<String>,
+    message_id: Option<String>,
     /// Associated task ID
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    task_id: Option<String>,
     /// Conversation context ID
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
+    context_id: Option<String>,
     /// List of prior task IDs for context
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub reference_task_ids: Vec<String>,
+    reference_task_ids: Vec<String>,
     /// Custom metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 impl Message {
     /// Create a new message
-    pub fn new(role: MessageRole, parts: Vec<Part>) -> Self {
+    fn new(role: MessageRole, parts: Vec<Part>) -> Self {
         Self {
             role,
             parts,
@@ -139,7 +139,7 @@ impl Message {
     }
 
     /// Create a text message from the agent
-    pub fn agent_text(text: impl Into<String>) -> Self {
+    pub(crate) fn agent_text(text: impl Into<String>) -> Self {
         Self::new(MessageRole::Agent, vec![Part::text(text)])
     }
 
@@ -196,7 +196,7 @@ pub enum Part {
 
 impl Part {
     /// Create a text part
-    pub fn text(text: impl Into<String>) -> Self {
+    fn text(text: impl Into<String>) -> Self {
         Part::Text { text: text.into() }
     }
 
@@ -219,7 +219,7 @@ impl Part {
     }
 
     /// Create a data part
-    pub fn data(data: serde_json::Value) -> Self {
+    fn data(data: serde_json::Value) -> Self {
         Part::Data { data }
     }
 
@@ -274,23 +274,23 @@ pub struct Artifact {
     pub id: String,
     /// Human-readable name
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    name: Option<String>,
     /// Description of the artifact
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
     /// Content parts
     pub parts: Vec<Part>,
     /// Index for ordering multiple artifacts
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub index: Option<u32>,
+    index: Option<u32>,
     /// Custom metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 impl Artifact {
     /// Create a new artifact with text content
-    pub fn text(id: impl Into<String>, text: impl Into<String>) -> Self {
+    pub(crate) fn text(id: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             name: None,
@@ -314,13 +314,13 @@ impl Artifact {
     }
 
     /// Add a name to the artifact
-    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+    fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
 
     /// Add a description to the artifact
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+    fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
@@ -349,10 +349,10 @@ pub struct Task {
     pub history: Vec<Message>,
     /// Custom metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    metadata: Option<HashMap<String, serde_json::Value>>,
     /// Type discriminator
     #[serde(default = "default_task_kind")]
-    pub kind: String,
+    kind: String,
 }
 
 fn default_task_kind() -> String {
@@ -361,7 +361,7 @@ fn default_task_kind() -> String {
 
 impl Task {
     /// Create a new task with a generated ID
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             context_id: None,
@@ -387,28 +387,28 @@ impl Task {
     }
 
     /// Set the context ID
-    pub fn with_context_id(mut self, context_id: impl Into<String>) -> Self {
+    pub(crate) fn with_context_id(mut self, context_id: impl Into<String>) -> Self {
         self.context_id = Some(context_id.into());
         self
     }
 
     /// Get the current state
-    pub fn state(&self) -> TaskState {
+    pub(crate) fn state(&self) -> TaskState {
         self.status.state
     }
 
     /// Check if the task is in a terminal state
-    pub fn is_terminal(&self) -> bool {
+    pub(crate) fn is_terminal(&self) -> bool {
         self.status.state.is_terminal()
     }
 
     /// Check if the task can be canceled
-    pub fn is_cancelable(&self) -> bool {
+    pub(crate) fn is_cancelable(&self) -> bool {
         self.status.state.is_cancelable()
     }
 
     /// Update the task status
-    pub fn update_status(&mut self, state: TaskState, message: Option<Message>) {
+    fn update_status(&mut self, state: TaskState, message: Option<Message>) {
         self.status = match message {
             Some(msg) => TaskStatus::with_message(state, msg),
             None => TaskStatus::new(state),

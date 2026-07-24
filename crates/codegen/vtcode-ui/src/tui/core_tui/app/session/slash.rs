@@ -34,7 +34,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
     (transcript_area, panel_area)
 }
 
-pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+pub(crate) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.height == 0 || area.width == 0 || !session.slash_palette_visible() || !session.inline_lists_visible() {
         session.slash_palette.clear_visible_rows();
         return;
@@ -158,7 +158,7 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
 }
 
-pub(super) fn handle_slash_palette_change(session: &mut Session) {
+fn handle_slash_palette_change(session: &mut Session) {
     session.core.recalculate_transcript_rows();
     session.core.enforce_scroll_bounds();
     session.core.mark_dirty();
@@ -212,27 +212,27 @@ pub(super) fn move_slash_selection_down(session: &mut Session) -> bool {
     handle_slash_selection_change(session, changed)
 }
 
-pub(super) fn select_first_slash_suggestion(session: &mut Session) -> bool {
+fn select_first_slash_suggestion(session: &mut Session) -> bool {
     let changed = session.slash_palette.select_first();
     handle_slash_selection_change(session, changed)
 }
 
-pub(super) fn select_last_slash_suggestion(session: &mut Session) -> bool {
+fn select_last_slash_suggestion(session: &mut Session) -> bool {
     let changed = session.slash_palette.select_last();
     handle_slash_selection_change(session, changed)
 }
 
-pub(super) fn page_up_slash_suggestion(session: &mut Session) -> bool {
+fn page_up_slash_suggestion(session: &mut Session) -> bool {
     let changed = session.slash_palette.page_up();
     handle_slash_selection_change(session, changed)
 }
 
-pub(super) fn page_down_slash_suggestion(session: &mut Session) -> bool {
+fn page_down_slash_suggestion(session: &mut Session) -> bool {
     let changed = session.slash_palette.page_down();
     handle_slash_selection_change(session, changed)
 }
 
-pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
+fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
     if changed {
         preview_selected_slash_suggestion(session);
         session.core.recalculate_transcript_rows();
@@ -317,7 +317,7 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
     true
 }
 
-pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
+fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     let input_content = session.core.input_manager.content();
     let cursor_pos = session.core.input_manager.cursor();
 

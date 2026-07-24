@@ -68,51 +68,51 @@ impl ToolAuditStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolAuditEntry {
     /// Unix epoch milliseconds when the entry was created.
-    pub timestamp_unix_ms: u64,
+    timestamp_unix_ms: u64,
     /// Stable identifier for the session (e.g. UUID).
-    pub session_id: String,
+    session_id: String,
     /// Stable identifier for the turn within the session.
-    pub turn_id: String,
+    turn_id: String,
     /// Provider-side identifier for the tool call (matches `tool_call_id`).
-    pub tool_call_id: String,
+    tool_call_id: String,
     /// Canonical tool name (e.g. `mcp::fetch::fetch`, `read_file`).
-    pub tool_name: String,
+    tool_name: String,
     /// SHA-256 of the original (unredacted) tool arguments, hex-encoded.
-    pub arguments_hash: String,
+    arguments_hash: String,
     /// Optional redacted snapshot of the arguments (secrets removed).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments_redacted: Option<Value>,
+    arguments_redacted: Option<Value>,
     /// SHA-256 of the tool result, hex-encoded.
-    pub result_hash: String,
+    result_hash: String,
     /// Optional first N characters of the result for offline triage.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result_summary: Option<String>,
+    result_summary: Option<String>,
     /// Wall-clock duration of the tool call in milliseconds.
-    pub duration_ms: u64,
+    duration_ms: u64,
     /// Final status (success / failure / timeout / cancelled / blocked).
-    pub status: ToolAuditStatus,
+    status: ToolAuditStatus,
     /// Optional sandbox policy applied to this tool call (path to a JSON
     /// snapshot, or a short identifier).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sandbox_policy: Option<String>,
+    sandbox_policy: Option<String>,
     /// MCP transport when applicable (`stdio`, `streamable_http`, …).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transport: Option<String>,
+    transport: Option<String>,
     /// Remote server address when applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub server_address: Option<String>,
+    server_address: Option<String>,
     /// Remote server port when applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub server_port: Option<u16>,
+    server_port: Option<u16>,
     /// Identifier of the model that requested the call.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_id: Option<String>,
+    model_id: Option<String>,
     /// True when the static `is_suspicious_instruction` probe flagged the
     /// result content.
-    pub prompt_injection_flagged: bool,
+    prompt_injection_flagged: bool,
     /// Optional free-form reason (e.g. `loop_detector`, `circuit_breaker_open`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    reason: Option<String>,
 }
 
 /// Trait every audit sink implements.
@@ -142,27 +142,27 @@ pub struct InMemorySink {
 impl InMemorySink {
     /// Create a new in-memory sink with no entries.
     #[must_use]
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
     /// Snapshot all entries recorded so far.
-    pub fn entries(&self) -> Vec<ToolAuditEntry> {
+    fn entries(&self) -> Vec<ToolAuditEntry> {
         self.entries.lock().expect("in-memory sink poisoned").clone()
     }
 
     /// Number of recorded entries.
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.entries.lock().expect("in-memory sink poisoned").len()
     }
 
     /// Returns true when no entries have been recorded.
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Drop all recorded entries.
-    pub fn clear(&self) {
+    fn clear(&self) {
         self.entries.lock().expect("in-memory sink poisoned").clear();
     }
 }
@@ -204,7 +204,7 @@ impl std::fmt::Debug for JsonlFileSink {
 impl JsonlFileSink {
     /// Open (or create) the sink at `path`. Returns an error if the file can't
     /// be created — typically a permissions issue.
-    pub fn open(path: impl Into<PathBuf>, max_size_bytes: u64, max_files: usize) -> std::io::Result<Self> {
+    fn open(path: impl Into<PathBuf>, max_size_bytes: u64, max_files: usize) -> std::io::Result<Self> {
         let path = path.into();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -326,7 +326,7 @@ impl MultiSink {
     /// with callers that want to read from one of the sinks while still
     /// forwarding writes.
     #[must_use]
-    pub fn new(sinks: Vec<Arc<dyn ToolAuditSink>>) -> Self {
+    fn new(sinks: Vec<Arc<dyn ToolAuditSink>>) -> Self {
         Self { inner: sinks }
     }
 
@@ -374,23 +374,23 @@ impl std::fmt::Debug for ToolAuditLogger {
 impl ToolAuditLogger {
     /// Wrap a sink in a logger.
     #[must_use]
-    pub fn new(sink: Arc<dyn ToolAuditSink>) -> Self {
+    fn new(sink: Arc<dyn ToolAuditSink>) -> Self {
         Self { sink }
     }
 
     /// Disabled logger that drops every entry (equivalent to `NullSink`).
     #[must_use]
-    pub fn disabled() -> Self {
+    fn disabled() -> Self {
         Self::new(Arc::new(NullSink))
     }
 
     /// Persist a single entry through the underlying sink.
-    pub fn record(&self, entry: ToolAuditEntry) {
+    fn record(&self, entry: ToolAuditEntry) {
         self.sink.write(&entry);
     }
 
     /// Flush the underlying sink.
-    pub fn flush(&self) {
+    fn flush(&self) {
         self.sink.flush();
     }
 
@@ -412,7 +412,7 @@ impl Default for ToolAuditLogger {
 /// Exposed so callers building a `ToolAuditEntry` can compute `arguments_hash`
 /// / `result_hash` without pulling in `sha2` directly.
 #[must_use]
-pub fn sha256_hex(bytes: &[u8]) -> String {
+fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(bytes);

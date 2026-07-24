@@ -123,17 +123,17 @@ impl TtyExt for io::Stdin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TtyCapabilities {
     /// Whether the terminal supports ANSI color codes.
-    pub color: bool,
+    color: bool,
     /// Whether the terminal supports cursor movement and manipulation.
-    pub cursor: bool,
+    cursor: bool,
     /// Whether the terminal supports bracketed paste mode.
-    pub bracketed_paste: bool,
+    bracketed_paste: bool,
     /// Whether the terminal supports focus change events.
-    pub focus_events: bool,
+    focus_events: bool,
     /// Whether the terminal supports mouse input.
-    pub mouse: bool,
+    mouse: bool,
     /// Whether the terminal supports keyboard enhancement flags.
-    pub keyboard_enhancement: bool,
+    keyboard_enhancement: bool,
 }
 
 impl TtyCapabilities {
@@ -146,7 +146,7 @@ impl TtyCapabilities {
     /// # Returns
     ///
     /// Returns `Some(TtyCapabilities)` if stderr is a TTY, otherwise `None`.
-    pub fn detect() -> Option<Self> {
+    pub(crate) fn detect() -> Option<Self> {
         let stderr = io::stderr();
         if !stderr.is_tty() {
             return None;
@@ -173,7 +173,7 @@ impl TtyCapabilities {
     }
 
     /// Returns `true` if the terminal supports basic TUI features.
-    pub fn is_basic_tui(&self) -> bool {
+    pub(crate) fn is_basic_tui(&self) -> bool {
         self.color && self.cursor
     }
 }
@@ -182,7 +182,7 @@ impl TtyCapabilities {
 ///
 /// This is useful for deciding whether to use rich terminal features
 /// or fall back to plain text output.
-pub fn is_interactive_session() -> bool {
+fn is_interactive_session() -> bool {
     io::stderr().is_tty() && io::stdin().is_tty()
 }
 

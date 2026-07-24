@@ -33,7 +33,7 @@ impl AgentRunner {
         }
     }
 
-    pub(super) async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
+    async fn build_exposed_tool_snapshot(&self) -> Result<SessionToolCatalogSnapshot> {
         let planning_active = self.tool_registry.is_planning_active();
         let request_user_input_enabled = false;
         // Keep definitions stable across runtime mode transitions. Active names
@@ -79,7 +79,7 @@ impl AgentRunner {
             ))
     }
 
-    pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
+    async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
         let snapshot = self.build_exposed_tool_snapshot().await?;
         let active_tool_names: HashSet<&str> = snapshot.active_tool_names.iter().map(String::as_str).collect();
         Ok(snapshot

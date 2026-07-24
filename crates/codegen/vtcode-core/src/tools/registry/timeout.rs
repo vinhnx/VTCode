@@ -116,8 +116,8 @@ impl ToolTimeoutPolicy {
 /// Tracks latency samples for adaptive timeout calculation.
 #[derive(Debug, Clone, Default)]
 pub struct ToolLatencyStats {
-    pub(super) samples: VecDeque<Duration>,
-    pub(super) max_samples: usize,
+    samples: VecDeque<Duration>,
+    max_samples: usize,
 }
 
 impl ToolLatencyStats {

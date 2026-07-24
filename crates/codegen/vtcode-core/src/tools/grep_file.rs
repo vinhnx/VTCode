@@ -67,7 +67,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::tools::ast_grep_language::AstGrepLanguage;
 
-pub(crate) const CODE_SEARCH_STREAM_BYTE_CAP: usize = 1024 * 1024;
+const CODE_SEARCH_STREAM_BYTE_CAP: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LiteralSearchCandidate {

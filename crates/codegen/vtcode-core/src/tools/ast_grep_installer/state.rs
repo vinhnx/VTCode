@@ -19,18 +19,18 @@ const INSTALL_CACHE_STALE_AFTER_SECS: u64 = 86_400;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct InstallationCache {
-    pub(super) last_attempt: u64,
+    last_attempt: u64,
     pub(super) status: String,
-    pub(super) release_tag: Option<String>,
+    release_tag: Option<String>,
     pub(super) failure_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct InstallPaths {
-    pub(super) state_dir: PathBuf,
+    state_dir: PathBuf,
     pub(super) bin_dir: PathBuf,
-    pub(super) cache_path: PathBuf,
-    pub(super) lock_path: PathBuf,
+    cache_path: PathBuf,
+    lock_path: PathBuf,
     pub(super) binary_path: PathBuf,
     pub(super) alias_path: Option<PathBuf>,
 }

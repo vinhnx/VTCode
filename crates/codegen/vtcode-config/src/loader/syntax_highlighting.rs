@@ -46,7 +46,7 @@ impl Default for SyntaxHighlightingConfig {
 }
 
 impl SyntaxHighlightingConfig {
-    pub fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }

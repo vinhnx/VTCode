@@ -124,7 +124,7 @@ impl McpClient {
     /// Public-facing version that takes ownership of `args` for compatibility
     /// with existing callers. Delegates to the reference-taking implementation
     /// to avoid unnecessary cloning when the caller already has a reference.
-    pub async fn execute_tool_with_validation(&self, tool_name: &str, args: Value) -> Result<Value> {
+    async fn execute_tool_with_validation(&self, tool_name: &str, args: Value) -> Result<Value> {
         self.execute_tool_with_validation_ref(tool_name, &args).await
     }
 

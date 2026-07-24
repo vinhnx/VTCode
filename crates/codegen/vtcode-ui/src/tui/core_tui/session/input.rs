@@ -876,7 +876,7 @@ impl Session {
         Some(line)
     }
 
-    pub(crate) fn input_uses_shell_prefix(&self) -> bool {
+    fn input_uses_shell_prefix(&self) -> bool {
         self.input_manager.content().trim_start().starts_with('!')
     }
 
@@ -1000,7 +1000,7 @@ impl Session {
     }
 
     /// Build input render data for external widgets
-    pub fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
+    pub(crate) fn build_input_widget_data(&self, width: u16, height: u16) -> InputWidgetData {
         let input_render = self.build_input_render(width, height);
         let background_style = self.styles.input_background_style();
 
@@ -1016,7 +1016,7 @@ impl Session {
     }
 
     /// Build input status line for external widgets
-    pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
+    pub(crate) fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
         self.render_input_status_line(width).map(|line| line.spans)
     }
 }

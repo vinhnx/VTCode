@@ -37,21 +37,21 @@ impl SkillLocationType {}
 #[derive(Debug, Clone)]
 pub struct SkillLocation {
     /// Location type for precedence
-    pub location_type: SkillLocationType,
+    location_type: SkillLocationType,
 
     /// Base directory path
-    pub base_path: PathBuf,
+    base_path: PathBuf,
 
     /// Scanning mode (recursive vs one-level)
-    pub recursive: bool,
+    recursive: bool,
 
     /// Skill name separator for recursive mode
-    pub name_separator: char,
+    name_separator: char,
 }
 
 impl SkillLocation {
     /// Create new skill location
-    pub fn new(location_type: SkillLocationType, base_path: PathBuf, recursive: bool) -> Self {
+    fn new(location_type: SkillLocationType, base_path: PathBuf, recursive: bool) -> Self {
         let name_separator = match location_type {
             SkillLocationType::PiUser | SkillLocationType::PiProject => ':',
             _ => '/', // Default to path separator
@@ -66,12 +66,12 @@ impl SkillLocation {
     }
 
     /// Check if this location exists
-    pub fn exists(&self) -> bool {
+    fn exists(&self) -> bool {
         self.base_path.exists() && self.base_path.is_dir()
     }
 
     /// Get skill name from path
-    pub fn get_skill_name(&self, skill_path: &Path) -> Option<String> {
+    fn get_skill_name(&self, skill_path: &Path) -> Option<String> {
         if !skill_path.exists() || !skill_path.is_dir() {
             return None;
         }
@@ -114,12 +114,12 @@ pub struct SkillLocations {
 
 impl SkillLocations {
     /// Create new skill locations manager with default locations
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::with_locations(Self::default_locations())
     }
 
     /// Create with custom locations
-    pub fn with_locations(locations: Vec<SkillLocation>) -> Self {
+    fn with_locations(locations: Vec<SkillLocation>) -> Self {
         // Sort by precedence (highest first)
         let mut sorted_locations = locations;
         sorted_locations.sort_by_key(|loc| std::cmp::Reverse(loc.location_type));
@@ -128,7 +128,7 @@ impl SkillLocations {
     }
 
     /// Get default skill locations following pi-mono pattern
-    pub fn default_locations() -> Vec<SkillLocation> {
+    fn default_locations() -> Vec<SkillLocation> {
         vec![
             // VT Code locations (highest precedence)
             SkillLocation::new(
@@ -178,7 +178,7 @@ impl SkillLocations {
     }
 
     /// Discover all skills across all locations
-    pub fn discover_skills(&self) -> Result<Vec<DiscoveredSkill>> {
+    fn discover_skills(&self) -> Result<Vec<DiscoveredSkill>> {
         let mut discovered_skills = HashMap::new(); // skill_name -> (location_type, skill_context)
         let mut discovery_stats = DiscoveryStats::default();
 
@@ -375,26 +375,26 @@ impl SkillLocations {
 #[derive(Debug, Clone)]
 pub struct DiscoveredSkill {
     /// Location type where skill was found
-    pub location_type: SkillLocationType,
+    location_type: SkillLocationType,
 
     /// Skill context (metadata only)
-    pub skill_context: SkillContext,
+    skill_context: SkillContext,
 
     /// Path to skill directory
-    pub skill_path: PathBuf,
+    skill_path: PathBuf,
 
     /// Generated skill name (with separators for recursive)
-    pub skill_name: String,
+    skill_name: String,
 }
 
 /// Discovery statistics
 #[derive(Debug, Default)]
 pub struct DiscoveryStats {
-    pub locations_scanned: usize,
-    pub skills_found: usize,
-    pub skips_due_to_precedence: usize,
-    pub skills_with_higher_precedence: usize,
-    pub parse_errors: usize,
+    locations_scanned: usize,
+    skills_found: usize,
+    skips_due_to_precedence: usize,
+    skills_with_higher_precedence: usize,
+    parse_errors: usize,
 }
 
 impl Default for SkillLocations {

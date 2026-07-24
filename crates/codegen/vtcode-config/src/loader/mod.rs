@@ -1,5 +1,5 @@
 #[cfg(feature = "bootstrap")]
-pub mod bootstrap;
+mod bootstrap;
 pub mod layers;
 pub mod watch;
 

@@ -77,7 +77,7 @@ impl FileOpsTool {
         }
     }
 
-    pub(super) fn absolute_candidate(&self, path: &Path) -> PathBuf {
+    fn absolute_candidate(&self, path: &Path) -> PathBuf {
         if path.is_absolute() {
             path.to_path_buf()
         } else {
@@ -113,7 +113,7 @@ impl FileOpsTool {
         Ok(canonical)
     }
 
-    pub(super) fn canonicalize_allow_missing<'a>(
+    fn canonicalize_allow_missing<'a>(
         &'a self,
         normalized: &'a Path,
     ) -> impl Future<Output = Result<PathBuf>> + 'a {
@@ -185,7 +185,7 @@ impl FileOpsTool {
         }
     }
 
-    pub(super) async fn suggest_workspace_paths(&self, requested_path: &str, kind: PathSuggestionKind) -> Vec<String> {
+    async fn suggest_workspace_paths(&self, requested_path: &str, kind: PathSuggestionKind) -> Vec<String> {
         let requested_path = normalize_path_for_suggestion(requested_path);
         if requested_path.is_empty() || requested_path == "." {
             return Vec::new();

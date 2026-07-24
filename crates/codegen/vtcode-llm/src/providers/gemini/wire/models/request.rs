@@ -4,47 +4,47 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateContentRequest {
-    pub contents: Vec<Content>,
+    pub(crate) contents: Vec<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<Tool>>,
+    pub(crate) tools: Option<Vec<Tool>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "toolConfig")]
-    pub tool_config: Option<ToolConfig>,
+    pub(crate) tool_config: Option<ToolConfig>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "systemInstruction")]
-    pub system_instruction: Option<SystemInstruction>,
+    pub(crate) system_instruction: Option<SystemInstruction>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         rename = "generationConfig",
         deserialize_with = "deserialize_boxed_generation_config_opt"
     )]
-    pub generation_config: Option<Box<GenerationConfig>>,
+    pub(crate) generation_config: Option<Box<GenerationConfig>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
+    pub(crate) temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
+    pub(crate) top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_k: Option<i32>,
+    pub(crate) top_k: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "candidateCount")]
-    pub candidate_count: Option<i32>,
+    pub(crate) candidate_count: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "maxOutputTokens")]
-    pub max_output_tokens: Option<u32>,
+    pub(crate) max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "stopSequences")]
-    pub stop_sequences: Option<Vec<String>>,
+    pub(crate) stop_sequences: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "responseMimeType")]
-    pub response_mime_type: Option<String>,
+    pub(crate) response_mime_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "responseSchema")]
-    pub response_schema: Option<Value>,
+    pub(crate) response_schema: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "presencePenalty")]
-    pub presence_penalty: Option<f32>,
+    pub(crate) presence_penalty: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "frequencyPenalty")]
-    pub frequency_penalty: Option<f32>,
+    pub(crate) frequency_penalty: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "thinkingConfig")]
-    pub thinking_config: Option<ThinkingConfig>,
+    pub(crate) thinking_config: Option<ThinkingConfig>,
 }
 
 impl GenerationConfig {
@@ -71,7 +71,7 @@ impl GenerationConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ThinkingConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking_level: Option<String>,
+    pub(crate) thinking_level: Option<String>,
 }
 
 fn deserialize_boxed_generation_config_opt<'de, D>(deserializer: D) -> Result<Option<Box<GenerationConfig>>, D::Error>

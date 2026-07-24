@@ -174,9 +174,9 @@ pub struct ToolRegistry {
     progress_callback: Arc<RwLock<Option<ToolProgressCallback>>>,
     // Performance Observability
     /// Total tool calls made in current session
-    pub(crate) tool_call_counter: Arc<std::sync::atomic::AtomicU64>,
+    tool_call_counter: Arc<std::sync::atomic::AtomicU64>,
     /// Total PTY poll iterations (for monitoring CPU usage)
-    pub(crate) pty_poll_counter: Arc<std::sync::atomic::AtomicU64>,
+    pty_poll_counter: Arc<std::sync::atomic::AtomicU64>,
     /// Shared metrics collector for reliability and execution observability
     metrics: Arc<crate::metrics::MetricsCollector>,
 
@@ -253,7 +253,7 @@ impl ToolRegistry {
         *self.self_ref.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&registry));
     }
 
-    pub(crate) fn builtin_executor_for_code(&self) -> Option<Arc<dyn BuiltinToolExecutor>> {
+    fn builtin_executor_for_code(&self) -> Option<Arc<dyn BuiltinToolExecutor>> {
         self.self_ref
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

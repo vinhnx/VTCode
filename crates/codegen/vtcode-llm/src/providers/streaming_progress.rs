@@ -24,7 +24,7 @@ pub struct StreamingProgressTracker {
 
 impl StreamingProgressTracker {
     /// Create a new streaming progress tracker
-    pub fn new(total_timeout: Duration) -> Self {
+    fn new(total_timeout: Duration) -> Self {
         Self {
             callback: None,
             warning_threshold: 0.8,
@@ -35,13 +35,13 @@ impl StreamingProgressTracker {
     }
 
     /// Set a progress callback
-    pub fn with_callback(mut self, callback: StreamingProgressCallback) -> Self {
+    fn with_callback(mut self, callback: StreamingProgressCallback) -> Self {
         self.callback = Some(Arc::new(callback));
         self
     }
 
     /// Set the warning threshold (0.0-1.0)
-    pub fn with_warning_threshold(mut self, threshold: f32) -> Self {
+    fn with_warning_threshold(mut self, threshold: f32) -> Self {
         self.warning_threshold = threshold.clamp(0.0, 1.0);
         self
     }
@@ -52,13 +52,13 @@ impl StreamingProgressTracker {
     }
 
     /// Report progress with elapsed time
-    pub fn report_chunk_received(&self) {
+    fn report_chunk_received(&self) {
         let elapsed = self.start_time.elapsed();
         self.report_progress_with_elapsed(elapsed);
     }
 
     /// Report progress at a specific elapsed duration
-    pub fn report_progress_with_elapsed(&self, elapsed: Duration) {
+    fn report_progress_with_elapsed(&self, elapsed: Duration) {
         if self.total_timeout.as_secs() == 0 {
             return;
         }
@@ -68,22 +68,22 @@ impl StreamingProgressTracker {
     }
 
     /// Report error or timeout (100% progress)
-    pub fn report_error(&self) {
+    fn report_error(&self) {
         self.report_progress(1.0);
     }
 
     /// Get current progress as percentage (0-100)
-    pub fn progress_percent(&self) -> u8 {
+    fn progress_percent(&self) -> u8 {
         self.last_reported_progress.load(Ordering::Relaxed)
     }
 
     /// Get elapsed time since start
-    pub fn elapsed(&self) -> Duration {
+    fn elapsed(&self) -> Duration {
         self.start_time.elapsed()
     }
 
     /// Check if warning threshold has been exceeded
-    pub fn is_approaching_timeout(&self) -> bool {
+    fn is_approaching_timeout(&self) -> bool {
         let elapsed = self.start_time.elapsed();
         if self.total_timeout.as_secs() == 0 {
             return false;
@@ -134,7 +134,7 @@ pub struct StreamingProgressBuilder {
 
 impl StreamingProgressBuilder {
     /// Create a new builder with total timeout in seconds
-    pub fn new(timeout_secs: u64) -> Self {
+    fn new(timeout_secs: u64) -> Self {
         Self {
             total_timeout: Duration::from_secs(timeout_secs),
             callback: None,
@@ -158,13 +158,13 @@ impl StreamingProgressBuilder {
     }
 
     /// Set the warning threshold (0.0-1.0)
-    pub fn warning_threshold(mut self, threshold: f32) -> Self {
+    fn warning_threshold(mut self, threshold: f32) -> Self {
         self.warning_threshold = threshold.clamp(0.0, 1.0);
         self
     }
 
     /// Build the tracker
-    pub fn build(self) -> StreamingProgressTracker {
+    fn build(self) -> StreamingProgressTracker {
         let mut tracker = StreamingProgressTracker::new(self.total_timeout);
         if let Some(callback) = self.callback {
             tracker.callback = Some(Arc::new(callback));

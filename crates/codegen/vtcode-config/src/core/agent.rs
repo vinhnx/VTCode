@@ -282,7 +282,7 @@ impl ContinuationPolicy {
         }
     }
 
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("off") {
             Some(Self::Off)
@@ -341,7 +341,7 @@ impl ContextResetMode {
         }
     }
 
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("off") {
             Some(Self::Off)
@@ -382,7 +382,7 @@ impl HarnessOrchestrationMode {
         }
     }
 
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("single") {
             Some(Self::Single)
@@ -507,7 +507,7 @@ pub struct AgentHarnessConfig {
     /// write a blocker file and notify the user out-of-band rather than blocking
     /// on terminal input.  Opt-in (default: disabled).
     #[serde(default)]
-    pub async_approval: AsyncApprovalConfig,
+    async_approval: AsyncApprovalConfig,
     /// Adversarial multi-model evaluator panel.  When enabled, the harness
     /// runs the evaluator prompt against every listed model in parallel and
     /// aggregates the strictest verdict/scorecard across the panel.
@@ -555,26 +555,26 @@ impl Default for AgentHarnessConfig {
 pub struct AsyncApprovalConfig {
     /// Master switch.  Default: false (opt-in).
     #[serde(default = "default_async_approval_enabled")]
-    pub enabled: bool,
+    enabled: bool,
 
     /// Maximum time in seconds before a deferred approval is auto-denied.
     #[serde(default = "default_async_approval_timeout_secs")]
-    pub timeout_secs: u64,
+    timeout_secs: u64,
 
     /// Optional command invoked with the blocker file path as argument when
     /// an approval request is deferred (e.g. `/usr/local/bin/notify-approval`).
     #[serde(default)]
-    pub notify_command: Option<String>,
+    notify_command: Option<String>,
 
     /// Auto-approve tool calls whose estimated cost is below this threshold (USD).
     /// Set to 0.0 to require approval for everything.
     #[serde(default = "default_async_approval_auto_approve_below")]
-    pub auto_approve_below_usd: f64,
+    auto_approve_below_usd: f64,
 
     /// When set, auto-approve after this many seconds if no explicit answer.
     /// The blocker file is updated with the auto-approval decision.
     #[serde(default)]
-    pub auto_approve_timeout_secs: Option<u64>,
+    auto_approve_timeout_secs: Option<u64>,
 }
 
 impl Default for AsyncApprovalConfig {
@@ -771,7 +771,7 @@ impl Default for ToolResultClearingConfig {
 }
 
 impl ToolResultClearingConfig {
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.trigger_tokens == 0 {
             return Err("tool_result_clearing.trigger_tokens must be greater than 0".to_string());
         }
@@ -826,11 +826,11 @@ pub struct CircuitBreakerConfig {
 
     /// Pause and ask user when circuit opens (vs auto-backoff)
     #[serde(default = "default_pause_on_open")]
-    pub pause_on_open: bool,
+    pause_on_open: bool,
 
     /// Number of open circuits before triggering pause
     #[serde(default = "default_max_open_circuits")]
-    pub max_open_circuits: usize,
+    max_open_circuits: usize,
 
     /// Cooldown period between recovery prompts (seconds)
     #[serde(default = "default_recovery_cooldown")]
@@ -1001,7 +1001,7 @@ impl AgentConfig {
     }
 
     /// Validate LLM generation parameters
-    pub fn validate_llm_params(&self) -> Result<(), String> {
+    pub(crate) fn validate_llm_params(&self) -> Result<(), String> {
         // Validate temperature range
         if !(0.0..=1.0).contains(&self.temperature) {
             return Err(format!("temperature must be between 0.0 and 1.0, got {}", self.temperature));
@@ -1300,11 +1300,11 @@ pub struct MemoriesConfig {
     /// Controls whether newly completed threads can be stored as
     /// memory-generation inputs.
     #[serde(default = "default_memories_generate")]
-    pub generate_memories: bool,
+    pub(crate) generate_memories: bool,
 
     /// Controls whether VT Code injects existing memories into future sessions.
     #[serde(default = "default_memories_use")]
-    pub use_memories: bool,
+    pub(crate) use_memories: bool,
 
     /// Overrides the model used for per-thread memory extraction.
     #[serde(default)]
@@ -1378,7 +1378,7 @@ impl Default for PersistentMemoryConfig {
 }
 
 impl PersistentMemoryConfig {
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.startup_line_limit == 0 {
             return Err("persistent_memory.startup_line_limit must be greater than 0".to_string());
         }
@@ -1420,11 +1420,11 @@ pub struct AgentOnboardingConfig {
 
     /// Introductory text shown at session start
     #[serde(default = "default_intro_text")]
-    pub intro_text: String,
+    intro_text: String,
 
     /// Whether to include project overview in onboarding message
     #[serde(default = "default_show_project_overview")]
-    pub include_project_overview: bool,
+    include_project_overview: bool,
 
     /// Whether to include language summary in onboarding message
     #[serde(default = "default_show_language_summary")]
@@ -1701,7 +1701,7 @@ pub struct AgentVibeCodingConfig {
 
     /// Maximum entity matches to return (default: 5)
     #[serde(default = "default_vibe_max_entity_matches")]
-    pub max_entity_matches: usize,
+    max_entity_matches: usize,
 
     /// Track workspace state (file activity, value changes)
     #[serde(default = "default_vibe_track_workspace")]
@@ -1709,11 +1709,11 @@ pub struct AgentVibeCodingConfig {
 
     /// Maximum recent files to track (default: 20)
     #[serde(default = "default_vibe_max_recent_files")]
-    pub max_recent_files: usize,
+    max_recent_files: usize,
 
     /// Track value history for inference
     #[serde(default = "default_vibe_track_values")]
-    pub track_value_history: bool,
+    track_value_history: bool,
 
     /// Enable conversation memory for pronoun resolution
     #[serde(default = "default_vibe_conversation_memory")]
@@ -1721,27 +1721,27 @@ pub struct AgentVibeCodingConfig {
 
     /// Maximum conversation turns to remember (default: 50)
     #[serde(default = "default_vibe_max_memory_turns")]
-    pub max_memory_turns: usize,
+    max_memory_turns: usize,
 
     /// Enable pronoun resolution (it, that, this)
     #[serde(default = "default_vibe_pronoun_resolution")]
-    pub enable_pronoun_resolution: bool,
+    enable_pronoun_resolution: bool,
 
     /// Enable proactive context gathering
     #[serde(default = "default_vibe_proactive_context")]
-    pub enable_proactive_context: bool,
+    enable_proactive_context: bool,
 
     /// Maximum files to gather for context (default: 3)
     #[serde(default = "default_vibe_max_context_files")]
-    pub max_context_files: usize,
+    max_context_files: usize,
 
     /// Maximum code snippets per file (default: 20 lines)
     #[serde(default = "default_vibe_max_snippets_per_file")]
-    pub max_context_snippets_per_file: usize,
+    max_context_snippets_per_file: usize,
 
     /// Maximum search results to include (default: 5)
     #[serde(default = "default_vibe_max_search_results")]
-    pub max_search_results: usize,
+    max_search_results: usize,
 
     /// Enable relative value inference (by half, double, etc.)
     #[serde(default = "default_vibe_value_inference")]

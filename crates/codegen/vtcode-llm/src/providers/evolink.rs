@@ -92,11 +92,11 @@ pub struct EvolinkProvider {
 }
 
 impl EvolinkProvider {
-    pub fn new(api_key: String) -> Self {
+    fn new(api_key: String) -> Self {
         Self::with_model(api_key, models::evolink::DEFAULT_MODEL.to_string())
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self { core: OpenAiCompatCore::direct(api_key, model) }
     }
 

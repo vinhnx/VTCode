@@ -49,7 +49,7 @@ pub enum LocalReadinessError {
 impl LocalReadinessError {
     /// Stable tag stored in `LLMErrorMetadata.code` so the runloop can render
     /// an interactive "start server" / "pull model" offer.
-    pub fn code(&self) -> &'static str {
+    fn code(&self) -> &'static str {
         match self {
             Self::ServerDown { .. } => "local_server_down",
             Self::ModelMissing { .. } => "local_model_missing",
@@ -57,7 +57,7 @@ impl LocalReadinessError {
     }
 
     /// The exact command/instruction the user needs to run to recover.
-    pub fn fix_command(&self) -> String {
+    fn fix_command(&self) -> String {
         match self {
             Self::ServerDown { provider } => format!("/local start {}", provider.key()),
             Self::ModelMissing { provider, model } => match provider {
@@ -71,7 +71,7 @@ impl LocalReadinessError {
     }
 
     /// Human-readable recovery instruction (used in logs/troubleshooting).
-    pub fn recovery_hint(&self) -> String {
+    fn recovery_hint(&self) -> String {
         match self {
             Self::ServerDown { provider } => format!(
                 "{} server is not running. Start it with `/local start {}` (or the app/CLI), \
@@ -87,7 +87,7 @@ impl LocalReadinessError {
 
     /// Convert into a structured `LLMError` carrying the recovery code so the
     /// runloop can offer the user a one-tap fix.
-    pub fn to_llm_error(&self, display: &str) -> LLMError {
+    pub(crate) fn to_llm_error(&self, display: &str) -> LLMError {
         LLMError::Provider {
             message: self.recovery_hint(),
             metadata: Some(vtcode_commons::llm::LLMErrorMetadata::new(
@@ -115,7 +115,7 @@ fn is_cloud_ollama_model(model: &str) -> bool {
 /// we never silently swap an explicit selection for a different loaded model.
 /// Only when *no* model is specified (empty request) do we fall back to the
 /// single loaded model.
-pub async fn resolve_local_model(
+pub(crate) async fn resolve_local_model(
     provider: LocalProvider,
     requested: &str,
     base_url: Option<&str>,
@@ -185,7 +185,7 @@ async fn fetch_models(provider: LocalProvider, base_url: Option<&str>) -> anyhow
 
 /// Clear the cached readiness state (used by tests and after a server lifecycle
 /// change so a subsequent generation re-probes immediately).
-pub fn invalidate_readiness_cache() {
+pub(crate) fn invalidate_readiness_cache() {
     if let Ok(mut guard) = READINESS_CACHE.lock() {
         guard.clear();
     }

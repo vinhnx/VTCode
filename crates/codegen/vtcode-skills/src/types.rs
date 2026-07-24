@@ -343,7 +343,7 @@ impl SkillManifest {
 
     /// Validate that skill name matches the parent directory name
     /// This is a requirement per Agent Skills specification
-    pub fn validate_directory_name_match(&self, skill_path: &std::path::Path) -> anyhow::Result<()> {
+    pub(crate) fn validate_directory_name_match(&self, skill_path: &std::path::Path) -> anyhow::Result<()> {
         // For CLI tools, the directory name might not match the skill name
         // Check if this is a CLI tool by looking for tool.json
         let tool_json = skill_path.join("tool.json");
@@ -417,7 +417,7 @@ pub struct Skill {
     pub variety: SkillVariety,
 
     /// Level 3: Bundled resources (lazy-loaded on demand)
-    pub resources: HashMap<String, SkillResource>,
+    resources: HashMap<String, SkillResource>,
 }
 
 impl Skill {
@@ -481,7 +481,7 @@ impl Skill {
     }
 
     /// Estimate token count for instructions (approximate)
-    pub fn instruction_tokens(&self) -> usize {
+    fn instruction_tokens(&self) -> usize {
         // Rough estimate: ~1 token per 4 characters
         self.instructions.len() / 4
     }
@@ -542,7 +542,7 @@ impl SkillContext {
     }
 
     /// Estimated tokens consumed in system prompt
-    pub fn tokens(&self) -> usize {
+    fn tokens(&self) -> usize {
         match self {
             SkillContext::MetadataOnly(_, _) => 100,
             SkillContext::WithInstructions(s) => 100 + s.instruction_tokens(),
@@ -554,9 +554,9 @@ impl SkillContext {
 /// Skill registry entry (loaded skill + metadata)
 #[derive(Debug, Clone)]
 pub struct SkillRegistryEntry {
-    pub skill: Skill,
-    pub enabled: bool,
-    pub load_time: std::time::SystemTime,
+    skill: Skill,
+    enabled: bool,
+    load_time: std::time::SystemTime,
 }
 
 #[cfg(test)]

@@ -128,8 +128,8 @@ pub const PLAN_STATUS_DONE: &str = "Done";
 pub const PLAN_IN_PROGRESS_NOTE: &str = "in progress";
 pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
 pub const STATUS_LINE_MODE: &str = "auto";
-pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
-pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
+pub(crate) const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
+pub(crate) const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
 // Agent/Mode color constants.
 //
@@ -143,7 +143,7 @@ pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 //
 /// Standard ANSI hue names usable for agent/mode badges. Must stay in sync with
 /// the variant table in `vtcode-ui`'s design color resolver.
-pub const AGENT_HUE_NAMES: &[&str] = &["red", "green", "blue", "magenta", "yellow", "cyan"];
+const AGENT_HUE_NAMES: &[&str] = &["red", "green", "blue", "magenta", "yellow", "cyan"];
 
 /// Build agent hue - red (warm, implementation / go-signal).
 pub const AGENT_COLOR_BUILD: &str = "red";
@@ -156,7 +156,7 @@ pub const AGENT_COLOR_DUCK: &str = "magenta";
 
 /// Canonical primary-agent mode -> standard ANSI hue mapping (single source of
 /// truth). `subagents.rs` assigns the hue to each built-in spec from here.
-pub const AGENT_MODE_HUE: &[(&str, &str)] = &[
+const AGENT_MODE_HUE: &[(&str, &str)] = &[
     ("build", AGENT_COLOR_BUILD),
     ("auto", AGENT_COLOR_AUTO),
     ("plan", AGENT_COLOR_PLAN),

@@ -1641,7 +1641,7 @@ mod tests {
         manager.config.policies.insert(tools::CODE_SEARCH.to_owned(), ToolPolicy::Allow);
         manager.save_config().await.expect("save initial config");
 
-        let mut tools_config = ToolsConfig {
+        let tools_config = ToolsConfig {
             default_policy: ToolPolicy::Prompt,
             ..Default::default()
         };

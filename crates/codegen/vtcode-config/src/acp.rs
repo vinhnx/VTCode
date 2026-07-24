@@ -101,7 +101,7 @@ pub struct AgentClientProtocolZedConfig {
 
     /// Authentication method configuration for ACP
     #[serde(default)]
-    pub auth: AcpAuthConfig,
+    auth: AcpAuthConfig,
 }
 
 impl Default for AgentClientProtocolZedConfig {
@@ -207,7 +207,7 @@ pub enum AcpAuthMethod {
 
 impl AcpAuthMethod {
     /// Returns the string representation of this auth method.
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         match self {
             Self::Agent => "agent",
             Self::EnvVar => "env_var",
@@ -230,16 +230,16 @@ pub struct AcpAuthConfig {
     /// Default authentication method for ACP agents
     /// Options: "agent" (default - agent handles auth), "env_var", "terminal"
     #[serde(default = "default_auth_method")]
-    pub default_method: AcpAuthMethod,
+    default_method: AcpAuthMethod,
 
     /// Environment variable name for auth (used when default_method is "env_var")
     /// Examples: "OPENAI_API_KEY", "ANTHROPIC_API_KEY"
     #[serde(default)]
-    pub env_var_name: Option<String>,
+    env_var_name: Option<String>,
 
     /// URL where users can get their API key (optional, for UI display)
     #[serde(default)]
-    pub auth_url: Option<String>,
+    auth_url: Option<String>,
 }
 
 fn default_auth_method() -> AcpAuthMethod {

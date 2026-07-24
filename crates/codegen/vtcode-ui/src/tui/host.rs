@@ -21,10 +21,10 @@ pub trait ThemeProvider {
 /// Host-level defaults for launching a TUI session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostSessionDefaults {
-    pub surface_preference: SessionSurface,
-    pub inline_rows: u16,
-    pub keyboard_protocol: KeyboardProtocolSettings,
-    pub fullscreen: FullscreenInteractionSettings,
+    pub(crate) surface_preference: SessionSurface,
+    pub(crate) inline_rows: u16,
+    pub(crate) keyboard_protocol: KeyboardProtocolSettings,
+    pub(crate) fullscreen: FullscreenInteractionSettings,
 }
 
 impl Default for HostSessionDefaults {

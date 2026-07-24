@@ -33,14 +33,14 @@ pub enum SkillVersion {
 }
 
 impl SkillVersion {
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         match self {
             SkillVersion::Latest => "latest",
             SkillVersion::Specific(v) => v,
         }
     }
 
-    pub fn is_latest(&self) -> bool {
+    fn is_latest(&self) -> bool {
         matches!(self, SkillVersion::Latest)
     }
 }
@@ -72,17 +72,17 @@ pub enum SkillSource {
 pub struct SkillSpec {
     /// Type of skill (anthropic or custom)
     #[serde(rename = "type")]
-    pub skill_type: SkillType,
+    skill_type: SkillType,
     /// Skill identifier (short name for Anthropic, UUID for custom)
-    pub skill_id: String,
+    skill_id: String,
     /// Version to use (latest or specific epoch timestamp)
     #[serde(default)]
-    pub version: SkillVersion,
+    version: SkillVersion,
 }
 
 impl SkillSpec {
     /// Create a new skill specification
-    pub fn new(skill_type: SkillType, skill_id: impl Into<String>) -> Self {
+    fn new(skill_type: SkillType, skill_id: impl Into<String>) -> Self {
         Self {
             skill_type,
             skill_id: skill_id.into(),
@@ -91,18 +91,18 @@ impl SkillSpec {
     }
 
     /// Create with specific version
-    pub fn with_version(mut self, version: SkillVersion) -> Self {
+    fn with_version(mut self, version: SkillVersion) -> Self {
         self.version = version;
         self
     }
 
     /// Create Anthropic skill (predefined by Anthropic)
-    pub fn anthropic(skill_id: impl Into<String>) -> Self {
+    fn anthropic(skill_id: impl Into<String>) -> Self {
         Self::new(SkillType::Anthropic, skill_id)
     }
 
     /// Create custom skill (user-uploaded)
-    pub fn custom(skill_id: impl Into<String>) -> Self {
+    fn custom(skill_id: impl Into<String>) -> Self {
         Self::new(SkillType::Custom, skill_id)
     }
 }
@@ -117,17 +117,17 @@ impl SkillSpec {
 pub struct SkillContainer {
     /// Optional container ID for reuse across turns
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     /// Skills to load in this container (max 8)
-    pub skills: Vec<SkillSpec>,
+    skills: Vec<SkillSpec>,
     /// Inline skill bundles (base64-encoded zips, no pre-registration needed)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub inline_bundles: Vec<SkillSource>,
+    inline_bundles: Vec<SkillSource>,
 }
 
 impl SkillContainer {
     /// Create a new skill container
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             id: None,
             skills: Vec::with_capacity(8),
@@ -136,7 +136,7 @@ impl SkillContainer {
     }
 
     /// Create with single skill
-    pub fn single(spec: SkillSpec) -> Self {
+    fn single(spec: SkillSpec) -> Self {
         Self {
             id: None,
             skills: vec![spec],
@@ -145,7 +145,7 @@ impl SkillContainer {
     }
 
     /// Create with container ID (for reuse)
-    pub fn with_id(id: impl Into<String>) -> Self {
+    fn with_id(id: impl Into<String>) -> Self {
         Self {
             id: Some(id.into()),
             skills: Vec::with_capacity(8),
@@ -157,7 +157,7 @@ impl SkillContainer {
     ///
     /// # Errors
     /// Returns error if adding skill would exceed maximum of 8 skills
-    pub fn add_skill(&mut self, spec: SkillSpec) -> anyhow::Result<()> {
+    fn add_skill(&mut self, spec: SkillSpec) -> anyhow::Result<()> {
         if self.skills.len() >= 8 {
             anyhow::bail!("Container already has maximum skills (8), cannot add '{}'", spec.skill_id);
         }
@@ -169,7 +169,7 @@ impl SkillContainer {
     ///
     /// # Errors
     /// Returns error if total would exceed 8 skills
-    pub fn add_skills(&mut self, mut specs: Vec<SkillSpec>) -> anyhow::Result<()> {
+    fn add_skills(&mut self, mut specs: Vec<SkillSpec>) -> anyhow::Result<()> {
         let current_len = self.skills.len();
         let new_len = current_len + specs.len();
         if new_len > 8 {
@@ -189,12 +189,12 @@ impl SkillContainer {
     }
 
     /// Add Anthropic skill
-    pub fn add_anthropic(&mut self, skill_id: impl Into<String>) -> anyhow::Result<()> {
+    fn add_anthropic(&mut self, skill_id: impl Into<String>) -> anyhow::Result<()> {
         self.add_skill(SkillSpec::anthropic(skill_id))
     }
 
     /// Add custom skill
-    pub fn add_custom(&mut self, skill_id: impl Into<String>) -> anyhow::Result<()> {
+    fn add_custom(&mut self, skill_id: impl Into<String>) -> anyhow::Result<()> {
         self.add_skill(SkillSpec::custom(skill_id))
     }
 
@@ -204,7 +204,7 @@ impl SkillContainer {
     ///
     /// # Errors
     /// Returns error if adding would exceed the maximum of 8 skills.
-    pub fn add_inline(&mut self, bundle_b64: String, sha256: Option<String>) -> anyhow::Result<()> {
+    fn add_inline(&mut self, bundle_b64: String, sha256: Option<String>) -> anyhow::Result<()> {
         if self.skills.len() >= 8 {
             anyhow::bail!("Container already has maximum skills (8)");
         }
@@ -219,22 +219,22 @@ impl SkillContainer {
     }
 
     /// Get number of skills in container
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.skills.len()
     }
 
     /// Check if container is empty
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.skills.is_empty()
     }
 
     /// Check if container has a specific skill
-    pub fn has_skill(&self, skill_id: &str) -> bool {
+    fn has_skill(&self, skill_id: &str) -> bool {
         self.skills.iter().any(|s| s.skill_id == skill_id)
     }
 
     /// Get skill by ID
-    pub fn get_skill(&self, skill_id: &str) -> Option<&SkillSpec> {
+    fn get_skill(&self, skill_id: &str) -> Option<&SkillSpec> {
         self.skills.iter().find(|s| s.skill_id == skill_id)
     }
 
@@ -243,7 +243,7 @@ impl SkillContainer {
     /// Checks:
     /// - No more than 8 skills
     /// - No duplicate skill IDs
-    pub fn validate(&self) -> anyhow::Result<()> {
+    fn validate(&self) -> anyhow::Result<()> {
         if self.skills.len() > 8 {
             anyhow::bail!("Container has {} skills, maximum is 8", self.skills.len());
         }
@@ -259,7 +259,7 @@ impl SkillContainer {
     }
 
     /// Set container ID for reuse
-    pub fn set_id(&mut self, id: impl Into<String>) {
+    fn set_id(&mut self, id: impl Into<String>) {
         self.id = Some(id.into());
     }
 
@@ -269,22 +269,22 @@ impl SkillContainer {
     }
 
     /// Get all skill IDs in container
-    pub fn skill_ids(&self) -> Vec<&str> {
+    fn skill_ids(&self) -> Vec<&str> {
         self.skills.iter().map(|s| s.skill_id.as_str()).collect()
     }
 
     /// Get all skills of a specific type
-    pub fn skills_by_type(&self, skill_type: SkillType) -> Vec<&SkillSpec> {
+    fn skills_by_type(&self, skill_type: SkillType) -> Vec<&SkillSpec> {
         self.skills.iter().filter(|s| s.skill_type == skill_type).collect()
     }
 
     /// Count anthropic skills
-    pub fn anthropic_count(&self) -> usize {
+    fn anthropic_count(&self) -> usize {
         self.skills_by_type(SkillType::Anthropic).len()
     }
 
     /// Count custom skills
-    pub fn custom_count(&self) -> usize {
+    fn custom_count(&self) -> usize {
         self.skills_by_type(SkillType::Custom).len()
     }
 }

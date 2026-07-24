@@ -6,13 +6,13 @@ pub struct ClientConfig {
     /// Maximum number of idle connections per host
     pub pool_max_idle_per_host: usize,
     /// How long to keep idle connections alive
-    pub pool_idle_timeout: Duration,
+    pub(crate) pool_idle_timeout: Duration,
     /// TCP keepalive duration
-    pub tcp_keepalive: Duration,
+    pub(crate) tcp_keepalive: Duration,
     /// Request timeout
-    pub request_timeout: Duration,
+    pub(crate) request_timeout: Duration,
     /// Connection timeout
-    pub connect_timeout: Duration,
+    pub(crate) connect_timeout: Duration,
     /// User agent string
     pub user_agent: String,
 }

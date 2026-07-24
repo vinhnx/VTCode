@@ -27,13 +27,13 @@ pub const DCS: &str = "\x1bP";
 pub const ST: &str = "\x1b\\";
 
 /// Bell character as a raw byte (BEL = 0x07)
-pub const BEL_BYTE: u8 = 0x07;
+pub(crate) const BEL_BYTE: u8 = 0x07;
 
 /// Bell character as a `char`
 pub const BEL_CHAR: char = '\x07';
 
 /// Bell character as a string slice
-pub const BEL: &str = "\x07";
+const BEL: &str = "\x07";
 
 /// Notification preference (rich OSC vs bell-only)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,7 +72,7 @@ pub fn play_bell(enabled: bool) {
 
 /// Determine whether the bell should play, honoring an env override.
 #[inline]
-pub fn is_bell_enabled(default_enabled: bool) -> bool {
+fn is_bell_enabled(default_enabled: bool) -> bool {
     if let Ok(val) = std::env::var("VTCODE_HITL_BELL") {
         return !matches!(val.trim().to_ascii_lowercase().as_str(), "false" | "0" | "off");
     }
@@ -452,7 +452,7 @@ pub const OSC_BG_COLOR_PREFIX: &str = "\x1b]11;";
 /// Query/set cursor color — OSC 12
 pub const OSC_CURSOR_COLOR_PREFIX: &str = "\x1b]12;";
 /// Hyperlink — OSC 8
-pub const OSC_HYPERLINK_PREFIX: &str = "\x1b]8;";
+const OSC_HYPERLINK_PREFIX: &str = "\x1b]8;";
 /// Clipboard access — OSC 52
 pub const OSC_CLIPBOARD_PREFIX: &str = "\x1b]52;";
 
@@ -492,10 +492,10 @@ pub fn cursor_to(row: u16, col: u16) -> String {
 /// Build a portable in-place redraw prefix (`CR` + `EL2`).
 ///
 /// This is the common CLI pattern for one-line progress updates.
-pub const REDRAW_LINE_PREFIX: &str = "\r\x1b[2K";
+const REDRAW_LINE_PREFIX: &str = "\r\x1b[2K";
 
 #[inline]
-pub fn redraw_line_prefix() -> &'static str {
+fn redraw_line_prefix() -> &'static str {
     REDRAW_LINE_PREFIX
 }
 
@@ -503,7 +503,7 @@ pub fn redraw_line_prefix() -> &'static str {
 ///
 /// Equivalent to: `\\r\\x1b[2K{content}`.
 #[inline]
-pub fn format_redraw_line(content: &str) -> String {
+fn format_redraw_line(content: &str) -> String {
     format!("{}{}", redraw_line_prefix(), content)
 }
 

@@ -31,20 +31,20 @@ pub struct McpOAuthConfig {
     pub scopes: Vec<String>,
     /// Optional audience/resource hint sent with the auth and token requests.
     #[serde(default)]
-    pub audience: Option<String>,
+    audience: Option<String>,
     /// Local callback server port.
     pub callback_port: u16,
     /// Browser-flow timeout in seconds.
-    pub flow_timeout_secs: u64,
+    flow_timeout_secs: u64,
     /// Credential storage backend for this provider's token.
     #[serde(default)]
     pub credentials_store_mode: AuthCredentialsStoreMode,
     /// Extra query parameters appended to the authorization URL.
     #[serde(default)]
-    pub extra_auth_params: BTreeMap<String, String>,
+    extra_auth_params: BTreeMap<String, String>,
     /// Extra form fields appended to token exchanges and refreshes.
     #[serde(default)]
-    pub extra_token_params: BTreeMap<String, String>,
+    extra_token_params: BTreeMap<String, String>,
 }
 
 impl Default for McpOAuthConfig {
@@ -65,7 +65,7 @@ impl Default for McpOAuthConfig {
 }
 
 impl McpOAuthConfig {
-    pub fn validate(&self, provider_name: &str) -> Result<()> {
+    fn validate(&self, provider_name: &str) -> Result<()> {
         if self.authorization_url.trim().is_empty() {
             bail!("MCP provider '{provider_name}' is missing oauth.authorization_url");
         }
@@ -86,16 +86,16 @@ impl McpOAuthConfig {
 /// Stored OAuth token for an MCP HTTP provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpOAuthToken {
-    pub access_token: String,
-    pub refresh_token: Option<String>,
-    pub token_type: Option<String>,
-    pub scope: Option<String>,
-    pub obtained_at: u64,
-    pub expires_at: Option<u64>,
+    access_token: String,
+    refresh_token: Option<String>,
+    token_type: Option<String>,
+    scope: Option<String>,
+    obtained_at: u64,
+    expires_at: Option<u64>,
 }
 
 impl McpOAuthToken {
-    pub fn is_refresh_due(&self) -> bool {
+    fn is_refresh_due(&self) -> bool {
         self.expires_at
             .is_some_and(|expires_at| now_secs().saturating_add(REFRESH_SKEW_SECS) >= expires_at)
     }
@@ -129,8 +129,8 @@ impl McpOAuthPreparedLogin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpOAuthLoginCompletion {
     pub name: String,
-    pub success: bool,
-    pub error: Option<String>,
+    success: bool,
+    error: Option<String>,
 }
 
 /// Service for loading, refreshing, and persisting MCP OAuth tokens.

@@ -8,7 +8,7 @@ mod responses_adapter;
 mod responses_stream;
 mod tag_sanitizer;
 use crate::providers::split_reasoning_from_text;
-pub use responses_stream::{ResponsesNormalizedStreamOptions, create_responses_normalized_stream};
+pub(crate) use responses_stream::{ResponsesNormalizedStreamOptions, create_responses_normalized_stream};
 pub(crate) use responses_stream::{ResponsesStreamEventPolicy, response_stream_event_policy};
 use serde_json::{Map, Value};
 pub use tag_sanitizer::TagStreamSanitizer;
@@ -55,7 +55,7 @@ pub enum StreamAssemblyError {
 
 impl StreamAssemblyError {
     #[cold]
-    pub fn into_llm_error(self, provider: &str) -> LLMError {
+    pub(crate) fn into_llm_error(self, provider: &str) -> LLMError {
         let message = self.to_string();
         let formatted = error_display::format_llm_error(provider, &message);
         LLMError::Provider { message: formatted, metadata: None }
@@ -86,7 +86,7 @@ pub struct StreamDelta {
 }
 
 impl StreamDelta {
-    pub fn push_content(&mut self, text: &str) {
+    pub(crate) fn push_content(&mut self, text: &str) {
         if text.is_empty() {
             return;
         }
@@ -97,7 +97,7 @@ impl StreamDelta {
         }
     }
 
-    pub fn push_reasoning(&mut self, text: &str) {
+    pub(crate) fn push_reasoning(&mut self, text: &str) {
         if text.is_empty() {
             return;
         }
@@ -108,11 +108,11 @@ impl StreamDelta {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.fragments.is_empty()
     }
 
-    pub fn into_fragments(self) -> Vec<StreamFragment> {
+    pub(crate) fn into_fragments(self) -> Vec<StreamFragment> {
         self.fragments
     }
 
@@ -127,7 +127,7 @@ impl StreamDelta {
 /// id-keyed history correlation downstream. Uniqueness across responses and
 /// process restarts (resumed sessions replay ids from checkpoints) is
 /// required, hence a random uuid rather than a counter.
-pub fn generate_tool_call_id() -> String {
+pub(crate) fn generate_tool_call_id() -> String {
     format!("call_{}", uuid::Uuid::new_v4().simple())
 }
 
@@ -140,7 +140,7 @@ pub struct ToolCallBuilder {
 }
 
 impl ToolCallBuilder {
-    pub fn apply_delta(&mut self, delta: &Value) {
+    pub(crate) fn apply_delta(&mut self, delta: &Value) {
         if let Some(id) = delta.get("id").and_then(|value| value.as_str()) {
             self.id = Some(id.to_string());
         }
@@ -168,7 +168,7 @@ impl ToolCallBuilder {
         }
     }
 
-    pub fn finalize(self) -> Option<ToolCall> {
+    fn finalize(self) -> Option<ToolCall> {
         let name = self.name?;
         let id = self.id.unwrap_or_else(generate_tool_call_id);
         let arguments = if self.arguments.is_empty() {
@@ -181,7 +181,7 @@ impl ToolCallBuilder {
     }
 }
 
-pub fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) {
+fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) {
     for (position, delta) in deltas.iter().enumerate() {
         let index = delta
             .get("index")
@@ -200,7 +200,7 @@ pub fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) 
     }
 }
 
-pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> {
+fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> {
     let calls: Vec<ToolCall> = builders.into_iter().filter_map(ToolCallBuilder::finalize).collect();
 
     (!calls.is_empty()).then_some(calls)
@@ -226,7 +226,7 @@ impl FunctionOutputContentItem {
         }
     }
 
-    pub(crate) fn to_function_output_json(&self) -> Value {
+    fn to_function_output_json(&self) -> Value {
         match self {
             Self::InputText { text } => serde_json::json!({
                 "type": "input_text",
@@ -239,7 +239,7 @@ impl FunctionOutputContentItem {
         }
     }
 
-    pub(crate) fn to_tool_result_json(&self) -> Value {
+    fn to_tool_result_json(&self) -> Value {
         match self {
             Self::InputText { text } => serde_json::json!({
                 "type": "output_text",
@@ -260,7 +260,7 @@ fn parse_function_output_content_items_array(items: &[Value]) -> Option<Vec<Func
         .collect::<Option<Vec<_>>>()
 }
 
-pub(crate) fn parse_function_output_content_items_value(value: &Value) -> Option<Vec<FunctionOutputContentItem>> {
+fn parse_function_output_content_items_value(value: &Value) -> Option<Vec<FunctionOutputContentItem>> {
     match value {
         Value::Array(items) => parse_function_output_content_items_array(items),
         Value::Object(obj) => ["content_items", "content", "output", "body"]
@@ -272,7 +272,7 @@ pub(crate) fn parse_function_output_content_items_value(value: &Value) -> Option
     }
 }
 
-pub(crate) fn parse_function_output_content_items_text(text: &str) -> Option<Vec<FunctionOutputContentItem>> {
+fn parse_function_output_content_items_text(text: &str) -> Option<Vec<FunctionOutputContentItem>> {
     let trimmed = text.trim();
     if !(trimmed.starts_with('[') || trimmed.starts_with('{')) {
         return None;
@@ -564,17 +564,17 @@ pub(crate) fn parse_compacted_output_messages(output: &[Value]) -> Vec<Message> 
 }
 
 /// Helper to aggregate streaming events and produce a final LLMResponse.
-pub struct StreamAggregator {
-    pub model: String,
-    pub content: String,
-    pub reasoning: String,
-    pub reasoning_details: Vec<String>,
-    pub reasoning_buffer: ReasoningBuffer,
-    pub tool_builders: Vec<ToolCallBuilder>,
-    pub usage: Option<crate::provider::Usage>,
-    pub finish_reason: crate::provider::FinishReason,
-    pub sanitizer: TagStreamSanitizer,
-    pub compaction: Option<String>,
+pub(crate) struct StreamAggregator {
+    model: String,
+    pub(crate) content: String,
+    pub(crate) reasoning: String,
+    reasoning_details: Vec<String>,
+    reasoning_buffer: ReasoningBuffer,
+    pub(crate) tool_builders: Vec<ToolCallBuilder>,
+    pub(crate) usage: Option<crate::provider::Usage>,
+    finish_reason: crate::provider::FinishReason,
+    pub(crate) sanitizer: TagStreamSanitizer,
+    pub(crate) compaction: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -618,7 +618,7 @@ fn emit_content_delta(
     }
 }
 
-pub fn handle_openai_compatible_chunk(
+pub(crate) fn handle_openai_compatible_chunk(
     value: &Value,
     aggregator: &mut StreamAggregator,
     tx: &tokio::sync::mpsc::UnboundedSender<Result<LLMStreamEvent, LLMError>>,
@@ -659,7 +659,7 @@ pub fn handle_openai_compatible_chunk(
 }
 
 impl StreamAggregator {
-    pub fn new(model: String) -> Self {
+    pub(crate) fn new(model: String) -> Self {
         Self {
             model,
             content: String::new(),
@@ -675,13 +675,13 @@ impl StreamAggregator {
     }
 
     /// Process a content delta, applying sanitization for reasoning tags.
-    pub fn handle_content(&mut self, delta: &str) -> Vec<LLMStreamEvent> {
+    pub(crate) fn handle_content(&mut self, delta: &str) -> Vec<LLMStreamEvent> {
         self.content.push_str(delta);
         self.sanitizer.process_chunk(delta)
     }
 
     /// Process a reasoning delta from a dedicated field.
-    pub fn handle_reasoning(&mut self, delta: &str) -> Option<String> {
+    pub(crate) fn handle_reasoning(&mut self, delta: &str) -> Option<String> {
         let result = self.reasoning_buffer.push(delta);
         if let Some(ref d) = result {
             self.reasoning.push_str(d);
@@ -690,7 +690,7 @@ impl StreamAggregator {
     }
 
     /// Store structured reasoning details received from streaming deltas.
-    pub fn set_reasoning_details(&mut self, details: &[Value]) {
+    pub(crate) fn set_reasoning_details(&mut self, details: &[Value]) {
         if details.is_empty() {
             return;
         }
@@ -702,22 +702,22 @@ impl StreamAggregator {
     }
 
     /// Process tool call deltas.
-    pub fn handle_tool_calls(&mut self, deltas: &[Value]) {
+    pub(crate) fn handle_tool_calls(&mut self, deltas: &[Value]) {
         update_tool_calls(&mut self.tool_builders, deltas);
     }
 
     /// Set usage metrics.
-    pub fn set_usage(&mut self, usage: crate::provider::Usage) {
+    pub(crate) fn set_usage(&mut self, usage: crate::provider::Usage) {
         self.usage = Some(usage);
     }
 
     /// Set finish reason.
-    pub fn set_finish_reason(&mut self, reason: crate::provider::FinishReason) {
+    pub(crate) fn set_finish_reason(&mut self, reason: crate::provider::FinishReason) {
         self.finish_reason = reason;
     }
 
     /// Finalize and produce the completed LLMResponse.
-    pub fn finalize(mut self) -> LLMResponse {
+    pub(crate) fn finalize(mut self) -> LLMResponse {
         // Collect any leftover bits from sanitizer
         for event in self.sanitizer.finalize() {
             match event {
@@ -781,13 +781,13 @@ pub struct Utf8StreamDecoder {
 }
 
 impl Utf8StreamDecoder {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Appends `bytes` and returns the decodable UTF-8 prefix. A trailing
     /// incomplete multibyte sequence is retained for the next call.
-    pub fn push(&mut self, bytes: &[u8]) -> String {
+    pub(crate) fn push(&mut self, bytes: &[u8]) -> String {
         self.pending.extend_from_slice(bytes);
         let mut out = String::new();
         loop {
@@ -826,7 +826,7 @@ impl Utf8StreamDecoder {
 ///
 /// This simplifies stream implementations across providers like DeepSeek, ZAI, Moonshot, etc.
 /// Especially optimized for high-performance models like Gemini 3 and GLM-5.
-pub async fn process_openai_stream<S, E, F>(
+pub(crate) async fn process_openai_stream<S, E, F>(
     mut byte_stream: S,
     provider_name: &'static str,
     model: String,
@@ -897,7 +897,7 @@ where
     Ok(final_response)
 }
 
-pub fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
+pub(crate) fn parse_openai_tool_calls(calls: &[Value]) -> Vec<ToolCall> {
     calls
         .iter()
         .filter_map(|call| {
@@ -963,7 +963,7 @@ pub(crate) fn collect_tool_references_from_tool_search_output(value: &Value, too
     }
 }
 
-pub fn append_text_with_reasoning(
+fn append_text_with_reasoning(
     text: &str,
     aggregated_content: &mut String,
     reasoning: &mut ReasoningBuffer,
@@ -1001,7 +1001,7 @@ pub fn append_text_with_reasoning(
 }
 
 #[inline]
-pub fn extract_data_payload(event: &str) -> Option<String> {
+pub(crate) fn extract_data_payload(event: &str) -> Option<String> {
     let mut out = String::new();
 
     for raw_line in event.lines() {
@@ -1022,7 +1022,7 @@ pub fn extract_data_payload(event: &str) -> Option<String> {
 }
 
 #[inline]
-pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
+fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
     let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
 
@@ -1041,7 +1041,7 @@ pub fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
 }
 
 #[inline]
-pub fn find_sse_boundary_bytes(buffer: &[u8], offset: usize) -> Option<(usize, usize)> {
+pub(crate) fn find_sse_boundary_bytes(buffer: &[u8], offset: usize) -> Option<(usize, usize)> {
     let data = &buffer[offset..];
     let newline_boundary = data.windows(2).position(|w| w == b"\n\n").map(|idx| (idx, 2));
     let carriage_boundary = data.windows(4).position(|w| w == b"\r\n\r\n").map(|idx| (idx, 4));
@@ -1058,7 +1058,7 @@ pub fn find_sse_boundary_bytes(buffer: &[u8], offset: usize) -> Option<(usize, u
     }
 }
 
-pub fn apply_tool_call_delta_from_content(
+fn apply_tool_call_delta_from_content(
     builders: &mut Vec<ToolCallBuilder>,
     container: &Map<String, Value>,
     telemetry: &impl StreamTelemetry,

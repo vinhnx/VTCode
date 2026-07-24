@@ -157,7 +157,7 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// Generate skills prompt with format specification
-pub fn generate_skills_prompt_with_format(
+fn generate_skills_prompt_with_format(
     skills: &[SkillMetadata],
     render_mode: SkillsRenderMode,
     format: PromptFormat,
@@ -169,7 +169,7 @@ pub fn generate_skills_prompt_with_format(
 }
 
 /// Test helper
-pub fn test_skills_prompt_generation() {
+fn test_skills_prompt_generation() {
     use crate::types::SkillManifest;
     use std::path::PathBuf;
 

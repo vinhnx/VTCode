@@ -19,7 +19,7 @@ pub struct CachedStyleParser {
 
 impl CachedStyleParser {
     /// Create a new cached style parser
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             git_cache: LrMap::new(),
             ls_colors_cache: LrMap::new(),
@@ -27,7 +27,7 @@ impl CachedStyleParser {
     }
 
     /// Parse and cache a Git-style color string (e.g., "bold red blue")
-    pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
+    pub(crate) fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
         if let Some(cached) = self.git_cache.get(input) {
             return Ok(cached);
         }
@@ -40,7 +40,7 @@ impl CachedStyleParser {
     }
 
     /// Parse and cache an LS_COLORS-style string (e.g., "01;34")
-    pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
+    pub(crate) fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
         if let Some(cached) = self.ls_colors_cache.get(input) {
             return Ok(cached);
         }
@@ -52,7 +52,7 @@ impl CachedStyleParser {
     }
 
     /// Parse using Git syntax first, then LS_COLORS as fallback, with caching
-    pub fn parse_flexible(&self, input: &str) -> Result<AnsiStyle> {
+    pub(crate) fn parse_flexible(&self, input: &str) -> Result<AnsiStyle> {
         match self.parse_git_style(input) {
             Ok(style) => Ok(style),
             Err(_) => self
@@ -62,13 +62,13 @@ impl CachedStyleParser {
     }
 
     /// Clear all cached styles
-    pub fn clear_cache(&self) {
+    fn clear_cache(&self) {
         self.git_cache.clear();
         self.ls_colors_cache.clear();
     }
 
     /// Get cache statistics
-    pub fn cache_stats(&self) -> (usize, usize) {
+    fn cache_stats(&self) -> (usize, usize) {
         (self.git_cache.len(), self.ls_colors_cache.len())
     }
 }

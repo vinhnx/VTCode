@@ -19,13 +19,13 @@ fn canonicalize_workspace_root(path: &Path) -> PathBuf {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ConfigPhaseTiming {
     /// Duration of workspace path resolution (in microseconds)
-    pub path_resolution_us: u64,
+    pub(crate) path_resolution_us: u64,
     /// Duration of layer probing and loading (in microseconds)
-    pub layer_loading_us: u64,
+    pub(crate) layer_loading_us: u64,
     /// Duration of TOML merging and deserialization (in microseconds)
-    pub merge_and_parse_us: u64,
+    merge_and_parse_us: u64,
     /// Duration of validation and API key migration (in microseconds)
-    pub validation_us: u64,
+    pub(crate) validation_us: u64,
 }
 
 /// Configuration manager for loading and validating configurations
@@ -36,7 +36,7 @@ pub struct ConfigManager {
     workspace_root: Option<PathBuf>,
     config_file_name: String,
     pub(crate) layer_stack: ConfigLayerStack,
-    pub(crate) phase_timing: Option<ConfigPhaseTiming>,
+    phase_timing: Option<ConfigPhaseTiming>,
 }
 
 impl ConfigManager {
@@ -379,7 +379,7 @@ impl ConfigManager {
     }
 
     /// Get the timing metrics recorded during loading, if available.
-    pub fn phase_timing(&self) -> Option<ConfigPhaseTiming> {
+    pub(crate) fn phase_timing(&self) -> Option<ConfigPhaseTiming> {
         self.phase_timing
     }
 
@@ -643,7 +643,7 @@ impl ConfigManager {
 
     /// Sync internal config from a saved config
     /// Call this after save_config to keep internal state in sync
-    pub fn sync_from_config(&mut self, config: &VTCodeConfig) -> Result<()> {
+    fn sync_from_config(&mut self, config: &VTCodeConfig) -> Result<()> {
         self.config = config.clone();
         Ok(())
     }

@@ -73,7 +73,7 @@ pub enum OpenAIPreferredMethod {
 pub struct OpenAIAuthConfig {
     pub preferred_method: OpenAIPreferredMethod,
     pub callback_port: u16,
-    pub auto_refresh: bool,
+    pub(crate) auto_refresh: bool,
     pub flow_timeout_secs: u64,
 }
 

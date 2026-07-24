@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static ALLOWED_TOOLS_ARRAY_WARNED: AtomicBool = AtomicBool::new(false);
 
 /// Supported YAML frontmatter keys for SKILL.md validation.
-pub const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
+pub(crate) const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
     "name",
     "description",
     "license",
@@ -28,23 +28,23 @@ pub const SUPPORTED_FRONTMATTER_KEYS: &[&str] = &[
 /// YAML frontmatter structure for SKILL.md
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SkillYaml {
-    pub name: String,
-    pub description: String,
+    pub(crate) name: String,
+    pub(crate) description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub license: Option<String>,
+    license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "allowed-tools")]
-    pub allowed_tools: Option<AllowedToolsField>,
+    allowed_tools: Option<AllowedToolsField>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "disable-model-invocation")]
     #[serde(alias = "disable_model_invocation")]
-    pub disable_model_invocation: Option<bool>,
+    disable_model_invocation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub compatibility: Option<String>,
+    compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hooks: Option<JsonValue>,
+    hooks: Option<JsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<SkillManifestMetadata>,
+    metadata: Option<SkillManifestMetadata>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

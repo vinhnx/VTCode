@@ -22,7 +22,7 @@ pub(super) struct ObservabilityFields {
 }
 
 impl AgentRunner {
-    pub(super) fn observability_fields(
+    fn observability_fields(
         &self,
         model: &str,
         turn: usize,

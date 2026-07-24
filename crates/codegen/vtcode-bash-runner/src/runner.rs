@@ -61,7 +61,7 @@ where
         &self.workspace_root
     }
 
-    pub fn working_dir(&self) -> &Path {
+    fn working_dir(&self) -> &Path {
         &self.working_dir
     }
 

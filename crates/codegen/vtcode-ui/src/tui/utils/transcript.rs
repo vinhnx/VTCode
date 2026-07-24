@@ -1,3 +1,3 @@
-pub fn display_error(message: &str) {
+pub(crate) fn display_error(message: &str) {
     tracing::error!("{message}");
 }

@@ -415,7 +415,7 @@ impl PromptEnricher {
     }
 
     #[cfg(test)]
-    pub async fn record_workspace_change_for_test(
+    async fn record_workspace_change_for_test(
         &self,
         path: PathBuf,
         content_before: Option<String>,

@@ -10,14 +10,14 @@ use std::path::{Path, PathBuf};
 pub(super) const PLAN_TRACKER_START: &str = "<!-- vtcode:plan-tracker:start -->";
 pub(super) const PLAN_TRACKER_END: &str = "<!-- vtcode:plan-tracker:end -->";
 
-pub(super) const REQUIRED_PLAN_SECTIONS: [&str; 4] = [
+const REQUIRED_PLAN_SECTIONS: [&str; 4] = [
     "Summary",
     "Implementation Steps",
     "Test Cases and Validation",
     "Assumptions and Defaults",
 ];
 
-pub(super) const PLACEHOLDER_TOKENS: [&str; 14] = [
+const PLACEHOLDER_TOKENS: [&str; 14] = [
     "[step]",
     "[paths]",
     "[check]",

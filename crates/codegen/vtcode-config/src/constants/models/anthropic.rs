@@ -11,7 +11,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 // Convenience constants for versioned models
-pub const CLAUDE_HAIKU_4_5_20251001: &str = "claude-haiku-4-5-20251001";
+pub(crate) const CLAUDE_HAIKU_4_5_20251001: &str = "claude-haiku-4-5-20251001";
 
 // Convenience constants for alias models
 pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
@@ -33,7 +33,7 @@ pub const REASONING_MODELS: &[&str] = &[
 ];
 
 /// Minimum advisor model capability: the advisor must be at least Claude Sonnet 4.6.
-pub const ADVISOR_MIN_MODEL: &str = CLAUDE_SONNET_4_6;
+const ADVISOR_MIN_MODEL: &str = CLAUDE_SONNET_4_6;
 
 /// Returns the base model id with any `-YYYYMMDD` version suffix stripped.
 pub fn normalize_model_id(model: &str) -> &str {

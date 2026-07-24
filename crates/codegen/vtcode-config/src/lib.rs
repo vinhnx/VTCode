@@ -34,7 +34,7 @@ pub mod context;
 pub mod core;
 pub mod debug;
 pub mod defaults;
-pub mod env_helpers;
+pub(crate) mod env_helpers;
 pub mod hooks;
 pub mod ide_context;
 pub mod loader;
@@ -102,7 +102,7 @@ pub use mcp::{
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use models::{MiMoAuthMethod, ModelId, OpenRouterMetadata};
-pub use network_allowlist::{
+pub(crate) use network_allowlist::{
     AiProviderCategories, AllowlistEntry, AllowlistMeta, DEFAULT_ALLOWLIST_TOML, LocalAiProviderEntry,
     NetworkAllowlist, SearchCategories,
 };

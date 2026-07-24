@@ -71,7 +71,7 @@ struct RenderedTitlePart {
 }
 
 impl Session {
-    pub fn set_workspace_root(&mut self, workspace_root: Option<std::path::PathBuf>) {
+    pub(crate) fn set_workspace_root(&mut self, workspace_root: Option<std::path::PathBuf>) {
         self.workspace_root = workspace_root;
     }
 
@@ -206,7 +206,7 @@ impl Session {
         sanitize_terminal_title(&title)
     }
 
-    pub fn update_terminal_title(&mut self) {
+    pub(crate) fn update_terminal_title(&mut self) {
         let Some(new_title) = self.render_terminal_title() else {
             self.clear_terminal_title();
             return;
@@ -221,7 +221,7 @@ impl Session {
         }
     }
 
-    pub fn clear_terminal_title(&mut self) {
+    pub(crate) fn clear_terminal_title(&mut self) {
         if self.last_terminal_title.is_none() {
             return;
         }

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::tools::code_search::CodeSearchRequest;
 use vtcode_commons::canonicalize;
 
-pub(super) fn normalised_identity_value(
+fn normalised_identity_value(
     args: &serde_json::Value,
     include_max_results: bool,
 ) -> Option<serde_json::Value> {

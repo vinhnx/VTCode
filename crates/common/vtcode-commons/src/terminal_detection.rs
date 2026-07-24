@@ -302,7 +302,7 @@ impl TerminalType {
     }
 
     /// Check if terminal requires manual setup (vs automatic config).
-    pub fn requires_manual_setup(&self) -> bool {
+    fn requires_manual_setup(&self) -> bool {
         self.should_offer_terminal_setup()
     }
 }

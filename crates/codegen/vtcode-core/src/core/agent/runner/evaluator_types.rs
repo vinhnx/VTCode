@@ -6,7 +6,7 @@
 use serde::Deserialize;
 
 /// Minimum score required for each evaluator scorecard dimension.
-pub(super) const EVALUATOR_SCORE_THRESHOLD: u8 = 4;
+const EVALUATOR_SCORE_THRESHOLD: u8 = 4;
 
 /// Structured response from the evaluator LLM.
 #[derive(Debug, Clone, Deserialize)]
@@ -59,7 +59,7 @@ impl EvaluatorScorecard {
         ]
     }
 
-    pub(super) fn missing_criteria(&self) -> Vec<String> {
+    fn missing_criteria(&self) -> Vec<String> {
         self.entries()
             .into_iter()
             .filter(|(_, score)| score.is_none())
@@ -67,7 +67,7 @@ impl EvaluatorScorecard {
             .collect()
     }
 
-    pub(super) fn invalid_criteria(&self) -> Vec<String> {
+    fn invalid_criteria(&self) -> Vec<String> {
         self.entries()
             .into_iter()
             .filter_map(|(label, score)| {
@@ -78,7 +78,7 @@ impl EvaluatorScorecard {
             .collect()
     }
 
-    pub(super) fn failing_criteria(&self) -> Vec<String> {
+    fn failing_criteria(&self) -> Vec<String> {
         self.entries()
             .into_iter()
             .filter_map(|(label, score)| {
@@ -95,19 +95,19 @@ impl EvaluatorScorecard {
 }
 
 impl EvaluatorResponse {
-    pub(super) fn effective_scorecard(&self) -> EvaluatorScorecard {
+    fn effective_scorecard(&self) -> EvaluatorScorecard {
         self.scorecard.unwrap_or_default()
     }
 
-    pub(super) fn missing_criteria(&self) -> Vec<String> {
+    fn missing_criteria(&self) -> Vec<String> {
         self.effective_scorecard().missing_criteria()
     }
 
-    pub(super) fn invalid_criteria(&self) -> Vec<String> {
+    fn invalid_criteria(&self) -> Vec<String> {
         self.effective_scorecard().invalid_criteria()
     }
 
-    pub(super) fn failing_criteria(&self) -> Vec<String> {
+    fn failing_criteria(&self) -> Vec<String> {
         self.effective_scorecard().failing_criteria()
     }
 
@@ -215,7 +215,7 @@ impl SkepticPanelAggregate {
 }
 
 impl EvaluatorScorecard {
-    pub(super) fn with_min_score(mut self, label: &str, new_score: u8) -> Self {
+    fn with_min_score(mut self, label: &str, new_score: u8) -> Self {
         let current = match label {
             "Contract fidelity" => self.contract_fidelity,
             "Functionality" => self.functionality,

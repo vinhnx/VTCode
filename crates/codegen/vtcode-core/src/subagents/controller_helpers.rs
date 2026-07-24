@@ -92,7 +92,7 @@ pub(super) async fn persist_child_archive(
     Ok(Some(path))
 }
 
-pub(super) fn transcript_line_from_message(message: &Message) -> Option<String> {
+fn transcript_line_from_message(message: &Message) -> Option<String> {
     let role = message.role.to_string();
     let content = message.content.trim();
     if content.is_empty() {

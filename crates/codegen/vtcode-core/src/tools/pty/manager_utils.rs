@@ -96,7 +96,7 @@ pub(super) fn set_command_environment(
 /// parent process, which can speed up command execution by avoiding the need
 /// to run login scripts via `-l` flag.
 #[expect(dead_code)] // Infrastructure for future snapshot-based PTY execution
-pub(super) fn set_command_environment_from_snapshot(
+fn set_command_environment_from_snapshot(
     builder: &mut CommandBuilder,
     snapshot: &ShellSnapshot,
     program: &str,

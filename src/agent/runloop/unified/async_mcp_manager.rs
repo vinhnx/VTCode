@@ -38,7 +38,7 @@ pub(crate) enum McpInitStatus {
 
 impl McpInitStatus {
     #[cfg(test)]
-    pub fn is_ready(&self) -> bool {
+    fn is_ready(&self) -> bool {
         matches!(self, McpInitStatus::Ready { .. })
     }
 
@@ -54,7 +54,7 @@ impl McpInitStatus {
     }
 
     #[cfg(test)]
-    pub fn is_initializing(&self) -> bool {
+    fn is_initializing(&self) -> bool {
         matches!(self, McpInitStatus::Initializing { .. })
     }
 }

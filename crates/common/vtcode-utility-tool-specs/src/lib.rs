@@ -21,7 +21,7 @@ pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema}
 #[cfg(feature = "mcp")]
 pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
 pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
-pub use tool_kind::{CanonicalToolMeta, TokenBucket, ToolKind, ToolNamespace};
+pub(crate) use tool_kind::{CanonicalToolMeta, TokenBucket, ToolKind, ToolNamespace};
 
 pub const SEMANTIC_ANCHOR_GUIDANCE: &str =
     "Prefer stable semantic @@ anchors such as function, class, method, or impl names.";

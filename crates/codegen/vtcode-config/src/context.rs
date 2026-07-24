@@ -64,7 +64,7 @@ impl Default for DynamicContextConfig {
 }
 
 impl DynamicContextConfig {
-    pub fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         ensure!(self.tool_output_threshold >= 1024, "Tool output threshold must be at least 1024 bytes");
         ensure!(self.max_spooled_files > 0, "Max spooled files must be greater than zero");
         ensure!(self.retained_user_messages > 0, "Retained user messages must be greater than zero");
@@ -117,10 +117,10 @@ pub struct LedgerConfig {
     pub max_entries: usize,
     /// Inject ledger into the system prompt each turn
     #[serde(default = "default_include_in_prompt")]
-    pub include_in_prompt: bool,
+    include_in_prompt: bool,
     /// Preserve ledger entries during context compression
     #[serde(default = "default_preserve_in_compression")]
-    pub preserve_in_compression: bool,
+    preserve_in_compression: bool,
 }
 
 impl Default for LedgerConfig {
@@ -135,7 +135,7 @@ impl Default for LedgerConfig {
 }
 
 impl LedgerConfig {
-    pub fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         ensure!(self.max_entries > 0, "Ledger max_entries must be greater than zero");
         Ok(())
     }
@@ -153,7 +153,7 @@ pub struct ContextFeaturesConfig {
     /// Percentage to trim context to when it gets too large
     /// This field is maintained for compatibility but no longer used for trimming
     #[serde(default = "default_trim_to_percent")]
-    pub trim_to_percent: u8,
+    trim_to_percent: u8,
 
     /// Preserve recent turns during context management
     /// This field is maintained for compatibility but no longer used for trimming
@@ -181,7 +181,7 @@ impl Default for ContextFeaturesConfig {
 }
 
 impl ContextFeaturesConfig {
-    pub fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         self.ledger.validate().context("Invalid ledger configuration")?;
         self.dynamic.validate().context("Invalid dynamic context configuration")?;
         Ok(())

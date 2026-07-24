@@ -33,7 +33,7 @@ pub(crate) fn strip_dsml_markup(text: &str) -> String {
 
 /// Public wrapper for tests
 #[cfg(test)]
-pub(super) fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
+fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
     parse_dsml_tool_call_raw(text)
 }
 

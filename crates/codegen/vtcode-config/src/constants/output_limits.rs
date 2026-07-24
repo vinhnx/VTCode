@@ -22,7 +22,7 @@ pub const DEFAULT_MESSAGE_LIMIT: usize = 4_000;
 pub const MAX_MESSAGE_LIMIT: usize = 20_000;
 
 /// Truncation marker appended when content is cut off.
-pub const TRUNCATION_MARKER: &str = "\n[... content truncated due to size limit ...]";
+const TRUNCATION_MARKER: &str = "\n[... content truncated due to size limit ...]";
 
 /// Collect content with lazy truncation (Codex pattern).
 /// Marks truncated but continues draining to prevent pipe blocking.
@@ -36,7 +36,7 @@ pub const TRUNCATION_MARKER: &str = "\n[... content truncated due to size limit 
 /// # Returns
 /// `true` if content was appended, `false` if truncated
 #[inline]
-pub fn collect_with_truncation(output: &mut String, new_content: &str, max_size: usize, truncated: &mut bool) -> bool {
+fn collect_with_truncation(output: &mut String, new_content: &str, max_size: usize, truncated: &mut bool) -> bool {
     let new_size = output.len() + new_content.len();
 
     if new_size > max_size {

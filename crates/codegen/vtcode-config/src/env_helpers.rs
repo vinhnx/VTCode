@@ -5,7 +5,7 @@
 //! previously duplicated across the crate.
 
 /// Read an environment variable, honoring the test-only override map.
-pub fn read_env_var(name: &str) -> Option<String> {
+pub(crate) fn read_env_var(name: &str) -> Option<String> {
     #[cfg(test)]
     if let Some(override_value) = test_env_overrides::get(name) {
         return override_value;
@@ -17,7 +17,7 @@ pub fn read_env_var(name: &str) -> Option<String> {
 /// unrecognized. Accepted truthy values: `1`, `true`, `yes`, `on`. Accepted
 /// falsy values: `0`, `false`, `no`, `off`. Matching is case-insensitive after
 /// trimming whitespace.
-pub fn parse_env_bool(name: &str, default: bool) -> bool {
+pub(crate) fn parse_env_bool(name: &str, default: bool) -> bool {
     read_env_var(name)
         .and_then(|value| {
             let normalized = value.trim().to_ascii_lowercase();
@@ -31,13 +31,13 @@ pub fn parse_env_bool(name: &str, default: bool) -> bool {
 }
 
 /// Serde default returning `true`. Use with `#[serde(default = "default_true")]`.
-pub const fn default_true() -> bool {
+pub(crate) const fn default_true() -> bool {
     true
 }
 
 /// Serde default returning `true`. Alias of [`default_true`] for use with
 /// `#[serde(default = "default_enabled")]`.
-pub const fn default_enabled() -> bool {
+pub(crate) const fn default_enabled() -> bool {
     true
 }
 
@@ -52,18 +52,18 @@ pub(crate) mod test_env_overrides {
         ENV_OVERRIDES.get_or_init(|| Mutex::new(HashMap::new()))
     }
 
-    pub fn get(name: &str) -> Option<Option<String>> {
+    pub(crate) fn get(name: &str) -> Option<Option<String>> {
         overrides().lock().expect("env overrides lock poisoned").get(name).cloned()
     }
 
-    pub fn set(name: &str, value: Option<&str>) {
+    pub(crate) fn set(name: &str, value: Option<&str>) {
         overrides()
             .lock()
             .expect("env overrides lock poisoned")
             .insert(name.to_string(), value.map(ToOwned::to_owned));
     }
 
-    pub fn restore(name: &str, previous: Option<Option<String>>) {
+    pub(crate) fn restore(name: &str, previous: Option<Option<String>>) {
         let mut guard = overrides().lock().expect("env overrides lock poisoned");
         match previous {
             Some(value) => {

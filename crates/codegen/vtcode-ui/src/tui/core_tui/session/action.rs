@@ -37,7 +37,7 @@ pub enum Action {
 
 impl Action {
     /// Human-readable name for config file serialization.
-    pub fn name(self) -> &'static str {
+    fn name(self) -> &'static str {
         match self {
             Action::Interrupt => "interrupt",
             Action::Exit => "exit",
@@ -55,7 +55,7 @@ impl Action {
     }
 
     /// All defined actions.
-    pub fn all() -> &'static [Action] {
+    fn all() -> &'static [Action] {
         &[
             Action::Interrupt,
             Action::Exit,
@@ -73,7 +73,7 @@ impl Action {
     }
 
     /// Look up an action by its serialized name.
-    pub fn from_name(name: &str) -> Option<Self> {
+    fn from_name(name: &str) -> Option<Self> {
         Self::all().iter().find(|a| a.name() == name).copied()
     }
 }
@@ -254,7 +254,7 @@ impl BindingStore {
     /// `overlay` is a `HashMap<action_name, Vec<key_spec_string>>` — exactly
     /// the shape of `KeyBindingConfig::bindings` and
     /// `UserPreferences::keybindings`.
-    pub fn new(overlay: HashMap<String, Vec<String>>) -> Self {
+    pub(crate) fn new(overlay: HashMap<String, Vec<String>>) -> Self {
         let mut merged: HashMap<Action, Vec<(KeyCode, KeyModifiers)>> = default_bindings();
 
         for (action_name, key_specs) in overlay {
@@ -284,7 +284,7 @@ impl BindingStore {
     }
 
     /// Build with only the default bindings.
-    pub fn defaults() -> Self {
+    fn defaults() -> Self {
         Self::new(HashMap::new())
     }
 
@@ -292,7 +292,7 @@ impl BindingStore {
     ///
     /// Returns `None` when the key has no binding (fall through to hardcoded
     /// dispatch).
-    pub fn resolve(&self, key: &KeyEvent) -> Option<Action> {
+    pub(crate) fn resolve(&self, key: &KeyEvent) -> Option<Action> {
         let mut best: Option<(usize, Action)> = None;
 
         // Iterate entries. For `Char` codes we also try a case-insensitive

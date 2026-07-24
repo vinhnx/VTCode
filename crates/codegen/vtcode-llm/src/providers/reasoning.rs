@@ -8,7 +8,7 @@ pub struct ReasoningBuffer {
 
 impl ReasoningBuffer {
     #[inline]
-    pub fn push(&mut self, chunk: &str) -> Option<String> {
+    pub(crate) fn push(&mut self, chunk: &str) -> Option<String> {
         if chunk.is_empty() {
             return None;
         }
@@ -23,7 +23,7 @@ impl ReasoningBuffer {
         Some(chunk.to_string())
     }
 
-    pub fn finalize(self) -> Option<String> {
+    pub(crate) fn finalize(self) -> Option<String> {
         let trimmed = self.text.trim();
         if trimmed.is_empty() {
             None

@@ -5,4 +5,4 @@ pub const DEFAULT_TEMPERATURE: f32 = 0.7;
 
 /// Default temperature for prompt refinement (0.0-1.0)
 /// Lower than main temperature for more deterministic refinement
-pub const DEFAULT_REFINE_TEMPERATURE: f32 = 0.3;
+pub(crate) const DEFAULT_REFINE_TEMPERATURE: f32 = 0.3;

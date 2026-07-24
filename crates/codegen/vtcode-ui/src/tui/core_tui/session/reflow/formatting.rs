@@ -20,7 +20,7 @@ impl Session {
 
     /// Get the style for a message divider
     #[expect(dead_code)]
-    pub(super) fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
+    fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         self.styles.message_divider_style(kind)
     }
 
@@ -105,7 +105,7 @@ impl Session {
 
     /// Check if a message line should be justified
     #[expect(dead_code)]
-    pub(super) fn should_justify_message_line(&self, line: &Line<'static>, max_width: usize, is_last: bool) -> bool {
+    fn should_justify_message_line(&self, line: &Line<'static>, max_width: usize, is_last: bool) -> bool {
         if is_last || max_width == 0 {
             return false;
         }
@@ -136,7 +136,7 @@ impl Session {
 
     /// Justify a message line by distributing spaces
     #[expect(dead_code)]
-    pub(super) fn justify_message_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
+    fn justify_message_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
         let span = &line.spans[0];
         if let Some(justified) = text_utils::justify_plain_text(&span.content, max_width) {
             Line::from(justified).style(span.style)
@@ -147,7 +147,7 @@ impl Session {
 
     /// Check if a line is a diff line (has diff markers and background color)
     #[expect(dead_code)]
-    pub(super) fn is_diff_line(&self, line: &Line<'static>) -> bool {
+    fn is_diff_line(&self, line: &Line<'static>) -> bool {
         if line.spans.is_empty() {
             return false;
         }
@@ -163,7 +163,7 @@ impl Session {
 
     /// Pad a diff line to full width
     #[expect(dead_code)]
-    pub(super) fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
+    fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
         if max_width == 0 || line.spans.is_empty() {
             return line.clone();
         }

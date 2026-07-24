@@ -47,14 +47,14 @@ pub mod modal;
 pub mod mouse_selection;
 mod navigation;
 mod queue;
-pub mod render;
+pub(crate) mod render;
 mod scroll;
 pub mod styling;
 mod text_utils;
 mod textarea_bridge;
 mod transcript;
-pub mod utils;
-pub mod wrapping;
+pub(crate) mod utils;
+pub(crate) mod wrapping;
 
 // New modular components (refactored from main session.rs)
 mod command;
@@ -116,7 +116,7 @@ struct CollapsedPaste {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SuggestedPromptState {
-    pub(crate) active: bool,
+    active: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,8 +127,8 @@ pub(crate) enum InlinePromptSuggestionSource {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct InlinePromptSuggestionState {
-    pub(crate) suggestion: Option<String>,
-    pub(crate) source: Option<InlinePromptSuggestionSource>,
+    suggestion: Option<String>,
+    source: Option<InlinePromptSuggestionSource>,
 }
 
 pub(crate) enum ActiveOverlay {
@@ -209,11 +209,11 @@ pub struct Session {
     /// Thinking/reasoning run bookkeeping (collapse overrides + the run
     /// currently streaming), isolated behind a narrow interface so the policy
     /// can evolve and be tested independently of transcript storage.
-    pub(crate) thinking_runs: ThinkingRunIndex,
+    thinking_runs: ThinkingRunIndex,
     pub(crate) theme: InlineTheme,
     pub(crate) styles: SessionStyles,
     pub(crate) appearance: AppearanceConfig,
-    pub(crate) header_context: InlineHeaderContext,
+    header_context: InlineHeaderContext,
     pub(crate) header_rows: u16,
     pub(crate) labels: MessageLabels,
 
@@ -234,7 +234,7 @@ pub struct Session {
     input_enabled: bool,
     image_input_enabled: bool,
     cursor_visible: bool,
-    pub(crate) needs_redraw: bool,
+    needs_redraw: bool,
     pub(crate) needs_full_clear: bool,
     /// Track whether the transcript viewport must be cleared before repainting.
     pub(crate) transcript_clear_required: bool,
@@ -242,7 +242,7 @@ pub struct Session {
     pub(crate) last_interrupt_press: Option<Instant>,
     scroll_cursor_steady_until: Option<Instant>,
     last_shimmer_active: bool,
-    pub(crate) view_rows: u16,
+    view_rows: u16,
     pub(crate) input_height: u16,
     pub(crate) transcript_rows: u16,
     pub(crate) transcript_width: u16,
@@ -271,12 +271,12 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
     /// Avoids expensive clone on cache hits
-    pub(crate) visible_lines_cache: Option<(usize, u16, usize, Arc<Vec<TranscriptLine>>)>,
+    visible_lines_cache: Option<(usize, u16, usize, Arc<Vec<TranscriptLine>>)>,
     pub(crate) queued_inputs: Vec<String>,
     pub(crate) local_agents: Vec<LocalAgentEntry>,
-    pub(crate) local_agents_drawer_visible: bool,
-    pub(crate) subprocess_entries: Vec<String>,
-    pub(crate) subagent_preview: Option<String>,
+    local_agents_drawer_visible: bool,
+    subprocess_entries: Vec<String>,
+    subagent_preview: Option<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
     active_overlay: Option<ActiveOverlay>,
@@ -289,8 +289,8 @@ pub struct Session {
     in_tool_code_fence: bool,
 
     // --- Prompt Suggestions ---
-    pub(crate) suggested_prompt_state: SuggestedPromptState,
-    pub(crate) inline_prompt_suggestion: InlinePromptSuggestionState,
+    suggested_prompt_state: SuggestedPromptState,
+    inline_prompt_suggestion: InlinePromptSuggestionState,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
@@ -303,39 +303,39 @@ pub struct Session {
     pub(crate) active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
 
     // --- Keybinding store ---
-    pub(crate) bindings: BindingStore,
+    bindings: BindingStore,
 
     // --- Clipboard for yank/paste operations ---
     #[expect(dead_code)]
-    pub(crate) clipboard: String,
-    pub(crate) vim_state: VimState,
+    clipboard: String,
+    vim_state: VimState,
 
     // --- Mouse Text Selection ---
     pub(crate) mouse_selection: MouseSelectionState,
     pub(crate) mouse_drag_target: MouseDragTarget,
     pub(crate) fullscreen: FullscreenSessionState,
 
-    pub(crate) skip_confirmations: bool,
+    skip_confirmations: bool,
 
     // --- Performance Caching ---
-    pub(crate) header_lines_cache: Option<Vec<Line<'static>>>,
-    pub(crate) header_height_cache: hashbrown::HashMap<u16, u16>,
+    header_lines_cache: Option<Vec<Line<'static>>>,
+    header_height_cache: hashbrown::HashMap<u16, u16>,
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
-    pub(crate) subprocess_entries_preview_cache: Option<Vec<String>>,
+    subprocess_entries_preview_cache: Option<Vec<String>>,
 
     // --- Terminal Title ---
     /// Product/app name used in terminal title branding
-    pub(crate) app_name: String,
+    app_name: String,
     /// Workspace root path for dynamic title generation
-    pub(crate) workspace_root: Option<std::path::PathBuf>,
+    workspace_root: Option<std::path::PathBuf>,
     /// Raw config items for terminal title rendering (`None` means use defaults).
-    pub(crate) terminal_title_items: Option<Vec<String>>,
+    terminal_title_items: Option<Vec<String>>,
     /// Active thread label shown in terminal title when configured.
-    pub(crate) terminal_title_thread_label: Option<String>,
+    terminal_title_thread_label: Option<String>,
     /// Active git branch shown in terminal title when configured.
-    pub(crate) terminal_title_git_branch: Option<String>,
+    terminal_title_git_branch: Option<String>,
     /// Latest task tracker progress label extracted from the task panel.
-    pub(crate) terminal_title_task_progress: Option<String>,
+    terminal_title_task_progress: Option<String>,
     /// Last set terminal title to avoid redundant updates
     last_terminal_title: Option<String>,
 
@@ -343,7 +343,7 @@ pub struct Session {
     /// Track if the assistant is currently streaming a final answer.
     /// When true, user input should be queued instead of submitted immediately
     /// to prevent race conditions with turn completion (see GitHub #12569).
-    pub(crate) is_streaming_final_answer: bool,
+    is_streaming_final_answer: bool,
 
     // --- Double-Esc Detection ---
     /// Timestamp of the last Escape key press for double-Esc detection.
@@ -370,32 +370,32 @@ pub(crate) struct ThinkingRunIndex {
 impl ThinkingRunIndex {
     /// Whether the run starting at `start` should render collapsed, falling
     /// back to `default` when no explicit override exists.
-    pub(crate) fn is_collapsed(&self, start: usize, default: bool) -> bool {
+    fn is_collapsed(&self, start: usize, default: bool) -> bool {
         self.collapsed.get(&start).copied().unwrap_or(default)
     }
 
     /// Set the explicit collapse state for the run starting at `start`.
-    pub(crate) fn set_collapsed(&mut self, start: usize, collapsed: bool) {
+    fn set_collapsed(&mut self, start: usize, collapsed: bool) {
         self.collapsed.insert(start, collapsed);
     }
 
     /// Record the start of a newly begun reasoning run.
-    pub(crate) fn begin_run(&mut self, start: usize) {
+    fn begin_run(&mut self, start: usize) {
         self.active_start = Some(start);
     }
 
     /// End the active reasoning run (a non-reasoning line was appended).
-    pub(crate) fn end_run(&mut self) {
+    fn end_run(&mut self) {
         self.active_start = None;
     }
 
     /// Start line index of the reasoning run currently streaming, if any.
-    pub(crate) fn active_start(&self) -> Option<usize> {
+    fn active_start(&self) -> Option<usize> {
         self.active_start
     }
 
     /// Reset all tracked runs (e.g. on `clear_screen`).
-    pub(crate) fn clear(&mut self) {
+    fn clear(&mut self) {
         self.collapsed.clear();
         self.active_start = None;
     }

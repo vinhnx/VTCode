@@ -33,7 +33,7 @@ pub fn blend_colors(color1: &Color, color2: &Color, ratio: f32) -> Option<Color>
 }
 
 /// Convert an ANSI color to RGB, if possible
-pub fn color_to_rgb(color: &Color) -> Option<RgbColor> {
+fn color_to_rgb(color: &Color) -> Option<RgbColor> {
     match color {
         Color::Rgb(rgb) => Some(*rgb),
         Color::Ansi(ansi_color) => ansi_to_rgb(*ansi_color),
@@ -183,7 +183,7 @@ impl StyledString {
         self
     }
 
-    pub fn dimmed(mut self) -> Self {
+    fn dimmed(mut self) -> Self {
         self.style = self.style.effects(self.style.get_effects() | Effects::DIMMED);
         self
     }

@@ -16,12 +16,12 @@ pub enum ResponsesApiState {
 }
 
 /// Payload structure for OpenAI Responses API requests.
-pub struct OpenAIResponsesPayload {
+pub(crate) struct OpenAIResponsesPayload {
     /// The input messages/items for the request.
-    pub input: Vec<Value>,
+    pub(crate) input: Vec<Value>,
     /// Optional system instructions.
-    pub instructions: Option<String>,
+    pub(crate) instructions: Option<String>,
 }
 
 /// Maximum completion tokens field name for Chat Completions API.
-pub const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
+pub(crate) const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";

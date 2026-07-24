@@ -55,7 +55,7 @@ pub(super) fn host_port(base_url: &str) -> Result<u16> {
     Ok(parsed.port().unwrap_or(8080))
 }
 
-pub(super) fn resolve_binary_path() -> Result<String> {
+fn resolve_binary_path() -> Result<String> {
     if let Ok(path) = std::env::var(env_vars::LLAMACPP_BINARY_PATH)
         && !path.trim().is_empty()
     {

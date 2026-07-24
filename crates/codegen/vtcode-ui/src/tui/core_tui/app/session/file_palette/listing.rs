@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use super::{FileEntry, FilePalette};
 
-pub(super) fn make_relative(workspace: &Path, file_path: &str) -> String {
+fn make_relative(workspace: &Path, file_path: &str) -> String {
     let path = Path::new(file_path);
     path.strip_prefix(workspace)
         .or_else(|_| path.strip_prefix("/"))
@@ -98,7 +98,7 @@ fn insert_child(
     children.push(entry);
 }
 
-pub(super) fn ensure_dir_listing(palette: &mut FilePalette, dir: &Path) -> Vec<FileEntry> {
+fn ensure_dir_listing(palette: &mut FilePalette, dir: &Path) -> Vec<FileEntry> {
     if let Some(cached) = palette.dir_index.get(dir) {
         return cached.clone();
     }

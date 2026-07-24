@@ -16,22 +16,22 @@
 
 mod client;
 pub mod connection_pool;
-pub mod conversion;
+pub(crate) mod conversion;
 pub mod enhanced_config;
 pub mod errors;
 mod provider;
 mod rmcp_client;
 pub mod rmcp_transport;
-pub mod schema;
+pub(crate) mod schema;
 pub mod tool_discovery;
 pub mod tool_discovery_cache;
 pub mod traits;
 pub mod types;
-pub mod utils;
+pub(crate) mod utils;
 
 pub use client::McpClient;
 
-pub use connection_pool::{ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats};
+pub(crate) use connection_pool::{ConnectionPoolStats, McpConnectionPool, McpPoolError, PooledMcpManager, PooledMcpStats};
 pub use errors::{
     ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found, provider_unavailable,
     schema_invalid, tool_invocation_failed, tool_not_found,
@@ -41,7 +41,7 @@ pub(crate) use rmcp_client::RmcpClient;
 pub use rmcp_transport::{
     HttpTransport, create_http_transport, create_stdio_transport, create_stdio_transport_with_stderr,
 };
-pub use schema::{validate_against_schema, validate_tool_input};
+pub(crate) use schema::{validate_against_schema, validate_tool_input};
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use traits::{McpElicitationHandler, McpToolExecutor};
 pub use types::{
@@ -49,7 +49,7 @@ pub use types::{
     McpPromptDetail, McpPromptInfo, McpResourceData, McpResourceInfo, McpToolInfo, OPENAI_FILE_PARAMS_META_KEY,
     OPENAI_FILE_PARAMS_VALUE, ProvidedFilePayload,
 };
-pub use utils::{
+pub(crate) use utils::{
     LOCAL_TIMEZONE_ENV_VAR, TIMEZONE_ARGUMENT, TZ_ENV_VAR, build_headers, detect_local_timezone,
     ensure_timezone_argument, schema_requires_field,
 };
@@ -61,8 +61,8 @@ use std::ffi::OsString;
 use std::fmt::Write;
 
 /// MCP protocol version constants
-pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";
-pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[LATEST_PROTOCOL_VERSION];
+pub(crate) const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";
+pub(crate) const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[LATEST_PROTOCOL_VERSION];
 
 /// Convert any serializable type to rmcp model type via JSON serialization
 pub(crate) fn convert_to_rmcp<T, U>(value: T) -> Result<U>

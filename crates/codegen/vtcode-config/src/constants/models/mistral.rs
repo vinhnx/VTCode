@@ -11,10 +11,10 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 pub const MISTRAL_LARGE_3: &str = "mistral-large-2512";
-pub const MISTRAL_MEDIUM_3_5: &str = "mistral-medium-3-5";
-pub const MISTRAL_SMALL_4: &str = "mistral-small-2603";
-pub const MISTRAL_MEDIUM_3_1: &str = "mistral-medium-2508";
-pub const CODESTRAL: &str = "codestral-2508";
-pub const MINISTRAL_3_14B: &str = "ministral-3-14b-2512";
-pub const MINISTRAL_3_8B: &str = "ministral-3-8b-2512";
-pub const MINISTRAL_3_3B: &str = "ministral-3-3b-2512";
+const MISTRAL_MEDIUM_3_5: &str = "mistral-medium-3-5";
+const MISTRAL_SMALL_4: &str = "mistral-small-2603";
+const MISTRAL_MEDIUM_3_1: &str = "mistral-medium-2508";
+const CODESTRAL: &str = "codestral-2508";
+const MINISTRAL_3_14B: &str = "ministral-3-14b-2512";
+const MINISTRAL_3_8B: &str = "ministral-3-8b-2512";
+const MINISTRAL_3_3B: &str = "ministral-3-3b-2512";

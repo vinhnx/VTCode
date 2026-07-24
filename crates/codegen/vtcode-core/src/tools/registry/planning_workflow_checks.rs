@@ -95,7 +95,7 @@ impl ToolRegistry {
 
     /// Check if a tool operation is targeting the plans directory.
     /// In planning workflow, writes to active plan storage are allowed for the agent to write its plan.
-    pub(super) fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
+    fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
         use crate::tools::names::canonical_tool_name;
 
         let canonical = canonical_tool_name(tool_name);
@@ -156,7 +156,7 @@ impl ToolRegistry {
     /// Allows `file_operation` with action "read" and `command_session` with read-only actions
     /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
     #[expect(dead_code)]
-    pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
+    fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
         classify_tool_intent(tool_name, args).readonly_unified_action
     }
 }

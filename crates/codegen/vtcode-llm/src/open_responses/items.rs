@@ -217,7 +217,7 @@ impl<'de> Deserialize<'de> for OutputItem {
 
 impl OutputItem {
     /// Returns the unique identifier for this item.
-    pub fn id(&self) -> &str {
+    fn id(&self) -> &str {
         match self {
             Self::Message(m) => &m.id,
             Self::Reasoning(r) => &r.id,
@@ -239,7 +239,7 @@ impl OutputItem {
     }
 
     /// Returns the type name for this item.
-    pub fn type_name(&self) -> &str {
+    fn type_name(&self) -> &str {
         match self {
             Self::Message(_) => "message",
             Self::Reasoning(_) => "reasoning",
@@ -260,7 +260,7 @@ impl OutputItem {
     }
 
     /// Creates a new completed message item with the given parameters.
-    pub fn completed_message(id: impl Into<OutputItemId>, role: MessageRole, content: Vec<ContentPart>) -> Self {
+    pub(crate) fn completed_message(id: impl Into<OutputItemId>, role: MessageRole, content: Vec<ContentPart>) -> Self {
         Self::Message(MessageItem {
             id: id.into(),
             status: ItemStatus::Completed,
@@ -270,7 +270,7 @@ impl OutputItem {
     }
 
     /// Creates a new reasoning item.
-    pub fn reasoning(id: impl Into<OutputItemId>) -> Self {
+    pub(crate) fn reasoning(id: impl Into<OutputItemId>) -> Self {
         Self::Reasoning(ReasoningItem {
             id: id.into(),
             status: ItemStatus::InProgress,
@@ -311,7 +311,7 @@ impl OutputItem {
     /// Creates a new completed function call output item.
     ///
     /// Use this when the tool execution has finished and the output is final.
-    pub fn completed_function_call_output(
+    fn completed_function_call_output(
         id: impl Into<OutputItemId>,
         call_id: Option<String>,
         output: impl Into<String>,
@@ -329,16 +329,16 @@ impl OutputItem {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MessageItem {
     /// Unique identifier for this item.
-    pub id: OutputItemId,
+    pub(crate) id: OutputItemId,
 
     /// Current lifecycle status.
     pub status: ItemStatus,
 
     /// Role of the message author.
-    pub role: MessageRole,
+    pub(crate) role: MessageRole,
 
     /// Content parts that make up this message.
-    pub content: Vec<ContentPart>,
+    pub(crate) content: Vec<ContentPart>,
 }
 
 /// Role of a message author.
@@ -371,32 +371,32 @@ impl std::fmt::Display for MessageRole {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReasoningItem {
     /// Unique identifier for this item.
-    pub id: OutputItemId,
+    pub(crate) id: OutputItemId,
 
     /// Current lifecycle status.
-    pub status: ItemStatus,
+    pub(crate) status: ItemStatus,
 
     /// Summary of the reasoning (human-readable).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
+    pub(crate) summary: Option<String>,
 
     /// Raw reasoning trace content.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
+    pub(crate) content: Option<String>,
 
     /// Encrypted reasoning content for rehydration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encrypted_content: Option<String>,
+    pub(crate) encrypted_content: Option<String>,
 }
 
 /// A function call item representing a tool invocation request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionCallItem {
     /// Unique identifier for this item.
-    pub id: OutputItemId,
+    pub(crate) id: OutputItemId,
 
     /// Current lifecycle status.
-    pub status: ItemStatus,
+    pub(crate) status: ItemStatus,
 
     /// Name of the function to call.
     pub name: String,
@@ -406,24 +406,24 @@ pub struct FunctionCallItem {
 
     /// Optional call ID for correlating with output.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub call_id: Option<String>,
+    pub(crate) call_id: Option<String>,
 }
 
 /// Output from a function call execution.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionCallOutputItem {
     /// Unique identifier for this item.
-    pub id: OutputItemId,
+    pub(crate) id: OutputItemId,
 
     /// Current lifecycle status.
-    pub status: ItemStatus,
+    pub(crate) status: ItemStatus,
 
     /// ID of the function call this output corresponds to.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub call_id: Option<String>,
+    pub(crate) call_id: Option<String>,
 
     /// Output content from the function execution.
-    pub output: String,
+    pub(crate) output: String,
 }
 
 /// Custom/extension item type.
@@ -432,21 +432,21 @@ pub struct FunctionCallOutputItem {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomItem {
     /// Unique identifier for this item.
-    pub id: OutputItemId,
+    pub(crate) id: OutputItemId,
 
     /// Current lifecycle status.
-    pub status: ItemStatus,
+    pub(crate) status: ItemStatus,
 
     /// Custom type identifier (must be prefixed, e.g., `vtcode:file_change`).
-    pub custom_type: String,
+    pub(crate) custom_type: String,
 
     /// Custom data payload.
-    pub data: Value,
+    pub(crate) data: Value,
 }
 
 impl CustomItem {
     /// Creates a new custom item with VT Code prefix.
-    pub fn vtcode(id: impl Into<OutputItemId>, name: &str, data: Value) -> Self {
+    fn vtcode(id: impl Into<OutputItemId>, name: &str, data: Value) -> Self {
         Self {
             id: id.into(),
             status: ItemStatus::InProgress,

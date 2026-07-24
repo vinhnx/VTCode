@@ -12,11 +12,11 @@ const ENCRYPTED_CREDENTIAL_VERSION: u8 = 1;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EncryptedCredential {
-    pub(crate) nonce: String,
-    pub(crate) ciphertext: String,
-    pub(crate) version: u8,
+    nonce: String,
+    ciphertext: String,
+    version: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) salt: Option<String>,
+    salt: Option<String>,
 }
 
 /// Encrypt a plaintext credential string into a portable encrypted payload.

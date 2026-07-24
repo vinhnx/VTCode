@@ -59,7 +59,7 @@ impl AlternateScreenSession {
     /// # Errors
     ///
     /// Returns an error if any terminal operation fails.
-    pub fn enter() -> Result<Self> {
+    fn enter() -> Result<Self> {
         let mut stdout = io::stdout();
 
         // Check if stdout is a TTY before proceeding
@@ -110,7 +110,7 @@ impl AlternateScreenSession {
     ///
     /// Returns an error if any terminal operation fails. However, this method
     /// will attempt to restore as much state as possible even if some operations fail.
-    pub fn exit(mut self) -> Result<()> {
+    fn exit(mut self) -> Result<()> {
         self.restore_state()?;
         self.entered = false; // Prevent Drop from trying again
         Ok(())
@@ -125,7 +125,7 @@ impl AlternateScreenSession {
     ///
     /// Returns an error if entering/exiting alternate screen fails, or if the
     /// closure returns an error.
-    pub fn run<F, T>(f: F) -> Result<T>
+    fn run<F, T>(f: F) -> Result<T>
     where
         F: FnOnce() -> Result<T>,
     {

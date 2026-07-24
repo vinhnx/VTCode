@@ -19,34 +19,34 @@ pub struct FunctionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCallingConfig {
-    pub mode: String,
+    pub(crate) mode: String,
     #[serde(skip_serializing_if = "Option::is_none", rename = "allowedFunctionNames")]
-    pub allowed_function_names: Option<Vec<String>>,
+    pub(crate) allowed_function_names: Option<Vec<String>>,
 }
 
 impl FunctionCallingConfig {
-    pub fn auto() -> Self {
+    pub(crate) fn auto() -> Self {
         Self {
             mode: "AUTO".to_owned(),
             allowed_function_names: None,
         }
     }
 
-    pub fn validated() -> Self {
+    pub(crate) fn validated() -> Self {
         Self {
             mode: "VALIDATED".to_owned(),
             allowed_function_names: None,
         }
     }
 
-    pub fn none() -> Self {
+    pub(crate) fn none() -> Self {
         Self {
             mode: "NONE".to_owned(),
             allowed_function_names: None,
         }
     }
 
-    pub fn any() -> Self {
+    pub(crate) fn any() -> Self {
         Self {
             mode: "ANY".to_owned(),
             allowed_function_names: None,

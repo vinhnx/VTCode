@@ -277,7 +277,7 @@ impl InlineHandle {
         self.set_placeholder_with_style(hint, None);
     }
 
-    pub fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
+    fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
         self.send_command(InlineCommand::SetPlaceholder { hint, style });
     }
 

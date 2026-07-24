@@ -18,22 +18,22 @@ use crate::models::Provider;
 /// the struct is no longer consumed by the key resolution logic.
 #[derive(Debug, Clone, Default)]
 pub struct ApiKeySources {
-    pub gemini_env: String,
-    pub anthropic_env: String,
-    pub openai_env: String,
-    pub openrouter_env: String,
-    pub deepseek_env: String,
-    pub zai_env: String,
-    pub ollama_env: String,
-    pub lmstudio_env: String,
-    pub gemini_config: Option<String>,
-    pub anthropic_config: Option<String>,
-    pub openai_config: Option<String>,
-    pub openrouter_config: Option<String>,
-    pub deepseek_config: Option<String>,
-    pub zai_config: Option<String>,
-    pub ollama_config: Option<String>,
-    pub lmstudio_config: Option<String>,
+    gemini_env: String,
+    anthropic_env: String,
+    openai_env: String,
+    openrouter_env: String,
+    deepseek_env: String,
+    zai_env: String,
+    ollama_env: String,
+    lmstudio_env: String,
+    gemini_config: Option<String>,
+    anthropic_config: Option<String>,
+    openai_config: Option<String>,
+    openrouter_config: Option<String>,
+    deepseek_config: Option<String>,
+    zai_config: Option<String>,
+    ollama_config: Option<String>,
+    lmstudio_config: Option<String>,
 }
 
 pub fn api_key_env_var(provider: &str) -> String {
@@ -324,7 +324,7 @@ pub fn provider_credential_detail(provider: Provider) -> Option<DiscoveredProvid
 /// Thin wrapper over [`provider_credential_detail`] that returns only the
 /// credential source. Kept for backward compatibility with callers that don't
 /// need the env-var detail.
-pub fn provider_credential_source(provider: Provider) -> Option<CredentialSource> {
+fn provider_credential_source(provider: Provider) -> Option<CredentialSource> {
     provider_credential_detail(provider).map(|detail| detail.source)
 }
 

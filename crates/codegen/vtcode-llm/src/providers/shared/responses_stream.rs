@@ -17,10 +17,10 @@ use super::{StreamAggregator, generate_tool_call_id, parse_cached_prompt_tokens_
 // Remove only when Rig exposes an event adapter with the same normalised
 // surface for all VTCode providers that use Responses-style streaming.
 pub struct ResponsesNormalizedStreamOptions {
-    pub provider_name: &'static str,
-    pub model: String,
-    pub emit_reasoning: bool,
-    pub include_cached_prompt_metrics: bool,
+    pub(crate) provider_name: &'static str,
+    pub(crate) model: String,
+    pub(crate) emit_reasoning: bool,
+    pub(crate) include_cached_prompt_metrics: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

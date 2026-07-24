@@ -10,7 +10,7 @@ pub fn format_unified_diff(old: &str, new: &str, options: DiffOptions<'_>) -> St
 }
 
 /// Compute a structured diff bundle using the default theme-aware formatter.
-pub fn compute_diff_with_theme(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundle {
+pub(crate) fn compute_diff_with_theme(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundle {
     crate::design::diff::compute_diff_with_theme(old, new, options)
 }
 

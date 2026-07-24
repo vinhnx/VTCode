@@ -10,7 +10,7 @@ pub mod acp {
     }
 
     impl AgentClientProtocolEnvKey {
-        pub fn as_str(self) -> &'static str {
+        pub(crate) fn as_str(self) -> &'static str {
             match self {
                 Self::Enabled => "VT_ACP_ENABLED",
                 Self::ZedEnabled => "VT_ACP_ZED_ENABLED",

@@ -46,7 +46,7 @@ pub(super) struct PlannerItem {
     pub(super) verify: Vec<String>,
 }
 
-pub(super) fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -66,7 +66,7 @@ where
     }
 }
 
-pub(super) fn deserialize_string_or_object<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+fn deserialize_string_or_object<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
 {

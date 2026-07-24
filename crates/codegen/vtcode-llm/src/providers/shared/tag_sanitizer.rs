@@ -29,7 +29,7 @@ impl Default for TagStreamSanitizer {
 }
 
 impl TagStreamSanitizer {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             in_reasoning: false,
             active_tag_pair: None,
@@ -40,7 +40,7 @@ impl TagStreamSanitizer {
     /// Processes a content chunk and returns a list of resulting stream events.
     /// This may return `LLMStreamEvent::Token` (for the actual content)
     /// and `LLMStreamEvent::Reasoning` (for extracted reasoning).
-    pub fn process_chunk(&mut self, chunk: &str) -> Vec<LLMStreamEvent> {
+    pub(crate) fn process_chunk(&mut self, chunk: &str) -> Vec<LLMStreamEvent> {
         let mut events = Vec::new();
         let mut current_pos = 0;
         let chunk_str = format!("{}{}", self.partial_tag, chunk);
@@ -152,7 +152,7 @@ impl TagStreamSanitizer {
     }
 
     /// Finalizes the sanitizer, returning any leftover content.
-    pub fn finalize(self) -> Vec<LLMStreamEvent> {
+    pub(crate) fn finalize(self) -> Vec<LLMStreamEvent> {
         let mut events = Vec::new();
         if !self.partial_tag.is_empty() {
             if self.in_reasoning {

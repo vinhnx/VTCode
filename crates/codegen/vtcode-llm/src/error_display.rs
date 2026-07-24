@@ -18,24 +18,24 @@ fn style_text(style: Style, text: &str) -> String {
 
 /// Get a styled error message with enhanced coloring
 #[cold]
-pub fn style_llm_error(message: &str) -> String {
+fn style_llm_error(message: &str) -> String {
     style_text(Styles::error(), message)
 }
 
 /// Get a styled warning message with enhanced coloring
 #[cold]
-pub fn style_llm_warning(message: &str) -> String {
+fn style_llm_warning(message: &str) -> String {
     style_text(Styles::warning(), message)
 }
 
 /// Get a styled success message with enhanced coloring
 #[inline]
-pub fn style_llm_success(message: &str) -> String {
+fn style_llm_success(message: &str) -> String {
     style_text(Styles::success(), message)
 }
 
 /// Get a styled provider name with enhanced coloring based on provider type
-pub fn style_provider_name(provider: &str) -> String {
+fn style_provider_name(provider: &str) -> String {
     let style = match provider.to_lowercase().as_str() {
         "gemini" => Styles::info(),    // Deep blue for Gemini
         "openai" => Styles::warning(), // Bright orange for OpenAI
@@ -55,14 +55,14 @@ pub fn format_llm_error(provider: &str, error: &str) -> String {
 
 /// Format an LLM warning for display with enhanced coloring
 #[cold]
-pub fn format_llm_warning(provider: &str, warning: &str) -> String {
+fn format_llm_warning(provider: &str, warning: &str) -> String {
     let provider_styled = style_provider_name(provider);
     let warning_styled = style_llm_warning(warning);
     format!("{provider_styled} {warning_styled}")
 }
 
 /// Format an LLM success message for display with enhanced coloring
-pub fn format_llm_success(provider: &str, message: &str) -> String {
+fn format_llm_success(provider: &str, message: &str) -> String {
     let provider_styled = style_provider_name(provider);
     let success_styled = style_llm_success(message);
     format!("{provider_styled} {success_styled}")

@@ -28,7 +28,7 @@ impl TraceLevel {
         }
     }
 
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         match value.trim().to_lowercase().as_str() {
             "error" => Some(Self::Error),
             "warn" => Some(Self::Warn),

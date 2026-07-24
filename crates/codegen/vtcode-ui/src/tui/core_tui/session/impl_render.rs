@@ -1,7 +1,7 @@
 use super::*;
 
 impl Session {
-    pub fn render(&mut self, frame: &mut Frame<'_>) {
+    pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
         let Some(layout) = self.prepare_frame_layout(frame, 0) else {
             return;
         };

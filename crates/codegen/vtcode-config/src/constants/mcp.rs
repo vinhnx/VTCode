@@ -1,5 +1,5 @@
-pub const RENDERER_CONTEXT7: &str = "context7";
-pub const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
+pub(crate) const RENDERER_CONTEXT7: &str = "context7";
+pub(crate) const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
 
 /// Default startup timeout for MCP servers in milliseconds (60 seconds)
 /// Can be overridden via config: mcp.startup_timeout_seconds

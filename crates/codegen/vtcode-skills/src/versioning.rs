@@ -20,13 +20,13 @@ use crate::types::SkillManifest;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedSkillRef {
     /// Skill name
-    pub name: String,
+    name: String,
     /// What was originally requested
-    pub requested: SkillVersion,
+    requested: SkillVersion,
     /// Concrete resolved version string
-    pub resolved: String,
+    resolved: String,
     /// Where the skill was found
-    pub source: SkillSource,
+    source: SkillSource,
 }
 
 /// Where a resolved skill comes from
@@ -44,10 +44,10 @@ pub enum SkillSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillLockfile {
     /// Locked skill versions: name -> version
-    pub locked: HashMap<String, String>,
+    locked: HashMap<String, String>,
     /// When the lockfile was last updated
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<String>,
+    updated_at: Option<String>,
 }
 
 const LOCKFILE_NAME: &str = "skills.lock";
@@ -76,7 +76,7 @@ impl SkillLockfile {
     }
 
     /// Get locked version for a skill
-    pub fn get_locked(&self, name: &str) -> Option<&str> {
+    fn get_locked(&self, name: &str) -> Option<&str> {
         self.locked.get(name).map(|s| s.as_str())
     }
 
@@ -87,7 +87,7 @@ impl SkillLockfile {
     }
 
     /// Check if any skills are locked
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.locked.is_empty()
     }
 }

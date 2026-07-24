@@ -31,10 +31,10 @@ pub mod sidebar;
 pub mod transcript;
 
 pub use footer::{FooterWidget, hints as footer_hints};
-pub use header::HeaderWidget;
-pub use input::InputWidget;
-pub use layout_mode::LayoutMode;
-pub use panel::{Panel, PanelStyles};
-pub use session::SessionWidget;
-pub use sidebar::{SidebarSection, SidebarWidget};
+pub(crate) use header::HeaderWidget;
+pub(crate) use input::InputWidget;
+pub(crate) use layout_mode::LayoutMode;
+pub(crate) use panel::{Panel, PanelStyles};
+pub(crate) use session::SessionWidget;
+pub(crate) use sidebar::{SidebarSection, SidebarWidget};
 pub use transcript::TranscriptWidget;

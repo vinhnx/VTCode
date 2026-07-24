@@ -29,12 +29,12 @@ impl Default for ColorAccessibilityConfig {
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
 pub struct ThemePalette {
-    pub primary_accent: RgbColor,
-    pub background: RgbColor,
-    pub foreground: RgbColor,
-    pub secondary_accent: RgbColor,
-    pub alert: RgbColor,
-    pub logo_accent: RgbColor,
+    pub(crate) primary_accent: RgbColor,
+    pub(crate) background: RgbColor,
+    pub(crate) foreground: RgbColor,
+    pub(crate) secondary_accent: RgbColor,
+    pub(crate) alert: RgbColor,
+    pub(crate) logo_accent: RgbColor,
 }
 
 /// Shared computation context for theme color derivation.
@@ -50,7 +50,7 @@ pub(crate) struct ColorContext {
 }
 
 impl ColorContext {
-    pub(crate) fn new(background: RgbColor, min_contrast: f32) -> Self {
+    fn new(background: RgbColor, min_contrast: f32) -> Self {
         Self {
             background,
             min_contrast,
@@ -64,19 +64,19 @@ impl ColorContext {
 
     /// Ensure minimum contrast against background, then balance luminance
     /// into the comfortable reading range. Used for text-content colors.
-    pub(crate) fn guaranteed_text_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
+    fn guaranteed_text_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
         let color = ensure_contrast(candidate, self.background, self.min_contrast, fallbacks);
         balance_text_luminance(color, self.background, self.min_contrast)
     }
 
     /// Ensure minimum contrast against background only. Used for accent/UI
     /// colors where luminance balancing would override the intended tint.
-    pub(crate) fn guaranteed_accent_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
+    fn guaranteed_accent_color(&self, candidate: RgbColor, fallbacks: &[RgbColor]) -> RgbColor {
         ensure_contrast(candidate, self.background, self.min_contrast, fallbacks)
     }
 
     /// 1. Main foreground text color.
-    pub(crate) fn compute_text_color(&self, foreground: RgbColor, secondary: RgbColor) -> RgbColor {
+    fn compute_text_color(&self, foreground: RgbColor, secondary: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             foreground,
             &[
@@ -88,7 +88,7 @@ impl ColorContext {
     }
 
     /// 2. Info/muted text color (secondary accent adapted for readability).
-    pub(crate) fn compute_info_color(&self, secondary: RgbColor, text_color: RgbColor) -> RgbColor {
+    fn compute_info_color(&self, secondary: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             secondary,
             &[
@@ -100,7 +100,7 @@ impl ColorContext {
     }
 
     /// 3. Tool accent color (text_color lightened and contrast-ensured).
-    pub(crate) fn compute_tool_color(&self, text_color: RgbColor) -> RgbColor {
+    fn compute_tool_color(&self, text_color: RgbColor) -> RgbColor {
         self.guaranteed_accent_color(
             lighten(text_color, ui::THEME_MIX_RATIO),
             &[
@@ -112,7 +112,7 @@ impl ColorContext {
     }
 
     /// 4. Tool body text color (subdued variant of tool accent).
-    pub(crate) fn compute_tool_body_color(&self, text_color: RgbColor) -> RgbColor {
+    fn compute_tool_body_color(&self, text_color: RgbColor) -> RgbColor {
         let candidate = mix(lighten(text_color, ui::THEME_MIX_RATIO), text_color, ui::THEME_TOOL_BODY_MIX_RATIO);
         self.guaranteed_accent_color(
             candidate,
@@ -126,13 +126,13 @@ impl ColorContext {
 
     /// 5. PTY/shell output color — dimmed by blending tool_body toward the
     ///    background, then balanced for readability.
-    pub(crate) fn compute_pty_output_color(&self, tool_body_color: RgbColor, text_color: RgbColor) -> RgbColor {
+    fn compute_pty_output_color(&self, tool_body_color: RgbColor, text_color: RgbColor) -> RgbColor {
         let candidate = mix(tool_body_color, self.background, ui::THEME_PTY_OUTPUT_MIX_RATIO);
         self.guaranteed_text_color(candidate, &[tool_body_color, text_color])
     }
 
     /// 6. Response/assistant text color.
-    pub(crate) fn compute_response_color(&self, text_color: RgbColor) -> RgbColor {
+    fn compute_response_color(&self, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             text_color,
             &[
@@ -143,7 +143,7 @@ impl ColorContext {
     }
 
     /// 7. Reasoning text color (lightened text, DIMMED+ITALIC applied separately).
-    pub(crate) fn compute_reasoning_color(&self, text_color: RgbColor) -> RgbColor {
+    fn compute_reasoning_color(&self, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             lighten(text_color, 0.25),
             &[lighten(text_color, 0.15), text_color, self.fallback_light],
@@ -151,7 +151,7 @@ impl ColorContext {
     }
 
     /// 8. User input text color.
-    pub(crate) fn compute_user_color(
+    fn compute_user_color(
         &self,
         secondary: RgbColor,
         info_color: RgbColor,
@@ -168,7 +168,7 @@ impl ColorContext {
     }
 
     /// 9. Alert/error color.
-    pub(crate) fn compute_alert_color(&self, alert: RgbColor, text_color: RgbColor) -> RgbColor {
+    fn compute_alert_color(&self, alert: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             alert,
             &[
@@ -180,7 +180,7 @@ impl ColorContext {
     }
 
     /// 10. Primary accent (for UI chrome, not body text).
-    pub(crate) fn compute_primary_color(&self, primary: RgbColor, text_color: RgbColor) -> RgbColor {
+    fn compute_primary_color(&self, primary: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             ensure_contrast(primary, self.background, self.min_contrast, &[text_color]),
             &[text_color],
@@ -188,7 +188,7 @@ impl ColorContext {
     }
 
     /// 11. Secondary accent (for UI chrome).
-    pub(crate) fn compute_secondary_color(
+    fn compute_secondary_color(
         &self,
         secondary: RgbColor,
         info_color: RgbColor,
@@ -201,7 +201,7 @@ impl ColorContext {
     }
 
     /// 12. Logo accent color.
-    pub(crate) fn compute_logo_color(
+    fn compute_logo_color(
         &self,
         logo_accent: RgbColor,
         secondary_color: RgbColor,
@@ -214,7 +214,7 @@ impl ColorContext {
     }
 
     /// 13. Status banner color (lightened primary).
-    pub(crate) fn compute_status_color(
+    fn compute_status_color(
         &self,
         primary_color: RgbColor,
         info_color: RgbColor,
@@ -231,7 +231,7 @@ impl ColorContext {
     }
 
     /// 14. MCP badge color (lightened logo accent).
-    pub(crate) fn compute_mcp_color(&self, logo_color: RgbColor, info_color: RgbColor) -> RgbColor {
+    fn compute_mcp_color(&self, logo_color: RgbColor, info_color: RgbColor) -> RgbColor {
         self.guaranteed_accent_color(
             lighten(logo_color, ui::THEME_SECONDARY_LIGHTEN_RATIO),
             &[
@@ -309,23 +309,23 @@ pub struct ThemeStyles {
 
 #[derive(Clone, Debug)]
 pub struct ThemeDefinition {
-    pub id: &'static str,
-    pub label: &'static str,
-    pub palette: ThemePalette,
+    pub(crate) id: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) palette: ThemePalette,
 }
 
 /// Logical grouping of built-in themes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ThemeSuite {
-    pub id: &'static str,
-    pub label: &'static str,
-    pub theme_ids: Vec<&'static str>,
+    pub(crate) id: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) theme_ids: Vec<&'static str>,
 }
 
 /// Theme validation result.
 #[derive(Debug, Clone)]
 pub struct ThemeValidationResult {
-    pub is_valid: bool,
+    pub(crate) is_valid: bool,
     pub warnings: Vec<String>,
-    pub errors: Vec<String>,
+    pub(crate) errors: Vec<String>,
 }

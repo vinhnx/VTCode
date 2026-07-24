@@ -246,7 +246,7 @@ impl Default for ToolsConfig {
 
 impl ToolsConfig {
     #[inline]
-    pub fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
+    fn tool_loop_limit_reached(&self, completed_tool_loops: usize) -> bool {
         tool_loop_limit_reached(completed_tool_loops, self.max_tool_loops)
     }
 

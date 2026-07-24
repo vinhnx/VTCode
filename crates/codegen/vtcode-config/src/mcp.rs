@@ -92,7 +92,7 @@ pub struct McpSecurityConfig {
 
     /// Rate limiting configuration
     #[serde(default)]
-    pub rate_limit: McpRateLimitConfig,
+    rate_limit: McpRateLimitConfig,
 
     /// Tool call validation configuration
     #[serde(default)]
@@ -116,11 +116,11 @@ impl Default for McpSecurityConfig {
 pub struct McpRateLimitConfig {
     /// Maximum requests per minute per client
     #[serde(default = "default_requests_per_minute")]
-    pub requests_per_minute: u32,
+    requests_per_minute: u32,
 
     /// Maximum concurrent requests per client
     #[serde(default = "default_concurrent_requests")]
-    pub concurrent_requests: u32,
+    concurrent_requests: u32,
 }
 
 impl Default for McpRateLimitConfig {
@@ -138,7 +138,7 @@ impl Default for McpRateLimitConfig {
 pub struct McpValidationConfig {
     /// Enable JSON schema validation for tool arguments
     #[serde(default = "default_schema_validation_enabled")]
-    pub schema_validation_enabled: bool,
+    schema_validation_enabled: bool,
 
     /// Enable path traversal protection
     #[serde(default = "default_path_traversal_protection_enabled")]
@@ -262,7 +262,7 @@ impl Default for McpUiConfig {
 
 impl McpUiConfig {
     /// Resolve renderer profile for a provider or tool identifier
-    pub fn renderer_for_identifier(&self, identifier: &str) -> Option<McpRendererProfile> {
+    fn renderer_for_identifier(&self, identifier: &str) -> Option<McpRendererProfile> {
         let normalized_identifier = normalize_mcp_identifier(identifier);
         if normalized_identifier.is_empty() {
             return None;
@@ -419,7 +419,7 @@ impl McpAllowListConfig {
     }
 
     /// Determine whether a logging channel is permitted
-    pub fn is_logging_channel_allowed(&self, provider: Option<&str>, channel: &str) -> bool {
+    fn is_logging_channel_allowed(&self, provider: Option<&str>, channel: &str) -> bool {
         if !self.enforce {
             return true;
         }
@@ -441,7 +441,7 @@ impl McpAllowListConfig {
     }
 
     /// Determine whether a configuration key can be modified
-    pub fn is_configuration_allowed(&self, provider: Option<&str>, category: &str, key: &str) -> bool {
+    fn is_configuration_allowed(&self, provider: Option<&str>, category: &str, key: &str) -> bool {
         if !self.enforce {
             return true;
         }

@@ -99,7 +99,7 @@ impl CommandTool {
     }
 
     #[cfg_attr(not(test), expect(dead_code))]
-    pub(crate) async fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
+    async fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
         let command = &input.command;
         if command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
@@ -192,7 +192,7 @@ impl CommandTool {
 
     /// Validate command arguments without executing them (test/helper)
     #[cfg(test)]
-    pub(crate) async fn validate_args(&self, input: &EnhancedTerminalInput) -> Result<()> {
+    async fn validate_args(&self, input: &EnhancedTerminalInput) -> Result<()> {
         self.prepare_invocation(input).await.map(|_| ())
     }
 }

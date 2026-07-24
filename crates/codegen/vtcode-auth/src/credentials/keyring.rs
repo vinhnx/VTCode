@@ -61,7 +61,7 @@ pub(crate) fn is_functional() -> bool {
 ///
 /// The result is cached after the first call so that repeated checks (e.g. from
 /// [`entry`]) do not re-read environment variables on every invocation.
-pub(crate) fn is_disabled() -> bool {
+fn is_disabled() -> bool {
     use std::sync::OnceLock;
 
     static DISABLED: OnceLock<bool> = OnceLock::new();

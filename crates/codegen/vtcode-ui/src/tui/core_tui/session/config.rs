@@ -11,19 +11,19 @@ use vtcode_commons::fs::{read_file_with_context_sync, write_file_with_context_sy
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SessionConfig {
     /// UI appearance settings
-    pub appearance: AppearanceConfig,
+    appearance: AppearanceConfig,
 
     /// Key binding preferences
-    pub key_bindings: KeyBindingConfig,
+    key_bindings: KeyBindingConfig,
 
     /// Behavior preferences
-    pub behavior: BehaviorConfig,
+    behavior: BehaviorConfig,
 
     /// Performance related settings
-    pub performance: PerformanceConfig,
+    performance: PerformanceConfig,
 
     /// Customization settings
-    pub customization: CustomizationConfig,
+    customization: CustomizationConfig,
 }
 
 // Re-export shared enums from vtcode-commons.
@@ -134,14 +134,14 @@ impl Default for AppearanceConfig {
 
 impl AppearanceConfig {
     /// Check if sidebar should be shown based on ui_mode and show_sidebar
-    pub fn should_show_sidebar(&self) -> bool {
+    pub(crate) fn should_show_sidebar(&self) -> bool {
         match self.ui_mode {
             UiMode::Full => self.show_sidebar,
             UiMode::Minimal | UiMode::Focused => false,
         }
     }
 
-    pub fn reasoning_visible(&self) -> bool {
+    fn reasoning_visible(&self) -> bool {
         match self.reasoning_display_mode {
             ReasoningDisplayMode::Always => true,
             ReasoningDisplayMode::Hidden => false,
@@ -150,15 +150,15 @@ impl AppearanceConfig {
     }
 
     /// Whether thinking/reasoning blocks should render collapsed by default.
-    pub fn thinking_collapsed_by_default(&self) -> bool {
+    pub(crate) fn thinking_collapsed_by_default(&self) -> bool {
         self.thinking_display == ThinkingBlockState::Collapsed
     }
 
-    pub fn motion_reduced(&self) -> bool {
+    pub(crate) fn motion_reduced(&self) -> bool {
         self.screen_reader_mode || self.reduce_motion_mode
     }
 
-    pub fn should_animate_progress_status(&self) -> bool {
+    pub(crate) fn should_animate_progress_status(&self) -> bool {
         !self.screen_reader_mode && (!self.reduce_motion_mode || self.reduce_motion_keep_progress_animation)
     }
 
@@ -177,7 +177,7 @@ impl AppearanceConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyBindingConfig {
     /// Map of action to key sequences
-    pub bindings: HashMap<String, Vec<String>>,
+    bindings: HashMap<String, Vec<String>>,
 }
 
 impl Default for KeyBindingConfig {
@@ -204,16 +204,16 @@ impl Default for KeyBindingConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehaviorConfig {
     /// Maximum lines for input area
-    pub max_input_lines: usize,
+    max_input_lines: usize,
 
     /// Whether to enable command history
-    pub enable_history: bool,
+    enable_history: bool,
 
     /// History size limit
-    pub history_size: usize,
+    history_size: usize,
 
     /// Whether to show queued inputs
-    pub show_queued_inputs: bool,
+    show_queued_inputs: bool,
 }
 
 impl Default for BehaviorConfig {
@@ -231,19 +231,19 @@ impl Default for BehaviorConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceConfig {
     /// Cache size for rendered elements
-    pub render_cache_size: usize,
+    render_cache_size: usize,
 
     /// Transcript cache size (number of messages to cache)
-    pub transcript_cache_size: usize,
+    transcript_cache_size: usize,
 
     /// Whether to enable transcript reflow caching
-    pub enable_transcript_caching: bool,
+    enable_transcript_caching: bool,
 
     /// Size of LRU cache for expensive operations
-    pub lru_cache_size: usize,
+    lru_cache_size: usize,
 
     /// Whether to enable smooth scrolling
-    pub enable_smooth_scrolling: bool,
+    enable_smooth_scrolling: bool,
 }
 
 impl Default for PerformanceConfig {
@@ -262,13 +262,13 @@ impl Default for PerformanceConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomizationConfig {
     /// User-defined UI labels
-    pub ui_labels: HashMap<String, String>,
+    ui_labels: HashMap<String, String>,
 
     /// Custom styling options
-    pub custom_styles: HashMap<String, String>,
+    custom_styles: HashMap<String, String>,
 
     /// Enabled UI features
-    pub enabled_features: Vec<String>,
+    enabled_features: Vec<String>,
 }
 
 impl Default for CustomizationConfig {
@@ -288,7 +288,7 @@ impl Default for CustomizationConfig {
 impl SessionConfig {
     /// Creates a new default configuration
     #[expect(dead_code)]
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
@@ -312,7 +312,7 @@ impl SessionConfig {
 
     /// Updates a specific configuration value by key
     #[expect(dead_code)]
-    pub fn set_value(&mut self, key: &str, value: &str) -> Result<(), String> {
+    fn set_value(&mut self, key: &str, value: &str) -> Result<(), String> {
         // This is a simplified version - in a real implementation, we'd have more sophisticated
         // parsing and validation for different configuration types
         match key {
@@ -331,7 +331,7 @@ impl SessionConfig {
 
     /// Gets a configuration value by key
     #[expect(dead_code)]
-    pub fn get_value(&self, key: &str) -> Option<String> {
+    fn get_value(&self, key: &str) -> Option<String> {
         match key {
             "behavior.max_input_lines" => Some(self.behavior.max_input_lines.to_string()),
             "performance.lru_cache_size" => Some(self.performance.lru_cache_size.to_string()),
@@ -341,7 +341,7 @@ impl SessionConfig {
 
     /// Validates the configuration to ensure all values are within acceptable ranges
     #[expect(dead_code)]
-    pub fn validate(&self) -> Result<(), Vec<String>> {
+    fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
         if self.behavior.history_size == 0 {

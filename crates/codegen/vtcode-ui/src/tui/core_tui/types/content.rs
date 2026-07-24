@@ -9,7 +9,7 @@ pub enum ContentPart {
 }
 
 impl ContentPart {
-    pub fn text(text: impl Into<String>) -> Self {
+    pub(crate) fn text(text: impl Into<String>) -> Self {
         Self::Text { text: text.into() }
     }
 

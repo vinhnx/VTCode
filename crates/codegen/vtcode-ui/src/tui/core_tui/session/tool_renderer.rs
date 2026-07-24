@@ -5,7 +5,7 @@ use super::super::types::InlineTheme;
 use super::message::MessageLine;
 
 #[expect(dead_code)]
-pub(super) fn render_tool_segments(
+fn render_tool_segments(
     line: &MessageLine,
     theme: &InlineTheme,
     _strip_ansi_fn: impl Fn(&str) -> String,

@@ -23,15 +23,15 @@ use vtcode_config::TimeoutsConfig;
 use vtcode_config::constants::{env_vars, models, urls};
 use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
-pub mod client;
-pub mod parser;
+pub(crate) mod client;
+pub(crate) mod parser;
 pub mod pull;
-pub mod url;
+pub(crate) mod url;
 
-pub use client::OllamaClient;
-pub use parser::pull_events_from_value;
-pub use pull::{CliPullProgressReporter, OllamaPullEvent, OllamaPullProgressReporter, TuiPullProgressReporter};
-pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
+pub(crate) use client::OllamaClient;
+pub(crate) use parser::pull_events_from_value;
+pub(crate) use pull::{CliPullProgressReporter, OllamaPullEvent, OllamaPullProgressReporter, TuiPullProgressReporter};
+pub(crate) use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
 use super::common::{
     assistant_interleaved_history_text, collect_history_system_directives, extract_reasoning_text_from_detail_values,
@@ -48,7 +48,7 @@ use super::local_server::LocalProvider;
 /// - Checks if the model exists locally and pulls it if missing.
 ///
 /// Adapted from OpenAI Codex's codex-ollama/src/lib.rs
-pub async fn ensure_oss_ready(model: Option<&str>, base_url: Option<String>) -> std::io::Result<()> {
+async fn ensure_oss_ready(model: Option<&str>, base_url: Option<String>) -> std::io::Result<()> {
     let target_model = model.unwrap_or(models::ollama::DEFAULT_MODEL);
 
     let resolved_base_url = override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
@@ -181,7 +181,7 @@ impl OllamaProvider {
         Self::with_model(api_key, models::ollama::DEFAULT_MODEL.to_string())
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(model, None, Some(api_key), None)
     }
 

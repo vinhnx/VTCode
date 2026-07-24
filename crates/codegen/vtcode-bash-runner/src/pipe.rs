@@ -82,17 +82,17 @@ pub enum PipeStdinMode {
 #[derive(Clone)]
 pub struct PipeSpawnOptions {
     /// The program to execute.
-    pub program: String,
+    program: String,
     /// Arguments to pass to the program.
-    pub args: Vec<String>,
+    args: Vec<String>,
     /// Working directory for the process.
-    pub cwd: std::path::PathBuf,
+    cwd: std::path::PathBuf,
     /// Environment variables (if None, inherits from parent).
-    pub env: Option<HashMap<String, String>>,
+    env: Option<HashMap<String, String>>,
     /// Override for `argv[0]` (Unix only).
-    pub arg0: Option<String>,
+    arg0: Option<String>,
     /// Stdin mode.
-    pub stdin_mode: PipeStdinMode,
+    stdin_mode: PipeStdinMode,
 }
 
 impl PipeSpawnOptions {

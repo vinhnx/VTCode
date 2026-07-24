@@ -77,7 +77,7 @@ impl fmt::Debug for ProcessHandle {
 impl ProcessHandle {
     /// Create a new process handle with all required components.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         writer_tx: mpsc::Sender<Vec<u8>>,
         output_tx: broadcast::Sender<Bytes>,
         initial_output_rx: broadcast::Receiver<Bytes>,

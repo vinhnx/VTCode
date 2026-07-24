@@ -54,7 +54,7 @@ pub(crate) fn clear_test_env_override(key: &str) {
 /// This function checks various environment variables and terminal settings
 /// to determine if Unicode characters can be safely displayed without
 /// appearing as broken ANSI sequences.
-pub fn supports_unicode_box_drawing() -> bool {
+fn supports_unicode_box_drawing() -> bool {
     // Check if explicitly disabled via environment variable
     if read_env_var("VTCODE_NO_UNICODE").is_some() {
         return false;
@@ -115,7 +115,7 @@ pub fn supports_unicode_box_drawing() -> bool {
 /// `BorderType::HeavyDoubleDashed` and similar types from ratatui 0.30.0.
 /// Only terminals known to render these correctly are opted in. Unknown
 /// Unicode-capable terminals receive `Rounded` borders instead.
-pub fn supports_rich_unicode_box_drawing() -> bool {
+fn supports_rich_unicode_box_drawing() -> bool {
     // Check if explicitly disabled via environment variable
     if read_env_var("VTCODE_NO_RICH_UNICODE").is_some() {
         return false;
@@ -145,7 +145,7 @@ pub fn supports_rich_unicode_box_drawing() -> bool {
 /// Returns `BorderType::HeavyDoubleDashed` for terminals with rich Unicode support,
 /// `BorderType::Rounded` for terminals with basic Unicode support, or
 /// `BorderType::Plain` for maximum compatibility.
-pub fn get_border_type() -> ratatui::widgets::BorderType {
+pub(crate) fn get_border_type() -> ratatui::widgets::BorderType {
     if supports_rich_unicode_box_drawing() {
         ratatui::widgets::BorderType::HeavyDoubleDashed
     } else if supports_unicode_box_drawing() {

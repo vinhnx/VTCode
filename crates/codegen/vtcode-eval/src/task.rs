@@ -9,7 +9,7 @@ pub enum EvalCategory {
 }
 
 impl EvalCategory {
-    pub fn label(&self) -> &'static str {
+    pub(crate) fn label(&self) -> &'static str {
         match self {
             Self::Capability => "Capability",
             Self::Regression => "Regression",

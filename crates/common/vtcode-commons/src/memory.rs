@@ -10,7 +10,7 @@ use std::time::Duration;
 /// it cannot be determined on the current platform.
 #[cfg(target_os = "macos")]
 #[allow(deprecated, unsafe_code, unused_qualifications)] // libc::mach_task_self is deprecated; qualification is required here
-pub fn resident_set_size_mb() -> Option<f64> {
+fn resident_set_size_mb() -> Option<f64> {
     // SAFETY: `mach_task_basic_info` is a plain old data struct; zeroing it
     // produces a valid (all-zero) starting value before `task_info` fills it.
     let mut info: libc::mach_task_basic_info = unsafe { std::mem::zeroed() };

@@ -32,7 +32,7 @@ pub enum IdeContextProviderMode {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdeContextProviderConfig {
     #[serde(default = "default_provider_enabled")]
-    pub enabled: bool,
+    pub(crate) enabled: bool,
 }
 
 impl Default for IdeContextProviderConfig {
@@ -45,11 +45,11 @@ impl Default for IdeContextProviderConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct IdeContextProvidersConfig {
     #[serde(default)]
-    pub vscode_compatible: IdeContextProviderConfig,
+    pub(crate) vscode_compatible: IdeContextProviderConfig,
     #[serde(default)]
-    pub zed: IdeContextProviderConfig,
+    pub(crate) zed: IdeContextProviderConfig,
     #[serde(default)]
-    pub generic: IdeContextProviderConfig,
+    pub(crate) generic: IdeContextProviderConfig,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -71,7 +71,7 @@ pub struct IdeContextConfig {
 }
 
 impl IdeContextConfig {
-    pub fn provider_enabled(&self, family: IdeContextProviderFamily) -> bool {
+    fn provider_enabled(&self, family: IdeContextProviderFamily) -> bool {
         match family {
             IdeContextProviderFamily::VscodeCompatible => self.providers.vscode_compatible.enabled,
             IdeContextProviderFamily::Zed => self.providers.zed.enabled,

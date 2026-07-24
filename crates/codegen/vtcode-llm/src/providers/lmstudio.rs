@@ -22,7 +22,7 @@ use vtcode_config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 
 pub mod client;
 
-pub use client::LMStudioClient;
+pub(crate) use client::LMStudioClient;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct LmStudioModelsResponse {
@@ -40,7 +40,7 @@ struct LmStudioModel {
     owned_by: Option<String>,
 }
 
-pub use client::LMSTUDIO_CONNECTION_ERROR;
+pub(crate) use client::LMSTUDIO_CONNECTION_ERROR;
 
 /// Derives the server root URL by stripping the `/v1` suffix from the API base.
 ///
@@ -150,7 +150,7 @@ impl LmStudioProvider {
         Self::with_model(api_key, models::lmstudio::DEFAULT_MODEL.to_string())
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(Some(api_key), Some(model), None, None, None)
     }
 

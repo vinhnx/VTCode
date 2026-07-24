@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// A2A Protocol version
-pub const A2A_PROTOCOL_VERSION: &str = "1.0";
+const A2A_PROTOCOL_VERSION: &str = "1.0";
 
 /// Agent Card - metadata describing an A2A agent
 ///
@@ -44,21 +44,21 @@ pub struct AgentCard {
     pub skills: Vec<AgentSkill>,
     /// Security schemes following OpenAPI specification
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub security_schemes: Option<HashMap<String, serde_json::Value>>,
+    security_schemes: Option<HashMap<String, serde_json::Value>>,
     /// Security requirements
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub security: Option<Vec<HashMap<String, Vec<String>>>>,
+    security: Option<Vec<HashMap<String, Vec<String>>>>,
     /// Whether a more detailed card is available post-authentication
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub supports_authenticated_extended_card: Option<bool>,
+    supports_authenticated_extended_card: Option<bool>,
     /// JWS signatures for card verification
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signatures: Option<Vec<AgentCardSignature>>,
+    signatures: Option<Vec<AgentCardSignature>>,
 }
 
 impl AgentCard {
     /// Create a new Agent Card with required fields
-    pub fn new(name: impl Into<String>, description: impl Into<String>, version: impl Into<String>) -> Self {
+    fn new(name: impl Into<String>, description: impl Into<String>, version: impl Into<String>) -> Self {
         Self {
             protocol_version: A2A_PROTOCOL_VERSION.to_string(),
             name: name.into(),
@@ -129,12 +129,12 @@ impl AgentCard {
     }
 
     /// Check if streaming is supported
-    pub fn supports_streaming(&self) -> bool {
+    fn supports_streaming(&self) -> bool {
         self.capabilities.as_ref().map(|c| c.streaming).unwrap_or(false)
     }
 
     /// Check if push notifications are supported
-    pub fn supports_push_notifications(&self) -> bool {
+    fn supports_push_notifications(&self) -> bool {
         self.capabilities.as_ref().map(|c| c.push_notifications).unwrap_or(false)
     }
 }
@@ -174,7 +174,7 @@ impl AgentCapabilities {
     }
 
     /// Create capabilities with all features enabled
-    pub fn full() -> Self {
+    fn full() -> Self {
         Self {
             streaming: true,
             push_notifications: true,
@@ -189,7 +189,7 @@ impl AgentCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSkill {
     /// Unique skill identifier
-    pub id: String,
+    id: String,
     /// Human-readable skill name
     pub name: String,
     /// Skill description
@@ -200,18 +200,18 @@ pub struct AgentSkill {
     pub tags: Vec<String>,
     /// Example inputs/outputs
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub examples: Vec<SkillExample>,
+    examples: Vec<SkillExample>,
     /// Input modes specific to this skill
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_modes: Option<Vec<String>>,
+    input_modes: Option<Vec<String>>,
     /// Output modes specific to this skill
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_modes: Option<Vec<String>>,
+    output_modes: Option<Vec<String>>,
 }
 
 impl AgentSkill {
     /// Create a new skill
-    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+    fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -224,19 +224,19 @@ impl AgentSkill {
     }
 
     /// Add a description
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+    fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
     /// Add tags
-    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+    fn with_tags(mut self, tags: Vec<String>) -> Self {
         self.tags = tags;
         self
     }
 
     /// Add an example
-    pub fn add_example(mut self, example: SkillExample) -> Self {
+    fn add_example(mut self, example: SkillExample) -> Self {
         self.examples.push(example);
         self
     }
@@ -246,14 +246,14 @@ impl AgentSkill {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillExample {
     /// Example input
-    pub input: String,
+    input: String,
     /// Example output
-    pub output: String,
+    output: String,
 }
 
 impl SkillExample {
     /// Create a new example
-    pub fn new(input: impl Into<String>, output: impl Into<String>) -> Self {
+    fn new(input: impl Into<String>, output: impl Into<String>) -> Self {
         Self { input: input.into(), output: output.into() }
     }
 }
@@ -262,11 +262,11 @@ impl SkillExample {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentCardSignature {
     /// Algorithm used
-    pub algorithm: String,
+    algorithm: String,
     /// Key ID
-    pub key_id: String,
+    key_id: String,
     /// The signature value
-    pub signature: String,
+    signature: String,
 }
 
 #[cfg(test)]

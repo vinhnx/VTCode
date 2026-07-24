@@ -18,16 +18,16 @@ const CODE_VERIFIER_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno
 #[derive(Debug, Clone)]
 pub struct PkceChallenge {
     /// The code verifier (random string, kept secret by client)
-    pub code_verifier: String,
+    pub(crate) code_verifier: String,
     /// The code challenge (SHA-256 hash of verifier, sent to authorization server)
-    pub code_challenge: String,
+    pub(crate) code_challenge: String,
     /// The challenge method (always "S256" for SHA-256)
-    pub code_challenge_method: String,
+    pub(crate) code_challenge_method: String,
 }
 
 impl PkceChallenge {
     /// Create a new PKCE challenge from a code verifier.
-    pub fn from_verifier(code_verifier: String) -> Result<Self> {
+    fn from_verifier(code_verifier: String) -> Result<Self> {
         let code_challenge = compute_s256_challenge(&code_verifier)?;
         Ok(Self {
             code_verifier,

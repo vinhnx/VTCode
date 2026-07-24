@@ -26,7 +26,7 @@ pub(crate) enum TransientSurface {
 }
 
 impl TransientSurface {
-    pub(crate) fn placement(self) -> TransientPlacement {
+    fn placement(self) -> TransientPlacement {
         match self {
             Self::FloatingOverlay | Self::DiffPreview | Self::TranscriptReview => TransientPlacement::FloatingModal,
             Self::SlashPalette
@@ -47,7 +47,7 @@ impl TransientSurface {
         }
     }
 
-    pub(crate) fn is_navigation_surface(self) -> bool {
+    fn is_navigation_surface(self) -> bool {
         !matches!(self, Self::TaskPanel)
     }
 }
@@ -93,7 +93,7 @@ impl TransientHost {
     }
 
     #[cfg(test)]
-    pub(crate) fn status(&self, surface: TransientSurface) -> Option<TransientStatus> {
+    fn status(&self, surface: TransientSurface) -> Option<TransientStatus> {
         self.stack
             .iter()
             .find(|entry| entry.surface == surface)

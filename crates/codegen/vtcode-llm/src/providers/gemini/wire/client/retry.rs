@@ -3,11 +3,11 @@ use std::time::Duration;
 /// Retry configuration for streaming operations
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
-    pub max_attempts: u32,
-    pub initial_delay: Duration,
-    pub max_delay: Duration,
-    pub backoff_multiplier: f64,
-    pub retryable_errors: Vec<String>,
+    max_attempts: u32,
+    initial_delay: Duration,
+    max_delay: Duration,
+    backoff_multiplier: f64,
+    retryable_errors: Vec<String>,
 }
 
 const RETRYABLE_ERRORS: &[&str] = &["timeout", "connection", "rate_limit", "server_error", "network"];

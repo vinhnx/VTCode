@@ -17,7 +17,7 @@ pub const MAX_RATE_LIMIT_WAIT_SECS: u64 = 5;
 pub const DEFAULT_AUTH_FLOW_TIMEOUT_SECS: u64 = 300;
 
 /// Maximum number of consecutive idle turns before the agent runner aborts.
-pub const IDLE_TURN_LIMIT: usize = 3;
+pub(crate) const IDLE_TURN_LIMIT: usize = 3;
 
 /// Maximum recent error records kept per agent session for recovery diagnostics.
 pub const DEFAULT_MAX_RECENT_ERRORS: usize = 10;
@@ -27,11 +27,11 @@ pub const DEFAULT_MAX_OPEN_CIRCUITS: usize = 3;
 
 /// Maximum allowed timeout (1 hour)
 /// Any user-specified timeout above this is capped
-pub const MAX_TIMEOUT_SECS: u64 = 3600;
+pub(crate) const MAX_TIMEOUT_SECS: u64 = 3600;
 
 /// Minimum timeout (10 seconds)
 /// Prevents unreasonably short timeouts that would cause failures
-pub const MIN_TIMEOUT_SECS: u64 = 10;
+pub(crate) const MIN_TIMEOUT_SECS: u64 = 10;
 
 /// Default maximum retry attempts for orchestrator operations.
 pub const DEFAULT_ORCHESTRATOR_MAX_RETRIES: u32 = 5;

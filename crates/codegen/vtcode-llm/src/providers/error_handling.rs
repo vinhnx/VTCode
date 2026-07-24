@@ -15,10 +15,10 @@ struct ApiResponseMetadata {
 }
 
 /// HTTP status codes for common error types
-pub const STATUS_UNAUTHORIZED: u16 = 401;
-pub const STATUS_FORBIDDEN: u16 = 403;
-pub const STATUS_BAD_REQUEST: u16 = 400;
-pub const STATUS_TOO_MANY_REQUESTS: u16 = 429;
+const STATUS_UNAUTHORIZED: u16 = 401;
+const STATUS_FORBIDDEN: u16 = 403;
+const STATUS_BAD_REQUEST: u16 = 400;
+const STATUS_TOO_MANY_REQUESTS: u16 = 429;
 
 /// Common rate limit error patterns (pre-lowercased for efficient matching)
 const RATE_LIMIT_PATTERNS: &[&str] = &[
@@ -52,7 +52,7 @@ pub async fn handle_gemini_http_error(response: Response) -> Result<Response, LL
 
 /// Handle HTTP response errors for Anthropic provider
 #[cold]
-pub async fn handle_anthropic_http_error(response: Response) -> Result<Response, LLMError> {
+pub(crate) async fn handle_anthropic_http_error(response: Response) -> Result<Response, LLMError> {
     if response.status().is_success() {
         return Ok(response);
     }
@@ -65,7 +65,7 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
 
 /// Handle HTTP response errors for OpenAI-compatible providers
 #[cold]
-pub async fn handle_openai_http_error(
+pub(crate) async fn handle_openai_http_error(
     response: Response,
     provider_name: &'static str,
     _api_key_env_var: &str,
@@ -93,7 +93,7 @@ pub async fn handle_openai_http_error(
 
 /// Check if an error is a rate limit error based on status code and message
 #[cold]
-pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
+pub(crate) fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
     if status_code == STATUS_TOO_MANY_REQUESTS {
         return true;
     }
@@ -105,14 +105,14 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 
 /// Handle network errors with consistent formatting
 #[cold]
-pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
+pub(crate) fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error = error_display::format_llm_error(provider, &format!("network error: {error}"));
     LLMError::Network { message: formatted_error, metadata: None }
 }
 
 /// Handle JSON parsing errors with consistent formatting
 #[cold]
-pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
+pub(crate) fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error = error_display::format_llm_error(provider, &format!("failed to parse response: {error}"));
     LLMError::Provider { message: formatted_error, metadata: None }
 }
@@ -133,7 +133,7 @@ pub fn format_http_error(provider: &str, status: reqwest::StatusCode, error_text
 ///
 /// Falls back to raw body if JSON parsing fails.
 #[cold]
-pub fn parse_api_error(provider_name: &'static str, status: reqwest::StatusCode, body: &str) -> LLMError {
+pub(crate) fn parse_api_error(provider_name: &'static str, status: reqwest::StatusCode, body: &str) -> LLMError {
     parse_api_error_with_metadata(provider_name, status, body, ApiResponseMetadata::default())
 }
 

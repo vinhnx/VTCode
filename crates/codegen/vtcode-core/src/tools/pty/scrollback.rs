@@ -347,14 +347,14 @@ impl PtyScrollback {
 #[derive(Debug, Clone)]
 #[expect(dead_code)]
 pub(super) struct ScrollbackMetrics {
-    pub(super) current_bytes: usize,
-    pub(super) max_bytes: usize,
-    pub(super) usage_percent: f64,
-    pub(super) overflow_detected: bool,
-    pub(super) bytes_dropped: usize,
-    pub(super) lines_dropped: usize,
-    pub(super) current_lines: usize,
-    pub(super) capacity_lines: usize,
+    current_bytes: usize,
+    max_bytes: usize,
+    usage_percent: f64,
+    overflow_detected: bool,
+    bytes_dropped: usize,
+    lines_dropped: usize,
+    current_lines: usize,
+    capacity_lines: usize,
     pub(super) unicode_errors: usize,      // Count of UTF-8 decoding errors
     pub(super) utf8_buffer_size: usize,    // Current size of UTF-8 incomplete buffer
     pub(super) total_unicode_chars: usize, // Total unicode characters processed

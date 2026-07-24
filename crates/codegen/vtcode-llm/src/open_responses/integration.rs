@@ -50,12 +50,12 @@ impl OpenResponsesIntegration {
     }
 
     /// Creates a new integration manager that is disabled.
-    pub fn disabled() -> Self {
+    fn disabled() -> Self {
         Self::new(OpenResponsesConfig::default())
     }
 
     /// Returns true if Open Responses integration is enabled.
-    pub fn is_enabled(&self) -> bool {
+    fn is_enabled(&self) -> bool {
         self.config.enabled
     }
 
@@ -100,7 +100,7 @@ impl OpenResponsesIntegration {
     }
 
     /// Processes a normalized provider stream event and emits corresponding Open Responses events.
-    pub fn process_normalized_event(&mut self, event: &NormalizedStreamEvent) {
+    fn process_normalized_event(&mut self, event: &NormalizedStreamEvent) {
         if !self.config.enabled || !self.config.emit_events {
             return;
         }
@@ -120,7 +120,7 @@ impl OpenResponsesIntegration {
     }
 
     /// Returns the current response, if any.
-    pub fn current_response(&self) -> Option<&Response> {
+    fn current_response(&self) -> Option<&Response> {
         self.builder.as_ref().map(|b| b.response())
     }
 
@@ -130,7 +130,7 @@ impl OpenResponsesIntegration {
     }
 
     /// Returns all collected events.
-    pub fn events(&self) -> &[ResponseStreamEvent] {
+    fn events(&self) -> &[ResponseStreamEvent] {
         &self.events
     }
 

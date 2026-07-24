@@ -1,7 +1,7 @@
 use super::*;
 
 impl Session {
-    pub fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
+    pub(crate) fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
         self.log_receiver = Some(receiver);
     }
 

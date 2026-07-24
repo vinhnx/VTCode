@@ -5,7 +5,7 @@
 
 use ratatui::style::{Modifier, Style};
 
-pub use crate::design::panel::{Panel, PanelStyleProvider, PanelStyles};
+pub(crate) use crate::design::panel::{Panel, PanelStyleProvider, PanelStyles};
 
 use crate::tui::ui::tui::session::{styling::SessionStyles, terminal_capabilities};
 
@@ -48,6 +48,6 @@ impl PanelStyles for SessionStyles {
 ///
 /// This preserves the previous behavior where `Panel::new` automatically
 /// selected the border type based on terminal capabilities.
-pub fn new_panel<'a>(styles: &'a SessionStyles) -> Panel<'a, SessionStyles> {
+pub(crate) fn new_panel<'a>(styles: &'a SessionStyles) -> Panel<'a, SessionStyles> {
     Panel::new(styles).border_type(terminal_capabilities::get_border_type())
 }

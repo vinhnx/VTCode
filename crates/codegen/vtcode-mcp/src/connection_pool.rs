@@ -15,7 +15,7 @@ use vtcode_commons::MultiErrors;
 use vtcode_config::mcp::{McpAllowListConfig, McpProviderConfig};
 
 /// MCP connection pool for efficient provider management
-pub struct McpConnectionPool {
+pub(crate) struct McpConnectionPool {
     /// Active provider connections
     providers: Arc<RwLock<HashMap<String, Arc<McpProvider>>>>,
     /// Connection semaphore to limit concurrent connections
@@ -27,7 +27,7 @@ pub struct McpConnectionPool {
 }
 
 impl McpConnectionPool {
-    pub fn new(max_concurrent_connections: usize, connection_timeout_seconds: u64) -> Self {
+    pub(crate) fn new(max_concurrent_connections: usize, connection_timeout_seconds: u64) -> Self {
         Self {
             providers: Arc::new(RwLock::new(HashMap::new())),
             connection_semaphore: Arc::new(Semaphore::new(max_concurrent_connections)),
@@ -37,7 +37,7 @@ impl McpConnectionPool {
     }
 
     /// Initialize multiple providers in parallel with controlled concurrency
-    pub async fn initialize_providers_parallel(
+    pub(crate) async fn initialize_providers_parallel(
         &self,
         provider_configs: Vec<McpProviderConfig>,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
@@ -132,13 +132,13 @@ impl McpConnectionPool {
     }
 
     /// Get a provider by name
-    pub async fn get_provider(&self, name: &str) -> Option<Arc<McpProvider>> {
+    async fn get_provider(&self, name: &str) -> Option<Arc<McpProvider>> {
         let providers = self.providers.read().await;
         providers.get(name).cloned()
     }
 
     /// Get all active providers
-    pub async fn get_all_providers(&self) -> Vec<Arc<McpProvider>> {
+    async fn get_all_providers(&self) -> Vec<Arc<McpProvider>> {
         let providers = self.providers.read().await;
         providers.values().cloned().collect()
     }
@@ -150,13 +150,13 @@ impl McpConnectionPool {
     }
 
     /// Check if a provider exists in the pool
-    pub async fn has_provider(&self, name: &str) -> bool {
+    async fn has_provider(&self, name: &str) -> bool {
         let providers = self.providers.read().await;
         providers.contains_key(name)
     }
 
     /// Get connection pool statistics
-    pub async fn stats(&self) -> ConnectionPoolStats {
+    async fn stats(&self) -> ConnectionPoolStats {
         let providers = self.providers.read().await;
         let semaphore = self.connection_semaphore.available_permits();
 
@@ -242,13 +242,13 @@ impl McpConnectionPool {
 /// Connection pool statistics
 #[derive(Debug, Clone)]
 pub struct ConnectionPoolStats {
-    pub active_connections: usize,
-    pub available_permits: usize,
-    pub max_connections: usize,
+    active_connections: usize,
+    available_permits: usize,
+    max_connections: usize,
 }
 
 /// Enhanced MCP manager with connection pooling
-pub struct PooledMcpManager {
+pub(crate) struct PooledMcpManager {
     /// Connection pool for providers
     pool: Arc<McpConnectionPool>,
     /// Tool discovery cache
@@ -256,7 +256,7 @@ pub struct PooledMcpManager {
 }
 
 impl PooledMcpManager {
-    pub fn new(max_concurrent_connections: usize, connection_timeout_seconds: u64, tool_cache_capacity: usize) -> Self {
+    fn new(max_concurrent_connections: usize, connection_timeout_seconds: u64, tool_cache_capacity: usize) -> Self {
         Self {
             pool: Arc::new(McpConnectionPool::new(max_concurrent_connections, connection_timeout_seconds)),
             tool_cache: Arc::new(super::tool_discovery_cache::ToolDiscoveryCache::new(tool_cache_capacity)),
@@ -333,7 +333,7 @@ impl PooledMcpManager {
     }
 
     /// Get pool statistics
-    pub async fn stats(&self) -> PooledMcpStats {
+    async fn stats(&self) -> PooledMcpStats {
         let pool_stats = self.pool.stats().await;
         let tool_cache_stats = self.tool_cache.stats();
 
@@ -352,8 +352,8 @@ impl PooledMcpManager {
 /// Pooled MCP manager statistics
 #[derive(Debug, Clone)]
 pub struct PooledMcpStats {
-    pub connection_pool: ConnectionPoolStats,
-    pub tool_cache: super::tool_discovery_cache::ToolCacheStats,
+    connection_pool: ConnectionPoolStats,
+    tool_cache: super::tool_discovery_cache::ToolCacheStats,
 }
 
 /// Build initialize params for an MCP provider
@@ -388,7 +388,7 @@ pub enum McpPoolError {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[tokio::test]

@@ -5,8 +5,8 @@ use super::instructions::SkillInstructions;
 
 #[derive(Debug, Default)]
 pub struct SkillInjections {
-    pub items: Vec<SkillInstructions>,
-    pub warnings: Vec<String>,
+    items: Vec<SkillInstructions>,
+    warnings: Vec<String>,
 }
 
 /// Builds injections for the specified skills.

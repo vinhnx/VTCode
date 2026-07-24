@@ -13,7 +13,7 @@ pub enum AssistantPhase {
 
 impl AssistantPhase {
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Commentary => "commentary",
             Self::FinalAnswer => "final_answer",
@@ -21,7 +21,7 @@ impl AssistantPhase {
     }
 
     #[must_use]
-    pub fn from_wire_str(value: &str) -> Option<Self> {
+    pub(crate) fn from_wire_str(value: &str) -> Option<Self> {
         match value {
             "commentary" => Some(Self::Commentary),
             "final_answer" => Some(Self::FinalAnswer),
@@ -66,7 +66,7 @@ impl ContentPart {
         ContentPart::Image { data, mime_type, content_type: "image".to_owned() }
     }
 
-    pub fn file_from_id(file_id: String) -> Self {
+    pub(crate) fn file_from_id(file_id: String) -> Self {
         ContentPart::File {
             content_type: "file".to_owned(),
             filename: None,
@@ -103,11 +103,11 @@ impl ContentPart {
         }
     }
 
-    pub fn is_image(&self) -> bool {
+    pub(crate) fn is_image(&self) -> bool {
         matches!(self, ContentPart::Image { .. })
     }
 
-    pub fn is_file(&self) -> bool {
+    pub(crate) fn is_file(&self) -> bool {
         matches!(self, ContentPart::File { .. })
     }
 }
@@ -231,7 +231,7 @@ impl MessageContent {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         match self {
             MessageContent::Text(text) => text.is_empty(),
             MessageContent::Parts(parts) => {
@@ -244,7 +244,7 @@ impl MessageContent {
         }
     }
 
-    pub fn has_images(&self) -> bool {
+    pub(crate) fn has_images(&self) -> bool {
         match self {
             MessageContent::Text(_) => false,
             MessageContent::Parts(parts) => parts.iter().any(|part| part.is_image()),
@@ -253,7 +253,7 @@ impl MessageContent {
 
     /// Returns content with images stripped, preserving text and file parts.
     /// Returns `None` if the content already contains no images.
-    pub fn without_images(&self) -> Option<MessageContent> {
+    pub(crate) fn without_images(&self) -> Option<MessageContent> {
         match self {
             MessageContent::Text(_) => None,
             MessageContent::Parts(parts) => {
@@ -353,7 +353,7 @@ impl Message {
     /// Helper to create a base message with common defaults.
     /// Public for use in provider implementations.
     #[inline]
-    pub const fn base(role: MessageRole, content: MessageContent) -> Self {
+    pub(crate) const fn base(role: MessageRole, content: MessageContent) -> Self {
         Self {
             role,
             content,
@@ -535,7 +535,7 @@ impl Message {
 
     /// Validate this message for a specific provider
     /// Based on official API documentation constraints
-    pub fn validate_for_provider(&self, provider: &str) -> Result<(), String> {
+    pub(crate) fn validate_for_provider(&self, provider: &str) -> Result<(), String> {
         // Check role-specific constraints
         self.role.validate_for_provider(provider, self.tool_call_id.is_some())?;
 
@@ -582,7 +582,7 @@ impl Message {
     }
 
     /// Check if this message has tool calls
-    pub fn has_tool_calls(&self) -> bool {
+    pub(crate) fn has_tool_calls(&self) -> bool {
         self.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
     }
 
@@ -638,7 +638,7 @@ impl MessageRole {
     /// - Only accepts "user" and "model" roles in conversations
     /// - System messages are handled separately as system instructions
     /// - Tool responses are sent as "user" role with function response format
-    pub fn as_gemini_str(&self) -> &'static str {
+    pub(crate) fn as_gemini_str(&self) -> &'static str {
         match self {
             MessageRole::System => "system", // Handled as systemInstruction, not in contents
             MessageRole::User => "user",
@@ -651,7 +651,7 @@ impl MessageRole {
     /// OpenAI supports all standard role types including:
     /// - system, user, assistant, tool
     /// - function (legacy, now replaced by tool)
-    pub fn as_openai_str(&self) -> &'static str {
+    pub(crate) fn as_openai_str(&self) -> &'static str {
         match self {
             MessageRole::System => "system",
             MessageRole::User => "user",
@@ -665,7 +665,7 @@ impl MessageRole {
     /// - Supports user, assistant roles normally
     /// - Tool responses are treated as user messages
     /// - System messages can be handled as system parameter or hoisted
-    pub fn as_anthropic_str(&self) -> &'static str {
+    pub(crate) fn as_anthropic_str(&self) -> &'static str {
         match self {
             MessageRole::System => "system", // Can be hoisted to system parameter
             MessageRole::User => "user",
@@ -687,7 +687,7 @@ impl MessageRole {
 
     /// Check if this role supports tool calls
     /// Only Assistant role can initiate tool calls in most APIs
-    pub fn can_make_tool_calls(&self) -> bool {
+    fn can_make_tool_calls(&self) -> bool {
         matches!(self, MessageRole::Assistant)
     }
 
@@ -698,7 +698,7 @@ impl MessageRole {
 
     /// Validate message role constraints for a given provider
     /// Based on official API documentation requirements
-    pub fn validate_for_provider(&self, provider: &str, has_tool_call_id: bool) -> Result<(), String> {
+    fn validate_for_provider(&self, provider: &str, has_tool_call_id: bool) -> Result<(), String> {
         match (self, provider) {
             (MessageRole::Tool, provider)
                 if matches!(provider, "openai" | "openrouter" | "deepseek" | "zai") && !has_tool_call_id =>

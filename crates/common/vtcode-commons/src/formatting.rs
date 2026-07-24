@@ -36,7 +36,7 @@ pub fn indent_block(text: &str, indent: &str) -> String {
 }
 
 /// Truncate text to a maximum length (in chars) with an optional ellipsis.
-pub fn truncate_text(text: &str, max_len: usize, ellipsis: &str) -> String {
+fn truncate_text(text: &str, max_len: usize, ellipsis: &str) -> String {
     if text.chars().count() <= max_len {
         return text.to_string();
     }

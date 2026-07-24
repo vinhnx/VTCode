@@ -13,19 +13,19 @@ use crate::provider::ToolDefinition;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Request {
     /// The model to use for the request.
-    pub model: String,
+    model: String,
 
     /// The input items that form the context for the model.
     /// Per the spec, these are polymorphic items (messages, tool outputs, etc.).
-    pub input: Vec<OutputItem>,
+    input: Vec<OutputItem>,
 
     /// Tools available to the model.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<ToolDefinition>>,
+    pub(crate) tools: Option<Vec<ToolDefinition>>,
 
     /// Tool choice parameter.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<ToolChoice>,
+    tool_choice: Option<ToolChoice>,
 
     /// Whether to stream the response.
     #[serde(default)]
@@ -37,51 +37,51 @@ pub struct Request {
 
     /// Nucleus sampling parameter.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f64>,
+    top_p: Option<f64>,
 
     /// Truncation configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub truncation: Option<Box<TruncationConfig>>,
+    truncation: Option<Box<TruncationConfig>>,
 
     /// Maximum output tokens allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_output_tokens: Option<u64>,
+    pub(crate) max_output_tokens: Option<u64>,
 
     /// Maximum tool calls allowed in a single request.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tool_calls: Option<u64>,
+    max_tool_calls: Option<u64>,
 
     /// Stop sequences for the model.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop: Option<Vec<String>>,
+    stop: Option<Vec<String>>,
 
     /// Presence penalty.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub presence_penalty: Option<f64>,
+    presence_penalty: Option<f64>,
 
     /// Frequency penalty.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub frequency_penalty: Option<f64>,
+    frequency_penalty: Option<f64>,
 
     /// Logit bias for token sampling.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logit_bias: Option<hashbrown::HashMap<String, f64>>,
+    logit_bias: Option<hashbrown::HashMap<String, f64>>,
 
     /// Whether to return log probabilities.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logprobs: Option<bool>,
+    logprobs: Option<bool>,
 
     /// Number of top log probabilities to return.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_logprobs: Option<u32>,
+    top_logprobs: Option<u32>,
 
     /// User ID for tracking and rate limiting.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<String>,
+    user: Option<String>,
 
     /// Service tier requested.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub service_tier: Option<String>,
+    service_tier: Option<String>,
 
     /// Reasoning configuration.
     #[serde(
@@ -89,23 +89,23 @@ pub struct Request {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_boxed_reasoning_config_opt"
     )]
-    pub reasoning: Option<Box<ReasoningConfig>>,
+    reasoning: Option<Box<ReasoningConfig>>,
 
     /// Whether to store the request/response.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub store: Option<bool>,
+    pub(crate) store: Option<bool>,
 
     /// Optional ID of the previous response for server-side continuity.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub previous_response_id: Option<String>,
+    pub(crate) previous_response_id: Option<String>,
 
     /// Optional response fields to include.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub include: Option<Vec<String>>,
+    pub(crate) include: Option<Vec<String>>,
 
     /// Metadata for the request.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    metadata: Option<Value>,
 }
 
 /// Reasoning configuration for the request.
@@ -138,7 +138,7 @@ pub struct TruncationConfig {
 
 impl Request {
     /// Creates a new request with the given model and input.
-    pub fn new(model: impl Into<String>, input: Vec<OutputItem>) -> Self {
+    pub(crate) fn new(model: impl Into<String>, input: Vec<OutputItem>) -> Self {
         Self {
             model: model.into(),
             input,
@@ -209,9 +209,9 @@ pub enum ToolChoiceMode {
 pub struct SpecificToolChoice {
     /// The type of the tool, always "function".
     #[serde(rename = "type")]
-    pub tool_type: String,
+    tool_type: String,
     /// The name of the function to call.
-    pub function: FunctionName,
+    function: FunctionName,
 }
 
 /// Function name wrapper for tool choice.

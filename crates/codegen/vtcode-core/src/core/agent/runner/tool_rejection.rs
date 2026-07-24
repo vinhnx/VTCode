@@ -14,7 +14,7 @@ use tracing::{error, warn};
 /// If the tool call has already been registered in the runtime, marks it as
 /// failed and emits the appropriate lifecycle events. Otherwise, records a
 /// tool rejection event directly.
-pub(super) fn reject_tool_call(
+fn reject_tool_call(
     runtime: &mut AgentRuntime,
     event_recorder: &mut ExecEventRecorder,
     tool_name: &str,

@@ -80,19 +80,19 @@ impl Session {
     }
 
     /// Check if the session should exit
-    pub fn should_exit(&self) -> bool {
+    pub(crate) fn should_exit(&self) -> bool {
         self.should_exit
     }
 
     /// Request session exit
-    pub fn request_exit(&mut self) {
+    pub(crate) fn request_exit(&mut self) {
         self.should_exit = true;
     }
 
     /// Take the redraw flag and reset it
     ///
     /// Returns true if a redraw was needed
-    pub fn take_redraw(&mut self) -> bool {
+    pub(crate) fn take_redraw(&mut self) -> bool {
         if self.needs_redraw {
             self.needs_redraw = false;
             true
@@ -105,7 +105,7 @@ impl Session {
     ///
     /// Use this for changes that only affect the visual output without changing
     /// content data: cursor movement, scroll position, hover state, mouse selection.
-    pub fn mark_visual_dirty(&mut self) {
+    pub(crate) fn mark_visual_dirty(&mut self) {
         self.needs_redraw = true;
     }
 
@@ -113,7 +113,7 @@ impl Session {
     ///
     /// Use this for changes that affect content data: new messages, text changes,
     /// config changes, queue updates. Clears header, sidebar, and subprocess caches.
-    pub fn mark_dirty(&mut self) {
+    pub(crate) fn mark_dirty(&mut self) {
         self.needs_redraw = true;
         self.header_lines_cache = None;
         self.header_height_cache.clear();
@@ -134,14 +134,14 @@ impl Session {
     }
 
     /// Invalidate only the header cache (e.g. when provider/model changes)
-    pub fn invalidate_header_cache(&mut self) {
+    pub(crate) fn invalidate_header_cache(&mut self) {
         self.header_lines_cache = None;
         self.header_height_cache.clear();
         self.needs_redraw = true;
     }
 
     /// Invalidate only the sidebar cache (e.g. when queue changes)
-    pub fn invalidate_sidebar_cache(&mut self) {
+    pub(crate) fn invalidate_sidebar_cache(&mut self) {
         self.queued_inputs_preview_cache = None;
         self.subprocess_entries_preview_cache = None;
         self.needs_redraw = true;
@@ -259,7 +259,7 @@ impl Session {
     }
 
     /// Advance animation state on tick and request redraw when a frame changes.
-    pub fn handle_tick(&mut self) {
+    pub(crate) fn handle_tick(&mut self) {
         let motion_reduced = self.appearance.motion_reduced();
         let mut animation_updated = false;
         if !motion_reduced && self.thinking_spinner.is_active && self.thinking_spinner.update() {
@@ -311,7 +311,7 @@ impl Session {
             .map(|_| COPY_NOTIFICATION_TEXT)
     }
 
-    pub(crate) fn overlay_attention_status_text(&self) -> Option<&'static str> {
+    fn overlay_attention_status_text(&self) -> Option<&'static str> {
         if let Some(modal) = self.modal_state() {
             let normalized_title = modal.title.trim().to_ascii_lowercase();
 
@@ -617,7 +617,7 @@ impl Session {
     /// offset=0 shows the bottom (newest content), offset=max shows the top.
     /// Therefore "scroll up" (show older content) increases the offset, and
     /// "scroll down" (show newer content) decreases it.
-    pub fn scroll_line_up(&mut self) {
+    pub(crate) fn scroll_line_up(&mut self) {
         self.mark_scrolling();
         self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
@@ -630,7 +630,7 @@ impl Session {
         }
     }
 
-    pub fn scroll_line_down(&mut self) {
+    pub(crate) fn scroll_line_down(&mut self) {
         self.mark_scrolling();
         self.ensure_scroll_metrics();
         let previous_offset = self.scroll_manager.offset();
@@ -818,7 +818,7 @@ impl Session {
     /// Handle scroll down event
     #[inline]
     #[expect(dead_code)]
-    pub(crate) fn handle_scroll_down(
+    fn handle_scroll_down(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
         callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
@@ -831,7 +831,7 @@ impl Session {
     /// Handle scroll up event
     #[inline]
     #[expect(dead_code)]
-    pub(crate) fn handle_scroll_up(
+    fn handle_scroll_up(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
         callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,

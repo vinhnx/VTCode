@@ -34,11 +34,11 @@ pub struct MarkdownSegment {
 }
 
 impl MarkdownSegment {
-    pub(crate) fn new(style: Style, text: impl Into<String>) -> Self {
+    fn new(style: Style, text: impl Into<String>) -> Self {
         Self { style, text: text.into(), link_target: None }
     }
 
-    pub(crate) fn with_link(style: Style, text: impl Into<String>, link_target: Option<String>) -> Self {
+    fn with_link(style: Style, text: impl Into<String>, link_target: Option<String>) -> Self {
         Self { style, text: text.into(), link_target }
     }
 }
@@ -50,11 +50,11 @@ pub struct MarkdownLine {
 }
 
 impl MarkdownLine {
-    pub(crate) fn push_segment(&mut self, style: Style, text: &str) {
+    fn push_segment(&mut self, style: Style, text: &str) {
         self.push_segment_with_link(style, text, None);
     }
 
-    pub(crate) fn push_segment_with_link(&mut self, style: Style, text: &str, link_target: Option<String>) {
+    fn push_segment_with_link(&mut self, style: Style, text: &str, link_target: Option<String>) {
         if text.is_empty() {
             return;
         }
@@ -72,7 +72,7 @@ impl MarkdownLine {
         self.segments.iter().all(|segment| segment.text.trim().is_empty())
     }
 
-    pub(crate) fn width(&self) -> usize {
+    fn width(&self) -> usize {
         self.segments.iter().map(|seg| UnicodeWidthStr::width(seg.text.as_str())).sum()
     }
 }
@@ -87,7 +87,7 @@ pub struct RenderMarkdownOptions {
 }
 
 /// Render markdown text to styled lines that can be written to the terminal renderer.
-pub fn render_markdown_to_lines(
+fn render_markdown_to_lines(
     source: &str,
     base_style: Style,
     theme_styles: &ThemeStyles,
@@ -213,7 +213,7 @@ pub fn render_markdown_to_lines_with_options(
 }
 
 /// Convenience helper that renders markdown using the active theme without emitting output.
-pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
+pub(crate) fn render_markdown(source: &str) -> Vec<MarkdownLine> {
     let styles = theme::active_styles();
     render_markdown_to_lines(source, Style::default(), &styles, None)
 }

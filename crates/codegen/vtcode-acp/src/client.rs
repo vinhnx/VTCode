@@ -9,7 +9,7 @@ use std::time::Duration;
 use tracing::{debug, trace};
 
 /// ACP Client for communicating with remote agents
-pub struct AcpClient {
+pub(crate) struct AcpClient {
     /// HTTP client for requests
     http_client: HttpClient,
 
@@ -25,25 +25,25 @@ pub struct AcpClient {
 }
 
 /// Builder for ACP client
-pub struct AcpClientBuilder {
+pub(crate) struct AcpClientBuilder {
     local_agent_id: String,
     timeout: Duration,
 }
 
 impl AcpClientBuilder {
     /// Create a new builder
-    pub fn new(local_agent_id: String) -> Self {
+    fn new(local_agent_id: String) -> Self {
         Self { local_agent_id, timeout: Duration::from_secs(30) }
     }
 
     /// Set request timeout
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// Build the client
-    pub fn build(self) -> AcpResult<AcpClient> {
+    fn build(self) -> AcpResult<AcpClient> {
         let http_client = HttpClient::builder().timeout(self.timeout).build()?;
 
         Ok(AcpClient {
@@ -57,7 +57,7 @@ impl AcpClientBuilder {
 
 impl AcpClient {
     /// Create a new ACP client with default settings
-    pub fn new(local_agent_id: String) -> AcpResult<Self> {
+    fn new(local_agent_id: String) -> AcpResult<Self> {
         AcpClientBuilder::new(local_agent_id).build()
     }
 

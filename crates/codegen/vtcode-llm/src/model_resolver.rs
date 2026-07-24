@@ -198,7 +198,7 @@ impl ModelResolver {
         ModelAvailability::MissingCredential
     }
 
-    pub fn estimate_cost(pricing: ModelPricing, usage: &Usage) -> Option<f64> {
+    fn estimate_cost(pricing: ModelPricing, usage: &Usage) -> Option<f64> {
         let input_cost = pricing.input?;
         let output_cost = pricing.output?;
 

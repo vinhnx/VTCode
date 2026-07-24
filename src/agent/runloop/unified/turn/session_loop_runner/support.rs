@@ -16,7 +16,7 @@ const STARTUP_PLANNING_WORKFLOW_STAY_ACTION: &str = "planning_active:start_stay"
 #[cfg(test)]
 #[derive(Clone)]
 pub(super) struct TurnHistoryCheckpoint {
-    pub(super) baseline_len: usize,
+    baseline_len: usize,
     #[cfg(debug_assertions)]
     prefix_fingerprint: u64,
 }

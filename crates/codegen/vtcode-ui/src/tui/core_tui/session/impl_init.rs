@@ -32,7 +32,7 @@ impl Session {
         Self::new_with_logs(theme, placeholder, view_rows, true, None, "Agent TUI".to_string())
     }
 
-    pub fn new_with_logs(
+    pub(crate) fn new_with_logs(
         theme: InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
@@ -43,7 +43,7 @@ impl Session {
         Self::new_with_options(theme, placeholder, view_rows, show_logs, appearance, app_name, None)
     }
 
-    pub fn new_with_bindings(
+    pub(crate) fn new_with_bindings(
         theme: InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,

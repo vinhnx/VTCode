@@ -11,14 +11,14 @@ pub struct TerminalTitleConfig {
 
 impl TerminalTitleConfig {
     #[must_use]
-    pub fn effective_items(&self) -> Vec<String> {
+    fn effective_items(&self) -> Vec<String> {
         self.items
             .clone()
             .unwrap_or_else(|| DEFAULT_TERMINAL_TITLE_ITEMS.iter().map(|item| (*item).to_string()).collect())
     }
 
     #[must_use]
-    pub fn manages_title(&self) -> bool {
+    fn manages_title(&self) -> bool {
         self.items.as_ref().is_none_or(|items| !items.is_empty())
     }
 }

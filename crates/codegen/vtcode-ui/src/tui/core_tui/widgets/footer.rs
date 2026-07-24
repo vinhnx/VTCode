@@ -44,7 +44,7 @@ pub struct FooterWidget<'a> {
 
 impl<'a> FooterWidget<'a> {
     /// Create a new footer widget
-    pub fn new(styles: &'a SessionStyles) -> Self {
+    pub(crate) fn new(styles: &'a SessionStyles) -> Self {
         Self {
             styles,
             left_status: None,
@@ -59,28 +59,28 @@ impl<'a> FooterWidget<'a> {
 
     /// Set the left status text (e.g., git branch)
     #[must_use]
-    pub fn left_status(mut self, status: &'a str) -> Self {
+    pub(crate) fn left_status(mut self, status: &'a str) -> Self {
         self.left_status = Some(status);
         self
     }
 
     /// Set the right status text (e.g., model info)
     #[must_use]
-    pub fn right_status(mut self, status: &'a str) -> Self {
+    pub(crate) fn right_status(mut self, status: &'a str) -> Self {
         self.right_status = Some(status);
         self
     }
 
     /// Set the hint text (shown when idle)
     #[must_use]
-    pub fn hint(mut self, hint: &'a str) -> Self {
+    pub(crate) fn hint(mut self, hint: &'a str) -> Self {
         self.hint = Some(hint);
         self
     }
 
     /// Set the layout mode
     #[must_use]
-    pub fn mode(mut self, mode: LayoutMode) -> Self {
+    pub(crate) fn mode(mut self, mode: LayoutMode) -> Self {
         self.mode = mode;
         self
     }
@@ -94,14 +94,14 @@ impl<'a> FooterWidget<'a> {
 
     /// Set spinner text (shown when processing)
     #[must_use]
-    pub fn spinner(mut self, spinner: &'a str) -> Self {
+    pub(crate) fn spinner(mut self, spinner: &'a str) -> Self {
         self.spinner = Some(spinner);
         self
     }
 
     /// Set shimmer phase for animated status text
     #[must_use]
-    pub fn shimmer_phase(mut self, phase: f32) -> Self {
+    pub(crate) fn shimmer_phase(mut self, phase: f32) -> Self {
         self.shimmer_phase = Some(phase);
         self
     }
@@ -219,10 +219,10 @@ impl Widget for FooterWidget<'_> {
 
 /// Default keybind hints for different contexts
 pub mod hints {
-    pub const IDLE: &str = "? help • / command • @ file • Tab agent";
-    pub const PROCESSING: &str = vtcode_commons::stop_hints::STOP_HINT_COMPACT;
-    pub const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
-    pub const EDITING: &str = "Enter/Tab queue • Ctrl+Enter run/steer • /stop • ↑ history";
+    pub(crate) const IDLE: &str = "? help • / command • @ file • Tab agent";
+    pub(crate) const PROCESSING: &str = vtcode_commons::stop_hints::STOP_HINT_COMPACT;
+    pub(crate) const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
+    pub(crate) const EDITING: &str = "Enter/Tab queue • Ctrl+Enter run/steer • /stop • ↑ history";
 }
 
 #[cfg(test)]

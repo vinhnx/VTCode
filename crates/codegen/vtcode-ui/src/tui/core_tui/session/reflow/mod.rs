@@ -232,7 +232,7 @@ impl Session {
 
     /// Reflow error, warning, and info messages with a bordered block.
     #[expect(dead_code)]
-    pub(super) fn reflow_error_warning_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
+    fn reflow_error_warning_lines(&self, index: usize, width: u16) -> Vec<TranscriptLine> {
         let Some(line) = self.lines.get(index) else {
             return vec![TranscriptLine::default()];
         };

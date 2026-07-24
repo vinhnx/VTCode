@@ -26,28 +26,28 @@ pub struct McpSandboxOverrides {
     /// When true, [`derive_mcp_sandbox_policy`] applies the conservative
     /// resource caps below regardless of the parent policy. Default `true`.
     #[serde(default = "default_true")]
-    pub enforce_conservative_limits: bool,
+    enforce_conservative_limits: bool,
     /// Memory cap (MB) applied to MCP child processes. Default `512`.
     #[serde(default = "default_memory_mb")]
-    pub max_memory_mb: u64,
+    max_memory_mb: u64,
     /// Maximum number of processes / pids in the sandbox. Default `64`.
     #[serde(default = "default_max_pids")]
-    pub max_pids: u64,
+    max_pids: u64,
     /// CPU time budget in seconds. Default `60`.
     #[serde(default = "default_cpu_secs")]
-    pub cpu_time_secs: u64,
+    cpu_time_secs: u64,
     /// Wall-clock timeout in seconds. Default `120`.
     #[serde(default = "default_timeout_secs")]
-    pub timeout_secs: u64,
+    timeout_secs: u64,
     /// Optional writable root. When set, the sandbox restricts writes to this
     /// directory (plus the workspace, if the parent policy permits workspace
     /// writes). When unset, the sandbox inherits the parent's writable set.
     #[serde(default)]
-    pub writable_root: Option<PathBuf>,
+    writable_root: Option<PathBuf>,
     /// Network allow-list override. When set, MCP servers may only talk to
     /// these hosts — even when the parent policy would otherwise allow egress.
     #[serde(default)]
-    pub allowed_endpoints: Vec<NetworkAllowlistEntry>,
+    allowed_endpoints: Vec<NetworkAllowlistEntry>,
 }
 
 impl Default for McpSandboxOverrides {
@@ -94,7 +94,7 @@ fn default_timeout_secs() -> u64 {
 /// `DangerFullAccess` parents are downgraded to `WorkspaceWrite` around the
 /// server's writable root; `ReadOnly` parents are left unchanged.
 #[must_use]
-pub fn derive_mcp_sandbox_policy(parent: &SandboxPolicy, overrides: &McpSandboxOverrides) -> SandboxPolicy {
+fn derive_mcp_sandbox_policy(parent: &SandboxPolicy, overrides: &McpSandboxOverrides) -> SandboxPolicy {
     let mut derived = parent.clone();
 
     if let Some(root) = &overrides.writable_root {
@@ -217,10 +217,10 @@ fn conservative_resource_limits(overrides: &McpSandboxOverrides) -> ResourceLimi
 #[derive(Debug, Clone)]
 pub struct McpSandboxWrapper {
     /// Platform-specific wrapper binary (e.g. `/usr/bin/sandbox-exec` on macOS).
-    pub wrapper_binary: PathBuf,
+    wrapper_binary: PathBuf,
     /// Argument(s) needed to point the wrapper at the policy (e.g. `-p
     /// <profile>` on macOS or `--sandbox-policy <json>` on Linux).
-    pub policy_argv: Vec<String>,
+    policy_argv: Vec<String>,
 }
 
 impl McpSandboxWrapper {
@@ -234,7 +234,7 @@ impl McpSandboxWrapper {
     /// - **Windows**: returns `None` (sandboxing is stubbed; see
     ///   `crates/codegen/vtcode-safety/src/sandboxing/manager.rs`).
     #[must_use]
-    pub fn for_current_platform(policy: &SandboxPolicy) -> Option<Self> {
+    fn for_current_platform(policy: &SandboxPolicy) -> Option<Self> {
         #[cfg(target_os = "macos")]
         {
             // macOS Seatbelt profiles are out of scope for this helper — the

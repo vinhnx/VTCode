@@ -10,7 +10,7 @@ pub enum ReadLineResult {
 }
 
 /// Read a line with a size limit, preventing unbounded memory growth.
-pub async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
+pub(crate) async fn read_line_with_limit<R: AsyncBufRead + Unpin>(
     reader: &mut R,
     buf: &mut Vec<u8>,
     max_len: usize,

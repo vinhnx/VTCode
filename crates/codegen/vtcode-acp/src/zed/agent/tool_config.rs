@@ -190,7 +190,7 @@ impl ZedAgent {
         (truncated, true)
     }
 
-    pub(super) fn argument_message(template: &str, argument: &str) -> String {
+    fn argument_message(template: &str, argument: &str) -> String {
         template.replace("{argument}", argument)
     }
 

@@ -207,7 +207,7 @@ impl Session {
         false
     }
 
-    pub fn handle_event(
+    pub(crate) fn handle_event(
         &mut self,
         event: CrosstermEvent,
         events: &UnboundedSender<InlineEvent>,
@@ -468,7 +468,7 @@ impl Session {
         toggled
     }
 
-    pub(crate) fn transcript_word_selection_range(
+    fn transcript_word_selection_range(
         &mut self,
         column: u16,
         row: u16,
@@ -514,7 +514,7 @@ impl Session {
         true
     }
 
-    pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
+    fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
         if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }

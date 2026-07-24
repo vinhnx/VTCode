@@ -4,7 +4,7 @@ use crate::tools::tool_intent::canonical_command_session_tool_name;
 use rustc_hash::FxHashSet;
 use vtcode_commons::formatting::collapse_whitespace as collapse_whitespace_inner;
 
-pub(crate) fn collapse_whitespace(text: &str) -> String {
+fn collapse_whitespace(text: &str) -> String {
     collapse_whitespace_inner(text)
 }
 
@@ -78,7 +78,7 @@ pub fn summarize_tool_block(lines: &[String], start: usize) -> (String, usize) {
     (collapse_whitespace(&summary), index)
 }
 
-pub(crate) fn is_tool_detail_line(line: &str) -> bool {
+fn is_tool_detail_line(line: &str) -> bool {
     line.starts_with("│ ")
         || line.starts_with("└ ")
         || line.starts_with("✓ ")
@@ -88,7 +88,7 @@ pub(crate) fn is_tool_detail_line(line: &str) -> bool {
         || line == "(no output)"
 }
 
-pub(crate) fn summarize_tool_detail(line: &str) -> Option<String> {
+fn summarize_tool_detail(line: &str) -> Option<String> {
     let path = line
         .strip_prefix("└ Path:")
         .map(str::trim)

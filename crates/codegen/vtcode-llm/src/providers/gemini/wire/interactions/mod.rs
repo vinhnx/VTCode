@@ -5,26 +5,26 @@ use super::GenerationConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionRequest {
-    pub model: String,
-    pub input: InteractionInput,
+    pub(crate) model: String,
+    pub(crate) input: InteractionInput,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<InteractionTool>>,
+    pub(crate) tools: Option<Vec<InteractionTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_instruction: Option<String>,
+    pub(crate) system_instruction: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_format: Option<Value>,
+    pub(crate) response_format: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_mime_type: Option<String>,
+    pub(crate) response_mime_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
+    pub(crate) stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub store: Option<bool>,
+    pub(crate) store: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub generation_config: Option<InteractionGenerationConfig>,
+    pub(crate) generation_config: Option<InteractionGenerationConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<InteractionToolChoice>,
+    pub(crate) tool_choice: Option<InteractionToolChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub previous_interaction_id: Option<String>,
+    pub(crate) previous_interaction_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,8 +37,8 @@ pub enum InteractionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionTurn {
-    pub role: String,
-    pub content: InteractionTurnContent,
+    pub(crate) role: String,
+    pub(crate) content: InteractionTurnContent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,19 +91,19 @@ pub enum InteractionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionTool {
     #[serde(rename = "type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<Value>,
+    parameters: Option<Value>,
     #[serde(flatten, default)]
-    pub extra: Map<String, Value>,
+    pub(crate) extra: Map<String, Value>,
 }
 
 impl InteractionTool {
-    pub fn built_in(tool_type: &str, config: Option<&Value>) -> Self {
+    pub(crate) fn built_in(tool_type: &str, config: Option<&Value>) -> Self {
         let extra = config.and_then(Value::as_object).cloned().unwrap_or_default();
         Self {
             tool_type: tool_type.to_string(),
@@ -114,7 +114,7 @@ impl InteractionTool {
         }
     }
 
-    pub fn function(name: String, description: String, parameters: Value) -> Self {
+    pub(crate) fn function(name: String, description: String, parameters: Value) -> Self {
         Self {
             tool_type: "function".to_string(),
             name: Some(name),
@@ -127,13 +127,13 @@ impl InteractionTool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionToolChoice {
-    pub mode: String,
+    pub(crate) mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<String>>,
+    pub(crate) tools: Option<Vec<String>>,
 }
 
 impl InteractionToolChoice {
-    pub fn new(mode: impl Into<String>) -> Self {
+    pub(crate) fn new(mode: impl Into<String>) -> Self {
         Self { mode: mode.into(), tools: None }
     }
 }
@@ -141,15 +141,15 @@ impl InteractionToolChoice {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionGenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
+    temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
+    top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_output_tokens: Option<u32>,
+    max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop_sequences: Option<Vec<String>>,
+    stop_sequences: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking_level: Option<String>,
+    thinking_level: Option<String>,
 }
 
 impl From<GenerationConfig> for InteractionGenerationConfig {
@@ -181,54 +181,54 @@ impl From<InteractionGenerationConfig> for GenerationConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Interaction {
-    pub id: String,
-    pub model: String,
+    pub(crate) id: String,
+    pub(crate) model: String,
     #[serde(default)]
-    pub status: Option<String>,
+    pub(crate) status: Option<String>,
     #[serde(default)]
-    pub outputs: Vec<InteractionOutput>,
+    pub(crate) outputs: Vec<InteractionOutput>,
     #[serde(default)]
-    pub usage: Option<InteractionUsage>,
+    pub(crate) usage: Option<InteractionUsage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionOutput {
     #[serde(rename = "type")]
-    pub output_type: String,
+    pub(crate) output_type: String,
     #[serde(default)]
-    pub text: Option<String>,
+    pub(crate) text: Option<String>,
     #[serde(default)]
-    pub summary: Option<String>,
+    pub(crate) summary: Option<String>,
     #[serde(default)]
-    pub id: Option<String>,
+    pub(crate) id: Option<String>,
     #[serde(default)]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
     #[serde(default)]
-    pub arguments: Option<Value>,
+    pub(crate) arguments: Option<Value>,
     #[serde(default)]
-    pub signature: Option<String>,
+    pub(crate) signature: Option<String>,
     #[serde(default)]
-    pub function_call: Option<InteractionFunctionCall>,
+    pub(crate) function_call: Option<InteractionFunctionCall>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionFunctionCall {
-    pub name: String,
-    pub arguments: Value,
+    pub(crate) name: String,
+    pub(crate) arguments: Value,
     #[serde(default)]
-    pub id: Option<String>,
+    pub(crate) id: Option<String>,
     #[serde(default)]
-    pub signature: Option<String>,
+    pub(crate) signature: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InteractionUsage {
     #[serde(default)]
-    pub total_input_tokens: Option<u32>,
+    pub(crate) total_input_tokens: Option<u32>,
     #[serde(default)]
-    pub total_output_tokens: Option<u32>,
+    pub(crate) total_output_tokens: Option<u32>,
     #[serde(default)]
-    pub total_tokens: Option<u32>,
+    pub(crate) total_tokens: Option<u32>,
     #[serde(default)]
-    pub total_cached_tokens: Option<u32>,
+    pub(crate) total_cached_tokens: Option<u32>,
 }

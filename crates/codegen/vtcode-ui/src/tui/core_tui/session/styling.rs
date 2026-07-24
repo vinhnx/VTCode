@@ -21,7 +21,7 @@ fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
 }
 
-pub fn normalize_tool_name(tool_name: &str) -> &'static str {
+fn normalize_tool_name(tool_name: &str) -> &'static str {
     match tool_name.to_lowercase().as_str() {
         "grep" | "rg" | "ripgrep" | "search" | "find" | "ag" | tools::GREP_FILE => "search",
         "list" | "ls" | "dir" | tools::LIST_FILES => "list",
@@ -34,7 +34,7 @@ pub fn normalize_tool_name(tool_name: &str) -> &'static str {
 
 /// Get the inline style for a tool based on its normalized name.
 /// Shared by both `SessionStyles` and standalone rendering contexts.
-pub fn tool_inline_style_for(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
+pub(crate) fn tool_inline_style_for(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
     let normalized_name = normalize_tool_name(tool_name);
     let mut style = InlineTextStyle::default().bold();
 
@@ -57,7 +57,7 @@ pub struct SessionStyles {
 }
 
 impl SessionStyles {
-    pub fn new(theme: InlineTheme) -> Self {
+    pub(crate) fn new(theme: InlineTheme) -> Self {
         Self { theme }
     }
 
@@ -66,12 +66,12 @@ impl SessionStyles {
         &self.theme
     }
 
-    pub fn set_theme(&mut self, theme: InlineTheme) {
+    pub(crate) fn set_theme(&mut self, theme: InlineTheme) {
         self.theme = theme;
     }
 
     /// Get the modal list highlight style (Select-style: primary fg, no bg change)
-    pub fn modal_list_highlight_style(&self) -> Style {
+    pub(crate) fn modal_list_highlight_style(&self) -> Style {
         let accent = self.theme.primary.or(self.theme.tool_accent).or(self.theme.foreground);
         let mut style = self.default_style().add_modifier(Modifier::BOLD);
         if let Some(accent) = accent {
@@ -94,7 +94,7 @@ impl SessionStyles {
     /// Get the default style with both foreground and background from the theme.
     /// Painting the theme background ensures readability regardless of terminal
     /// color scheme (e.g. a light theme on a dark terminal no longer appears blank).
-    pub fn default_style(&self) -> Style {
+    pub(crate) fn default_style(&self) -> Style {
         let mut style = Style::default();
         if let Some(background) = self.theme.background.map(ratatui_color_from_ansi) {
             style = style.bg(background);
@@ -107,7 +107,7 @@ impl SessionStyles {
 
     /// Get the default inline style (for tests and inline conversions)
     #[expect(dead_code)]
-    pub fn default_inline_style(&self) -> InlineTextStyle {
+    pub(crate) fn default_inline_style(&self) -> InlineTextStyle {
         InlineTextStyle {
             color: self.theme.foreground,
             ..InlineTextStyle::default()
@@ -115,7 +115,7 @@ impl SessionStyles {
     }
 
     /// Get the accent inline style
-    pub fn accent_inline_style(&self) -> InlineTextStyle {
+    pub(crate) fn accent_inline_style(&self) -> InlineTextStyle {
         InlineTextStyle {
             color: self.theme.primary.or(self.theme.foreground),
             ..InlineTextStyle::default()
@@ -123,11 +123,11 @@ impl SessionStyles {
     }
 
     /// Get the accent style
-    pub fn accent_style(&self) -> Style {
+    pub(crate) fn accent_style(&self) -> Style {
         ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
     }
 
-    pub fn transcript_link_style(&self) -> Style {
+    pub(crate) fn transcript_link_style(&self) -> Style {
         let style = InlineTextStyle {
             color: self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground),
             ..InlineTextStyle::default()
@@ -136,7 +136,7 @@ impl SessionStyles {
     }
 
     /// Get the border inline style
-    pub fn border_inline_style(&self) -> InlineTextStyle {
+    fn border_inline_style(&self) -> InlineTextStyle {
         InlineTextStyle {
             color: self.theme.secondary.or(self.theme.foreground),
             ..InlineTextStyle::default()
@@ -144,14 +144,14 @@ impl SessionStyles {
     }
 
     /// Get the border style (dimmed)
-    pub fn border_style(&self) -> Style {
+    pub(crate) fn border_style(&self) -> Style {
         self.dimmed_border_style(true)
     }
 
     /// Get a border style with configurable boldness.
     /// When `suppress_bold` is true, the BOLD modifier is removed — useful for
     /// info/error/warning block borders that should appear subtle.
-    pub fn dimmed_border_style(&self, suppress_bold: bool) -> Style {
+    pub(crate) fn dimmed_border_style(&self, suppress_bold: bool) -> Style {
         let mut style =
             ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground).add_modifier(Modifier::DIM);
         if suppress_bold {
@@ -160,7 +160,7 @@ impl SessionStyles {
         style
     }
 
-    pub fn input_background_style(&self) -> Style {
+    pub(crate) fn input_background_style(&self) -> Style {
         let mut style = self.default_style();
         let Some(background) = self.theme.background else {
             return style;
@@ -178,7 +178,7 @@ impl SessionStyles {
     }
 
     /// Get the prefix style for a message line
-    pub fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
+    pub(crate) fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
 
         let color = line.segments.iter().find_map(|segment| segment.style.color).or(fallback);
@@ -187,7 +187,7 @@ impl SessionStyles {
     }
 
     /// Get the fallback text color for a message kind
-    pub fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
+    pub(crate) fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
         match kind {
             // Assistant content should be legible and clearly distinct from subdued PTY output.
             InlineMessageKind::Agent => self.theme.foreground.or(self.theme.primary),
@@ -201,7 +201,7 @@ impl SessionStyles {
     }
 
     /// Get the message divider style
-    pub fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
+    pub(crate) fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         let mut style = InlineTextStyle::default();
         if kind == InlineMessageKind::User {
             style.color = self.theme.primary.or(self.theme.foreground);

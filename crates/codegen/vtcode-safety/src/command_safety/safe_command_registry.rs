@@ -49,7 +49,7 @@ pub struct CommandRule {
 
 impl CommandRule {
     /// Creates a read-only safe command rule
-    pub fn safe_readonly() -> Self {
+    pub(crate) fn safe_readonly() -> Self {
         Self {
             safe_subcommands: None,
             forbidden_options: vec![],
@@ -58,7 +58,7 @@ impl CommandRule {
     }
 
     /// Creates a rule with allowed subcommands
-    pub fn with_allowed_subcommands(subcommands: Vec<&str>) -> Self {
+    pub(crate) fn with_allowed_subcommands(subcommands: Vec<&str>) -> Self {
         Self {
             safe_subcommands: Some(
                 subcommands
@@ -83,7 +83,7 @@ impl CommandRule {
 
 impl SafeCommandRegistry {
     /// Creates a new empty registry
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { rules: Self::default_rules() }
     }
 
@@ -192,7 +192,7 @@ impl SafeCommandRegistry {
     }
 
     /// Checks if a command is safe
-    pub fn is_safe(&self, command: &[String]) -> SafetyDecision {
+    pub(crate) fn is_safe(&self, command: &[String]) -> SafetyDecision {
         if command.is_empty() {
             return SafetyDecision::Unknown;
         }

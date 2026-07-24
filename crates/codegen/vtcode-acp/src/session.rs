@@ -36,30 +36,30 @@ pub enum SessionState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpSession {
     /// Unique session identifier
-    pub session_id: String,
+    session_id: String,
 
     /// Current session state
-    pub state: SessionState,
+    state: SessionState,
 
     /// Session creation timestamp (ISO 8601)
-    pub created_at: String,
+    created_at: String,
 
     /// Last activity timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_activity_at: Option<String>,
+    last_activity_at: Option<String>,
 
     /// Session metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 
     /// Turn counter for prompt/response cycles
     #[serde(default)]
-    pub turn_count: u32,
+    turn_count: u32,
 }
 
 impl AcpSession {
     /// Create a new session with the given ID
-    pub fn new(session_id: impl Into<String>) -> Self {
+    pub(crate) fn new(session_id: impl Into<String>) -> Self {
         Self {
             session_id: session_id.into(),
             state: SessionState::Created,
@@ -71,7 +71,7 @@ impl AcpSession {
     }
 
     /// Update session state
-    pub fn set_state(&mut self, state: SessionState) {
+    pub(crate) fn set_state(&mut self, state: SessionState) {
         self.state = state;
         self.last_activity_at = Some(chrono::Utc::now().to_rfc3339());
     }
@@ -92,26 +92,26 @@ impl AcpSession {
 pub struct SessionNewParams {
     /// Optional session metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 
     /// Optional workspace context
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace: Option<WorkspaceContext>,
+    workspace: Option<WorkspaceContext>,
 
     /// Optional model preferences
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_preferences: Option<ModelPreferences>,
+    model_preferences: Option<ModelPreferences>,
 }
 
 /// Result of session/new method
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionNewResult {
     /// The created session ID
-    pub session_id: String,
+    pub(crate) session_id: String,
 
     /// Initial session state
     #[serde(default)]
-    pub state: SessionState,
+    state: SessionState,
 }
 
 // ============================================================================
@@ -122,18 +122,18 @@ pub struct SessionNewResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionLoadParams {
     /// Session ID to load
-    pub session_id: String,
+    pub(crate) session_id: String,
 }
 
 /// Result of session/load method
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionLoadResult {
     /// The loaded session
-    pub session: AcpSession,
+    pub(crate) session: AcpSession,
 
     /// Conversation history (if available)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub history: Vec<ConversationTurn>,
+    pub(crate) history: Vec<ConversationTurn>,
 }
 
 // ============================================================================
@@ -144,14 +144,14 @@ pub struct SessionLoadResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionPromptParams {
     /// Session ID
-    pub session_id: String,
+    pub(crate) session_id: String,
 
     /// Prompt content (can be text, images, etc.)
-    pub content: Vec<PromptContent>,
+    content: Vec<PromptContent>,
 
     /// Optional turn-specific metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 }
 
 /// Prompt content types
@@ -189,7 +189,7 @@ pub enum PromptContent {
 
 impl PromptContent {
     /// Create text content
-    pub fn text(text: impl Into<String>) -> Self {
+    fn text(text: impl Into<String>) -> Self {
         Self::Text { text: text.into() }
     }
 
@@ -207,18 +207,18 @@ impl PromptContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionPromptResult {
     /// Turn ID for this prompt/response cycle
-    pub turn_id: String,
+    pub(crate) turn_id: String,
 
     /// Final response content (may be streamed via notifications first)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response: Option<String>,
+    response: Option<String>,
 
     /// Tool calls made during this turn
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tool_calls: Vec<ToolCallRecord>,
+    tool_calls: Vec<ToolCallRecord>,
 
     /// Turn completion status
-    pub status: TurnStatus,
+    pub(crate) status: TurnStatus,
 }
 
 /// Turn completion status
@@ -244,27 +244,27 @@ pub enum TurnStatus {
 #[serde(rename_all = "camelCase")]
 pub struct RequestPermissionParams {
     /// Session ID
-    pub session_id: String,
+    session_id: String,
 
     /// Tool call requiring permission
-    pub tool_call: ToolCallRecord,
+    tool_call: ToolCallRecord,
 
     /// Available permission options
-    pub options: Vec<PermissionOption>,
+    options: Vec<PermissionOption>,
 }
 
 /// A permission option presented to the user
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionOption {
     /// Option ID
-    pub id: String,
+    id: String,
 
     /// Display label
-    pub label: String,
+    label: String,
 
     /// Detailed description
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
 }
 
 /// Result of session/request_permission
@@ -288,11 +288,11 @@ pub enum RequestPermissionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionCancelParams {
     /// Session ID
-    pub session_id: String,
+    pub(crate) session_id: String,
 
     /// Optional turn ID to cancel (if not provided, cancels current turn)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub turn_id: Option<String>,
+    pub(crate) turn_id: Option<String>,
 }
 
 // ============================================================================
@@ -303,14 +303,14 @@ pub struct SessionCancelParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionUpdateNotification {
     /// Session ID
-    pub session_id: String,
+    pub(crate) session_id: String,
 
     /// Turn ID this update belongs to
-    pub turn_id: String,
+    pub(crate) turn_id: String,
 
     /// Update type
     #[serde(flatten)]
-    pub update: SessionUpdate,
+    pub(crate) update: SessionUpdate,
 }
 
 /// Session update types
@@ -369,15 +369,15 @@ pub enum SessionUpdate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceContext {
     /// Workspace root path
-    pub root_path: String,
+    root_path: String,
 
     /// Workspace name
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    name: Option<String>,
 
     /// Active file paths
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub active_files: Vec<String>,
+    active_files: Vec<String>,
 }
 
 /// Model preferences for session
@@ -385,35 +385,35 @@ pub struct WorkspaceContext {
 pub struct ModelPreferences {
     /// Preferred model ID
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_id: Option<String>,
+    model_id: Option<String>,
 
     /// Temperature setting
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
+    temperature: Option<f32>,
 
     /// Max tokens
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    max_tokens: Option<u32>,
 }
 
 /// Record of a tool call
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCallRecord {
     /// Unique tool call ID
-    pub id: String,
+    id: String,
 
     /// Tool name
-    pub name: String,
+    name: String,
 
     /// Tool arguments
-    pub arguments: Value,
+    arguments: Value,
 
     /// Tool result (if completed)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    result: Option<Value>,
 
     /// Timestamp
-    pub timestamp: String,
+    timestamp: String,
 }
 
 /// Server-to-client tool execution request (arrives via `server/request` SSE event).
@@ -424,55 +424,55 @@ pub struct ToolCallRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionRequest {
     /// Unique request identifier used to correlate the response.
-    pub request_id: String,
+    request_id: String,
     /// The tool call the agent wants the client to execute.
-    pub tool_call: ToolCallRecord,
+    tool_call: ToolCallRecord,
 }
 
 /// Result of a client-side tool execution, sent back via `client/response`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionResult {
     /// Must match the `request_id` from [`ToolExecutionRequest`].
-    pub request_id: String,
+    pub(crate) request_id: String,
     /// ID of the tool call that was executed.
-    pub tool_call_id: String,
+    pub(crate) tool_call_id: String,
     /// Tool output (structured or text).
-    pub output: Value,
+    pub(crate) output: Value,
     /// Whether execution succeeded.
-    pub success: bool,
+    pub(crate) success: bool,
     /// Error message when `success` is false.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 /// Wrapper for a `server/request` SSE event notification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerRequestNotification {
     /// Session this request belongs to.
-    pub session_id: String,
+    pub(crate) session_id: String,
     /// The tool execution request.
-    pub request: ToolExecutionRequest,
+    pub(crate) request: ToolExecutionRequest,
 }
 
 /// A single turn in the conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTurn {
     /// Turn ID
-    pub turn_id: String,
+    turn_id: String,
 
     /// User prompt
-    pub prompt: Vec<PromptContent>,
+    prompt: Vec<PromptContent>,
 
     /// Agent response
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response: Option<String>,
+    response: Option<String>,
 
     /// Tool calls made during this turn
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tool_calls: Vec<ToolCallRecord>,
+    tool_calls: Vec<ToolCallRecord>,
 
     /// Turn timestamp
-    pub timestamp: String,
+    timestamp: String,
 }
 
 #[cfg(test)]

@@ -45,7 +45,7 @@ pub struct SessionWidget<'a> {
 
 impl<'a> SessionWidget<'a> {
     /// Create a new SessionWidget with required parameters
-    pub fn new(session: &'a mut Session) -> Self {
+    pub(crate) fn new(session: &'a mut Session) -> Self {
         Self {
             session,
             header_lines: None,
@@ -59,28 +59,28 @@ impl<'a> SessionWidget<'a> {
 
     /// Set the header lines to render
     #[must_use]
-    pub fn header_lines(mut self, lines: Vec<ratatui::text::Line<'static>>) -> Self {
+    pub(crate) fn header_lines(mut self, lines: Vec<ratatui::text::Line<'static>>) -> Self {
         self.header_lines = Some(lines);
         self
     }
 
     /// Set the header area
     #[must_use]
-    pub fn header_area(mut self, area: Rect) -> Self {
+    pub(crate) fn header_area(mut self, area: Rect) -> Self {
         self.header_area = Some(area);
         self
     }
 
     /// Set the transcript area
     #[must_use]
-    pub fn transcript_area(mut self, area: Rect) -> Self {
+    pub(crate) fn transcript_area(mut self, area: Rect) -> Self {
         self.transcript_area = Some(area);
         self
     }
 
     /// Set the navigation area
     #[must_use]
-    pub fn navigation_area(mut self, area: Rect) -> Self {
+    pub(crate) fn navigation_area(mut self, area: Rect) -> Self {
         self.navigation_area = Some(area);
         self
     }

@@ -52,7 +52,7 @@ impl PatchChunk {
         self.is_end_of_file
     }
 
-    pub(crate) fn to_segments(&self) -> (Vec<String>, Vec<String>) {
+    fn to_segments(&self) -> (Vec<String>, Vec<String>) {
         let cap = self.lines.len();
         let mut old_lines = Vec::with_capacity(cap);
         let mut new_lines = Vec::with_capacity(cap);
@@ -75,7 +75,7 @@ impl PatchChunk {
         (old_lines, new_lines)
     }
 
-    pub(crate) fn has_old_lines(&self) -> bool {
+    fn has_old_lines(&self) -> bool {
         self.lines
             .iter()
             .any(|line| matches!(line, PatchLine::Context(_) | PatchLine::Removal(_)))

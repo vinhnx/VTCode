@@ -78,7 +78,7 @@ impl FileOpsTool {
 
     /// Get relative path from workspace root, avoiding allocation when possible
     #[inline]
-    pub(super) fn relative_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
+    fn relative_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
         path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy()
     }
 

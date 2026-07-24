@@ -22,7 +22,7 @@ impl SubmittedInput {
         Self { text: text.into(), attachments }
     }
 
-    pub fn text_only(text: impl Into<String>) -> Self {
+    fn text_only(text: impl Into<String>) -> Self {
         Self::new(text, Vec::new())
     }
 

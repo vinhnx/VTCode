@@ -3,7 +3,7 @@
 mod messages;
 mod system;
 mod thinking;
-pub mod tools;
+pub(crate) mod tools;
 
 use crate::provider::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicThinkingConfig, LLMError, LLMRequest,
@@ -29,13 +29,13 @@ use thinking::build_thinking_config;
 use tools::{build_tool_choice, build_tools};
 
 #[cfg(test)]
-pub use messages::tool_result_blocks;
+pub(crate) use messages::tool_result_blocks;
 
-pub struct RequestBuilderContext<'a> {
-    pub prompt_cache_enabled: bool,
-    pub prompt_cache_settings: &'a AnthropicPromptCacheSettings,
-    pub anthropic_config: &'a AnthropicConfig,
-    pub model: &'a str,
+pub(crate) struct RequestBuilderContext<'a> {
+    pub(crate) prompt_cache_enabled: bool,
+    pub(crate) prompt_cache_settings: &'a AnthropicPromptCacheSettings,
+    pub(crate) anthropic_config: &'a AnthropicConfig,
+    pub(crate) model: &'a str,
 }
 
 fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -> &'static str {
@@ -49,7 +49,7 @@ fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -
     }
 }
 
-pub fn convert_to_anthropic_format(request: &LLMRequest, ctx: &RequestBuilderContext) -> Result<Value, LLMError> {
+pub(crate) fn convert_to_anthropic_format(request: &LLMRequest, ctx: &RequestBuilderContext) -> Result<Value, LLMError> {
     let resolved_model = resolve_model_name(&request.model, ctx.model);
     let tools_ttl = if ctx.prompt_cache_enabled {
         get_tools_cache_ttl(ctx.prompt_cache_settings)
@@ -324,7 +324,7 @@ fn effort_from_reasoning_for_adaptive(effort: ReasoningEffortLevel) -> &'static 
 /// dated suffix before checking against the supported set. Keep this in lockstep
 /// with `vtcode_config::constants::models::anthropic::normalize_model_id` so the
 /// executor check and the advisor-pair validation agree on normalization.
-pub(crate) fn is_anthropic_executor_model(model: &str) -> bool {
+fn is_anthropic_executor_model(model: &str) -> bool {
     use vtcode_config::constants::models::anthropic::{SUPPORTED_MODELS, normalize_model_id};
     let normalized = normalize_model_id(model);
     SUPPORTED_MODELS.contains(&normalized)

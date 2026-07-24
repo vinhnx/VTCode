@@ -77,25 +77,25 @@ impl Usage {
     }
 
     #[inline]
-    pub fn is_cache_hit(&self) -> Option<bool> {
+    fn is_cache_hit(&self) -> Option<bool> {
         self.has_any_cache_metrics().then(|| self.cache_read_tokens_or_fallback() > 0)
     }
 
     #[inline]
-    pub fn is_cache_miss(&self) -> Option<bool> {
+    fn is_cache_miss(&self) -> Option<bool> {
         self.has_any_cache_metrics()
             .then(|| self.cache_creation_tokens_or_zero() > 0 && self.cache_read_tokens_or_fallback() == 0)
     }
 
     #[inline]
-    pub fn total_cache_tokens(&self) -> u32 {
+    fn total_cache_tokens(&self) -> u32 {
         let read = self.cache_read_tokens_or_fallback();
         let creation = self.cache_creation_tokens_or_zero();
         read + creation
     }
 
     #[inline]
-    pub fn cache_savings_ratio(&self) -> Option<f64> {
+    fn cache_savings_ratio(&self) -> Option<f64> {
         if !self.has_cache_read_metric() {
             return None;
         }
@@ -117,18 +117,18 @@ pub struct BalanceInfo {
 /// DeepSeek-specific balance info from GET /user/balance
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeepSeekBalanceResponse {
-    pub is_available: bool,
-    pub balance_infos: Vec<DeepSeekCurrencyBalance>,
+    is_available: bool,
+    balance_infos: Vec<DeepSeekCurrencyBalance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeepSeekCurrencyBalance {
-    pub currency: String,
-    pub total_balance: String,
+    currency: String,
+    total_balance: String,
     #[serde(default)]
-    pub granted_balance: String,
+    granted_balance: String,
     #[serde(default)]
-    pub topped_up_balance: String,
+    topped_up_balance: String,
 }
 
 impl From<DeepSeekBalanceResponse> for BalanceInfo {
@@ -567,11 +567,11 @@ impl LLMResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LLMErrorMetadata {
-    pub provider: Option<String>,
+    provider: Option<String>,
     pub status: Option<u16>,
     pub code: Option<String>,
-    pub request_id: Option<String>,
-    pub organization_id: Option<String>,
+    request_id: Option<String>,
+    organization_id: Option<String>,
     pub retry_after: Option<String>,
     pub message: Option<String>,
 }

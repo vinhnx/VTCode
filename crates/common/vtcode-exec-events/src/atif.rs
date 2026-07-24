@@ -34,7 +34,7 @@ use serde_json::Value;
 use crate::{ThreadEvent, ThreadItemDetails, ToolCallStatus};
 
 /// Current ATIF schema version supported by this implementation.
-pub const ATIF_SCHEMA_VERSION: &str = "ATIF-v1.4";
+const ATIF_SCHEMA_VERSION: &str = "ATIF-v1.4";
 
 // ============================================================================
 // Core ATIF Types
@@ -44,37 +44,37 @@ pub const ATIF_SCHEMA_VERSION: &str = "ATIF-v1.4";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trajectory {
     /// ATIF schema version (e.g., "ATIF-v1.4").
-    pub schema_version: String,
+    schema_version: String,
     /// Unique identifier for the entire agent run.
-    pub session_id: String,
+    session_id: String,
     /// Agent configuration for this trajectory.
-    pub agent: AtifAgent,
+    agent: AtifAgent,
     /// Ordered interaction steps.
-    pub steps: Vec<Step>,
+    steps: Vec<Step>,
     /// Optional developer notes.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
+    notes: Option<String>,
     /// Aggregate metrics for the full trajectory.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub final_metrics: Option<FinalMetrics>,
     /// Optional custom root-level metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<Value>,
+    extra: Option<Value>,
 }
 
 /// Agent configuration metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtifAgent {
     /// Agent system name (e.g., "vtcode").
-    pub name: String,
+    name: String,
     /// Agent system version.
-    pub version: String,
+    version: String,
     /// Default LLM model used. Step-level `model_name` overrides this.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_name: Option<String>,
+    model_name: Option<String>,
     /// Optional custom agent metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<Value>,
+    extra: Option<Value>,
 }
 
 impl AtifAgent {
@@ -116,38 +116,38 @@ pub enum StepSource {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Step {
     /// Ordinal index (starting from 1).
-    pub step_id: u64,
+    step_id: u64,
     /// ISO 8601 timestamp.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timestamp: Option<String>,
+    timestamp: Option<String>,
     /// Originator of this step.
-    pub source: StepSource,
+    source: StepSource,
     /// LLM model used for this step (agent steps only).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_name: Option<String>,
+    model_name: Option<String>,
     /// Step content — text message or array.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    message: Option<String>,
     /// Agent internal reasoning content.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_content: Option<String>,
+    reasoning_content: Option<String>,
     /// Tool/function invocations (agent steps only).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<AtifToolCall>>,
+    tool_calls: Option<Vec<AtifToolCall>>,
     /// Environment feedback after actions.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub observation: Option<Observation>,
+    observation: Option<Observation>,
     /// LLM operational metrics (agent steps only).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metrics: Option<StepMetrics>,
+    metrics: Option<StepMetrics>,
     /// Custom step-level metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<Value>,
+    extra: Option<Value>,
 }
 
 impl Step {
     /// Create a user step.
-    pub fn user(step_id: u64, message: impl Into<String>) -> Self {
+    fn user(step_id: u64, message: impl Into<String>) -> Self {
         Self {
             step_id,
             timestamp: Some(Utc::now().to_rfc3339()),
@@ -163,7 +163,7 @@ impl Step {
     }
 
     /// Create an agent step.
-    pub fn agent(step_id: u64, message: impl Into<String>) -> Self {
+    fn agent(step_id: u64, message: impl Into<String>) -> Self {
         Self {
             step_id,
             timestamp: Some(Utc::now().to_rfc3339()),
@@ -179,7 +179,7 @@ impl Step {
     }
 
     /// Create a system step.
-    pub fn system(step_id: u64, message: impl Into<String>) -> Self {
+    fn system(step_id: u64, message: impl Into<String>) -> Self {
         Self {
             step_id,
             timestamp: Some(Utc::now().to_rfc3339()),
@@ -199,28 +199,28 @@ impl Step {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtifToolCall {
     /// Unique identifier for the tool call.
-    pub tool_call_id: String,
+    tool_call_id: String,
     /// Function/tool name.
-    pub function_name: String,
+    function_name: String,
     /// Arguments passed to the tool.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Value>,
+    arguments: Option<Value>,
 }
 
 /// Environment feedback container.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Observation {
     /// Results from tool calls or system operations.
-    pub results: Vec<ObservationResult>,
+    results: Vec<ObservationResult>,
 }
 
 /// Individual observation result tied to a tool call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservationResult {
     /// Identifier of the originating tool call.
-    pub source_call_id: String,
+    source_call_id: String,
     /// Content/output of the observation.
-    pub content: String,
+    content: String,
 }
 
 /// Per-step LLM operational metrics.
@@ -228,33 +228,33 @@ pub struct ObservationResult {
 pub struct StepMetrics {
     /// Total input tokens for this step (cached + non-cached).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_tokens: Option<u64>,
+    prompt_tokens: Option<u64>,
     /// Completion tokens generated.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub completion_tokens: Option<u64>,
+    completion_tokens: Option<u64>,
     /// Subset of prompt_tokens that were cache hits.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cached_tokens: Option<u64>,
+    cached_tokens: Option<u64>,
     /// Estimated cost in USD for this step.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cost_usd: Option<f64>,
+    cost_usd: Option<f64>,
     /// Log probabilities for completion tokens.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logprobs: Option<Vec<f64>>,
+    logprobs: Option<Vec<f64>>,
     /// Completion token IDs for RL training.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub completion_token_ids: Option<Vec<u64>>,
+    completion_token_ids: Option<Vec<u64>>,
     /// Prompt token IDs.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_token_ids: Option<Vec<u64>>,
+    prompt_token_ids: Option<Vec<u64>>,
     /// Custom metrics.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<Value>,
+    extra: Option<Value>,
 }
 
 impl StepMetrics {
     /// Create metrics from vtcode Usage.
-    pub fn from_usage(usage: &crate::Usage) -> Self {
+    fn from_usage(usage: &crate::Usage) -> Self {
         Self {
             prompt_tokens: Some(usage.input_tokens),
             completion_tokens: Some(usage.output_tokens),
@@ -292,13 +292,13 @@ pub struct FinalMetrics {
     pub total_cached_tokens: Option<u64>,
     /// Total estimated cost in USD.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_cost_usd: Option<f64>,
+    total_cost_usd: Option<f64>,
     /// Total number of steps.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_steps: Option<u64>,
+    total_steps: Option<u64>,
     /// Custom aggregate metrics.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<Value>,
+    extra: Option<Value>,
 }
 
 // ============================================================================
@@ -362,7 +362,7 @@ impl AtifTrajectoryBuilder {
     }
 
     /// Process a thread event with an explicit timestamp (for deterministic tests).
-    pub fn process_event_at(&mut self, event: &ThreadEvent, ts: DateTime<Utc>) {
+    fn process_event_at(&mut self, event: &ThreadEvent, ts: DateTime<Utc>) {
         let ts_str = ts.to_rfc3339();
         match event {
             ThreadEvent::ThreadStarted(e) => {
@@ -612,7 +612,7 @@ impl AtifTrajectoryBuilder {
     }
 
     /// Returns the number of steps collected so far.
-    pub fn step_count(&self) -> usize {
+    fn step_count(&self) -> usize {
         self.steps.len()
     }
 }

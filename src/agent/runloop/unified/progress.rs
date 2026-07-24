@@ -184,13 +184,13 @@ impl ProgressReporter {
 #[derive(Debug, Clone)]
 pub(crate) struct ProgressInfo {
     #[cfg(test)]
-    pub current: u64,
+    current: u64,
     pub total: u64,
     pub percentage: u8,
     pub message: String,
     pub eta: Option<Duration>,
     #[cfg(test)]
-    pub is_complete: bool,
+    is_complete: bool,
 }
 
 impl ProgressInfo {

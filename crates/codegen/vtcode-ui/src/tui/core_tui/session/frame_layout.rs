@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct SessionFrameMetrics {
-    pub(crate) header_lines: Vec<Line<'static>>,
+    header_lines: Vec<Line<'static>>,
     pub(crate) header_height: u16,
     pub(crate) input_core_height: u16,
 }
@@ -10,8 +10,8 @@ pub(crate) struct SessionFrameMetrics {
 #[derive(Clone)]
 pub(crate) struct SessionFrameLayout {
     pub(crate) viewport: Rect,
-    pub(crate) header_lines: Vec<Line<'static>>,
-    pub(crate) header_area: Rect,
+    header_lines: Vec<Line<'static>>,
+    header_area: Rect,
     pub(crate) main_area: Rect,
     pub(crate) input_area: Rect,
 }

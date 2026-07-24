@@ -8,11 +8,11 @@ use anstyle::{AnsiColor, Color, Effects, Style};
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPalette {
     pub success: Color, // Green
-    pub error: Color,   // Red
+    error: Color,   // Red
     pub warning: Color, // Red
     pub info: Color,    // Cyan
     pub accent: Color,  // Magenta
-    pub primary: Color, // Cyan
+    primary: Color, // Cyan
     pub muted: Color,   // Gray/Dim
 }
 
@@ -109,11 +109,11 @@ pub fn dimmed_color(color: AnsiColor) -> Style {
 #[derive(Debug, Clone, Copy)]
 pub struct DiffColorPalette {
     pub added_fg: Color,
-    pub added_bg: Color,
+    added_bg: Color,
     pub removed_fg: Color,
-    pub removed_bg: Color,
+    removed_bg: Color,
     pub header_fg: Color,
-    pub header_bg: Color,
+    header_bg: Color,
 }
 
 impl Default for DiffColorPalette {

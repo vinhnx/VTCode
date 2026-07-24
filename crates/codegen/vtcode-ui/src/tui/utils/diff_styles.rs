@@ -64,7 +64,7 @@ pub struct DiffRenderStyleContext {
 }
 
 /// Resolve the current terminal and syntax-theme styling into one context.
-pub fn current_diff_render_style_context() -> DiffRenderStyleContext {
+pub(crate) fn current_diff_render_style_context() -> DiffRenderStyleContext {
     let theme = DiffTheme::detect();
     let level = DiffColorLevel::detect();
     diff_render_style_context_for(theme, level, scope_backgrounds_for_level(level))
@@ -127,7 +127,7 @@ fn color_from_rgb_for_level(rgb: (u8, u8, u8), theme: DiffTheme, level: DiffColo
     }
 }
 
-pub fn content_background(kind: DiffLineType, style_context: DiffRenderStyleContext) -> Option<RatatuiColor> {
+fn content_background(kind: DiffLineType, style_context: DiffRenderStyleContext) -> Option<RatatuiColor> {
     match kind {
         DiffLineType::Insert => style_context.backgrounds.add,
         DiffLineType::Delete => style_context.backgrounds.del,
@@ -136,7 +136,7 @@ pub fn content_background(kind: DiffLineType, style_context: DiffRenderStyleCont
 }
 
 /// Full-width line background style. Context lines use terminal default.
-pub fn style_line_bg(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
+pub(crate) fn style_line_bg(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
     match kind {
         DiffLineType::Insert => style_context
             .backgrounds
@@ -190,17 +190,17 @@ fn indicator_style(kind: DiffLineType, theme: DiffTheme) -> RatatuiStyle {
 // ── Public style API ────────────────────────────────────────────────────────
 
 /// Gutter (line number) style.
-pub fn style_gutter(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
+pub(crate) fn style_gutter(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
     indicator_style(kind, style_context.theme)
 }
 
 /// Sign character (`+`/`-`) style.
-pub fn style_sign(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
+pub(crate) fn style_sign(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
     indicator_style(kind, style_context.theme)
 }
 
 /// Content style for plain (non-syntax-highlighted) diff lines.
-pub fn style_content(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
+pub(crate) fn style_content(kind: DiffLineType, style_context: DiffRenderStyleContext) -> RatatuiStyle {
     let bg = content_background(kind, style_context);
     let fg = indicator_fg(kind, style_context.theme);
     match (kind, style_context.theme, style_context.level, bg) {

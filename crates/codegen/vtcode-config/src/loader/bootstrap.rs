@@ -5,11 +5,11 @@ use anyhow::{Context, Result};
 
 use crate::defaults::ConfigDefaultsProvider;
 
-pub const DEFAULT_GITIGNORE_FILE_NAME: &str = ".vtcodegitignore";
+const DEFAULT_GITIGNORE_FILE_NAME: &str = ".vtcodegitignore";
 
 /// Determine where configuration and gitignore files should be created when
 /// bootstrapping a workspace.
-pub fn determine_bootstrap_targets(
+pub(crate) fn determine_bootstrap_targets(
     workspace: &Path,
     use_home_dir: bool,
     config_file_name: &str,
@@ -27,7 +27,7 @@ pub fn determine_bootstrap_targets(
 }
 
 /// Returns the preferred gitignore path for a given configuration file.
-pub fn gitignore_path_for(config_path: &Path) -> PathBuf {
+fn gitignore_path_for(config_path: &Path) -> PathBuf {
     config_path
         .parent()
         .map(|parent| parent.join(DEFAULT_GITIGNORE_FILE_NAME))
@@ -36,7 +36,7 @@ pub fn gitignore_path_for(config_path: &Path) -> PathBuf {
 
 /// Ensures the parent directory for the provided path exists, creating it if
 /// necessary.
-pub fn ensure_parent_dir(path: &Path) -> Result<()> {
+pub(crate) fn ensure_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         if parent.exists() {
             return Ok(());
@@ -50,7 +50,7 @@ pub fn ensure_parent_dir(path: &Path) -> Result<()> {
 
 /// Selects the home directory configuration path from the defaults provider or
 /// falls back to the system home directory.
-pub fn select_home_config_path(
+fn select_home_config_path(
     defaults_provider: &dyn ConfigDefaultsProvider,
     config_file_name: &str,
 ) -> Option<PathBuf> {
@@ -63,7 +63,7 @@ pub fn select_home_config_path(
 
 /// Attempts to resolve the current user's home directory using common
 /// environment variables and the `dirs` crate fallback.
-pub fn default_home_dir() -> Option<PathBuf> {
+fn default_home_dir() -> Option<PathBuf> {
     if let Ok(home) = std::env::var("HOME") {
         return Some(PathBuf::from(home));
     }

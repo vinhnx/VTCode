@@ -7,7 +7,7 @@ pub struct HeadTailPreview<'a, T> {
     pub head: &'a [T],
     pub tail: &'a [T],
     pub hidden_count: usize,
-    pub total: usize,
+    total: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -99,7 +99,7 @@ pub fn format_hidden_lines_summary(hidden: usize) -> String {
     }
 }
 
-pub fn split_head_tail_preview<'a, T>(items: &'a [T], head: usize, tail: usize) -> HeadTailPreview<'a, T> {
+fn split_head_tail_preview<'a, T>(items: &'a [T], head: usize, tail: usize) -> HeadTailPreview<'a, T> {
     let total = items.len();
     if total <= head.saturating_add(tail) {
         return HeadTailPreview {
@@ -195,7 +195,7 @@ pub fn excerpt_text_lines_with_limit<'a>(text: &'a str, limit: usize, preferred_
     }
 }
 
-pub fn format_hidden_bytes_summary(hidden: usize) -> String {
+fn format_hidden_bytes_summary(hidden: usize) -> String {
     format!("… [{hidden} bytes omitted] …")
 }
 

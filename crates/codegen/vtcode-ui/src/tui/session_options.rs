@@ -63,7 +63,7 @@ impl Default for SessionOptions {
 
 impl SessionOptions {
     /// Build options from a host adapter's defaults.
-    pub fn from_host(host: &impl crate::tui::host::HostAdapter) -> Self {
+    fn from_host(host: &impl crate::tui::host::HostAdapter) -> Self {
         let defaults = host.session_defaults();
         Self {
             surface_preference: defaults.surface_preference,

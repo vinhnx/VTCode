@@ -12,7 +12,7 @@ pub(crate) struct ThinkingSpinner {
     spinner_index: usize,
     last_update: Instant,
     #[expect(dead_code)]
-    pub(crate) label: String,
+    label: String,
 }
 
 impl ThinkingSpinner {

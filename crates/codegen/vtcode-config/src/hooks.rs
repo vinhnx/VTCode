@@ -151,7 +151,7 @@ impl HooksConfig {
 }
 
 impl LifecycleHooksConfig {
-    pub fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         validate_groups(&self.session_start, "session_start")?;
         validate_groups(&self.session_end, "session_end")?;
         validate_groups(&self.subagent_start, "subagent_start")?;

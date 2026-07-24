@@ -19,14 +19,14 @@ use super::pull::{OllamaPullEvent, OllamaPullProgressReporter};
 use super::url::base_url_to_host_root;
 
 /// Client for interacting with a local or remote Ollama instance.
-pub struct OllamaClient {
+pub(crate) struct OllamaClient {
     client: reqwest::Client,
     host_root: String,
 }
 
 impl OllamaClient {
     /// Create a client from a base URL and verify the server is reachable.
-    pub async fn try_from_base_url(base_url: &str) -> io::Result<Self> {
+    pub(crate) async fn try_from_base_url(base_url: &str) -> io::Result<Self> {
         let host_root = base_url_to_host_root(base_url);
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
@@ -55,7 +55,7 @@ impl OllamaClient {
     }
 
     /// Fetch the list of model names available on the server.
-    pub async fn fetch_models(&self) -> io::Result<Vec<String>> {
+    pub(crate) async fn fetch_models(&self) -> io::Result<Vec<String>> {
         let tags_url = format!("{}/api/tags", self.host_root.trim_end_matches('/'));
         let resp = self.client.get(tags_url).send().await.map_err(io::Error::other)?;
 
@@ -109,7 +109,7 @@ impl OllamaClient {
     }
 
     /// Start a model pull and return a stream of events.
-    pub async fn pull_model_stream(&self, model: &str) -> io::Result<BoxStream<'static, OllamaPullEvent>> {
+    async fn pull_model_stream(&self, model: &str) -> io::Result<BoxStream<'static, OllamaPullEvent>> {
         let url = format!("{}/api/pull", self.host_root.trim_end_matches('/'));
         let resp = self
             .client
@@ -161,7 +161,7 @@ impl OllamaClient {
 
     /// High-level helper to pull a model and drive a progress reporter.
     /// Adapted from OpenAI Codex's codex-ollama/src/client.rs
-    pub async fn pull_with_reporter(
+    pub(crate) async fn pull_with_reporter(
         &self,
         model: &str,
         reporter: &mut (dyn OllamaPullProgressReporter + Send),

@@ -11,44 +11,44 @@ use thiserror::Error;
 // ============================================================================
 
 /// Parse error - Invalid JSON was received
-pub const JSON_PARSE_ERROR: i32 = -32700;
+const JSON_PARSE_ERROR: i32 = -32700;
 
 /// Invalid Request - The JSON sent is not a valid Request object
-pub const INVALID_REQUEST_ERROR: i32 = -32600;
+const INVALID_REQUEST_ERROR: i32 = -32600;
 
 /// Method not found - The method does not exist / is not available
-pub const METHOD_NOT_FOUND_ERROR: i32 = -32601;
+const METHOD_NOT_FOUND_ERROR: i32 = -32601;
 
 /// Invalid params - Invalid method parameters
-pub const INVALID_PARAMS_ERROR: i32 = -32602;
+const INVALID_PARAMS_ERROR: i32 = -32602;
 
 /// Internal error - Internal JSON-RPC error
-pub const INTERNAL_ERROR: i32 = -32603;
+const INTERNAL_ERROR: i32 = -32603;
 
 // ============================================================================
 // A2A-Specific Error Codes
 // ============================================================================
 
 /// Task not found - The specified task does not exist
-pub const TASK_NOT_FOUND_ERROR: i32 = -32001;
+const TASK_NOT_FOUND_ERROR: i32 = -32001;
 
 /// Task not cancelable - The task cannot be canceled in its current state
-pub const TASK_NOT_CANCELABLE_ERROR: i32 = -32002;
+const TASK_NOT_CANCELABLE_ERROR: i32 = -32002;
 
 /// Push notifications not supported - The agent does not support push notifications
-pub const PUSH_NOTIFICATION_NOT_SUPPORTED_ERROR: i32 = -32003;
+const PUSH_NOTIFICATION_NOT_SUPPORTED_ERROR: i32 = -32003;
 
 /// Unsupported operation - The requested operation is not supported
-pub const UNSUPPORTED_OPERATION_ERROR: i32 = -32004;
+const UNSUPPORTED_OPERATION_ERROR: i32 = -32004;
 
 /// Content type not supported - The content type is not supported
-pub const CONTENT_TYPE_NOT_SUPPORTED_ERROR: i32 = -32005;
+const CONTENT_TYPE_NOT_SUPPORTED_ERROR: i32 = -32005;
 
 /// Invalid agent response - The agent returned an invalid response
-pub const INVALID_AGENT_RESPONSE_ERROR: i32 = -32006;
+const INVALID_AGENT_RESPONSE_ERROR: i32 = -32006;
 
 /// Authenticated extended card not configured
-pub const AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR: i32 = -32007;
+const AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED_ERROR: i32 = -32007;
 
 // ============================================================================
 // Error Types
@@ -177,7 +177,7 @@ pub enum A2aError {
 
 impl A2aError {
     /// Get the error code for this error
-    pub fn code(&self) -> A2aErrorCode {
+    pub(crate) fn code(&self) -> A2aErrorCode {
         match self {
             A2aError::RpcError { code, .. } => *code,
             A2aError::TaskNotFound(_) => A2aErrorCode::TaskNotFound,
@@ -191,7 +191,7 @@ impl A2aError {
     }
 
     /// Create a new RPC error
-    pub fn rpc(code: A2aErrorCode, message: impl Into<String>) -> Self {
+    pub(crate) fn rpc(code: A2aErrorCode, message: impl Into<String>) -> Self {
         A2aError::RpcError { code, message: message.into(), data: None }
     }
 

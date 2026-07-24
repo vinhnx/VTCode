@@ -32,7 +32,7 @@ pub struct StringId(u32);
 impl StringId {
     /// Create a new StringId from a raw u32 value.
     #[inline]
-    pub const fn new(id: u32) -> Self {
+    const fn new(id: u32) -> Self {
         Self(id)
     }
 
@@ -69,7 +69,7 @@ impl StringInterner {
     }
 
     /// Intern a byte string, returning its StringId.
-    pub fn intern_bytes(&mut self, s: &[u8]) -> StringId {
+    fn intern_bytes(&mut self, s: &[u8]) -> StringId {
         let hash = Self::hash_bytes(s);
 
         if let Some(ids) = self.lookup.get(&hash) {
@@ -96,7 +96,7 @@ impl StringInterner {
     }
 
     /// Get the StringId for a byte string without interning it.
-    pub fn get_bytes_id(&self, s: &[u8]) -> Option<StringId> {
+    fn get_bytes_id(&self, s: &[u8]) -> Option<StringId> {
         let hash = Self::hash_bytes(s);
         if let Some(ids) = self.lookup.get(&hash) {
             for &id in ids {
@@ -110,12 +110,12 @@ impl StringInterner {
 
     /// Get the StringId for a UTF-8 string without interning it.
     #[inline]
-    pub fn get_id(&self, s: &str) -> Option<StringId> {
+    fn get_id(&self, s: &str) -> Option<StringId> {
         self.get_bytes_id(s.as_bytes())
     }
 
     /// Get the raw bytes for a StringId.
-    pub fn get_bytes(&self, id: StringId) -> Option<&[u8]> {
+    fn get_bytes(&self, id: StringId) -> Option<&[u8]> {
         let (start, len) = self.offsets[id.0 as usize];
         self.arena.get(start as usize..(start as usize + len as usize))
     }
@@ -127,7 +127,7 @@ impl StringInterner {
 
     /// Number of interned strings.
     #[inline]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.offsets.len()
     }
 

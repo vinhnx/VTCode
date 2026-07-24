@@ -28,7 +28,7 @@ pub(crate) fn render_left_border_panel(renderer: &mut AnsiRenderer, lines: Vec<P
 }
 
 #[cfg(test)]
-pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
         return vec![text.to_string()];
     }

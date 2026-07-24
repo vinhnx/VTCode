@@ -14,24 +14,24 @@ use crate::provider::{LLMError, LLMRequest, LLMStreamEvent};
 use vtcode_config::TimeoutsConfig;
 
 /// Default timeout configurations
-pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
-pub const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(300);
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+const DEFAULT_STREAM_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
 pub struct BaseProviderConfig {
-    pub api_key: String,
-    pub base_url: String,
-    pub model: String,
-    pub http_client: HttpClient,
-    pub prompt_cache_enabled: bool,
-    pub request_timeout: Duration,
-    pub stream_timeout: Duration,
+    api_key: String,
+    base_url: String,
+    model: String,
+    http_client: HttpClient,
+    prompt_cache_enabled: bool,
+    request_timeout: Duration,
+    stream_timeout: Duration,
 }
 
 impl BaseProviderConfig {
     /// Create base configuration from common parameters
-    pub fn from_options(
+    fn from_options(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
@@ -88,7 +88,7 @@ impl BaseProviderConfig {
 
 /// Trait for providers that support standard OpenAI-compatible APIs
 #[async_trait]
-pub trait OpenAICompatibleProvider: Send + Sync {
+trait OpenAICompatibleProvider: Send + Sync {
     fn provider_name(&self) -> &'static str;
     fn supports_prompt_caching(&self) -> bool;
 
@@ -118,17 +118,17 @@ pub trait OpenAICompatibleProvider: Send + Sync {
 }
 
 /// Shared error handling utilities
-pub struct ErrorHandler {
+struct ErrorHandler {
     _provider_name: &'static str,
 }
 
 impl ErrorHandler {
-    pub fn new(provider_name: &'static str) -> Self {
+    fn new(provider_name: &'static str) -> Self {
         Self { _provider_name: provider_name }
     }
 
     /// Handle HTTP errors consistently across providers
-    pub fn handle_http_error(&self, status: reqwest::StatusCode, error_text: &str) -> LLMError {
+    fn handle_http_error(&self, status: reqwest::StatusCode, error_text: &str) -> LLMError {
         use reqwest::StatusCode;
 
         let error_message = match status {
@@ -337,7 +337,7 @@ impl RequestProcessor {
 }
 
 /// Common model resolution utilities
-pub struct ModelResolver {
+struct ModelResolver {
     #[expect(dead_code)]
     provider_name: &'static str,
     default_model: &'static str,
@@ -345,7 +345,7 @@ pub struct ModelResolver {
 }
 
 impl ModelResolver {
-    pub fn new(
+    fn new(
         provider_name: &'static str,
         default_model: &'static str,
         supported_models: &'static [&'static str],
@@ -354,12 +354,12 @@ impl ModelResolver {
     }
 
     /// Resolve model with fallback to default
-    pub fn resolve_model(&self, model: Option<String>) -> String {
+    fn resolve_model(&self, model: Option<String>) -> String {
         model.unwrap_or_else(|| self.default_model.to_string())
     }
 
     /// Validate model is supported
-    pub fn validate_model(&self, model: &str) -> Result<()> {
+    fn validate_model(&self, model: &str) -> Result<()> {
         if self.supported_models.is_empty() {
             // If no specific supported models listed, accept any non-empty model
             if model.is_empty() {

@@ -56,7 +56,7 @@ pub fn set_debug_mode(enabled: bool) {
 }
 
 /// Get whether the application is in debug mode
-pub fn is_debug_mode() -> bool {
+pub(crate) fn is_debug_mode() -> bool {
     DEBUG_MODE.load(Ordering::SeqCst)
 }
 
@@ -115,7 +115,7 @@ pub fn set_show_diagnostics(enabled: bool) {
 }
 
 /// Get whether diagnostics should be displayed in the TUI
-pub fn show_diagnostics() -> bool {
+pub(crate) fn show_diagnostics() -> bool {
     SHOW_DIAGNOSTICS.load(Ordering::SeqCst)
 }
 
@@ -210,18 +210,18 @@ pub fn init_panic_hook() {
 }
 
 /// Mark that TUI has been initialized so panic hook knows to restore terminal
-pub fn mark_tui_initialized() {
+fn mark_tui_initialized() {
     TUI_INITIALIZED.store(true, Ordering::SeqCst);
     RESTORE_DONE.store(false, Ordering::SeqCst);
 }
 
 /// Mark that TUI has been deinitialized to prevent further restoration attempts
-pub fn mark_tui_deinitialized() {
+fn mark_tui_deinitialized() {
     TUI_INITIALIZED.store(false, Ordering::SeqCst);
 }
 
 /// Mark that keyboard enhancement flags were pushed so `restore_tui` knows to pop them.
-pub fn mark_keyboard_enhancements_pushed(pushed: bool) {
+pub(crate) fn mark_keyboard_enhancements_pushed(pushed: bool) {
     KEYBOARD_ENHANCEMENTS_PUSHED.store(pushed, Ordering::SeqCst);
 }
 
@@ -318,7 +318,7 @@ impl TuiPanicGuard {
     /// Create a new guard and mark TUI as initialized
     ///
     /// This should be called when a TUI session begins.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         mark_tui_initialized();
         Self
     }

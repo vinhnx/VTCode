@@ -6,20 +6,20 @@ const AST_GREP_RELEASE_API: &str = "https://api.github.com/repos/ast-grep/ast-gr
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ReleaseInfo {
-    pub(super) tag_name: String,
-    pub(super) assets: Vec<ReleaseAsset>,
+    tag_name: String,
+    assets: Vec<ReleaseAsset>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct ReleaseAsset {
     pub(super) name: String,
-    pub(super) browser_download_url: String,
+    browser_download_url: String,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct PlatformAssetSpec {
-    pub(super) candidate_triples: &'static [&'static str],
-    pub(super) archive_exts: &'static [&'static str],
+    candidate_triples: &'static [&'static str],
+    archive_exts: &'static [&'static str],
 }
 
 #[derive(Debug, Clone)]

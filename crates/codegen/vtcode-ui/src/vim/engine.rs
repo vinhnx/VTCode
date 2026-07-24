@@ -36,8 +36,8 @@ pub trait Editor {
 /// Result of routing a single key through the Vim engine.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HandleKeyOutcome {
-    pub handled: bool,
-    pub clear_selection: bool,
+    pub(crate) handled: bool,
+    pub(crate) clear_selection: bool,
 }
 
 /// Apply a single key event to the Vim state and editor surface.

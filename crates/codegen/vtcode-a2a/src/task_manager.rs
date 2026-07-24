@@ -43,7 +43,7 @@ impl TaskManager {
     }
 
     /// Create a new task manager with custom capacity
-    pub fn with_capacity(max_tasks: usize) -> Self {
+    fn with_capacity(max_tasks: usize) -> Self {
         Self {
             state: Arc::new(RwLock::new(TaskManagerState {
                 tasks: HashMap::with_capacity(max_tasks.min(100)),
@@ -55,7 +55,7 @@ impl TaskManager {
     }
 
     /// Create a new task
-    pub async fn create_task(&self, context_id: Option<String>) -> Task {
+    pub(crate) async fn create_task(&self, context_id: Option<String>) -> Task {
         let mut task = Task::new();
         if let Some(ref ctx_id) = context_id {
             task = task.with_context_id(ctx_id);
@@ -106,20 +106,20 @@ impl TaskManager {
     }
 
     /// Get a task by ID
-    pub async fn get_task(&self, task_id: &str) -> Option<Task> {
+    async fn get_task(&self, task_id: &str) -> Option<Task> {
         let state = self.state.read().await;
         state.tasks.get(task_id).cloned()
     }
 
     /// Get a task by ID, returning an error if not found
-    pub async fn get_task_or_error(&self, task_id: &str) -> A2aResult<Task> {
+    pub(crate) async fn get_task_or_error(&self, task_id: &str) -> A2aResult<Task> {
         self.get_task(task_id)
             .await
             .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))
     }
 
     /// Update task status
-    pub async fn update_status(&self, task_id: &str, state: TaskState, message: Option<Message>) -> A2aResult<Task> {
+    pub(crate) async fn update_status(&self, task_id: &str, state: TaskState, message: Option<Message>) -> A2aResult<Task> {
         let mut manager_state = self.state.write().await;
         let task = manager_state
             .tasks
@@ -135,7 +135,7 @@ impl TaskManager {
     }
 
     /// Add an artifact to a task
-    pub async fn add_artifact(&self, task_id: &str, artifact: Artifact) -> A2aResult<Task> {
+    async fn add_artifact(&self, task_id: &str, artifact: Artifact) -> A2aResult<Task> {
         let mut state = self.state.write().await;
         let task = state
             .tasks
@@ -147,7 +147,7 @@ impl TaskManager {
     }
 
     /// Add a message to task history
-    pub async fn add_message(&self, task_id: &str, message: Message) -> A2aResult<Task> {
+    pub(crate) async fn add_message(&self, task_id: &str, message: Message) -> A2aResult<Task> {
         let mut state = self.state.write().await;
         let task = state
             .tasks
@@ -159,7 +159,7 @@ impl TaskManager {
     }
 
     /// Cancel a task
-    pub async fn cancel_task(&self, task_id: &str) -> A2aResult<Task> {
+    pub(crate) async fn cancel_task(&self, task_id: &str) -> A2aResult<Task> {
         let mut state = self.state.write().await;
         let task = state
             .tasks
@@ -215,7 +215,7 @@ impl TaskManager {
     }
 
     /// List tasks with optional filtering
-    pub async fn list_tasks(&self, params: ListTasksParams) -> ListTasksResult {
+    pub(crate) async fn list_tasks(&self, params: ListTasksParams) -> ListTasksResult {
         let updated_after = params
             .last_updated_after
             .as_deref()
@@ -292,7 +292,7 @@ impl TaskManager {
     }
 
     /// Get tasks by context ID
-    pub async fn get_tasks_by_context(&self, context_id: &str) -> Vec<Task> {
+    async fn get_tasks_by_context(&self, context_id: &str) -> Vec<Task> {
         let state = self.state.read().await;
         state
             .contexts
@@ -302,7 +302,7 @@ impl TaskManager {
     }
 
     /// Get the number of tasks
-    pub async fn task_count(&self) -> usize {
+    async fn task_count(&self) -> usize {
         self.state.read().await.tasks.len()
     }
 
@@ -315,7 +315,7 @@ impl TaskManager {
     }
 
     /// Set webhook configuration for a task
-    pub async fn set_webhook_config(&self, config: TaskPushNotificationConfig) -> A2aResult<()> {
+    pub(crate) async fn set_webhook_config(&self, config: TaskPushNotificationConfig) -> A2aResult<()> {
         if !config.url.starts_with("https://") && !config.url.starts_with("http://localhost") {
             return Err(A2aError::UnsupportedOperation("Webhook URL must use HTTPS or be localhost".to_string()));
         }
@@ -330,7 +330,7 @@ impl TaskManager {
     }
 
     /// Get webhook configuration for a task
-    pub async fn get_webhook_config(&self, task_id: &str) -> Option<TaskPushNotificationConfig> {
+    pub(crate) async fn get_webhook_config(&self, task_id: &str) -> Option<TaskPushNotificationConfig> {
         let state = self.state.read().await;
         state.webhook_configs.get(task_id).cloned()
     }

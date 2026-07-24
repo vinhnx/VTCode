@@ -33,7 +33,7 @@ pub(crate) enum SuppressReason {
 }
 
 impl SuppressReason {
-    pub(crate) fn suppress_state(self) -> u8 {
+    fn suppress_state(self) -> u8 {
         match self {
             SuppressReason::Size | SuppressReason::Schema => SUPPRESS_STICKY,
             SuppressReason::CreditBlock | SuppressReason::Auth => SUPPRESS_UNTIL_SUCCESS,

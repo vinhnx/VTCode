@@ -191,7 +191,7 @@ pub struct SimpleIndexerConfig {
 
 impl SimpleIndexerConfig {
     /// Builds a configuration using VT Code's legacy layout as defaults.
-    pub fn new(workspace_root: PathBuf) -> Self {
+    fn new(workspace_root: PathBuf) -> Self {
         let index_dir = workspace_root.join(".vtcode").join("index");
         let vtcode_dir = workspace_root.join(".vtcode");
         let external_dir = vtcode_dir.join("external");
@@ -239,7 +239,7 @@ impl SimpleIndexerConfig {
     }
 
     /// Toggles whether hidden directories (prefix `.`) are ignored.
-    pub fn ignore_hidden(mut self, ignore_hidden: bool) -> Self {
+    fn ignore_hidden(mut self, ignore_hidden: bool) -> Self {
         self.ignore_hidden = ignore_hidden;
         self
     }
@@ -250,7 +250,7 @@ impl SimpleIndexerConfig {
     }
 
     /// Index directory accessor.
-    pub fn index_dir(&self) -> &Path {
+    fn index_dir(&self) -> &Path {
         &self.index_dir
     }
 
@@ -265,26 +265,26 @@ impl SimpleIndexerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileIndex {
     /// File path.
-    pub path: String,
+    path: String,
     /// File content hash for change detection.
-    pub hash: String,
+    hash: String,
     /// Last modified timestamp.
-    pub modified: u64,
+    modified: u64,
     /// File size.
-    pub size: u64,
+    size: u64,
     /// Language/extension.
-    pub language: String,
+    language: String,
     /// Simple tags.
-    pub tags: Vec<String>,
+    tags: Vec<String>,
 }
 
 /// Simple search result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
-    pub file_path: String,
-    pub line_number: usize,
-    pub line_content: String,
-    pub matches: Vec<String>,
+    file_path: String,
+    line_number: usize,
+    line_content: String,
+    matches: Vec<String>,
 }
 
 /// Simple file indexer.
@@ -307,7 +307,7 @@ impl SimpleIndexer {
     }
 
     /// Create a simple indexer with the provided configuration.
-    pub fn with_config(config: SimpleIndexerConfig) -> Self {
+    fn with_config(config: SimpleIndexerConfig) -> Self {
         Self::with_components(config, Arc::new(MarkdownIndexStorage), Arc::new(ConfigTraversalFilter))
     }
 
@@ -318,7 +318,7 @@ impl SimpleIndexer {
     }
 
     /// Create an indexer with explicit storage and traversal filter implementations.
-    pub fn with_components(
+    fn with_components(
         config: SimpleIndexerConfig,
         storage: Arc<dyn IndexStorage>,
         filter: Arc<dyn TraversalFilter>,
@@ -333,12 +333,12 @@ impl SimpleIndexer {
     }
 
     /// Replace the storage backend used to persist index entries.
-    pub fn with_storage(self, storage: Arc<dyn IndexStorage>) -> Self {
+    fn with_storage(self, storage: Arc<dyn IndexStorage>) -> Self {
         Self { storage, ..self }
     }
 
     /// Replace the traversal filter used to decide which files and directories are indexed.
-    pub fn with_filter(self, filter: Arc<dyn TraversalFilter>) -> Self {
+    fn with_filter(self, filter: Arc<dyn TraversalFilter>) -> Self {
         Self { filter, ..self }
     }
 
@@ -358,7 +358,7 @@ impl SimpleIndexer {
     }
 
     /// Index a single file.
-    pub fn index_file(&mut self, file_path: &Path) -> Result<()> {
+    fn index_file(&mut self, file_path: &Path) -> Result<()> {
         let cache_key = file_path.to_string_lossy().into_owned();
 
         if self.storage.prefers_snapshot_persistence() {
@@ -557,7 +557,7 @@ impl SimpleIndexer {
     }
 
     /// Find files by name pattern.
-    pub fn find_files(&self, pattern: &str) -> Result<Vec<String>> {
+    fn find_files(&self, pattern: &str) -> Result<Vec<String>> {
         let regex = Regex::new(pattern)?;
         let mut results = Vec::with_capacity(self.index_cache.len());
 
@@ -573,14 +573,14 @@ impl SimpleIndexer {
 
     /// Get all indexed files without pattern matching.
     /// This is more efficient than using find_files(".*").
-    pub fn all_files(&self) -> Vec<String> {
+    fn all_files(&self) -> Vec<String> {
         let mut files = self.index_cache.keys().cloned().collect::<Vec<_>>();
         files.sort_unstable();
         files
     }
 
     /// Get file content with line numbers.
-    pub fn get_file_content(
+    fn get_file_content(
         &self,
         file_path: &str,
         start_line: Option<usize>,

@@ -41,13 +41,13 @@ impl fmt::Display for IntentFulfillment {
 /// Tool execution record tied to message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecution {
-    pub tool_name: String,
-    pub args: Value,
-    pub result: EnhancedToolResult,
-    pub duration_ms: u64,
+    tool_name: String,
+    args: Value,
+    result: EnhancedToolResult,
+    duration_ms: u64,
 
     /// Did this tool help fulfill the intent?
-    pub contributed_to_intent: bool,
+    contributed_to_intent: bool,
 }
 
 /// Stated intent extracted from message
@@ -74,29 +74,29 @@ impl fmt::Display for ToolIntent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageToolCorrelation {
     /// Unique message identifier
-    pub message_id: String,
+    message_id: String,
 
     /// Extracted intent from message
-    pub stated_intent: ToolIntent,
+    stated_intent: ToolIntent,
 
     /// Original message text
-    pub message_text: String,
+    message_text: String,
 
     /// Tools executed to fulfill this message
-    pub tool_executions: Vec<ToolExecution>,
+    tool_executions: Vec<ToolExecution>,
 
     /// Overall success of fulfilling stated intent
-    pub intent_fulfillment: IntentFulfillment,
+    intent_fulfillment: IntentFulfillment,
 
     /// Confidence in fulfillment assessment (0.0-1.0)
-    pub confidence: f32,
+    confidence: f32,
 
     /// Any issues encountered
-    pub issues: Vec<String>,
+    issues: Vec<String>,
 }
 
 impl MessageToolCorrelation {
-    pub fn new(message_id: String, message_text: String, intent: ToolIntent) -> Self {
+    fn new(message_id: String, message_text: String, intent: ToolIntent) -> Self {
         Self {
             message_id,
             stated_intent: intent,
@@ -109,7 +109,7 @@ impl MessageToolCorrelation {
     }
 
     /// Add a tool execution
-    pub fn add_execution(&mut self, execution: ToolExecution) {
+    fn add_execution(&mut self, execution: ToolExecution) {
         self.tool_executions.push(execution);
         self.reassess_fulfillment();
     }
@@ -169,7 +169,7 @@ pub struct ToolIntentExtractor;
 
 impl ToolIntentExtractor {
     /// Extract intent from message text
-    pub fn extract(text: &str) -> Option<ToolIntent> {
+    fn extract(text: &str) -> Option<ToolIntent> {
         let text_lower = text.to_lowercase();
 
         // Search patterns
@@ -304,12 +304,12 @@ pub struct MessageCorrelationTracker {
 }
 
 impl MessageCorrelationTracker {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { correlations: vec![] }
     }
 
     /// Add a correlation
-    pub fn add(&mut self, correlation: MessageToolCorrelation) {
+    fn add(&mut self, correlation: MessageToolCorrelation) {
         self.correlations.push(correlation);
     }
 
@@ -327,7 +327,7 @@ impl MessageCorrelationTracker {
     }
 
     /// Get fulfillment statistics
-    pub fn stats(&self) -> CorrelationStats {
+    fn stats(&self) -> CorrelationStats {
         let total = self.correlations.len();
         let fulfilled = self
             .correlations
@@ -370,12 +370,12 @@ impl Default for MessageCorrelationTracker {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorrelationStats {
-    pub total: usize,
-    pub fulfilled: usize,
-    pub partially_fulfilled: usize,
-    pub attempted: usize,
-    pub failed: usize,
-    pub avg_confidence: f32,
+    total: usize,
+    fulfilled: usize,
+    partially_fulfilled: usize,
+    attempted: usize,
+    failed: usize,
+    avg_confidence: f32,
 }
 
 #[cfg(test)]

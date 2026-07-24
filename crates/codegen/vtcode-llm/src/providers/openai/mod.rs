@@ -27,15 +27,15 @@
 
 pub(crate) mod backend_setup;
 mod custom_provider_auth;
-pub mod errors;
+pub(crate) mod errors;
 mod harmony;
-pub mod headers;
-pub mod request_builder;
-pub mod response_parser;
-pub mod responses_api;
-pub mod stream_decoder;
+pub(crate) mod headers;
+pub(crate) mod request_builder;
+pub(crate) mod response_parser;
+pub(crate) mod responses_api;
+pub(crate) mod stream_decoder;
 pub mod streaming;
-pub mod tool_serialization;
+pub(crate) mod tool_serialization;
 pub mod types;
 
 // Main provider implementation

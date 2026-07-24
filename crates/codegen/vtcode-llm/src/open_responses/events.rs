@@ -287,7 +287,7 @@ impl ResponseStreamEvent {
     }
 
     /// Returns true if this is a terminal event.
-    pub fn is_terminal(&self) -> bool {
+    fn is_terminal(&self) -> bool {
         matches!(self, Self::ResponseCompleted { .. } | Self::ResponseFailed { .. } | Self::ResponseIncomplete { .. })
     }
 
@@ -386,7 +386,7 @@ impl VecStreamEmitter {
     }
 
     /// Returns the collected events.
-    pub fn events(&self) -> &[ResponseStreamEvent] {
+    fn events(&self) -> &[ResponseStreamEvent] {
         &self.events
     }
 
@@ -407,10 +407,10 @@ impl StreamEventEmitter for VecStreamEmitter {
 #[derive(Debug, Clone, Serialize)]
 pub struct SequencedEvent<'a> {
     /// Monotonically increasing sequence number within the stream.
-    pub sequence_number: u64,
+    sequence_number: u64,
     /// The underlying event.
     #[serde(flatten)]
-    pub event: &'a ResponseStreamEvent,
+    event: &'a ResponseStreamEvent,
 }
 
 impl<'a> SequencedEvent<'a> {

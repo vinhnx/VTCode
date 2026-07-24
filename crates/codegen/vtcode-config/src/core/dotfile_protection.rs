@@ -93,7 +93,7 @@ impl Default for DotfileProtectionConfig {
 ///
 /// These patterns match common configuration files that should never be
 /// modified automatically by AI agents or automated tools.
-pub const DEFAULT_PROTECTED_DOTFILES: &[&str] = &[
+const DEFAULT_PROTECTED_DOTFILES: &[&str] = &[
     // Git configuration
     ".gitignore",
     ".gitattributes",

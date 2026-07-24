@@ -41,7 +41,7 @@ impl ProviderFamily {
     /// unknown identifier — most providers in this class expose the same function
     /// calling shape.
     #[must_use]
-    pub fn from_provider_id(provider_id: &str) -> Self {
+    fn from_provider_id(provider_id: &str) -> Self {
         match provider_id.to_ascii_lowercase().as_str() {
             "openai" => Self::OpenAIChat,
             "openai-responses" | "openai_responses" => Self::OpenAIResponses,
@@ -226,7 +226,7 @@ impl ProviderToolFormatter for OpenAICompatibleFormatter {
 
 /// Build a formatter for a given provider family.
 #[must_use]
-pub fn formatter_for_family(family: ProviderFamily) -> Box<dyn ProviderToolFormatter> {
+fn formatter_for_family(family: ProviderFamily) -> Box<dyn ProviderToolFormatter> {
     match family {
         ProviderFamily::OpenAIChat => Box::new(OpenAIChatFormatter),
         ProviderFamily::OpenAIResponses => Box::new(OpenAIResponsesFormatter),
@@ -239,7 +239,7 @@ pub fn formatter_for_family(family: ProviderFamily) -> Box<dyn ProviderToolForma
 /// Convenience: resolve a formatter from a provider identifier. This is the entry
 /// point the runloop should use when constructing an LLM request.
 #[must_use]
-pub fn formatter_for_provider(provider_id: &str) -> Box<dyn ProviderToolFormatter> {
+fn formatter_for_provider(provider_id: &str) -> Box<dyn ProviderToolFormatter> {
     formatter_for_family(ProviderFamily::from_provider_id(provider_id))
 }
 

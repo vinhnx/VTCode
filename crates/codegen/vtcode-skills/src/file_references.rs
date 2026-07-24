@@ -27,7 +27,7 @@ impl FileReferenceValidator {
     /// Validate all file references in the instruction text
     ///
     /// Returns a list of validation errors (empty if valid)
-    pub fn validate_references(&self, instructions: &str) -> Vec<String> {
+    pub(crate) fn validate_references(&self, instructions: &str) -> Vec<String> {
         let mut errors = Vec::new();
         let references = self.extract_references(instructions);
 

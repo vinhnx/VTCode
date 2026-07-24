@@ -41,7 +41,7 @@ use tracing::{debug, trace, warn};
 ///
 /// Streaming updates are delivered via SSE and can be subscribed to
 /// using `subscribe_updates()`.
-pub struct AcpClientV2 {
+pub(crate) struct AcpClientV2 {
     /// HTTP client for JSON-RPC requests
     http_client: HttpClient,
 
@@ -76,7 +76,7 @@ pub struct AcpClientV2 {
 }
 
 /// Builder for AcpClientV2
-pub struct AcpClientV2Builder {
+pub(crate) struct AcpClientV2Builder {
     base_url: String,
     client_id: String,
     capabilities: ClientCapabilities,
@@ -85,7 +85,7 @@ pub struct AcpClientV2Builder {
 
 impl AcpClientV2Builder {
     /// Create a new builder
-    pub fn new(base_url: impl Into<String>) -> Self {
+    fn new(base_url: impl Into<String>) -> Self {
         Self {
             base_url: base_url.into(),
             client_id: format!("vtcode-{}", uuid::Uuid::new_v4()),
@@ -95,7 +95,7 @@ impl AcpClientV2Builder {
     }
 
     /// Set client identifier
-    pub fn with_client_id(mut self, id: impl Into<String>) -> Self {
+    fn with_client_id(mut self, id: impl Into<String>) -> Self {
         self.client_id = id.into();
         self
     }
@@ -107,13 +107,13 @@ impl AcpClientV2Builder {
     }
 
     /// Set request timeout
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// Build the client
-    pub fn build(self) -> AcpResult<AcpClientV2> {
+    fn build(self) -> AcpResult<AcpClientV2> {
         let http_client = HttpClient::builder()
             .timeout(self.timeout)
             .build()
@@ -136,7 +136,7 @@ impl AcpClientV2Builder {
 
 impl AcpClientV2 {
     /// Create a new client with default settings
-    pub fn new(base_url: impl Into<String>) -> AcpResult<Self> {
+    fn new(base_url: impl Into<String>) -> AcpResult<Self> {
         AcpClientV2Builder::new(base_url).build()
     }
 
@@ -147,7 +147,7 @@ impl AcpClientV2 {
     }
 
     /// Check if client has been initialized
-    pub async fn is_initialized(&self) -> bool {
+    async fn is_initialized(&self) -> bool {
         self.protocol_version.read().await.is_some()
     }
 
@@ -460,7 +460,7 @@ impl AcpClientV2 {
     /// # Errors
     ///
     /// Returns an error if serialization or the network request fails.
-    pub async fn session_tool_response(&self, session_id: &str, result: ToolExecutionResult) -> AcpResult<()> {
+    async fn session_tool_response(&self, session_id: &str, result: ToolExecutionResult) -> AcpResult<()> {
         self.notify(
             "client/response",
             Some(serde_json::json!({

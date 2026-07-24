@@ -47,19 +47,19 @@ pub(crate) fn clear_test_env_override(key: &str) {
 /// Build the standard Implementation struct for vtcode MCP client.
 ///
 /// This ensures consistent client identification across all MCP connections.
-pub fn build_client_implementation() -> Implementation {
+pub(crate) fn build_client_implementation() -> Implementation {
     Implementation::new("vtcode", env!("CARGO_PKG_VERSION"))
 }
 
 /// Environment variable for explicit local timezone override.
-pub const LOCAL_TIMEZONE_ENV_VAR: &str = "VTCODE_LOCAL_TIMEZONE";
+pub(crate) const LOCAL_TIMEZONE_ENV_VAR: &str = "VTCODE_LOCAL_TIMEZONE";
 /// Standard TZ environment variable fallback.
-pub const TZ_ENV_VAR: &str = "TZ";
+pub(crate) const TZ_ENV_VAR: &str = "TZ";
 /// Argument name for timezone injection.
-pub const TIMEZONE_ARGUMENT: &str = "timezone";
+pub(crate) const TIMEZONE_ARGUMENT: &str = "timezone";
 
 /// Ensure a timezone argument is present when required by the schema.
-pub fn ensure_timezone_argument(arguments: &mut Map<String, Value>, requires_timezone: bool) -> Result<()> {
+pub(crate) fn ensure_timezone_argument(arguments: &mut Map<String, Value>, requires_timezone: bool) -> Result<()> {
     if !requires_timezone {
         return Ok(());
     }
@@ -73,7 +73,7 @@ pub fn ensure_timezone_argument(arguments: &mut Map<String, Value>, requires_tim
 }
 
 /// Detect the local timezone using environment variables or system detection.
-pub fn detect_local_timezone() -> Result<String> {
+pub(crate) fn detect_local_timezone() -> Result<String> {
     if let Some(value) = read_env_var(LOCAL_TIMEZONE_ENV_VAR) {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
@@ -99,7 +99,7 @@ pub fn detect_local_timezone() -> Result<String> {
 }
 
 /// Check if a JSON schema requires a specific field.
-pub fn schema_requires_field(schema: &Value, field: &str) -> bool {
+pub(crate) fn schema_requires_field(schema: &Value, field: &str) -> bool {
     match schema {
         Value::Object(map) => {
             if map
@@ -139,7 +139,7 @@ pub fn schema_requires_field(schema: &Value, field: &str) -> bool {
 }
 
 /// Build HTTP headers from static and environment-based configuration.
-pub fn build_headers(static_headers: &HashMap<String, String>, env_headers: &HashMap<String, String>) -> HeaderMap {
+pub(crate) fn build_headers(static_headers: &HashMap<String, String>, env_headers: &HashMap<String, String>) -> HeaderMap {
     let mut map = HeaderMap::new();
 
     for (key, value) in static_headers {

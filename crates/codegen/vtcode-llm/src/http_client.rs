@@ -49,7 +49,7 @@ impl HttpClientFactory {
     /// Create an HTTP client with explicit timeout values.
     ///
     /// Use this when providers need custom timeout handling.
-    pub fn with_timeouts(request_timeout: Duration, connect_timeout: Duration) -> Client {
+    pub(crate) fn with_timeouts(request_timeout: Duration, connect_timeout: Duration) -> Client {
         vtcode_commons::http::create_client_with_timeouts(connect_timeout, request_timeout)
     }
 

@@ -37,9 +37,9 @@ struct FileLinkMatch {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ListState {
-    pub(crate) kind: ListKind,
-    pub(crate) depth: usize,
-    pub(crate) continuation: String,
+    kind: ListKind,
+    depth: usize,
+    continuation: String,
 }
 
 #[derive(Clone, Debug)]
@@ -50,10 +50,10 @@ pub(crate) enum ListKind {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LinkState {
-    pub(crate) destination: String,
-    pub(crate) show_destination: bool,
-    pub(crate) hidden_location_suffix: Option<String>,
-    pub(crate) label_start_segment_idx: usize,
+    destination: String,
+    show_destination: bool,
+    hidden_location_suffix: Option<String>,
+    label_start_segment_idx: usize,
 }
 
 pub(crate) struct MarkdownContext<'a> {

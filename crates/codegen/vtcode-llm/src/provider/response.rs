@@ -26,7 +26,7 @@ pub type BorrowedLLMStream<'a> = Pin<Box<dyn futures::Stream<Item = Result<LLMSt
 pub type LLMNormalizedStream = Pin<Box<dyn futures::Stream<Item = Result<NormalizedStreamEvent, LLMError>> + Send>>;
 
 impl LLMStreamEvent {
-    pub fn into_normalized(self) -> Vec<NormalizedStreamEvent> {
+    pub(crate) fn into_normalized(self) -> Vec<NormalizedStreamEvent> {
         match self {
             Self::Token { delta } => vec![NormalizedStreamEvent::TextDelta { delta }],
             Self::Reasoning { delta } => vec![NormalizedStreamEvent::ReasoningDelta { delta }],

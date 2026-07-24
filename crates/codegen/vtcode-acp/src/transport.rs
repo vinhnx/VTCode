@@ -128,12 +128,12 @@ impl StdioTransport {
     /// No subprocess is spawned and no background tasks are started. The caller
     /// can drive the mock by reading from the paired receiver.
     #[cfg(test)]
-    pub fn new_for_testing(write_tx: mpsc::Sender<String>, rpc_timeout: Duration) -> Self {
+    fn new_for_testing(write_tx: mpsc::Sender<String>, rpc_timeout: Duration) -> Self {
         Self::new_for_testing_with_options(write_tx, rpc_timeout, StdioTransportOptions::default())
     }
 
     #[cfg(test)]
-    pub fn new_for_testing_with_options(
+    fn new_for_testing_with_options(
         write_tx: mpsc::Sender<String>,
         rpc_timeout: Duration,
         options: StdioTransportOptions,
@@ -222,7 +222,7 @@ impl StdioTransport {
     /// # Errors
     ///
     /// Returns an error if serialisation fails or the writer task has shut down.
-    pub fn respond(&self, id: i64, result: Value) -> AcpResult<()> {
+    fn respond(&self, id: i64, result: Value) -> AcpResult<()> {
         self.respond_value(Value::from(id), result)
     }
 
@@ -241,7 +241,7 @@ impl StdioTransport {
     /// # Errors
     ///
     /// Returns an error if serialisation fails or the writer task has shut down.
-    pub fn respond_error(&self, id: i64, code: i32, message: impl Into<String>) -> AcpResult<()> {
+    fn respond_error(&self, id: i64, code: i32, message: impl Into<String>) -> AcpResult<()> {
         self.respond_error_value(Value::from(id), code, message)
     }
 

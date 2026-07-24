@@ -85,7 +85,7 @@ impl ResponseBuilder {
     }
 
     /// Returns a reference to the current response.
-    pub fn response(&self) -> &Response {
+    pub(crate) fn response(&self) -> &Response {
         &self.response
     }
 
@@ -204,7 +204,7 @@ impl ResponseBuilder {
     }
 
     /// Processes a normalized provider stream event and emits corresponding Open Responses events.
-    pub fn process_normalized_event<E: StreamEventEmitter>(&mut self, event: &NormalizedStreamEvent, emitter: &mut E) {
+    pub(crate) fn process_normalized_event<E: StreamEventEmitter>(&mut self, event: &NormalizedStreamEvent, emitter: &mut E) {
         if self.response.status.is_terminal() {
             return;
         }

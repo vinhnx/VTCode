@@ -45,21 +45,21 @@ pub struct FactRecord {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct MemorySearchResult {
     /// Stable identifier for this chunk (session_id + fact index).
-    pub chunk_id: String,
+    chunk_id: String,
     /// Source memory file path.
-    pub path: String,
+    path: String,
     /// 0-based start line in the source file (0 for derived facts).
-    pub start_line: usize,
+    start_line: usize,
     /// 0-based end line in the source file (0 for derived facts).
-    pub end_line: usize,
+    end_line: usize,
     /// Relevance score (higher = more relevant).
-    pub score: f64,
+    score: f64,
     /// Text snippet from the chunk.
-    pub snippet: String,
+    snippet: String,
     /// Source scope: `"session"` for per-session memory files.
-    pub source: String,
+    source: String,
     /// Unix timestamp (seconds) when the source memory was created.
-    pub created_at: Option<i64>,
+    created_at: Option<i64>,
 }
 
 /// List up to `n` most-recently-updated sessions.

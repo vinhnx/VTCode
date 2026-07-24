@@ -40,9 +40,9 @@ pub struct PromptCompletion {
 }
 
 pub struct PromptSession {
-    pub updates: tokio::sync::mpsc::UnboundedReceiver<PromptUpdate>,
-    pub runtime_requests: tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
-    pub completion: tokio::task::JoinHandle<Result<PromptCompletion>>,
+    updates: tokio::sync::mpsc::UnboundedReceiver<PromptUpdate>,
+    runtime_requests: tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
+    completion: tokio::task::JoinHandle<Result<PromptCompletion>>,
     cancel_handle: PromptSessionCancelHandle,
 }
 
@@ -256,7 +256,7 @@ impl RpcReply {
 // ---------------------------------------------------------------------------
 
 impl CopilotAcpClient {
-    pub async fn connect(
+    pub(crate) async fn connect(
         config: &CopilotAuthConfig,
         workspace_root: &Path,
         raw_model: Option<&str>,
@@ -360,7 +360,7 @@ impl CopilotAcpClient {
             .ok_or_else(|| anyhow!("copilot acp session not initialized"))
     }
 
-    pub async fn start_prompt(&self, prompt_text: String) -> Result<PromptSession> {
+    pub(crate) async fn start_prompt(&self, prompt_text: String) -> Result<PromptSession> {
         let (updates_tx, updates_rx) = tokio::sync::mpsc::unbounded_channel();
         let (runtime_tx, runtime_rx) = tokio::sync::mpsc::unbounded_channel();
         {
@@ -427,7 +427,7 @@ impl CopilotAcpClient {
         })
     }
 
-    pub fn cancel(&self) -> Result<()> {
+    fn cancel(&self) -> Result<()> {
         self.inner
             .transport
             .notify(
@@ -559,7 +559,7 @@ impl CopilotAcpClient {
         }
     }
 
-    pub fn compatibility_state(&self) -> Result<CopilotAcpCompatibilityState> {
+    fn compatibility_state(&self) -> Result<CopilotAcpCompatibilityState> {
         self.inner
             .compatibility_state
             .lock()

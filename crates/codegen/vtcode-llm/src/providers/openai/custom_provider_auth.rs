@@ -42,7 +42,7 @@ impl CustomProviderAuthHandle {
         }
     }
 
-    pub async fn current_token(&self) -> Result<String> {
+    pub(crate) async fn current_token(&self) -> Result<String> {
         let mut state = self.state.lock().await;
         if let Some(token) = state.cached_token.as_ref()
             && token.fetched_at.elapsed() < self.refresh_interval()
@@ -55,7 +55,7 @@ impl CustomProviderAuthHandle {
         Ok(token)
     }
 
-    pub async fn force_refresh(&self) -> Result<String> {
+    pub(crate) async fn force_refresh(&self) -> Result<String> {
         let token = self.fetch_token().await?;
         let mut state = self.state.lock().await;
         state.cached_token = Some(CachedToken { value: token.clone(), fetched_at: Instant::now() });

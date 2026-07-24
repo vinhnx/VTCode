@@ -20,7 +20,7 @@ pub mod provider_config_types;
 pub mod providers;
 pub mod rig_adapter;
 pub mod single_response;
-pub mod system_prompt;
+pub(crate) mod system_prompt;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils;

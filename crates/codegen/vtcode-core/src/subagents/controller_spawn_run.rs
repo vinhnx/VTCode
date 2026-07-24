@@ -329,7 +329,7 @@ impl SubagentController {
         Ok(record.build_status_entry())
     }
 
-    pub(super) async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
+    async fn spawn_child_ids_for_parent(&self, parent_thread_id: &str) -> Vec<String> {
         let state = self.state.read().await;
         let mut child_ids = state
             .children
@@ -378,7 +378,7 @@ impl SubagentController {
         Ok(true)
     }
 
-    pub(super) async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
+    async fn close_single(&self, target: &str) -> Result<SubagentStatusEntry> {
         let mut state = self.state.write().await;
         let record = state
             .children
@@ -644,7 +644,7 @@ impl SubagentController {
             .ok_or_else(|| anyhow!("Unknown subagent type {requested}"))
     }
 
-    pub(super) async fn prepare_delegation_context(
+    async fn prepare_delegation_context(
         &self,
         requested_agent: Option<String>,
         items: &mut Vec<SubagentInputItem>,
@@ -676,7 +676,7 @@ impl SubagentController {
         })
     }
 
-    pub(super) fn prepare_delegation_prompt(
+    fn prepare_delegation_prompt(
         &self,
         spec: &SubagentSpec,
         delegation: &PreparedDelegationContext,
@@ -727,7 +727,7 @@ impl SubagentController {
         Ok(prompt)
     }
 
-    pub(super) fn active_background_launch_conflicts(
+    fn active_background_launch_conflicts(
         record: &BackgroundRecord,
         prompt: &str,
         max_turns: Option<usize>,
@@ -750,7 +750,7 @@ impl SubagentController {
         conflicts
     }
 
-    pub(super) async fn spawn_with_spec(
+    async fn spawn_with_spec(
         &self,
         spec: SubagentSpec,
         prompt: String,
@@ -854,7 +854,7 @@ impl SubagentController {
         self.status_for(&id).await
     }
 
-    pub(super) async fn restart_child(&self, target: &str) -> Result<()> {
+    async fn restart_child(&self, target: &str) -> Result<()> {
         let has_queued_input = {
             let mut state = self.state.write().await;
             let record = state

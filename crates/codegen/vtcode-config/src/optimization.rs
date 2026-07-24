@@ -16,11 +16,11 @@ pub struct OptimizationConfig {
 
     /// Async pipeline configuration
     #[serde(default)]
-    pub async_pipeline: AsyncPipelineConfig,
+    async_pipeline: AsyncPipelineConfig,
 
     /// LLM client optimization settings
     #[serde(default)]
-    pub llm_client: LLMClientConfig,
+    llm_client: LLMClientConfig,
 
     /// Agent execution optimization
     #[serde(default)]
@@ -28,7 +28,7 @@ pub struct OptimizationConfig {
 
     /// Performance profiling settings
     #[serde(default)]
-    pub profiling: ProfilingConfig,
+    profiling: ProfilingConfig,
 
     /// File read cache configuration
     #[serde(default)]
@@ -73,17 +73,17 @@ impl Default for RlConfig {
 }
 
 /// Serde/default for [`RlConfig::strategy`].
-pub fn default_rl_strategy() -> String {
+fn default_rl_strategy() -> String {
     "bandit".to_string()
 }
 
 /// Serde/default for [`RlConfig::epsilon`].
-pub fn default_rl_epsilon() -> f64 {
+fn default_rl_epsilon() -> f64 {
     0.15
 }
 
 /// Serde/default for [`RlConfig::latency_weight`].
-pub fn default_rl_latency_weight() -> f64 {
+fn default_rl_latency_weight() -> f64 {
     0.5
 }
 
@@ -104,7 +104,7 @@ pub struct FileReadCacheConfig {
     pub ttl_secs: u64,
 
     /// Maximum number of cached entries
-    pub max_entries: usize,
+    max_entries: usize,
 
     /// Absolute ceiling (in lines) for a single line-based `read_file` call.
     /// Any read requesting more lines is clamped to this value and the response
@@ -114,7 +114,7 @@ pub struct FileReadCacheConfig {
 }
 
 /// Serde default for [`FileReadCacheConfig::max_read_lines`].
-pub fn default_max_read_lines() -> usize {
+fn default_max_read_lines() -> usize {
     crate::constants::optimization::DEFAULT_MAX_READ_LINES
 }
 
@@ -161,13 +161,13 @@ pub struct ToolRegistryConfig {
     pub use_optimized_registry: bool,
 
     /// Maximum concurrent tool executions
-    pub max_concurrent_tools: usize,
+    max_concurrent_tools: usize,
 
     /// Hot cache size for frequently used tools
     pub hot_cache_size: usize,
 
     /// Tool execution timeout in seconds
-    pub default_timeout_secs: u64,
+    default_timeout_secs: u64,
 
     /// When `true`, middleware `before_execute` failures are logged but do
     /// not block the tool call (fail-open). When `false` (the default),
@@ -180,19 +180,19 @@ pub struct ToolRegistryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsyncPipelineConfig {
     /// Enable request batching
-    pub enable_batching: bool,
+    enable_batching: bool,
 
     /// Enable result caching
-    pub enable_caching: bool,
+    enable_caching: bool,
 
     /// Maximum batch size for tool requests
-    pub max_batch_size: usize,
+    max_batch_size: usize,
 
     /// Batch timeout in milliseconds
-    pub batch_timeout_ms: u64,
+    batch_timeout_ms: u64,
 
     /// Result cache size
-    pub cache_size: usize,
+    cache_size: usize,
 }
 
 /// LLM client optimization configuration
@@ -200,28 +200,28 @@ pub struct AsyncPipelineConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMClientConfig {
     /// Enable connection pooling
-    pub enable_connection_pooling: bool,
+    enable_connection_pooling: bool,
 
     /// Enable response caching
-    pub enable_response_caching: bool,
+    enable_response_caching: bool,
 
     /// Enable request batching
-    pub enable_request_batching: bool,
+    enable_request_batching: bool,
 
     /// Connection pool size
-    pub connection_pool_size: usize,
+    connection_pool_size: usize,
 
     /// Response cache size
-    pub response_cache_size: usize,
+    response_cache_size: usize,
 
     /// Response cache TTL in seconds
-    pub cache_ttl_secs: u64,
+    cache_ttl_secs: u64,
 
     /// Rate limit: requests per second
-    pub rate_limit_rps: f64,
+    rate_limit_rps: f64,
 
     /// Rate limit burst capacity
-    pub rate_limit_burst: usize,
+    rate_limit_burst: usize,
 }
 
 /// Agent execution optimization configuration
@@ -229,19 +229,19 @@ pub struct LLMClientConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentExecutionConfig {
     /// Enable optimized agent execution loop
-    pub use_optimized_loop: bool,
+    use_optimized_loop: bool,
 
     /// Enable performance prediction
-    pub enable_performance_prediction: bool,
+    enable_performance_prediction: bool,
 
     /// State transition history size
-    pub state_history_size: usize,
+    state_history_size: usize,
 
     /// Resource monitoring interval in milliseconds
-    pub resource_monitor_interval_ms: u64,
+    resource_monitor_interval_ms: u64,
 
     /// Maximum memory usage in MB
-    pub max_memory_mb: u64,
+    max_memory_mb: u64,
 
     /// Maximum execution time in seconds
     pub max_execution_time_secs: u64,
@@ -263,25 +263,25 @@ pub struct AgentExecutionConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfilingConfig {
     /// Enable performance profiling
-    pub enabled: bool,
+    enabled: bool,
 
     /// Resource monitoring interval in milliseconds
-    pub monitor_interval_ms: u64,
+    monitor_interval_ms: u64,
 
     /// Maximum benchmark history size
-    pub max_history_size: usize,
+    max_history_size: usize,
 
     /// Auto-export results to file
-    pub auto_export_results: bool,
+    auto_export_results: bool,
 
     /// Export file path
-    pub export_file_path: String,
+    export_file_path: String,
 
     /// Enable regression testing
-    pub enable_regression_testing: bool,
+    enable_regression_testing: bool,
 
     /// Maximum allowed performance regression percentage
-    pub max_regression_percent: f64,
+    max_regression_percent: f64,
 }
 
 impl Default for MemoryPoolConfig {

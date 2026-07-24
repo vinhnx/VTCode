@@ -43,11 +43,11 @@ pub struct ToolDefinition {
 
     /// Restricts which Anthropic callers can invoke this tool programmatically.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub allowed_callers: Option<Vec<String>>,
+    pub(crate) allowed_callers: Option<Vec<String>>,
 
     /// Anthropic tool use examples used to teach complex tool behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_examples: Option<Vec<Value>>,
+    pub(crate) input_examples: Option<Vec<Value>>,
 
     /// Provider-native web search configuration payload (e.g. Z.AI `web_search` tool).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,20 +56,20 @@ pub struct ToolDefinition {
     /// Provider-hosted Responses tool configuration for tool types like
     /// `file_search` and `mcp`.
     #[serde(skip, default)]
-    pub hosted_tool_config: Option<Value>,
+    pub(crate) hosted_tool_config: Option<Value>,
 
     /// Shell tool configuration (GPT-5.1 specific)
     /// Describes shell command capabilities and constraints
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub shell: Option<ShellToolDefinition>,
+    pub(crate) shell: Option<ShellToolDefinition>,
 
     /// Grammar definition for context-free grammar constraints (GPT-5 specific)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub grammar: Option<GrammarDefinition>,
+    pub(crate) grammar: Option<GrammarDefinition>,
 
     /// When true and using Anthropic, mark the tool as strict for structured tool use validation
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub strict: Option<bool>,
+    pub(crate) strict: Option<bool>,
 
     /// When true, the tool is deferred and only loaded when discovered via tool search (Anthropic advanced-tool-use beta)
     /// This enables dynamic tool discovery for large tool catalogs (10k+ tools)
@@ -86,7 +86,7 @@ pub struct ToolDefinition {
     /// options (model, max_uses, max_tokens, caching) so that inbound proxy
     /// requests can round-trip through `ToolDefinition` without losing data.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub advisor: Option<Value>,
+    pub(crate) advisor: Option<Value>,
 }
 
 /// Shell tool definition for GPT-5.1 shell tool type
@@ -94,26 +94,26 @@ pub struct ToolDefinition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShellToolDefinition {
     /// Description of shell tool capabilities
-    pub description: String,
+    description: String,
 
     /// List of allowed commands (whitelist for safety)
-    pub allowed_commands: Vec<String>,
+    allowed_commands: Vec<String>,
 
     /// List of forbidden commands (blacklist for safety)
-    pub forbidden_patterns: Vec<String>,
+    forbidden_patterns: Vec<String>,
 
     /// Maximum command timeout in seconds
-    pub timeout_seconds: u32,
+    timeout_seconds: u32,
 }
 
 /// Grammar definition for GPT-5 context-free grammar (CFG) constraints
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GrammarDefinition {
     /// The syntax of the grammar: "lark" or "regex"
-    pub syntax: String,
+    pub(crate) syntax: String,
 
     /// The grammar definition in the specified syntax
-    pub definition: String,
+    pub(crate) definition: String,
 }
 
 impl Default for GrammarDefinition {
@@ -204,13 +204,13 @@ impl ToolDefinition {
     }
 
     /// Restrict which Anthropic callers can invoke this tool programmatically.
-    pub fn with_allowed_callers(mut self, allowed_callers: Vec<String>) -> Self {
+    pub(crate) fn with_allowed_callers(mut self, allowed_callers: Vec<String>) -> Self {
         self.allowed_callers = Some(allowed_callers);
         self
     }
 
     /// Attach Anthropic tool use examples for better tool selection and argument shaping.
-    pub fn with_input_examples(mut self, input_examples: Vec<Value>) -> Self {
+    pub(crate) fn with_input_examples(mut self, input_examples: Vec<Value>) -> Self {
         self.input_examples = Some(input_examples);
         self
     }
@@ -325,21 +325,21 @@ impl ToolDefinition {
     }
 
     /// Create an OpenAI Responses file search tool definition.
-    pub fn file_search(config: Value) -> Self {
+    pub(crate) fn file_search(config: Value) -> Self {
         let mut tool = Self::empty("file_search");
         tool.hosted_tool_config = Some(config);
         tool
     }
 
     /// Create a Gemini Code Execution tool definition.
-    pub fn code_execution(config: Value) -> Self {
+    pub(crate) fn code_execution(config: Value) -> Self {
         let mut tool = Self::empty("code_execution");
         tool.hosted_tool_config = Some(config);
         tool
     }
 
     /// Create an OpenAI Responses remote MCP tool definition.
-    pub fn mcp(config: Value) -> Self {
+    pub(crate) fn mcp(config: Value) -> Self {
         let mut tool = Self::empty("mcp");
         tool.hosted_tool_config = Some(config);
         tool
@@ -404,12 +404,12 @@ impl ToolDefinition {
     }
 
     /// Returns true when the tool is an Anthropic native code execution tool revision.
-    pub fn is_anthropic_code_execution(&self) -> bool {
+    pub(crate) fn is_anthropic_code_execution(&self) -> bool {
         self.tool_type.starts_with("code_execution_")
     }
 
     /// Returns true when the tool is an Anthropic native memory tool revision.
-    pub fn is_anthropic_memory_tool(&self) -> bool {
+    pub(crate) fn is_anthropic_memory_tool(&self) -> bool {
         self.tool_type.starts_with("memory_")
     }
 
@@ -523,7 +523,7 @@ impl ToolDefinition {
 /// Static schema for apply_patch tool parameters.
 /// This is the same schema as `crate::tools::apply_patch::parameter_schema` but
 /// inlined to avoid depending on vtcode-core's tools module.
-pub(crate) fn apply_patch_schema(description: &str) -> Value {
+fn apply_patch_schema(description: &str) -> Value {
     json!({
         "type": "object",
         "properties": {

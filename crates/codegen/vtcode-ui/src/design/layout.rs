@@ -23,7 +23,7 @@ pub enum LayoutMode {
 
 impl LayoutMode {
     /// Determine layout mode from viewport dimensions.
-    pub fn from_area(area: Rect) -> Self {
+    pub(crate) fn from_area(area: Rect) -> Self {
         if area.width < COMPACT_MAX_COLS || area.height < COMPACT_MAX_ROWS {
             LayoutMode::Compact
         } else if area.width >= WIDE_MIN_COLS && area.height >= WIDE_MIN_ROWS {
@@ -34,39 +34,39 @@ impl LayoutMode {
     }
 
     /// Check if borders should be shown.
-    pub fn show_borders(self) -> bool {
+    pub(crate) fn show_borders(self) -> bool {
         !matches!(self, LayoutMode::Compact)
     }
 
     /// Check if panel titles should be shown.
-    pub fn show_titles(self) -> bool {
+    pub(crate) fn show_titles(self) -> bool {
         !matches!(self, LayoutMode::Compact)
     }
 
     /// Check if sidebar can be shown.
-    pub fn allow_sidebar(self) -> bool {
+    pub(crate) fn allow_sidebar(self) -> bool {
         matches!(self, LayoutMode::Wide)
     }
 
     /// Check if logs panel should be visible.
-    pub fn show_logs_panel(self) -> bool {
+    pub(crate) fn show_logs_panel(self) -> bool {
         !matches!(self, LayoutMode::Compact)
     }
 
     /// Get the footer height for this mode.
     /// Footer is disabled in all modes to avoid duplicating header info.
-    pub fn footer_height(self) -> u16 {
+    pub(crate) fn footer_height(self) -> u16 {
         0
     }
 
     /// Check if footer should be shown.
     /// Footer is disabled to avoid duplicating the header status bar.
-    pub fn show_footer(self) -> bool {
+    pub(crate) fn show_footer(self) -> bool {
         false
     }
 
     /// Get the maximum header height as percentage of viewport.
-    pub fn max_header_percent(self) -> f32 {
+    pub(crate) fn max_header_percent(self) -> f32 {
         match self {
             LayoutMode::Compact => 0.15,
             LayoutMode::Standard => 0.25,
@@ -75,7 +75,7 @@ impl LayoutMode {
     }
 
     /// Get the sidebar width percentage (only meaningful in Wide mode).
-    pub fn sidebar_width_percent(self) -> u16 {
+    pub(crate) fn sidebar_width_percent(self) -> u16 {
         match self {
             LayoutMode::Wide => 28,
             _ => 0,

@@ -21,12 +21,12 @@ pub struct CredentialStorage {
 
 impl CredentialStorage {
     /// Create a new credential storage handle.
-    pub fn new(service: impl Into<String>, user: impl Into<String>) -> Self {
+    pub(crate) fn new(service: impl Into<String>, user: impl Into<String>) -> Self {
         Self { service: service.into(), user: user.into() }
     }
 
     /// Store a credential using the specified mode.
-    pub fn store_with_mode(&self, value: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
+    pub(crate) fn store_with_mode(&self, value: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
         match mode.effective_mode() {
             AuthCredentialsStoreMode::Keyring => match self.store_keyring(value) {
                 Ok(()) => {
@@ -61,7 +61,7 @@ impl CredentialStorage {
     }
 
     /// Load a credential using the specified mode.
-    pub fn load_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<Option<String>> {
+    pub(crate) fn load_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<Option<String>> {
         match mode.effective_mode() {
             AuthCredentialsStoreMode::Keyring => match self.load_keyring() {
                 Ok(Some(value)) => Ok(Some(value)),
@@ -87,7 +87,7 @@ impl CredentialStorage {
     }
 
     /// Clear (delete) a credential using the specified mode.
-    pub fn clear_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
+    pub(crate) fn clear_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
         match mode.effective_mode() {
             AuthCredentialsStoreMode::Keyring => {
                 let mut errors = Vec::new();

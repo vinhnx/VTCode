@@ -45,7 +45,7 @@ const OPENROUTER_AUTH_URL: &str = "https://openrouter.ai/auth";
 const OPENROUTER_KEYS_URL: &str = "https://openrouter.ai/api/v1/auth/keys";
 
 /// Default callback port for localhost OAuth server
-pub const DEFAULT_CALLBACK_PORT: u16 = 8484;
+const DEFAULT_CALLBACK_PORT: u16 = 8484;
 
 /// Configuration for OpenRouter OAuth authentication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,11 +53,11 @@ pub const DEFAULT_CALLBACK_PORT: u16 = 8484;
 #[serde(default)]
 pub struct OpenRouterOAuthConfig {
     /// Whether to use OAuth instead of API key
-    pub use_oauth: bool,
+    use_oauth: bool,
     /// Port for the local callback server
     pub callback_port: u16,
     /// Whether to automatically refresh tokens
-    pub auto_refresh: bool,
+    auto_refresh: bool,
     /// Timeout in seconds for completing the OAuth browser flow.
     pub flow_timeout_secs: u64,
 }
@@ -88,7 +88,7 @@ pub struct OpenRouterToken {
 
 impl OpenRouterToken {
     /// Check if the token has expired.
-    pub fn is_expired(&self) -> bool {
+    fn is_expired(&self) -> bool {
         if let Some(expires_at) = self.expires_at {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -539,7 +539,7 @@ impl AuthStatus {
     }
 
     /// Get a human-readable status string.
-    pub fn display_string(&self) -> String {
+    fn display_string(&self) -> String {
         match self {
             AuthStatus::Authenticated { label, age_seconds, expires_in } => {
                 let label_str = label.as_ref().map(|l| format!(" ({l})")).unwrap_or_default();

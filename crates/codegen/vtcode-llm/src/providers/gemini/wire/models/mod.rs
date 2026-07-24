@@ -15,26 +15,26 @@ pub struct Content {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemInstruction {
-    pub parts: Vec<Part>,
+    pub(crate) parts: Vec<Part>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerToolCall {
     #[serde(rename = "toolType", alias = "tool_type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub args: Option<Value>,
+    pub(crate) args: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    pub(crate) id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerToolResponse {
     #[serde(rename = "toolType", alias = "tool_type")]
-    pub tool_type: String,
-    pub response: Value,
+    pub(crate) tool_type: String,
+    pub(crate) response: Value,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    pub(crate) id: Option<String>,
 }
 
 impl Content {
@@ -63,13 +63,13 @@ impl Content {
 }
 
 impl SystemInstruction {
-    pub fn new(text: impl Into<String>) -> Self {
+    pub(crate) fn new(text: impl Into<String>) -> Self {
         SystemInstruction {
             parts: vec![Part::Text { text: text.into(), thought_signature: None }],
         }
     }
 
-    pub fn with_ttl(text: impl Into<String>, ttl_seconds: u64) -> Self {
+    pub(crate) fn with_ttl(text: impl Into<String>, ttl_seconds: u64) -> Self {
         SystemInstruction {
             parts: vec![
                 Part::Text { text: text.into(), thought_signature: None },
@@ -184,17 +184,17 @@ impl Part {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Tool {
     #[serde(skip_serializing_if = "Option::is_none", rename = "functionDeclarations")]
-    pub function_declarations: Option<Vec<FunctionDeclaration>>,
+    pub(crate) function_declarations: Option<Vec<FunctionDeclaration>>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "googleSearch")]
-    pub google_search: Option<Value>,
+    pub(crate) google_search: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "googleMaps")]
-    pub google_maps: Option<Value>,
+    pub(crate) google_maps: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "urlContext")]
-    pub url_context: Option<Value>,
+    pub(crate) url_context: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "fileSearch")]
-    pub file_search: Option<Value>,
+    pub(crate) file_search: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "codeExecution")]
-    pub code_execution: Option<Value>,
+    pub(crate) code_execution: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,9 +214,9 @@ pub struct FunctionDeclaration {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolConfig {
     #[serde(skip_serializing_if = "Option::is_none", rename = "functionCallingConfig")]
-    pub function_calling_config: Option<super::function_calling::FunctionCallingConfig>,
+    pub(crate) function_calling_config: Option<super::function_calling::FunctionCallingConfig>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "includeServerSideToolInvocations")]
-    pub include_server_side_tool_invocations: Option<bool>,
+    pub(crate) include_server_side_tool_invocations: Option<bool>,
 }
 
 impl ToolConfig {

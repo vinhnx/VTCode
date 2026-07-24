@@ -570,7 +570,7 @@ impl HarnessTurnState {
     }
 
     #[cfg(test)]
-    pub(crate) fn recovery_mode(&self) -> Option<RecoveryMode> {
+    fn recovery_mode(&self) -> Option<RecoveryMode> {
         self.recovery_mode
     }
 
@@ -722,7 +722,7 @@ impl HarnessTurnState {
     }
 
     #[cfg(test)]
-    pub(crate) fn reset_file_read_path_counts(&mut self) {
+    fn reset_file_read_path_counts(&mut self) {
         self.file_read_path_counts.clear();
     }
 

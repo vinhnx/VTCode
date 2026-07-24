@@ -11,29 +11,29 @@ use ratatui_cheese::input::InputState;
 
 #[derive(Clone)]
 pub struct ModalState {
-    pub title: String,
-    pub lines: Vec<String>,
-    pub footer_hint: Option<String>,
-    pub hotkeys: Vec<OverlayHotkey>,
-    pub list: Option<ModalListState>,
-    pub secure_prompt: Option<SecurePromptConfig>,
+    pub(crate) title: String,
+    pub(crate) lines: Vec<String>,
+    pub(crate) footer_hint: Option<String>,
+    pub(crate) hotkeys: Vec<OverlayHotkey>,
+    pub(crate) list: Option<ModalListState>,
+    pub(crate) secure_prompt: Option<SecurePromptConfig>,
     #[expect(dead_code)]
-    pub restore_input: bool,
+    pub(crate) restore_input: bool,
     #[expect(dead_code)]
-    pub restore_cursor: bool,
-    pub search: Option<ModalSearchState>,
-    pub is_help_modal: bool,
+    pub(crate) restore_cursor: bool,
+    pub(crate) search: Option<ModalSearchState>,
+    pub(crate) is_help_modal: bool,
 }
 
 /// State for a multi-step wizard modal with tabs for navigation
 #[expect(dead_code)]
 #[derive(Clone)]
 pub struct WizardModalState {
-    pub title: String,
-    pub steps: Vec<WizardStepState>,
-    pub current_step: usize,
-    pub search: Option<ModalSearchState>,
-    pub mode: WizardModalMode,
+    pub(crate) title: String,
+    pub(crate) steps: Vec<WizardStepState>,
+    pub(crate) current_step: usize,
+    pub(crate) search: Option<ModalSearchState>,
+    pub(crate) mode: WizardModalMode,
 }
 
 /// State for a single wizard step
@@ -41,31 +41,31 @@ pub struct WizardModalState {
 #[derive(Clone)]
 pub struct WizardStepState {
     /// Title displayed in the tab header
-    pub title: String,
+    pub(crate) title: String,
     /// Question or instruction shown above the list
-    pub question: String,
+    pub(crate) question: String,
     /// List state for selectable items
-    pub list: ModalListState,
+    pub(crate) list: ModalListState,
     /// Whether this step has been completed
-    pub completed: bool,
+    pub(crate) completed: bool,
     /// The selected answer for this step
-    pub answer: Option<InlineListSelection>,
+    answer: Option<InlineListSelection>,
     /// Optional notes for the current step (free text)
-    pub notes: String,
+    pub(crate) notes: String,
     /// Whether notes input is active for the current step
-    pub notes_active: bool,
+    pub(crate) notes_active: bool,
 
-    pub allow_freeform: bool,
-    pub freeform_label: Option<String>,
-    pub freeform_placeholder: Option<String>,
-    pub freeform_default: Option<String>,
+    allow_freeform: bool,
+    pub(crate) freeform_label: Option<String>,
+    pub(crate) freeform_placeholder: Option<String>,
+    freeform_default: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ModalKeyModifiers {
-    pub control: bool,
-    pub alt: bool,
-    pub command: bool,
+    pub(crate) control: bool,
+    pub(crate) alt: bool,
+    pub(crate) command: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,14 +80,14 @@ pub enum ModalListKeyResult {
 
 #[derive(Clone)]
 pub struct ModalListState {
-    pub items: Vec<ModalListItem>,
-    pub visible_indices: Vec<usize>,
-    pub list_state: ListState,
-    pub total_selectable: usize,
-    pub filter_terms: Vec<String>,
-    pub filter_query: Option<String>,
-    pub viewport_rows: Option<u16>,
-    pub compact_rows: bool,
+    pub(crate) items: Vec<ModalListItem>,
+    pub(crate) visible_indices: Vec<usize>,
+    pub(crate) list_state: ListState,
+    total_selectable: usize,
+    filter_terms: Vec<String>,
+    filter_query: Option<String>,
+    viewport_rows: Option<u16>,
+    compact_rows: bool,
     density_behavior: ModalListDensityBehavior,
 }
 
@@ -101,20 +101,20 @@ const CONFIG_LIST_NAVIGATION_HINT: &str = "Navigation: ↑/↓ select • Space/
 
 #[derive(Clone)]
 pub struct ModalListItem {
-    pub title: String,
-    pub subtitle: Option<String>,
-    pub badge: Option<String>,
-    pub indent: u8,
-    pub selection: Option<InlineListSelection>,
-    pub search_value: Option<String>,
-    pub is_divider: bool,
+    pub(crate) title: String,
+    pub(crate) subtitle: Option<String>,
+    pub(crate) badge: Option<String>,
+    pub(crate) indent: u8,
+    pub(crate) selection: Option<InlineListSelection>,
+    search_value: Option<String>,
+    pub(crate) is_divider: bool,
 }
 
 #[derive(Clone)]
 pub struct ModalSearchState {
-    pub label: String,
-    pub placeholder: Option<String>,
-    pub query: String,
+    pub(crate) label: String,
+    pub(crate) placeholder: Option<String>,
+    pub(crate) query: String,
 }
 
 impl From<InlineListSearchConfig> for ModalSearchState {
@@ -128,7 +128,7 @@ impl From<InlineListSearchConfig> for ModalSearchState {
 }
 
 impl ModalSearchState {
-    pub fn insert(&mut self, value: &str) {
+    pub(crate) fn insert(&mut self, value: &str) {
         for ch in value.chars() {
             if matches!(ch, '\n' | '\r') {
                 continue;
@@ -137,18 +137,18 @@ impl ModalSearchState {
         }
     }
 
-    pub fn push_char(&mut self, ch: char) {
+    fn push_char(&mut self, ch: char) {
         self.query.push(ch);
     }
 
-    pub fn backspace(&mut self) -> bool {
+    fn backspace(&mut self) -> bool {
         if self.query.pop().is_some() {
             return true;
         }
         false
     }
 
-    pub fn clear(&mut self) -> bool {
+    fn clear(&mut self) -> bool {
         if self.query.is_empty() {
             return false;
         }
@@ -158,7 +158,7 @@ impl ModalSearchState {
 }
 
 impl ModalState {
-    pub fn hotkey_action(&self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> Option<OverlayHotkeyAction> {
+    pub(crate) fn hotkey_action(&self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> Option<OverlayHotkeyAction> {
         self.hotkeys.iter().find_map(|hotkey| match hotkey.key {
             OverlayHotkeyKey::CtrlChar(ch)
                 if modifiers.control
@@ -180,7 +180,7 @@ impl ModalState {
         })
     }
 
-    pub fn handle_list_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
+    pub(crate) fn handle_list_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
         let Some(list) = self.list.as_mut() else {
             return ModalListKeyResult::NotHandled;
         };
@@ -382,7 +382,7 @@ impl ModalState {
         }
     }
 
-    pub fn handle_list_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
+    pub(crate) fn handle_list_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
         let Some(list) = self.list.as_mut() else {
             return ModalListKeyResult::NotHandled;
         };
@@ -414,7 +414,7 @@ impl ModalState {
         }
     }
 
-    pub fn handle_list_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
+    pub(crate) fn handle_list_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
         let Some(list) = self.list.as_mut() else {
             return ModalListKeyResult::NotHandled;
         };
@@ -492,7 +492,7 @@ fn map_config_selection_for_arrow(selection: &InlineListSelection, is_left: bool
 }
 
 impl ModalListItem {
-    pub fn is_header(&self) -> bool {
+    pub(crate) fn is_header(&self) -> bool {
         self.selection.is_none() && !self.is_divider
     }
 
@@ -526,7 +526,7 @@ pub fn is_divider_title(item: &InlineListItem) -> bool {
 }
 
 impl ModalListState {
-    pub fn new(items: Vec<InlineListItem>, selected: Option<InlineListSelection>) -> Self {
+    pub(crate) fn new(items: Vec<InlineListItem>, selected: Option<InlineListSelection>) -> Self {
         let converted: Vec<ModalListItem> = items
             .into_iter()
             .map(|item| {
@@ -612,7 +612,7 @@ impl ModalListState {
         has_model_selection
     }
 
-    pub fn current_selection(&self) -> Option<InlineListSelection> {
+    pub(crate) fn current_selection(&self) -> Option<InlineListSelection> {
         self.list_state
             .selected()
             .and_then(|index| self.visible_indices.get(index))
@@ -620,7 +620,7 @@ impl ModalListState {
             .and_then(|item| item.selection.clone())
     }
 
-    pub fn get_best_matching_item(&self, query: &str) -> Option<String> {
+    fn get_best_matching_item(&self, query: &str) -> Option<String> {
         if query.is_empty() {
             return None;
         }
@@ -635,7 +635,7 @@ impl ModalListState {
             .cloned()
     }
 
-    pub fn select_previous(&mut self) {
+    fn select_previous(&mut self) {
         if self.visible_indices.is_empty() {
             return;
         }
@@ -670,7 +670,7 @@ impl ModalListState {
         }
     }
 
-    pub fn select_next(&mut self) {
+    pub(crate) fn select_next(&mut self) {
         if self.visible_indices.is_empty() {
             return;
         }
@@ -691,7 +691,7 @@ impl ModalListState {
         }
     }
 
-    pub fn select_first(&mut self) {
+    fn select_first(&mut self) {
         if let Some(first) = self.first_selectable_index() {
             self.list_state.select(Some(first));
         } else {
@@ -702,7 +702,7 @@ impl ModalListState {
         }
     }
 
-    pub fn select_last(&mut self) {
+    pub(crate) fn select_last(&mut self) {
         if let Some(last) = self.last_selectable_index() {
             self.list_state.select(Some(last));
         } else {
@@ -720,7 +720,7 @@ impl ModalListState {
         self.last_selectable_index().is_some_and(|last| selected == last)
     }
 
-    pub fn select_nth_selectable(&mut self, target_index: usize) -> bool {
+    fn select_nth_selectable(&mut self, target_index: usize) -> bool {
         let mut count = 0usize;
         for (visible_pos, &item_index) in self.visible_indices.iter().enumerate() {
             if self.items[item_index].selection.is_some() {
@@ -737,7 +737,7 @@ impl ModalListState {
         false
     }
 
-    pub fn page_up(&mut self) {
+    fn page_up(&mut self) {
         let step = self.page_step();
         if step == 0 {
             self.select_previous();
@@ -752,7 +752,7 @@ impl ModalListState {
         }
     }
 
-    pub fn page_down(&mut self) {
+    fn page_down(&mut self) {
         let step = self.page_step();
         if step == 0 {
             self.select_next();
@@ -767,7 +767,7 @@ impl ModalListState {
         }
     }
 
-    pub fn set_viewport_rows(&mut self, rows: u16) {
+    pub(crate) fn set_viewport_rows(&mut self, rows: u16) {
         self.viewport_rows = Some(rows);
     }
 
@@ -787,12 +787,12 @@ impl ModalListState {
         }
     }
 
-    pub fn apply_search(&mut self, query: &str) {
+    pub(crate) fn apply_search(&mut self, query: &str) {
         let preferred = self.current_selection();
         self.apply_search_with_preference(query, preferred);
     }
 
-    pub fn apply_search_with_preference(&mut self, query: &str, preferred: Option<InlineListSelection>) {
+    pub(crate) fn apply_search_with_preference(&mut self, query: &str, preferred: Option<InlineListSelection>) {
         let trimmed = query.trim();
         if trimmed.is_empty() {
             if self.filter_query.is_none() {
@@ -953,7 +953,7 @@ impl ModalListState {
         }
     }
 
-    pub fn toggle_row_density(&mut self) {
+    fn toggle_row_density(&mut self) {
         self.compact_rows = !self.compact_rows;
     }
 
@@ -966,7 +966,7 @@ impl ModalListState {
 #[expect(dead_code)]
 impl WizardModalState {
     /// Create a new wizard modal state from wizard steps
-    pub fn new(
+    pub(crate) fn new(
         title: String,
         steps: Vec<WizardStep>,
         current_step: usize,
@@ -1016,7 +1016,7 @@ impl WizardModalState {
     }
 
     /// Handle key event for wizard navigation
-    pub fn handle_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
+    pub(crate) fn handle_key_event(&mut self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> ModalListKeyResult {
         if let Some(step) = self.steps.get_mut(self.current_step)
             && step.notes_active
         {
@@ -1221,7 +1221,7 @@ impl WizardModalState {
         }
     }
 
-    pub fn handle_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
+    pub(crate) fn handle_mouse_click(&mut self, visible_index: usize) -> ModalListKeyResult {
         let submit_after_click = {
             let Some(step) = self.steps.get_mut(self.current_step) else {
                 return ModalListKeyResult::NotHandled;
@@ -1269,7 +1269,7 @@ impl WizardModalState {
         ModalListKeyResult::Redraw
     }
 
-    pub fn handle_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
+    pub(crate) fn handle_mouse_scroll(&mut self, down: bool) -> ModalListKeyResult {
         let Some(step) = self.steps.get_mut(self.current_step) else {
             return ModalListKeyResult::NotHandled;
         };
@@ -1360,11 +1360,11 @@ impl WizardModalState {
             .is_some_and(WizardStepState::has_freeform_default)
     }
 
-    pub fn unanswered_count(&self) -> usize {
+    fn unanswered_count(&self) -> usize {
         self.steps.iter().filter(|step| !step.completed).count()
     }
 
-    pub fn question_header(&self) -> String {
+    pub(crate) fn question_header(&self) -> String {
         format!(
             "Question {}/{} ({} unanswered)",
             self.current_step.saturating_add(1),
@@ -1388,11 +1388,11 @@ impl WizardModalState {
         }
     }
 
-    pub fn notes_active(&self) -> bool {
+    pub(crate) fn notes_active(&self) -> bool {
         self.steps.get(self.current_step).is_some_and(|step| step.notes_active)
     }
 
-    pub fn instruction_lines(&self) -> Vec<String> {
+    pub(crate) fn instruction_lines(&self) -> Vec<String> {
         let step = match self.steps.get(self.current_step) {
             Some(s) => s,
             None => return Vec::new(),

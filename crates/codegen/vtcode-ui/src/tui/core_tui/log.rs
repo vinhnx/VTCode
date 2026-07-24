@@ -23,11 +23,11 @@ use crate::tui::ui::syntax_highlight::{
 
 #[derive(Debug, Clone)]
 pub struct LogEntry {
-    pub formatted: Arc<str>,
-    pub timestamp: Arc<str>,
-    pub level: Level,
-    pub target: Arc<str>,
-    pub message: Arc<str>,
+    formatted: Arc<str>,
+    timestamp: Arc<str>,
+    level: Level,
+    target: Arc<str>,
+    message: Arc<str>,
 }
 
 #[derive(Default)]
@@ -115,7 +115,7 @@ pub struct TuiLogLayer {
 }
 
 impl TuiLogLayer {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { forwarder: LOG_FORWARDER.clone() }
     }
 }
@@ -127,11 +127,11 @@ impl Default for TuiLogLayer {
 }
 
 impl TuiLogLayer {
-    pub fn set_sender(sender: UnboundedSender<LogEntry>) {
+    fn set_sender(sender: UnboundedSender<LogEntry>) {
         LOG_FORWARDER.set_sender(sender);
     }
 
-    pub fn clear_sender() {
+    fn clear_sender() {
         LOG_FORWARDER.clear_sender();
     }
 }
@@ -245,15 +245,15 @@ pub fn make_tui_log_layer() -> TuiLogLayer {
     TuiLogLayer::new()
 }
 
-pub fn register_tui_log_sender(sender: UnboundedSender<LogEntry>) {
+pub(crate) fn register_tui_log_sender(sender: UnboundedSender<LogEntry>) {
     TuiLogLayer::set_sender(sender);
 }
 
-pub fn clear_tui_log_sender() {
+pub(crate) fn clear_tui_log_sender() {
     TuiLogLayer::clear_sender();
 }
 
-pub fn set_log_theme_name(theme: Option<String>) {
+pub(crate) fn set_log_theme_name(theme: Option<String>) {
     let Ok(mut slot) = LOG_THEME_NAME.write() else {
         tracing::warn!("failed to set TUI log theme name; theme lock poisoned");
         return;
@@ -376,7 +376,7 @@ fn select_syntax(message: &str) -> &'static SyntaxReference {
         .unwrap_or_else(find_syntax_plain_text)
 }
 
-pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
+pub(crate) fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
     let ss = syntax_set();
     if ss.syntaxes().is_empty() {
         let mut text = Text::raw(entry.formatted.as_ref().to_string());

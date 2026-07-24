@@ -15,22 +15,22 @@ use super::{CommandSpec, SandboxManager, SandboxPolicy, SandboxType};
 #[derive(Debug)]
 pub struct SandboxDebugResult {
     /// Whether the command succeeded.
-    pub success: bool,
+    success: bool,
     /// Exit code if available.
-    pub exit_code: Option<i32>,
+    exit_code: Option<i32>,
     /// Standard output.
-    pub stdout: String,
+    stdout: String,
     /// Standard error.
-    pub stderr: String,
+    stderr: String,
     /// The sandbox type used.
-    pub sandbox_type: SandboxType,
+    sandbox_type: SandboxType,
     /// Whether the sandbox was actually applied.
-    pub sandbox_active: bool,
+    sandbox_active: bool,
 }
 
 impl SandboxDebugResult {
     /// Create a result indicating sandbox is not available.
-    pub fn unavailable(sandbox_type: SandboxType) -> Self {
+    fn unavailable(sandbox_type: SandboxType) -> Self {
         Self {
             success: false,
             exit_code: None,
@@ -169,7 +169,7 @@ pub enum DebugSubcommand {
 
 impl DebugSubcommand {
     /// Get the sandbox type for this debug subcommand.
-    pub fn sandbox_type(&self) -> SandboxType {
+    fn sandbox_type(&self) -> SandboxType {
         match self {
             Self::Seatbelt => SandboxType::MacosSeatbelt,
             Self::Landlock => SandboxType::LinuxLandlock,

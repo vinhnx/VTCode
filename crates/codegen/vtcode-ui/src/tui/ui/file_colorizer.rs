@@ -100,7 +100,7 @@ impl FileColorizer {
     /// Determine the appropriate LS_COLORS key for a file path
     ///
     /// This uses path-based heuristics to determine file type without I/O.
-    pub fn determine_file_type_key(&self, path: &Path) -> String {
+    fn determine_file_type_key(&self, path: &Path) -> String {
         // Check if path ends with a directory separator (indicates directory)
         let path_str = path.to_string_lossy();
         if path_str.ends_with('/') || path_str.ends_with('\\') {

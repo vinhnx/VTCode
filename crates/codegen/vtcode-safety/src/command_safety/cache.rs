@@ -11,11 +11,11 @@ use tokio::sync::Mutex;
 #[derive(Clone, Debug)]
 pub struct CachedDecision {
     /// True if command is safe
-    pub is_safe: bool,
+    pub(crate) is_safe: bool,
     /// Reason for decision
-    pub reason: String,
+    pub(crate) reason: String,
     /// Access count (for LRU)
-    pub access_count: u64,
+    access_count: u64,
 }
 
 /// Thread-safe cache for command safety decisions
@@ -26,7 +26,7 @@ pub struct SafetyDecisionCache {
 
 impl SafetyDecisionCache {
     /// Creates a new cache with given max size
-    pub fn new(max_size: usize) -> Self {
+    pub(crate) fn new(max_size: usize) -> Self {
         Self {
             cache: Arc::new(Mutex::new(HashMap::new())),
             max_size,
@@ -39,7 +39,7 @@ impl SafetyDecisionCache {
     }
 
     /// Gets a cached decision
-    pub async fn get(&self, command: &str) -> Option<CachedDecision> {
+    pub(crate) async fn get(&self, command: &str) -> Option<CachedDecision> {
         let mut cache = self.cache.lock().await;
         if let Some(decision) = cache.get_mut(command) {
             decision.access_count += 1;
@@ -49,7 +49,7 @@ impl SafetyDecisionCache {
     }
 
     /// Sets a cached decision
-    pub async fn put(&self, command: String, is_safe: bool, reason: String) {
+    pub(crate) async fn put(&self, command: String, is_safe: bool, reason: String) {
         let mut cache = self.cache.lock().await;
 
         if cache.len() >= self.max_size
@@ -66,19 +66,19 @@ impl SafetyDecisionCache {
     }
 
     /// Clears all cached entries
-    pub async fn clear(&self) {
+    async fn clear(&self) {
         let mut cache = self.cache.lock().await;
         cache.clear();
     }
 
     /// Returns current cache size
-    pub async fn size(&self) -> usize {
+    async fn size(&self) -> usize {
         let cache = self.cache.lock().await;
         cache.len()
     }
 
     /// Returns cache hit rate statistics
-    pub async fn stats(&self) -> CacheStats {
+    async fn stats(&self) -> CacheStats {
         let cache = self.cache.lock().await;
         let total_accesses: u64 = cache.values().map(|d| d.access_count).sum();
         let entry_count = cache.len();
@@ -107,9 +107,9 @@ impl Clone for SafetyDecisionCache {
 /// Cache statistics
 #[derive(Debug, Clone)]
 pub struct CacheStats {
-    pub entry_count: usize,
-    pub total_accesses: u64,
-    pub avg_access_per_entry: u64,
+    entry_count: usize,
+    total_accesses: u64,
+    avg_access_per_entry: u64,
 }
 
 #[cfg(test)]

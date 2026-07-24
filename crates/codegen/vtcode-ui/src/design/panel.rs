@@ -46,7 +46,7 @@ pub trait PanelStyleProvider {
 ///     .render_and_get_inner(area, buf);
 /// // Render child widget into `inner`
 /// ```
-pub struct Panel<'a, S: PanelStyleProvider> {
+pub(crate) struct Panel<'a, S: PanelStyleProvider> {
     styles: &'a S,
     title: Option<&'a str>,
     active: bool,
@@ -56,7 +56,7 @@ pub struct Panel<'a, S: PanelStyleProvider> {
 
 impl<'a, S: PanelStyleProvider> Panel<'a, S> {
     /// Create a new panel with required style reference.
-    pub fn new(styles: &'a S) -> Self {
+    pub(crate) fn new(styles: &'a S) -> Self {
         Self {
             styles,
             title: None,
@@ -68,34 +68,34 @@ impl<'a, S: PanelStyleProvider> Panel<'a, S> {
 
     /// Set the panel title (displayed in the border).
     #[must_use]
-    pub fn title(mut self, title: &'a str) -> Self {
+    pub(crate) fn title(mut self, title: &'a str) -> Self {
         self.title = Some(title);
         self
     }
 
     /// Mark the panel as active (highlighted border).
     #[must_use]
-    pub fn active(mut self, active: bool) -> Self {
+    pub(crate) fn active(mut self, active: bool) -> Self {
         self.active = active;
         self
     }
 
     /// Set the layout mode (affects border visibility).
     #[must_use]
-    pub fn mode(mut self, mode: LayoutMode) -> Self {
+    pub(crate) fn mode(mut self, mode: LayoutMode) -> Self {
         self.mode = mode;
         self
     }
 
     /// Override the border type.
     #[must_use]
-    pub fn border_type(mut self, border_type: BorderType) -> Self {
+    pub(crate) fn border_type(mut self, border_type: BorderType) -> Self {
         self.border_type = Some(border_type);
         self
     }
 
     /// Render the panel and return the inner area for child widgets.
-    pub fn render_and_get_inner(self, area: Rect, buf: &mut Buffer) -> Rect {
+    pub(crate) fn render_and_get_inner(self, area: Rect, buf: &mut Buffer) -> Rect {
         if !self.mode.show_borders() {
             return area;
         }

@@ -196,12 +196,12 @@ pub fn get_syntax_theme(theme: &str) -> &'static str {
 /// `diff.inserted` / `diff.deleted`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DiffScopeBackgroundRgbs {
-    pub inserted: Option<(u8, u8, u8)>,
-    pub deleted: Option<(u8, u8, u8)>,
+    pub(crate) inserted: Option<(u8, u8, u8)>,
+    pub(crate) deleted: Option<(u8, u8, u8)>,
 }
 
 /// Resolve diff-scope background colors from the currently active syntax theme.
-pub fn diff_scope_background_rgbs() -> DiffScopeBackgroundRgbs {
+pub(crate) fn diff_scope_background_rgbs() -> DiffScopeBackgroundRgbs {
     let theme_name = get_active_syntax_theme();
     let theme = load_theme(theme_name, true);
     diff_scope_background_rgbs_for_theme(&theme)

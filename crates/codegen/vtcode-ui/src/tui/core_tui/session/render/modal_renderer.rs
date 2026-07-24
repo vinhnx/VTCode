@@ -452,7 +452,7 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
 }
 
 #[expect(dead_code)]
-pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
+fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
     let trimmed = text.trim();
     let stripped = trimmed.strip_prefix("```").or_else(|| trimmed.strip_prefix("~~~"));
 

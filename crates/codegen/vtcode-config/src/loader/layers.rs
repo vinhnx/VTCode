@@ -23,7 +23,7 @@ pub enum ConfigLayerSource {
 
 impl ConfigLayerSource {
     /// Lower numbers are lower precedence.
-    pub const fn precedence(&self) -> i16 {
+    const fn precedence(&self) -> i16 {
         match self {
             Self::System { .. } => 10,
             Self::User { .. } => 20,
@@ -44,7 +44,7 @@ impl ConfigLayerSource {
     }
 
     /// Return a copy of this source with an updated file path.
-    pub fn with_file(&self, new_file: PathBuf) -> Self {
+    pub(crate) fn with_file(&self, new_file: PathBuf) -> Self {
         match self {
             Self::System { .. } => Self::System { file: new_file },
             Self::User { .. } => Self::User { file: new_file },
@@ -83,7 +83,7 @@ pub struct ConfigLayerEntry {
     /// Stable metadata for this layer
     pub metadata: ConfigLayerMetadata,
     /// Parsed TOML content
-    pub config: TomlValue,
+    pub(crate) config: TomlValue,
     /// Optional reason the layer was disabled
     pub disabled_reason: Option<LayerDisabledReason>,
     /// Optional error attached to this layer
@@ -92,7 +92,7 @@ pub struct ConfigLayerEntry {
 
 impl ConfigLayerEntry {
     /// Create a new configuration layer entry.
-    pub fn new(source: ConfigLayerSource, config: TomlValue) -> Self {
+    pub(crate) fn new(source: ConfigLayerSource, config: TomlValue) -> Self {
         let metadata = ConfigLayerMetadata {
             name: source.label(),
             version: fingerprint_toml_value(&config),
@@ -107,7 +107,7 @@ impl ConfigLayerEntry {
     }
 
     /// Create a disabled layer entry while retaining layer metadata.
-    pub fn disabled(source: ConfigLayerSource, reason: LayerDisabledReason, message: impl Into<String>) -> Self {
+    pub(crate) fn disabled(source: ConfigLayerSource, reason: LayerDisabledReason, message: impl Into<String>) -> Self {
         let message = message.into();
         let config = TomlValue::Table(toml::Table::new());
         let metadata = ConfigLayerMetadata {
@@ -141,17 +141,17 @@ impl ConfigLayerStack {
     }
 
     /// Add a layer to the stack.
-    pub fn push(&mut self, layer: ConfigLayerEntry) {
+    pub(crate) fn push(&mut self, layer: ConfigLayerEntry) {
         self.layers.push(layer);
     }
 
     /// Retain only layers matching the predicate.
-    pub fn retain<F: FnMut(&ConfigLayerEntry) -> bool>(&mut self, mut f: F) {
+    pub(crate) fn retain<F: FnMut(&ConfigLayerEntry) -> bool>(&mut self, mut f: F) {
         self.layers.retain(|layer| f(layer));
     }
 
     /// Merge all layers into a single effective configuration.
-    pub fn effective_config(&self) -> TomlValue {
+    pub(crate) fn effective_config(&self) -> TomlValue {
         self.effective_config_with_origins().0
     }
 
@@ -166,7 +166,7 @@ impl ConfigLayerStack {
     }
 
     /// Return the first layer error in precedence order.
-    pub fn first_layer_error(&self) -> Option<(&ConfigLayerEntry, &ConfigLayerLoadError)> {
+    pub(crate) fn first_layer_error(&self) -> Option<(&ConfigLayerEntry, &ConfigLayerLoadError)> {
         for layer in self.ordered_layers() {
             if let Some(error) = layer.error.as_ref() {
                 return Some((layer, error));

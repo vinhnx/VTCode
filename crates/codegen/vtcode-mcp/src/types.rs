@@ -16,40 +16,40 @@ pub struct McpToolInfo {
 /// Summary of an MCP resource exposed by a provider.
 #[derive(Debug, Clone)]
 pub struct McpResourceInfo {
-    pub provider: String,
-    pub uri: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub mime_type: Option<String>,
-    pub size: Option<i64>,
+    pub(crate) provider: String,
+    pub(crate) uri: String,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) mime_type: Option<String>,
+    pub(crate) size: Option<i64>,
 }
 
 /// Resource contents fetched from an MCP provider.
 #[derive(Debug, Clone)]
 pub struct McpResourceData {
-    pub provider: String,
-    pub uri: String,
-    pub contents: Vec<ResourceContents>,
-    pub meta: Map<String, Value>,
+    pub(crate) provider: String,
+    pub(crate) uri: String,
+    pub(crate) contents: Vec<ResourceContents>,
+    pub(crate) meta: Map<String, Value>,
 }
 
 /// Summary of an MCP prompt exposed by a provider.
 #[derive(Debug, Clone)]
 pub struct McpPromptInfo {
-    pub provider: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub arguments: Vec<PromptArgument>,
+    pub(crate) provider: String,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) arguments: Vec<PromptArgument>,
 }
 
 /// Fully rendered MCP prompt ready for use.
 #[derive(Debug, Clone)]
 pub struct McpPromptDetail {
-    pub provider: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub messages: Vec<PromptMessage>,
-    pub meta: Map<String, Value>,
+    pub(crate) provider: String,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) messages: Vec<PromptMessage>,
+    pub(crate) meta: Map<String, Value>,
 }
 
 /// Snapshot describing the MCP client at runtime.
@@ -66,7 +66,7 @@ pub struct McpClientStatus {
 pub struct McpElicitationRequest {
     pub message: String,
     pub requested_schema: Value,
-    pub meta: Option<Value>,
+    pub(crate) meta: Option<Value>,
 }
 
 /// Result returned by an elicitation handler after interacting with the user.
@@ -92,25 +92,25 @@ pub const OPENAI_FILE_PARAMS_VALUE: &str = "openai/fileParams";
 pub struct ProvidedFilePayload {
     /// The file ID returned from the upload (maps to backend file reference)
     #[serde(rename = "fileId")]
-    pub file_id: String,
+    file_id: String,
     /// The original file name
     #[serde(rename = "fileName")]
-    pub file_name: String,
+    file_name: String,
     /// MIME type of the uploaded file
     #[serde(rename = "mimeType")]
-    pub mime_type: String,
+    mime_type: String,
     /// File size in bytes
     #[serde(rename = "fileSize")]
-    pub file_size: i64,
+    file_size: i64,
 }
 
 /// Result of uploading a local file to the backend.
 #[derive(Debug, Clone)]
 pub struct FileUploadResult {
     /// The file ID from the backend upload
-    pub file_id: String,
+    file_id: String,
     /// The payload to substitute in the tool call arguments
-    pub payload: ProvidedFilePayload,
+    payload: ProvidedFilePayload,
 }
 
 /// Masked schema entry for a file parameter in a tool's input schema.
@@ -122,9 +122,9 @@ pub struct FileUploadResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileParamSchemaEntry {
     /// The original property name in the tool's input schema
-    pub property_name: String,
+    property_name: String,
     /// Description shown to the model for this file parameter
-    pub description: String,
+    description: String,
     /// Whether this file parameter is required
-    pub required: bool,
+    required: bool,
 }

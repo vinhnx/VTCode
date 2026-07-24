@@ -1,22 +1,22 @@
 use super::*;
 
 impl Session {
-    pub fn cursor(&self) -> usize {
+    pub(crate) fn cursor(&self) -> usize {
         self.input_manager.cursor()
     }
 
-    pub fn set_input(&mut self, text: impl Into<String>) {
+    pub(crate) fn set_input(&mut self, text: impl Into<String>) {
         self.input_manager.set_content(text.into());
         self.input_compact_mode = self.input_compact_placeholder().is_some();
         self.mark_dirty();
     }
 
-    pub fn set_cursor(&mut self, pos: usize) {
+    pub(crate) fn set_cursor(&mut self, pos: usize) {
         self.input_manager.set_cursor(pos);
         self.mark_dirty();
     }
 
-    pub fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
+    pub(crate) fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         events::process_key(self, key)
     }
 

@@ -22,7 +22,7 @@ use crate::tui::utils::diff_styles::{
     style_sign,
 };
 
-pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
+pub(crate) fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
     let Some(preview) = session.diff_preview_state() else {
         return;
     };

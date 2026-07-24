@@ -68,12 +68,12 @@ pub use vtcode_config::core::tools::ToolPolicy;
 /// Configuration for the terminal keyboard protocol (Kitty progressive enhancement).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KeyboardProtocolConfig {
-    pub enabled: bool,
-    pub mode: String,
-    pub disambiguate_escape_codes: bool,
-    pub report_event_types: bool,
-    pub report_alternate_keys: bool,
-    pub report_all_keys: bool,
+    pub(crate) enabled: bool,
+    pub(crate) mode: String,
+    pub(crate) disambiguate_escape_codes: bool,
+    pub(crate) report_event_types: bool,
+    pub(crate) report_alternate_keys: bool,
+    pub(crate) report_all_keys: bool,
 }
 
 impl Default for KeyboardProtocolConfig {

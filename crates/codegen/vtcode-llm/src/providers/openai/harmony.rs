@@ -2,7 +2,7 @@ use serde_json::Value;
 use vtcode_config::constants::models;
 use vtcode_config::constants::tools;
 
-pub(super) fn normalized_harmony_model(model: &str) -> String {
+fn normalized_harmony_model(model: &str) -> String {
     let trimmed = model.trim();
     if trimmed.is_empty() {
         return String::new();

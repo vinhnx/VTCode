@@ -61,7 +61,7 @@ pub struct FullAutoConfig {
     /// and either approves or rejects the change before it is committed.
     /// This doubles cost on mutating calls but catches propose-side errors.
     #[serde(default)]
-    pub verify_mutations: bool,
+    verify_mutations: bool,
 }
 
 impl Default for FullAutoConfig {
@@ -109,12 +109,12 @@ pub struct LoopEngineConfig {
     /// Enable loop engineering mode. When false, loop-specific features
     /// (reconciler, per-iteration skills) are inactive.
     #[serde(default)]
-    pub enabled: bool,
+    enabled: bool,
 
     /// Optional circuit breaker: maximum loop iterations before the harness
     /// refuses further runs. `None` means unlimited.
     #[serde(default)]
-    pub max_iterations: Option<usize>,
+    max_iterations: Option<usize>,
 
     /// After a worktree-isolated subagent completes, run the reconciler
     /// (diff → verify → merge) automatically.
@@ -124,7 +124,7 @@ pub struct LoopEngineConfig {
     /// Skill names to preload into the agent context at the start of each
     /// loop iteration. Empty means no per-iteration skill injection.
     #[serde(default)]
-    pub preload_skills: Vec<String>,
+    preload_skills: Vec<String>,
 }
 
 impl Default for LoopEngineConfig {

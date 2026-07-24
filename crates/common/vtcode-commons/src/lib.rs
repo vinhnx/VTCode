@@ -76,7 +76,7 @@ pub use error_category::{
     is_retryable_llm_error_message,
 };
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, MultiErrors, NoopErrorReporter};
-pub use interjection::{
+pub(crate) use interjection::{
     EventQueue, FormattedInterjection, InterjectionBuffer, LARGE_PROMPT_THRESHOLD, PendingInterjection,
     drain_formatted, format_interjection, user_query,
 };
@@ -94,4 +94,4 @@ pub use tokens::{estimate_tokens, truncate_to_tokens};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
 
 // Re-export key thread safety primitives.
-pub use thread_safety::RelaxedAtomic;
+pub(crate) use thread_safety::RelaxedAtomic;

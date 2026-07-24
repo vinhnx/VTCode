@@ -48,17 +48,17 @@ pub struct SkillsConfig {
     /// - "lean": Codex-style minimal (name + description + path only, 40-60% token savings)
     /// - "full": Full metadata with version, author, native flags
     #[serde(default = "default_render_mode")]
-    pub render_mode: SkillsRenderMode,
+    render_mode: SkillsRenderMode,
 
     /// Prompt format for skills section (Agent Skills spec)
     /// - "xml": XML wrapping for safety (Claude models default)
     /// - "markdown": Plain markdown sections
     #[serde(default = "default_prompt_format")]
-    pub prompt_format: PromptFormat,
+    prompt_format: PromptFormat,
 
     /// Maximum number of skills to show in system prompt
     #[serde(default = "default_max_skills_in_prompt")]
-    pub max_skills_in_prompt: usize,
+    max_skills_in_prompt: usize,
 
     /// Enable auto-trigger on $skill-name mentions
     #[serde(default = "default_enable_auto_trigger")]

@@ -56,7 +56,7 @@ fn parse_openai_error_details(body: &str) -> OpenAIErrorDetails {
 }
 
 /// Detect if an OpenAI API error indicates the model was not found or is inaccessible.
-pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
+pub(crate) fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
     if !matches!(status, StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY) {
         return false;
     }
@@ -69,7 +69,7 @@ pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
 }
 
 /// Provide a fallback model when the requested model is unavailable.
-pub fn fallback_model_if_not_found(model: &str) -> Option<String> {
+pub(crate) fn fallback_model_if_not_found(model: &str) -> Option<String> {
     match model {
         m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
         m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
@@ -78,7 +78,7 @@ pub fn fallback_model_if_not_found(model: &str) -> Option<String> {
 }
 
 /// Format an OpenAI API error with request metadata.
-pub fn format_openai_error(
+pub(crate) fn format_openai_error(
     status: StatusCode,
     body: &str,
     headers: &HeaderMap,
@@ -127,7 +127,7 @@ pub fn format_openai_error(
 }
 
 /// Detect if an error indicates Responses API is not supported for this model/endpoint.
-pub fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
+pub(crate) fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
     let lower = body.to_ascii_lowercase();
 
     (status == StatusCode::NOT_FOUND && lower.trim().is_empty())
@@ -140,7 +140,7 @@ pub fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
 }
 
 /// Detect if an OpenAI API error indicates `service_tier=flex` is unsupported.
-pub fn is_flex_service_tier_unsupported(status: StatusCode, body: &str) -> bool {
+pub(crate) fn is_flex_service_tier_unsupported(status: StatusCode, body: &str) -> bool {
     if status != StatusCode::BAD_REQUEST {
         return false;
     }

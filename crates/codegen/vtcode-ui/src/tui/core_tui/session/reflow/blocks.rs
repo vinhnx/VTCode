@@ -66,7 +66,7 @@ impl Session {
 
     /// Wrap content with left and right borders
     #[expect(dead_code)]
-    pub(super) fn wrap_block_lines(
+    fn wrap_block_lines(
         &self,
         first_prefix: &str,
         continuation_prefix: &str,
@@ -79,7 +79,7 @@ impl Session {
 
     /// Wrap content with left border only (no right border)
     #[expect(dead_code)]
-    pub(super) fn wrap_block_lines_no_right_border(
+    fn wrap_block_lines_no_right_border(
         &self,
         first_prefix: &str,
         continuation_prefix: &str,
@@ -298,7 +298,7 @@ impl Session {
 
     /// Check if a PTY block has actual content
     #[expect(dead_code)]
-    pub(super) fn pty_block_has_content(&self, index: usize) -> bool {
+    fn pty_block_has_content(&self, index: usize) -> bool {
         if self.lines.is_empty() {
             return false;
         }

@@ -26,13 +26,13 @@ pub struct ContainerValidationResult {
     /// Whether container skills are required
     pub requirement: ContainerSkillsRequirement,
     /// Detailed analysis
-    pub analysis: String,
+    analysis: String,
     /// Specific patterns found
-    pub patterns_found: Vec<String>,
+    patterns_found: Vec<String>,
     /// Recommendations for users
     pub recommendations: Vec<String>,
     /// Whether skill should be filtered out
-    pub should_filter: bool,
+    should_filter: bool,
 }
 
 /// Detects container skills requirements in skill instructions
@@ -274,35 +274,35 @@ impl ContainerSkillsValidator {
 /// Information about incompatible skills
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncompatibleSkillInfo {
-    pub name: String,
-    pub description: String,
-    pub reason: String,
-    pub recommendations: Vec<String>,
+    name: String,
+    description: String,
+    reason: String,
+    recommendations: Vec<String>,
 }
 
 /// Comprehensive validation report for all skills
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerValidationReport {
-    pub total_skills_analyzed: usize,
-    pub compatible_skills: Vec<String>,
+    total_skills_analyzed: usize,
+    compatible_skills: Vec<String>,
     pub incompatible_skills: Vec<IncompatibleSkillInfo>,
-    pub skills_with_fallbacks: Vec<SkillWithFallback>,
-    pub summary: ValidationSummary,
+    skills_with_fallbacks: Vec<SkillWithFallback>,
+    summary: ValidationSummary,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillWithFallback {
-    pub name: String,
-    pub description: String,
-    pub fallback_description: String,
+    name: String,
+    description: String,
+    fallback_description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationSummary {
-    pub total_compatible: usize,
-    pub total_incompatible: usize,
-    pub total_with_fallbacks: usize,
-    pub recommendation: String,
+    total_compatible: usize,
+    total_incompatible: usize,
+    total_with_fallbacks: usize,
+    recommendation: String,
 }
 
 impl ContainerValidationReport {

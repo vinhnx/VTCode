@@ -24,7 +24,7 @@ pub enum UiSurfacePreference {
 }
 
 impl UiSurfacePreference {
-    pub const fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::Alternate => "alternate",

@@ -12,13 +12,13 @@ use serde::{Deserialize, Deserializer, Serialize};
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OpenUsage {
     /// Number of input tokens processed.
-    pub input_tokens: u64,
+    input_tokens: u64,
 
     /// Number of output tokens generated.
-    pub output_tokens: u64,
+    output_tokens: u64,
 
     /// Total number of tokens used (input + output).
-    pub total_tokens: u64,
+    pub(crate) total_tokens: u64,
 
     /// Detailed breakdown of input token usage.
     #[serde(
@@ -26,7 +26,7 @@ pub struct OpenUsage {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_boxed_input_tokens_details_opt"
     )]
-    pub input_tokens_details: Option<Box<InputTokensDetails>>,
+    input_tokens_details: Option<Box<InputTokensDetails>>,
 
     /// Detailed breakdown of output token usage.
     #[serde(
@@ -34,7 +34,7 @@ pub struct OpenUsage {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_boxed_output_tokens_details_opt"
     )]
-    pub output_tokens_details: Option<Box<OutputTokensDetails>>,
+    output_tokens_details: Option<Box<OutputTokensDetails>>,
 }
 
 /// Detailed breakdown of input token usage.
@@ -42,15 +42,15 @@ pub struct OpenUsage {
 pub struct InputTokensDetails {
     /// Number of cached tokens reused from previous requests.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cached_tokens: Option<u64>,
+    cached_tokens: Option<u64>,
 
     /// Number of tokens used for audio input.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_tokens: Option<u64>,
+    audio_tokens: Option<u64>,
 
     /// Number of tokens used for text input.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_tokens: Option<u64>,
+    text_tokens: Option<u64>,
 }
 
 impl InputTokensDetails {
@@ -68,15 +68,15 @@ impl InputTokensDetails {
 pub struct OutputTokensDetails {
     /// Number of tokens used for reasoning/thinking.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_tokens: Option<u64>,
+    reasoning_tokens: Option<u64>,
 
     /// Number of tokens used for audio output.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub audio_tokens: Option<u64>,
+    audio_tokens: Option<u64>,
 
     /// Number of tokens used for text output.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_tokens: Option<u64>,
+    text_tokens: Option<u64>,
 }
 
 impl OutputTokensDetails {
@@ -91,7 +91,7 @@ impl OutputTokensDetails {
 
 impl OpenUsage {
     /// Creates a new usage instance with the given token counts.
-    pub fn new(input_tokens: u64, output_tokens: u64) -> Self {
+    fn new(input_tokens: u64, output_tokens: u64) -> Self {
         Self {
             input_tokens,
             output_tokens,
@@ -102,7 +102,7 @@ impl OpenUsage {
     }
 
     /// Creates usage from VT Code's internal LLM usage type.
-    pub fn from_llm_usage(usage: &crate::provider::Usage) -> Self {
+    pub(crate) fn from_llm_usage(usage: &crate::provider::Usage) -> Self {
         let mut details = InputTokensDetails::default();
         let cached = usage.cache_read_tokens_or_fallback();
         if cached > 0 {
@@ -123,7 +123,7 @@ impl OpenUsage {
     }
 
     /// Creates usage from VT Code's exec events usage type.
-    pub fn from_exec_usage(usage: &vtcode_exec_events::Usage) -> Self {
+    pub(crate) fn from_exec_usage(usage: &vtcode_exec_events::Usage) -> Self {
         let input_details = if usage.cached_input_tokens > 0 {
             Some(Box::new(InputTokensDetails {
                 cached_tokens: Some(usage.cached_input_tokens),

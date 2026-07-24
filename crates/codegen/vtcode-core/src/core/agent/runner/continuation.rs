@@ -493,7 +493,7 @@ fn format_command_list(results: &[VerificationResult]) -> String {
         .join(", ")
 }
 
-pub(super) fn build_verification_failure_summary(failure: &VerificationResult) -> String {
+fn build_verification_failure_summary(failure: &VerificationResult) -> String {
     match failure.exit_code {
         Some(code) => format!("Verification failed: {} (exit code {}).", failure.command, code),
         None => format!("Verification failed: {}.", failure.command),

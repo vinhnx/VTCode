@@ -7,9 +7,9 @@ use crate::tui::core_tui::types::{
 
 #[derive(Clone, Debug)]
 pub struct ModalOverlayRequest {
-    pub title: String,
-    pub lines: Vec<String>,
-    pub secure_prompt: Option<SecurePromptConfig>,
+    pub(crate) title: String,
+    pub(crate) lines: Vec<String>,
+    pub(crate) secure_prompt: Option<SecurePromptConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -44,9 +44,9 @@ pub struct DiffOverlayRequest {
 
 #[derive(Clone, Debug)]
 pub struct FilePaletteTransientRequest {
-    pub dir_lister: crate::tui::core_tui::app::session::file_palette::DirLister,
-    pub workspace: PathBuf,
-    pub visible: Option<bool>,
+    pub(crate) dir_lister: crate::tui::core_tui::app::session::file_palette::DirLister,
+    pub(crate) workspace: PathBuf,
+    pub(crate) visible: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,19 +57,19 @@ pub struct AgentPaletteItem {
 
 #[derive(Clone, Debug)]
 pub struct AgentPaletteTransientRequest {
-    pub agents: Vec<AgentPaletteItem>,
-    pub visible: Option<bool>,
+    pub(crate) agents: Vec<AgentPaletteItem>,
+    pub(crate) visible: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TaskPanelTransientRequest {
-    pub lines: Vec<String>,
-    pub visible: Option<bool>,
+    pub(crate) lines: Vec<String>,
+    pub(crate) visible: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
 pub struct LocalAgentsTransientRequest {
-    pub visible: Option<bool>,
+    pub(crate) visible: Option<bool>,
 }
 
 #[derive(Clone, Debug)]

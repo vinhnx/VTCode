@@ -60,7 +60,7 @@ impl AnthropicProvider {
         )
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(
             api_key,
             model,
@@ -72,7 +72,7 @@ impl AnthropicProvider {
         )
     }
 
-    pub fn new_with_client(
+    pub(crate) fn new_with_client(
         api_key: String,
         model: String,
         http_client: reqwest::Client,

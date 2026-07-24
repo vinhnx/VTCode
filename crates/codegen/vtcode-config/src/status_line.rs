@@ -69,7 +69,7 @@ impl Default for StatusLineConfig {
 /// Returns the default status line mode when not explicitly configured.
 ///
 /// This is the fallback when `tui.status_line` config is unset (pattern from Codex PR #12015).
-pub const DEFAULT_STATUS_LINE_MODE: StatusLineMode = StatusLineMode::Auto;
+const DEFAULT_STATUS_LINE_MODE: StatusLineMode = StatusLineMode::Auto;
 
 fn default_status_line_mode() -> StatusLineMode {
     DEFAULT_STATUS_LINE_MODE

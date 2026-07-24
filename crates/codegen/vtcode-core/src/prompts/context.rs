@@ -127,7 +127,7 @@ impl PromptContext {
         self.replace_available_skills_with_named_and_home_dir(names, home_dir.as_deref());
     }
 
-    pub(crate) fn load_available_skills_with_home_dir(&mut self, home_dir: Option<&Path>) {
+    fn load_available_skills_with_home_dir(&mut self, home_dir: Option<&Path>) {
         let Some(workspace) = self.workspace.as_deref() else {
             return;
         };
@@ -143,7 +143,7 @@ impl PromptContext {
         self.add_skill_metadata_entries(outcome.skills.into_iter().filter(is_model_catalog_eligible).collect());
     }
 
-    pub(crate) fn replace_available_skills_with_named_and_home_dir(
+    fn replace_available_skills_with_named_and_home_dir(
         &mut self,
         names: &[String],
         home_dir: Option<&Path>,

@@ -504,7 +504,7 @@ impl AgentRunner {
             .collect()
     }
 
-    pub(crate) fn features(&self) -> FeatureSet {
+    fn features(&self) -> FeatureSet {
         self.session_config.features().clone()
     }
 }

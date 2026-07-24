@@ -79,7 +79,7 @@ pub struct SidebarWidget<'a> {
 
 impl<'a> SidebarWidget<'a> {
     /// Create a new sidebar widget
-    pub fn new(styles: &'a SessionStyles) -> Self {
+    pub(crate) fn new(styles: &'a SessionStyles) -> Self {
         Self {
             styles,
             queue_items: Vec::new(),
@@ -93,20 +93,20 @@ impl<'a> SidebarWidget<'a> {
 
     /// Set queued items to display
     #[must_use]
-    pub fn queue_items(mut self, items: Vec<String>) -> Self {
+    pub(crate) fn queue_items(mut self, items: Vec<String>) -> Self {
         self.queue_items = items;
         self
     }
 
     #[must_use]
-    pub fn local_agents(mut self, entries: Vec<LocalAgentEntry>) -> Self {
+    pub(crate) fn local_agents(mut self, entries: Vec<LocalAgentEntry>) -> Self {
         self.local_agents = entries;
         self
     }
 
     /// Set context info text
     #[must_use]
-    pub fn context_info(mut self, info: &'a str) -> Self {
+    pub(crate) fn context_info(mut self, info: &'a str) -> Self {
         self.context_info = Some(info);
         self
     }
@@ -127,7 +127,7 @@ impl<'a> SidebarWidget<'a> {
 
     /// Set the layout mode
     #[must_use]
-    pub fn mode(mut self, mode: LayoutMode) -> Self {
+    pub(crate) fn mode(mut self, mode: LayoutMode) -> Self {
         self.mode = mode;
         self
     }

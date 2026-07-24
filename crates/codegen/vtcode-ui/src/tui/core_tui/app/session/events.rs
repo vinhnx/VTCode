@@ -1525,7 +1525,7 @@ pub(super) fn emit_inline_event(
 /// Handles scroll down event from mouse input
 #[inline]
 #[expect(dead_code)]
-pub(super) fn handle_scroll_down(
+fn handle_scroll_down(
     session: &mut Session,
     events: &UnboundedSender<InlineEvent>,
     callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
@@ -1538,7 +1538,7 @@ pub(super) fn handle_scroll_down(
 /// Handles scroll up event from mouse input
 #[inline]
 #[expect(dead_code)]
-pub(super) fn handle_scroll_up(
+fn handle_scroll_up(
     session: &mut Session,
     events: &UnboundedSender<InlineEvent>,
     callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
@@ -1549,7 +1549,7 @@ pub(super) fn handle_scroll_up(
 }
 
 #[expect(dead_code)]
-pub(super) fn handle_diff_preview_key(session: &mut Session, key: &KeyEvent) -> Option<InlineEvent> {
+fn handle_diff_preview_key(session: &mut Session, key: &KeyEvent) -> Option<InlineEvent> {
     let mode = session.diff_preview_state()?.mode;
 
     match key.code {

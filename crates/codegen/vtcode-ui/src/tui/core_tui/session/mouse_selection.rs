@@ -15,13 +15,13 @@ const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(450);
 #[derive(Debug, Default)]
 pub struct MouseSelectionState {
     /// Whether the user is currently dragging to select text.
-    pub is_selecting: bool,
+    pub(crate) is_selecting: bool,
     /// Screen coordinates where the selection started (column, row).
-    pub start: (u16, u16),
+    start: (u16, u16),
     /// Screen coordinates where the selection currently ends (column, row).
-    pub end: (u16, u16),
+    end: (u16, u16),
     /// Whether a completed selection exists (ready for highlight rendering).
-    pub has_selection: bool,
+    pub(crate) has_selection: bool,
     /// Whether the current selection has already been copied to clipboard.
     copied: bool,
     /// Whether Ctrl+C was pressed to explicitly copy the current selection.
@@ -38,12 +38,12 @@ struct ClickRecord {
 }
 
 impl MouseSelectionState {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Begin a new selection at the given screen position.
-    pub fn start_selection(&mut self, col: u16, row: u16) {
+    pub(crate) fn start_selection(&mut self, col: u16, row: u16) {
         self.is_selecting = true;
         self.has_selection = false;
         self.copied = false;
@@ -52,7 +52,7 @@ impl MouseSelectionState {
     }
 
     /// Set a selection directly, bypassing drag state.
-    pub fn set_selection(&mut self, start: (u16, u16), end: (u16, u16)) {
+    pub(crate) fn set_selection(&mut self, start: (u16, u16), end: (u16, u16)) {
         self.is_selecting = false;
         self.has_selection = start != end;
         self.copied = false;
@@ -61,7 +61,7 @@ impl MouseSelectionState {
     }
 
     /// Update the end position while dragging.
-    pub fn update_selection(&mut self, col: u16, row: u16) {
+    pub(crate) fn update_selection(&mut self, col: u16, row: u16) {
         if self.is_selecting {
             self.end = (col, row);
             self.has_selection = true;
@@ -69,7 +69,7 @@ impl MouseSelectionState {
     }
 
     /// Finalize the selection on mouse-up.
-    pub fn finish_selection(&mut self, col: u16, row: u16) {
+    pub(crate) fn finish_selection(&mut self, col: u16, row: u16) {
         if self.is_selecting {
             self.end = (col, row);
             self.is_selecting = false;
@@ -84,7 +84,7 @@ impl MouseSelectionState {
     /// older content) and negative when content moves up (scroll down / showing newer
     /// content).  If the adjustment pushes the selection completely off-screen the
     /// selection is cleared.
-    pub fn adjust_for_scroll(&mut self, row_delta: i32) {
+    pub(crate) fn adjust_for_scroll(&mut self, row_delta: i32) {
         if !self.has_selection && !self.is_selecting {
             return;
         }
@@ -121,7 +121,7 @@ impl MouseSelectionState {
 
     /// Clear any active selection.
     #[expect(dead_code)]
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.is_selecting = false;
         self.has_selection = false;
         self.copied = false;
@@ -130,13 +130,13 @@ impl MouseSelectionState {
     }
 
     /// Clears only the mouse click history used for double-click detection.
-    pub fn clear_click_history(&mut self) {
+    pub(crate) fn clear_click_history(&mut self) {
         self.last_click = None;
     }
 
     /// Records a click and returns `true` when it matches the previous click closely enough
     /// to be treated as a double click.
-    pub fn register_click(&mut self, col: u16, row: u16, at: Instant) -> bool {
+    pub(crate) fn register_click(&mut self, col: u16, row: u16, at: Instant) -> bool {
         let is_double_click = self.last_click.is_some_and(|last| {
             last.column == col && last.row == row && at.saturating_duration_since(last.at) <= DOUBLE_CLICK_INTERVAL
         });
@@ -156,7 +156,7 @@ impl MouseSelectionState {
     }
 
     /// Extract selected text from a ratatui `Buffer`.
-    pub fn extract_text(&self, buf: &Buffer, area: Rect) -> String {
+    pub(crate) fn extract_text(&self, buf: &Buffer, area: Rect) -> String {
         if !self.has_selection && !self.is_selecting {
             return String::new();
         }
@@ -211,7 +211,7 @@ impl MouseSelectionState {
     }
 
     /// Apply selection highlight (inverted colors) to the frame buffer.
-    pub fn apply_highlight(&self, buf: &mut Buffer, area: Rect) {
+    pub(crate) fn apply_highlight(&self, buf: &mut Buffer, area: Rect) {
         if !self.has_selection && !self.is_selecting {
             return;
         }
@@ -254,24 +254,24 @@ impl MouseSelectionState {
     }
 
     /// Returns `true` if the selection needs to be copied (finalized and not yet copied).
-    pub fn needs_copy(&self) -> bool {
+    pub(crate) fn needs_copy(&self) -> bool {
         self.has_selection && !self.is_selecting && !self.copied
     }
 
     /// Returns `true` if an explicit copy was requested via Ctrl+C.
-    pub fn has_copy_request(&self) -> bool {
+    pub(crate) fn has_copy_request(&self) -> bool {
         self.copy_requested
     }
 
     /// Request an explicit copy of the current selection (triggered by Ctrl+C).
-    pub fn request_copy(&mut self) {
+    pub(crate) fn request_copy(&mut self) {
         if self.has_selection {
             self.copy_requested = true;
         }
     }
 
     /// Mark the selection as already copied.
-    pub fn mark_copied(&mut self) {
+    pub(crate) fn mark_copied(&mut self) {
         self.copied = true;
     }
 

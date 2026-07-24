@@ -14,23 +14,23 @@ use serde::{Deserialize, Serialize};
 pub struct OpenResponseError {
     /// Category of the error.
     #[serde(rename = "type")]
-    pub error_type: OpenResponseErrorType,
+    error_type: OpenResponseErrorType,
 
     /// Machine-readable error code providing additional detail.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<OpenResponseErrorCode>,
+    code: Option<OpenResponseErrorCode>,
 
     /// The input parameter related to the error, if applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub param: Option<String>,
+    param: Option<String>,
 
     /// Human-readable explanation of what went wrong.
-    pub message: String,
+    message: String,
 }
 
 impl OpenResponseError {
     /// Creates a new error with the given type and message.
-    pub fn new(error_type: OpenResponseErrorType, message: impl Into<String>) -> Self {
+    fn new(error_type: OpenResponseErrorType, message: impl Into<String>) -> Self {
         Self {
             error_type,
             code: None,
@@ -40,7 +40,7 @@ impl OpenResponseError {
     }
 
     /// Creates a server error.
-    pub fn server_error(message: impl Into<String>) -> Self {
+    pub(crate) fn server_error(message: impl Into<String>) -> Self {
         Self::new(OpenResponseErrorType::ServerError, message)
     }
 
@@ -60,7 +60,7 @@ impl OpenResponseError {
     }
 
     /// Creates a model error.
-    pub fn model_error(message: impl Into<String>) -> Self {
+    pub(crate) fn model_error(message: impl Into<String>) -> Self {
         Self::new(OpenResponseErrorType::ModelError, message)
     }
 

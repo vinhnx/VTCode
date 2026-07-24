@@ -90,7 +90,7 @@ pub enum SubagentSource {
 
 impl SubagentSource {
     #[must_use]
-    pub const fn priority(&self) -> usize {
+    const fn priority(&self) -> usize {
         match self {
             Self::Cli => 0,
             Self::ProjectVtcode => 1,
@@ -120,7 +120,7 @@ impl SubagentSource {
     }
 
     #[must_use]
-    pub const fn vtcode_native(&self) -> bool {
+    const fn vtcode_native(&self) -> bool {
         matches!(self, Self::ProjectVtcode | Self::UserVtcode | Self::Cli)
     }
 }
@@ -299,7 +299,7 @@ impl SubagentSpec {
     }
 
     #[must_use]
-    pub fn permissions_allows_mutation(&self) -> bool {
+    fn permissions_allows_mutation(&self) -> bool {
         if matches!(
             self.permissions.default,
             PermissionDefault::Ask | PermissionDefault::Allow | PermissionDefault::Auto
@@ -323,7 +323,7 @@ impl SubagentSpec {
 }
 
 #[must_use]
-pub fn classify_agent_spec_field(field: &str) -> Option<AgentSpecFieldClass> {
+pub(crate) fn classify_agent_spec_field(field: &str) -> Option<AgentSpecFieldClass> {
     match field.trim() {
         "name" | "prompt" => Some(AgentSpecFieldClass::Shared),
         "description" | "color" | "aliases" => Some(AgentSpecFieldClass::PrimaryMetadata),
@@ -353,7 +353,7 @@ pub struct BackgroundSubagentConfig {
     #[serde(default = "default_background_auto_restore")]
     pub auto_restore: bool,
     #[serde(default = "default_background_toggle_shortcut")]
-    pub toggle_shortcut: String,
+    toggle_shortcut: String,
 }
 
 impl Default for BackgroundSubagentConfig {

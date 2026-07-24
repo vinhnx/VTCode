@@ -221,7 +221,7 @@ impl Session {
     }
 
     /// Collects a window of visible lines from the transcript
-    pub(super) fn collect_transcript_window(
+    fn collect_transcript_window(
         &mut self,
         width: u16,
         start_row: usize,

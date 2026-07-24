@@ -11,20 +11,20 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// The command that was evaluated
-    pub command: Vec<String>,
+    command: Vec<String>,
     /// Whether the command was allowed
-    pub allowed: bool,
+    pub(crate) allowed: bool,
     /// Reason for the decision
-    pub reason: String,
+    reason: String,
     /// Decision type (Allow, Deny, Unknown)
-    pub decision_type: String,
+    pub(crate) decision_type: String,
     /// Timestamp (ISO 8601 format)
-    pub timestamp: String,
+    timestamp: String,
 }
 
 impl AuditEntry {
     /// Creates a new audit entry
-    pub fn new(command: Vec<String>, allowed: bool, reason: String, decision_type: String) -> Self {
+    pub(crate) fn new(command: Vec<String>, allowed: bool, reason: String, decision_type: String) -> Self {
         // Use a simple timestamp (can be improved with chrono if available)
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -43,12 +43,12 @@ pub struct SafetyAuditLogger {
 
 impl SafetyAuditLogger {
     /// Creates a new audit logger
-    pub fn new(enabled: bool) -> Self {
+    pub(crate) fn new(enabled: bool) -> Self {
         Self { entries: Arc::new(Mutex::new(Vec::new())), enabled }
     }
 
     /// Logs an audit entry
-    pub async fn log(&self, entry: AuditEntry) {
+    pub(crate) async fn log(&self, entry: AuditEntry) {
         if self.enabled {
             let mut entries = self.entries.lock().await;
             entries.push(entry);
@@ -56,7 +56,7 @@ impl SafetyAuditLogger {
     }
 
     /// Returns all logged entries
-    pub async fn entries(&self) -> Vec<AuditEntry> {
+    pub(crate) async fn entries(&self) -> Vec<AuditEntry> {
         let entries = self.entries.lock().await;
         entries.clone()
     }
@@ -68,7 +68,7 @@ impl SafetyAuditLogger {
     }
 
     /// Returns denied entries only
-    pub async fn denied_entries(&self) -> Vec<AuditEntry> {
+    async fn denied_entries(&self) -> Vec<AuditEntry> {
         let entries = self.entries.lock().await;
         entries.iter().filter(|e| !e.allowed).cloned().collect()
     }
@@ -80,7 +80,7 @@ impl SafetyAuditLogger {
     }
 
     /// Returns count of entries
-    pub async fn count(&self) -> usize {
+    pub(crate) async fn count(&self) -> usize {
         let entries = self.entries.lock().await;
         entries.len()
     }

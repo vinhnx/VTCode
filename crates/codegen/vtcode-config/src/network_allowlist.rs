@@ -26,7 +26,7 @@ use std::collections::BTreeSet;
 /// Including the file at compile time means the allowlist is always
 /// available — even in WASM / sandbox environments where reading a
 /// runtime file path would be a problem.
-pub const DEFAULT_ALLOWLIST_TOML: &str = include_str!("../data/network_allowlist.toml");
+pub(crate) const DEFAULT_ALLOWLIST_TOML: &str = include_str!("../data/network_allowlist.toml");
 
 /// Top-level allowlist document.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -34,43 +34,43 @@ pub const DEFAULT_ALLOWLIST_TOML: &str = include_str!("../data/network_allowlist
 pub struct NetworkAllowlist {
     /// File-level metadata (`[meta]` block).
     #[serde(default)]
-    pub meta: Option<AllowlistMeta>,
+    meta: Option<AllowlistMeta>,
 
     /// LLM inference endpoints (cloud-hosted).
     #[serde(default)]
-    pub ai_providers: AiProviderCategories,
+    ai_providers: AiProviderCategories,
 
     /// Search APIs (web + specialized/vertical).
     #[serde(default)]
-    pub search: SearchCategories,
+    search: SearchCategories,
 
     /// Full-page fetch & content extraction services.
     #[serde(default, rename = "web_crawl")]
-    pub web_crawl: Vec<AllowlistEntry>,
+    web_crawl: Vec<AllowlistEntry>,
 
     /// MCP tool server endpoints.
     #[serde(default, rename = "mcp_servers")]
-    pub mcp_servers: Vec<AllowlistEntry>,
+    mcp_servers: Vec<AllowlistEntry>,
 
     /// Language package manager registries.
     #[serde(default)]
-    pub package_registries: Vec<AllowlistEntry>,
+    package_registries: Vec<AllowlistEntry>,
 
     /// Git platforms & raw content hosts.
     #[serde(default)]
-    pub code_hosting: Vec<AllowlistEntry>,
+    code_hosting: Vec<AllowlistEntry>,
 
     /// OAuth & identity provider endpoints.
     #[serde(default)]
-    pub auth: Vec<AllowlistEntry>,
+    auth: Vec<AllowlistEntry>,
 
     /// Cloud infra, databases, observability.
     #[serde(default, rename = "dev_infra")]
-    pub dev_infra: Vec<AllowlistEntry>,
+    dev_infra: Vec<AllowlistEntry>,
 
     /// System / OS package mirrors.
     #[serde(default, rename = "os_updates")]
-    pub os_updates: Vec<AllowlistEntry>,
+    os_updates: Vec<AllowlistEntry>,
 }
 
 /// Allowlist file-level metadata.
@@ -78,15 +78,15 @@ pub struct NetworkAllowlist {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AllowlistMeta {
     #[serde(default)]
-    pub version: Option<String>,
+    version: Option<String>,
     #[serde(default)]
-    pub last_updated: Option<String>,
+    last_updated: Option<String>,
     #[serde(default)]
-    pub maintainer: Option<String>,
+    maintainer: Option<String>,
     #[serde(default)]
-    pub repo: Option<String>,
+    repo: Option<String>,
     #[serde(default)]
-    pub description: Option<String>,
+    description: Option<String>,
 }
 
 /// AI provider entries split into cloud vs. local/self-hosted.
@@ -94,9 +94,9 @@ pub struct AllowlistMeta {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AiProviderCategories {
     #[serde(default)]
-    pub cloud: Vec<AllowlistEntry>,
+    cloud: Vec<AllowlistEntry>,
     #[serde(default)]
-    pub local: Vec<LocalAiProviderEntry>,
+    local: Vec<LocalAiProviderEntry>,
 }
 
 /// Search entries split into generic web vs. specialized/vertical.
@@ -104,9 +104,9 @@ pub struct AiProviderCategories {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SearchCategories {
     #[serde(default)]
-    pub web: Vec<AllowlistEntry>,
+    web: Vec<AllowlistEntry>,
     #[serde(default)]
-    pub specialized: Vec<AllowlistEntry>,
+    specialized: Vec<AllowlistEntry>,
 }
 
 /// A single allowlist row.
@@ -120,23 +120,23 @@ pub struct SearchCategories {
 pub struct AllowlistEntry {
     /// Human-readable label.
     #[serde(default)]
-    pub name: Option<String>,
+    name: Option<String>,
     /// Apex domain (e.g. `github.com`). May be a wildcard like `*.auth0.com`.
     #[serde(default)]
-    pub domain: Option<String>,
+    domain: Option<String>,
     /// Optional path prefix that the URL must start with.
     #[serde(default)]
-    pub path: Option<String>,
+    path: Option<String>,
     /// Network protocol; defaults to `https` when missing.
     #[serde(default)]
-    pub protocol: Option<String>,
+    protocol: Option<String>,
     /// Free-form notes.
     #[serde(default)]
-    pub notes: Option<String>,
+    notes: Option<String>,
     /// When `true`, surface the entry via `unverified_entries` so callers
     /// can warn or block until the operator confirms.
     #[serde(default)]
-    pub verify: bool,
+    verify: bool,
 }
 
 /// Local/self-hosted AI provider — identified by `host` + `port` rather
@@ -146,22 +146,22 @@ pub struct AllowlistEntry {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct LocalAiProviderEntry {
     #[serde(default)]
-    pub name: Option<String>,
+    name: Option<String>,
     #[serde(default)]
-    pub host: Option<String>,
+    host: Option<String>,
     #[serde(default)]
-    pub port: Option<u16>,
+    port: Option<u16>,
     #[serde(default)]
-    pub protocol: Option<String>,
+    protocol: Option<String>,
     #[serde(default)]
-    pub notes: Option<String>,
+    notes: Option<String>,
 }
 
 impl NetworkAllowlist {
     /// Parse the embedded TOML. Returns a default empty allowlist if the
     /// parse fails so the agent can still start in degraded mode (a
     /// warning is logged by the caller).
-    pub fn load_default() -> Self {
+    pub(crate) fn load_default() -> Self {
         toml::from_str(DEFAULT_ALLOWLIST_TOML).unwrap_or_default()
     }
 
@@ -172,7 +172,7 @@ impl NetworkAllowlist {
     /// Order is preserved per category so the resulting list is
     /// deterministic for tests and config dumps. Use a `BTreeSet` when
     /// callers want stable dedup without ordering.
-    pub fn all_allow_domains(&self) -> Vec<String> {
+    fn all_allow_domains(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for entry in self
             .ai_providers
@@ -199,7 +199,7 @@ impl NetworkAllowlist {
     }
 
     /// Deduplicated set form of `all_allow_domains()`.
-    pub fn all_allow_domains_set(&self) -> BTreeSet<String> {
+    fn all_allow_domains_set(&self) -> BTreeSet<String> {
         self.all_allow_domains().into_iter().collect()
     }
 
@@ -222,7 +222,7 @@ impl NetworkAllowlist {
     /// package registries, code-hosting platforms, MCP servers that
     /// expose public web content, and web-crawl relays other than
     /// defuddle.
-    pub fn web_fetch_relevant_domains(&self) -> Vec<String> {
+    pub(crate) fn web_fetch_relevant_domains(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         let mut push = |entry: &AllowlistEntry| {
             if let Some(domain) = entry.domain.as_deref() {
@@ -260,13 +260,13 @@ impl NetworkAllowlist {
     /// Entries that the allowlist itself flags as `verify = true`. The
     /// agent can refuse to use these (or surface a warning) until the
     /// operator confirms.
-    pub fn unverified_entries(&self) -> Vec<&AllowlistEntry> {
+    fn unverified_entries(&self) -> Vec<&AllowlistEntry> {
         self.iter_entries().filter(|e| e.verify).collect()
     }
 
     /// All entries across every category, in source-file order. Local
     /// AI providers are excluded (no domain).
-    pub fn iter_entries(&self) -> impl Iterator<Item = &AllowlistEntry> {
+    fn iter_entries(&self) -> impl Iterator<Item = &AllowlistEntry> {
         self.ai_providers
             .cloud
             .iter()
@@ -283,14 +283,14 @@ impl NetworkAllowlist {
 
     /// Total number of allowlist entries across all categories (excluding
     /// local AI providers).
-    pub fn entry_count(&self) -> usize {
+    fn entry_count(&self) -> usize {
         self.iter_entries().count()
     }
 
     /// Pretty-print the allowlist as a one-line per category summary
     /// (e.g. `"ai_providers.cloud: 27, search.web: 11, …"`). Useful in
     /// startup logs so operators can confirm what shipped.
-    pub fn category_summary(&self) -> String {
+    fn category_summary(&self) -> String {
         let mut parts = Vec::new();
         if !self.ai_providers.cloud.is_empty() {
             parts.push(format!("ai_providers.cloud: {}", self.ai_providers.cloud.len()));

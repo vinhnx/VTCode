@@ -46,7 +46,7 @@ pub use policy::{AllowAllPolicy, CommandPolicy, WorkspaceGuardPolicy};
 pub use runner::BashRunner;
 
 // Stream utilities
-pub use stream::{ReadLineResult, read_line_with_limit};
+pub(crate) use stream::{ReadLineResult, read_line_with_limit};
 
 // Pipe-based process spawning (codex-rs compatible)
 pub use pipe::{

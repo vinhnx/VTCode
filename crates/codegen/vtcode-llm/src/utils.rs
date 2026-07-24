@@ -9,12 +9,12 @@ use serde_json::Value;
 use crate::provider::{LLMRequest, LLMResponse, LLMStreamEvent, ToolCall};
 
 /// Parse chat request from OpenAI-compatible format
-pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
+pub(crate) fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
     crate::providers::common::parse_chat_request_openai_format(value, default_model)
 }
 
 /// Parse response from OpenAI-compatible format
-pub fn parse_response_openai_format(
+pub(crate) fn parse_response_openai_format(
     response: Value,
     _provider_name: &str,
     model: String,
@@ -121,7 +121,7 @@ pub fn parse_stream_event_openai_format(json: Value, _provider_name: &str) -> Op
 /// Returns (reasoning_parts, cleaned_content) where reasoning_parts contains
 /// the extracted reasoning text (without tags) and cleaned_content is the
 /// remaining content with reasoning sections removed.
-pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>) {
+pub(crate) fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>) {
     if let Some((deprecated_reasoning, deprecated_content)) = extract_deprecated_reasoning_sections(content) {
         let reasoning_parts = deprecated_reasoning.map(|value| vec![value]).unwrap_or_default();
         return (reasoning_parts, deprecated_content);
@@ -237,12 +237,12 @@ pub use vtcode_commons::tokens::{
 };
 
 /// Create a consistent error message for LLM errors
-pub fn format_llm_error(provider_name: &str, error_message: &str) -> String {
+fn format_llm_error(provider_name: &str, error_message: &str) -> String {
     format!("[{}] {}", provider_name, error_message.trim())
 }
 
 /// Validate that a model string is not empty and reasonable
-pub fn validate_model_string(model: &str) -> Result<()> {
+fn validate_model_string(model: &str) -> Result<()> {
     if model.is_empty() {
         anyhow::bail!("Model cannot be empty")
     }

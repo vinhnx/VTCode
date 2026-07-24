@@ -34,13 +34,13 @@ pub struct HeaderWidget<'a> {
 
 impl<'a> HeaderWidget<'a> {
     /// Create a new HeaderWidget with required parameters
-    pub fn new(session: &'a Session) -> Self {
+    pub(crate) fn new(session: &'a Session) -> Self {
         Self { session, lines: Vec::new(), custom_style: None }
     }
 
     /// Set the header lines to display
     #[must_use]
-    pub fn lines(mut self, lines: Vec<Line<'static>>) -> Self {
+    pub(crate) fn lines(mut self, lines: Vec<Line<'static>>) -> Self {
         self.lines = lines;
         self
     }

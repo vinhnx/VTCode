@@ -16,21 +16,21 @@ use tracing::{debug, info, warn};
 use vtcode_commons::canonicalize;
 
 /// Maximum compressed bundle size (50 MB)
-pub const MAX_BUNDLE_SIZE: usize = 50 * 1024 * 1024;
+const MAX_BUNDLE_SIZE: usize = 50 * 1024 * 1024;
 /// Maximum uncompressed file size (25 MB)
-pub const MAX_FILE_SIZE: usize = 25 * 1024 * 1024;
+const MAX_FILE_SIZE: usize = 25 * 1024 * 1024;
 /// Maximum file count per bundle
-pub const MAX_FILE_COUNT: usize = 500;
+const MAX_FILE_COUNT: usize = 500;
 
 /// Result of importing a skill bundle
 #[derive(Debug, Clone)]
 pub struct ImportedSkillInfo {
-    pub name: String,
-    pub version: Option<String>,
-    pub description: String,
-    pub path: PathBuf,
-    pub file_count: usize,
-    pub total_size: u64,
+    name: String,
+    version: Option<String>,
+    description: String,
+    path: PathBuf,
+    file_count: usize,
+    total_size: u64,
 }
 
 /// Export a skill directory to a zip bundle (bytes)
@@ -299,15 +299,15 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
 /// Skill store index for tracking versions
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct SkillStoreIndex {
-    pub skills: HashMap<String, SkillVersionIndex>,
+    skills: HashMap<String, SkillVersionIndex>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SkillVersionIndex {
-    pub latest_version: String,
+    latest_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_version: Option<String>,
-    pub versions: Vec<String>,
+    default_version: Option<String>,
+    versions: Vec<String>,
 }
 
 /// Update the skill index after import

@@ -28,7 +28,7 @@ pub trait WorkspaceTrustSynchronizer {
 pub struct DefaultWorkspaceTrustSynchronizer;
 
 impl DefaultWorkspaceTrustSynchronizer {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self
     }
 }
@@ -44,7 +44,7 @@ impl WorkspaceTrustSynchronizer for DefaultWorkspaceTrustSynchronizer {
     }
 }
 
-pub async fn ensure_workspace_trust_level_silent(
+async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {

@@ -21,7 +21,7 @@ pub struct CommandDatabase;
 
 impl CommandDatabase {
     /// Returns all built-in command rules
-    pub fn all_rules() -> HashMap<String, CommandRule> {
+    fn all_rules() -> HashMap<String, CommandRule> {
         let mut rules = HashMap::new();
 
         // File operations (read-only)

@@ -15,7 +15,7 @@ const FALLBACK_SYSTEM_PROMPT: &str = "You are VT Code, a coding assistant.";
 ///
 /// Returns the prompt set via [`set_default_system_prompt`] if available,
 /// otherwise falls back to a built-in default.
-pub fn default_system_prompt() -> String {
+pub(crate) fn default_system_prompt() -> String {
     DEFAULT_SYSTEM_PROMPT
         .get()
         .map_or_else(|| FALLBACK_SYSTEM_PROMPT.to_string(), |f| f())

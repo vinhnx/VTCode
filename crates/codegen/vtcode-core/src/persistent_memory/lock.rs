@@ -1,7 +1,7 @@
 use super::*;
 
-pub(crate) const LOCK_RETRY_ATTEMPTS: usize = 40;
-pub(crate) const LOCK_RETRY_DELAY_MS: u64 = 50;
+const LOCK_RETRY_ATTEMPTS: usize = 40;
+const LOCK_RETRY_DELAY_MS: u64 = 50;
 /// A held `MemoryLock` file is considered abandoned once it is older than this
 /// many seconds and may be forcibly removed so a new holder can acquire it.
 ///

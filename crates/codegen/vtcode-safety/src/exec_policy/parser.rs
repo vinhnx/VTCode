@@ -14,10 +14,10 @@ use vtcode_commons::fs::{parse_json_with_context, read_file_with_context};
 pub struct PolicyFile {
     /// Format version for compatibility.
     #[serde(default = "default_version")]
-    pub version: u32,
+    version: u32,
 
     /// Policy rules.
-    pub rules: Vec<PolicyRule>,
+    rules: Vec<PolicyRule>,
 }
 
 fn default_version() -> u32 {
@@ -28,14 +28,14 @@ fn default_version() -> u32 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyRule {
     /// Command pattern (space-separated components).
-    pub pattern: String,
+    pattern: String,
 
     /// Decision for this pattern.
-    pub decision: Decision,
+    decision: Decision,
 
     /// Optional comment explaining the rule.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub comment: Option<String>,
+    comment: Option<String>,
 }
 
 /// Parser for policy files.
@@ -44,23 +44,23 @@ pub struct PolicyParser;
 
 impl PolicyParser {
     /// Create a new parser.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self
     }
 
     /// Parse a TOML policy file.
-    pub fn parse_toml(&self, content: &str) -> Result<PolicyFile> {
+    fn parse_toml(&self, content: &str) -> Result<PolicyFile> {
         toml::from_str(content).context("Failed to parse policy TOML")
     }
 
     /// Parse a JSON policy file.
-    pub fn parse_json(&self, content: &str) -> Result<PolicyFile> {
+    fn parse_json(&self, content: &str) -> Result<PolicyFile> {
         parse_json_with_context(content, "policy JSON")
     }
 
     /// Parse a simple line-based format.
     /// Format: "decision: pattern" or "pattern = decision"
-    pub fn parse_simple(&self, content: &str) -> Result<Vec<PrefixRule>> {
+    fn parse_simple(&self, content: &str) -> Result<Vec<PrefixRule>> {
         let mut rules = Vec::new();
 
         for (line_num, line) in content.lines().enumerate() {

@@ -8,7 +8,7 @@ pub enum LocalAgentKind {
 
 impl LocalAgentKind {
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Delegated => "delegated",
             Self::Background => "background",
@@ -31,7 +31,7 @@ pub struct LocalAgentEntry {
 
 impl LocalAgentEntry {
     #[must_use]
-    pub fn is_loading(&self) -> bool {
+    pub(crate) fn is_loading(&self) -> bool {
         match self.kind {
             LocalAgentKind::Delegated => {
                 matches!(self.status.as_str(), "queued" | "running" | "waiting")

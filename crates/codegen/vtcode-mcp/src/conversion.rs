@@ -23,12 +23,12 @@ use vtcode_llm::provider::ToolDefinition;
 /// The separator mirrors the runtime convention used in
 /// `crates/codegen/vtcode-core/src/tools/mcp.rs::build_mcp_registration` (i.e. `mcp::provider::tool`)
 /// so the tool catalog stays consistent end-to-end.
-pub const DEFAULT_MCP_TOOL_NAME_PREFIX: &str = "mcp";
+const DEFAULT_MCP_TOOL_NAME_PREFIX: &str = "mcp";
 
 /// Separator used between `prefix`, `provider`, and `tool_name` segments in the
 /// canonical MCP tool name. Kept in sync with the parser in
 /// `crates/codegen/vtcode-core/src/tools/mcp.rs::parse_canonical_mcp_tool_name`.
-pub const MCP_TOOL_NAME_SEPARATOR: &str = "::";
+const MCP_TOOL_NAME_SEPARATOR: &str = "::";
 
 /// Convert an MCP tool descriptor into the canonical `ToolDefinition`.
 ///
@@ -37,14 +37,14 @@ pub const MCP_TOOL_NAME_SEPARATOR: &str = "::";
 /// `{"type": "object"}` shape so downstream formatters don't have to
 /// special-case it.
 #[must_use]
-pub fn mcp_tool_to_definition(info: &McpToolInfo) -> ToolDefinition {
+fn mcp_tool_to_definition(info: &McpToolInfo) -> ToolDefinition {
     mcp_tool_to_definition_with_prefix(info, DEFAULT_MCP_TOOL_NAME_PREFIX)
 }
 
 /// Like [`mcp_tool_to_definition`] but lets the caller override the prefix
 /// segment of the canonical name.
 #[must_use]
-pub fn mcp_tool_to_definition_with_prefix(info: &McpToolInfo, prefix: &str) -> ToolDefinition {
+fn mcp_tool_to_definition_with_prefix(info: &McpToolInfo, prefix: &str) -> ToolDefinition {
     let canonical_name = canonical_tool_name(prefix, &info.provider, &info.name);
     let parameters = normalize_input_schema(info.input_schema.clone());
     let description = info.description.trim().to_owned();
@@ -59,7 +59,7 @@ pub fn mcp_tool_to_definition_with_prefix(info: &McpToolInfo, prefix: &str) -> T
 /// Returns `None` when the tool has no function payload (hosted / native tools
 /// are not representable as MCP tools today).
 #[must_use]
-pub fn definition_to_mcp_tool(tool: &ToolDefinition, provider: &str) -> Option<McpToolInfo> {
+fn definition_to_mcp_tool(tool: &ToolDefinition, provider: &str) -> Option<McpToolInfo> {
     let func = tool.function.as_ref()?;
     let name = strip_canonical_prefix(&func.name, DEFAULT_MCP_TOOL_NAME_PREFIX, provider)?;
     Some(McpToolInfo {
@@ -73,7 +73,7 @@ pub fn definition_to_mcp_tool(tool: &ToolDefinition, provider: &str) -> Option<M
 /// Build the canonical MCP tool name from a prefix, provider identifier, and
 /// tool name (e.g. `("mcp", "fetch", "fetch") -> "mcp::fetch::fetch"`).
 #[must_use]
-pub fn canonical_tool_name(prefix: &str, provider: &str, tool_name: &str) -> String {
+fn canonical_tool_name(prefix: &str, provider: &str, tool_name: &str) -> String {
     let mut out = String::with_capacity(prefix.len() + provider.len() + tool_name.len() + 4);
     out.push_str(prefix);
     out.push_str(MCP_TOOL_NAME_SEPARATOR);

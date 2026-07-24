@@ -76,7 +76,7 @@ impl LocalProvider {
         }
     }
 
-    pub fn base_url(self) -> String {
+    fn base_url(self) -> String {
         resolve_base_url(self.default_base_url(), self.base_url_env())
     }
 
@@ -98,7 +98,7 @@ pub struct LocalServerStatus {
 }
 
 impl LocalServerStatus {
-    pub fn not_running(provider: LocalProvider, reason: impl Into<String>) -> Self {
+    fn not_running(provider: LocalProvider, reason: impl Into<String>) -> Self {
         Self {
             provider,
             running: false,
@@ -113,11 +113,11 @@ impl LocalServerStatus {
 
 #[derive(Debug, Clone)]
 pub struct LocalServerCapabilities {
-    pub can_start: bool,
-    pub can_stop: bool,
-    pub binary_found: bool,
-    pub binary_name: &'static str,
-    pub binary_path: Option<String>,
+    can_start: bool,
+    can_stop: bool,
+    binary_found: bool,
+    binary_name: &'static str,
+    binary_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -701,7 +701,7 @@ fn resolve_base_url(default: &str, env_var: &str) -> String {
 /// Shared by local providers so the "is this localhost?" check lives in one
 /// place. Accepts `localhost`, `127.0.0.1` (and the whole `127.0.0.0/8`
 /// subnet via prefix match), `::1`, and `0.0.0.0` over http/https.
-pub fn is_local_base_url(base_url: &str) -> bool {
+pub(crate) fn is_local_base_url(base_url: &str) -> bool {
     let lowered = base_url.trim().to_ascii_lowercase();
     const LOCAL_PREFIXES: &[&str] = &[
         "http://localhost",

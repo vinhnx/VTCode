@@ -9,13 +9,13 @@ use crate::provider::Provider;
 use crate::reasoning::ReasoningEffortLevel;
 
 /// Default context window for most models
-pub const DEFAULT_CONTEXT_WINDOW: i64 = 128_000;
+const DEFAULT_CONTEXT_WINDOW: i64 = 128_000;
 
 /// Large context window (for models like Gemini)
-pub const LARGE_CONTEXT_WINDOW: i64 = 1_048_576;
+const LARGE_CONTEXT_WINDOW: i64 = 1_048_576;
 
 /// Medium context window
-pub const MEDIUM_CONTEXT_WINDOW: i64 = 200_000;
+const MEDIUM_CONTEXT_WINDOW: i64 = 200_000;
 
 /// Shell tool type preference for a model family
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -52,7 +52,7 @@ impl Default for TruncationPolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelFamily {
     /// The full model slug used to derive this model family
-    pub slug: String,
+    slug: String,
 
     /// The model family name (e.g., "gemini-2.5", "claude-opus")
     pub family: String,
@@ -61,46 +61,46 @@ pub struct ModelFamily {
     pub provider: Provider,
 
     /// Maximum supported context window, if known
-    pub context_window: Option<i64>,
+    context_window: Option<i64>,
 
     /// Token threshold for automatic compaction
-    pub auto_compact_token_limit: Option<i64>,
+    auto_compact_token_limit: Option<i64>,
 
     /// Whether the model supports reasoning summaries
     pub supports_reasoning_summaries: bool,
 
     /// Default reasoning effort for this model family
-    pub default_reasoning_effort: Option<ReasoningEffortLevel>,
+    default_reasoning_effort: Option<ReasoningEffortLevel>,
 
     /// Whether the model supports parallel tool calls
-    pub supports_parallel_tool_calls: bool,
+    supports_parallel_tool_calls: bool,
 
     /// Whether the model needs special apply_patch instructions
-    pub needs_special_apply_patch_instructions: bool,
+    needs_special_apply_patch_instructions: bool,
 
     /// Preferred shell tool type for this model family
-    pub shell_type: ShellToolType,
+    shell_type: ShellToolType,
 
     /// Truncation policy for model output
-    pub truncation_policy: TruncationPolicy,
+    truncation_policy: TruncationPolicy,
 
     /// Names of experimental tools supported by this model family
-    pub experimental_supported_tools: Vec<String>,
+    experimental_supported_tools: Vec<String>,
 
     /// Percentage of context window considered usable for inputs
-    pub effective_context_window_percent: i64,
+    effective_context_window_percent: i64,
 
     /// Whether the model supports verbosity settings
-    pub support_verbosity: bool,
+    support_verbosity: bool,
 
     /// Whether the model supports tool use
-    pub supports_tool_use: bool,
+    supports_tool_use: bool,
 
     /// Whether the model supports streaming
-    pub supports_streaming: bool,
+    supports_streaming: bool,
 
     /// Whether the model supports thinking/reasoning output
-    pub supports_thinking: bool,
+    supports_thinking: bool,
 }
 
 impl Default for ModelFamily {
@@ -129,7 +129,7 @@ impl Default for ModelFamily {
 
 impl ModelFamily {
     /// Create a new model family with the given slug
-    pub fn new(slug: impl Into<String>, family: impl Into<String>, provider: Provider) -> Self {
+    fn new(slug: impl Into<String>, family: impl Into<String>, provider: Provider) -> Self {
         Self {
             slug: slug.into(),
             family: family.into(),
@@ -139,7 +139,7 @@ impl ModelFamily {
     }
 
     /// Get the auto-compact token limit, computing a default if not set
-    pub fn auto_compact_token_limit(&self) -> Option<i64> {
+    fn auto_compact_token_limit(&self) -> Option<i64> {
         self.auto_compact_token_limit
             .or(self.context_window.map(Self::default_auto_compact_limit))
     }
@@ -155,7 +155,7 @@ impl ModelFamily {
     }
 
     /// Check if this family supports a specific feature
-    pub fn supports_feature(&self, feature: &str) -> bool {
+    fn supports_feature(&self, feature: &str) -> bool {
         match feature {
             "reasoning" | "thinking" => self.supports_thinking,
             "tool_use" | "tools" => self.supports_tool_use,

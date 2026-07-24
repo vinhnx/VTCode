@@ -128,7 +128,7 @@ impl Default for VTCodeGitignore {
 }
 
 /// Global .vtcodegitignore instance for easy access
-pub static VTCODE_GITIGNORE: once_cell::sync::Lazy<tokio::sync::RwLock<Arc<VTCodeGitignore>>> =
+static VTCODE_GITIGNORE: once_cell::sync::Lazy<tokio::sync::RwLock<Arc<VTCodeGitignore>>> =
     once_cell::sync::Lazy::new(|| tokio::sync::RwLock::new(Arc::new(VTCodeGitignore::default())));
 
 /// Initialize the global .vtcodegitignore instance

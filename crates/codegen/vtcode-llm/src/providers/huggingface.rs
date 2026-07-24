@@ -41,7 +41,7 @@ impl HuggingFaceProvider {
         Self::with_model_internal(api_key, models::huggingface::DEFAULT_MODEL.to_string(), None, None, None)
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(api_key, model, None, None, None)
     }
 
@@ -732,7 +732,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
         parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(json, PROVIDER_NAME, model, false, None)
     }
 
-    pub fn available_models() -> Vec<String> {
+    fn available_models() -> Vec<String> {
         models::huggingface::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 

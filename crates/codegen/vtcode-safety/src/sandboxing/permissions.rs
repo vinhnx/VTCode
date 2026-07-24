@@ -27,7 +27,7 @@ pub enum SandboxPermissions {
 
 impl SandboxPermissions {
     /// Check if this permission requires approval.
-    pub fn requires_approval(&self) -> bool {
+    fn requires_approval(&self) -> bool {
         matches!(self, Self::RequireEscalated | Self::WithAdditionalPermissions | Self::BypassSandbox)
     }
 
@@ -37,7 +37,7 @@ impl SandboxPermissions {
     }
 
     /// Check if this permission requests any additional privileges.
-    pub fn requires_additional_permissions(&self) -> bool {
+    fn requires_additional_permissions(&self) -> bool {
         !matches!(self, Self::UseDefault)
     }
 
@@ -47,12 +47,12 @@ impl SandboxPermissions {
     }
 
     /// Check if this permission bypasses the sandbox.
-    pub fn bypasses_sandbox(&self) -> bool {
+    fn bypasses_sandbox(&self) -> bool {
         matches!(self, Self::BypassSandbox)
     }
 
     /// Merge with another permission, taking the more permissive one.
-    pub fn merge(&self, other: &Self) -> Self {
+    fn merge(&self, other: &Self) -> Self {
         use SandboxPermissions::*;
         match (self, other) {
             (BypassSandbox, _) | (_, BypassSandbox) => BypassSandbox,

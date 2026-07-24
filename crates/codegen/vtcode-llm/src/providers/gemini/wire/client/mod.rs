@@ -29,7 +29,7 @@ impl Client {
     }
 
     /// Create a client with custom configuration
-    pub fn with_config(api_key: String, model: String, config: ClientConfig) -> Self {
+    fn with_config(api_key: String, model: String, config: ClientConfig) -> Self {
         let http_client = ReqwestClient::builder()
             .pool_max_idle_per_host(config.pool_max_idle_per_host)
             .pool_idle_timeout(config.pool_idle_timeout)

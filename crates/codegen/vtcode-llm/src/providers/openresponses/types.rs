@@ -74,12 +74,12 @@ pub enum FunctionCallStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputTextContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "input_text"
-    pub text: String,
+    content_type: String, // "input_text"
+    text: String,
 }
 
 impl InputTextContent {
-    pub fn new(text: impl Into<String>) -> Self {
+    fn new(text: impl Into<String>) -> Self {
         Self {
             content_type: "input_text".to_string(),
             text: text.into(),
@@ -91,10 +91,10 @@ impl InputTextContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputTextContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "output_text"
-    pub text: String,
+    content_type: String, // "output_text"
+    text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Vec<Annotation>>,
+    annotations: Option<Vec<Annotation>>,
 }
 
 impl OutputTextContent {
@@ -111,8 +111,8 @@ impl OutputTextContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefusalContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "refusal"
-    pub refusal: String,
+    content_type: String, // "refusal"
+    refusal: String,
 }
 
 /// Image detail level.
@@ -132,26 +132,26 @@ pub enum ImageDetail {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputImageContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "input_image"
+    content_type: String, // "input_image"
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_url: Option<String>,
+    image_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail: Option<ImageDetail>,
+    detail: Option<ImageDetail>,
 }
 
 /// Input file content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputFileContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "input_file"
+    content_type: String, // "input_file"
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub filename: Option<String>,
+    filename: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_id: Option<String>,
+    file_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_data: Option<String>,
+    file_data: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_url: Option<String>,
+    file_url: Option<String>,
 }
 
 /// Annotation for citations.
@@ -196,17 +196,17 @@ pub enum OutputContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserMessageItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "message"
-    pub role: String, // "user"
-    pub content: Vec<InputContent>,
+    item_type: String, // "message"
+    role: String, // "user"
+    content: Vec<InputContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    status: Option<String>,
 }
 
 impl UserMessageItemParam {
-    pub fn new(text: impl Into<String>) -> Self {
+    fn new(text: impl Into<String>) -> Self {
         Self {
             item_type: "message".to_string(),
             role: "user".to_string(),
@@ -221,13 +221,13 @@ impl UserMessageItemParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemMessageItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "message"
-    pub role: String, // "system"
-    pub content: Vec<InputTextContent>,
+    item_type: String, // "message"
+    role: String, // "system"
+    content: Vec<InputTextContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    status: Option<String>,
 }
 
 impl SystemMessageItemParam {
@@ -246,26 +246,26 @@ impl SystemMessageItemParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeveloperMessageItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "message"
-    pub role: String, // "developer"
-    pub content: Vec<InputTextContent>,
+    item_type: String, // "message"
+    role: String, // "developer"
+    content: Vec<InputTextContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    status: Option<String>,
 }
 
 /// Assistant message item parameter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssistantMessageItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "message"
-    pub role: String, // "assistant"
-    pub content: Vec<OutputContent>,
+    item_type: String, // "message"
+    role: String, // "assistant"
+    content: Vec<OutputContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    status: Option<String>,
 }
 
 impl AssistantMessageItemParam {
@@ -284,30 +284,30 @@ impl AssistantMessageItemParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCallItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "function_call"
-    pub id: String,
-    pub call_id: String,
-    pub name: String,
-    pub arguments: String,
+    item_type: String, // "function_call"
+    id: String,
+    call_id: String,
+    name: String,
+    arguments: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<FunctionCallStatus>,
+    status: Option<FunctionCallStatus>,
 }
 
 /// Function call output item parameter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionCallOutputItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "function_call_output"
-    pub call_id: String,
-    pub output: String,
+    item_type: String, // "function_call_output"
+    call_id: String,
+    output: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<FunctionCallStatus>,
+    status: Option<FunctionCallStatus>,
 }
 
 impl FunctionCallOutputItemParam {
-    pub fn new(call_id: impl Into<String>, output: impl Into<String>) -> Self {
+    fn new(call_id: impl Into<String>, output: impl Into<String>) -> Self {
         Self {
             item_type: "function_call_output".to_string(),
             call_id: call_id.into(),
@@ -322,43 +322,43 @@ impl FunctionCallOutputItemParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningSummaryContent {
     #[serde(rename = "type")]
-    pub content_type: String, // "summary_text"
-    pub text: String,
+    content_type: String, // "summary_text"
+    text: String,
 }
 
 /// Reasoning item parameter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningItemParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "reasoning"
-    pub summary: Vec<ReasoningSummaryContent>,
+    item_type: String, // "reasoning"
+    summary: Vec<ReasoningSummaryContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<Value>,
+    content: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encrypted_content: Option<String>,
+    encrypted_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub usage: Option<ReasoningUsage>,
+    usage: Option<ReasoningUsage>,
 }
 
 /// Usage information for reasoning items.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningUsage {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_tokens: Option<u32>,
+    input_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_tokens: Option<u32>,
+    output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_tokens: Option<u32>,
+    total_tokens: Option<u32>,
 }
 
 /// Item reference parameter for referencing previous items.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemReferenceParam {
     #[serde(rename = "type")]
-    pub item_type: String, // "item_reference"
-    pub id: String,
+    item_type: String, // "item_reference"
+    id: String,
 }
 
 /// Union of all item parameters that can be sent as input.
@@ -383,18 +383,18 @@ pub enum ItemParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionToolParam {
     #[serde(rename = "type")]
-    pub tool_type: String, // "function"
-    pub name: String,
+    tool_type: String, // "function"
+    name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub parameters: Option<Value>,
+    parameters: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub strict: Option<bool>,
+    strict: Option<bool>,
 }
 
 impl FunctionToolParam {
-    pub fn new(name: impl Into<String>) -> Self {
+    fn new(name: impl Into<String>) -> Self {
         Self {
             tool_type: "function".to_string(),
             name: name.into(),
@@ -404,12 +404,12 @@ impl FunctionToolParam {
         }
     }
 
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+    fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
-    pub fn with_parameters(mut self, parameters: Value) -> Self {
+    fn with_parameters(mut self, parameters: Value) -> Self {
         self.parameters = Some(parameters);
         self
     }
@@ -436,8 +436,8 @@ pub enum ToolChoiceValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpecificFunctionChoice {
     #[serde(rename = "type")]
-    pub choice_type: String, // "function"
-    pub name: String,
+    choice_type: String, // "function"
+    name: String,
 }
 
 /// Tool choice parameter union.
@@ -452,14 +452,14 @@ pub enum ToolChoiceParam {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncompleteDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    reason: Option<String>,
 }
 
 /// Error object.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseError {
-    pub code: String,
-    pub message: String,
+    code: String,
+    message: String,
 }
 
 /// Response status.
@@ -480,34 +480,34 @@ pub enum ResponseStatus {
 /// OpenResponses API response body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenResponsesResponse {
-    pub id: String,
-    pub object: String, // "response"
+    id: String,
+    object: String, // "response"
     #[serde(default)]
-    pub status: ResponseStatus,
-    pub output: Vec<Value>,
+    status: ResponseStatus,
+    output: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub usage: Option<ResponseUsage>,
+    usage: Option<ResponseUsage>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ResponseError>,
+    error: Option<ResponseError>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub incomplete_details: Option<IncompleteDetails>,
+    incomplete_details: Option<IncompleteDetails>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
+    model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<u64>,
+    created_at: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    metadata: Option<Value>,
 }
 
 /// Response usage statistics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseUsage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
+    input_tokens: u64,
+    output_tokens: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_tokens_details: Option<Value>,
+    input_tokens_details: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_tokens_details: Option<Value>,
+    output_tokens_details: Option<Value>,
 }
 
 #[cfg(test)]

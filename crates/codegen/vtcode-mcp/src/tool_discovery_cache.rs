@@ -25,7 +25,7 @@ pub struct BloomFilter {
 }
 
 impl BloomFilter {
-    pub fn new(expected_items: usize, false_positive_rate: f64) -> Self {
+    fn new(expected_items: usize, false_positive_rate: f64) -> Self {
         let size = Self::optimal_size(expected_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(size, expected_items);
 
@@ -33,7 +33,7 @@ impl BloomFilter {
     }
 
     /// Add an item to the bloom filter
-    pub fn insert(&mut self, item: &str) {
+    fn insert(&mut self, item: &str) {
         for i in 0..self.num_hashes {
             let hash = self.hash(item, i);
             let index = hash % self.size;
@@ -42,7 +42,7 @@ impl BloomFilter {
     }
 
     /// Check if an item might be in the set
-    pub fn contains(&self, item: &str) -> bool {
+    fn contains(&self, item: &str) -> bool {
         for i in 0..self.num_hashes {
             let hash = self.hash(item, i);
             let index = hash % self.size;
@@ -110,13 +110,13 @@ struct DiscoveryCacheInner {
 /// Cached tool discovery result (matches actual API)
 #[derive(Debug, Clone)]
 pub struct ToolDiscoveryResult {
-    pub tool: McpToolInfo,
-    pub relevance_score: f64,
-    pub detail_level: DetailLevel,
+    tool: McpToolInfo,
+    relevance_score: f64,
+    detail_level: DetailLevel,
 }
 
 /// Multi-level caching system for tool discovery
-pub struct ToolDiscoveryCache {
+pub(crate) struct ToolDiscoveryCache {
     inner: Arc<RwLock<DiscoveryCacheInner>>,
     /// Cache configuration
     config: CacheConfig,
@@ -135,7 +135,7 @@ struct CacheConfig {
 }
 
 impl ToolDiscoveryCache {
-    pub fn new(capacity: usize) -> Self {
+    pub(crate) fn new(capacity: usize) -> Self {
         let config = CacheConfig {
             max_age: Duration::from_secs(300),                  // 5 minutes
             provider_refresh_interval: Duration::from_secs(60), // 1 minute
@@ -169,7 +169,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Get cached tool discovery results
-    pub fn get_cached_discovery(
+    fn get_cached_discovery(
         &self,
         provider_name: &str,
         keyword: &str,
@@ -204,7 +204,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Cache tool discovery results
-    pub fn cache_discovery(
+    fn cache_discovery(
         &self,
         provider_name: &str,
         keyword: &str,
@@ -314,7 +314,7 @@ impl ToolDiscoveryCache {
     }
 
     /// Get cache statistics
-    pub fn stats(&self) -> ToolCacheStats {
+    pub(crate) fn stats(&self) -> ToolCacheStats {
         let (detailed_entries, detailed_capacity, all_tools_entries, bf_size, bf_hashes) = self
             .inner
             .read()
@@ -342,11 +342,11 @@ impl ToolDiscoveryCache {
 /// Cache statistics for monitoring
 #[derive(Debug, Clone)]
 pub struct ToolCacheStats {
-    pub detailed_cache_entries: usize,
-    pub detailed_cache_capacity: usize,
-    pub all_tools_cache_entries: usize,
-    pub bloom_filter_size: usize,
-    pub bloom_filter_hashes: usize,
+    detailed_cache_entries: usize,
+    detailed_cache_capacity: usize,
+    all_tools_cache_entries: usize,
+    bloom_filter_size: usize,
+    bloom_filter_hashes: usize,
 }
 
 /// Enhanced tool discovery with caching

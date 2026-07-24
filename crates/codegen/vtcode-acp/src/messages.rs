@@ -8,27 +8,27 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpMessage {
     /// Unique message ID
-    pub id: String,
+    pub(crate) id: String,
 
     /// Message type (request, response, etc.)
     #[serde(rename = "type")]
-    pub message_type: MessageType,
+    message_type: MessageType,
 
     /// Sender agent ID
-    pub sender: String,
+    sender: String,
 
     /// Recipient agent ID
-    pub recipient: String,
+    recipient: String,
 
     /// Message content
-    pub content: MessageContent,
+    pub(crate) content: MessageContent,
 
     /// Timestamp (ISO 8601)
-    pub timestamp: String,
+    timestamp: String,
 
     /// Optional correlation ID for request/response pairs
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub correlation_id: Option<String>,
+    correlation_id: Option<String>,
 }
 
 /// Message type enumeration
@@ -62,36 +62,36 @@ pub enum MessageContent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpRequest {
     /// Action/tool name to execute
-    pub action: String,
+    action: String,
 
     /// Arguments for the action (any JSON-serializable data)
-    pub args: Value,
+    args: Value,
 
     /// Optional timeout in seconds
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout_secs: Option<u64>,
+    timeout_secs: Option<u64>,
 
     /// Whether to await response synchronously
     #[serde(default)]
-    pub sync: bool,
+    pub(crate) sync: bool,
 }
 
 /// ACP response structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpResponse {
     /// Execution status
-    pub status: ResponseStatus,
+    status: ResponseStatus,
 
     /// Result data (on success)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    result: Option<Value>,
 
     /// Error details (on failure)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorDetails>,
+    error: Option<ErrorDetails>,
 
     /// Execution time in milliseconds
-    pub execution_time_ms: u64,
+    execution_time_ms: u64,
 }
 
 /// Response status enum
@@ -108,43 +108,43 @@ pub enum ResponseStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorPayload {
     /// Error code (ACP standard or custom)
-    pub code: String,
+    code: String,
 
     /// Human-readable error message
-    pub message: String,
+    message: String,
 
     /// Additional error details
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<Value>,
+    details: Option<Value>,
 }
 
 /// Error details in response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetails {
     /// Error code
-    pub code: String,
+    code: String,
 
     /// Error message
-    pub message: String,
+    message: String,
 
     /// Additional context
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<Value>,
+    context: Option<Value>,
 }
 
 /// Notification payload for one-way messages
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationPayload {
     /// Notification type
-    pub event: String,
+    event: String,
 
     /// Event-specific data
-    pub data: Value,
+    data: Value,
 }
 
 impl AcpMessage {
     /// Create a new ACP request message
-    pub fn request(sender: String, recipient: String, action: String, args: Value) -> Self {
+    pub(crate) fn request(sender: String, recipient: String, action: String, args: Value) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             message_type: MessageType::Request,
@@ -194,12 +194,12 @@ impl AcpMessage {
     }
 
     /// Convert to JSON for transmission
-    pub fn to_json(&self) -> anyhow::Result<String> {
+    fn to_json(&self) -> anyhow::Result<String> {
         Ok(serde_json::to_string(self)?)
     }
 
     /// Parse from JSON
-    pub fn from_json(json: &str) -> anyhow::Result<Self> {
+    fn from_json(json: &str) -> anyhow::Result<Self> {
         Ok(serde_json::from_str(json)?)
     }
 }

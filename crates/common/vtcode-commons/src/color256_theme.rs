@@ -94,7 +94,7 @@ fn adjust_index(index: u8, is_harmonious: bool) -> u8 {
 }
 
 /// Adjust an ANSI256 index based on a light/dark theme hint.
-pub fn adjust_index_for_theme(index: u8, is_light_theme: bool) -> u8 {
+fn adjust_index_for_theme(index: u8, is_light_theme: bool) -> u8 {
     adjust_index(index, is_harmonious_for_theme(is_light_theme))
 }
 

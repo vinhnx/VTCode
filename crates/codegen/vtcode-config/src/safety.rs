@@ -23,7 +23,7 @@ pub struct SafetyConfig {
     /// Audit log configuration. `None` ⇒ audit disabled, equivalent to a
     /// disabled [`ToolAuditConfig`].
     #[serde(default)]
-    pub audit: Option<ToolAuditConfig>,
+    audit: Option<ToolAuditConfig>,
 }
 
 /// Subset of `[safety.audit]` controlling the audit log sink.
@@ -31,17 +31,17 @@ pub struct SafetyConfig {
 pub struct ToolAuditConfig {
     /// When true, the runloop persists audit entries. Default `false`.
     #[serde(default)]
-    pub enabled: bool,
+    enabled: bool,
     /// Path of the JSONL file. Tilde expansion is performed at load time.
     #[serde(default = "default_audit_path")]
-    pub path: PathBuf,
+    path: PathBuf,
     /// Rotation threshold in bytes. Default 32 MiB.
     #[serde(default = "default_max_size_bytes")]
-    pub max_size_bytes: u64,
+    max_size_bytes: u64,
     /// Maximum number of rotated files to keep (current file + N-1 archives).
     /// Default `4`.
     #[serde(default = "default_max_files")]
-    pub max_files: usize,
+    max_files: usize,
 }
 
 impl Default for ToolAuditConfig {

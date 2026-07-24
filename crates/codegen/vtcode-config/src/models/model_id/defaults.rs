@@ -19,7 +19,7 @@ impl ModelId {
     }
 
     /// Get the default model for general use
-    pub fn default_model() -> Self {
+    pub(crate) fn default_model() -> Self {
         ModelId::ClaudeSonnet5
     }
 

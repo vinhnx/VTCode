@@ -41,7 +41,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 /// Models that use the Anthropic Messages API instead of OpenAI Chat Completions.
-pub const ANTHROPIC_FORMAT_MODELS: &[&str] = &[CLAUDE_SONNET_4_6, CLAUDE_OPUS_4_8, CLAUDE_HAIKU_4_5];
+const ANTHROPIC_FORMAT_MODELS: &[&str] = &[CLAUDE_SONNET_4_6, CLAUDE_OPUS_4_8, CLAUDE_HAIKU_4_5];
 
 /// Models that emit reasoning traces / accept `reasoning_effort`.
 pub const REASONING_MODELS: &[&str] = &[DEEPSEEK_V4_PRO, DEEPSEEK_V4_FLASH, DOUBAO_SEED_2_0_PRO];

@@ -86,7 +86,7 @@ pub(crate) fn fixed_section_rows_with_divider(
 
 /// Rows reserved by the search field: 0 when absent, 1 when the label is empty
 /// (prompt-only, no title row), 2 when a title label is rendered above the input.
-pub(crate) fn search_field_rows(field: Option<&SharedSearchField>) -> u16 {
+fn search_field_rows(field: Option<&SharedSearchField>) -> u16 {
     match field {
         Some(field) if field.label.is_empty() => 1,
         Some(_) => 2,
@@ -108,7 +108,7 @@ impl ListPanelLayout {
         split_bottom_list_panel(area, self.fixed_rows, self.desired_list_rows)
     }
 
-    pub(crate) fn visible_list_rows(&self, panel_area: Rect) -> usize {
+    fn visible_list_rows(&self, panel_area: Rect) -> usize {
         panel_area.height.saturating_sub(self.fixed_rows).into()
     }
 
@@ -174,7 +174,7 @@ pub(crate) fn input_styles_from_theme(theme: &InlineTheme) -> InputStyles {
     InputStyles::from_palette(&palette)
 }
 
-pub(crate) fn render_shared_search_field(
+fn render_shared_search_field(
     frame: &mut Frame<'_>,
     area: Rect,
     search: &SharedSearchField,

@@ -26,19 +26,19 @@ pub struct CommandSkillSpec {
     pub skill_name: &'static str,
     pub description: &'static str,
     pub usage: &'static str,
-    pub category: &'static str,
+    category: &'static str,
     /// Additional slash names that resolve to this command (the canonical name
     /// stays `slash_name`). Used so legacy commands keep working after a rename.
-    pub aliases: &'static [&'static str],
+    aliases: &'static [&'static str],
     pub backend: CommandSkillBackend,
 }
 
 impl CommandSkillSpec {
-    pub const fn is_traditional(self) -> bool {
+    const fn is_traditional(self) -> bool {
         matches!(self.backend, CommandSkillBackend::TraditionalSkill { .. })
     }
 
-    pub const fn is_built_in(self) -> bool {
+    const fn is_built_in(self) -> bool {
         matches!(self.backend, CommandSkillBackend::BuiltInCommand { .. })
     }
 }
@@ -51,7 +51,7 @@ pub struct BuiltInCommandSkill {
 }
 
 impl BuiltInCommandSkill {
-    pub fn from_spec(spec: &'static CommandSkillSpec) -> Self {
+    fn from_spec(spec: &'static CommandSkillSpec) -> Self {
         Self {
             spec,
             manifest: built_in_manifest(spec),
@@ -141,7 +141,7 @@ macro_rules! traditional_command_spec {
     };
 }
 
-pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
+const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     built_in_command_spec!(
         "init",
         "Guided workspace setup for vtcode.toml, AGENTS.md, and indexing (usage: /init [--force])",
@@ -402,7 +402,7 @@ pub fn find_command_skill_by_skill_name(name: &str) -> Option<&'static CommandSk
     COMMAND_SKILL_SPECS.iter().find(|spec| spec.skill_name == name)
 }
 
-pub fn is_command_skill_name(name: &str) -> bool {
+fn is_command_skill_name(name: &str) -> bool {
     find_command_skill_by_skill_name(name).is_some()
 }
 

@@ -1,1 +1,1 @@
-pub mod line_truncation;
+pub(crate) mod line_truncation;

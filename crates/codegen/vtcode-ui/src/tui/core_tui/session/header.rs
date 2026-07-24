@@ -118,7 +118,7 @@ impl Session {
         self.header_height_from_lines(width, &lines)
     }
 
-    pub fn header_block_title(&self) -> Line<'static> {
+    fn header_block_title(&self) -> Line<'static> {
         self.header_block_title_for_width(0)
     }
 
@@ -224,7 +224,7 @@ impl Session {
         spans
     }
 
-    pub fn header_title_line(&self) -> Line<'static> {
+    pub(crate) fn header_title_line(&self) -> Line<'static> {
         // First line: badge-style provider + model + reasoning summary
         let mut spans = Vec::new();
 
@@ -348,12 +348,12 @@ impl Session {
         if value.trim().is_empty() { None } else { Some(value) }
     }
 
-    pub fn header_provider_short_value(&self) -> String {
+    fn header_provider_short_value(&self) -> String {
         let value = self.header_provider_value();
         Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX).trim().to_owned()
     }
 
-    pub fn header_model_short_value(&self) -> String {
+    fn header_model_short_value(&self) -> String {
         let value = self.header_model_value();
         let model = Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX).trim().to_owned();
 
@@ -365,7 +365,7 @@ impl Session {
         }
     }
 
-    pub fn header_reasoning_short_value(&self) -> String {
+    fn header_reasoning_short_value(&self) -> String {
         let value = self.header_reasoning_value().unwrap_or_default();
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX).trim().to_owned()
     }
@@ -402,7 +402,7 @@ impl Session {
         values
     }
 
-    pub fn header_meta_line(&self) -> Line<'static> {
+    pub(crate) fn header_meta_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
 
         let mut first_section = true;

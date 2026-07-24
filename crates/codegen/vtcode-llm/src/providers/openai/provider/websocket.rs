@@ -51,7 +51,7 @@ pub(super) fn is_websocket_previous_response_not_found_error(err: &LLMError) -> 
     message.contains(PREVIOUS_RESPONSE_NOT_FOUND_CODE)
 }
 
-pub(super) fn is_websocket_reconnect_error(err: &LLMError) -> bool {
+fn is_websocket_reconnect_error(err: &LLMError) -> bool {
     matches!(err, LLMError::Network { .. })
 }
 

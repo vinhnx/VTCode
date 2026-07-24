@@ -16,23 +16,23 @@ pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 /// Cached provider capabilities to reduce repeated trait method calls
 #[derive(Debug, Clone)]
 pub struct ProviderCapabilities {
-    pub provider_name: String,
-    pub model: String,
+    pub(crate) provider_name: String,
+    pub(crate) model: String,
     pub streaming: bool,
     pub reasoning: bool,
     pub reasoning_effort: bool,
     pub tools: bool,
     pub parallel_tool_config: bool,
-    pub structured_output: bool,
-    pub context_caching: bool,
+    pub(crate) structured_output: bool,
+    pub(crate) context_caching: bool,
     pub responses_compaction: bool,
     pub context_edits: bool,
-    pub vision: bool,
-    pub context_size: usize,
+    pub(crate) vision: bool,
+    pub(crate) context_size: usize,
 }
 
 impl ProviderCapabilities {
-    pub fn detect(provider: &dyn LLMProvider, model: &str) -> Self {
+    fn detect(provider: &dyn LLMProvider, model: &str) -> Self {
         Self {
             provider_name: provider.name().to_string(),
             model: model.to_string(),
@@ -50,11 +50,11 @@ impl ProviderCapabilities {
         }
     }
 
-    pub fn has_advanced_features(&self) -> bool {
+    pub(crate) fn has_advanced_features(&self) -> bool {
         self.reasoning || self.structured_output || self.context_caching || self.reasoning_effort
     }
 
-    pub fn summary(&self) -> String {
+    pub(crate) fn summary(&self) -> String {
         let mut features = Vec::new();
 
         if self.streaming {

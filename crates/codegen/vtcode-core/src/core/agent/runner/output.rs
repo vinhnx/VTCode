@@ -4,7 +4,7 @@ use crate::utils::colors::style;
 use std::io::IsTerminal;
 
 impl AgentRunner {
-    pub(super) fn should_print_final_message_to_stdout(stdout_is_terminal: bool, stderr_is_terminal: bool) -> bool {
+    fn should_print_final_message_to_stdout(stdout_is_terminal: bool, stderr_is_terminal: bool) -> bool {
         !(stdout_is_terminal && stderr_is_terminal)
     }
 

@@ -18,12 +18,12 @@ pub struct ModelPricing {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModelCatalogEntry {
-    pub provider: &'static str,
-    pub id: &'static str,
+    pub(crate) provider: &'static str,
+    id: &'static str,
     pub display_name: &'static str,
     pub description: &'static str,
     pub context_window: usize,
-    pub max_output_tokens: Option<usize>,
+    max_output_tokens: Option<usize>,
     pub reasoning: bool,
     pub tool_call: bool,
     pub vision: bool,
@@ -525,7 +525,7 @@ impl ModelId {
     }
 
     /// Determine if this model supports GPT-5.1+/5.2+/5.3+ shell tool type
-    pub fn supports_shell_tool(&self) -> bool {
+    pub(crate) fn supports_shell_tool(&self) -> bool {
         matches!(
             self,
             ModelId::GPT56Sol

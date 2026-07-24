@@ -116,7 +116,7 @@ pub enum ResultCompleteness {
 
 impl ResultCompleteness {
     /// Deprecated: prefer using the `Display` impl; `ToString` is derived from Display.
-    pub fn to_static_str(&self) -> &'static str {
+    fn to_static_str(&self) -> &'static str {
         match self {
             Self::Complete => "complete",
             Self::Partial => "partial",
@@ -249,20 +249,20 @@ impl ResultMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnhancedToolResult {
     /// The actual tool result
-    pub value: Value,
+    value: Value,
 
     /// Quality metadata
     pub metadata: ResultMetadata,
 
     /// When result was produced
-    pub timestamp: u64,
+    timestamp: u64,
 
     /// Tool name that produced this
-    pub tool_name: CompactStr,
+    tool_name: CompactStr,
 
     /// Whether this was from cache
     #[serde(default)]
-    pub from_cache: bool,
+    from_cache: bool,
 }
 
 impl EnhancedToolResult {

@@ -5,7 +5,7 @@ use super::{FileEntry, FilePalette};
 const PAGE_JUMP: usize = 10;
 
 impl FilePalette {
-    pub fn move_selection_up(&mut self) {
+    pub(crate) fn move_selection_up(&mut self) {
         match self.selected {
             Some(sel) => self.selected = Some(sel.saturating_sub(1)),
             None if !self.filtered_files.is_empty() => self.selected = Some(0),
@@ -13,7 +13,7 @@ impl FilePalette {
         }
     }
 
-    pub fn move_selection_down(&mut self) {
+    pub(crate) fn move_selection_down(&mut self) {
         if self.filtered_files.is_empty() {
             self.selected = None;
             return;
@@ -29,7 +29,7 @@ impl FilePalette {
         self.select_first();
     }
 
-    pub fn move_to_last(&mut self) {
+    pub(crate) fn move_to_last(&mut self) {
         self.selected = if self.filtered_files.is_empty() {
             None
         } else {
@@ -49,11 +49,11 @@ impl FilePalette {
         }
     }
 
-    pub fn get_selected(&self) -> Option<&FileEntry> {
+    pub(crate) fn get_selected(&self) -> Option<&FileEntry> {
         self.selected.and_then(|i| self.filtered_files.get(i))
     }
 
-    pub fn select_index(&mut self, index: usize) -> bool {
+    pub(crate) fn select_index(&mut self, index: usize) -> bool {
         if index < self.filtered_files.len() {
             self.selected = Some(index);
             true
@@ -62,13 +62,13 @@ impl FilePalette {
         }
     }
 
-    pub fn select_best_match(&mut self) {
+    pub(crate) fn select_best_match(&mut self) {
         self.select_first();
     }
 
     /// Descend into the selected directory, or ascend when the `..` entry is
     /// selected. No-op on a file or when nothing is selected.
-    pub fn enter_selected_dir(&mut self) {
+    pub(crate) fn enter_selected_dir(&mut self) {
         let Some(entry) = self.get_selected().cloned() else {
             return;
         };
@@ -85,7 +85,7 @@ impl FilePalette {
     }
 
     /// Ascend one directory level, reselecting the directory just left.
-    pub fn go_up(&mut self) {
+    pub(crate) fn go_up(&mut self) {
         if self.current_dir == self.workspace_root {
             return;
         }
@@ -105,15 +105,15 @@ impl FilePalette {
         }
     }
 
-    pub fn total_items(&self) -> usize {
+    pub(crate) fn total_items(&self) -> usize {
         self.filtered_files.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.filtered_files.is_empty()
     }
 
-    pub fn filter_query(&self) -> &str {
+    pub(crate) fn filter_query(&self) -> &str {
         &self.filter_query
     }
 
@@ -124,7 +124,7 @@ impl FilePalette {
     /// collapse the panel layout and swallow mouse input during Browse mode
     /// before the index finishes; basing it solely on `filtered_files` would
     /// make an empty search-listing with a loaded corpus report `false`.
-    pub fn has_files(&self) -> bool {
+    pub(crate) fn has_files(&self) -> bool {
         !self.filtered_files.is_empty() || !self.all_files.is_empty()
     }
 

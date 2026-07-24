@@ -287,7 +287,7 @@ impl FileOpsTool {
         tree::execute_tree_view(self, input)
     }
 
-    pub(super) fn paginate_and_format(
+    fn paginate_and_format(
         &self,
         items: Vec<Value>,
         total_count: usize,

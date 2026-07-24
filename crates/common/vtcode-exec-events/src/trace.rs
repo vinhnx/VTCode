@@ -89,7 +89,7 @@ pub struct TraceRecord {
 
 impl TraceRecord {
     /// Create a new trace record with required fields.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             version: AGENT_TRACE_VERSION.to_string(),
             id: uuid::Uuid::new_v4(),
@@ -102,7 +102,7 @@ impl TraceRecord {
     }
 
     /// Create a trace record for a specific git revision.
-    pub fn for_git_revision(revision: impl Into<String>) -> Self {
+    fn for_git_revision(revision: impl Into<String>) -> Self {
         let mut trace = Self::new();
         trace.vcs = Some(VcsInfo::git(revision));
         trace
@@ -143,7 +143,7 @@ pub struct VcsInfo {
 
 impl VcsInfo {
     /// Create VCS info for a git repository.
-    pub fn git(revision: impl Into<String>) -> Self {
+    fn git(revision: impl Into<String>) -> Self {
         Self { vcs_type: VcsType::Git, revision: revision.into() }
     }
 
@@ -186,7 +186,7 @@ pub struct ToolInfo {
 
 impl ToolInfo {
     /// Create tool info for VT Code.
-    pub fn vtcode() -> Self {
+    fn vtcode() -> Self {
         Self {
             name: "vtcode".to_string(),
             version: Some(env!("CARGO_PKG_VERSION").to_string()),
@@ -282,10 +282,10 @@ impl TraceConversation {
 pub struct RelatedResource {
     /// Type of the related resource.
     #[serde(rename = "type")]
-    pub resource_type: String,
+    resource_type: String,
 
     /// URL of the related resource.
-    pub url: String,
+    url: String,
 }
 
 impl RelatedResource {
@@ -315,18 +315,18 @@ impl RelatedResource {
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TraceRange {
     /// Start line number (1-indexed, inclusive).
-    pub start_line: u32,
+    start_line: u32,
 
     /// End line number (1-indexed, inclusive).
-    pub end_line: u32,
+    end_line: u32,
 
     /// Hash of attributed content for position-independent tracking.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_hash: Option<String>,
+    content_hash: Option<String>,
 
     /// Override contributor for this specific range (e.g., for agent handoffs).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub contributor: Option<Contributor>,
+    contributor: Option<Contributor>,
 }
 
 impl TraceRange {
@@ -352,7 +352,7 @@ impl TraceRange {
     }
 
     /// Compute and set content hash from content using MurmurHash3.
-    pub fn with_content_hash(mut self, content: &str) -> Self {
+    fn with_content_hash(mut self, content: &str) -> Self {
         let hash = compute_content_hash(content);
         self.content_hash = Some(hash);
         self
@@ -369,11 +369,11 @@ impl TraceRange {
 pub struct Contributor {
     /// Type of contributor.
     #[serde(rename = "type")]
-    pub contributor_type: ContributorType,
+    contributor_type: ContributorType,
 
     /// Model identifier following models.dev convention (e.g., "anthropic/claude-opus-4-5-20251101").
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_id: Option<String>,
+    model_id: Option<String>,
 }
 
 impl Contributor {

@@ -17,7 +17,7 @@ pub(crate) struct BackgroundLaunchSpec {
 
 // ─── Background State Persistence ──────────────────────────────────────────
 
-pub(crate) fn background_state_path(workspace_root: &Path) -> PathBuf {
+fn background_state_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(".vtcode").join("state").join("background_subagents.json")
 }
 

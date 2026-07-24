@@ -168,7 +168,7 @@ impl Session {
     /// This preserves the full block (including large multi-line pastes) so the
     /// agent receives the exact content instead of dropping line breaks after
     /// hitting the interactive input's visual limit.
-    pub fn insert_paste_text(&mut self, text: &str) {
+    pub(crate) fn insert_paste_text(&mut self, text: &str) {
         let sanitized: String = text.chars().filter(|&ch| ch != '\r' && ch != '\u{7f}').collect();
 
         if sanitized.is_empty() {
@@ -214,7 +214,7 @@ impl Session {
     }
 
     /// Calculate remaining newline capacity in the input field
-    pub(crate) fn remaining_newline_capacity(&self) -> usize {
+    fn remaining_newline_capacity(&self) -> usize {
         let content = self.input_manager.content();
         let mut newline_count = content.matches('\n').count();
         if let Some(range) = self.input_manager.compact_paste_range()
@@ -229,7 +229,7 @@ impl Session {
     }
 
     /// Check if a newline can be inserted
-    pub(crate) fn can_insert_newline(&self) -> bool {
+    fn can_insert_newline(&self) -> bool {
         self.remaining_newline_capacity() > 0
     }
 

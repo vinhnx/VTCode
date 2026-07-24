@@ -21,7 +21,7 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
     )
 }
 
-pub fn measure_text_width(text: &str) -> u16 {
+pub(crate) fn measure_text_width(text: &str) -> u16 {
     UnicodeWidthStr::width(text) as u16
 }
 
@@ -29,13 +29,13 @@ pub fn measure_text_width(text: &str) -> u16 {
 ///
 /// Delegates to `crate::design::color::anstyle_to_ratatui_color` which
 /// provides the correct mapping (fixing the Magenta bug).
-pub fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
+pub(crate) fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
     crate::design::color::anstyle_to_ratatui_color(color)
 }
 
 /// Parse a hex color string (e.g., "#D99A4E") to a ratatui Color.
 /// Returns None if the string is invalid or cannot be parsed.
-pub use crate::design::color::hex_to_ratatui_color;
+pub(crate) use crate::design::color::hex_to_ratatui_color;
 
 /// Get the agent color style from an optional color token.
 ///
@@ -43,7 +43,7 @@ pub use crate::design::color::hex_to_ratatui_color;
 /// name (`"green"`), or a `#rrggbb` hex string. It is resolved theme-aware via
 /// the design system so the badge stays legible on both dark and light
 /// terminals, with `fallback_color` used when the token is empty or unknown.
-pub fn agent_color_style(color: Option<&str>, fallback_color: Color) -> Style {
+pub(crate) fn agent_color_style(color: Option<&str>, fallback_color: Color) -> Style {
     let light = matches!(
         vtcode_commons::ansi_capabilities::detect_color_scheme(),
         vtcode_commons::ansi_capabilities::ColorScheme::Light
@@ -54,19 +54,19 @@ pub fn agent_color_style(color: Option<&str>, fallback_color: Color) -> Style {
     Style::default().fg(color).add_modifier(Modifier::BOLD)
 }
 
-pub fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+pub(crate) fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
     crate::design::style::inline_text_style_to_ratatui(style.color, style.bg_color, style.effects, fallback)
 }
 
 /// PTY output style helper: keep configured color, suppress bold, enforce dimmed output.
-pub fn ratatui_pty_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+pub(crate) fn ratatui_pty_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
     ratatui_style_from_inline(style, fallback)
         .remove_modifier(Modifier::BOLD)
         .add_modifier(Modifier::DIM)
 }
 
 /// Convert an `anstyle::Style` directly to a `ratatui::style::Style`.
-pub fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
+pub(crate) fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
     crate::design::style::anstyle_to_ratatui_style(style)
 }
 

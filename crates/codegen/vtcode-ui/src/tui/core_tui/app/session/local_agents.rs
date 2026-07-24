@@ -54,7 +54,7 @@ impl LocalAgentsState {
         &self.entries
     }
 
-    pub(super) fn has_entries(&self) -> bool {
+    fn has_entries(&self) -> bool {
         !self.entries.is_empty()
     }
 
@@ -74,11 +74,11 @@ impl LocalAgentsState {
         self.navigator.move_down()
     }
 
-    pub(super) fn page_up(&mut self, step: usize) -> bool {
+    fn page_up(&mut self, step: usize) -> bool {
         self.navigator.page_up(step)
     }
 
-    pub(super) fn page_down(&mut self, step: usize) -> bool {
+    fn page_down(&mut self, step: usize) -> bool {
         self.navigator.page_down(step)
     }
 
@@ -86,7 +86,7 @@ impl LocalAgentsState {
         self.navigator.set_visible_rows(rows);
     }
 
-    pub(super) fn visible_rows(&self) -> usize {
+    fn visible_rows(&self) -> usize {
         self.navigator.visible_rows()
     }
 
@@ -98,7 +98,7 @@ impl LocalAgentsState {
         self.navigator.set_scroll_offset(offset);
     }
 
-    pub(super) fn selected_entry(&self) -> Option<&LocalAgentEntry> {
+    fn selected_entry(&self) -> Option<&LocalAgentEntry> {
         self.selected().and_then(|index| self.entries.get(index))
     }
 }

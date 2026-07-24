@@ -81,7 +81,7 @@ impl Session {
     }
 
     #[expect(dead_code)]
-    pub(crate) fn decorate_borrowed_transcript_links(
+    fn decorate_borrowed_transcript_links(
         &mut self,
         lines: &[TranscriptLine],
         area: Rect,
@@ -801,7 +801,7 @@ pub(crate) fn detect_rendered_transcript_links(
         .collect()
 }
 
-pub(crate) fn detect_transcript_link_matches(text: &str, workspace_root: Option<&Path>) -> Vec<DetectedLinkMatch> {
+fn detect_transcript_link_matches(text: &str, workspace_root: Option<&Path>) -> Vec<DetectedLinkMatch> {
     let mut matches = Vec::new();
 
     for quoted_match in QUOTED_PATH_PATTERN.find_iter(text) {

@@ -108,7 +108,7 @@ impl SpoolResult {
     /// Read the full content from the spooled file (skips metadata header)
     ///
     /// Use this when the agent needs the complete output for analysis.
-    pub fn read_full_content(&self) -> Result<String> {
+    pub(crate) fn read_full_content(&self) -> Result<String> {
         let content = read_file_with_context_sync(&self.file_path, "spooled output")?;
 
         // Skip the metadata header (lines before "---\n\n")
@@ -122,7 +122,7 @@ impl SpoolResult {
     /// Read a specific line range from the spooled file (1-indexed, inclusive)
     ///
     /// Useful for the agent to read specific sections without loading everything.
-    pub fn read_lines(&self, start: usize, end: usize) -> Result<String> {
+    pub(crate) fn read_lines(&self, start: usize, end: usize) -> Result<String> {
         let content = self.read_full_content()?;
         // Avoid allocating a full Vec of lines; iterate and collect only the requested range.
         if start == 0 || end == 0 || start > end {
@@ -153,7 +153,7 @@ impl SpoolResult {
     ///
     /// Returns a string suitable for including in the agent's response,
     /// with clear markers showing what was truncated.
-    pub fn get_preview(&self) -> Result<String> {
+    pub(crate) fn get_preview(&self) -> Result<String> {
         let content = self.read_full_content()?;
         let preview = excerpt_text_lines(&content, PREVIEW_HEAD_LINES, PREVIEW_TAIL_LINES);
         if preview.hidden_count == 0 {
@@ -173,7 +173,7 @@ impl SpoolResult {
     ///
     /// This is the recommended format for tool results when output was spooled.
     /// It gives the agent everything it needs: preview, file path, and size info.
-    pub fn to_agent_response(&self) -> Result<String> {
+    pub(crate) fn to_agent_response(&self) -> Result<String> {
         let preview = self.get_preview()?;
 
         Ok(format!(

@@ -43,13 +43,13 @@ use tower_http::cors::CorsLayer;
 #[derive(Debug, Clone)]
 pub struct A2aServerState {
     /// Task manager for handling task lifecycle
-    pub task_manager: Arc<TaskManager>,
+    task_manager: Arc<TaskManager>,
     /// Agent card for discovery
-    pub agent_card: Arc<AgentCard>,
+    agent_card: Arc<AgentCard>,
     /// Broadcast channel for streaming events
-    pub event_tx: Arc<tokio::sync::broadcast::Sender<StreamingEvent>>,
+    event_tx: Arc<tokio::sync::broadcast::Sender<StreamingEvent>>,
     /// Webhook notifier for push notifications
-    pub webhook_notifier: Arc<WebhookNotifier>,
+    webhook_notifier: Arc<WebhookNotifier>,
 }
 
 impl A2aServerState {
@@ -65,7 +65,7 @@ impl A2aServerState {
     }
 
     /// Create a server state with default settings for VT Code
-    pub fn vtcode_default(base_url: impl Into<String>) -> Self {
+    fn vtcode_default(base_url: impl Into<String>) -> Self {
         Self::new(TaskManager::new(), AgentCard::vtcode_default(base_url))
     }
 }
@@ -383,7 +383,7 @@ pub struct A2aErrorResponse {
 
 impl A2aErrorResponse {
     /// Create a new error response
-    pub fn new(error: JsonRpcError, id: Value, status_code: StatusCode) -> Self {
+    fn new(error: JsonRpcError, id: Value, status_code: StatusCode) -> Self {
         Self {
             response: JsonRpcResponse::error(error, id),
             status_code,
@@ -391,17 +391,17 @@ impl A2aErrorResponse {
     }
 
     /// Create an invalid request error response
-    pub fn invalid_request(message: &str, id: Value) -> Self {
+    fn invalid_request(message: &str, id: Value) -> Self {
         Self::new(JsonRpcError::invalid_request(message), id, StatusCode::BAD_REQUEST)
     }
 
     /// Create a method not found error response
-    pub fn method_not_found(method: &str, id: Value) -> Self {
+    fn method_not_found(method: &str, id: Value) -> Self {
         Self::new(JsonRpcError::method_not_found(method), id, StatusCode::NOT_FOUND)
     }
 
     /// Create an error response from an A2aError
-    pub fn from_error(error: A2aError, id: Value) -> Self {
+    fn from_error(error: A2aError, id: Value) -> Self {
         let code: i32 = error.code().into();
         let message = error.to_string();
         let status_code = match error {

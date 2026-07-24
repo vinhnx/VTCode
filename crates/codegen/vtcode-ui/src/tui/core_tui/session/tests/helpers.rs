@@ -43,16 +43,16 @@ pub use tokio::sync::mpsc;
 pub use tokio::sync::mpsc::UnboundedSender;
 pub use vtcode_commons::ui_protocol::InlineMessageKind;
 
-pub const VIEW_ROWS: u16 = 14;
-pub const VIEW_WIDTH: u16 = 100;
-pub const LINE_COUNT: usize = 10;
-pub const LABEL_PREFIX: &str = "line";
-pub const EXTRA_SEGMENT: &str = "\nextra-line";
-pub static TRANSCRIPT_TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
-pub static CLIPBOARD_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-pub static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+pub(crate) const VIEW_ROWS: u16 = 14;
+pub(crate) const VIEW_WIDTH: u16 = 100;
+pub(crate) const LINE_COUNT: usize = 10;
+pub(crate) const LABEL_PREFIX: &str = "line";
+pub(crate) const EXTRA_SEGMENT: &str = "\nextra-line";
+static TRANSCRIPT_TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static CLIPBOARD_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-pub fn with_terminal_env<R>(tmux: Option<&str>, term: Option<&str>, f: impl FnOnce() -> R) -> R {
+pub(crate) fn with_terminal_env<R>(tmux: Option<&str>, term: Option<&str>, f: impl FnOnce() -> R) -> R {
     let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
     let original_tmux = std::env::var("TMUX").ok();
     let original_term = std::env::var("TERM").ok();
@@ -74,14 +74,14 @@ pub fn with_terminal_env<R>(tmux: Option<&str>, term: Option<&str>, f: impl FnOn
     result
 }
 
-pub fn make_segment(text: &str) -> InlineSegment {
+pub(crate) fn make_segment(text: &str) -> InlineSegment {
     InlineSegment {
         text: text.to_string(),
         style: Arc::new(InlineTextStyle::default()),
     }
 }
 
-pub fn themed_inline_colors() -> InlineTheme {
+pub(crate) fn themed_inline_colors() -> InlineTheme {
     InlineTheme {
         foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
         tool_accent: Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45))),
@@ -92,21 +92,21 @@ pub fn themed_inline_colors() -> InlineTheme {
     }
 }
 
-pub fn session_with_input(input: &str, cursor: usize) -> Session {
+pub(crate) fn session_with_input(input: &str, cursor: usize) -> Session {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS * 2);
     session.set_input(input.to_string());
     session.set_cursor(cursor);
     session
 }
 
-pub fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
+pub(crate) fn app_session_with_input(input: &str, cursor: usize) -> AppSession {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     session.core.set_input(input.to_string());
     session.core.set_cursor(cursor);
     session
 }
 
-pub fn left_click_session(
+pub(crate) fn left_click_session(
     session: &mut Session,
     events: &UnboundedSender<InlineEvent>,
     column: u16,
@@ -135,7 +135,7 @@ pub fn left_click_session(
     );
 }
 
-pub fn left_click_app_session(
+pub(crate) fn left_click_app_session(
     session: &mut AppSession,
     events: &UnboundedSender<app_types::InlineEvent>,
     column: u16,
@@ -164,11 +164,11 @@ pub fn left_click_app_session(
     );
 }
 
-pub fn sample_local_agent_entry(kind: app_types::LocalAgentKind) -> LocalAgentEntry {
+pub(crate) fn sample_local_agent_entry(kind: app_types::LocalAgentKind) -> LocalAgentEntry {
     sample_local_agent_entry_with_id("agent-1", "rust-engineer", kind)
 }
 
-pub fn sample_local_agent_entry_with_id(
+pub(crate) fn sample_local_agent_entry_with_id(
     id: &str,
     display_label: &str,
     kind: app_types::LocalAgentKind,
@@ -186,7 +186,7 @@ pub fn sample_local_agent_entry_with_id(
     }
 }
 
-pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, workspace: PathBuf) {
+pub(crate) fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, workspace: PathBuf) {
     use crate::tui::core_tui::app::session::file_palette::DirLister;
     use std::path::Path;
 
@@ -228,7 +228,7 @@ pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, works
     session.handle_command(app_types::InlineCommand::UpdateFilePaletteSearch { files });
 }
 
-pub fn session_with_slash_palette_commands() -> AppSession {
+pub(crate) fn session_with_slash_palette_commands() -> AppSession {
     AppSession::new_with_logs(
         InlineTheme::default(),
         None,
@@ -246,17 +246,17 @@ pub fn session_with_slash_palette_commands() -> AppSession {
     )
 }
 
-pub fn enable_vim_normal_mode(session: &mut Session) {
+pub(crate) fn enable_vim_normal_mode(session: &mut Session) {
     session.vim_state.set_enabled(true);
     assert!(session.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
 }
 
-pub fn enable_vim_normal_mode_app(session: &mut AppSession) {
+pub(crate) fn enable_vim_normal_mode_app(session: &mut AppSession) {
     session.core.vim_state.set_enabled(true);
     assert!(session.core.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
 }
 
-pub fn show_basic_list_overlay(session: &mut Session) {
+pub(crate) fn show_basic_list_overlay(session: &mut Session) {
     session.handle_command(InlineCommand::ShowOverlay {
         request: Box::new(OverlayRequest::List(ListOverlayRequest {
             title: "Pick one".to_string(),
@@ -287,7 +287,7 @@ pub fn show_basic_list_overlay(session: &mut Session) {
     });
 }
 
-pub fn show_diff_overlay(session: &mut AppSession, mode: app_types::DiffPreviewMode) {
+pub(crate) fn show_diff_overlay(session: &mut AppSession, mode: app_types::DiffPreviewMode) {
     session.show_diff_overlay(app_types::DiffOverlayRequest {
         file_path: "src/main.rs".to_string(),
         before: "fn old() {}\n".to_string(),
@@ -304,7 +304,7 @@ pub fn show_diff_overlay(session: &mut AppSession, mode: app_types::DiffPreviewM
     });
 }
 
-pub fn visible_transcript(session: &mut Session) -> Vec<String> {
+pub(crate) fn visible_transcript(session: &mut Session) -> Vec<String> {
     let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
     terminal
@@ -314,7 +314,7 @@ pub fn visible_transcript(session: &mut Session) -> Vec<String> {
     current_visible_transcript(session)
 }
 
-pub fn current_visible_transcript(session: &mut Session) -> Vec<String> {
+fn current_visible_transcript(session: &mut Session) -> Vec<String> {
     let width = session.transcript_width;
     let viewport = session.viewport_height();
     let offset = session.transcript_view_top;
@@ -348,7 +348,7 @@ pub fn current_visible_transcript(session: &mut Session) -> Vec<String> {
         .collect()
 }
 
-pub fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
+pub(crate) fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
     session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -366,7 +366,7 @@ pub fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
         .collect()
 }
 
-pub fn rendered_transcript_widget_lines(session: &mut Session, width: u16, height: u16) -> Vec<String> {
+pub(crate) fn rendered_transcript_widget_lines(session: &mut Session, width: u16, height: u16) -> Vec<String> {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
     TranscriptWidget::new(session).render(area, &mut buf);
@@ -382,7 +382,7 @@ pub fn rendered_transcript_widget_lines(session: &mut Session, width: u16, heigh
         .collect()
 }
 
-pub fn rendered_transcript_lines(session: &mut Session, rows: u16) -> (Rect, Vec<String>) {
+pub(crate) fn rendered_transcript_lines(session: &mut Session, rows: u16) -> (Rect, Vec<String>) {
     session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -392,7 +392,7 @@ pub fn rendered_transcript_lines(session: &mut Session, rows: u16) -> (Rect, Vec
     (area, current_visible_transcript(session))
 }
 
-pub fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String> {
+pub(crate) fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<String> {
     session.core.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -410,48 +410,48 @@ pub fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<St
         .collect()
 }
 
-pub fn is_horizontal_rule(line: &str) -> bool {
+pub(crate) fn is_horizontal_rule(line: &str) -> bool {
     let glyph = ui::INLINE_BLOCK_HORIZONTAL.chars().next().expect("horizontal rule glyph");
     !line.is_empty() && line.chars().all(|ch| ch == glyph)
 }
 
-pub fn line_text(line: &Line<'_>) -> String {
+pub(crate) fn line_text(line: &Line<'_>) -> String {
     line.spans.iter().map(|span| span.content.clone().into_owned()).collect()
 }
 
-pub fn transcript_line(text: impl Into<String>) -> TranscriptLine {
+pub(crate) fn transcript_line(text: impl Into<String>) -> TranscriptLine {
     TranscriptLine {
         line: Line::from(text.into()),
         explicit_links: Vec::new(),
     }
 }
 
-pub fn text_content(text: &Text<'static>) -> String {
+pub(crate) fn text_content(text: &Text<'static>) -> String {
     text.lines.iter().map(line_text).collect::<Vec<_>>().join("\n")
 }
 
-pub fn vtcode_tui_workspace_root() -> PathBuf {
+pub(crate) fn vtcode_tui_workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-pub fn transcript_file_fixture_relative_path() -> &'static str {
+pub(crate) fn transcript_file_fixture_relative_path() -> &'static str {
     "src/tui/core_tui/session.rs"
 }
 
-pub fn transcript_file_fixture_absolute_path() -> String {
+pub(crate) fn transcript_file_fixture_absolute_path() -> String {
     vtcode_tui_workspace_root()
         .join(transcript_file_fixture_relative_path())
         .display()
         .to_string()
 }
 
-pub fn quoted_transcript_temp_file_path() -> PathBuf {
+pub(crate) fn quoted_transcript_temp_file_path() -> PathBuf {
     let unique = TRANSCRIPT_TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("vtcode transcript quoted path {} {unique}.txt", std::process::id()))
 }
 
 #[cfg(target_os = "macos")]
-pub fn open_file_click_modifiers() -> KeyModifiers {
+pub(crate) fn open_file_click_modifiers() -> KeyModifiers {
     KeyModifiers::SUPER
 }
 
@@ -461,21 +461,21 @@ pub fn open_file_click_modifiers() -> KeyModifiers {
 }
 
 #[cfg(target_os = "macos")]
-pub fn command_modifier_press_event() -> KeyEvent {
+pub(crate) fn command_modifier_press_event() -> KeyEvent {
     KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftSuper), KeyModifiers::SUPER, KeyEventKind::Press)
 }
 
 #[cfg(target_os = "macos")]
-pub fn command_modifier_release_event() -> KeyEvent {
+pub(crate) fn command_modifier_release_event() -> KeyEvent {
     KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftSuper), KeyModifiers::SUPER, KeyEventKind::Release)
 }
 
 #[cfg(target_os = "macos")]
-pub fn meta_modifier_press_event() -> KeyEvent {
+pub(crate) fn meta_modifier_press_event() -> KeyEvent {
     KeyEvent::new_with_kind(KeyCode::Modifier(ModifierKeyCode::LeftMeta), KeyModifiers::META, KeyEventKind::Press)
 }
 
-pub fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
+pub(crate) fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     WizardStep {
         title: format!("Question {question_id}"),
         question: format!("Select {question_id}"),
@@ -500,7 +500,7 @@ pub fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     }
 }
 
-pub fn request_user_input_custom_step(question_id: &str, label: &str, default: &str) -> WizardStep {
+pub(crate) fn request_user_input_custom_step(question_id: &str, label: &str, default: &str) -> WizardStep {
     WizardStep {
         title: format!("Question {question_id}"),
         question: format!("Enter {question_id}"),
@@ -525,7 +525,7 @@ pub fn request_user_input_custom_step(question_id: &str, label: &str, default: &
     }
 }
 
-pub fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanContent) {
+pub(crate) fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanContent) {
     let mut lines: Vec<String> = plan.raw_content.lines().map(|line| line.to_string()).collect();
     if lines.is_empty() && !plan.summary.is_empty() {
         lines.push(plan.summary.clone());
@@ -578,13 +578,13 @@ pub fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::Pl
 
 // Helper structs and functions for transcript_links tests
 
-pub struct SessionWithFileLink {
-    pub session: Session,
-    pub path: String,
+pub(crate) struct SessionWithFileLink {
+    pub(crate) session: Session,
+    pub(crate) path: String,
 }
 
 impl SessionWithFileLink {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let path = transcript_file_fixture_absolute_path();
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("Open {path}"))]);
@@ -592,7 +592,7 @@ impl SessionWithFileLink {
         Self { session, path }
     }
 
-    pub fn target_area(&self) -> Rect {
+    pub(crate) fn target_area(&self) -> Rect {
         self.session
             .transcript_file_link_targets
             .first()
@@ -601,13 +601,13 @@ impl SessionWithFileLink {
     }
 }
 
-pub struct AppSessionWithFileLink {
-    pub session: AppSession,
-    pub path: String,
+pub(crate) struct AppSessionWithFileLink {
+    pub(crate) session: AppSession,
+    pub(crate) path: String,
 }
 
 impl AppSessionWithFileLink {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let path = transcript_file_fixture_absolute_path();
         let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
         session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("Open {path}"))]);
@@ -615,7 +615,7 @@ impl AppSessionWithFileLink {
         Self { session, path }
     }
 
-    pub fn target_area(&self) -> Rect {
+    pub(crate) fn target_area(&self) -> Rect {
         self.session
             .core
             .transcript_file_link_targets
@@ -625,7 +625,7 @@ impl AppSessionWithFileLink {
     }
 }
 
-pub fn wizard_auth_transient(url: &str) -> app_types::TransientRequest {
+pub(crate) fn wizard_auth_transient(url: &str) -> app_types::TransientRequest {
     app_types::TransientRequest::Wizard(app_types::WizardOverlayRequest {
         title: "OpenAI manual callback".to_string(),
         steps: vec![WizardStep {
@@ -652,7 +652,7 @@ pub fn wizard_auth_transient(url: &str) -> app_types::TransientRequest {
     })
 }
 
-pub fn list_auth_overlay(url: &str) -> OverlayRequest {
+pub(crate) fn list_auth_overlay(url: &str) -> OverlayRequest {
     OverlayRequest::List(ListOverlayRequest {
         title: format!("Authorize with {url}"),
         lines: vec![format!("Open this URL in your browser:\n{url}")],
@@ -673,29 +673,29 @@ pub fn list_auth_overlay(url: &str) -> OverlayRequest {
 
 // Helpers for queue_inputs tests
 
-pub fn set_busy_status(session: &mut Session) {
+pub(crate) fn set_busy_status(session: &mut Session) {
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running tool: code_search".to_string()),
         right: None,
     });
 }
 
-pub fn set_app_session_busy_status(session: &mut AppSession) {
+pub(crate) fn set_app_session_busy_status(session: &mut AppSession) {
     session.handle_command(app_types::InlineCommand::SetInputStatus {
         left: Some("Running tool: code_search".to_string()),
         right: None,
     });
 }
 
-pub fn set_queued_inputs(session: &mut Session, entries: Vec<String>) {
+pub(crate) fn set_queued_inputs(session: &mut Session, entries: Vec<String>) {
     session.handle_command(InlineCommand::SetQueuedInputs { entries });
 }
 
-pub fn set_app_session_queued_inputs(session: &mut AppSession, entries: Vec<String>) {
+pub(crate) fn set_app_session_queued_inputs(session: &mut AppSession, entries: Vec<String>) {
     session.handle_command(app_types::InlineCommand::SetQueuedInputs { entries });
 }
 
-pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
+pub(crate) fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
     let view = visible_transcript(session);
     let footer: Vec<String> = view.iter().rev().take(take_from_bottom as usize).cloned().collect();
     assert!(footer.iter().any(|line| line.contains(needle)), "expected footer to contain: {needle}");

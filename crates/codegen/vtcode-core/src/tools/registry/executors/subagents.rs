@@ -87,7 +87,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn spawn_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn spawn_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             self.execute_subagent_request::<crate::subagents::SpawnAgentRequest, _, _, _>(
                 args,
@@ -98,7 +98,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn spawn_background_subprocess_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn spawn_background_subprocess_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             self.execute_subagent_request::<crate::subagents::SpawnBackgroundSubprocessRequest, _, _, _>(
                 args,
@@ -109,7 +109,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn send_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn send_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             self.execute_subagent_request::<crate::subagents::SendInputRequest, _, _, _>(
                 args,
@@ -120,7 +120,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn wait_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn wait_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let targets = args
                 .get("ids")
@@ -142,7 +142,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn resume_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn resume_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let target = args
                 .get("id")
@@ -154,7 +154,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(crate) fn close_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn close_agent_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let target = args
                 .get("id")

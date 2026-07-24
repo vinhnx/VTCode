@@ -50,16 +50,16 @@ fn prompt_is_rejected_by_policy(approval_policy: AskForApproval, prompt_is_rule:
 #[derive(Debug, Clone)]
 pub struct ExecPolicyConfig {
     /// Default sandbox policy for commands.
-    pub default_sandbox_policy: SandboxPolicy,
+    default_sandbox_policy: SandboxPolicy,
 
     /// Default approval behavior.
-    pub default_approval: AskForApproval,
+    default_approval: AskForApproval,
 
     /// Whether to apply heuristics for unknown commands.
-    pub use_heuristics: bool,
+    use_heuristics: bool,
 
     /// Maximum command length before requiring confirmation.
-    pub max_auto_approve_length: usize,
+    max_auto_approve_length: usize,
 }
 
 impl Default for ExecPolicyConfig {
@@ -97,7 +97,7 @@ pub struct ExecPolicyManager {
 
 impl ExecPolicyManager {
     /// Create a new policy manager.
-    pub fn new(workspace_root: PathBuf, config: ExecPolicyConfig) -> Self {
+    fn new(workspace_root: PathBuf, config: ExecPolicyConfig) -> Self {
         Self {
             policy: RwLock::new(Policy::empty()),
             trusted_patterns: RwLock::new(Vec::new()),
@@ -109,7 +109,7 @@ impl ExecPolicyManager {
     }
 
     /// Create with default configuration.
-    pub fn with_defaults(workspace_root: PathBuf) -> Self {
+    fn with_defaults(workspace_root: PathBuf) -> Self {
         Self::new(workspace_root, ExecPolicyConfig::default())
     }
 
@@ -124,13 +124,13 @@ impl ExecPolicyManager {
     }
 
     /// Add a prefix rule to the policy.
-    pub async fn add_prefix_rule(&self, pattern: &[String], decision: Decision) -> Result<()> {
+    async fn add_prefix_rule(&self, pattern: &[String], decision: Decision) -> Result<()> {
         let mut policy = self.policy.write().await;
         policy.add_prefix_rule(pattern, decision)
     }
 
     /// Add a trusted pattern amendment.
-    pub async fn add_trusted_pattern(&self, amendment: ExecPolicyAmendment) {
+    async fn add_trusted_pattern(&self, amendment: ExecPolicyAmendment) {
         let mut patterns = self.trusted_patterns.write().await;
         patterns.push(amendment);
     }
@@ -147,7 +147,7 @@ impl ExecPolicyManager {
     }
 
     /// Check if a command requires approval.
-    pub async fn check_approval(&self, command: &[String]) -> ExecApprovalRequirement {
+    async fn check_approval(&self, command: &[String]) -> ExecApprovalRequirement {
         // Check if already approved this session
         let command_key = command.join(" ");
         {
@@ -220,14 +220,14 @@ impl ExecPolicyManager {
     }
 
     /// Mark a command as approved for this session.
-    pub async fn approve_command(&self, command: &[String]) {
+    async fn approve_command(&self, command: &[String]) {
         let command_key = command.join(" ");
         let mut approved = self.session_approved.write().await;
         approved.insert(command_key);
     }
 
     /// Clear all session approvals.
-    pub async fn clear_session_approvals(&self) {
+    async fn clear_session_approvals(&self) {
         let mut approved = self.session_approved.write().await;
         approved.clear();
     }

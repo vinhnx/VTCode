@@ -34,7 +34,7 @@ pub enum SystemPromptMode {
 
 impl SystemPromptMode {
     /// Return the textual representation for configuration
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Minimal => "minimal",
             Self::Lightweight => "lightweight",
@@ -106,7 +106,7 @@ pub enum ToolDocumentationMode {
 
 impl ToolDocumentationMode {
     /// Return the textual representation for configuration
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Minimal => "minimal",
             Self::Progressive => "progressive",
@@ -115,7 +115,7 @@ impl ToolDocumentationMode {
     }
 
     /// Parse tool documentation mode from user configuration
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("minimal") {
             Some(Self::Minimal)
@@ -175,7 +175,7 @@ pub enum ShellPromptProfile {
 
 impl ShellPromptProfile {
     /// Return the textual representation for configuration.
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::UnixLike => "unix_like",
@@ -184,7 +184,7 @@ impl ShellPromptProfile {
     }
 
     /// Parse a shell prompt profile from user configuration.
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("auto") {
             Some(Self::Auto)
@@ -215,7 +215,7 @@ impl ShellPromptProfile {
     }
 
     /// Resolve this configured value against an explicit platform.
-    pub fn resolve_for_platform(self, platform: ShellProfilePlatform) -> ResolvedShellPromptProfile {
+    fn resolve_for_platform(self, platform: ShellProfilePlatform) -> ResolvedShellPromptProfile {
         match self {
             Self::Auto => match platform {
                 ShellProfilePlatform::NativeWindows => ResolvedShellPromptProfile::PowerShell,
@@ -258,7 +258,7 @@ pub enum ShellProfilePlatform {
 }
 
 impl ShellProfilePlatform {
-    pub fn current() -> Self {
+    fn current() -> Self {
         if cfg!(windows) {
             Self::NativeWindows
         } else if is_wsl_environment() {
@@ -279,7 +279,7 @@ pub enum ResolvedShellPromptProfile {
 }
 
 impl ResolvedShellPromptProfile {
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::UnixLike => "unix_like",
             Self::PowerShell => "powershell",
@@ -385,7 +385,7 @@ pub enum UiSurfacePreference {
 
 impl UiSurfacePreference {
     /// String representation used in configuration and logging
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
             Self::Alternate => "alternate",
@@ -394,7 +394,7 @@ impl UiSurfacePreference {
     }
 
     /// Parse a surface preference from configuration input
-    pub fn parse(value: &str) -> Option<Self> {
+    fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("auto") {
             Some(Self::Auto)
@@ -498,11 +498,11 @@ pub struct SessionInfo {
 /// Error information for tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorInfo {
-    pub error_type: String,
-    pub message: String,
-    pub turn_number: usize,
-    pub recoverable: bool,
-    pub timestamp: u64,
+    error_type: String,
+    message: String,
+    turn_number: usize,
+    recoverable: bool,
+    timestamp: u64,
 }
 
 /// Performance metrics

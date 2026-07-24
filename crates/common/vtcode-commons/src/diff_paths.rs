@@ -44,7 +44,7 @@ pub fn is_diff_deletion_line(line: &str) -> bool {
 }
 
 /// Whether a line is a unified diff old-file marker (`--- ...`).
-pub fn is_diff_old_file_marker_line(line: &str) -> bool {
+pub(crate) fn is_diff_old_file_marker_line(line: &str) -> bool {
     line.starts_with("--- ")
 }
 
@@ -54,7 +54,7 @@ pub fn is_diff_new_file_marker_line(line: &str) -> bool {
 }
 
 /// Whether a line is an apply_patch operation header.
-pub fn is_apply_patch_header_line(line: &str) -> bool {
+pub(crate) fn is_apply_patch_header_line(line: &str) -> bool {
     line.starts_with("*** Begin Patch")
         || line.starts_with("*** Update File:")
         || line.starts_with("*** Add File:")
@@ -167,7 +167,7 @@ pub fn looks_like_diff_content(content: &str) -> bool {
 }
 
 /// Parse unified diff hunk header starts from `@@ -old,+new @@`.
-pub fn parse_hunk_starts(line: &str) -> Option<(usize, usize)> {
+pub(crate) fn parse_hunk_starts(line: &str) -> Option<(usize, usize)> {
     let trimmed = line.trim_end();
     let rest = trimmed.strip_prefix("@@ -")?;
     let mut parts = rest.split_whitespace();

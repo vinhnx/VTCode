@@ -26,7 +26,7 @@ pub(super) struct EventChannels {
 }
 
 impl EventChannels {
-    pub(super) fn new(tx: UnboundedSender<TerminalEvent>) -> Self {
+    fn new(tx: UnboundedSender<TerminalEvent>) -> Self {
         Self {
             tx,
             rx_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),

@@ -43,17 +43,17 @@ pub fn is_subagent_tool(name: &str) -> bool {
 
 #[derive(Clone, Default)]
 pub(super) struct BackgroundLaunchOverrides {
-    pub(super) prompt: Option<String>,
-    pub(super) max_turns: Option<usize>,
-    pub(super) model_override: Option<String>,
-    pub(super) reasoning_override: Option<String>,
+    prompt: Option<String>,
+    max_turns: Option<usize>,
+    model_override: Option<String>,
+    reasoning_override: Option<String>,
 }
 
 #[derive(Clone, Default)]
 pub(super) struct PreparedDelegationContext {
-    pub(super) requested_agent: Option<String>,
-    pub(super) explicit_mentions: Vec<String>,
-    pub(super) explicit_request: bool,
+    requested_agent: Option<String>,
+    explicit_mentions: Vec<String>,
+    explicit_request: bool,
 }
 
 /// Result of a propose/verify cycle.

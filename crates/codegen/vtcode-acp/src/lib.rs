@@ -5,8 +5,8 @@
 //! Downstream crates should treat this as the canonical ACP entrypoint.
 
 pub mod capabilities;
-pub mod client;
-pub mod client_v2;
+pub(crate) mod client;
+pub(crate) mod client_v2;
 pub mod discovery;
 pub mod error;
 pub mod jsonrpc;
@@ -30,16 +30,16 @@ pub(crate) mod acp {
     pub(crate) use agent_client_protocol::schema::v1::*;
 }
 
-pub use capabilities::{
+pub(crate) use capabilities::{
     AgentCapabilities, AgentFeatures, AgentInfo as AgentInfoV2, AuthCredentials, AuthMethod, AuthRequirements,
     AuthenticateParams, AuthenticateResult, ClientCapabilities, ClientInfo, FilesystemCapabilities, InitializeParams,
     InitializeResult, PROTOCOL_VERSION, SUPPORTED_VERSIONS, TerminalCapabilities, ToolCapability, UiCapabilities,
 };
-pub use client_v2::{AcpClientV2, AcpClientV2Builder};
-pub use discovery::{AgentInfo, AgentRegistry};
+pub(crate) use client_v2::{AcpClientV2, AcpClientV2Builder};
+pub(crate) use discovery::{AgentInfo, AgentRegistry};
 pub use error::{AcpError, AcpResult};
-pub use jsonrpc::{JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
-pub use session::{
+pub(crate) use jsonrpc::{JSONRPC_VERSION, JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
+pub(crate) use session::{
     AcpSession, ConversationTurn, PermissionOption, PromptContent, RequestPermissionParams, RequestPermissionResult,
     SessionCancelParams, SessionLoadParams, SessionLoadResult, SessionNewParams, SessionNewResult, SessionPromptParams,
     SessionPromptResult, SessionState, SessionUpdate, SessionUpdateNotification, ToolCallRecord, TurnStatus,
@@ -48,9 +48,9 @@ pub use transport::{StdioTransport, StdioTransportOptions};
 pub use zed::{StandardAcpAdapter, ZedAcpAdapter};
 
 #[deprecated(since = "0.60.0", note = "Use AcpClientV2 for ACP protocol compliance")]
-pub use client::{AcpClient, AcpClientBuilder};
+pub(crate) use client::{AcpClient, AcpClientBuilder};
 #[deprecated(since = "0.60.0", note = "Use jsonrpc module types instead")]
-pub use messages::{AcpMessage, AcpRequest, AcpResponse};
+pub(crate) use messages::{AcpMessage, AcpRequest, AcpResponse};
 
 use std::sync::{Arc, OnceLock};
 
@@ -66,7 +66,7 @@ static ACP_CONNECTION: OnceLock<Arc<zed::connection::ConnectionHandle>> = OnceLo
 ///
 /// Returns `Err` with the provided connection if one has already been
 /// registered. Callers may drop the returned connection or reuse it as needed.
-pub fn register_acp_connection(
+pub(crate) fn register_acp_connection(
     connection: Arc<zed::connection::ConnectionHandle>,
 ) -> Result<(), Arc<zed::connection::ConnectionHandle>> {
     ACP_CONNECTION.set(connection)

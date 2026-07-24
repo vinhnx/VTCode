@@ -3,7 +3,7 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 /// Normalizes a user-provided query by trimming whitespace, collapsing internal
 /// spaces, and converting everything to lowercase ASCII.
-pub fn normalize_query(query: &str) -> String {
+pub(crate) fn normalize_query(query: &str) -> String {
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return String::new();
@@ -34,7 +34,7 @@ pub fn normalize_query(query: &str) -> String {
 /// history pickers, file lists) prefer building a single `FuzzyQuery` before
 /// the loop and reusing it per candidate to avoid the per-item pattern parse
 /// and matcher allocation.
-pub struct FuzzyQuery {
+pub(crate) struct FuzzyQuery {
     pattern: Pattern,
     matcher: Matcher,
     buffer: Vec<char>,
@@ -44,7 +44,7 @@ pub struct FuzzyQuery {
 impl FuzzyQuery {
     /// Compile a query once for repeated scoring.
     #[must_use]
-    pub fn new(query: &str) -> Self {
+    pub(crate) fn new(query: &str) -> Self {
         Self {
             pattern: Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart),
             matcher: Matcher::new(Config::DEFAULT),
@@ -57,7 +57,7 @@ impl FuzzyQuery {
     ///
     /// Returns `Some(0)` for an empty query (matches everything), `Some(score)`
     /// on a fuzzy match, and `None` when the candidate does not match.
-    pub fn score(&mut self, candidate: &str) -> Option<u32> {
+    pub(crate) fn score(&mut self, candidate: &str) -> Option<u32> {
         if self.empty {
             return Some(0);
         }
@@ -66,7 +66,7 @@ impl FuzzyQuery {
     }
 
     /// Returns true when the candidate fuzzy-matches the compiled query.
-    pub fn matches(&mut self, candidate: &str) -> bool {
+    fn matches(&mut self, candidate: &str) -> bool {
         if self.empty {
             return true;
         }
@@ -76,7 +76,7 @@ impl FuzzyQuery {
 
 /// Returns true when every term in the query appears as a fuzzy match
 /// within the candidate text using nucleo-matcher.
-pub fn fuzzy_match(query: &str, candidate: &str) -> bool {
+fn fuzzy_match(query: &str, candidate: &str) -> bool {
     FuzzyQuery::new(query).matches(candidate)
 }
 
@@ -85,7 +85,7 @@ pub fn fuzzy_match(query: &str, candidate: &str) -> bool {
 /// are expected to be pre-lowered (via [`normalize_query`] and construction-time
 /// lowering respectively), so this function performs zero allocations.
 #[inline]
-pub fn exact_terms_match(query: &str, candidate: &str) -> bool {
+pub(crate) fn exact_terms_match(query: &str, candidate: &str) -> bool {
     if query.is_empty() {
         return true;
     }
@@ -94,7 +94,7 @@ pub fn exact_terms_match(query: &str, candidate: &str) -> bool {
 
 /// Returns true when the characters from `needle` can be found in order within
 /// `haystack` (kept for backward compatibility).
-pub fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
+fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -119,7 +119,7 @@ pub fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
 
 /// Returns a score for the fuzzy match between query and candidate using nucleo-matcher.
 /// Returns None if no match is found, Some(score) if a match exists.
-pub fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
+fn fuzzy_score(query: &str, candidate: &str) -> Option<u32> {
     FuzzyQuery::new(query).score(candidate)
 }
 

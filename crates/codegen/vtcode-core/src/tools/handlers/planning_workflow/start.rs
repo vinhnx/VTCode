@@ -19,23 +19,23 @@ use crate::utils::file_utils::ensure_dir_exists;
 pub(super) struct StartPlanningArgs {
     /// Optional: Name for the plan file (defaults to timestamp-based name)
     #[serde(default)]
-    pub(super) plan_name: Option<String>,
+    plan_name: Option<String>,
 
     /// Optional: Explicit output path for the plan file (absolute or workspace-relative)
     #[serde(default)]
-    pub(super) plan_path: Option<String>,
+    plan_path: Option<String>,
 
     /// Optional: Initial description of what you're planning
     #[serde(default)]
-    pub(super) description: Option<String>,
+    description: Option<String>,
 
     /// Internal: when true, request confirmation instead of entering immediately.
     #[serde(default)]
-    pub(super) require_confirmation: bool,
+    require_confirmation: bool,
 
     /// Internal: confirmation has already been granted.
     #[serde(default)]
-    pub(super) approved: bool,
+    approved: bool,
 }
 
 /// Tool for entering planning workflow

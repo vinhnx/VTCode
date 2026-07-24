@@ -34,7 +34,7 @@ impl WebhookNotifier {
     }
 
     /// Create a new webhook notifier with default settings
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             client: Self::build_http_client(),
             max_retries: 3,
@@ -43,7 +43,7 @@ impl WebhookNotifier {
     }
 
     /// Create a webhook notifier with custom settings
-    pub fn with_settings(max_retries: u32, retry_delay_ms: u64) -> Self {
+    fn with_settings(max_retries: u32, retry_delay_ms: u64) -> Self {
         Self {
             client: Self::build_http_client(),
             max_retries,
@@ -52,7 +52,7 @@ impl WebhookNotifier {
     }
 
     /// Deliver a streaming event to a webhook URL
-    pub async fn send_event(
+    pub(crate) async fn send_event(
         &self,
         config: &TaskPushNotificationConfig,
         event: StreamingEvent,

@@ -10,28 +10,28 @@ use std::time::Instant;
 #[derive(Debug, Default)]
 pub struct UnicodeMonitor {
     // Processing statistics
-    pub total_bytes_processed: AtomicU64,
-    pub total_unicode_bytes: AtomicU64,
-    pub total_sequences: AtomicU64,
-    pub total_errors: AtomicU64,
+    total_bytes_processed: AtomicU64,
+    total_unicode_bytes: AtomicU64,
+    total_sequences: AtomicU64,
+    total_errors: AtomicU64,
 
     // Error tracking
-    pub error_types: Mutex<HashMap<String, usize>>,
-    pub last_error: Mutex<Option<String>>,
+    error_types: Mutex<HashMap<String, usize>>,
+    last_error: Mutex<Option<String>>,
 
     // Performance metrics
-    pub processing_time_ns: AtomicU64,
-    pub max_buffer_size: AtomicUsize,
+    processing_time_ns: AtomicU64,
+    max_buffer_size: AtomicUsize,
 
     // Session tracking
-    pub active_sessions: AtomicUsize,
-    pub total_sessions: AtomicUsize,
-    pub unicode_sessions: AtomicUsize,
+    active_sessions: AtomicUsize,
+    total_sessions: AtomicUsize,
+    unicode_sessions: AtomicUsize,
 }
 
 impl UnicodeMonitor {
     /// Create a new unicode monitor
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             total_bytes_processed: AtomicU64::new(0),
             total_unicode_bytes: AtomicU64::new(0),
@@ -95,9 +95,9 @@ impl UnicodeMonitor {
 
 /// Unicode validation context for tracking processing of individual buffers
 pub struct UnicodeValidationContext {
-    pub start_time: Instant,
-    pub unicode_detected: bool,
-    pub errors: Vec<String>,
+    start_time: Instant,
+    unicode_detected: bool,
+    errors: Vec<String>,
 }
 
 impl UnicodeValidationContext {

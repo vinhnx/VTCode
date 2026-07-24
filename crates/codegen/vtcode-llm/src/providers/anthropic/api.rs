@@ -27,9 +27,9 @@ type AnthropicSseSender = tokio::sync::mpsc::Sender<AnthropicSseEvent>;
 #[derive(Clone)]
 pub struct AnthropicApiServerState {
     /// The LLM provider to use for requests
-    pub provider: Arc<dyn LLMProvider>,
+    provider: Arc<dyn LLMProvider>,
     /// Model name to use
-    pub model: String,
+    model: String,
 }
 
 impl AnthropicApiServerState {
@@ -88,7 +88,7 @@ async fn send_content_block_stop(tx: &AnthropicSseSender, index: u32) -> bool {
 }
 
 /// Handle messages endpoint
-pub async fn messages_handler(
+async fn messages_handler(
     State(state): State<AnthropicApiServerState>,
     headers: HeaderMap,
     Json(request): Json<AnthropicMessagesRequest>,

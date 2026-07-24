@@ -55,9 +55,9 @@ pub struct EvaluationResult {
     /// Primary reason for decision
     pub primary_reason: EvaluationReason,
     /// Secondary reasons (e.g., policy rule that matched)
-    pub secondary_reasons: Vec<String>,
+    pub(crate) secondary_reasons: Vec<String>,
     /// Resolved command path (if available)
-    pub resolved_path: Option<PathBuf>,
+    resolved_path: Option<PathBuf>,
 }
 
 /// Unified command evaluator combining policies and safety rules
@@ -96,7 +96,7 @@ impl UnifiedCommandEvaluator {
     /// 4. Handle shell parsing if needed (bash -lc)
     /// 5. Log audit entry (async)
     /// 6. Cache result
-    pub async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
+    pub(crate) async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
         if command.is_empty() {
             return Ok(EvaluationResult {
                 allowed: false,
@@ -246,7 +246,7 @@ impl UnifiedCommandEvaluator {
     }
 
     /// Get reference to the audit logger
-    pub fn audit_logger(&self) -> &SafetyAuditLogger {
+    fn audit_logger(&self) -> &SafetyAuditLogger {
         &self.audit_logger
     }
 
@@ -426,7 +426,7 @@ pub struct PolicyAwareEvaluator {
 
 impl PolicyAwareEvaluator {
     /// Create a new policy-aware evaluator with default components
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             unified: Arc::new(UnifiedCommandEvaluator::new()),
             allow_policy_decision: None,
@@ -435,7 +435,7 @@ impl PolicyAwareEvaluator {
     }
 
     /// Create with explicit policy decision
-    pub fn with_policy(allow_policy_decision: bool, policy_reason: impl Into<String>) -> Self {
+    pub(crate) fn with_policy(allow_policy_decision: bool, policy_reason: impl Into<String>) -> Self {
         Self {
             unified: Arc::new(UnifiedCommandEvaluator::new()),
             allow_policy_decision: Some(allow_policy_decision),
@@ -444,7 +444,7 @@ impl PolicyAwareEvaluator {
     }
 
     /// Evaluate command with optional policy layer
-    pub async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
+    pub(crate) async fn evaluate(&self, command: &[String]) -> Result<EvaluationResult> {
         // Apply policy layer if configured
         if let (Some(policy_allowed), Some(reason)) = (&self.allow_policy_decision, &self.policy_reason) {
             self.unified.evaluate_with_policy(command, *policy_allowed, reason).await
@@ -455,13 +455,13 @@ impl PolicyAwareEvaluator {
     }
 
     /// Set policy decision (allows updating policy after creation)
-    pub fn set_policy(&mut self, allowed: bool, reason: impl Into<String>) {
+    pub(crate) fn set_policy(&mut self, allowed: bool, reason: impl Into<String>) {
         self.allow_policy_decision = Some(allowed);
         self.policy_reason = Some(reason.into());
     }
 
     /// Clear policy decision (revert to pure safety evaluation)
-    pub fn clear_policy(&mut self) {
+    pub(crate) fn clear_policy(&mut self) {
         self.allow_policy_decision = None;
         self.policy_reason = None;
     }

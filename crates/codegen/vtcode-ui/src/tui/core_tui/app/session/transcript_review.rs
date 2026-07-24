@@ -69,7 +69,7 @@ impl TranscriptReviewState {
         }
     }
 
-    pub(crate) fn line_count(&self) -> usize {
+    fn line_count(&self) -> usize {
         self.total_lines.max(1)
     }
 
@@ -94,7 +94,7 @@ impl TranscriptReviewState {
         export
     }
 
-    pub(crate) fn visible_lines(&self, height: usize) -> Vec<Line<'static>> {
+    fn visible_lines(&self, height: usize) -> Vec<Line<'static>> {
         let height = height.max(1);
         let end = self.scroll_top.saturating_add(height).min(self.total_lines);
         let current_match_line = self.current_match_line();
@@ -173,7 +173,7 @@ impl TranscriptReviewState {
         self.search.active
     }
 
-    pub(crate) fn search_query(&self) -> &str {
+    fn search_query(&self) -> &str {
         if self.search.active {
             &self.search.pending_query
         } else {

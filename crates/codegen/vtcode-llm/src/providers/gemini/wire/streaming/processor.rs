@@ -16,13 +16,13 @@ use tracing;
 #[derive(Debug, Clone)]
 pub struct StreamingConfig {
     /// Timeout for reading each chunk
-    pub chunk_timeout: Duration,
+    chunk_timeout: Duration,
     /// Maximum time to wait for the first chunk
-    pub first_chunk_timeout: Duration,
+    first_chunk_timeout: Duration,
     /// Maximum total time for entire streaming request (0 means no limit)
-    pub total_timeout: Duration,
+    total_timeout: Duration,
     /// Buffer size for chunk processing
-    pub buffer_size: usize,
+    buffer_size: usize,
 }
 
 impl Default for StreamingConfig {
@@ -38,7 +38,7 @@ impl Default for StreamingConfig {
 
 impl StreamingConfig {
     /// Create config with custom total timeout (in seconds)
-    pub fn with_total_timeout(total_timeout_secs: u64) -> Self {
+    pub(crate) fn with_total_timeout(total_timeout_secs: u64) -> Self {
         Self {
             total_timeout: Duration::from_secs(total_timeout_secs),
             ..Default::default()
@@ -60,7 +60,7 @@ pub struct StreamingProcessor {
 
 impl StreamingProcessor {
     /// Create a new streaming processor with default configuration
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             config: StreamingConfig::default(),
             metrics: StreamingMetrics::default(),
@@ -72,7 +72,7 @@ impl StreamingProcessor {
     }
 
     /// Create a new streaming processor with custom configuration
-    pub fn with_config(config: StreamingConfig) -> Self {
+    pub(crate) fn with_config(config: StreamingConfig) -> Self {
         Self {
             config,
             metrics: StreamingMetrics::default(),
@@ -108,7 +108,7 @@ impl StreamingProcessor {
     /// # Returns
     ///
     /// A result containing the final accumulated response or a streaming error
-    pub async fn process_stream<F>(
+    pub(crate) async fn process_stream<F>(
         &mut self,
         response: Response,
         mut on_chunk: F,
@@ -776,7 +776,7 @@ impl StreamingProcessor {
     }
 
     /// Get current streaming metrics
-    pub fn metrics(&self) -> &StreamingMetrics {
+    fn metrics(&self) -> &StreamingMetrics {
         &self.metrics
     }
 

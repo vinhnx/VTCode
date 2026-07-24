@@ -342,11 +342,11 @@ pub struct ExternalSandboxConfig {
 
     /// Docker-specific settings
     #[serde(default)]
-    pub docker: DockerSandboxConfig,
+    docker: DockerSandboxConfig,
 
     /// MicroVM-specific settings
     #[serde(default)]
-    pub microvm: MicroVMSandboxConfig,
+    microvm: MicroVMSandboxConfig,
 }
 
 /// External sandbox type
@@ -371,15 +371,15 @@ pub enum ExternalSandboxType {
 pub struct DockerSandboxConfig {
     /// Docker image to use
     #[serde(default = "default_docker_image")]
-    pub image: String,
+    image: String,
 
     /// Memory limit for container
     #[serde(default)]
-    pub memory_limit: String,
+    memory_limit: String,
 
     /// CPU limit for container
     #[serde(default)]
-    pub cpu_limit: String,
+    cpu_limit: String,
 }
 
 fn default_docker_image() -> String {
@@ -416,7 +416,7 @@ pub enum MicroVmProvider {
 
 impl MicroVmProvider {
     /// Returns the string representation of this VMM provider.
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         match self {
             Self::None => "",
             Self::Firecracker => "firecracker",
@@ -438,23 +438,23 @@ impl fmt::Display for MicroVmProvider {
 pub struct MicroVMSandboxConfig {
     /// VMM to use (firecracker, cloud-hypervisor)
     #[serde(default)]
-    pub vmm: MicroVmProvider,
+    vmm: MicroVmProvider,
 
     /// Kernel image path
     #[serde(default)]
-    pub kernel_path: String,
+    kernel_path: String,
 
     /// Root filesystem path
     #[serde(default)]
-    pub rootfs_path: String,
+    rootfs_path: String,
 
     /// Memory size in MB
     #[serde(default = "default_microvm_memory")]
-    pub memory_mb: u64,
+    memory_mb: u64,
 
     /// Number of vCPUs
     #[serde(default = "default_vcpus")]
-    pub vcpus: u32,
+    vcpus: u32,
 }
 
 fn default_microvm_memory() -> u64 {

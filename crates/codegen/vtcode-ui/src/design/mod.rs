@@ -8,9 +8,9 @@
 //! - **Panel**: Base panel widget primitive
 //! - **Diff formatting**: Unified diff rendering with ANSI colors
 
-pub mod color;
+pub(crate) mod color;
 pub mod constants;
 pub mod diff;
 pub mod layout;
 pub mod panel;
-pub mod style;
+pub(crate) mod style;

@@ -709,8 +709,8 @@ fn try_highlight(
 
 #[derive(Clone, Debug)]
 pub struct HighlightedSegment {
-    pub style: Style,
-    pub text: String,
+    style: Style,
+    text: String,
 }
 
 pub fn highlight_code_to_segments(

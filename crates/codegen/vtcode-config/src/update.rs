@@ -41,12 +41,12 @@ impl std::fmt::Display for ReleaseChannel {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VersionPin {
     /// Pinned version (if set, auto-update will stay on this version)
-    pub version: Option<Version>,
+    version: Option<Version>,
     /// Reason for pinning (user note)
     pub reason: Option<String>,
     /// Auto-unpin after successful update check (for temporary pins)
     #[serde(default)]
-    pub auto_unpin: bool,
+    auto_unpin: bool,
 }
 
 /// Update configuration

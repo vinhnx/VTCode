@@ -8,17 +8,17 @@ use std::fmt::Write as _;
 use std::path::Path;
 use vtcode_commons::styling::DiffColorPalette;
 
-pub(crate) struct GitDiffPalette {
-    pub(crate) bullet: Style,
-    pub(crate) label: Style,
-    pub(crate) path: Style,
-    pub(crate) stat_added: Style,
-    pub(crate) stat_removed: Style,
-    pub(crate) line_added: Style,
-    pub(crate) line_removed: Style,
-    pub(crate) line_context: Style,
-    pub(crate) line_header: Style,
-    pub(crate) line_number: Style,
+struct GitDiffPalette {
+    bullet: Style,
+    label: Style,
+    path: Style,
+    stat_added: Style,
+    stat_removed: Style,
+    line_added: Style,
+    line_removed: Style,
+    line_context: Style,
+    line_header: Style,
+    line_number: Style,
 }
 
 fn strip_diff_background(style: Style) -> Style {

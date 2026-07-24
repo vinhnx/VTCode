@@ -33,11 +33,11 @@ const SKIP_DIRS: &[&str] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileStat {
     /// Size in bytes.
-    pub size: u64,
+    size: u64,
     /// Modification time in nanoseconds since the Unix epoch.
-    pub mtime_ns: i64,
+    mtime_ns: i64,
     /// FNV-1a hash of the file's first 4096 bytes.
-    pub head_hash: u64,
+    head_hash: u64,
 }
 
 /// Number of leading bytes sampled for the content fingerprint.
@@ -47,27 +47,27 @@ const HASH_SAMPLE_BYTES: usize = 4096;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceSnapshot {
     /// `relative_path -> stat`, sorted for stable diffs.
-    pub files: BTreeMap<String, FileStat>,
+    files: BTreeMap<String, FileStat>,
     /// RFC3339 capture timestamp.
-    pub captured_at: String,
+    captured_at: String,
 }
 
 /// The difference between two workspace snapshots.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SnapshotDelta {
     /// Paths present in `new` but not `old`.
-    pub added: Vec<String>,
+    added: Vec<String>,
     /// Paths present in both but with a different fingerprint.
-    pub changed: Vec<String>,
+    changed: Vec<String>,
     /// Paths present in `old` but not `new`.
-    pub removed: Vec<String>,
+    removed: Vec<String>,
 }
 
 /// Capture a snapshot of `workspace`, skipping VCS/ build/ cache directories.
 ///
 /// Files larger than `max_file_bytes` are fingerprinted by size + mtime only
 /// (the head hash is set to 0) to keep capture O(files) rather than O(bytes).
-pub fn capture(workspace: &Path, max_file_bytes: u64) -> io::Result<WorkspaceSnapshot> {
+fn capture(workspace: &Path, max_file_bytes: u64) -> io::Result<WorkspaceSnapshot> {
     let mut files = BTreeMap::new();
     collect(workspace, workspace, max_file_bytes, &mut files)?;
     Ok(WorkspaceSnapshot { files, captured_at: now_rfc3339() })
@@ -129,7 +129,7 @@ fn hash_head(path: &Path) -> u64 {
 
 /// Compute the delta from `old` to `new`.
 #[must_use]
-pub fn diff(old: &WorkspaceSnapshot, new: &WorkspaceSnapshot) -> SnapshotDelta {
+fn diff(old: &WorkspaceSnapshot, new: &WorkspaceSnapshot) -> SnapshotDelta {
     let mut delta = SnapshotDelta::default();
     for (path, new_stat) in &new.files {
         match old.files.get(path) {
@@ -148,12 +148,12 @@ pub fn diff(old: &WorkspaceSnapshot, new: &WorkspaceSnapshot) -> SnapshotDelta {
 
 /// Whether the delta indicates meaningful environment drift.
 #[must_use]
-pub fn is_drift(delta: &SnapshotDelta) -> bool {
+fn is_drift(delta: &SnapshotDelta) -> bool {
     !delta.added.is_empty() || !delta.changed.is_empty() || !delta.removed.is_empty()
 }
 
 /// Persist a snapshot as JSON (e.g. as a session derived view).
-pub fn save_json(snapshot: &WorkspaceSnapshot, path: &Path) -> io::Result<()> {
+fn save_json(snapshot: &WorkspaceSnapshot, path: &Path) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -162,7 +162,7 @@ pub fn save_json(snapshot: &WorkspaceSnapshot, path: &Path) -> io::Result<()> {
 }
 
 /// Load a previously persisted snapshot.
-pub fn load_json(path: &Path) -> io::Result<WorkspaceSnapshot> {
+fn load_json(path: &Path) -> io::Result<WorkspaceSnapshot> {
     let bytes = std::fs::read(path)?;
     serde_json::from_slice(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }

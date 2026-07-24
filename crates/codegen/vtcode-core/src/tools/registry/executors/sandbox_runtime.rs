@@ -21,9 +21,9 @@ pub(super) struct ShellExecutionPlan {
     pub(super) sandbox_policy: Option<SandboxPolicy>,
 }
 
-pub(super) const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
+const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
     "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
-pub(super) const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str =
+const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str =
     "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
 
 fn push_unique_reason(reasons: &mut Vec<String>, reason: impl Into<String>) {

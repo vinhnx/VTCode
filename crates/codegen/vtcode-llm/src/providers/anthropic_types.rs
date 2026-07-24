@@ -13,52 +13,52 @@ pub enum AnthropicFallback {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicFallbackModel {
-    pub model: String,
+    model: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicRequest {
-    pub model: String,
-    pub messages: Vec<AnthropicMessage>,
-    pub max_tokens: u32,
+    pub(crate) model: String,
+    pub(crate) messages: Vec<AnthropicMessage>,
+    pub(crate) max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControl>,
+    pub(crate) cache_control: Option<CacheControl>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Value>, // Can be string or array of blocks
+    pub(crate) system: Option<Value>, // Can be string or array of blocks
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
+    pub(crate) temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<AnthropicTool>>,
+    pub(crate) tools: Option<Vec<AnthropicTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<Value>,
+    pub(crate) tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<ThinkingConfig>,
+    pub(crate) thinking: Option<ThinkingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
+    pub(crate) reasoning: Option<Value>, // Deprecated in favor of thinking, but kept for backward compat or direct effort passing
     #[serde(
         default,
         deserialize_with = "deserialize_boxed_output_config_opt",
         skip_serializing_if = "Option::is_none"
     )]
-    pub output_config: Option<Box<AnthropicOutputConfig>>,
+    pub(crate) output_config: Option<Box<AnthropicOutputConfig>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_management: Option<Value>,
+    pub(crate) context_management: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fallbacks: Option<Vec<AnthropicFallbackParam>>,
+    pub(crate) fallbacks: Option<Vec<AnthropicFallbackParam>>,
     /// Opaque credit token returned by a refused request's `stop_details.fallback_credit_token`.
     /// Echoed on the retry to avoid paying the prompt-cache cost twice.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fallback_credit_token: Option<String>,
-    pub stream: bool,
+    pub(crate) fallback_credit_token: Option<String>,
+    pub(crate) stream: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicFallbackParam {
-    pub model: String,
+    pub(crate) model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    pub(crate) max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<ThinkingConfig>,
+    pub(crate) thinking: Option<ThinkingConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -96,8 +96,8 @@ pub enum ThinkingDisplay {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicMessage {
-    pub role: String,
-    pub content: Vec<AnthropicContentBlock>,
+    pub(crate) role: String,
+    pub(crate) content: Vec<AnthropicContentBlock>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -184,22 +184,22 @@ pub enum AnthropicContentBlock {
 /// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicToolUseBlock {
-    pub id: String,
-    pub name: String,
-    pub input: Value,
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) input: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControl>,
+    pub(crate) cache_control: Option<CacheControl>,
 }
 
 /// Extracted struct for `AnthropicContentBlock::ToolResult` (boxed to reduce enum size).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicToolResultBlock {
-    pub tool_use_id: String,
-    pub content: Value, // string or array of blocks
+    pub(crate) tool_use_id: String,
+    pub(crate) content: Value, // string or array of blocks
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_error: Option<bool>,
+    pub(crate) is_error: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControl>,
+    pub(crate) cache_control: Option<CacheControl>,
 }
 
 /// Content of a tool search result
@@ -219,8 +219,8 @@ pub enum ToolSearchResultContent {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ToolReference {
     #[serde(rename = "type")]
-    pub ref_type: Option<String>, // "tool_reference"
-    pub tool_name: String,
+    ref_type: Option<String>, // "tool_reference"
+    tool_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -265,17 +265,17 @@ pub enum TextCitation {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImageSource {
     #[serde(rename = "type")]
-    pub source_type: String, // "base64"
-    pub media_type: String,
-    pub data: String,
+    pub(crate) source_type: String, // "base64"
+    pub(crate) media_type: String,
+    pub(crate) data: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CacheControl {
     #[serde(rename = "type")]
-    pub control_type: String, // "ephemeral"
+    pub(crate) control_type: String, // "ephemeral"
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ttl: Option<String>, // "5m" or "1h"
+    pub(crate) ttl: Option<String>, // "5m" or "1h"
 }
 
 /// Anthropic tool definition
@@ -300,20 +300,20 @@ pub enum AnthropicTool {
 /// Regular function tool definition for Anthropic API
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicFunctionTool {
-    pub name: String,
-    pub description: String,
-    pub input_schema: Value,
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) input_schema: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_examples: Option<Vec<Value>>,
+    pub(crate) input_examples: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub strict: Option<bool>,
+    pub(crate) strict: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub allowed_callers: Option<Vec<String>>,
+    pub(crate) allowed_callers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControl>,
+    pub(crate) cache_control: Option<CacheControl>,
     /// When true, the tool is deferred and only loaded when discovered via tool search
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub defer_loading: Option<bool>,
+    pub(crate) defer_loading: Option<bool>,
 }
 
 /// Native code execution tool definition for Anthropic API.
@@ -321,9 +321,9 @@ pub struct AnthropicFunctionTool {
 pub struct AnthropicCodeExecutionTool {
     /// Versioned code execution type (e.g. "code_execution_20250825")
     #[serde(rename = "type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     /// Tool name (typically "code_execution")
-    pub name: String,
+    pub(crate) name: String,
 }
 
 /// Native memory tool definition for Anthropic API.
@@ -331,9 +331,9 @@ pub struct AnthropicCodeExecutionTool {
 pub struct AnthropicMemoryTool {
     /// Versioned memory type (e.g. "memory_20250818")
     #[serde(rename = "type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     /// Tool name (typically "memory")
-    pub name: String,
+    pub(crate) name: String,
 }
 
 /// Tool search tool definition for Anthropic's advanced-tool-use beta
@@ -341,9 +341,9 @@ pub struct AnthropicMemoryTool {
 pub struct AnthropicToolSearchTool {
     /// The type of tool search: "tool_search_tool_regex_20251119" or "tool_search_tool_bm25_20251119"
     #[serde(rename = "type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     /// Tool name (e.g., "tool_search_tool_regex" or "tool_search_tool_bm25")
-    pub name: String,
+    pub(crate) name: String,
 }
 
 /// Native web search tool definition for Anthropic API (PTC-enabled search revisions)
@@ -351,12 +351,12 @@ pub struct AnthropicToolSearchTool {
 pub struct AnthropicWebSearchTool {
     /// Versioned web search type (e.g., "web_search_20260209")
     #[serde(rename = "type")]
-    pub tool_type: String,
+    pub(crate) tool_type: String,
     /// Tool name (typically "web_search")
-    pub name: String,
+    pub(crate) name: String,
     /// Optional Anthropic-native web search configuration.
     #[serde(flatten, default, skip_serializing_if = "Map::is_empty")]
-    pub options: Map<String, Value>,
+    pub(crate) options: Map<String, Value>,
 }
 
 /// Anthropic server-side advisor tool definition (beta `advisor-tool-2026-03-01`).
@@ -368,20 +368,20 @@ pub struct AnthropicWebSearchTool {
 pub struct AnthropicAdvisorTool {
     /// Fixed advisor tool type.
     #[serde(rename = "type")]
-    pub tool_type: String, // "advisor_20260301"
+    pub(crate) tool_type: String, // "advisor_20260301"
     /// Fixed advisor tool name.
-    pub name: String, // "advisor"
+    pub(crate) name: String, // "advisor"
     /// Advisor model id (e.g. "claude-opus-4-8").
-    pub model: String,
+    pub(crate) model: String,
     /// Maximum number of advisor invocations per request.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_uses: Option<u32>,
+    pub(crate) max_uses: Option<u32>,
     /// Caps the advisor's total output (thinking plus text) per call (min 1024).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    pub(crate) max_tokens: Option<u32>,
     /// Enables prompt caching for the advisor's own transcript across calls.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub caching: Option<AnthropicAdvisorCaching>,
+    pub(crate) caching: Option<AnthropicAdvisorCaching>,
 }
 
 /// Prompt-caching configuration for the advisor tool.
@@ -389,9 +389,9 @@ pub struct AnthropicAdvisorTool {
 pub struct AnthropicAdvisorCaching {
     /// Fixed cache type.
     #[serde(rename = "type")]
-    pub cache_type: String, // "ephemeral"
+    pub(crate) cache_type: String, // "ephemeral"
     /// Cache lifetime ("5m" or "1h").
-    pub ttl: String,
+    pub(crate) ttl: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,46 +444,46 @@ pub enum AnthropicStreamDelta {
 
 #[derive(Debug, Deserialize)]
 pub struct AnthropicMessageDelta {
-    pub stop_reason: Option<String>,
-    pub stop_sequence: Option<String>,
+    pub(crate) stop_reason: Option<String>,
+    stop_sequence: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AnthropicStopDetails {
     #[serde(rename = "type")]
-    pub stop_details_type: Option<String>,
-    pub category: Option<String>,
-    pub explanation: Option<String>,
+    stop_details_type: Option<String>,
+    category: Option<String>,
+    explanation: Option<String>,
     /// Opaque token that represents fallback credit when retrying on another model.
     /// Present when the refusal qualifies for fallback credit.
-    pub fallback_credit_token: Option<String>,
+    fallback_credit_token: Option<String>,
     /// Whether the retry can append an assistant message continuing the refused model's
     /// partial output (`true`) or must use the unchanged request body (`false`).
-    pub fallback_has_prefill_claim: Option<bool>,
+    fallback_has_prefill_claim: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AnthropicMessageResponse {
-    pub id: String,
-    pub role: String,
-    pub content: Vec<AnthropicContentBlock>,
-    pub model: String,
-    pub stop_reason: Option<String>,
-    pub stop_sequence: Option<String>,
-    pub stop_details: Option<AnthropicStopDetails>,
-    pub usage: AnthropicUsage,
+    id: String,
+    role: String,
+    content: Vec<AnthropicContentBlock>,
+    model: String,
+    stop_reason: Option<String>,
+    stop_sequence: Option<String>,
+    stop_details: Option<AnthropicStopDetails>,
+    pub(crate) usage: AnthropicUsage,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AnthropicUsage {
-    pub input_tokens: u32,
-    pub output_tokens: u32,
-    pub cache_creation_input_tokens: Option<u32>,
-    pub cache_read_input_tokens: Option<u32>,
+    pub(crate) input_tokens: u32,
+    pub(crate) output_tokens: u32,
+    pub(crate) cache_creation_input_tokens: Option<u32>,
+    pub(crate) cache_read_input_tokens: Option<u32>,
     /// Per-iteration token usage, populated when compaction triggers or server-side fallback runs.
     /// Each entry represents one sampling pass (compaction, message, or fallback_message).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub iterations: Option<Vec<AnthropicUsageIteration>>,
+    iterations: Option<Vec<AnthropicUsageIteration>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -517,19 +517,19 @@ pub enum AnthropicUsageIteration {
 #[derive(Debug, Deserialize)]
 pub struct AnthropicErrorBody {
     #[serde(rename = "type")]
-    pub error_type: String,
-    pub message: String,
+    error_type: String,
+    pub(crate) message: String,
 }
 
 /// Output configuration for Anthropic API (e.g., effort parameter)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicOutputConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<String>,
+    pub(crate) effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_budget: Option<AnthropicTaskBudget>,
+    pub(crate) task_budget: Option<AnthropicTaskBudget>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub format: Option<AnthropicOutputFormat>,
+    pub(crate) format: Option<AnthropicOutputFormat>,
 }
 
 impl AnthropicOutputConfig {
@@ -545,8 +545,8 @@ impl AnthropicOutputConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AnthropicTaskBudget {
     #[serde(rename = "type")]
-    pub budget_type: String,
-    pub total: u32,
+    pub(crate) budget_type: String,
+    pub(crate) total: u32,
 }
 
 /// Native structured output format for Anthropic responses.
@@ -565,14 +565,14 @@ pub enum AnthropicOutputFormat {
 /// <https://docs.anthropic.com/en/api/messages-count-tokens>
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CountTokensRequest {
-    pub model: String,
+    model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Value>,
-    pub messages: Vec<AnthropicMessage>,
+    system: Option<Value>,
+    messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<AnthropicTool>>,
+    tools: Option<Vec<AnthropicTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<ThinkingConfig>,
+    thinking: Option<ThinkingConfig>,
 }
 
 fn deserialize_boxed_output_config_opt<'de, D>(deserializer: D) -> Result<Option<Box<AnthropicOutputConfig>>, D::Error>
@@ -586,7 +586,7 @@ where
 /// Response from Anthropic's count_tokens endpoint
 #[derive(Debug, Deserialize)]
 pub struct CountTokensResponse {
-    pub input_tokens: u32,
+    input_tokens: u32,
 }
 
 #[cfg(test)]

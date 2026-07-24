@@ -46,7 +46,7 @@ pub struct ProviderOverrideConfig {
 impl ProviderOverrideConfig {
     /// Validate that all model entries are non-empty after trimming and
     /// that there are no duplicate model entries.
-    pub fn validate(&self, provider_name: &str) -> Result<(), String> {
+    pub(crate) fn validate(&self, provider_name: &str) -> Result<(), String> {
         let mut seen = std::collections::HashSet::new();
         for model in &self.models {
             let trimmed = model.trim();

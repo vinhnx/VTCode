@@ -16,7 +16,7 @@ impl InlineListRow {
         Self { lines: vec![line], style }
     }
 
-    pub(crate) fn apply_style(&mut self, style: Style) {
+    fn apply_style(&mut self, style: Style) {
         self.style = style;
         for line in &mut self.lines {
             for span in &mut line.spans {

@@ -121,7 +121,7 @@ pub(super) struct EventStreamController {
 }
 
 impl EventStreamController {
-    pub(super) fn new(
+    fn new(
         cancellation_token: CancellationToken,
         join_handle: tokio::task::JoinHandle<()>,
         event_tx: UnboundedSender<TerminalEvent>,
@@ -141,7 +141,7 @@ impl EventStreamController {
 
     /// Cancel the current event loop task and await its termination.
     /// Creates a fresh CancellationToken for the next `start()` call.
-    pub(super) async fn stop(&mut self) {
+    async fn stop(&mut self) {
         self.cancellation_token.cancel();
         if let Some(handle) = self.join_handle.take() {
             let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
@@ -151,7 +151,7 @@ impl EventStreamController {
 
     /// Spawn a new event loop task with a fresh EventStream.
     /// Safe to call multiple times after `stop()`.
-    pub(super) fn start(&mut self) {
+    fn start(&mut self) {
         let token = self.cancellation_token.clone();
         let event_tx = self.event_tx.clone();
         let rx_paused = self.rx_paused.clone();
@@ -163,7 +163,7 @@ impl EventStreamController {
     }
 
     /// Ensure the event loop is stopped for final cleanup on TUI exit.
-    pub(super) async fn shutdown(&mut self) {
+    async fn shutdown(&mut self) {
         if let Some(handle) = self.join_handle.take() {
             self.cancellation_token.cancel();
             let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
@@ -209,22 +209,22 @@ impl Drop for TerminalModeRestoreGuard {
     }
 }
 
-pub struct TuiOptions<E> {
-    pub surface_preference: UiSurfacePreference,
-    pub inline_rows: u16,
-    pub show_logs: bool,
-    pub log_theme: Option<String>,
-    pub event_callback: Option<EventCallback<E>>,
-    pub focus_callback: Option<FocusChangeCallback>,
-    pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
-    pub input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
-    pub keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
-    pub fullscreen: FullscreenInteractionSettings,
-    pub workspace_root: Option<std::path::PathBuf>,
-    pub preview_callback: Option<PreviewCallback>,
+pub(crate) struct TuiOptions<E> {
+    pub(crate) surface_preference: UiSurfacePreference,
+    pub(crate) inline_rows: u16,
+    pub(crate) show_logs: bool,
+    pub(crate) log_theme: Option<String>,
+    pub(crate) event_callback: Option<EventCallback<E>>,
+    pub(crate) focus_callback: Option<FocusChangeCallback>,
+    pub(crate) active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    pub(crate) input_activity_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
+    pub(crate) keyboard_protocol: crate::tui::config::KeyboardProtocolConfig,
+    pub(crate) fullscreen: FullscreenInteractionSettings,
+    pub(crate) workspace_root: Option<std::path::PathBuf>,
+    pub(crate) preview_callback: Option<PreviewCallback>,
 }
 
-pub async fn run_tui<S, F>(
+pub(crate) async fn run_tui<S, F>(
     mut commands: UnboundedReceiver<S::Command>,
     events: UnboundedSender<S::Event>,
     options: TuiOptions<S::Event>,

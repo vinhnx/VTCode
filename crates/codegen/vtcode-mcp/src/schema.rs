@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 /// - Enum validation
 /// - Nested objects and arrays
 /// - Complex schemas (oneOf, anyOf, allOf, not)
-pub fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
+pub(crate) fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
     if input.is_null() {
         anyhow::bail!("Input cannot be null");
     }
@@ -35,7 +35,7 @@ pub fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
 /// Validate tool input parameters (Phase 2 - Full validation)
 ///
 /// Validates tool input against the tool's schema using full JSON Schema support.
-pub fn validate_tool_input(input_schema: Option<&Value>, input: &Value) -> Result<()> {
+pub(crate) fn validate_tool_input(input_schema: Option<&Value>, input: &Value) -> Result<()> {
     if input.is_null() {
         anyhow::bail!("Tool input cannot be null");
     }
@@ -49,7 +49,7 @@ pub fn validate_tool_input(input_schema: Option<&Value>, input: &Value) -> Resul
 }
 
 /// Build a simple JSON Schema for a tool with no specific input requirements
-pub fn simple_schema() -> Value {
+fn simple_schema() -> Value {
     json!({
         "type": "object",
         "properties": {},

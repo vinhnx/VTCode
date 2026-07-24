@@ -37,23 +37,23 @@ pub use retention::{RetentionPolicy, apply_retention, gc_legacy};
 use std::path::{Path, PathBuf};
 
 /// Directory (relative to the workspace) holding all per-session stores.
-pub const SESSIONS_DIR: &str = ".vtcode/sessions";
+const SESSIONS_DIR: &str = ".vtcode/sessions";
 
 /// Sub-directory inside a session holding regenerated views.
-pub const DERIVED_DIR: &str = "derived";
+const DERIVED_DIR: &str = "derived";
 
 /// Schema version for the on-disk session store layout.
-pub const SESSION_STORE_SCHEMA_VERSION: u32 = 1;
+const SESSION_STORE_SCHEMA_VERSION: u32 = 1;
 
 /// Resolve the sessions root directory for a workspace.
 #[must_use]
-pub fn sessions_root(workspace: &Path) -> PathBuf {
+pub(crate) fn sessions_root(workspace: &Path) -> PathBuf {
     workspace.join(SESSIONS_DIR)
 }
 
 /// Resolve the directory for a single session.
 #[must_use]
-pub fn session_dir(workspace: &Path, session_id: &str) -> PathBuf {
+pub(crate) fn session_dir(workspace: &Path, session_id: &str) -> PathBuf {
     sessions_root(workspace).join(sanitize_id(session_id))
 }
 

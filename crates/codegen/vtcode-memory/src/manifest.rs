@@ -16,17 +16,17 @@ pub struct ManifestStore {
 
 impl ManifestStore {
     /// Create a new manifest store for the given session directory.
-    pub fn new(session_dir: std::path::PathBuf) -> Self {
+    pub(crate) fn new(session_dir: std::path::PathBuf) -> Self {
         Self { session_dir }
     }
 
     /// Path to `manifest.json` inside the session directory.
-    pub fn manifest_path(&self) -> std::path::PathBuf {
+    fn manifest_path(&self) -> std::path::PathBuf {
         self.session_dir.join("manifest.json")
     }
 
     /// Path to `index/turns.json` inside the session directory.
-    pub fn turns_path(&self) -> std::path::PathBuf {
+    fn turns_path(&self) -> std::path::PathBuf {
         self.session_dir.join("index").join("turns.json")
     }
 
@@ -35,7 +35,7 @@ impl ManifestStore {
     /// Returns `Ok(None)` when the file is missing (fresh session) or
     /// unreadable, rather than erroring — the caller can fall back to
     /// scanning the event log.
-    pub fn load_manifest(&self) -> Result<Option<SessionManifest>, SessionStoreError> {
+    pub(crate) fn load_manifest(&self) -> Result<Option<SessionManifest>, SessionStoreError> {
         let path = self.manifest_path();
         if !path.exists() {
             return Ok(None);
@@ -50,7 +50,7 @@ impl ManifestStore {
     /// Load the turn index if it exists and is parseable.
     ///
     /// Returns `Ok(None)` when the file is missing or unreadable.
-    pub fn load_turn_index(&self) -> Result<Option<TurnIndex>, SessionStoreError> {
+    pub(crate) fn load_turn_index(&self) -> Result<Option<TurnIndex>, SessionStoreError> {
         let path = self.turns_path();
         if !path.exists() {
             return Ok(None);
@@ -62,14 +62,14 @@ impl ManifestStore {
         Ok(Some(index))
     }
     /// Atomically write the manifest. Parent directories must already exist.
-    pub fn write_manifest(&self, manifest: &SessionManifest) -> Result<(), SessionStoreError> {
+    pub(crate) fn write_manifest(&self, manifest: &SessionManifest) -> Result<(), SessionStoreError> {
         let path = self.manifest_path();
         let bytes = serde_json::to_string(manifest)?;
         fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path.clone(), e))
     }
 
     /// Atomically write the turn index. Parent directories must already exist.
-    pub fn write_turn_index(&self, index: &TurnIndex) -> Result<(), SessionStoreError> {
+    pub(crate) fn write_turn_index(&self, index: &TurnIndex) -> Result<(), SessionStoreError> {
         let path = self.turns_path();
         let bytes = serde_json::to_string(index)?;
         fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path.clone(), e))

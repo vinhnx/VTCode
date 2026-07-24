@@ -17,7 +17,7 @@ pub struct ThemeConfigParser {
 
 impl ThemeConfigParser {
     /// Create a new ThemeConfigParser
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { cached_parser: CachedStyleParser::new() }
     }
 }
@@ -44,7 +44,7 @@ impl ThemeConfigParser {
     /// # Errors
     ///
     /// Returns error if the input doesn't match Git color syntax.
-    pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
+    fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
         self.cached_parser.parse_git_style(input)
     }
 
@@ -62,7 +62,7 @@ impl ThemeConfigParser {
     /// # Errors
     ///
     /// Returns error if the input doesn't match LS_COLORS syntax.
-    pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
+    fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
         self.cached_parser.parse_ls_colors(input)
     }
 

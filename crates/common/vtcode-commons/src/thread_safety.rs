@@ -298,12 +298,12 @@ static MAIN_THREAD_ID: OnceLock<ThreadId> = OnceLock::new();
 ///
 /// Should be invoked once, early in `main`, before spawning any worker threads
 /// that may try to obtain a [`MainThreadToken`]. Subsequent calls have no effect.
-pub fn designate_main_thread() {
+fn designate_main_thread() {
     let _ = MAIN_THREAD_ID.set(thread::current().id());
 }
 
 /// Returns the `ThreadId` previously designated as the main thread, if any.
-pub fn main_thread_id() -> Option<ThreadId> {
+fn main_thread_id() -> Option<ThreadId> {
     MAIN_THREAD_ID.get().copied()
 }
 
@@ -338,7 +338,7 @@ impl MainThreadToken {
     ///
     /// Returns `None` if [`designate_main_thread`] has never been called, or
     /// if the current thread is not the designated main thread.
-    pub fn try_new() -> Option<Self> {
+    fn try_new() -> Option<Self> {
         let designated = MAIN_THREAD_ID.get()?;
         if *designated == thread::current().id() {
             Some(Self(PhantomData))

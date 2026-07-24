@@ -25,7 +25,7 @@ pub enum OAuthProvider {
 
 impl OAuthProvider {
     #[must_use]
-    pub fn slug(self) -> &'static str {
+    fn slug(self) -> &'static str {
         match self {
             Self::OpenAi => "openai",
             Self::OpenRouter => "openrouter",
@@ -128,22 +128,22 @@ impl OAuthCallbackPage {
     }
 
     #[must_use]
-    pub fn provider_slug(&self) -> &'static str {
+    fn provider_slug(&self) -> &'static str {
         self.provider_slug
     }
 
     #[must_use]
-    pub fn success_subtitle(&self) -> &'static str {
+    fn success_subtitle(&self) -> &'static str {
         self.success_subtitle
     }
 
     #[must_use]
-    pub fn failure_subtitle(&self) -> &'static str {
+    fn failure_subtitle(&self) -> &'static str {
         self.failure_subtitle
     }
 
     #[must_use]
-    pub fn retry_hint(&self) -> &'static str {
+    fn retry_hint(&self) -> &'static str {
         self.retry_hint
     }
 }
@@ -163,7 +163,7 @@ pub struct AuthCodeCallbackServer {
 }
 
 impl AuthCodeCallbackServer {
-    pub async fn start(
+    async fn start(
         port: u16,
         timeout_secs: u64,
         page: OAuthCallbackPage,

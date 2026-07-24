@@ -49,15 +49,15 @@ pub enum ShellKind {
 #[cfg_attr(feature = "serde-errors", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct CommandInvocation {
-    pub shell: ShellKind,
+    shell: ShellKind,
     pub command: String,
-    pub category: CommandCategory,
-    pub working_dir: PathBuf,
-    pub touched_paths: Vec<PathBuf>,
+    pub(crate) category: CommandCategory,
+    pub(crate) working_dir: PathBuf,
+    pub(crate) touched_paths: Vec<PathBuf>,
 }
 
 impl CommandInvocation {
-    pub fn new(shell: ShellKind, command: String, category: CommandCategory, working_dir: PathBuf) -> Self {
+    pub(crate) fn new(shell: ShellKind, command: String, category: CommandCategory, working_dir: PathBuf) -> Self {
         Self {
             shell,
             command,
@@ -67,7 +67,7 @@ impl CommandInvocation {
         }
     }
 
-    pub fn with_paths(mut self, paths: Vec<PathBuf>) -> Self {
+    pub(crate) fn with_paths(mut self, paths: Vec<PathBuf>) -> Self {
         self.touched_paths = paths;
         self
     }
@@ -82,15 +82,15 @@ pub struct CommandStatus {
 }
 
 impl CommandStatus {
-    pub fn new(success: bool, code: Option<i32>) -> Self {
+    pub(crate) fn new(success: bool, code: Option<i32>) -> Self {
         Self { success, code }
     }
 
-    pub fn success(&self) -> bool {
+    pub(crate) fn success(&self) -> bool {
         self.success
     }
 
-    pub fn code(&self) -> Option<i32> {
+    fn code(&self) -> Option<i32> {
         self.code
     }
 
@@ -111,13 +111,13 @@ impl From<std::process::ExitStatus> for CommandStatus {
 #[cfg_attr(feature = "serde-errors", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
-    pub status: CommandStatus,
-    pub stdout: String,
-    pub stderr: String,
+    pub(crate) status: CommandStatus,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
 }
 
 impl CommandOutput {
-    pub fn success(stdout: impl Into<String>) -> Self {
+    fn success(stdout: impl Into<String>) -> Self {
         Self {
             status: CommandStatus::new(true, Some(0)),
             stdout: stdout.into(),
@@ -145,7 +145,7 @@ pub struct ProcessCommandExecutor;
 
 #[cfg(feature = "std-process")]
 impl ProcessCommandExecutor {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self
     }
 }

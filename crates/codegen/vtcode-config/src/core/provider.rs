@@ -76,7 +76,7 @@ impl OpenAIHostedShellEnvironment {
 }
 
 impl OpenAIHostedShellEnvironment {
-    pub const fn uses_container_reference(self) -> bool {
+    const fn uses_container_reference(self) -> bool {
         matches!(self, Self::ContainerReference)
     }
 }
@@ -110,7 +110,7 @@ pub struct OpenAIHostedShellDomainSecret {
 }
 
 impl OpenAIHostedShellDomainSecret {
-    pub fn validation_error(&self, index: usize) -> Option<String> {
+    fn validation_error(&self, index: usize) -> Option<String> {
         let base = format!("provider.openai.hosted_shell.network_policy.domain_secrets[{index}]");
 
         if self.domain.trim().is_empty() {
@@ -146,7 +146,7 @@ impl OpenAIHostedShellNetworkPolicy {
         matches!(self.policy_type, OpenAIHostedShellNetworkPolicyType::Allowlist)
     }
 
-    pub fn first_invalid_message(&self) -> Option<String> {
+    fn first_invalid_message(&self) -> Option<String> {
         match self.policy_type {
             OpenAIHostedShellNetworkPolicyType::Disabled => {
                 if !self.allowed_domains.is_empty() || !self.domain_secrets.is_empty() {
@@ -219,7 +219,7 @@ impl Default for OpenAIHostedSkillVersion {
 }
 
 impl OpenAIHostedSkillVersion {
-    pub fn validation_error(&self, field_path: &str) -> Option<String> {
+    fn validation_error(&self, field_path: &str) -> Option<String> {
         match self {
             Self::String(value) if value.trim().is_empty() => {
                 Some(format!("`{field_path}` must not be empty when set."))
@@ -249,7 +249,7 @@ pub enum OpenAIHostedSkill {
 }
 
 impl OpenAIHostedSkill {
-    pub fn validation_error(&self, index: usize) -> Option<String> {
+    fn validation_error(&self, index: usize) -> Option<String> {
         match self {
             Self::SkillReference { skill_id, version } => {
                 let skill_id_path = format!("provider.openai.hosted_shell.skills[{index}].skill_id");
@@ -301,7 +301,7 @@ pub struct OpenAIHostedShellConfig {
 }
 
 impl OpenAIHostedShellConfig {
-    pub fn container_id_ref(&self) -> Option<&str> {
+    fn container_id_ref(&self) -> Option<&str> {
         self.container_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
     }
 
@@ -320,7 +320,7 @@ impl OpenAIHostedShellConfig {
             .find_map(|(index, skill)| skill.validation_error(index))
     }
 
-    pub fn has_valid_skill_mounts(&self) -> bool {
+    fn has_valid_skill_mounts(&self) -> bool {
         self.first_invalid_skill_message().is_none()
     }
 
@@ -332,7 +332,7 @@ impl OpenAIHostedShellConfig {
         self.network_policy.first_invalid_message()
     }
 
-    pub fn has_valid_network_policy(&self) -> bool {
+    fn has_valid_network_policy(&self) -> bool {
         self.first_invalid_network_policy_message().is_none()
     }
 
@@ -548,7 +548,7 @@ pub enum ToolSearchAlgorithm {
 
 impl ToolSearchAlgorithm {
     /// Returns the string representation of this algorithm variant.
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         match self {
             Self::Regex => "regex",
             Self::Bm25 => "bm25",
@@ -582,7 +582,7 @@ pub struct ToolSearchConfig {
 
     /// Maximum number of tool search results to return
     #[serde(default = "default_max_results")]
-    pub max_results: u32,
+    max_results: u32,
 
     /// Tool names that should never be deferred (always available)
     #[serde(default)]

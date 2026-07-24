@@ -135,7 +135,7 @@ impl AgentRunner {
     /// generator can see what went wrong. Uses an LLM-based replanner when
     /// available to produce a revised feature list, contract addendum, and new
     /// tracker items. Falls back to annotation-only if the replanner fails.
-    pub(super) async fn run_evaluator_phase(
+    async fn run_evaluator_phase(
         &mut self,
         task: &Task,
         session_state: &AgentSessionState,
@@ -184,7 +184,7 @@ impl AgentRunner {
         })
     }
 
-    pub(super) fn evaluation_retry_prompt(&self, evaluation: &EvaluationArtifacts, revision_round: usize) -> String {
+    fn evaluation_retry_prompt(&self, evaluation: &EvaluationArtifacts, revision_round: usize) -> String {
         let tracker_path = harness_artifacts::current_task_path(&self._workspace);
         format!(
             "Evaluator rejected the candidate implementation in round {}. Fix the reported issues, update `{}`, and try again.\n\nLatest evaluation summary:\n{}\n\nEvaluation artifact: {}",

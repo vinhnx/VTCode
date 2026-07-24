@@ -21,11 +21,11 @@ static MODEL_LIMITERS: LazyLock<Mutex<HashMap<String, Arc<Semaphore>>>> = LazyLo
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
 pub struct ProviderConfig {
-    pub api_key: String,
-    pub base_url: String,
-    pub model: String,
-    pub timeout: Duration,
-    pub max_retries: u32,
+    api_key: String,
+    base_url: String,
+    model: String,
+    timeout: Duration,
+    max_retries: u32,
 }
 
 impl ProviderConfig {
@@ -41,14 +41,14 @@ impl ProviderConfig {
     }
 
     /// Build HTTP client with provider-specific configuration
-    pub fn build_http_client(&self) -> Result<HttpClient, LLMError> {
+    fn build_http_client(&self) -> Result<HttpClient, LLMError> {
         use crate::http_client::HttpClientFactory;
         Ok(HttpClientFactory::with_timeouts(self.timeout, Duration::from_secs(30)))
     }
 }
 
 /// Common HTTP error handling for all providers
-pub fn handle_http_error(status: StatusCode, error_text: &str, _model: &str) -> LLMError {
+fn handle_http_error(status: StatusCode, error_text: &str, _model: &str) -> LLMError {
     match status {
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication {
             message: format!("Authentication failed ({status}): {error_text}"),
@@ -158,7 +158,7 @@ pub mod request_builder {
 
 /// Base provider trait with common functionality
 #[async_trait]
-pub trait BaseProvider: Send + Sync {
+trait BaseProvider: Send + Sync {
     /// Get provider configuration
     fn config(&self) -> &ProviderConfig;
 

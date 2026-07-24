@@ -5,7 +5,7 @@ use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
-pub(crate) fn openai_reasoning_efforts(
+fn openai_reasoning_efforts(
     include_none: bool,
     include_xhigh: bool,
     include_max: bool,

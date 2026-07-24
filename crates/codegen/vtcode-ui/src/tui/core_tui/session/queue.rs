@@ -4,9 +4,9 @@ use unicode_width::UnicodeWidthStr;
 use vtcode_commons::preview;
 
 pub(crate) struct QueueOverlay {
-    pub(crate) width: u16,
-    pub(crate) version: u64,
-    pub(crate) lines: Vec<Line<'static>>,
+    width: u16,
+    version: u64,
+    lines: Vec<Line<'static>>,
 }
 
 impl Session {
@@ -28,7 +28,7 @@ impl Session {
         result
     }
 
-    pub(crate) fn queue_input_lines(&self, width: u16) -> Vec<Line<'static>> {
+    fn queue_input_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width == 0 || self.queued_inputs.is_empty() {
             return Vec::new();
         }
@@ -61,13 +61,13 @@ impl Session {
         lines
     }
 
-    pub(crate) fn invalidate_queue_overlay(&mut self) {
+    fn invalidate_queue_overlay(&mut self) {
         self.queue_overlay_version = self.queue_overlay_version.wrapping_add(1);
         self.queue_overlay_cache = None;
         self.request_transcript_clear();
     }
 
-    pub(crate) fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {
+    fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {
         if width == 0 || self.queued_inputs.is_empty() {
             self.queue_overlay_cache = None;
             return None;

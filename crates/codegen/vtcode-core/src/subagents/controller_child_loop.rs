@@ -78,7 +78,7 @@ impl SubagentController {
         Ok(())
     }
 
-    pub(super) async fn child_loop(&self, child_id: &str) {
+    async fn child_loop(&self, child_id: &str) {
         loop {
             let request = {
                 let mut state = self.state.write().await;
@@ -160,7 +160,7 @@ impl SubagentController {
         }
     }
 
-    pub(super) async fn run_child_once(
+    async fn run_child_once(
         &self,
         child_id: &str,
         prompt: String,

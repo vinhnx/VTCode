@@ -10,7 +10,7 @@ use serde_json::Value as JsonValue;
 use super::pull::OllamaPullEvent;
 
 /// Convert a single JSON object representing a pull update into one or more events.
-pub fn pull_events_from_value(value: &JsonValue) -> Vec<OllamaPullEvent> {
+pub(crate) fn pull_events_from_value(value: &JsonValue) -> Vec<OllamaPullEvent> {
     let mut events = Vec::new();
 
     if let Some(status) = value.get("status").and_then(|s| s.as_str()) {

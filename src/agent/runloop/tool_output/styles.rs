@@ -133,7 +133,7 @@ impl LsStyles {
     }
 
     #[cfg(test)]
-    pub(crate) fn from_components(classes: HashMap<String, AnsiStyle>, suffixes: Vec<(String, AnsiStyle)>) -> Self {
+    fn from_components(classes: HashMap<String, AnsiStyle>, suffixes: Vec<(String, AnsiStyle)>) -> Self {
         Self { classes, suffixes }
     }
 }

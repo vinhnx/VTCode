@@ -10,13 +10,13 @@ use super::{Message, ToolDefinition};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FallbackModel {
     /// The model identifier to fall back to (e.g., "claude-opus-4-8")
-    pub model: String,
+    pub(crate) model: String,
     /// Optional max_tokens override for this fallback attempt
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<u32>,
+    pub(crate) max_tokens: Option<u32>,
     /// Optional thinking configuration override for this fallback attempt
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<AnthropicThinkingConfig>,
+    pub(crate) thinking: Option<AnthropicThinkingConfig>,
 }
 
 /// Anthropic thinking configuration for fallback models.
@@ -82,13 +82,13 @@ pub enum AnthropicOptionalU32Override {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct AnthropicRequestOverrides {
     #[serde(default)]
-    pub thinking_mode: AnthropicThinkingModeOverride,
+    pub(crate) thinking_mode: AnthropicThinkingModeOverride,
     #[serde(default)]
-    pub thinking_display: AnthropicThinkingDisplayOverride,
+    pub(crate) thinking_display: AnthropicThinkingDisplayOverride,
     #[serde(default)]
-    pub effort: AnthropicOptionalStringOverride,
+    pub(crate) effort: AnthropicOptionalStringOverride,
     #[serde(default)]
-    pub task_budget_tokens: AnthropicOptionalU32Override,
+    pub(crate) task_budget_tokens: AnthropicOptionalU32Override,
 }
 
 /// Universal LLM request structure
@@ -231,23 +231,23 @@ pub struct ResponsesCompactionOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CodingAgentSettings {
     /// Encourage the model to use XML tags for structured responses
-    pub force_xml_tags: bool,
+    pub(crate) force_xml_tags: bool,
     /// Automatically prefill with `<thought>` to encourage reasoning
-    pub prefill_thought: bool,
+    pub(crate) prefill_thought: bool,
     /// Explicitly allow the model to say "I don't know" or "I am unsure"
-    pub allow_uncertainty: bool,
+    pub(crate) allow_uncertainty: bool,
     /// Enforce strict grounding to provided documents
-    pub strict_grounding: bool,
+    pub(crate) strict_grounding: bool,
     /// Optimize for long context by hoisting large messages and grounding in quotes
-    pub long_context_optimization: bool,
+    pub(crate) long_context_optimization: bool,
     /// Wrap multiple file contexts in structured XML tags
-    pub use_xml_document_format: bool,
+    pub(crate) use_xml_document_format: bool,
     /// Inject instructions to find quotes before carrying out the task
-    pub force_quote_grounding: bool,
+    pub(crate) force_quote_grounding: bool,
     /// Optional specialized role for Claude (e.g., "Senior Software Architect")
-    pub role_specialization: Option<String>,
+    pub(crate) role_specialization: Option<String>,
     /// Enforce the use of `<thinking>` and `<answer>` tags for manual chain-of-thought
-    pub enforce_structured_thought: bool,
+    pub(crate) enforce_structured_thought: bool,
 }
 
 /// Tool choice configuration that works across different providers
@@ -323,15 +323,15 @@ pub struct AllowedToolsChoice {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpecificToolChoice {
     #[serde(rename = "type")]
-    pub tool_type: String, // "function"
+    pub(crate) tool_type: String, // "function"
 
-    pub function: SpecificFunctionChoice,
+    pub(crate) function: SpecificFunctionChoice,
 }
 
 /// Specific function choice details
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpecificFunctionChoice {
-    pub name: String,
+    pub(crate) name: String,
 }
 
 impl ToolChoice {
@@ -346,12 +346,12 @@ impl ToolChoice {
     }
 
     /// Create any tool choice (force at least one tool call)
-    pub fn any() -> Self {
+    pub(crate) fn any() -> Self {
         Self::Any
     }
 
     /// Create specific function tool choice
-    pub fn function(name: String) -> Self {
+    pub(crate) fn function(name: String) -> Self {
         Self::Specific(SpecificToolChoice {
             tool_type: "function".to_owned(),
             function: SpecificFunctionChoice { name },
@@ -406,7 +406,7 @@ impl ToolChoice {
 
     /// Convert to provider-specific format
     #[inline]
-    pub fn to_provider_format(&self, provider: &str) -> Value {
+    pub(crate) fn to_provider_format(&self, provider: &str) -> Value {
         if Self::OPENAI_STYLE_PROVIDERS.contains(&provider) {
             return self.to_openai_format();
         }
@@ -460,14 +460,14 @@ impl ToolChoice {
 pub struct ParallelToolConfig {
     /// Whether to disable parallel tool use
     /// When true, forces sequential tool execution
-    pub disable_parallel_tool_use: bool,
+    pub(crate) disable_parallel_tool_use: bool,
 
     /// Maximum number of tools to execute in parallel
     /// None means no limit (provider default)
-    pub max_parallel_tools: Option<usize>,
+    pub(crate) max_parallel_tools: Option<usize>,
 
     /// Whether to encourage parallel tool use in prompts
-    pub encourage_parallel: bool,
+    pub(crate) encourage_parallel: bool,
 }
 
 impl Default for ParallelToolConfig {
@@ -491,7 +491,7 @@ impl ParallelToolConfig {
     }
 
     /// Create configuration for sequential tool use
-    pub fn sequential_only() -> Self {
+    pub(crate) fn sequential_only() -> Self {
         Self {
             disable_parallel_tool_use: true,
             max_parallel_tools: Some(1),

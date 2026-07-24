@@ -19,7 +19,7 @@ static PRESERVED_TOKEN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Check if text contains a preserved URL/path token.
-pub fn contains_preserved_token(text: &str) -> bool {
+fn contains_preserved_token(text: &str) -> bool {
     PRESERVED_TOKEN_PATTERN.is_match(text)
 }
 
@@ -28,7 +28,7 @@ pub fn contains_preserved_token(text: &str) -> bool {
 /// - Lines without URLs: delegated to standard wrapping
 /// - URL-only lines: returned unwrapped if they fit
 /// - Mixed lines: URLs kept intact, surrounding text wrapped normally
-pub fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+pub(crate) fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];
     }
@@ -227,7 +227,7 @@ fn wrap_mixed_content(
 }
 
 /// Wrap multiple lines with URL preservation.
-pub fn wrap_lines_preserving_urls(lines: Vec<Line<'static>>, max_width: usize) -> Vec<Line<'static>> {
+pub(crate) fn wrap_lines_preserving_urls(lines: Vec<Line<'static>>, max_width: usize) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];
     }

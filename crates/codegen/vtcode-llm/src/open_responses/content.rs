@@ -34,12 +34,12 @@ pub enum ContentPart {
 
 impl ContentPart {
     /// Create a new output text content part.
-    pub fn output_text(text: impl Into<String>) -> Self {
+    pub(crate) fn output_text(text: impl Into<String>) -> Self {
         Self::OutputText(OutputTextContent { text: text.into() })
     }
 
     /// Create a new input text content part.
-    pub fn input_text(text: impl Into<String>) -> Self {
+    pub(crate) fn input_text(text: impl Into<String>) -> Self {
         Self::InputText(InputTextContent { text: text.into() })
     }
 
@@ -49,7 +49,7 @@ impl ContentPart {
     }
 
     /// Returns the text content if this is a text-based content part.
-    pub fn as_text(&self) -> Option<&str> {
+    fn as_text(&self) -> Option<&str> {
         match self {
             Self::OutputText(c) => Some(&c.text),
             Self::InputText(c) => Some(&c.text),
@@ -77,11 +77,11 @@ pub struct InputTextContent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputImageContent {
     /// URL of the image (data URI or HTTP URL).
-    pub image_url: String,
+    pub(crate) image_url: String,
 
     /// Level of detail for image analysis.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<ImageDetail>,
+    pub(crate) detail: Option<ImageDetail>,
 }
 
 /// Level of detail for image analysis.
@@ -104,19 +104,19 @@ pub enum ImageDetail {
 pub struct InputFileContent {
     /// Filename of the input file.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub filename: Option<String>,
+    pub(crate) filename: Option<String>,
 
     /// File ID returned by the Files API.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_id: Option<String>,
+    pub(crate) file_id: Option<String>,
 
     /// Base64-encoded file data.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_data: Option<String>,
+    pub(crate) file_data: Option<String>,
 
     /// URL of the file.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_url: Option<String>,
+    pub(crate) file_url: Option<String>,
 }
 
 /// URL citation for web resources.

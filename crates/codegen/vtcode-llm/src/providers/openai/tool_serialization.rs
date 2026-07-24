@@ -114,7 +114,7 @@ fn should_strip_any_of_for_builtin_tool(tool_name: &str) -> bool {
     )
 }
 
-pub fn sanitize_openai_function_parameters(value: Value, strip_any_of: bool) -> Value {
+pub(crate) fn sanitize_openai_function_parameters(value: Value, strip_any_of: bool) -> Value {
     sanitize_openai_schema_node(parse_tool_input_schema(&value), strip_any_of)
 }
 
@@ -347,7 +347,7 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
     }))
 }
 
-pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
+pub(crate) fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
     if tools.is_empty() {
         return None;
     }
@@ -423,7 +423,7 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
     Some(Value::Array(serialized_tools))
 }
 
-pub fn serialize_tools_for_responses(
+pub(crate) fn serialize_tools_for_responses(
     tools: &[provider::ToolDefinition],
     hosted_shell: Option<&OpenAIHostedShellConfig>,
 ) -> Option<Value> {

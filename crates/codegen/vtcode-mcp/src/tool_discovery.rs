@@ -49,10 +49,10 @@ impl DetailLevel {
 pub struct ToolDiscoveryResult {
     pub name: String,
     pub provider: String,
-    pub description: String,
-    pub relevance_score: f32,
+    description: String,
+    relevance_score: f32,
     /// Present only when detail_level is Full or NameAndDescription
-    pub input_schema: Option<Value>,
+    input_schema: Option<Value>,
 }
 
 impl ToolDiscoveryResult {
@@ -193,7 +193,7 @@ impl ToolDiscovery {
     }
 
     /// List all available tools grouped by provider.
-    pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
+    async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
         Ok(group_results_by_provider_preserving_order(tools.into_iter().map(|tool| ToolDiscoveryResult {

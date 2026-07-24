@@ -31,7 +31,7 @@ pub enum CopilotAuthEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotDiscoveredModel {
     pub id: String,
-    pub name: String,
+    pub(crate) name: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub struct CopilotAuthStatus {
 
 impl CopilotAuthStatus {
     #[must_use]
-    pub fn authenticated(message: Option<String>) -> Self {
+    pub(crate) fn authenticated(message: Option<String>) -> Self {
         Self {
             kind: CopilotAuthStatusKind::Authenticated,
             message,
@@ -58,7 +58,7 @@ impl CopilotAuthStatus {
     }
 
     #[must_use]
-    pub fn unauthenticated(message: Option<String>) -> Self {
+    pub(crate) fn unauthenticated(message: Option<String>) -> Self {
         Self {
             kind: CopilotAuthStatusKind::Unauthenticated,
             message,
@@ -66,7 +66,7 @@ impl CopilotAuthStatus {
     }
 
     #[must_use]
-    pub fn server_unavailable(message: impl Into<String>) -> Self {
+    pub(crate) fn server_unavailable(message: impl Into<String>) -> Self {
         Self {
             kind: CopilotAuthStatusKind::ServerUnavailable,
             message: Some(message.into()),
@@ -74,7 +74,7 @@ impl CopilotAuthStatus {
     }
 
     #[must_use]
-    pub fn auth_flow_failed(message: impl Into<String>) -> Self {
+    pub(crate) fn auth_flow_failed(message: impl Into<String>) -> Self {
         Self {
             kind: CopilotAuthStatusKind::AuthFlowFailed,
             message: Some(message.into()),
@@ -82,7 +82,7 @@ impl CopilotAuthStatus {
     }
 
     #[must_use]
-    pub fn is_authenticated(&self) -> bool {
+    pub(crate) fn is_authenticated(&self) -> bool {
         matches!(self.kind, CopilotAuthStatusKind::Authenticated)
     }
 }
@@ -96,8 +96,8 @@ pub struct CopilotToolCallRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotToolUse {
-    pub tool_call_id: String,
-    pub tool_name: String,
+    tool_call_id: String,
+    tool_name: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,25 +141,25 @@ pub struct CopilotTerminalCreateResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotTerminalOutputRequest {
-    pub session_id: String,
+    pub(crate) session_id: String,
     pub terminal_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotTerminalReleaseRequest {
-    pub session_id: String,
+    pub(crate) session_id: String,
     pub terminal_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotTerminalKillRequest {
-    pub session_id: String,
+    pub(crate) session_id: String,
     pub terminal_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotTerminalWaitForExitRequest {
-    pub session_id: String,
+    pub(crate) session_id: String,
     pub terminal_id: String,
 }
 
@@ -257,8 +257,8 @@ pub enum CopilotPermissionRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopilotShellCommandSummary {
-    pub identifier: String,
-    pub read_only: bool,
+    pub(crate) identifier: String,
+    pub(crate) read_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,7 +273,7 @@ pub enum CopilotPermissionDecision {
 
 impl CopilotPermissionDecision {
     #[must_use]
-    pub fn to_rpc_result(&self) -> Value {
+    pub(crate) fn to_rpc_result(&self) -> Value {
         match self {
             Self::Approved | Self::ApprovedAlways => serde_json::json!({
                 "kind": "approved",

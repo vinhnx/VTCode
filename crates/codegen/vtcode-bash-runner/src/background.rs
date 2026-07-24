@@ -7,9 +7,9 @@ use crate::executor::{CommandExecutor, CommandInvocation, CommandOutput};
 
 #[derive(Debug, Clone)]
 pub struct BackgroundTaskHandle {
-    pub id: String,
-    pub command: String,
-    pub status: BackgroundTaskStatus,
+    id: String,
+    command: String,
+    status: BackgroundTaskStatus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,11 +22,11 @@ pub enum BackgroundTaskStatus {
 
 #[derive(Debug)]
 pub struct BackgroundTask {
-    pub id: String,
-    pub invocation: CommandInvocation,
-    pub status: BackgroundTaskStatus,
-    pub result: Option<Result<CommandOutput, String>>,
-    pub cancel_tx: Option<oneshot::Sender<()>>,
+    id: String,
+    invocation: CommandInvocation,
+    status: BackgroundTaskStatus,
+    result: Option<Result<CommandOutput, String>>,
+    cancel_tx: Option<oneshot::Sender<()>>,
 }
 
 pub struct BackgroundCommandManager<E: CommandExecutor> {

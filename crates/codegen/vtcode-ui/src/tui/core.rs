@@ -27,20 +27,20 @@ pub type CoreSession = core_tui::types::InlineSession;
 /// Core session launch options for reusable TUI integrations.
 #[derive(Clone)]
 pub struct CoreSessionOptions {
-    pub placeholder: Option<String>,
-    pub surface_preference: SessionSurface,
-    pub inline_rows: u16,
-    pub event_callback: Option<InlineEventCallback>,
-    pub focus_callback: Option<FocusChangeCallback>,
-    pub active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
-    pub input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
-    pub keyboard_protocol: KeyboardProtocolSettings,
-    pub fullscreen: FullscreenInteractionSettings,
-    pub workspace_root: Option<PathBuf>,
-    pub appearance: Option<SessionAppearanceConfig>,
-    pub app_name: String,
-    pub non_interactive_hint: Option<String>,
-    pub preview_callback: Option<core_tui::types::PreviewCallback>,
+    placeholder: Option<String>,
+    surface_preference: SessionSurface,
+    inline_rows: u16,
+    event_callback: Option<InlineEventCallback>,
+    focus_callback: Option<FocusChangeCallback>,
+    active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    input_activity_counter: Option<Arc<std::sync::atomic::AtomicU64>>,
+    keyboard_protocol: KeyboardProtocolSettings,
+    fullscreen: FullscreenInteractionSettings,
+    workspace_root: Option<PathBuf>,
+    appearance: Option<SessionAppearanceConfig>,
+    app_name: String,
+    non_interactive_hint: Option<String>,
+    preview_callback: Option<core_tui::types::PreviewCallback>,
 }
 
 impl Default for CoreSessionOptions {

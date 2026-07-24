@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalMetric {
-    pub pass_at_k: f64,
-    pub pass_all_k: f64,
-    pub total_runs: u32,
-    pub passed_runs: u32,
-    pub task_id: String,
+    pub(crate) pass_at_k: f64,
+    pub(crate) pass_all_k: f64,
+    pub(crate) total_runs: u32,
+    pub(crate) passed_runs: u32,
+    pub(crate) task_id: String,
 }
 
 pub fn compute_metric(task_id: &str, results: &[EvalRunResult]) -> EvalMetric {

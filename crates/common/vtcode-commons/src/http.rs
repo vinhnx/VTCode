@@ -3,8 +3,8 @@
 use reqwest::{Client, ClientBuilder};
 use std::time::Duration;
 
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-pub const SHORT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+const SHORT_TIMEOUT: Duration = Duration::from_secs(5);
 pub const LONG_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn apply_platform_proxy_policy(builder: ClientBuilder) -> ClientBuilder {
@@ -23,7 +23,7 @@ fn apply_platform_proxy_policy(builder: ClientBuilder) -> ClientBuilder {
 ///
 /// This is the fallible version of `build_client`. Use this when you want to handle
 /// the error gracefully (e.g., return an error to the caller) instead of panicking.
-pub fn try_build_client<F>(configure: F) -> Result<Client, reqwest::Error>
+fn try_build_client<F>(configure: F) -> Result<Client, reqwest::Error>
 where
     F: Fn(ClientBuilder) -> ClientBuilder,
 {

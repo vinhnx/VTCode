@@ -132,7 +132,7 @@ impl OpenResponsesProvider {
         Self::with_model_internal(model, None, api_key, TimeoutsConfig::default(), None)
     }
 
-    pub fn new_with_client(
+    fn new_with_client(
         api_key: String,
         model: String,
         http_client: reqwest::Client,

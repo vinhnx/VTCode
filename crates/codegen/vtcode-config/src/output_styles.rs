@@ -24,8 +24,8 @@ impl Default for OutputStyleConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OutputStyleFileConfig {
-    pub name: String,
-    pub description: Option<String>,
+    name: String,
+    description: Option<String>,
     #[serde(default)]
     pub keep_coding_instructions: bool,
 }
@@ -120,7 +120,7 @@ impl OutputStyleManager {
             .collect()
     }
 
-    pub fn apply_style(&self, name: &str, base_prompt: &str) -> String {
+    fn apply_style(&self, name: &str, base_prompt: &str) -> String {
         if let Some(style) = self.get_style(name) {
             if style.config.keep_coding_instructions {
                 // Combine base prompt with style content

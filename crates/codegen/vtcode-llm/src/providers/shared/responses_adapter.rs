@@ -83,11 +83,11 @@ pub(crate) struct ResponsesStreamAdapter;
 
 impl ResponsesStreamAdapter {
     #[cfg(test)]
-    pub(crate) fn parse_sse_data(data: &str) -> Result<ResponsesStreamEvent, LLMError> {
+    fn parse_sse_data(data: &str) -> Result<ResponsesStreamEvent, LLMError> {
         Self::parse_sse_data_for_provider("OpenAI", data)
     }
 
-    pub(crate) fn parse_sse_data_for_provider(
+    fn parse_sse_data_for_provider(
         provider_name: &str,
         data: &str,
     ) -> Result<ResponsesStreamEvent, LLMError> {

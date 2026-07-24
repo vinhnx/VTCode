@@ -13,7 +13,7 @@ pub fn current_timestamp() -> u64 {
 
 /// Get current Unix timestamp in seconds as a fallible operation.
 #[inline]
-pub fn current_timestamp_result() -> Result<u64> {
+fn current_timestamp_result() -> Result<u64> {
     Ok(SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("System clock is before UNIX_EPOCH while generating timestamp")?

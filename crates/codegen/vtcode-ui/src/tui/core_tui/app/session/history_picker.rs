@@ -13,9 +13,9 @@ use crate::tui::core_tui::session::input_manager::InputManager;
 /// A prompt from a previous session archive.
 #[derive(Debug, Clone)]
 pub struct ArchivedPrompt {
-    pub content: String,
-    pub created_at: DateTime<Utc>,
-    pub session_label: String,
+    pub(crate) content: String,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) session_label: String,
 }
 
 /// A single history entry with fuzzy match score
@@ -23,28 +23,28 @@ pub struct ArchivedPrompt {
 pub struct HistoryMatch {
     /// Index in the original in-memory history. `None` for archived entries
     /// that come from a previous session rather than the current one.
-    pub history_index: Option<usize>,
+    history_index: Option<usize>,
     /// The command text
-    pub content: String,
+    pub(crate) content: String,
     /// Fuzzy match score (higher is better)
-    pub score: u32,
+    score: u32,
     /// Associated attachments
-    pub attachments: Vec<ContentPart>,
+    attachments: Vec<ContentPart>,
     /// When this prompt was submitted (None for legacy entries without timestamps)
-    pub created_at: Option<DateTime<Utc>>,
+    created_at: Option<DateTime<Utc>>,
     /// Short relative time label (e.g. "3h ago", "just now")
-    pub time_label: String,
+    pub(crate) time_label: String,
 }
 
 /// State for the history picker overlay
 #[derive(Debug)]
 pub struct HistoryPickerState {
     /// Whether the picker is currently active
-    pub active: bool,
+    pub(crate) active: bool,
     /// Current search/filter query
-    pub search_query: String,
+    pub(crate) search_query: String,
     /// Filtered and sorted matches
-    pub matches: Vec<HistoryMatch>,
+    pub(crate) matches: Vec<HistoryMatch>,
     /// Shared list navigation state
     pub(crate) navigator: ListNavigator,
     /// Original content before picker was opened (for cancel restoration)
@@ -65,7 +65,7 @@ impl Default for HistoryPickerState {
 
 impl HistoryPickerState {
     /// Create a new history picker state
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             active: false,
             search_query: String::new(),
@@ -79,12 +79,12 @@ impl HistoryPickerState {
     }
 
     /// Set archived prompts loaded from previous sessions.
-    pub fn set_archived_prompts(&mut self, entries: Vec<ArchivedPrompt>) {
+    pub(crate) fn set_archived_prompts(&mut self, entries: Vec<ArchivedPrompt>) {
         self.archived_prompts = entries;
     }
 
     /// Open the history picker
-    pub fn open(&mut self, input_manager: &InputManager) {
+    pub(crate) fn open(&mut self, input_manager: &InputManager) {
         self.active = true;
         self.search_query.clear();
         self.original_content = input_manager.content().to_string();
@@ -94,7 +94,7 @@ impl HistoryPickerState {
     }
 
     /// Close the picker and restore original input
-    pub fn cancel(&mut self, input_manager: &mut InputManager) {
+    pub(crate) fn cancel(&mut self, input_manager: &mut InputManager) {
         self.active = false;
         self.search_query.clear();
         self.matches.clear();
@@ -105,7 +105,7 @@ impl HistoryPickerState {
     }
 
     /// Accept the current selection and close the picker
-    pub fn accept(&mut self, input_manager: &mut InputManager) {
+    pub(crate) fn accept(&mut self, input_manager: &mut InputManager) {
         if let Some(selected) = self.selected_match() {
             input_manager.set_content(selected.content.clone());
             input_manager.set_attachments(selected.attachments.clone());
@@ -117,19 +117,19 @@ impl HistoryPickerState {
     }
 
     /// Get the currently selected match
-    pub fn selected_match(&self) -> Option<&HistoryMatch> {
+    pub(crate) fn selected_match(&self) -> Option<&HistoryMatch> {
         self.navigator.selected().and_then(|index| self.matches.get(index))
     }
 
-    pub fn selected_index(&self) -> Option<usize> {
+    pub(crate) fn selected_index(&self) -> Option<usize> {
         self.navigator.selected()
     }
 
-    pub fn scroll_offset(&self) -> usize {
+    pub(crate) fn scroll_offset(&self) -> usize {
         self.navigator.scroll_offset()
     }
 
-    pub fn select_index(&mut self, index: usize) -> bool {
+    pub(crate) fn select_index(&mut self, index: usize) -> bool {
         self.navigator.select_index(index)
     }
 
@@ -138,7 +138,7 @@ impl HistoryPickerState {
     /// Merges in-memory session history with archived prompts from previous
     /// sessions.  Archived entries are included so the user can search across
     /// all recent prompts, not just the current conversation.
-    pub fn update_search(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
+    pub(crate) fn update_search(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.matches.clear();
         let now = Utc::now();
 
@@ -218,24 +218,24 @@ impl HistoryPickerState {
     }
 
     /// Add a character to the search query
-    pub fn add_char(&mut self, ch: char, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
+    fn add_char(&mut self, ch: char, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.search_query.push(ch);
         self.update_search(history);
     }
 
     /// Remove the last character from the search query
-    pub fn backspace(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
+    fn backspace(&mut self, history: &[(String, Vec<ContentPart>, DateTime<Utc>)]) {
         self.search_query.pop();
         self.update_search(history);
     }
 
     /// Move selection up
-    pub fn move_up(&mut self) {
+    pub(crate) fn move_up(&mut self) {
         self.navigator.move_up();
     }
 
     /// Move selection down
-    pub fn move_down(&mut self) {
+    pub(crate) fn move_down(&mut self) {
         self.navigator.move_down();
     }
 
@@ -245,14 +245,14 @@ impl HistoryPickerState {
     }
 
     /// Get number of matches
-    pub fn match_count(&self) -> usize {
+    fn match_count(&self) -> usize {
         self.matches.len()
     }
 }
 
 /// Handle keyboard input for the history picker
 /// Returns true if the key was handled
-pub fn handle_history_picker_key(
+pub(crate) fn handle_history_picker_key(
     key: &KeyEvent,
     picker: &mut HistoryPickerState,
     input_manager: &mut InputManager,
@@ -327,7 +327,7 @@ pub fn handle_history_picker_key(
 /// Format a `chrono::Duration` as a compact human-readable relative time label.
 ///
 /// Returns strings like `"just now"`, `"5m ago"`, `"3h ago"`, `"2d ago"`.
-pub fn format_time_ago(elapsed: Duration) -> String {
+fn format_time_ago(elapsed: Duration) -> String {
     if elapsed < Duration::zero() {
         return "just now".to_string();
     }

@@ -81,7 +81,7 @@ impl ZedAgent {
         }
     }
 
-    pub(super) fn model_supports_thought_level(&self, provider: &str, model: &str) -> bool {
+    fn model_supports_thought_level(&self, provider: &str, model: &str) -> bool {
         ModelResolver::resolve(Some(provider), model, &[], None)
             .map(|resolved| resolved.reasoning_supported())
             .unwrap_or(false)
@@ -173,7 +173,7 @@ impl ZedAgent {
         true
     }
 
-    pub(super) fn update_session_reasoning_effort(
+    fn update_session_reasoning_effort(
         &self,
         session: &SessionHandle,
         reasoning_effort: ReasoningEffortLevel,
@@ -190,7 +190,7 @@ impl ZedAgent {
         true
     }
 
-    pub(super) fn update_session_provider_and_model(
+    fn update_session_provider_and_model(
         &self,
         session: &SessionHandle,
         provider: String,
@@ -209,13 +209,13 @@ impl ZedAgent {
         true
     }
 
-    pub(super) fn provider_default_model(&self, provider: &str) -> Option<String> {
+    fn provider_default_model(&self, provider: &str) -> Option<String> {
         Provider::from_str(provider)
             .ok()
             .map(|value| ModelId::default_single_for_provider(value).as_str().to_string())
     }
 
-    pub(super) fn provider_supports_model(&self, provider: &str, model: &str) -> bool {
+    fn provider_supports_model(&self, provider: &str, model: &str) -> bool {
         let Ok(provider) = Provider::from_str(provider) else {
             return true;
         };
@@ -288,13 +288,13 @@ impl ZedAgent {
         options
     }
 
-    pub(super) fn supports_provider(&self, provider: &str, current_provider: &str) -> bool {
+    fn supports_provider(&self, provider: &str, current_provider: &str) -> bool {
         self.provider_select_options(current_provider)
             .iter()
             .any(|option| option.value.0.as_ref() == provider)
     }
 
-    pub(super) fn current_session_config_options(&self, session: &SessionHandle) -> Vec<acp::SessionConfigOption> {
+    fn current_session_config_options(&self, session: &SessionHandle) -> Vec<acp::SessionConfigOption> {
         let data = match session.data.lock() {
             Ok(guard) => guard,
             Err(_) => return Vec::new(),
@@ -339,7 +339,7 @@ impl ZedAgent {
         messages
     }
 
-    pub(super) async fn attach_thread_from_archive(
+    async fn attach_thread_from_archive(
         &self,
         session_id: &acp::SessionId,
         identifier: &str,

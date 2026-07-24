@@ -114,7 +114,7 @@ impl ToolCallSafetyValidator {
     }
 
     #[cfg(test)]
-    pub fn set_rate_limit_per_second(&self, limit: usize) {
+    fn set_rate_limit_per_second(&self, limit: usize) {
         if limit > 0 {
             let mut test_rate_limits = self.test_rate_limits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             test_rate_limits.per_second = limit;
@@ -124,13 +124,13 @@ impl ToolCallSafetyValidator {
     }
 
     #[cfg(test)]
-    pub fn set_rate_limit_enforcement(&self, enabled: bool) {
+    fn set_rate_limit_enforcement(&self, enabled: bool) {
         self.safety_gateway.set_rate_limit_enforcement(enabled);
     }
 
     /// Validate a tool call before execution
     #[cfg(test)]
-    pub(crate) async fn validate_call(&self, tool_name: &str, args: &Value) -> Result<(), SafetyError> {
+    async fn validate_call(&self, tool_name: &str, args: &Value) -> Result<(), SafetyError> {
         self.validate_call_with_invocation_id(tool_name, args, ToolInvocationId::new())
             .await
     }
@@ -156,7 +156,7 @@ impl ToolCallSafetyValidator {
 
     /// Check if tool is destructive
     #[cfg(test)]
-    pub fn is_destructive(&self, tool_name: &str) -> bool {
+    fn is_destructive(&self, tool_name: &str) -> bool {
         let normalized = tool_name.trim().to_ascii_lowercase();
         vtcode_core::tools::tool_intent::classify_tool_intent(normalized.as_str(), &Value::Object(Map::new()))
             .destructive

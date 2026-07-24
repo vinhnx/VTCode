@@ -19,12 +19,12 @@ pub struct OpenAIAccountAuthService {
 
 impl OpenAIAccountAuthService {
     #[must_use]
-    pub fn new(auth_config: OpenAIAuthConfig, storage_mode: AuthCredentialsStoreMode) -> Self {
+    pub(crate) fn new(auth_config: OpenAIAuthConfig, storage_mode: AuthCredentialsStoreMode) -> Self {
         Self { auth_config, storage_mode }
     }
 
     /// Resolve the active OpenAI auth source for the current configuration.
-    pub fn resolve_runtime_auth(&self, api_key: Option<String>) -> Result<OpenAIResolvedAuth> {
+    pub(crate) fn resolve_runtime_auth(&self, api_key: Option<String>) -> Result<OpenAIResolvedAuth> {
         let session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
         match self.auth_config.preferred_method {
             OpenAIPreferredMethod::Chatgpt => {
@@ -62,7 +62,7 @@ impl OpenAIAccountAuthService {
     }
 
     /// Summarize the available OpenAI credentials without mutating storage.
-    pub fn summarize_credentials(&self, api_key: Option<String>) -> Result<OpenAICredentialOverview> {
+    pub(crate) fn summarize_credentials(&self, api_key: Option<String>) -> Result<OpenAICredentialOverview> {
         let chatgpt_session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
         let api_key_available = api_key.as_ref().is_some_and(|value| !value.trim().is_empty());
         let active_source = match self.auth_config.preferred_method {

@@ -75,24 +75,24 @@ type PluginFreeStringFn = unsafe extern "C" fn(*const c_char);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginContext {
     /// Input data for the plugin
-    pub input: HashMap<String, serde_json::Value>,
+    input: HashMap<String, serde_json::Value>,
     /// Workspace root path
-    pub workspace_root: Option<String>,
+    workspace_root: Option<String>,
     /// Plugin configuration
-    pub config: HashMap<String, serde_json::Value>,
+    config: HashMap<String, serde_json::Value>,
 }
 
 /// Plugin execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginResult {
     /// Success flag
-    pub success: bool,
+    success: bool,
     /// Output data
-    pub output: HashMap<String, serde_json::Value>,
+    output: HashMap<String, serde_json::Value>,
     /// Error message if failed
-    pub error: Option<String>,
+    error: Option<String>,
     /// Optional file references created by the plugin
-    pub files: Vec<String>,
+    files: Vec<String>,
 }
 
 /// Plugin metadata structure
@@ -103,21 +103,21 @@ pub struct PluginMetadata {
     /// Human-readable description
     pub description: String,
     /// Plugin version (semver)
-    pub version: String,
+    version: String,
     /// Plugin author
-    pub author: Option<String>,
+    author: Option<String>,
     /// Plugin ABI version
-    pub abi_version: u32,
+    abi_version: u32,
     /// When to use this plugin
-    pub when_to_use: Option<String>,
+    when_to_use: Option<String>,
     /// When NOT to use this plugin
-    pub when_not_to_use: Option<String>,
+    when_not_to_use: Option<String>,
     /// Allowed tools for this plugin
-    pub allowed_tools: Option<Vec<String>>,
+    allowed_tools: Option<Vec<String>>,
     /// Whether the plugin is thread-safe (Sync).
     /// If false, VT Code serializes all calls to this plugin instance.
     #[serde(default)]
-    pub thread_safe: bool,
+    thread_safe: bool,
 }
 
 /// Native plugin trait for type-erased plugin operations
@@ -248,7 +248,7 @@ fn warn_if_insecure_trusted_dir(_dir: &Path) {}
 
 impl NativePlugin {
     /// Create a new native plugin from a loaded library
-    pub fn new(library: Library, path: PathBuf) -> Result<Self> {
+    fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
         let version_fn = get_plugin_symbol::<PluginVersionFn>(&library, b"vtcode_plugin_version\0")?;
 
@@ -286,7 +286,7 @@ impl NativePlugin {
     }
 
     /// Execute the plugin with the given context
-    pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
+    fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
         let input_json = serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
         let input_cstr = CString::new(input_json).context("Plugin context contains internal null bytes")?;
 

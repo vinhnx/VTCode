@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalSuite {
-    pub id: String,
+    pub(crate) id: String,
     pub name: String,
     pub tasks: Vec<EvalTask>,
     pub attempts: u32,

@@ -30,9 +30,9 @@ mod unix_impl {
         reason: Option<String>,
     }
 
-    pub(super) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str = "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
-    pub(super) const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
-    pub(super) const EXEC_WRAPPER_ENV_VAR: &str = "EXEC_WRAPPER";
+    const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str = "VTCODE_ZSH_EXEC_BRIDGE_WRAPPER_SOCKET";
+    const ZSH_EXEC_WRAPPER_MODE_ENV_VAR: &str = "VTCODE_ZSH_EXEC_WRAPPER_MODE";
+    const EXEC_WRAPPER_ENV_VAR: &str = "EXEC_WRAPPER";
     use anyhow::{Context, Result, bail};
     use hashbrown::HashMap;
     use parking_lot::Mutex;

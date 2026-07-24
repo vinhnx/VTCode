@@ -74,15 +74,15 @@ pub struct WorkspaceConfig {
     /// active config layer, discarding system, user, project, and
     /// dot-dir layers.
     #[serde(default)]
-    pub use_root_config: bool,
+    pub(crate) use_root_config: bool,
 
     /// Include workspace context in messages.
     #[serde(default = "default_true")]
-    pub include_context: bool,
+    pub(crate) include_context: bool,
 
     /// Maximum size of workspace context to include (in bytes).
     #[serde(default)]
-    pub max_context_size: Option<usize>,
+    pub(crate) max_context_size: Option<usize>,
 }
 
 impl Default for WorkspaceConfig {
@@ -452,7 +452,7 @@ impl VTCodeConfig {
 
     #[cfg(feature = "bootstrap")]
     /// Bootstrap project files using the supplied [`ConfigDefaultsProvider`].
-    pub fn bootstrap_project_with_provider<P: AsRef<Path>>(
+    fn bootstrap_project_with_provider<P: AsRef<Path>>(
         workspace: P,
         force: bool,
         use_home_dir: bool,

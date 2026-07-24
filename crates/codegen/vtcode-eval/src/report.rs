@@ -3,25 +3,25 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskReport {
-    pub task_id: String,
-    pub category: String,
-    pub metric: EvalMetric,
+    task_id: String,
+    pub(crate) category: String,
+    pub(crate) metric: EvalMetric,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SuiteReport {
-    pub suite_id: String,
-    pub suite_name: String,
-    pub task_reports: Vec<TaskReport>,
-    pub aggregate: EvalMetric,
-    pub capability_metrics: EvalMetric,
-    pub regression_metrics: EvalMetric,
+    pub(crate) suite_id: String,
+    pub(crate) suite_name: String,
+    pub(crate) task_reports: Vec<TaskReport>,
+    pub(crate) aggregate: EvalMetric,
+    pub(crate) capability_metrics: EvalMetric,
+    pub(crate) regression_metrics: EvalMetric,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EvalReport {
-    pub generated_at: String,
-    pub suites: Vec<SuiteReport>,
+    pub(crate) generated_at: String,
+    pub(crate) suites: Vec<SuiteReport>,
 }
 
 impl EvalReport {

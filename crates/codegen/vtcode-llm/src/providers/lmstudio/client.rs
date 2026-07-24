@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::Value as JsonValue;
 
-pub const LMSTUDIO_CONNECTION_ERROR: &str =
+pub(crate) const LMSTUDIO_CONNECTION_ERROR: &str =
     "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 /// Client for interacting with a local LM Studio instance.
@@ -27,7 +27,7 @@ pub struct LMStudioClient {
 
 impl LMStudioClient {
     /// Create a client from a base URL and verify the server is reachable.
-    pub async fn try_from_base_url(base_url: &str) -> io::Result<Self> {
+    async fn try_from_base_url(base_url: &str) -> io::Result<Self> {
         Self::try_from_base_url_with_api_version(base_url, false).await
     }
 
@@ -35,7 +35,7 @@ impl LMStudioClient {
     ///
     /// - `use_native_api = false`: Use OpenAI-compatible endpoints at `/v1/*` (default)
     /// - `use_native_api = true`: Use native REST API at `/api/v0/*`
-    pub async fn try_from_base_url_with_api_version(base_url: &str, use_native_api: bool) -> io::Result<Self> {
+    async fn try_from_base_url_with_api_version(base_url: &str, use_native_api: bool) -> io::Result<Self> {
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
             .build()
@@ -78,7 +78,7 @@ impl LMStudioClient {
     }
 
     /// Fetch the list of model IDs available on the server.
-    pub async fn fetch_models(&self) -> io::Result<Vec<String>> {
+    async fn fetch_models(&self) -> io::Result<Vec<String>> {
         let url = self.models_endpoint();
         let response = self
             .client

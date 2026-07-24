@@ -11,7 +11,7 @@ use vtcode_config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::providers::openai::tool_serialization::sanitize_openai_function_parameters;
 
 /// Returns the first present header among `names`, as an owned string.
-pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {
+pub(crate) fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {
     names
         .iter()
         .find_map(|name| headers.get(*name).and_then(|value| value.to_str().ok()).map(ToOwned::to_owned))
@@ -19,7 +19,7 @@ pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> O
 
 /// Converts a float parameter (temperature, top_p, …) into a JSON number,
 /// rejecting NaN and infinity with an `LLMError::InvalidRequest`.
-pub fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
+pub(crate) fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
     serde_json::Number::from_f64(f64::from(value)).ok_or_else(|| LLMError::InvalidRequest {
         message: "invalid numeric parameter value (NaN or infinity)".to_string(),
         metadata: None,
@@ -29,7 +29,7 @@ pub fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> 
 /// Collects non-empty history system directives that should be preserved when a
 /// provider accepts a separate top-level system prompt but cannot reliably
 /// consume follow-up `system` chat messages.
-pub fn collect_history_system_directives(request: &LLMRequest) -> Vec<String> {
+pub(crate) fn collect_history_system_directives(request: &LLMRequest) -> Vec<String> {
     request
         .messages
         .iter()
@@ -42,7 +42,7 @@ pub fn collect_history_system_directives(request: &LLMRequest) -> Vec<String> {
 /// Merges a base system prompt with history directives using a simple bulleted
 /// section. Providers with custom cache shaping can reuse the collected
 /// directives and apply their own section placement.
-pub fn merge_system_prompt_with_history_directives(
+pub(crate) fn merge_system_prompt_with_history_directives(
     base_prompt: Option<&str>,
     directives: &[String],
     section_header: &str,
@@ -78,7 +78,7 @@ pub fn merge_system_prompt_with_history_directives(
 /// This function normalizes all tool types to "function" type for compatibility with
 /// OpenAI-compatible APIs that don't support special tool types like "apply_patch".
 #[inline]
-pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Value>> {
+pub(crate) fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Value>> {
     if tools.is_empty() {
         return None;
     }
@@ -116,7 +116,7 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
 
 /// Serialize message content for OpenAI-compatible chat payloads.
 /// Falls back to a string when there are no image parts.
-pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
+pub(crate) fn serialize_message_content_openai(content: &MessageContent) -> Value {
     match content {
         MessageContent::Text(text) => Value::String(text.clone()),
         MessageContent::Parts(parts) => {
@@ -195,7 +195,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
 /// Serialize message content for OpenAI-compatible payloads and normalize tool
 /// response content to plain text where required.
 #[inline]
-pub fn serialize_message_content_openai_for_role(role: &MessageRole, content: &MessageContent) -> Value {
+pub(crate) fn serialize_message_content_openai_for_role(role: &MessageRole, content: &MessageContent) -> Value {
     let serialized = serialize_message_content_openai(content);
     if role == &MessageRole::Tool && !serialized.is_string() {
         Value::String(content.as_text().into_owned())
@@ -206,7 +206,7 @@ pub fn serialize_message_content_openai_for_role(role: &MessageRole, content: &M
 
 /// Serialize message content for OpenAI-compatible payloads while preserving
 /// interleaved thinking history for supported assistant models.
-pub fn serialize_message_content_openai_for_model(message: &Message, model: &str) -> Value {
+pub(crate) fn serialize_message_content_openai_for_model(message: &Message, model: &str) -> Value {
     if let Some(interleaved_content) = assistant_interleaved_history_text(message, model) {
         Value::String(interleaved_content)
     } else {
@@ -217,7 +217,7 @@ pub fn serialize_message_content_openai_for_model(message: &Message, model: &str
 /// Returns true when the model identifier points to MiniMax M2 family models.
 /// Works across direct model ids and provider-qualified ids.
 #[inline]
-pub fn is_minimax_m2_model(model: &str) -> bool {
+pub(crate) fn is_minimax_m2_model(model: &str) -> bool {
     let lower = model.to_ascii_lowercase();
     lower.contains("minimax-m2.5") || lower.contains("minimax-m2.7") || lower.contains("minimax-m3")
 }
@@ -231,7 +231,7 @@ fn is_glm_interleaved_thinking_model(model: &str) -> bool {
 /// Returns true when the model family relies on interleaved `<think>...</think>`
 /// history to maintain reasoning quality across turns.
 #[inline]
-pub fn is_interleaved_thinking_model(model: &str) -> bool {
+pub(crate) fn is_interleaved_thinking_model(model: &str) -> bool {
     is_minimax_m2_model(model) || is_glm_interleaved_thinking_model(model)
 }
 
@@ -263,7 +263,7 @@ fn preserved_interleaved_content_from_details(details: &[Value]) -> Option<Strin
 
 /// Rehydrates assistant history into the tagged form expected by interleaved
 /// thinking models.
-pub fn assistant_interleaved_history_text(message: &Message, model: &str) -> Option<String> {
+pub(crate) fn assistant_interleaved_history_text(message: &Message, model: &str) -> Option<String> {
     if message.role != MessageRole::Assistant
         || !is_interleaved_thinking_model(model)
         || !message_content_is_text_only(&message.content)
@@ -305,7 +305,7 @@ pub fn assistant_interleaved_history_text(message: &Message, model: &str) -> Opt
 
 /// Stores the exact interleaved assistant content alongside normalized
 /// reasoning so later turns can replay the original tagged history.
-pub fn preserve_interleaved_content_in_reasoning_details(
+pub(crate) fn preserve_interleaved_content_in_reasoning_details(
     reasoning_details: &mut Option<Vec<String>>,
     raw_content: &str,
 ) {
@@ -327,7 +327,7 @@ pub fn preserve_interleaved_content_in_reasoning_details(
 
 /// Normalizes a reasoning detail into an object payload.
 /// Accepts native objects or stringified JSON objects, and rejects everything else.
-pub fn normalize_reasoning_detail_object(detail: &Value) -> Option<Value> {
+pub(crate) fn normalize_reasoning_detail_object(detail: &Value) -> Option<Value> {
     match detail {
         Value::Object(_) => Some(detail.clone()),
         Value::String(text) => {
@@ -350,12 +350,12 @@ pub fn normalize_reasoning_detail_object(detail: &Value) -> Option<Value> {
 }
 
 #[inline]
-pub fn normalize_reasoning_detail_objects(details: &[Value]) -> Vec<Value> {
+pub(crate) fn normalize_reasoning_detail_objects(details: &[Value]) -> Vec<Value> {
     details.iter().filter_map(normalize_reasoning_detail_object).collect()
 }
 
 #[inline]
-pub fn append_normalized_reasoning_detail_items(input: &mut Vec<Value>, details: &[Value]) {
+pub(crate) fn append_normalized_reasoning_detail_items(input: &mut Vec<Value>, details: &[Value]) {
     for item in details {
         if let Some(normalized) = normalize_reasoning_detail_object(item) {
             input.push(normalized);
@@ -363,7 +363,7 @@ pub fn append_normalized_reasoning_detail_items(input: &mut Vec<Value>, details:
     }
 }
 
-pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
+pub(crate) fn resolve_model(model: Option<String>, default_model: &str) -> String {
     model
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| default_model.to_owned())
@@ -371,7 +371,7 @@ pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
 
 /// Ensures the request has a non-empty model, falling back to the provider's default.
 /// Mutates the request in place and returns the resolved model string.
-pub fn ensure_model(request: &mut LLMRequest, default_model: &str) -> String {
+pub(crate) fn ensure_model(request: &mut LLMRequest, default_model: &str) -> String {
     if request.model.trim().is_empty() {
         request.model = default_model.to_owned();
     }
@@ -380,7 +380,7 @@ pub fn ensure_model(request: &mut LLMRequest, default_model: &str) -> String {
 
 /// Parses a JSON response body from an HTTP response, mapping errors to
 /// `LLMError::Provider` with a formatted message including the provider name.
-pub async fn parse_json_response(response: reqwest::Response, provider_name: &str) -> Result<Value, LLMError> {
+pub(crate) async fn parse_json_response(response: reqwest::Response, provider_name: &str) -> Result<Value, LLMError> {
     response.json().await.map_err(|e| LLMError::Provider {
         message: error_display::format_llm_error(provider_name, &format!("failed to parse response: {e}")),
         metadata: None,
@@ -390,7 +390,7 @@ pub async fn parse_json_response(response: reqwest::Response, provider_name: &st
 /// Validates a request against a static list of supported model strings.
 /// Convenience wrapper around `validate_request_common` that converts
 /// `&[&str]` to `Vec<String>` internally.
-pub fn validate_supported_models(
+pub(crate) fn validate_supported_models(
     request: &LLMRequest,
     provider_name: &str,
     provider_key: &str,
@@ -403,7 +403,7 @@ pub fn validate_supported_models(
 /// Builds the `/chat/completions` endpoint URL for an OpenAI-compatible base URL,
 /// tolerating a trailing slash on the configured base.
 #[inline]
-pub fn chat_completions_url(base_url: &str) -> String {
+pub(crate) fn chat_completions_url(base_url: &str) -> String {
     format!("{}/chat/completions", base_url.trim_end_matches('/'))
 }
 
@@ -413,7 +413,7 @@ pub fn chat_completions_url(base_url: &str) -> String {
 /// The caller supplies a `RequestBuilder` with the endpoint, authentication, and
 /// any provider-specific headers already applied; this helper only attaches the
 /// JSON payload, dispatches the request, and normalizes network errors.
-pub async fn send_chat_completions(
+pub(crate) async fn send_chat_completions(
     request: reqwest::RequestBuilder,
     payload: &Value,
     provider_name: &str,
@@ -431,7 +431,7 @@ pub async fn send_chat_completions(
 ///
 /// Providers with custom chunk handling (e.g., DeepSeek reasoning extraction)
 /// should use the lower-level `process_openai_stream` directly.
-pub fn spawn_openai_compatible_stream(
+pub(crate) fn spawn_openai_compatible_stream(
     response: reqwest::Response,
     provider_name: &'static str,
     model: String,
@@ -521,7 +521,7 @@ pub(crate) use impl_llm_client;
 /// Creates a default LLM request with a single user message.
 /// Used by all providers for their LLMClient implementation.
 #[inline]
-pub fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
+pub(crate) fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
     LLMRequest {
         messages: std::sync::Arc::new(vec![Message::user(prompt.to_owned())]),
         model: model.to_owned(),
@@ -532,7 +532,7 @@ pub fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
 /// Parses a client prompt that may be a JSON chat request or plain text.
 /// Returns a parsed LLMRequest from JSON if valid, or a default request with the prompt.
 #[inline]
-pub fn parse_client_prompt_common<F>(prompt: &str, model: &str, parse_json: F) -> LLMRequest
+pub(crate) fn parse_client_prompt_common<F>(prompt: &str, model: &str, parse_json: F) -> LLMRequest
 where
     F: FnOnce(&Value) -> Option<LLMRequest>,
 {
@@ -549,11 +549,11 @@ where
 /// Converts provider Usage to llm_types::Usage.
 /// Shared by all LLMClient implementations.
 #[inline]
-pub fn convert_usage_to_llm_types(usage: crate::provider::Usage) -> llm_types::Usage {
+pub(crate) fn convert_usage_to_llm_types(usage: crate::provider::Usage) -> llm_types::Usage {
     usage
 }
 
-pub fn override_base_url(default_base_url: &str, base_url: Option<String>, env_var_name: Option<&str>) -> String {
+pub(crate) fn override_base_url(default_base_url: &str, base_url: Option<String>, env_var_name: Option<&str>) -> String {
     if let Some(url) = base_url {
         let trimmed = url.trim();
         if !trimmed.is_empty() {
@@ -701,7 +701,7 @@ pub async fn execute_token_count_request(
     Ok(Some(value))
 }
 
-pub fn extract_prompt_cache_settings_default(
+pub(crate) fn extract_prompt_cache_settings_default(
     prompt_cache: Option<PromptCachingConfig>,
     _provider_key: &str,
 ) -> (bool, bool) {
@@ -711,7 +711,7 @@ pub fn extract_prompt_cache_settings_default(
     }
 }
 
-pub fn extract_prompt_cache_settings<T, SelectFn, EnabledFn>(
+pub(crate) fn extract_prompt_cache_settings<T, SelectFn, EnabledFn>(
     prompt_cache: Option<PromptCachingConfig>,
     select_settings: SelectFn,
     enabled: EnabledFn,
@@ -753,7 +753,7 @@ where
 /// Parses a tool call from OpenAI-compatible JSON format.
 /// Works for DeepSeek, ZAI, and other OpenAI-compatible providers.
 #[inline]
-pub fn parse_tool_call_openai_format(value: &Value) -> Option<ToolCall> {
+fn parse_tool_call_openai_format(value: &Value) -> Option<ToolCall> {
     let id = value.get("id").and_then(|v| v.as_str())?;
     let function = value.get("function")?;
     let name = function.get("name").and_then(|v| v.as_str())?;
@@ -771,7 +771,7 @@ pub fn parse_tool_call_openai_format(value: &Value) -> Option<ToolCall> {
 /// Maps common finish reason strings to FinishReason enum.
 /// Handles standard OpenAI-compatible finish reasons.
 #[inline]
-pub fn map_finish_reason_common(reason: &str) -> FinishReason {
+pub(crate) fn map_finish_reason_common(reason: &str) -> FinishReason {
     match reason {
         "stop" | "completed" | "done" | "finished" => FinishReason::Stop,
         "length" => FinishReason::Length,
@@ -791,7 +791,7 @@ const KEY_REASONING_CONTENT: &str = "reasoning_content";
 
 /// Serializes messages to OpenAI-compatible JSON format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
-pub fn serialize_messages_openai_format(request: &LLMRequest, provider_key: &str) -> Result<Vec<Value>, LLMError> {
+pub(crate) fn serialize_messages_openai_format(request: &LLMRequest, provider_key: &str) -> Result<Vec<Value>, LLMError> {
     use serde_json::{Map, json};
 
     let mut messages = Vec::with_capacity(request.messages.len());
@@ -859,7 +859,7 @@ pub fn serialize_messages_openai_format(request: &LLMRequest, provider_key: &str
 
 /// Validates an LLM request with common checks.
 /// Checks for empty messages and validates each message for the given provider.
-pub fn validate_request_common(
+pub(crate) fn validate_request_common(
     request: &LLMRequest,
     provider_name: &str,
     validation_provider: &str,
@@ -899,7 +899,7 @@ pub fn validate_request_common(
 ///
 /// # Returns
 /// `Some(LLMRequest)` if parsing succeeds, `None` otherwise
-pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
+pub(crate) fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
     parse_chat_request_openai_format_with_extractor(value, default_model, |c| {
         c.as_str().map(|s| s.to_string()).unwrap_or_default()
     })
@@ -907,7 +907,7 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
 
 /// Parses chat request with custom content extraction logic.
 /// Use this when provider has special content format (e.g., array of content blocks).
-pub fn parse_chat_request_openai_format_with_extractor<F>(
+fn parse_chat_request_openai_format_with_extractor<F>(
     value: &Value,
     default_model: &str,
     content_extractor: F,
@@ -978,7 +978,7 @@ where
 
 /// Extracts content from a message value, handling both string and array formats.
 #[inline]
-pub fn extract_content_from_message(message: &Value) -> Option<String> {
+fn extract_content_from_message(message: &Value) -> Option<String> {
     message.get("content").and_then(|value| match value {
         Value::String(text) => {
             let trimmed = text.trim();
@@ -1008,7 +1008,7 @@ pub fn extract_content_from_message(message: &Value) -> Option<String> {
 
 /// Parses usage information from OpenAI-compatible response format.
 #[inline]
-pub fn parse_usage_openai_format(response_json: &Value, include_cache_metrics: bool) -> Option<crate::provider::Usage> {
+pub(crate) fn parse_usage_openai_format(response_json: &Value, include_cache_metrics: bool) -> Option<crate::provider::Usage> {
     response_json.get("usage").map(|usage_value| crate::provider::Usage {
         prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
@@ -1035,7 +1035,7 @@ pub fn parse_usage_openai_format(response_json: &Value, include_cache_metrics: b
 }
 
 #[inline]
-pub fn serialize_reasoning_detail_values(details: &[Value]) -> Option<Vec<String>> {
+pub(crate) fn serialize_reasoning_detail_values(details: &[Value]) -> Option<Vec<String>> {
     let normalized = details
         .iter()
         .filter_map(|item| match item {
@@ -1053,7 +1053,7 @@ pub fn serialize_reasoning_detail_values(details: &[Value]) -> Option<Vec<String
     if normalized.is_empty() { None } else { Some(normalized) }
 }
 
-pub fn serialize_reasoning_details_field(details: &Value) -> Option<Vec<String>> {
+fn serialize_reasoning_details_field(details: &Value) -> Option<Vec<String>> {
     match details {
         Value::Array(items) => serialize_reasoning_detail_values(items),
         Value::Object(_) => Some(vec![details.to_string()]),
@@ -1141,7 +1141,7 @@ pub fn extract_reasoning_text_from_serialized_details(details: &[String]) -> Opt
 ///
 /// # Returns
 /// Parsed LLMResponse or error
-pub fn parse_response_openai_format<F>(
+pub(crate) fn parse_response_openai_format<F>(
     response_json: Value,
     provider_name: &str,
     model: String,

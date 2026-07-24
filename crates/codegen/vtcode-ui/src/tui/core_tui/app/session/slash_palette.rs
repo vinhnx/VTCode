@@ -6,11 +6,11 @@ use crate::tui::ui::search::{FuzzyQuery, normalize_query};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlashCommandRange {
-    pub start: usize,
-    pub end: usize,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
-pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
+pub(crate) fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
     if !input.starts_with('/') {
         return None;
     }
@@ -35,7 +35,7 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
     active_range.filter(|range| range.end > range.start)
 }
 
-pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
+pub(crate) fn command_prefix(input: &str, cursor: usize) -> Option<String> {
     let range = command_range(input, cursor)?;
     let end = cursor.min(range.end);
     let start = range.start + 1;
@@ -48,19 +48,19 @@ pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg(test)]
 pub struct SlashPaletteHighlightSegment {
-    pub content: String,
-    pub highlighted: bool,
+    content: String,
+    highlighted: bool,
 }
 
 #[cfg(test)]
 impl SlashPaletteHighlightSegment {
     #[cfg(test)]
-    pub fn highlighted(content: impl Into<String>) -> Self {
+    fn highlighted(content: impl Into<String>) -> Self {
         Self { content: content.into(), highlighted: true }
     }
 
     #[cfg(test)]
-    pub fn plain(content: impl Into<String>) -> Self {
+    fn plain(content: impl Into<String>) -> Self {
         Self { content: content.into(), highlighted: false }
     }
 }
@@ -69,10 +69,10 @@ impl SlashPaletteHighlightSegment {
 #[cfg(test)]
 pub struct SlashPaletteItem {
     #[expect(dead_code)]
-    pub command: Option<SlashCommandItem>,
-    pub name_segments: Vec<SlashPaletteHighlightSegment>,
+    command: Option<SlashCommandItem>,
+    name_segments: Vec<SlashPaletteHighlightSegment>,
     #[expect(dead_code)]
-    pub description: String,
+    description: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,7 +103,7 @@ impl SlashPalette {
         Self::with_commands(Vec::new())
     }
 
-    pub fn with_commands(commands: Vec<SlashCommandItem>) -> Self {
+    pub(crate) fn with_commands(commands: Vec<SlashCommandItem>) -> Self {
         Self {
             commands,
             suggestions: Vec::new(),
@@ -112,15 +112,15 @@ impl SlashPalette {
         }
     }
 
-    pub fn suggestions(&self) -> &[SlashPaletteSuggestion] {
+    pub(crate) fn suggestions(&self) -> &[SlashPaletteSuggestion] {
         &self.suggestions
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.suggestions.is_empty()
     }
 
-    pub fn selected_command(&self) -> Option<&SlashCommandItem> {
+    pub(crate) fn selected_command(&self) -> Option<&SlashCommandItem> {
         self.navigator
             .selected()
             .and_then(|index| self.suggestions.get(index))
@@ -129,11 +129,11 @@ impl SlashPalette {
             })
     }
 
-    pub fn selected_index(&self) -> Option<usize> {
+    pub(crate) fn selected_index(&self) -> Option<usize> {
         self.navigator.selected()
     }
 
-    pub fn scroll_offset(&self) -> usize {
+    pub(crate) fn scroll_offset(&self) -> usize {
         self.navigator.scroll_offset()
     }
 
@@ -145,20 +145,20 @@ impl SlashPalette {
         self.navigator.set_scroll_offset(offset);
     }
 
-    pub fn clear_visible_rows(&mut self) {
+    pub(crate) fn clear_visible_rows(&mut self) {
         self.navigator.set_visible_rows(0);
     }
 
-    pub fn set_visible_rows(&mut self, rows: usize) {
+    pub(crate) fn set_visible_rows(&mut self, rows: usize) {
         self.navigator.set_visible_rows(rows);
     }
 
     #[cfg(test)]
-    pub fn visible_rows(&self) -> usize {
+    fn visible_rows(&self) -> usize {
         self.navigator.visible_rows()
     }
 
-    pub fn update(&mut self, prefix: Option<&str>) -> SlashPaletteUpdate {
+    pub(crate) fn update(&mut self, prefix: Option<&str>) -> SlashPaletteUpdate {
         let Some(prefix) = prefix else {
             if self.clear_internal() {
                 return SlashPaletteUpdate::Cleared;
@@ -199,42 +199,42 @@ impl SlashPalette {
         }
     }
 
-    pub fn clear(&mut self) -> bool {
+    pub(crate) fn clear(&mut self) -> bool {
         self.clear_internal()
     }
 
-    pub fn move_up(&mut self) -> bool {
+    pub(crate) fn move_up(&mut self) -> bool {
         self.navigator.move_up()
     }
 
-    pub fn move_down(&mut self) -> bool {
+    pub(crate) fn move_down(&mut self) -> bool {
         self.navigator.move_down()
     }
 
-    pub fn select_first(&mut self) -> bool {
+    pub(crate) fn select_first(&mut self) -> bool {
         self.navigator.select_first()
     }
 
-    pub fn select_last(&mut self) -> bool {
+    pub(crate) fn select_last(&mut self) -> bool {
         self.navigator.select_last()
     }
 
-    pub fn page_up(&mut self) -> bool {
+    pub(crate) fn page_up(&mut self) -> bool {
         let step = self.navigator.visible_rows().max(1);
         self.navigator.page_up(step)
     }
 
-    pub fn page_down(&mut self) -> bool {
+    pub(crate) fn page_down(&mut self) -> bool {
         let step = self.navigator.visible_rows().max(1);
         self.navigator.page_down(step)
     }
 
-    pub fn select_index(&mut self, index: usize) -> bool {
+    pub(crate) fn select_index(&mut self, index: usize) -> bool {
         self.navigator.select_index(index)
     }
 
     #[cfg(test)]
-    pub fn items(&self) -> Vec<SlashPaletteItem> {
+    fn items(&self) -> Vec<SlashPaletteItem> {
         self.suggestions
             .iter()
             .map(|suggestion| match suggestion {

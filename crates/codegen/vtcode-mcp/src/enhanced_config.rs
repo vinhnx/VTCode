@@ -16,19 +16,19 @@ use tracing::{debug, warn};
 pub struct EnhancedMcpSecurityConfig {
     /// Enable authentication for MCP server
     #[serde(default = "default_auth_enabled")]
-    pub auth_enabled: bool,
+    auth_enabled: bool,
 
     /// API key environment variable name
     #[serde(default)]
-    pub api_key_env: Option<String>,
+    api_key_env: Option<String>,
 
     /// Rate limiting configuration
     #[serde(default)]
-    pub rate_limit: McpRateLimitConfig,
+    rate_limit: McpRateLimitConfig,
 
     /// Tool call validation configuration
     #[serde(default)]
-    pub validation: McpValidationConfig,
+    validation: McpValidationConfig,
 }
 
 impl Default for EnhancedMcpSecurityConfig {
@@ -51,20 +51,20 @@ fn default_auth_enabled() -> bool {
 #[derive(Debug, Clone)]
 pub struct ValidatedMcpClientConfig {
     /// Original configuration
-    pub original: vtcode_config::mcp::McpClientConfig,
+    original: vtcode_config::mcp::McpClientConfig,
     /// Enhanced security configuration
-    pub security: EnhancedMcpSecurityConfig,
+    security: EnhancedMcpSecurityConfig,
 }
 
 impl ValidatedMcpClientConfig {
     /// Create a new validated configuration from the original
-    pub fn new(original: vtcode_config::mcp::McpClientConfig) -> Self {
+    fn new(original: vtcode_config::mcp::McpClientConfig) -> Self {
         let security = EnhancedMcpSecurityConfig::default();
         Self { original, security }
     }
 
     /// Validate the configuration and return any issues found
-    pub fn validate(&self) -> Vec<ValidationError> {
+    fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
 
         // Validate server configuration if enabled
@@ -119,7 +119,7 @@ impl ValidatedMcpClientConfig {
     }
 
     /// Check if the configuration is valid
-    pub fn is_valid(&self) -> bool {
+    fn is_valid(&self) -> bool {
         self.validate().is_empty()
     }
 
@@ -161,18 +161,18 @@ pub enum ValidationError {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EnhancedMcpToolConfig {
     /// Name of the tool to expose
-    pub name: String,
+    name: String,
     /// Whether the tool is enabled
     #[serde(default = "default_tool_enabled")]
-    pub enabled: bool,
+    enabled: bool,
     /// Optional description override
-    pub description: Option<String>,
+    description: Option<String>,
     /// Rate limiting for this specific tool
     #[serde(default)]
-    pub rate_limit: Option<McpRateLimitConfig>,
+    rate_limit: Option<McpRateLimitConfig>,
     /// Validation rules specific to this tool
     #[serde(default)]
-    pub validation: Option<McpValidationConfig>,
+    validation: Option<McpValidationConfig>,
 }
 
 fn default_tool_enabled() -> bool {

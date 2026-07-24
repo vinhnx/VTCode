@@ -170,7 +170,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn cron_create_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn cron_create_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let prompt = args
                 .get("prompt")
@@ -202,7 +202,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn cron_list_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn cron_list_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             Ok(json!({
                 "tasks": self.list_session_tasks().await,
@@ -210,7 +210,7 @@ impl ToolRegistry {
         })
     }
 
-    pub(super) fn cron_delete_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    fn cron_delete_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let id = args
                 .get("id")
@@ -414,7 +414,7 @@ impl ToolRegistry {
         serde_json::to_value(response).context("failed to serialise code_search response")
     }
 
-    pub(super) async fn execute_code(&self, args: Value) -> Result<Value> {
+    async fn execute_code(&self, args: Value) -> Result<Value> {
         let code = args
             .get("command")
             .or_else(|| args.get("code"))
@@ -463,7 +463,7 @@ impl ToolRegistry {
         Ok(response)
     }
 
-    pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
+    async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
         let (patch_args, patch_input_bytes, patch_base64) = self.prepare_apply_patch_args(args)?;
         let context = self.harness_context_snapshot();
         tracing::debug!(

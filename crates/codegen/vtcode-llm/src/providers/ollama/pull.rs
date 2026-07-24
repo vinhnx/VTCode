@@ -51,7 +51,7 @@ impl Default for CliPullProgressReporter {
 }
 
 impl CliPullProgressReporter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             printed_header: false,
             last_line_len: 0,

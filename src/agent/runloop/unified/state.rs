@@ -271,7 +271,7 @@ impl SessionStats {
     }
 
     #[cfg(test)]
-    pub(crate) fn turn_stalled(&self) -> bool {
+    fn turn_stalled(&self) -> bool {
         self.turn_stalled
     }
 

@@ -48,7 +48,7 @@ impl RetryPolicy {
     /// Uses a 2.0 multiplier and no jitter, so
     /// [`Self::delay_for_attempt`] reproduces the classic
     /// `base_ms << attempt` doubling curve capped at `max_delay_ms`.
-    pub fn simple(max_retries: u32, base_delay_ms: u64, max_delay_ms: u64) -> Self {
+    fn simple(max_retries: u32, base_delay_ms: u64, max_delay_ms: u64) -> Self {
         Self::from_retries(max_retries, Duration::from_millis(base_delay_ms), Duration::from_millis(max_delay_ms), 2.0)
     }
 

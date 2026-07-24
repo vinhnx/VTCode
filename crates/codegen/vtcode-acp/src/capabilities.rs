@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Current ACP protocol version supported by this implementation
-pub const PROTOCOL_VERSION: &str = "2025-01-01";
+pub(crate) const PROTOCOL_VERSION: &str = "2025-01-01";
 
 /// Supported protocol versions (newest first)
-pub const SUPPORTED_VERSIONS: &[&str] = &["2025-01-01", "2024-11-01"];
+pub(crate) const SUPPORTED_VERSIONS: &[&str] = &["2025-01-01", "2024-11-01"];
 
 // ============================================================================
 // Initialize Request/Response
@@ -26,13 +26,13 @@ pub const SUPPORTED_VERSIONS: &[&str] = &["2025-01-01", "2024-11-01"];
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
     /// Protocol versions the client supports (newest first)
-    pub protocol_versions: Vec<String>,
+    pub(crate) protocol_versions: Vec<String>,
 
     /// Client capabilities
-    pub capabilities: ClientCapabilities,
+    pub(crate) capabilities: ClientCapabilities,
 
     /// Client information
-    pub client_info: ClientInfo,
+    pub(crate) client_info: ClientInfo,
 }
 
 impl Default for InitializeParams {
@@ -50,17 +50,17 @@ impl Default for InitializeParams {
 #[serde(rename_all = "camelCase")]
 pub struct InitializeResult {
     /// Negotiated protocol version
-    pub protocol_version: String,
+    pub(crate) protocol_version: String,
 
     /// Agent capabilities
-    pub capabilities: AgentCapabilities,
+    pub(crate) capabilities: AgentCapabilities,
 
     /// Agent information
-    pub agent_info: AgentInfo,
+    pub(crate) agent_info: AgentInfo,
 
     /// Authentication requirements (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_requirements: Option<AuthRequirements>,
+    auth_requirements: Option<AuthRequirements>,
 }
 
 // ============================================================================
@@ -73,23 +73,23 @@ pub struct InitializeResult {
 pub struct ClientCapabilities {
     /// File system operations
     #[serde(default)]
-    pub filesystem: FilesystemCapabilities,
+    filesystem: FilesystemCapabilities,
 
     /// Terminal/shell capabilities
     #[serde(default)]
-    pub terminal: TerminalCapabilities,
+    terminal: TerminalCapabilities,
 
     /// UI/notification capabilities
     #[serde(default)]
-    pub ui: UiCapabilities,
+    ui: UiCapabilities,
 
     /// MCP server connections the client can provide
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mcp_servers: Vec<McpServerCapability>,
+    mcp_servers: Vec<McpServerCapability>,
 
     /// Extension points for custom capabilities
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub extensions: HashMap<String, Value>,
+    extensions: HashMap<String, Value>,
 }
 
 /// File system operation capabilities
@@ -98,23 +98,23 @@ pub struct ClientCapabilities {
 pub struct FilesystemCapabilities {
     /// Can read files
     #[serde(default)]
-    pub read: bool,
+    read: bool,
 
     /// Can write files
     #[serde(default)]
-    pub write: bool,
+    write: bool,
 
     /// Can list directories
     #[serde(default)]
-    pub list: bool,
+    list: bool,
 
     /// Can search files (grep/find)
     #[serde(default)]
-    pub search: bool,
+    search: bool,
 
     /// Can watch for file changes
     #[serde(default)]
-    pub watch: bool,
+    watch: bool,
 }
 
 /// Terminal operation capabilities
@@ -123,19 +123,19 @@ pub struct FilesystemCapabilities {
 pub struct TerminalCapabilities {
     /// Can create terminal sessions
     #[serde(default)]
-    pub create: bool,
+    create: bool,
 
     /// Can send input to terminals
     #[serde(default)]
-    pub input: bool,
+    input: bool,
 
     /// Can read terminal output
     #[serde(default)]
-    pub output: bool,
+    output: bool,
 
     /// Supports PTY (pseudo-terminal)
     #[serde(default)]
-    pub pty: bool,
+    pty: bool,
 }
 
 /// UI/notification capabilities
@@ -144,19 +144,19 @@ pub struct TerminalCapabilities {
 pub struct UiCapabilities {
     /// Can show notifications
     #[serde(default)]
-    pub notifications: bool,
+    notifications: bool,
 
     /// Can show progress indicators
     #[serde(default)]
-    pub progress: bool,
+    progress: bool,
 
     /// Can prompt for user input
     #[serde(default)]
-    pub input_prompt: bool,
+    input_prompt: bool,
 
     /// Can show file diffs
     #[serde(default)]
-    pub diff_view: bool,
+    diff_view: bool,
 }
 
 /// MCP server connection capability
@@ -164,14 +164,14 @@ pub struct UiCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct McpServerCapability {
     /// Server name/identifier
-    pub name: String,
+    name: String,
 
     /// Server transport type (stdio, http, sse)
-    pub transport: String,
+    transport: String,
 
     /// Tools this server provides
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<String>,
+    tools: Vec<String>,
 }
 
 // ============================================================================
@@ -184,19 +184,19 @@ pub struct McpServerCapability {
 pub struct AgentCapabilities {
     /// Available tools
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<ToolCapability>,
+    tools: Vec<ToolCapability>,
 
     /// Supported features
     #[serde(default)]
-    pub features: AgentFeatures,
+    features: AgentFeatures,
 
     /// Model information
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<ModelInfo>,
+    model: Option<ModelInfo>,
 
     /// Extension points
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub extensions: HashMap<String, Value>,
+    extensions: HashMap<String, Value>,
 }
 
 /// A tool the agent can execute
@@ -204,19 +204,19 @@ pub struct AgentCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct ToolCapability {
     /// Tool name
-    pub name: String,
+    name: String,
 
     /// Tool description
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
 
     /// Input schema (JSON Schema)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_schema: Option<Value>,
+    input_schema: Option<Value>,
 
     /// Whether tool requires user confirmation
     #[serde(default)]
-    pub requires_confirmation: bool,
+    requires_confirmation: bool,
 }
 
 /// Agent feature flags
@@ -225,23 +225,23 @@ pub struct ToolCapability {
 pub struct AgentFeatures {
     /// Supports streaming responses
     #[serde(default)]
-    pub streaming: bool,
+    streaming: bool,
 
     /// Supports multi-turn conversations
     #[serde(default)]
-    pub multi_turn: bool,
+    multi_turn: bool,
 
     /// Supports session persistence
     #[serde(default)]
-    pub session_persistence: bool,
+    session_persistence: bool,
 
     /// Supports image/vision input
     #[serde(default)]
-    pub vision: bool,
+    vision: bool,
 
     /// Supports code execution
     #[serde(default)]
-    pub code_execution: bool,
+    code_execution: bool,
 }
 
 /// Model information
@@ -249,19 +249,19 @@ pub struct AgentFeatures {
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     /// Model identifier
-    pub id: String,
+    id: String,
 
     /// Model name
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    name: Option<String>,
 
     /// Provider name
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    provider: Option<String>,
 
     /// Context window size
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_window: Option<u32>,
+    context_window: Option<u32>,
 }
 
 // ============================================================================
@@ -272,14 +272,14 @@ pub struct ModelInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
     /// Client name
-    pub name: String,
+    name: String,
 
     /// Client version
-    pub version: String,
+    version: String,
 
     /// Additional metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 }
 
 impl Default for ClientInfo {
@@ -296,18 +296,18 @@ impl Default for ClientInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     /// Agent name
-    pub name: String,
+    pub(crate) name: String,
 
     /// Agent version
-    pub version: String,
+    version: String,
 
     /// Agent description
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    description: Option<String>,
 
     /// Additional metadata
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 }
 
 impl Default for AgentInfo {
@@ -330,11 +330,11 @@ impl Default for AgentInfo {
 #[serde(rename_all = "camelCase")]
 pub struct AuthRequirements {
     /// Whether authentication is required
-    pub required: bool,
+    required: bool,
 
     /// Supported authentication methods
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub methods: Vec<AuthMethod>,
+    methods: Vec<AuthMethod>,
 }
 
 /// Supported authentication methods
@@ -415,10 +415,10 @@ pub enum AuthMethod {
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticateParams {
     /// Authentication method being used
-    pub method: AuthMethod,
+    method: AuthMethod,
 
     /// Authentication credentials
-    pub credentials: AuthCredentials,
+    credentials: AuthCredentials,
 }
 
 /// Authentication credentials
@@ -444,15 +444,15 @@ pub enum AuthCredentials {
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticateResult {
     /// Whether authentication succeeded
-    pub authenticated: bool,
+    pub(crate) authenticated: bool,
 
     /// Session token (if applicable)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_token: Option<String>,
+    pub(crate) session_token: Option<String>,
 
     /// Token expiration (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<String>,
+    expires_at: Option<String>,
 }
 
 #[cfg(test)]

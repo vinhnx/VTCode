@@ -34,12 +34,12 @@ pub enum ErrorCode {
 
 impl ErrorCode {
     /// Get error code string (e.g., "MCP_E001")
-    pub fn code(&self) -> String {
+    fn code(&self) -> String {
         format!("MCP_E{:03}", *self as u32)
     }
 
     /// Get human-readable error name
-    pub fn name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         match self {
             Self::ToolNotFound => "ToolNotFound",
             Self::ToolInvocationFailed => "ToolInvocationFailed",

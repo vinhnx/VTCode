@@ -18,25 +18,25 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MessageMetadata {
     /// Unix millisecond timestamp when the message was created.
-    pub timestamp: u64,
+    timestamp: u64,
 
     /// Importance score in [0.0, 1.0]: 0.0 = low (safe to drop first),
     /// 1.0 = high (preserve as long as possible).
     ///
     /// Initialised to 0.5 (neutral) and adjusted by the compression/pruning
     /// system or by explicit agent reflection.
-    pub importance_score: f64,
+    importance_score: f64,
 
     /// Current compression status of this message.
-    pub compression_status: CompressionStatus,
+    compression_status: CompressionStatus,
 
     /// Cached token estimate for this message. Populated on creation and
     /// updated after compression.
-    pub estimated_tokens: usize,
+    estimated_tokens: usize,
 
     /// Origin of this message: "user_input", "llm_response", "tool_result",
     /// "system", or "synthetic".
-    pub source: Option<String>,
+    source: Option<String>,
 }
 
 impl MessageMetadata {
@@ -96,7 +96,7 @@ impl MessageMetadata {
     }
 
     /// Mark this message as compressed, recording the original and new token counts.
-    pub fn mark_compressed(&mut self, original_tokens: usize, compressed_tokens: usize) {
+    fn mark_compressed(&mut self, original_tokens: usize, compressed_tokens: usize) {
         self.compression_status = CompressionStatus::Compressed {
             original_token_count: original_tokens,
             summary_token_count: compressed_tokens,
@@ -105,7 +105,7 @@ impl MessageMetadata {
     }
 
     /// Mark this message as summarized.
-    pub fn mark_summarized(&mut self, original_tokens: usize, summary_tokens: usize) {
+    fn mark_summarized(&mut self, original_tokens: usize, summary_tokens: usize) {
         self.compression_status = CompressionStatus::Summarized {
             original_token_count: original_tokens,
             summary_token_count: summary_tokens,
@@ -114,13 +114,13 @@ impl MessageMetadata {
     }
 
     /// Set the importance score (clamped to [0.0, 1.0]).
-    pub fn set_importance(&mut self, score: f64) {
+    fn set_importance(&mut self, score: f64) {
         self.importance_score = score.clamp(0.0, 1.0);
     }
 
     /// Returns the original (pre-compression) token count, or the current count
     /// if the message was never compressed.
-    pub fn original_token_count(&self) -> usize {
+    fn original_token_count(&self) -> usize {
         match self.compression_status {
             CompressionStatus::Uncompressed => self.estimated_tokens,
             CompressionStatus::Compressed { original_token_count, .. }
@@ -130,7 +130,7 @@ impl MessageMetadata {
     }
 
     /// Returns the effective (post-compression) token count.
-    pub fn effective_token_count(&self) -> usize {
+    fn effective_token_count(&self) -> usize {
         match self.compression_status {
             CompressionStatus::Uncompressed => self.estimated_tokens,
             CompressionStatus::Compressed { summary_token_count, .. }

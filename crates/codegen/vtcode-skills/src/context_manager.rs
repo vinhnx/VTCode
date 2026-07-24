@@ -21,31 +21,31 @@ use vtcode_commons::fs::{read_json_file_sync, write_json_file_sync};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextConfig {
     /// Maximum total context size in tokens
-    pub max_context_tokens: usize,
+    max_context_tokens: usize,
 
     /// Maximum number of cached skills
-    pub max_cached_skills: usize,
+    max_cached_skills: usize,
 
     /// Token cost for skill metadata (name + description)
-    pub metadata_token_cost: usize,
+    metadata_token_cost: usize,
 
     /// Token cost for skill instructions per character
-    pub instruction_token_factor: f64,
+    instruction_token_factor: f64,
 
     /// Token cost for skill resources
-    pub resource_token_cost: usize,
+    resource_token_cost: usize,
 
     /// Enable memory monitoring
-    pub enable_monitoring: bool,
+    enable_monitoring: bool,
 
     /// Context eviction policy
-    pub eviction_policy: EvictionPolicy,
+    eviction_policy: EvictionPolicy,
 
     /// Enable persistent caching
-    pub enable_persistence: bool,
+    enable_persistence: bool,
 
     /// Cache persistence path
-    pub cache_path: Option<PathBuf>,
+    cache_path: Option<PathBuf>,
 }
 
 impl Default for ContextConfig {
@@ -92,16 +92,16 @@ pub enum ContextLevel {
 #[derive(Debug, Clone)]
 pub struct ContextUsage {
     /// Number of times skill was accessed
-    pub access_count: u64,
+    access_count: u64,
 
     /// Last access timestamp
-    pub last_access: std::time::Instant,
+    last_access: std::time::Instant,
 
     /// Total time loaded in memory
-    pub total_loaded_duration: std::time::Duration,
+    total_loaded_duration: std::time::Duration,
 
     /// Token cost for this skill
-    pub token_cost: usize,
+    token_cost: usize,
 }
 
 impl Default for ContextUsage {
@@ -119,25 +119,25 @@ impl Default for ContextUsage {
 #[derive(Debug, Clone)]
 pub struct SkillContextEntry {
     /// Skill name
-    pub name: String,
+    name: String,
 
     /// Current context level
-    pub level: ContextLevel,
+    level: ContextLevel,
 
     /// Skill metadata (always available)
-    pub manifest: SkillManifest,
+    manifest: SkillManifest,
 
     /// Skill instructions (loaded on demand)
-    pub instructions: Option<String>,
+    instructions: Option<String>,
 
     /// Full skill object (loaded on demand)
-    pub skill: Option<Box<Skill>>,
+    skill: Option<Box<Skill>>,
 
     /// Usage tracking
-    pub usage: ContextUsage,
+    usage: ContextUsage,
 
     /// Memory size estimate (bytes)
-    pub memory_size: usize,
+    memory_size: usize,
 }
 
 /// Progressive context manager
@@ -165,24 +165,24 @@ struct ContextManagerInner {
 /// Context management statistics
 #[derive(Debug, Default, Clone)]
 pub struct ContextStats {
-    pub total_skills_loaded: u64,
-    pub total_skills_evicted: u64,
-    pub total_tokens_loaded: u64,
-    pub total_tokens_evicted: u64,
-    pub cache_hits: u64,
-    pub cache_misses: u64,
-    pub peak_token_usage: usize,
-    pub current_token_usage: usize,
+    total_skills_loaded: u64,
+    total_skills_evicted: u64,
+    total_tokens_loaded: u64,
+    total_tokens_evicted: u64,
+    cache_hits: u64,
+    cache_misses: u64,
+    peak_token_usage: usize,
+    current_token_usage: usize,
 }
 
 impl ContextManager {
     /// Create new context manager with default configuration
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::with_config(ContextConfig::default())
     }
 
     /// Create new context manager with custom configuration
-    pub fn with_config(config: ContextConfig) -> Self {
+    fn with_config(config: ContextConfig) -> Self {
         let max_cached_skills = config.max_cached_skills.max(1);
         if max_cached_skills != config.max_cached_skills {
             warn!(
@@ -214,7 +214,7 @@ impl Default for ContextManager {
 
 impl ContextManager {
     /// Register skill metadata (Level 1 loading)
-    pub fn register_skill_metadata(&self, manifest: SkillManifest) -> Result<()> {
+    fn register_skill_metadata(&self, manifest: SkillManifest) -> Result<()> {
         let name = manifest.name.clone();
 
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
@@ -347,7 +347,7 @@ impl ContextManager {
     }
 
     /// Get skill context (with automatic loading)
-    pub fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {
+    fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
             warn!("ContextManager write lock poisoned while fetching skill context; recovering");
             poisoned.into_inner()
@@ -420,7 +420,7 @@ impl ContextManager {
     }
 
     /// Get current token usage
-    pub fn get_token_usage(&self) -> usize {
+    fn get_token_usage(&self) -> usize {
         self.inner
             .read()
             .unwrap_or_else(|poisoned| {
@@ -451,7 +451,7 @@ impl ContextManager {
     }
 
     /// Get all active skill names
-    pub fn get_active_skills(&self) -> Vec<String> {
+    fn get_active_skills(&self) -> Vec<String> {
         self.inner
             .read()
             .unwrap_or_else(|poisoned| {

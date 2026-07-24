@@ -49,7 +49,7 @@ pub enum ToolKind {
 
 impl ToolKind {
     /// Short stable label used in telemetry and grouping.
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Read => "read",
             Self::Edit => "edit",
@@ -97,7 +97,7 @@ pub enum ToolNamespace {
 
 impl ToolNamespace {
     /// Short stable label used in telemetry and grouping.
-    pub fn as_str(self) -> &'static str {
+    fn as_str(self) -> &'static str {
         match self {
             Self::Builtin => "builtin",
             Self::Mcp => "mcp",
@@ -123,18 +123,18 @@ impl std::fmt::Display for ToolNamespace {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalToolMeta {
     /// Semantic category of the tool.
-    pub kind: ToolKind,
+    kind: ToolKind,
     /// Logical owner of the tool.
-    pub namespace: ToolNamespace,
+    namespace: ToolNamespace,
     /// Human-readable label for UI grouping.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+    label: Option<String>,
     /// Short description of the tool's side-effects (mutating, read-only, etc.).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub side_effects: Option<String>,
+    side_effects: Option<String>,
     /// Estimated token cost bucket (small < 500, medium < 2000, large >= 2000).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub token_bucket: Option<TokenBucket>,
+    token_bucket: Option<TokenBucket>,
 }
 
 /// Rough token-cost bucket for a tool invocation (input + output estimate).
@@ -148,7 +148,7 @@ pub enum TokenBucket {
 
 impl CanonicalToolMeta {
     /// Create a minimal metadata entry with kind and namespace.
-    pub fn new(kind: ToolKind, namespace: ToolNamespace) -> Self {
+    fn new(kind: ToolKind, namespace: ToolNamespace) -> Self {
         Self {
             kind,
             namespace,

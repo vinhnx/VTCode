@@ -103,7 +103,7 @@ impl StdioTransport {
     /// No subprocess is spawned and no background tasks are started. The caller
     /// can drive the mock by reading from the paired receiver.
     #[cfg(test)]
-    pub fn new_for_testing(write_tx: mpsc::Sender<String>, rpc_timeout: Duration) -> Self {
+    pub(crate) fn new_for_testing(write_tx: mpsc::Sender<String>, rpc_timeout: Duration) -> Self {
         Self {
             write_tx,
             pending: Arc::new(StdMutex::new(HashMap::new())),

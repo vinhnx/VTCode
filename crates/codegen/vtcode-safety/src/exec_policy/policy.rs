@@ -22,10 +22,10 @@ pub enum Decision {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrefixRule {
     /// The command pattern to match.
-    pub pattern: Vec<String>,
+    pub(crate) pattern: Vec<String>,
 
     /// The decision when the pattern matches.
-    pub decision: Decision,
+    pub(crate) decision: Decision,
 }
 
 impl PrefixRule {
@@ -55,7 +55,7 @@ pub enum RuleMatch {
 
 impl RuleMatch {
     /// Get the decision from the match.
-    pub fn decision(&self) -> Decision {
+    fn decision(&self) -> Decision {
         match self {
             Self::PrefixRuleMatch { decision, .. } => *decision,
             Self::HeuristicsRuleMatch { decision } => *decision,
@@ -63,7 +63,7 @@ impl RuleMatch {
     }
 
     /// Check if this match came from an explicit policy rule.
-    pub fn is_policy_match(&self) -> bool {
+    fn is_policy_match(&self) -> bool {
         matches!(self, Self::PrefixRuleMatch { .. })
     }
 }
@@ -72,10 +72,10 @@ impl RuleMatch {
 #[derive(Debug, Clone)]
 pub struct PolicyEvaluation {
     /// The overall decision.
-    pub decision: Decision,
+    decision: Decision,
 
     /// All rules that matched.
-    pub matched_rules: Vec<RuleMatch>,
+    matched_rules: Vec<RuleMatch>,
 }
 
 /// Execution policy containing rules for command authorization.

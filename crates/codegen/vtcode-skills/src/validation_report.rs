@@ -20,10 +20,10 @@ pub enum ValidationLevel {
 /// Single validation issue
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationIssue {
-    pub level: ValidationLevel,
-    pub field: Option<String>,
-    pub message: String,
-    pub suggestion: Option<String>,
+    level: ValidationLevel,
+    pub(crate) field: Option<String>,
+    message: String,
+    suggestion: Option<String>,
 }
 
 impl fmt::Display for ValidationIssue {
@@ -42,26 +42,26 @@ impl fmt::Display for ValidationIssue {
 /// Comprehensive skill validation report
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillValidationReport {
-    pub skill_name: String,
-    pub skill_path: PathBuf,
+    skill_name: String,
+    skill_path: PathBuf,
     pub is_valid: bool,
-    pub errors: Vec<ValidationIssue>,
-    pub warnings: Vec<ValidationIssue>,
-    pub suggestions: Vec<ValidationIssue>,
+    errors: Vec<ValidationIssue>,
+    warnings: Vec<ValidationIssue>,
+    pub(crate) suggestions: Vec<ValidationIssue>,
     pub stats: ValidationStats,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationStats {
-    pub total_issues: usize,
+    total_issues: usize,
     pub error_count: usize,
-    pub warning_count: usize,
-    pub suggestion_count: usize,
-    pub token_estimate: usize,
+    warning_count: usize,
+    suggestion_count: usize,
+    token_estimate: usize,
 }
 
 impl SkillValidationReport {
-    pub fn new(skill_name: String, skill_path: PathBuf) -> Self {
+    pub(crate) fn new(skill_name: String, skill_path: PathBuf) -> Self {
         Self {
             skill_name,
             skill_path,
@@ -79,7 +79,7 @@ impl SkillValidationReport {
         }
     }
 
-    pub fn add_error(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
+    pub(crate) fn add_error(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
         self.errors.push(ValidationIssue {
             level: ValidationLevel::Error,
             field,
@@ -89,7 +89,7 @@ impl SkillValidationReport {
         self.is_valid = false;
     }
 
-    pub fn add_warning(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
+    pub(crate) fn add_warning(&mut self, field: Option<String>, message: String, suggestion: Option<String>) {
         self.warnings.push(ValidationIssue {
             level: ValidationLevel::Warning,
             field,
@@ -98,7 +98,7 @@ impl SkillValidationReport {
         });
     }
 
-    pub fn add_suggestion(&mut self, field: Option<String>, message: String) {
+    pub(crate) fn add_suggestion(&mut self, field: Option<String>, message: String) {
         self.suggestions.push(ValidationIssue {
             level: ValidationLevel::Info,
             field,

@@ -4,16 +4,16 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateContentResponse {
-    pub candidates: Vec<Candidate>,
+    pub(crate) candidates: Vec<Candidate>,
     #[serde(default, rename = "promptFeedback")]
-    pub prompt_feedback: Option<Value>,
+    pub(crate) prompt_feedback: Option<Value>,
     #[serde(default, rename = "usageMetadata")]
-    pub usage_metadata: Option<Value>,
+    pub(crate) usage_metadata: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candidate {
-    pub content: Content,
+    pub(crate) content: Content,
     #[serde(default, rename = "finishReason")]
-    pub finish_reason: Option<String>,
+    pub(crate) finish_reason: Option<String>,
 }

@@ -2,4 +2,4 @@
 //!
 //! Re-exported from `crate::design::layout` as the single source of truth.
 
-pub use crate::design::layout::LayoutMode;
+pub(crate) use crate::design::layout::LayoutMode;

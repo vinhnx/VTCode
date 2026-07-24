@@ -1,4 +1,4 @@
-pub const DEFAULT_EXTRA_PATH_ENTRIES: &[&str] = &[
+pub(crate) const DEFAULT_EXTRA_PATH_ENTRIES: &[&str] = &[
     "$HOME/.cargo/bin",
     "$HOME/.local/bin",
     "/opt/homebrew/bin",

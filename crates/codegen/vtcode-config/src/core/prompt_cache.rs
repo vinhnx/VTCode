@@ -144,13 +144,13 @@ pub struct ProviderPromptCachingConfig {
     pub openrouter: OpenRouterPromptCacheSettings,
 
     #[serde(default = "MoonshotPromptCacheSettings::default")]
-    pub moonshot: MoonshotPromptCacheSettings,
+    moonshot: MoonshotPromptCacheSettings,
 
     #[serde(default = "DeepSeekPromptCacheSettings::default")]
     pub deepseek: DeepSeekPromptCacheSettings,
 
     #[serde(default = "ZaiPromptCacheSettings::default")]
-    pub zai: ZaiPromptCacheSettings,
+    zai: ZaiPromptCacheSettings,
 }
 
 /// OpenAI prompt cache retention policy.
@@ -195,10 +195,10 @@ pub struct OpenAIPromptCacheSettings {
     pub enabled: bool,
 
     #[serde(default = "default_openai_min_prefix_tokens")]
-    pub min_prefix_tokens: u32,
+    min_prefix_tokens: u32,
 
     #[serde(default = "default_openai_idle_expiration")]
-    pub idle_expiration_seconds: u64,
+    idle_expiration_seconds: u64,
 
     #[serde(default = "default_true")]
     pub surface_metrics: bool,
@@ -232,7 +232,7 @@ impl Default for OpenAIPromptCacheSettings {
 impl OpenAIPromptCacheSettings {
     /// Validate OpenAI provider prompt cache settings.
     /// With the typed enum, invalid values are caught at deserialization time.
-    pub fn validate(&self) -> anyhow::Result<()> {
+    fn validate(&self) -> anyhow::Result<()> {
         if let Some(PromptCacheRetention::Unknown) = self.prompt_cache_retention {
             anyhow::bail!("prompt_cache_retention must be one of: in_memory, 24h");
         }
@@ -348,7 +348,7 @@ pub struct GeminiPromptCacheSettings {
     pub mode: GeminiPromptCacheMode,
 
     #[serde(default = "default_gemini_min_prefix_tokens")]
-    pub min_prefix_tokens: u32,
+    min_prefix_tokens: u32,
 
     /// TTL for explicit caches (ignored in implicit mode)
     #[serde(default = "default_gemini_explicit_ttl")]
@@ -387,7 +387,7 @@ pub struct OpenRouterPromptCacheSettings {
 
     /// Propagate provider cache instructions automatically
     #[serde(default = "default_true")]
-    pub propagate_provider_capabilities: bool,
+    propagate_provider_capabilities: bool,
 
     /// Surface cache savings reported by OpenRouter
     #[serde(default = "default_true")]
@@ -409,7 +409,7 @@ impl Default for OpenRouterPromptCacheSettings {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MoonshotPromptCacheSettings {
     #[serde(default = "default_moonshot_enabled")]
-    pub enabled: bool,
+    enabled: bool,
 }
 
 impl Default for MoonshotPromptCacheSettings {
@@ -444,7 +444,7 @@ impl Default for DeepSeekPromptCacheSettings {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ZaiPromptCacheSettings {
     #[serde(default = "default_zai_enabled")]
-    pub enabled: bool,
+    enabled: bool,
 }
 
 impl Default for ZaiPromptCacheSettings {
@@ -569,7 +569,7 @@ fn resolve_default_cache_dir() -> PathBuf {
 
 impl PromptCachingConfig {
     /// Validate prompt cache config and provider overrides
-    pub fn validate(&self) -> anyhow::Result<()> {
+    pub(crate) fn validate(&self) -> anyhow::Result<()> {
         // Validate OpenAI provider settings
         self.providers.openai.validate()?;
         Ok(())

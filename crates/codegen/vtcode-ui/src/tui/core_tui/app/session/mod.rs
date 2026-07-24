@@ -17,7 +17,7 @@ use crate::tui::core_tui::session::action::BindingStore;
 
 mod agent_palette;
 /// Diff preview overlay for file changes.
-pub mod diff_preview;
+pub(crate) mod diff_preview;
 mod events;
 /// File palette for workspace file selection.
 pub mod file_palette;
@@ -29,9 +29,9 @@ mod layout;
 mod local_agents;
 mod palette;
 /// Session rendering logic and layout composition.
-pub mod render;
+pub(crate) mod render;
 /// Slash command detection and suggestion UI.
-pub mod slash;
+pub(crate) mod slash;
 /// Slash command palette widget.
 pub mod slash_palette;
 mod transcript_review;
@@ -51,29 +51,29 @@ use agent_palette::AgentPalette;
 /// App-level session that layers VT Code features on top of the core session.
 pub struct AppSession {
     pub(crate) core: CoreSessionState,
-    pub(crate) agent_palette: Option<AgentPalette>,
-    pub(crate) agent_palette_active: bool,
-    pub(crate) file_palette: Option<FilePalette>,
+    agent_palette: Option<AgentPalette>,
+    agent_palette_active: bool,
+    file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
-    pub(crate) inline_lists_visible: bool,
+    inline_lists_visible: bool,
     pub(crate) slash_palette: SlashPalette,
     pub(crate) history_picker_state: HistoryPickerState,
     local_agents_state: LocalAgentsState,
     local_agents_auto_opened: bool,
     pub(crate) show_task_panel: bool,
     pub(crate) task_panel_lines: Vec<String>,
-    pub(crate) diff_preview_state: Option<DiffPreviewState>,
-    pub(crate) transcript_review_state: Option<TranscriptReviewState>,
-    pub(crate) diff_overlay_queue: VecDeque<DiffOverlayRequest>,
-    pub(crate) transient_host: TransientHost,
-    pub(crate) preview_callback: Option<crate::tui::core_tui::types::PreviewCallback>,
+    diff_preview_state: Option<DiffPreviewState>,
+    transcript_review_state: Option<TranscriptReviewState>,
+    diff_overlay_queue: VecDeque<DiffOverlayRequest>,
+    transient_host: TransientHost,
+    preview_callback: Option<crate::tui::core_tui::types::PreviewCallback>,
 }
 
 pub(super) type Session = AppSession;
 
 impl AppSession {
     /// Create a new session with explicit log visibility, theme, and slash commands.
-    pub fn new_with_logs(
+    pub(crate) fn new_with_logs(
         theme: crate::tui::core_tui::types::InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
@@ -106,7 +106,7 @@ impl AppSession {
     }
 
     /// Create a new session with explicit log visibility, theme, slash commands, and key bindings.
-    pub fn new_with_logs_and_bindings(
+    pub(crate) fn new_with_logs_and_bindings(
         theme: crate::tui::core_tui::types::InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
@@ -163,19 +163,19 @@ impl AppSession {
         self.inline_lists_visible
     }
 
-    pub(crate) fn toggle_inline_lists_visibility(&mut self) {
+    fn toggle_inline_lists_visibility(&mut self) {
         self.inline_lists_visible = !self.inline_lists_visible;
         self.core.mark_dirty();
     }
 
-    pub(crate) fn ensure_inline_lists_visible_for_trigger(&mut self) {
+    fn ensure_inline_lists_visible_for_trigger(&mut self) {
         if !self.inline_lists_visible {
             self.inline_lists_visible = true;
             self.core.mark_dirty();
         }
     }
 
-    pub(crate) fn update_input_triggers(&mut self) {
+    fn update_input_triggers(&mut self) {
         if !self.core.input_enabled() {
             return;
         }
@@ -185,7 +185,7 @@ impl AppSession {
         slash::update_slash_suggestions(self);
     }
 
-    pub(super) fn show_transient_surface(&mut self, surface: TransientSurface) -> bool {
+    fn show_transient_surface(&mut self, surface: TransientSurface) -> bool {
         let change = self.transient_host.show(surface);
         if !change.changed() {
             return false;
@@ -195,7 +195,7 @@ impl AppSession {
         true
     }
 
-    pub(super) fn close_transient_surface(&mut self, surface: TransientSurface) -> bool {
+    fn close_transient_surface(&mut self, surface: TransientSurface) -> bool {
         let change = self.transient_host.hide(surface);
         if !change.changed() {
             return false;
@@ -205,7 +205,7 @@ impl AppSession {
         true
     }
 
-    pub(super) fn finish_history_picker_interaction(&mut self, was_active: bool) {
+    fn finish_history_picker_interaction(&mut self, was_active: bool) {
         if was_active && !self.history_picker_state.active {
             self.close_transient_surface(TransientSurface::HistoryPicker);
             self.update_input_triggers();
@@ -224,15 +224,15 @@ impl AppSession {
         }
     }
 
-    pub(crate) fn visible_transient_surface(&self) -> Option<TransientSurface> {
+    fn visible_transient_surface(&self) -> Option<TransientSurface> {
         self.transient_host.top()
     }
 
-    pub(crate) fn visible_bottom_docked_surface(&self) -> Option<TransientSurface> {
+    fn visible_bottom_docked_surface(&self) -> Option<TransientSurface> {
         self.transient_host.visible_bottom_docked()
     }
 
-    pub(crate) fn history_picker_visible(&self) -> bool {
+    fn history_picker_visible(&self) -> bool {
         self.history_picker_state.active && self.transient_host.is_visible(TransientSurface::HistoryPicker)
     }
 
@@ -240,7 +240,7 @@ impl AppSession {
         self.transient_host.is_visible(TransientSurface::LocalAgents)
     }
 
-    pub(super) fn local_agents_loading_active(&self) -> bool {
+    fn local_agents_loading_active(&self) -> bool {
         self.local_agents_visible()
             && self
                 .local_agents_state
@@ -253,7 +253,7 @@ impl AppSession {
         self.file_palette_active && self.transient_host.is_visible(TransientSurface::FilePalette)
     }
 
-    pub(crate) fn agent_palette_visible(&self) -> bool {
+    fn agent_palette_visible(&self) -> bool {
         self.agent_palette_active && self.transient_host.is_visible(TransientSurface::AgentPalette)
     }
 
@@ -269,25 +269,25 @@ impl AppSession {
         self.has_active_overlay().then(|| self.core.modal_state()).flatten()
     }
 
-    pub(crate) fn modal_state_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::ModalState> {
+    fn modal_state_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::ModalState> {
         if !self.has_active_overlay() {
             return None;
         }
         self.core.modal_state_mut()
     }
 
-    pub(crate) fn wizard_overlay(&self) -> Option<&crate::tui::core_tui::session::modal::WizardModalState> {
+    fn wizard_overlay(&self) -> Option<&crate::tui::core_tui::session::modal::WizardModalState> {
         self.has_active_overlay().then(|| self.core.wizard_overlay()).flatten()
     }
 
-    pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::WizardModalState> {
+    fn wizard_overlay_mut(&mut self) -> Option<&mut crate::tui::core_tui::session::modal::WizardModalState> {
         if !self.has_active_overlay() {
             return None;
         }
         self.core.wizard_overlay_mut()
     }
 
-    pub(crate) fn close_overlay(&mut self) {
+    fn close_overlay(&mut self) {
         if !self.has_active_overlay() {
             return;
         }
@@ -305,21 +305,21 @@ impl AppSession {
             .and(self.diff_preview_state.as_ref())
     }
 
-    pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
+    fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
         if !self.transient_host.is_visible(TransientSurface::DiffPreview) {
             return None;
         }
         self.diff_preview_state.as_mut()
     }
 
-    pub(crate) fn transcript_review_state(&self) -> Option<&TranscriptReviewState> {
+    fn transcript_review_state(&self) -> Option<&TranscriptReviewState> {
         self.transient_host
             .is_visible(TransientSurface::TranscriptReview)
             .then_some(())
             .and(self.transcript_review_state.as_ref())
     }
 
-    pub(crate) fn transcript_review_state_mut(&mut self) -> Option<&mut TranscriptReviewState> {
+    fn transcript_review_state_mut(&mut self) -> Option<&mut TranscriptReviewState> {
         if !self.transient_host.is_visible(TransientSurface::TranscriptReview) {
             return None;
         }
@@ -358,7 +358,7 @@ impl AppSession {
         self.core.mark_dirty();
     }
 
-    pub(crate) fn close_history_picker(&mut self) {
+    fn close_history_picker(&mut self) {
         if !self.history_picker_state.active {
             return;
         }
@@ -368,13 +368,13 @@ impl AppSession {
         self.mark_dirty();
     }
 
-    pub(crate) fn open_transcript_review(&mut self, width: u16, height: u16) {
+    fn open_transcript_review(&mut self, width: u16, height: u16) {
         self.transcript_review_state = Some(TranscriptReviewState::open(self, width, height));
         self.show_transient_surface(TransientSurface::TranscriptReview);
         self.core.mark_dirty();
     }
 
-    pub(crate) fn close_transcript_review(&mut self) {
+    fn close_transcript_review(&mut self) {
         if self.transcript_review_state.is_none() {
             return;
         }
@@ -465,7 +465,7 @@ impl AppSession {
     }
 
     /// Show a help modal using the ratatui-cheese Help widget
-    pub(crate) fn show_help_modal(&mut self) {
+    fn show_help_modal(&mut self) {
         self.show_transient(TransientRequest::Modal(crate::tui::core_tui::app::types::ModalOverlayRequest {
             title: "Keyboard Shortcuts".to_string(),
             lines: Vec::new(),
@@ -504,19 +504,19 @@ impl AppSession {
         }
     }
 
-    pub(super) fn open_local_agents_drawer(&mut self, auto_opened: bool) {
+    fn open_local_agents_drawer(&mut self, auto_opened: bool) {
         self.local_agents_auto_opened = auto_opened;
         self.show_transient_surface(TransientSurface::LocalAgents);
     }
 
-    pub(super) fn close_local_agents_drawer(&mut self, clear_auto_opened: bool) {
+    fn close_local_agents_drawer(&mut self, clear_auto_opened: bool) {
         if clear_auto_opened {
             self.local_agents_auto_opened = false;
         }
         self.close_transient_surface(TransientSurface::LocalAgents);
     }
 
-    pub(crate) fn sync_transient_focus(&mut self) {
+    fn sync_transient_focus(&mut self) {
         let Some(surface) = self.visible_transient_surface() else {
             self.core.set_input_enabled(true);
             self.core.set_cursor_visible(true);

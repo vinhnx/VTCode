@@ -3,8 +3,8 @@ pub trait EnvironmentProbe: Send + Sync {
 }
 
 pub struct CommandProbe {
-    pub command: String,
-    pub args: Vec<String>,
+    command: String,
+    args: Vec<String>,
 }
 impl CommandProbe {
     pub fn new(command: String, args: Vec<String>) -> Self {
@@ -24,7 +24,7 @@ impl EnvironmentProbe for CommandProbe {
 }
 
 pub struct FileExistsProbe {
-    pub path: std::path::PathBuf,
+    path: std::path::PathBuf,
 }
 impl FileExistsProbe {
     pub fn new(path: std::path::PathBuf) -> Self {

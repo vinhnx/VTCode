@@ -19,10 +19,10 @@ use vtcode_commons::preview::excerpt_text_lines;
 
 pub(super) const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
 pub(super) const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
-pub(super) const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
-pub(super) const MIN_EXEC_YIELD_MS: u64 = 250;
-pub(super) const MAX_EXEC_YIELD_MS: u64 = 30_000;
-pub(super) const EXEC_OUTPUT_TRUNCATED_SENTINEL: &str = "\n[Output truncated]";
+const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
+const MIN_EXEC_YIELD_MS: u64 = 250;
+const MAX_EXEC_YIELD_MS: u64 = 30_000;
+const EXEC_OUTPUT_TRUNCATED_SENTINEL: &str = "\n[Output truncated]";
 
 // Conservative PTY command policy inspired by bash allow/deny defaults.
 const PTY_DENY_PREFIXES: &[&str] = &[
@@ -130,7 +130,7 @@ pub(super) fn missing_command_session_action_error(args: &Value) -> anyhow::Erro
     )
 }
 
-pub(super) fn is_valid_pty_session_id(session_id: &str) -> bool {
+fn is_valid_pty_session_id(session_id: &str) -> bool {
     !session_id.trim().is_empty()
         && session_id.len() <= 128
         && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')

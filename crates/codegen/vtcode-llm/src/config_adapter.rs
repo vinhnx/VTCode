@@ -65,7 +65,7 @@ pub trait ProviderConfig {
 
 /// Marker component for projecting a borrowed provider config into the owned
 /// config bag consumed by `vtcode-core`.
-pub enum FactoryConfigProjectionComponent {}
+enum FactoryConfigProjectionComponent {}
 
 trait FactoryConfigProjectionProvider<Ctx> {
     fn project(ctx: &Ctx) -> crate::factory_types::ProviderConfig;
@@ -151,7 +151,7 @@ pub struct AdapterHooks<'a, Hooks: AdapterHooksProvider> {
 
 impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     /// Create a new adapter that enriches provider configuration conversions.
-    pub fn new(hooks: &'a Hooks) -> Self {
+    fn new(hooks: &'a Hooks) -> Self {
         Self { hooks }
     }
 
@@ -637,7 +637,7 @@ pub struct OwnedProviderConfig {
 }
 
 impl OwnedProviderConfig {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
@@ -656,27 +656,27 @@ impl OwnedProviderConfig {
         self
     }
 
-    pub fn with_prompt_cache(mut self, value: PromptCachingConfig) -> Self {
+    fn with_prompt_cache(mut self, value: PromptCachingConfig) -> Self {
         self.prompt_cache = Some(value);
         self
     }
 
-    pub fn with_timeouts(mut self, value: TimeoutsConfig) -> Self {
+    fn with_timeouts(mut self, value: TimeoutsConfig) -> Self {
         self.timeouts = Some(value);
         self
     }
 
-    pub fn with_openai(mut self, value: OpenAIConfig) -> Self {
+    fn with_openai(mut self, value: OpenAIConfig) -> Self {
         self.openai = Some(value);
         self
     }
 
-    pub fn with_anthropic(mut self, value: AnthropicConfig) -> Self {
+    fn with_anthropic(mut self, value: AnthropicConfig) -> Self {
         self.anthropic = Some(value);
         self
     }
 
-    pub fn with_model_behavior(mut self, value: ModelConfig) -> Self {
+    fn with_model_behavior(mut self, value: ModelConfig) -> Self {
         self.model_behavior = Some(value);
         self
     }

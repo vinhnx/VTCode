@@ -15,11 +15,11 @@ const INSTALL_CACHE_STALE_AFTER_SECS: u64 = 86_400;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct InstallationCache {
     /// Timestamp of last installation attempt
-    pub(super) last_attempt: u64,
+    last_attempt: u64,
     /// Status from last attempt
     pub(super) status: String,
     /// Method that was attempted
-    pub(super) method_attempted: Option<String>,
+    method_attempted: Option<String>,
     /// Reason for failure (if applicable)
     pub(super) failure_reason: Option<String>,
 }

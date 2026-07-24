@@ -76,7 +76,7 @@ pub fn detect_mime_type_from_data(data: &[u8]) -> String {
 }
 
 /// Detects the MIME type based on file extension
-pub fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
+fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
     let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_lowercase();
 
     let mime_type = match extension.as_str() {

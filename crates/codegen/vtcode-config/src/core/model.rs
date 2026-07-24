@@ -6,15 +6,15 @@ use serde::{Deserialize, Serialize};
 pub struct ModelConfig {
     /// Enable loop hang detection to identify when model is stuck in repetitive behavior
     #[serde(default = "default_loop_detection_enabled")]
-    pub skip_loop_detection: bool,
+    skip_loop_detection: bool,
 
     /// Maximum number of identical tool calls (same tool + same arguments) before triggering loop detection
     #[serde(default = "default_loop_detection_threshold")]
-    pub loop_detection_threshold: usize,
+    loop_detection_threshold: usize,
 
     /// Enable interactive prompt for loop detection instead of silently halting
     #[serde(default = "default_loop_detection_interactive")]
-    pub loop_detection_interactive: bool,
+    loop_detection_interactive: bool,
 
     /// Manually enable reasoning support for models that are not natively recognized.
     /// Note: Setting this to false will NOT disable reasoning for known reasoning models (e.g. GPT-5).

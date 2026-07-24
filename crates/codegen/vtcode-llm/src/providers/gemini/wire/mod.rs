@@ -8,7 +8,7 @@ pub mod streaming;
 
 pub use client::{Client, ClientConfig, RetryConfig};
 pub use function_calling::{FunctionCall, FunctionCallingConfig, FunctionResponse};
-pub use interactions::{
+pub(crate) use interactions::{
     Interaction, InteractionContent, InteractionFunctionCall, InteractionInput, InteractionOutput, InteractionRequest,
     InteractionResult, InteractionTool, InteractionToolChoice, InteractionTurn, InteractionTurnContent,
     InteractionUsage,

@@ -131,19 +131,19 @@ pub enum A2aCommands {
 pub struct A2aServeConfig {
     /// Host to bind the server to
     #[arg(long, default_value = "127.0.0.1")]
-    pub host: String,
+    host: String,
 
     /// Port to listen on
     #[arg(short, long, default_value_t = 8080)]
-    pub port: u16,
+    port: u16,
 
     /// Base URL for the agent (used in agent card)
     #[arg(long)]
-    pub base_url: Option<String>,
+    base_url: Option<String>,
 
     /// Enable push notifications via webhooks
     #[arg(long)]
-    pub enable_push: bool,
+    enable_push: bool,
 }
 
 #[cfg(test)]

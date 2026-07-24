@@ -10,7 +10,7 @@ mod navigation;
 mod references;
 mod search;
 
-pub use references::extract_file_reference;
+pub(crate) use references::extract_file_reference;
 
 /// Lists the immediate children of a directory without recursing, so the picker
 /// only touches the directories the user actually opens. Returns `(path, is_dir)`
@@ -28,7 +28,7 @@ impl DirLister {
         Self(Arc::new(f))
     }
 
-    pub fn list(&self, dir: &Path) -> Vec<(PathBuf, bool)> {
+    fn list(&self, dir: &Path) -> Vec<(PathBuf, bool)> {
         (self.0)(dir)
     }
 }
@@ -41,12 +41,12 @@ impl std::fmt::Debug for DirLister {
 
 #[derive(Debug, Clone)]
 pub struct FileEntry {
-    pub path: String,
-    pub display_name: String,
-    pub relative_path: String,
-    pub is_dir: bool,
+    path: String,
+    pub(crate) display_name: String,
+    pub(crate) relative_path: String,
+    pub(crate) is_dir: bool,
     /// `true` for the synthetic `..` entry that ascends one directory.
-    pub is_parent: bool,
+    pub(crate) is_parent: bool,
 }
 
 /// Whether the palette is browsing a single directory or searching across the
@@ -85,7 +85,7 @@ pub struct FilePalette {
 }
 
 impl FilePalette {
-    pub fn new(workspace_root: PathBuf) -> Self {
+    pub(crate) fn new(workspace_root: PathBuf) -> Self {
         Self {
             all_files: Vec::new(),
             dir_index: BTreeMap::new(),
@@ -105,7 +105,7 @@ impl FilePalette {
     /// are loaded immediately (a single shallow listing); deeper directories are
     /// listed on demand as the user navigates, and the full recursive file list
     /// is filled in later via [`Self::set_search_index`] for Search mode.
-    pub fn configure(&mut self, workspace_root: PathBuf, dir_lister: DirLister) {
+    pub(crate) fn configure(&mut self, workspace_root: PathBuf, dir_lister: DirLister) {
         self.workspace_root = workspace_root.clone();
         self.current_dir = workspace_root;
         self.dir_lister = dir_lister;
@@ -122,14 +122,14 @@ impl FilePalette {
     /// Provide the full recursive file list (used by Search mode). Supplied by the
     /// runloop after its background discovery task finishes; Browse mode does not
     /// require it. Rebuilds the search view if the user is already searching.
-    pub fn set_search_index(&mut self, files: Vec<String>) {
+    pub(crate) fn set_search_index(&mut self, files: Vec<String>) {
         listing::build_entries(self, files, false);
         if self.mode == PickerMode::Search {
             self.rebuild_search();
         }
     }
 
-    pub(super) fn rebuild_dir_listing(&mut self) {
+    fn rebuild_dir_listing(&mut self) {
         listing::rebuild_dir_listing(self);
     }
 
@@ -153,15 +153,15 @@ impl FilePalette {
         self.mode = PickerMode::Browse;
     }
 
-    pub fn list_entries(&self) -> &[FileEntry] {
+    pub(crate) fn list_entries(&self) -> &[FileEntry] {
         &self.filtered_files
     }
 
-    pub fn selected_index(&self) -> Option<usize> {
+    pub(crate) fn selected_index(&self) -> Option<usize> {
         self.selected
     }
 
-    pub fn set_selected(&mut self, selected: Option<usize>) {
+    pub(crate) fn set_selected(&mut self, selected: Option<usize>) {
         self.selected = selected;
     }
 
@@ -169,13 +169,13 @@ impl FilePalette {
         &self.current_dir
     }
 
-    pub fn is_search_mode(&self) -> bool {
+    pub(crate) fn is_search_mode(&self) -> bool {
         self.mode == PickerMode::Search
     }
 
     /// Human-readable breadcrumb of the current directory relative to the
     /// workspace root (or `/` when at the root).
-    pub fn breadcrumb(&self) -> String {
+    pub(crate) fn breadcrumb(&self) -> String {
         match self.current_dir.strip_prefix(&self.workspace_root) {
             Ok(rel) if rel.as_os_str().is_empty() => "/".to_string(),
             Ok(rel) => format!("/{}", rel.display()),
@@ -183,7 +183,7 @@ impl FilePalette {
         }
     }
 
-    pub fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
+    pub(crate) fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
         let path = Path::new(&entry.path);
         self.file_colorizer.style_for_path(path)
     }

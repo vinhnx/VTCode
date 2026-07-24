@@ -47,7 +47,7 @@ impl Default for AuthCredentialsStoreMode {
 impl AuthCredentialsStoreMode {
     /// Resolve `Auto` to the best available concrete backend.
     /// `Keyring` and `File` pass through unchanged.
-    pub fn effective_mode(self) -> Self {
+    pub(crate) fn effective_mode(self) -> Self {
         match self {
             Self::Auto => {
                 if super::keyring::is_functional() {

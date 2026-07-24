@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use vtcode_commons::llm::LLMErrorMetadata;
 
-pub(crate) fn parse_retry_after_header(raw: &str) -> Option<Duration> {
+fn parse_retry_after_header(raw: &str) -> Option<Duration> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;

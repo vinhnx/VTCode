@@ -35,7 +35,7 @@ impl AppSession {
         self.check_agent_reference_trigger();
     }
 
-    pub fn check_agent_reference_trigger(&mut self) {
+    pub(crate) fn check_agent_reference_trigger(&mut self) {
         let cursor = self.core.input_manager.cursor();
         let content = self.core.input_manager.content();
         let trigger = extract_agent_reference(content, cursor);
@@ -150,7 +150,7 @@ impl AppSession {
     }
 
     /// Check if the current input should trigger the file palette
-    pub fn check_file_reference_trigger(&mut self) {
+    pub(crate) fn check_file_reference_trigger(&mut self) {
         if self.agent_palette_visible() {
             if self.file_palette_active {
                 self.close_file_palette();

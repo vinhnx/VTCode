@@ -13,11 +13,11 @@ pub struct TelemetryConfig {
 
     /// KPI sampling interval in milliseconds
     #[serde(default = "default_interval")]
-    pub sample_interval_ms: u64,
+    sample_interval_ms: u64,
 
     /// Retention window for historical benchmarking (days)
     #[serde(default = "default_retention_days")]
-    pub retention_days: u32,
+    retention_days: u32,
 
     /// Enable ATIF (Agent Trajectory Interchange Format) trajectory export.
     /// When enabled, sessions write an `atif-trajectory.json` alongside the
@@ -27,7 +27,7 @@ pub struct TelemetryConfig {
 
     /// Emit bottleneck traces for slow paths
     #[serde(default)]
-    pub bottleneck_tracing: bool,
+    bottleneck_tracing: bool,
 
     /// Emit performance events for file I/O, spawns, and UI latency
     #[serde(default = "default_true")]

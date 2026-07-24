@@ -154,7 +154,7 @@ pub(super) async fn plan_file_baseline(plan_file: &Path) -> SystemTime {
         .unwrap_or_else(|_| SystemTime::now())
 }
 
-pub(super) fn render_initial_plan_file_content(
+fn render_initial_plan_file_content(
     plan_title: &str,
     description: Option<&str>,
     plan_file: &Path,
@@ -182,7 +182,7 @@ pub(super) struct ValidationCommandHints {
     pub(super) tests: String,
 }
 
-pub(super) fn package_manager_for_workspace(workspace_root: &Path) -> &'static str {
+fn package_manager_for_workspace(workspace_root: &Path) -> &'static str {
     if workspace_root.join("pnpm-lock.yaml").exists() {
         "pnpm"
     } else if workspace_root.join("yarn.lock").exists() {
@@ -194,7 +194,7 @@ pub(super) fn package_manager_for_workspace(workspace_root: &Path) -> &'static s
     }
 }
 
-pub(super) fn node_script_command(pm: &str, script: &str) -> String {
+fn node_script_command(pm: &str, script: &str) -> String {
     match pm {
         "yarn" => format!("yarn {script}"),
         "bun" => format!("bun run {script}"),
@@ -202,7 +202,7 @@ pub(super) fn node_script_command(pm: &str, script: &str) -> String {
     }
 }
 
-pub(super) fn package_json_has_script(workspace_root: &Path, script: &str) -> bool {
+fn package_json_has_script(workspace_root: &Path, script: &str) -> bool {
     let path = workspace_root.join("package.json");
     let Ok(content) = std::fs::read_to_string(path) else {
         return false;

@@ -159,7 +159,7 @@ fn supports_native_1m_context(model: &str) -> bool {
         || matches_model(model, models::anthropic::CLAUDE_OPUS_4_8)
 }
 
-pub fn supports_reasoning(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_reasoning(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
     if claude_thinking_profile(requested, default_model).is_some() {
         return true;
@@ -168,7 +168,7 @@ pub fn supports_reasoning(model: &str, default_model: &str) -> bool {
     models::minimax::SUPPORTED_MODELS.contains(&requested)
 }
 
-pub fn supports_reasoning_effort(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_reasoning_effort(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
     if claude_thinking_profile(requested, default_model).is_some() {
@@ -182,11 +182,11 @@ pub fn supports_reasoning_effort(model: &str, default_model: &str) -> bool {
     models::anthropic::REASONING_MODELS.contains(&requested)
 }
 
-pub fn supports_effort(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_effort(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model).is_some_and(|profile| profile.supports_effort)
 }
 
-pub fn supports_task_budget(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_task_budget(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model).is_some_and(|profile| profile.supports_task_budget)
 }
 
@@ -249,7 +249,7 @@ pub(crate) fn effort_allowed_for_model(model: &str, default_model: &str, effort:
     allowed_efforts_for_model(model, default_model).is_some_and(|allowed| allowed.contains(&normalized.as_str()))
 }
 
-pub fn supports_compaction(model: &str) -> bool {
+pub(crate) fn supports_compaction(model: &str) -> bool {
     matches_model(model, models::anthropic::CLAUDE_SONNET_5)
         || matches_model(model, models::anthropic::CLAUDE_FABLE_5)
         || matches_model(model, models::anthropic::CLAUDE_MYTHOS_5)
@@ -257,7 +257,7 @@ pub fn supports_compaction(model: &str) -> bool {
         || matches_model(model, models::anthropic::CLAUDE_SONNET_4_6)
 }
 
-pub fn supports_parallel_tool_config(_model: &str) -> bool {
+pub(crate) fn supports_parallel_tool_config(_model: &str) -> bool {
     true
 }
 
@@ -269,7 +269,7 @@ pub fn effective_context_size(model: &str) -> usize {
     }
 }
 
-pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_structured_output(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
     // All models with a thinking profile support structured outputs.
@@ -283,7 +283,7 @@ pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
         || matches_model(requested, "claude-haiku-4-5")
 }
 
-pub fn supports_vision(model: &str, default_model: &str) -> bool {
+pub(crate) fn supports_vision(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
 
     // All models with a thinking profile support vision.
@@ -299,7 +299,7 @@ pub fn is_claude_model(model: &str, default_model: &str) -> bool {
     claude_thinking_profile(model, default_model).is_some()
 }
 
-pub fn supported_models() -> Vec<String> {
+pub(crate) fn supported_models() -> Vec<String> {
     let mut supported: Vec<String> = models::anthropic::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect();
 
     supported.extend(models::minimax::SUPPORTED_MODELS.iter().map(|s| s.to_string()));

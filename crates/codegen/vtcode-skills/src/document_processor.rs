@@ -30,19 +30,19 @@ use vtcode_commons::fs::ensure_dir_exists_sync;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentProcessorConfig {
     /// Enable vision-based document processing
-    pub enabled: bool,
+    enabled: bool,
 
     /// Output format for rendered pages
-    pub image_format: String, // "png" recommended
+    image_format: String, // "png" recommended
 
     /// DPI for rendering (higher = better quality but larger files)
-    pub dpi: u32,
+    dpi: u32,
 
     /// Maximum number of pages to process (prevent runaway)
-    pub max_pages: usize,
+    max_pages: usize,
 
     /// Enable OCR fallback for text extraction
-    pub enable_ocr_fallback: bool,
+    enable_ocr_fallback: bool,
 }
 
 impl Default for DocumentProcessorConfig {
@@ -61,22 +61,22 @@ impl Default for DocumentProcessorConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessedDocument {
     /// Original document path
-    pub source_path: PathBuf,
+    source_path: PathBuf,
 
     /// Document type
-    pub doc_type: DocumentType,
+    doc_type: DocumentType,
 
     /// Page count
-    pub page_count: usize,
+    page_count: usize,
 
     /// Rendered page images
-    pub pages: Vec<PageImage>,
+    pages: Vec<PageImage>,
 
     /// Extracted text (with layout preservation)
-    pub extracted_text: Option<String>,
+    extracted_text: Option<String>,
 
     /// Document metadata
-    pub metadata: DocumentMetadata,
+    metadata: DocumentMetadata,
 }
 
 /// Document type classification
@@ -96,7 +96,7 @@ pub enum DocumentType {
 
 impl DocumentType {
     /// Detect document type from file extension
-    pub fn from_path(path: &Path) -> Self {
+    fn from_path(path: &Path) -> Self {
         match path.extension().and_then(|e| e.to_str()) {
             Some("pdf") => DocumentType::Pdf,
             Some("docx") => DocumentType::Docx,
@@ -129,34 +129,34 @@ impl DocumentType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageImage {
     /// Page number (1-indexed)
-    pub page_number: usize,
+    page_number: usize,
 
     /// Image file path
-    pub image_path: PathBuf,
+    image_path: PathBuf,
 
     /// Image dimensions
-    pub dimensions: ImageDimensions,
+    dimensions: ImageDimensions,
 
     /// Page text content (if OCR enabled)
-    pub text_content: Option<String>,
+    text_content: Option<String>,
 }
 
 /// Image dimensions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageDimensions {
-    pub width: u32,
-    pub height: u32,
+    width: u32,
+    height: u32,
 }
 
 /// Document metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMetadata {
-    pub title: Option<String>,
-    pub author: Option<String>,
-    pub created_date: Option<String>,
-    pub modified_date: Option<String>,
-    pub file_size: u64,
-    pub page_count: Option<usize>,
+    title: Option<String>,
+    author: Option<String>,
+    created_date: Option<String>,
+    modified_date: Option<String>,
+    file_size: u64,
+    page_count: Option<usize>,
 }
 
 /// Main document processor
@@ -167,7 +167,7 @@ pub struct DocumentProcessor {
 
 impl DocumentProcessor {
     /// Create new document processor
-    pub fn new(config: DocumentProcessorConfig) -> Result<Self> {
+    fn new(config: DocumentProcessorConfig) -> Result<Self> {
         let temp_dir = std::env::temp_dir().join("vtcode-document-processor");
         ensure_dir_exists_sync(&temp_dir)?;
 
@@ -175,7 +175,7 @@ impl DocumentProcessor {
     }
 
     /// Process a document for vision model analysis
-    pub async fn process_document(&self, document_path: &Path) -> Result<ProcessedDocument> {
+    async fn process_document(&self, document_path: &Path) -> Result<ProcessedDocument> {
         if !self.config.enabled {
             return Err(anyhow!("Document processing is disabled"));
         }
@@ -313,7 +313,7 @@ impl DocumentProcessor {
     }
 
     /// Clean up temporary files
-    pub fn cleanup(&self) -> Result<()> {
+    fn cleanup(&self) -> Result<()> {
         if self.temp_dir.exists() {
             std::fs::remove_dir_all(&self.temp_dir)?;
             debug!("Cleaned up temporary directory: {}", self.temp_dir.display());

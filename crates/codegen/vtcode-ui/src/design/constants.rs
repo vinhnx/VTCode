@@ -7,27 +7,27 @@
 pub const ELLIPSIS: &str = "\u{2026}";
 
 /// Unicode ellipsis character.
-pub const ELLIPSIS_CHAR: char = '\u{2026}';
+pub(crate) const ELLIPSIS_CHAR: char = '\u{2026}';
 
 /// Three-dot ASCII fallback ellipsis.
-pub const ELLIPSIS_ASCII: &str = "...";
+pub(crate) const ELLIPSIS_ASCII: &str = "...";
 
 /// Alias used by preview contexts. Delegates to [`ELLIPSIS`].
-pub const INLINE_PREVIEW_ELLIPSIS: &str = ELLIPSIS;
+pub(crate) const INLINE_PREVIEW_ELLIPSIS: &str = ELLIPSIS;
 
 // ── Layout breakpoints ──────────────────────────────────────────────────────
 
 /// Maximum column width for compact layout mode.
-pub const COMPACT_MAX_COLS: u16 = 80;
+pub(crate) const COMPACT_MAX_COLS: u16 = 80;
 
 /// Maximum row height for compact layout mode.
-pub const COMPACT_MAX_ROWS: u16 = 20;
+pub(crate) const COMPACT_MAX_ROWS: u16 = 20;
 
 /// Minimum column width for wide layout mode.
-pub const WIDE_MIN_COLS: u16 = 120;
+pub(crate) const WIDE_MIN_COLS: u16 = 120;
 
 /// Minimum row height for wide layout mode.
-pub const WIDE_MIN_ROWS: u16 = 24;
+pub(crate) const WIDE_MIN_ROWS: u16 = 24;
 
 // ── Spacing tokens ──────────────────────────────────────────────────────────
 

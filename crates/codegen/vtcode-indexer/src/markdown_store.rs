@@ -23,18 +23,18 @@ pub struct MarkdownStorage {
 
 impl MarkdownStorage {
     /// Create a new markdown storage instance rooted at `storage_dir`.
-    pub fn new(storage_dir: PathBuf) -> Self {
+    fn new(storage_dir: PathBuf) -> Self {
         Self { storage_dir }
     }
 
     /// Initialize storage directory
-    pub fn init(&self) -> Result<()> {
+    fn init(&self) -> Result<()> {
         fs::create_dir_all(&self.storage_dir)?;
         Ok(())
     }
 
     /// Store data as markdown
-    pub fn store<T: Serialize>(&self, key: &str, data: &T, title: &str) -> Result<()> {
+    fn store<T: Serialize>(&self, key: &str, data: &T, title: &str) -> Result<()> {
         let file_path = self.storage_dir.join(format!("{key}.md"));
         let markdown = self.serialize_to_markdown(data, title)?;
         write_with_lock(&file_path, markdown.as_bytes())
@@ -253,11 +253,11 @@ impl SimpleKVStorage {
 /// Simple project metadata storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectData {
-    pub name: String,
+    name: String,
     pub description: Option<String>,
-    pub version: String,
-    pub tags: Vec<String>,
-    pub metadata: IndexMap<String, String>,
+    version: String,
+    tags: Vec<String>,
+    metadata: IndexMap<String, String>,
 }
 
 impl ProjectData {
@@ -279,15 +279,15 @@ pub struct ProjectStorage {
 }
 
 impl ProjectStorage {
-    pub fn new(storage_dir: PathBuf) -> Self {
+    fn new(storage_dir: PathBuf) -> Self {
         Self { storage: MarkdownStorage::new(storage_dir) }
     }
 
-    pub fn init(&self) -> Result<()> {
+    fn init(&self) -> Result<()> {
         self.storage.init()
     }
 
-    pub fn save_project(&self, project: &ProjectData) -> Result<()> {
+    fn save_project(&self, project: &ProjectData) -> Result<()> {
         self.storage
             .store(&project.name, project, &format!("Project: {}", project.name))
     }
@@ -326,7 +326,7 @@ impl SimpleProjectManager {
     }
 
     /// Construct a manager with a caller-supplied project storage root.
-    pub fn with_project_root(workspace_root: PathBuf, project_root: PathBuf) -> Self {
+    fn with_project_root(workspace_root: PathBuf, project_root: PathBuf) -> Self {
         let storage = ProjectStorage::new(project_root.clone());
         Self { storage, workspace_root, project_root }
     }

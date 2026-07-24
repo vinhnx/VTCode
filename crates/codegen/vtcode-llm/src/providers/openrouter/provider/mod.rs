@@ -47,11 +47,11 @@ impl OpenRouterProvider {
         )
     }
 
-    pub fn with_model(api_key: String, model: String) -> Self {
+    fn with_model(api_key: String, model: String) -> Self {
         Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default(), None)
     }
 
-    pub fn new_with_client(
+    fn new_with_client(
         api_key: String,
         model: String,
         http_client: reqwest::Client,

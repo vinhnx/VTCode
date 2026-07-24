@@ -1,7 +1,7 @@
 use super::*;
 
 impl Session {
-    pub fn scroll_offset(&self) -> usize {
+    pub(crate) fn scroll_offset(&self) -> usize {
         self.scroll_manager.offset()
     }
 

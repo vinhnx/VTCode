@@ -11,30 +11,30 @@ use tokio::sync::RwLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     /// Unique agent identifier
-    pub id: String,
+    id: String,
 
     /// Agent display name
-    pub name: String,
+    name: String,
 
     /// Base URL for agent communication
-    pub base_url: String,
+    pub(crate) base_url: String,
 
     /// Agent description
-    pub description: Option<String>,
+    description: Option<String>,
 
     /// Supported actions/tools
-    pub capabilities: Vec<String>,
+    capabilities: Vec<String>,
 
     /// Agent metadata (version, tags, etc.)
     #[serde(default)]
-    pub metadata: HashMap<String, Value>,
+    metadata: HashMap<String, Value>,
 
     /// Whether agent is currently online
     #[serde(default = "default_online")]
-    pub online: bool,
+    online: bool,
 
     /// Last heartbeat/update timestamp
-    pub last_seen: Option<String>,
+    last_seen: Option<String>,
 }
 
 fn default_online() -> bool {
@@ -49,26 +49,26 @@ pub struct AgentRegistry {
 
 impl AgentRegistry {
     /// Create a new agent registry
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { agents: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     /// Register an agent
-    pub async fn register(&self, agent: AgentInfo) -> AcpResult<()> {
+    async fn register(&self, agent: AgentInfo) -> AcpResult<()> {
         let mut agents = self.agents.write().await;
         agents.insert(agent.id.clone(), agent);
         Ok(())
     }
 
     /// Unregister an agent
-    pub async fn unregister(&self, agent_id: &str) -> AcpResult<()> {
+    async fn unregister(&self, agent_id: &str) -> AcpResult<()> {
         let mut agents = self.agents.write().await;
         agents.remove(agent_id);
         Ok(())
     }
 
     /// Find agent by ID
-    pub async fn find(&self, agent_id: &str) -> AcpResult<AgentInfo> {
+    pub(crate) async fn find(&self, agent_id: &str) -> AcpResult<AgentInfo> {
         let agents = self.agents.read().await;
         agents
             .get(agent_id)
@@ -77,7 +77,7 @@ impl AgentRegistry {
     }
 
     /// Find agents by capability
-    pub async fn find_by_capability(&self, capability: &str) -> AcpResult<Vec<AgentInfo>> {
+    async fn find_by_capability(&self, capability: &str) -> AcpResult<Vec<AgentInfo>> {
         let agents = self.agents.read().await;
         let matching = agents
             .values()
@@ -112,7 +112,7 @@ impl AgentRegistry {
     }
 
     /// Get agent count
-    pub async fn count(&self) -> usize {
+    async fn count(&self) -> usize {
         self.agents.read().await.len()
     }
 

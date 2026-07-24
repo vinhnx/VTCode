@@ -106,7 +106,7 @@ impl AgentRunner {
     }
 
     /// Check if a tool is allowed for this agent
-    pub(super) async fn is_tool_allowed(&self, tool_name: &str) -> bool {
+    async fn is_tool_allowed(&self, tool_name: &str) -> bool {
         let policy = self.tool_registry.get_tool_policy(tool_name).await;
         matches!(policy, crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt)
     }

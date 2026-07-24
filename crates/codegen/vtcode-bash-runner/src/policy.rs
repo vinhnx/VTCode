@@ -24,7 +24,7 @@ pub struct WorkspaceGuardPolicy {
 }
 
 impl WorkspaceGuardPolicy {
-    pub fn new(workspace: Arc<dyn WorkspacePaths>) -> Self {
+    fn new(workspace: Arc<dyn WorkspacePaths>) -> Self {
         Self { workspace, allowed_commands: None }
     }
 

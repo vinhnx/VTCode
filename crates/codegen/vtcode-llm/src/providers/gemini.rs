@@ -41,4 +41,4 @@ mod tests;
 pub mod wire;
 
 pub use provider::GeminiProvider;
-pub use sanitize::sanitize_function_parameters;
+pub(crate) use sanitize::sanitize_function_parameters;

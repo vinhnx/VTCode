@@ -51,7 +51,7 @@ pub use windows_registry_filter::{RegistryAccessFilter, RegistryAccessPattern, R
 
 /// Evaluates if a command is safe to execute.
 /// Returns true if the command passes all safety checks.
-pub fn is_safe_command(registry: &SafeCommandRegistry, command: &[String]) -> bool {
+fn is_safe_command(registry: &SafeCommandRegistry, command: &[String]) -> bool {
     if command.is_empty() {
         return false;
     }

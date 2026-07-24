@@ -163,7 +163,7 @@ impl<E> MultiErrors<E> {
     }
 
     /// Extend the collection with multiple errors.
-    pub fn extend(&mut self, iter: impl IntoIterator<Item = E>) {
+    fn extend(&mut self, iter: impl IntoIterator<Item = E>) {
         self.errors.extend(iter);
     }
 
@@ -181,7 +181,7 @@ impl<E> MultiErrors<E> {
 
     /// Consume the collector and return the underlying error vector.
     #[must_use]
-    pub fn into_inner(self) -> Vec<E> {
+    fn into_inner(self) -> Vec<E> {
         self.errors
     }
 
@@ -197,7 +197,7 @@ impl<E> MultiErrors<E> {
     }
 
     /// Convert into `Result<()>` — succeeds if no errors were collected.
-    pub fn ok(self) -> std::result::Result<(), Self> {
+    fn ok(self) -> std::result::Result<(), Self> {
         if self.errors.is_empty() { Ok(()) } else { Err(self) }
     }
 
@@ -225,7 +225,7 @@ impl<E> MultiErrors<E> {
 
     /// Convert into an [`anyhow::Error`] for use with traditional error handling.
     #[must_use]
-    pub fn to_anyhow(&self) -> Error
+    fn to_anyhow(&self) -> Error
     where
         E: fmt::Display,
     {

@@ -15,14 +15,14 @@ pub enum SupportedTool {
 }
 
 impl SupportedTool {
-    pub fn kind(&self) -> crate::acp::ToolKind {
+    pub(crate) fn kind(&self) -> crate::acp::ToolKind {
         match self {
             Self::ReadFile => crate::acp::ToolKind::Read,
             Self::ListFiles => crate::acp::ToolKind::Search,
         }
     }
 
-    pub fn default_title(&self) -> &'static str {
+    pub(crate) fn default_title(&self) -> &'static str {
         match self {
             Self::ReadFile => "Read file",
             Self::ListFiles => "List files",
@@ -36,7 +36,7 @@ impl SupportedTool {
         }
     }
 
-    pub fn sort_key(&self) -> u8 {
+    fn sort_key(&self) -> u8 {
         match self {
             Self::ReadFile => 0,
             Self::ListFiles => 1,
@@ -71,7 +71,7 @@ pub struct AcpToolRegistry {
 }
 
 impl AcpToolRegistry {
-    pub fn new(
+    pub(crate) fn new(
         workspace_root: &Path,
         read_file_enabled: bool,
         list_files_enabled: bool,
@@ -102,11 +102,11 @@ impl AcpToolRegistry {
         Self { entries, local_definitions, mapping }
     }
 
-    pub fn registered_tools(&self) -> Vec<SupportedTool> {
+    pub(crate) fn registered_tools(&self) -> Vec<SupportedTool> {
         self.entries.iter().map(|entry| entry.tool).collect()
     }
 
-    pub fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
+    pub(crate) fn definitions_for(&self, enabled_tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
         self.definitions_for_filtered(enabled_tools, include_local, |_| true)
     }
 
@@ -114,7 +114,7 @@ impl AcpToolRegistry {
     /// through `local_tool_allowed`. This lets callers apply per-agent
     /// permission gating to local tools while keeping the ACP-advertised tools
     /// (already gated via `enabled_tools`) unchanged.
-    pub fn definitions_for_filtered(
+    pub(crate) fn definitions_for_filtered(
         &self,
         enabled_tools: &[SupportedTool],
         include_local: bool,
@@ -139,7 +139,7 @@ impl AcpToolRegistry {
         definitions
     }
 
-    pub fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String {
+    pub(crate) fn render_title(&self, descriptor: ToolDescriptor, function_name: &str, args: &Value) -> String {
         render_title(descriptor, function_name, args)
     }
 
@@ -147,7 +147,7 @@ impl AcpToolRegistry {
         self.tool_kind_for_call(function_name, None)
     }
 
-    pub fn tool_kind_for_call(&self, function_name: &str, args: Option<&Value>) -> crate::acp::ToolKind {
+    pub(crate) fn tool_kind_for_call(&self, function_name: &str, args: Option<&Value>) -> crate::acp::ToolKind {
         let _ = args;
         match function_name {
             tools::READ_FILE => crate::acp::ToolKind::Read,
@@ -173,7 +173,7 @@ impl AcpToolRegistry {
         }
     }
 
-    pub fn lookup(&self, function_name: &str) -> Option<ToolDescriptor> {
+    pub(crate) fn lookup(&self, function_name: &str) -> Option<ToolDescriptor> {
         self.mapping.get(function_name).copied().or_else(|| {
             self.local_definitions
                 .iter()
@@ -182,7 +182,7 @@ impl AcpToolRegistry {
         })
     }
 
-    pub fn has_local_tools(&self) -> bool {
+    pub(crate) fn has_local_tools(&self) -> bool {
         !self.local_definitions.is_empty()
     }
 }

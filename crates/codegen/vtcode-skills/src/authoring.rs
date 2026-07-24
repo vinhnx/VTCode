@@ -11,7 +11,7 @@ use tracing::{debug, info};
 use vtcode_commons::MultiErrors;
 
 /// Example Python script template
-pub const EXAMPLE_SCRIPT: &str = r#"#!/usr/bin/env python3
+const EXAMPLE_SCRIPT: &str = r#"#!/usr/bin/env python3
 """
 Example script for {skill_name}
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 "#;
 
 /// Example reference document template
-pub const EXAMPLE_REFERENCE: &str = r#"# {skill_title} API Reference
+const EXAMPLE_REFERENCE: &str = r#"# {skill_title} API Reference
 
 This is an example reference document that VT Code can read as needed.
 
@@ -388,14 +388,14 @@ fn add_directory_to_zip<W: Write + std::io::Seek>(zip: &mut zip::ZipWriter<W>, d
 /// Validation report for skills
 #[derive(Debug, Clone)]
 pub struct ValidationReport {
-    pub skill_dir: PathBuf,
-    pub valid: bool,
-    pub errors: MultiErrors<String>,
-    pub warnings: Vec<String>,
+    skill_dir: PathBuf,
+    valid: bool,
+    errors: MultiErrors<String>,
+    warnings: Vec<String>,
 }
 
 impl ValidationReport {
-    pub fn new(skill_dir: PathBuf) -> Self {
+    fn new(skill_dir: PathBuf) -> Self {
         Self {
             skill_dir,
             valid: false,

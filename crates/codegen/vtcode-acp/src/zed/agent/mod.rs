@@ -32,7 +32,7 @@ mod updates;
 /// SACP-style agent bridge. `Send + Sync` so it can be moved into SACP
 /// `cx.spawn` tasks and held inside the global connection registry.
 pub(crate) struct ZedAgent {
-    pub(crate) config: CoreAgentConfig,
+    config: CoreAgentConfig,
     system_prompt: String,
     sessions: Arc<Mutex<HashMap<acp::SessionId, SessionHandle>>>,
     next_session_id: AtomicU64,
@@ -125,12 +125,12 @@ impl ZedAgent {
     }
 
     /// Borrow the SACP `cx` handle, if one is attached.
-    pub(crate) fn client(&self) -> Option<Arc<ConnectionHandle>> {
+    fn client(&self) -> Option<Arc<ConnectionHandle>> {
         self.client.lock().unwrap_or_else(|e| e.into_inner()).as_ref().cloned()
     }
 
     /// Optional human-readable title used during `initialize`.
-    pub(crate) fn title(&self) -> Option<String> {
+    fn title(&self) -> Option<String> {
         self.title.clone()
     }
 }

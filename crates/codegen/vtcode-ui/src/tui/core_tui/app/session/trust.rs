@@ -4,8 +4,8 @@ use hashbrown::{HashMap, HashSet};
 #[expect(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TrustSetting {
-    pub mode: TrustMode,
-    pub updated_at: String,
+    mode: TrustMode,
+    updated_at: String,
 }
 
 #[expect(dead_code)]
@@ -16,7 +16,7 @@ pub struct TrustManager {
 
 #[expect(dead_code)]
 impl TrustManager {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             settings: HashMap::new(),
             session_cache: HashSet::new(),

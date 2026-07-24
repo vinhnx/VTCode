@@ -95,13 +95,13 @@ impl McpEvent {
 
     /// Get the compact title for this event
     #[cfg(test)]
-    pub fn compact_title(&self) -> String {
+    fn compact_title(&self) -> String {
         format!("[{}] MCP {} `{}`", self.status.symbol(), self.provider, self.method)
     }
 
     /// Get the detailed title for this event
     #[cfg(test)]
-    pub fn detailed_title(&self) -> String {
+    fn detailed_title(&self) -> String {
         let duration = self.duration_ms.map(|ms| format!(" (duration: {ms}ms)")).unwrap_or_default();
 
         format!(
@@ -188,13 +188,13 @@ impl McpPanelState {
 
     /// Number of tracked events
     #[cfg(test)]
-    pub fn event_count(&self) -> usize {
+    pub(crate) fn event_count(&self) -> usize {
         self.events.len()
     }
 
     /// Get compact status string for display
     #[cfg(test)]
-    pub fn compact_status(&self) -> Option<String> {
+    fn compact_status(&self) -> Option<String> {
         if self.events.is_empty() {
             return None;
         }
@@ -211,7 +211,7 @@ impl McpPanelState {
 
     /// Create a disabled panel state
     #[cfg(test)]
-    pub fn disabled() -> Self {
+    fn disabled() -> Self {
         Self {
             events: VecDeque::new(),
             max_events: 0,

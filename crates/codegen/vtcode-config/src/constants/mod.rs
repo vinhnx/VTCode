@@ -7,7 +7,7 @@ pub mod bash;
 /// Chunking constants for large file handling
 pub mod chunking;
 /// Command execution defaults shared across the agent runtime
-pub mod commands;
+pub(crate) mod commands;
 /// Context window management defaults
 pub mod context;
 /// Default configuration values
@@ -25,7 +25,7 @@ pub mod headers;
 /// LLM generation parameters
 pub mod llm_generation;
 /// MCP constants
-pub mod mcp;
+pub(crate) mod mcp;
 /// Memory monitoring thresholds and constants
 pub mod memory;
 /// Message role constants to avoid hardcoding strings

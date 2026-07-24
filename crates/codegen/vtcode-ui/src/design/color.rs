@@ -23,7 +23,7 @@ use ratatui::style::Color;
 /// - `BrightMagenta` to `DarkGray` (now correctly `LightMagenta`)
 /// - `BrightRed/Green/Yellow/Blue/Cyan` to non-bright variants
 /// - `Ansi256` colors to `Reset` instead of `Indexed`
-pub fn anstyle_to_ratatui_color(color: AnstyleColor) -> Color {
+pub(crate) fn anstyle_to_ratatui_color(color: AnstyleColor) -> Color {
     match color {
         AnstyleColor::Ansi(ansi) => ansi_to_ratatui(ansi),
         AnstyleColor::Ansi256(c) => Color::Indexed(c.0),
@@ -75,7 +75,7 @@ fn ansi_hue_variant(hue: &str, light: bool) -> Option<Color> {
 
 /// Parse a hex color string (e.g. `"#D99A4E"`) to a `ratatui` `Color`.
 /// Returns `None` if the string is not a valid `#rrggbb` value.
-pub fn hex_to_ratatui_color(hex: &str) -> Option<Color> {
+pub(crate) fn hex_to_ratatui_color(hex: &str) -> Option<Color> {
     let hex = hex.trim().trim_start_matches('#');
     if hex.len() != 6 {
         return None;
@@ -98,7 +98,7 @@ pub fn hex_to_ratatui_color(hex: &str) -> Option<Color> {
 /// Hue/mode tokens are resolved to the variant matching `light`, so a single
 /// token reads well on both dark and light terminals. Falls back to
 /// `fallback` when the token is unknown or unparseable.
-pub fn resolve_agent_color(token: &str, fallback: Color, light: bool) -> Color {
+pub(crate) fn resolve_agent_color(token: &str, fallback: Color, light: bool) -> Color {
     use vtcode_config::constants::ui::agent_mode_hue;
 
     agent_mode_hue(token)

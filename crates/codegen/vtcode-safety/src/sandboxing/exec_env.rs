@@ -62,25 +62,25 @@ impl ExecExpiration {
 #[derive(Debug, Clone)]
 pub struct CommandSpec {
     /// The program to execute.
-    pub program: OsString,
+    pub(crate) program: OsString,
 
     /// Arguments to pass to the program.
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
 
     /// Working directory for the command.
-    pub cwd: PathBuf,
+    pub(crate) cwd: PathBuf,
 
     /// Environment variables to set.
-    pub env: HashMap<String, String>,
+    pub(crate) env: HashMap<String, String>,
 
     /// Expiration mechanism for the command.
-    pub expiration: ExecExpiration,
+    pub(crate) expiration: ExecExpiration,
 
     /// Sandbox permissions for this command.
-    pub sandbox_permissions: SandboxPermissions,
+    sandbox_permissions: SandboxPermissions,
 
     /// Optional justification for why the command needs to run.
-    pub justification: Option<String>,
+    justification: Option<String>,
 }
 
 impl Default for CommandSpec {
@@ -134,13 +134,13 @@ impl CommandSpec {
     }
 
     /// Set a justification.
-    pub fn with_justification(mut self, justification: impl Into<String>) -> Self {
+    fn with_justification(mut self, justification: impl Into<String>) -> Self {
         self.justification = Some(justification.into());
         self
     }
 
     /// Get the full command as a vector.
-    pub fn full_command(&self) -> Vec<OsString> {
+    fn full_command(&self) -> Vec<OsString> {
         let mut cmd = vec![self.program.clone()];
         cmd.extend(self.args.iter().cloned().map(OsString::from));
         cmd
@@ -191,7 +191,7 @@ pub enum SandboxType {
 
 impl SandboxType {
     /// Get the platform-appropriate sandbox type.
-    pub fn platform_default() -> Self {
+    pub(crate) fn platform_default() -> Self {
         #[cfg(target_os = "macos")]
         {
             Self::MacosSeatbelt
@@ -211,7 +211,7 @@ impl SandboxType {
     }
 
     /// Check if this sandbox type is available on the current platform.
-    pub fn is_available(&self) -> bool {
+    pub(crate) fn is_available(&self) -> bool {
         match self {
             Self::None => true,
             Self::MacosSeatbelt => cfg!(target_os = "macos"),

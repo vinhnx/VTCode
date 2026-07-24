@@ -29,7 +29,7 @@ pub const CHAT_COMPLETIONS_MODELS: &[&str] = &[
 ];
 
 // Curated models VT Code currently exposes in config flows and ModelId metadata.
-pub const CONFIGURED_MODELS: &[&str] = &[
+pub(crate) const CONFIGURED_MODELS: &[&str] = &[
     GLM_5_2,
     GLM_5_1,
     KIMI_K2_7_CODE,

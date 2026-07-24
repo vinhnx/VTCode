@@ -91,7 +91,7 @@ impl FileOpsTool {
         Ok((capped_content, metadata, is_truncated))
     }
 
-    pub(super) async fn read_file_chunked(
+    async fn read_file_chunked(
         &self,
         file_path: &Path,
         input: &Input,

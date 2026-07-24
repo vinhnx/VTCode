@@ -13,25 +13,25 @@ use super::errors::A2aErrorCode;
 // ============================================================================
 
 /// Send a message to initiate or continue a task
-pub const METHOD_MESSAGE_SEND: &str = "message/send";
+pub(crate) const METHOD_MESSAGE_SEND: &str = "message/send";
 
 /// Send a message and subscribe to real-time updates via SSE
-pub const METHOD_MESSAGE_STREAM: &str = "message/stream";
+pub(crate) const METHOD_MESSAGE_STREAM: &str = "message/stream";
 
 /// Retrieve the current state of a task
-pub const METHOD_TASKS_GET: &str = "tasks/get";
+pub(crate) const METHOD_TASKS_GET: &str = "tasks/get";
 
 /// Retrieve a list of tasks with optional filtering
-pub const METHOD_TASKS_LIST: &str = "tasks/list";
+pub(crate) const METHOD_TASKS_LIST: &str = "tasks/list";
 
 /// Request cancellation of a running task
-pub const METHOD_TASKS_CANCEL: &str = "tasks/cancel";
+pub(crate) const METHOD_TASKS_CANCEL: &str = "tasks/cancel";
 
 /// Set push notification configuration for a task
-pub const METHOD_TASKS_PUSH_CONFIG_SET: &str = "tasks/pushNotificationConfig/set";
+pub(crate) const METHOD_TASKS_PUSH_CONFIG_SET: &str = "tasks/pushNotificationConfig/set";
 
 /// Get push notification configuration for a task
-pub const METHOD_TASKS_PUSH_CONFIG_GET: &str = "tasks/pushNotificationConfig/get";
+pub(crate) const METHOD_TASKS_PUSH_CONFIG_GET: &str = "tasks/pushNotificationConfig/get";
 
 /// Resubscribe to task updates after connection interruption
 pub const METHOD_TASKS_RESUBSCRIBE: &str = "tasks/resubscribe";
@@ -44,25 +44,25 @@ pub const METHOD_AGENT_GET_EXTENDED_CARD: &str = "agent/getAuthenticatedExtended
 // ============================================================================
 
 /// JSON-RPC 2.0 version constant
-pub const JSONRPC_VERSION: &str = "2.0";
+pub(crate) const JSONRPC_VERSION: &str = "2.0";
 
 /// JSON-RPC 2.0 Request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
     /// Protocol version (always "2.0")
-    pub jsonrpc: String,
+    pub(crate) jsonrpc: String,
     /// Method name
-    pub method: String,
+    pub(crate) method: String,
     /// Method parameters
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<Value>,
+    pub(crate) params: Option<Value>,
     /// Request ID (can be string, number, or null)
-    pub id: Value,
+    pub(crate) id: Value,
 }
 
 impl JsonRpcRequest {
     /// Create a new JSON-RPC request
-    pub fn new(method: impl Into<String>, params: Option<Value>, id: Value) -> Self {
+    fn new(method: impl Into<String>, params: Option<Value>, id: Value) -> Self {
         Self {
             jsonrpc: JSONRPC_VERSION.to_string(),
             method: method.into(),
@@ -72,7 +72,7 @@ impl JsonRpcRequest {
     }
 
     /// Create a request with a string ID
-    pub fn with_string_id(method: impl Into<String>, params: Option<Value>, id: impl Into<String>) -> Self {
+    pub(crate) fn with_string_id(method: impl Into<String>, params: Option<Value>, id: impl Into<String>) -> Self {
         Self::new(method, params, Value::String(id.into()))
     }
 
@@ -96,20 +96,20 @@ impl JsonRpcRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcResponse {
     /// Protocol version (always "2.0")
-    pub jsonrpc: String,
+    jsonrpc: String,
     /// Result (present on success)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    pub(crate) result: Option<Value>,
     /// Error (present on failure)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcError>,
+    pub(crate) error: Option<JsonRpcError>,
     /// Request ID (matches the request)
-    pub id: Value,
+    id: Value,
 }
 
 impl JsonRpcResponse {
     /// Create a success response
-    pub fn success(result: Value, id: Value) -> Self {
+    pub(crate) fn success(result: Value, id: Value) -> Self {
         Self {
             jsonrpc: JSONRPC_VERSION.to_string(),
             result: Some(result),
@@ -119,7 +119,7 @@ impl JsonRpcResponse {
     }
 
     /// Create an error response
-    pub fn error(error: JsonRpcError, id: Value) -> Self {
+    pub(crate) fn error(error: JsonRpcError, id: Value) -> Self {
         Self {
             jsonrpc: JSONRPC_VERSION.to_string(),
             result: None,
@@ -129,12 +129,12 @@ impl JsonRpcResponse {
     }
 
     /// Check if this is a success response
-    pub fn is_success(&self) -> bool {
+    fn is_success(&self) -> bool {
         self.result.is_some() && self.error.is_none()
     }
 
     /// Check if this is an error response
-    pub fn is_error(&self) -> bool {
+    fn is_error(&self) -> bool {
         self.error.is_some()
     }
 }
@@ -143,17 +143,17 @@ impl JsonRpcResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcError {
     /// Error code
-    pub code: i32,
+    pub(crate) code: i32,
     /// Error message
-    pub message: String,
+    pub(crate) message: String,
     /// Additional error data
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
+    data: Option<Value>,
 }
 
 impl JsonRpcError {
     /// Create a new error
-    pub fn new(code: i32, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: i32, message: impl Into<String>) -> Self {
         Self { code, message: message.into(), data: None }
     }
 
@@ -163,7 +163,7 @@ impl JsonRpcError {
     }
 
     /// Create an error from A2aErrorCode
-    pub fn from_code(code: A2aErrorCode, message: impl Into<String>) -> Self {
+    fn from_code(code: A2aErrorCode, message: impl Into<String>) -> Self {
         Self::new(code.into(), message)
     }
 
@@ -173,12 +173,12 @@ impl JsonRpcError {
     }
 
     /// Create an invalid request error
-    pub fn invalid_request(message: impl Into<String>) -> Self {
+    pub(crate) fn invalid_request(message: impl Into<String>) -> Self {
         Self::from_code(A2aErrorCode::InvalidRequest, message)
     }
 
     /// Create a method not found error
-    pub fn method_not_found(method: impl Into<String>) -> Self {
+    pub(crate) fn method_not_found(method: impl Into<String>) -> Self {
         Self::from_code(A2aErrorCode::MethodNotFound, format!("Method not found: {}", method.into()))
     }
 
@@ -193,7 +193,7 @@ impl JsonRpcError {
     }
 
     /// Create a task not found error
-    pub fn task_not_found(task_id: impl Into<String>) -> Self {
+    fn task_not_found(task_id: impl Into<String>) -> Self {
         Self::from_code(A2aErrorCode::TaskNotFound, format!("Task not found: {}", task_id.into()))
     }
 }
@@ -207,16 +207,16 @@ impl JsonRpcError {
 #[serde(rename_all = "camelCase")]
 pub struct MessageSendParams {
     /// Message to send
-    pub message: super::types::Message,
+    pub(crate) message: super::types::Message,
     /// Optional task ID (to continue existing task)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
+    pub(crate) task_id: Option<String>,
     /// Optional context ID (for conversational context)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
+    pub(crate) context_id: Option<String>,
     /// Optional configuration
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub configuration: Option<MessageConfiguration>,
+    configuration: Option<MessageConfiguration>,
 }
 
 impl MessageSendParams {
@@ -249,16 +249,16 @@ impl MessageSendParams {
 pub struct MessageConfiguration {
     /// Accepted input MIME types
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accepted_input_modes: Option<Vec<String>>,
+    accepted_input_modes: Option<Vec<String>>,
     /// Accepted output MIME types
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub accepted_output_modes: Option<Vec<String>>,
+    accepted_output_modes: Option<Vec<String>>,
     /// History length to include
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub history_length: Option<u32>,
+    history_length: Option<u32>,
     /// Push notification configuration
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub push_notification_config: Option<PushNotificationConfig>,
+    push_notification_config: Option<PushNotificationConfig>,
 }
 
 /// Push notification configuration
@@ -266,10 +266,10 @@ pub struct MessageConfiguration {
 #[serde(rename_all = "camelCase")]
 pub struct PushNotificationConfig {
     /// Webhook URL to receive notifications
-    pub url: String,
+    url: String,
     /// Optional authentication header value
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication: Option<String>,
+    authentication: Option<String>,
 }
 
 /// Parameters for tasks/get method
@@ -277,10 +277,10 @@ pub struct PushNotificationConfig {
 #[serde(rename_all = "camelCase")]
 pub struct TaskQueryParams {
     /// Task ID
-    pub id: String,
+    pub(crate) id: String,
     /// Optional history length
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub history_length: Option<u32>,
+    pub(crate) history_length: Option<u32>,
 }
 
 /// Parameters for tasks/list method
@@ -292,25 +292,25 @@ pub struct ListTasksParams {
     pub context_id: Option<String>,
     /// Filter by status
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<super::types::TaskState>,
+    pub(crate) status: Option<super::types::TaskState>,
     /// Page size
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_size: Option<u32>,
     /// Page token for pagination
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_token: Option<String>,
+    pub(crate) page_token: Option<String>,
     /// History length to include
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub history_length: Option<u32>,
+    pub(crate) history_length: Option<u32>,
     /// Filter by last updated timestamp
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_updated_after: Option<String>,
+    pub(crate) last_updated_after: Option<String>,
     /// Include artifacts in response
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub include_artifacts: Option<bool>,
+    pub(crate) include_artifacts: Option<bool>,
     /// Filter by metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    pub(crate) metadata: Option<Value>,
 }
 
 /// Result for tasks/list method
@@ -318,16 +318,16 @@ pub struct ListTasksParams {
 #[serde(rename_all = "camelCase")]
 pub struct ListTasksResult {
     /// List of tasks
-    pub tasks: Vec<super::types::Task>,
+    pub(crate) tasks: Vec<super::types::Task>,
     /// Total number of tasks matching the query
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_size: Option<u32>,
+    pub(crate) total_size: Option<u32>,
     /// Page size used
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_size: Option<u32>,
+    pub(crate) page_size: Option<u32>,
     /// Token for next page
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_page_token: Option<String>,
+    pub(crate) next_page_token: Option<String>,
 }
 
 /// Parameters for tasks/cancel method
@@ -335,7 +335,7 @@ pub struct ListTasksResult {
 #[serde(rename_all = "camelCase")]
 pub struct TaskIdParams {
     /// Task ID
-    pub id: String,
+    pub(crate) id: String,
 }
 
 /// Configuration for push notification delivery
@@ -343,12 +343,12 @@ pub struct TaskIdParams {
 #[serde(rename_all = "camelCase")]
 pub struct TaskPushNotificationConfig {
     /// Task ID to configure
-    pub task_id: String,
+    pub(crate) task_id: String,
     /// Webhook URL for notifications
-    pub url: String,
+    pub(crate) url: String,
     /// Optional authentication header value (Bearer token, API key, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication: Option<String>,
+    pub(crate) authentication: Option<String>,
 }
 
 // ============================================================================
@@ -365,7 +365,7 @@ pub struct TaskPushNotificationConfig {
 pub struct SendStreamingMessageResponse {
     /// Event data (one of MessageEvent, TaskStatusUpdateEvent, TaskArtifactUpdateEvent)
     #[serde(flatten)]
-    pub event: StreamingEvent,
+    pub(crate) event: StreamingEvent,
 }
 
 /// Streaming event types (discriminated by 'type' field)
@@ -436,7 +436,7 @@ fn default_status_kind() -> String {
 
 impl StreamingEvent {
     /// Check if this is a final event
-    pub fn is_final(&self) -> bool {
+    pub(crate) fn is_final(&self) -> bool {
         match self {
             StreamingEvent::Message { r#final, .. } => *r#final,
             StreamingEvent::TaskStatus { r#final, .. } => *r#final,
@@ -446,7 +446,7 @@ impl StreamingEvent {
     }
 
     /// Get the task ID if present
-    pub fn task_id(&self) -> Option<&str> {
+    pub(crate) fn task_id(&self) -> Option<&str> {
         match self {
             StreamingEvent::Message { .. } => None,
             StreamingEvent::TaskStatus { task_id, .. } => Some(task_id),
@@ -456,7 +456,7 @@ impl StreamingEvent {
     }
 
     /// Get the context ID if present
-    pub fn context_id(&self) -> Option<&str> {
+    fn context_id(&self) -> Option<&str> {
         match self {
             StreamingEvent::Message { context_id, .. } => context_id.as_deref(),
             StreamingEvent::TaskStatus { context_id, .. } => context_id.as_deref(),

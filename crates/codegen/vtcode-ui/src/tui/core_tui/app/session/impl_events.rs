@@ -695,7 +695,7 @@ impl Session {
         }
     }
 
-    pub(crate) fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
+    fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
         if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }
@@ -743,7 +743,7 @@ impl Session {
         toggled
     }
 
-    pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
+    fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
         if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }

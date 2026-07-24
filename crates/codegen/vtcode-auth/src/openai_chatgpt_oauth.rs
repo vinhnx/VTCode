@@ -72,7 +72,7 @@ pub struct OpenAIChatGptSession {
 }
 
 impl OpenAIChatGptSession {
-    pub fn is_refresh_due(&self) -> bool {
+    fn is_refresh_due(&self) -> bool {
         let now = now_secs();
         if let Some(expires_at) = self.expires_at
             && now.saturating_add(REFRESH_SKEW_SECS) >= expires_at
@@ -200,7 +200,7 @@ impl OpenAIChatGptAuthHandle {
     }
 
     #[must_use]
-    pub fn using_external_tokens(&self) -> bool {
+    fn using_external_tokens(&self) -> bool {
         matches!(self.refresh_strategy, OpenAIChatGptAuthRefreshStrategy::External { .. })
     }
 
@@ -238,7 +238,7 @@ impl OpenAIResolvedAuth {
         }
     }
 
-    pub fn using_chatgpt(&self) -> bool {
+    fn using_chatgpt(&self) -> bool {
         matches!(self, Self::ChatGpt { .. })
     }
 }

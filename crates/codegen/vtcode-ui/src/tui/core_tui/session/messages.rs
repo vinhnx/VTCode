@@ -471,7 +471,7 @@ impl Session {
     /// Append text to the current or new message line
     ///
     /// This method handles appending text efficiently by reusing the last line if possible
-    pub(crate) fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
+    fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
         if text.is_empty() {
             return;
         }
@@ -586,12 +586,12 @@ impl Session {
     }
 
     /// Start a new empty message line
-    pub(crate) fn start_line(&mut self, kind: InlineMessageKind) {
+    fn start_line(&mut self, kind: InlineMessageKind) {
         self.push_line(kind, Vec::new());
     }
 
     /// Reset the current line (clear its segments)
-    pub(crate) fn reset_line(&mut self, kind: InlineMessageKind) {
+    fn reset_line(&mut self, kind: InlineMessageKind) {
         let mut cleared = false;
         {
             if let Some(line) = self.lines.last_mut()
@@ -619,7 +619,7 @@ impl Session {
     /// Handle tool code fence markers (``` or ~~~)
     ///
     /// Returns true if the text was a code fence marker (and should not be displayed)
-    pub(crate) fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
+    fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
         let trimmed = text.trim();
         let stripped = trimmed.strip_prefix("```").or_else(|| trimmed.strip_prefix("~~~"));
 
@@ -643,7 +643,7 @@ impl Session {
     }
 
     /// Remove trailing empty tool lines
-    pub(crate) fn remove_trailing_empty_tool_line(&mut self) {
+    fn remove_trailing_empty_tool_line(&mut self) {
         let should_remove = self
             .lines
             .last()

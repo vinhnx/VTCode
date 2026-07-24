@@ -5,19 +5,19 @@ pub const SKILL_INSTRUCTIONS_PREFIX: &str = "<skill>";
 
 #[derive(Debug, Clone)]
 pub struct SkillInstructions {
-    pub name: String,
-    pub path: PathBuf,
-    pub contents: String,
+    pub(crate) name: String,
+    pub(crate) path: PathBuf,
+    pub(crate) contents: String,
 }
 
 impl SkillInstructions {
     /// Check if a message contains skill instructions.
-    pub fn is_skill_instructions(text: &str) -> bool {
+    fn is_skill_instructions(text: &str) -> bool {
         text.starts_with(SKILL_INSTRUCTIONS_PREFIX)
     }
 
     /// Format skill instructions as an XML-wrapped message (Codex-compatible format).
-    pub fn to_xml_message(&self) -> String {
+    fn to_xml_message(&self) -> String {
         let path_str = self.path.to_string_lossy().replace('\\', "/");
         format!("<skill>\n<name>{}</name>\n<path>{}</path>\n{}\n</skill>", self.name, path_str, self.contents)
     }

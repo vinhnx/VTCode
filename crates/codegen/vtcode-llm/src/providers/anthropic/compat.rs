@@ -14,39 +14,39 @@ use std::sync::Arc;
 /// Anthropic Messages API request.
 #[derive(Debug, Deserialize, Clone)]
 pub struct AnthropicMessagesRequest {
-    pub model: String,
-    pub max_tokens: u32,
-    pub messages: Vec<AnthropicMessage>,
+    pub(crate) model: String,
+    pub(crate) max_tokens: u32,
+    pub(crate) messages: Vec<AnthropicMessage>,
     #[serde(default)]
-    pub system: Option<AnthropicSystemPrompt>,
+    pub(crate) system: Option<AnthropicSystemPrompt>,
     #[serde(default)]
-    pub stream: bool,
+    pub(crate) stream: bool,
     #[serde(default)]
-    pub temperature: Option<f32>,
+    pub(crate) temperature: Option<f32>,
     #[serde(default)]
-    pub top_p: Option<f32>,
+    pub(crate) top_p: Option<f32>,
     #[serde(default)]
-    pub top_k: Option<i32>,
+    pub(crate) top_k: Option<i32>,
     #[serde(default)]
-    pub stop_sequences: Option<Vec<String>>,
+    pub(crate) stop_sequences: Option<Vec<String>>,
     #[serde(default)]
-    pub tools: Option<Vec<AnthropicTool>>,
+    pub(crate) tools: Option<Vec<AnthropicTool>>,
     #[serde(default)]
-    pub tool_choice: Option<Value>,
+    pub(crate) tool_choice: Option<Value>,
     #[serde(default)]
-    pub thinking: Option<ThinkingConfig>,
+    pub(crate) thinking: Option<ThinkingConfig>,
     #[serde(default)]
-    pub betas: Option<Vec<String>>,
+    pub(crate) betas: Option<Vec<String>>,
     #[serde(default)]
-    pub context_management: Option<Value>,
+    pub(crate) context_management: Option<Value>,
     #[serde(default)]
-    pub output_config: Option<AnthropicOutputConfig>,
+    pub(crate) output_config: Option<AnthropicOutputConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnthropicMessage {
-    pub role: String,
-    pub content: AnthropicContent,
+    pub(crate) role: String,
+    pub(crate) content: AnthropicContent,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -106,9 +106,9 @@ pub enum AnthropicContentBlock {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnthropicImageSource {
-    pub r#type: String,
-    pub media_type: String,
-    pub data: String,
+    r#type: String,
+    media_type: String,
+    data: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -156,26 +156,26 @@ pub enum AnthropicTool {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnthropicAdvisorCachingCompat {
     #[serde(rename = "type")]
-    pub cache_type: String,
-    pub ttl: String,
+    cache_type: String,
+    ttl: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct AnthropicMessagesResponse {
-    pub id: String,
-    pub r#type: String,
-    pub role: String,
-    pub model: String,
-    pub content: Vec<AnthropicContentBlock>,
-    pub stop_reason: Option<String>,
-    pub stop_sequence: Option<String>,
-    pub usage: AnthropicUsage,
+    pub(crate) id: String,
+    pub(crate) r#type: String,
+    pub(crate) role: String,
+    pub(crate) model: String,
+    pub(crate) content: Vec<AnthropicContentBlock>,
+    pub(crate) stop_reason: Option<String>,
+    pub(crate) stop_sequence: Option<String>,
+    pub(crate) usage: AnthropicUsage,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct AnthropicUsage {
-    pub input_tokens: u32,
-    pub output_tokens: u32,
+    pub(crate) input_tokens: u32,
+    pub(crate) output_tokens: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -220,14 +220,14 @@ pub enum AnthropicContentDelta {
 
 #[derive(Debug, Serialize)]
 pub struct AnthropicDelta {
-    pub stop_reason: Option<String>,
-    pub stop_sequence: Option<String>,
+    pub(crate) stop_reason: Option<String>,
+    pub(crate) stop_sequence: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct AnthropicError {
-    pub r#type: String,
-    pub message: String,
+    pub(crate) r#type: String,
+    pub(crate) message: String,
 }
 
 #[derive(Default)]
@@ -239,7 +239,7 @@ struct ConvertedAnthropicBlocks {
     emitted_messages: Vec<Message>,
 }
 
-pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LLMRequest {
+pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LLMRequest {
     let (tool_choice, parallel_tool_config) = parse_anthropic_tool_choice(request.tool_choice.as_ref());
     let effort = request.output_config.as_ref().and_then(|config| config.effort.clone());
     let output_format = request.output_config.as_ref().and_then(|config| {
@@ -451,7 +451,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
     }
 }
 
-pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMessagesResponse {
+pub(crate) fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMessagesResponse {
     use uuid::Uuid;
 
     let mut content_blocks = Vec::new();

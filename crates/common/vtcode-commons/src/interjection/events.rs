@@ -18,15 +18,15 @@ impl<E> Default for EventQueue<E> {
 }
 
 impl<E> EventQueue<E> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { events: Arc::new(Mutex::new(Vec::new())) }
     }
 
-    pub fn push(&self, event: E) {
+    pub(crate) fn push(&self, event: E) {
         self.lock().push(event);
     }
 
-    pub fn push_capped(&self, event: E, max: usize) {
+    fn push_capped(&self, event: E, max: usize) {
         let mut q = self.lock();
         q.push(event);
         if q.len() > max {
@@ -35,26 +35,26 @@ impl<E> EventQueue<E> {
         }
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.lock().len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.lock().is_empty()
     }
 
-    pub fn drain_matching(&self, take: impl Fn(&E) -> bool) -> Vec<E> {
+    fn drain_matching(&self, take: impl Fn(&E) -> bool) -> Vec<E> {
         let mut q = self.lock();
         let (matched, kept): (Vec<E>, Vec<E>) = std::mem::take(&mut *q).into_iter().partition(|e| take(e));
         *q = kept;
         matched
     }
 
-    pub fn drain_all(&self) -> Vec<E> {
+    pub(crate) fn drain_all(&self) -> Vec<E> {
         std::mem::take(&mut *self.lock())
     }
 
-    pub fn clear(&self) {
+    fn clear(&self) {
         self.lock().clear();
     }
 
@@ -64,7 +64,7 @@ impl<E> EventQueue<E> {
 }
 
 impl<E: Clone> EventQueue<E> {
-    pub fn snapshot(&self) -> Vec<E> {
+    fn snapshot(&self) -> Vec<E> {
         self.lock().clone()
     }
 }

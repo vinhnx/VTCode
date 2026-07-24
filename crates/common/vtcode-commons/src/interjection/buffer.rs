@@ -5,27 +5,27 @@ use super::format::format_interjection;
 /// `Attachment` is host-defined (inline images, asset IDs); core never reads it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingInterjection<Attachment> {
-    pub text: String,
-    pub attachments: Vec<Attachment>,
+    text: String,
+    attachments: Vec<Attachment>,
 }
 
 /// A drained entry, wrapped and ready to emit as a synthetic user message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FormattedInterjection<Attachment> {
-    pub text: String,
-    pub attachments: Vec<Attachment>,
+    text: String,
+    attachments: Vec<Attachment>,
 }
 
 /// A queue of pending interjections — just an [`EventQueue`] of
 /// [`PendingInterjection`]. Use [`drain_formatted`] to drain + frame them as
 /// synthetic user messages.
-pub type InterjectionBuffer<Attachment> = EventQueue<PendingInterjection<Attachment>>;
+pub(crate) type InterjectionBuffer<Attachment> = EventQueue<PendingInterjection<Attachment>>;
 
 /// Drain `buffer`, framing each entry as a synthetic user message (FIFO, one
 /// message per entry, never merged). `sanitize_text` runs on the raw text first
 /// (hosts strip artifacts like image placeholder paths; pass
 /// `std::convert::identity` if none).
-pub fn drain_formatted<Attachment>(
+pub(crate) fn drain_formatted<Attachment>(
     buffer: &InterjectionBuffer<Attachment>,
     sanitize_text: impl Fn(String) -> String,
 ) -> Vec<FormattedInterjection<Attachment>> {

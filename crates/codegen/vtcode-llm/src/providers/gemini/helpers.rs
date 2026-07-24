@@ -100,7 +100,7 @@ impl GeminiProvider {
 
     /// Check if model supports extended thinking levels (minimal, medium)
     /// Only Gemini 3 Flash supports these additional levels
-    pub fn supports_extended_thinking(model: &str) -> bool {
+    pub(crate) fn supports_extended_thinking(model: &str) -> bool {
         model.contains("gemini-3-flash")
     }
 
@@ -136,7 +136,7 @@ impl GeminiProvider {
 
     /// Get supported thinking levels for a model
     /// Reference: <https://ai.google.dev/gemini-api/docs/gemini-3>
-    pub fn supported_thinking_levels(model: &str) -> Vec<&'static str> {
+    pub(crate) fn supported_thinking_levels(model: &str) -> Vec<&'static str> {
         if model.contains("gemini-3-flash") {
             // Gemini 3 Flash supports all levels
             vec!["minimal", "low", "medium", "high"]

@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 /// A diff hunk representing a contiguous block of changes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffHunk {
-    pub old_start: usize,
-    pub new_start: usize,
-    pub old_lines: usize,
-    pub new_lines: usize,
-    pub display: String,
+    pub(crate) old_start: usize,
+    pub(crate) new_start: usize,
+    pub(crate) old_lines: usize,
+    pub(crate) new_lines: usize,
+    pub(crate) display: String,
 }
 
 impl DiffHunk {
@@ -72,21 +72,21 @@ pub enum DiffPreviewMode {
 /// State for diff preview modal
 #[derive(Debug, Clone)]
 pub struct DiffPreviewState {
-    pub file_path: String,
-    pub before: String,
-    pub after: String,
-    pub hunks: Vec<DiffHunk>,
-    pub current_hunk: usize,
-    pub trust_mode: TrustMode,
-    pub mode: DiffPreviewMode,
+    pub(crate) file_path: String,
+    pub(crate) before: String,
+    pub(crate) after: String,
+    hunks: Vec<DiffHunk>,
+    pub(crate) current_hunk: usize,
+    pub(crate) trust_mode: TrustMode,
+    pub(crate) mode: DiffPreviewMode,
 }
 
 impl DiffPreviewState {
-    pub fn new(file_path: String, before: String, after: String, hunks: Vec<DiffHunk>) -> Self {
+    pub(crate) fn new(file_path: String, before: String, after: String, hunks: Vec<DiffHunk>) -> Self {
         Self::new_with_mode(file_path, before, after, hunks, DiffPreviewMode::EditApproval)
     }
 
-    pub fn new_with_mode(
+    pub(crate) fn new_with_mode(
         file_path: String,
         before: String,
         after: String,
@@ -108,7 +108,7 @@ impl DiffPreviewState {
         self.hunks.get(self.current_hunk)
     }
 
-    pub fn hunk_count(&self) -> usize {
+    pub(crate) fn hunk_count(&self) -> usize {
         self.hunks.len()
     }
 }

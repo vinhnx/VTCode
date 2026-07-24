@@ -23,15 +23,15 @@ impl RejectConfig {
         self.sandbox_approval
     }
 
-    pub const fn rejects_rules_approval(self) -> bool {
+    const fn rejects_rules_approval(self) -> bool {
         self.rules
     }
 
-    pub const fn rejects_request_permissions(self) -> bool {
+    const fn rejects_request_permissions(self) -> bool {
         self.request_permissions
     }
 
-    pub const fn rejects_mcp_elicitations(self) -> bool {
+    const fn rejects_mcp_elicitations(self) -> bool {
         self.mcp_elicitations
     }
 }
@@ -133,22 +133,22 @@ pub fn default_exec_approval_requirement(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecPolicyAmendment {
     /// The command pattern to add to the policy.
-    pub pattern: Vec<String>,
+    pattern: Vec<String>,
 }
 
 impl ExecPolicyAmendment {
     /// Create a new policy amendment.
-    pub fn new(pattern: Vec<String>) -> Self {
+    fn new(pattern: Vec<String>) -> Self {
         Self { pattern }
     }
 
     /// Create from a single command prefix.
-    pub fn from_prefix(prefix: impl Into<String>) -> Self {
+    pub(crate) fn from_prefix(prefix: impl Into<String>) -> Self {
         Self { pattern: vec![prefix.into()] }
     }
 
     /// Check if a command matches this amendment pattern.
-    pub fn matches(&self, command: &[String]) -> bool {
+    pub(crate) fn matches(&self, command: &[String]) -> bool {
         if command.len() < self.pattern.len() {
             return false;
         }
@@ -156,7 +156,7 @@ impl ExecPolicyAmendment {
     }
 
     /// Convert the amendment to a policy rule string.
-    pub fn to_rule_string(&self) -> String {
+    fn to_rule_string(&self) -> String {
         let pattern_json = serde_json::to_string(&self.pattern).unwrap_or_default();
         format!("prefix_rule(pattern={pattern_json}, decision=\"allow\")")
     }
@@ -199,7 +199,7 @@ pub enum ExecApprovalRequirement {
 
 impl ExecApprovalRequirement {
     /// Create a skip requirement.
-    pub fn skip() -> Self {
+    pub(crate) fn skip() -> Self {
         Self::Skip {
             bypass_sandbox: false,
             proposed_execpolicy_amendment: None,
@@ -215,7 +215,7 @@ impl ExecApprovalRequirement {
     }
 
     /// Create an approval requirement.
-    pub fn needs_approval(reason: impl Into<String>) -> Self {
+    pub(crate) fn needs_approval(reason: impl Into<String>) -> Self {
         Self::NeedsApproval {
             reason: Some(reason.into()),
             proposed_execpolicy_amendment: None,
@@ -231,22 +231,22 @@ impl ExecApprovalRequirement {
     }
 
     /// Create a forbidden requirement.
-    pub fn forbidden(reason: impl Into<String>) -> Self {
+    pub(crate) fn forbidden(reason: impl Into<String>) -> Self {
         Self::Forbidden { reason: reason.into() }
     }
 
     /// Check if approval is needed.
-    pub fn requires_approval(&self) -> bool {
+    pub(crate) fn requires_approval(&self) -> bool {
         matches!(self, Self::NeedsApproval { .. })
     }
 
     /// Check if the command is forbidden.
-    pub fn is_forbidden(&self) -> bool {
+    pub(crate) fn is_forbidden(&self) -> bool {
         matches!(self, Self::Forbidden { .. })
     }
 
     /// Check if the command can proceed (skip or approved).
-    pub fn can_proceed(&self) -> bool {
+    pub(crate) fn can_proceed(&self) -> bool {
         matches!(self, Self::Skip { .. })
     }
 

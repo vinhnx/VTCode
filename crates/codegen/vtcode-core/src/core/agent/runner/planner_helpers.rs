@@ -18,7 +18,7 @@ impl AgentRunner {
     }
 
     /// Generate fallback planner items when the planner doesn't provide any.
-    pub(super) fn fallback_planner_items(&self, task: &Task) -> Vec<serde_json::Value> {
+    fn fallback_planner_items(&self, task: &Task) -> Vec<serde_json::Value> {
         let verify = self.fallback_verify_commands();
         vec![json!({
             "description": task.description,
@@ -42,7 +42,7 @@ impl AgentRunner {
     }
 
     /// Normalize a planner item into a tracker item JSON value.
-    pub(super) fn normalize_planner_item(
+    fn normalize_planner_item(
         &self,
         task: &Task,
         item: PlannerItem,
@@ -91,7 +91,7 @@ impl AgentRunner {
     }
 
     /// Get the default verify commands for the workspace.
-    pub(super) fn fallback_verify_commands(&self) -> Vec<String> {
+    fn fallback_verify_commands(&self) -> Vec<String> {
         super::workspace_detection::infer_default_verify_commands(self._workspace.as_path())
     }
 }

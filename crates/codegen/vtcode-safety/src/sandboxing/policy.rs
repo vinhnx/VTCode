@@ -31,13 +31,13 @@ impl WritableRoot {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NetworkAllowlistEntry {
     /// Domain pattern (e.g., "api.github.com", "*.npmjs.org")
-    pub domain: String,
+    pub(crate) domain: String,
     /// Optional port (defaults to 443 for HTTPS)
     #[serde(default = "default_https_port")]
-    pub port: u16,
+    pub(crate) port: u16,
     /// Protocol (tcp or udp, defaults to tcp)
     #[serde(default = "default_protocol")]
-    pub protocol: String,
+    pub(crate) protocol: String,
 }
 
 fn default_https_port() -> u16 {
@@ -71,7 +71,7 @@ impl NetworkAllowlistEntry {
 
     /// Check if a domain matches this entry (supports wildcard prefix).
     #[inline]
-    pub fn matches(&self, domain: &str, port: u16) -> bool {
+    fn matches(&self, domain: &str, port: u16) -> bool {
         if self.port != port {
             return false;
         }
@@ -143,13 +143,13 @@ const USERPROFILE_READ_ROOT_EXCLUSIONS: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SensitivePath {
     /// Path pattern (supports ~ for home directory)
-    pub path: String,
+    path: String,
     /// Whether to block read access (true by default)
     #[serde(default = "default_true")]
-    pub block_read: bool,
+    pub(crate) block_read: bool,
     /// Whether to block write access (true by default)
     #[serde(default = "default_true")]
-    pub block_write: bool,
+    pub(crate) block_write: bool,
 }
 
 fn default_true() -> bool {
@@ -169,7 +169,7 @@ impl SensitivePath {
 
     /// Create a sensitive path entry that only blocks write access.
     #[must_use]
-    pub fn write_only(path: impl Into<String>) -> Self {
+    fn write_only(path: impl Into<String>) -> Self {
         Self {
             path: path.into(),
             block_read: false,
@@ -192,7 +192,7 @@ impl SensitivePath {
     }
 
     /// Check if a given path matches this sensitive path pattern.
-    pub fn matches(&self, path: &Path) -> bool {
+    fn matches(&self, path: &Path) -> bool {
         let expanded = self.expand_path();
         #[cfg(windows)]
         {
@@ -345,14 +345,14 @@ impl ResourceLimits {
 
     /// Builder: set memory limit.
     #[must_use]
-    pub fn with_memory_mb(mut self, mb: u64) -> Self {
+    fn with_memory_mb(mut self, mb: u64) -> Self {
         self.max_memory_mb = mb;
         self
     }
 
     /// Builder: set PID limit.
     #[must_use]
-    pub fn with_max_pids(mut self, pids: u32) -> Self {
+    fn with_max_pids(mut self, pids: u32) -> Self {
         self.max_pids = pids;
         self
     }
@@ -373,7 +373,7 @@ impl ResourceLimits {
 
     /// Builder: set timeout.
     #[must_use]
-    pub fn with_timeout_secs(mut self, secs: u64) -> Self {
+    fn with_timeout_secs(mut self, secs: u64) -> Self {
         self.timeout_secs = secs;
         self
     }
@@ -381,7 +381,7 @@ impl ResourceLimits {
     /// Check if any limits are set.
     #[inline]
     #[must_use]
-    pub fn has_limits(&self) -> bool {
+    fn has_limits(&self) -> bool {
         self.max_memory_mb > 0
             || self.max_pids > 0
             || self.max_disk_mb > 0
@@ -392,7 +392,7 @@ impl ResourceLimits {
     /// Get the effective timeout in seconds.
     #[inline]
     #[must_use]
-    pub fn effective_timeout_secs(&self) -> u64 {
+    fn effective_timeout_secs(&self) -> u64 {
         if self.timeout_secs > 0 { self.timeout_secs } else { 300 }
     }
 }
@@ -469,19 +469,19 @@ pub const FILTERED_SYSCALLS: &[&str] = &[
 pub struct SeccompProfile {
     /// Syscalls to block entirely.
     #[serde(default = "default_blocked_syscalls")]
-    pub blocked_syscalls: Vec<String>,
+    blocked_syscalls: Vec<String>,
 
     /// Whether to allow new namespace creation (usually false for sandboxes).
     #[serde(default)]
-    pub allow_namespaces: bool,
+    allow_namespaces: bool,
 
     /// Whether to allow network socket creation (controlled separately).
     #[serde(default)]
-    pub allow_network_sockets: bool,
+    allow_network_sockets: bool,
 
     /// Whether to log blocked syscalls instead of killing the process.
     #[serde(default)]
-    pub log_only: bool,
+    log_only: bool,
 }
 
 fn default_blocked_syscalls() -> Vec<String> {
@@ -565,12 +565,12 @@ impl SeccompProfile {
     /// Check if a syscall is blocked by this profile.
     #[inline]
     #[must_use]
-    pub fn is_blocked(&self, syscall: &str) -> bool {
+    fn is_blocked(&self, syscall: &str) -> bool {
         self.blocked_syscalls.iter().any(|s| s == syscall)
     }
 
     /// Generate a JSON representation for the sandbox helper.
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
+    pub(crate) fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
 }
@@ -703,7 +703,7 @@ impl SandboxPolicy {
 
     /// Create a workspace-write policy with network allowlist.
     #[must_use]
-    pub fn workspace_write_with_network(
+    fn workspace_write_with_network(
         writable_roots: Vec<PathBuf>,
         network_allowlist: Vec<NetworkAllowlistEntry>,
     ) -> Self {
@@ -739,7 +739,7 @@ impl SandboxPolicy {
 
     /// Create a workspace-write policy without sensitive path blocking (dangerous).
     #[must_use]
-    pub fn workspace_write_no_sensitive_blocking(writable_roots: Vec<PathBuf>) -> Self {
+    fn workspace_write_no_sensitive_blocking(writable_roots: Vec<PathBuf>) -> Self {
         Self::WorkspaceWrite {
             writable_roots: writable_roots.into_iter().map(WritableRoot::new).collect(),
             network_access: false,
@@ -755,7 +755,7 @@ impl SandboxPolicy {
     /// Create a workspace-write policy with resource limits.
     /// Useful for untrusted code that needs containment.
     #[must_use]
-    pub fn workspace_write_with_limits(writable_roots: Vec<PathBuf>, resource_limits: ResourceLimits) -> Self {
+    fn workspace_write_with_limits(writable_roots: Vec<PathBuf>, resource_limits: ResourceLimits) -> Self {
         Self::WorkspaceWrite {
             writable_roots: writable_roots.into_iter().map(WritableRoot::new).collect(),
             network_access: false,
@@ -852,7 +852,7 @@ impl SandboxPolicy {
     /// Get the effective sensitive paths to block.
     /// Returns default paths if not explicitly configured.
     #[must_use]
-    pub fn sensitive_paths(&self) -> Vec<SensitivePath> {
+    fn sensitive_paths(&self) -> Vec<SensitivePath> {
         match self {
             Self::ReadOnly { .. } => default_sensitive_paths(),
             Self::WorkspaceWrite { sensitive_paths, .. } => {
@@ -864,7 +864,7 @@ impl SandboxPolicy {
 
     /// Get sensitive paths including write-only protected directories for writable roots.
     #[must_use]
-    pub fn sensitive_paths_for_execution(&self, cwd: &Path) -> Vec<SensitivePath> {
+    pub(crate) fn sensitive_paths_for_execution(&self, cwd: &Path) -> Vec<SensitivePath> {
         match self {
             Self::WorkspaceWrite { .. } => {
                 let mut sensitive_paths = self.sensitive_paths();
@@ -878,14 +878,14 @@ impl SandboxPolicy {
     /// Check if a path is a sensitive location that should be blocked.
     #[inline]
     #[must_use]
-    pub fn is_sensitive_path(&self, path: &Path) -> bool {
+    fn is_sensitive_path(&self, path: &Path) -> bool {
         self.sensitive_paths().iter().any(|sp| sp.matches(path) && sp.block_read)
     }
 
     /// Check if write access to a path is blocked under this policy.
     #[inline]
     #[must_use]
-    pub fn is_path_write_blocked(&self, path: &Path, cwd: &Path) -> bool {
+    fn is_path_write_blocked(&self, path: &Path, cwd: &Path) -> bool {
         match self {
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => false,
             _ => self
@@ -917,7 +917,7 @@ impl SandboxPolicy {
 
     /// Get the seccomp profile for this policy (Linux only).
     #[must_use]
-    pub fn seccomp_profile(&self) -> SeccompProfile {
+    pub(crate) fn seccomp_profile(&self) -> SeccompProfile {
         match self {
             Self::ReadOnly { network_access, network_allowlist } => {
                 let mut profile = SeccompProfile::strict();
@@ -934,20 +934,20 @@ impl SandboxPolicy {
     /// Check if the policy allows full disk write access.
     #[inline]
     #[must_use]
-    pub fn has_full_disk_write_access(&self) -> bool {
+    fn has_full_disk_write_access(&self) -> bool {
         matches!(self, Self::DangerFullAccess | Self::ExternalSandbox { .. })
     }
 
     /// Check if the policy allows full disk read access.
     #[inline]
     #[must_use]
-    pub fn has_full_disk_read_access(&self) -> bool {
+    fn has_full_disk_read_access(&self) -> bool {
         true
     }
 
     /// Get the list of writable roots including the current working directory.
     #[must_use]
-    pub fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
+    pub(crate) fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
         match self {
             Self::ReadOnly { .. } => vec![],
             Self::WorkspaceWrite { writable_roots, .. } => {
@@ -980,7 +980,7 @@ impl SandboxPolicy {
 
     /// Validate that another policy can be set from this one.
     /// Used to enforce policy escalation restrictions.
-    pub fn can_set(&self, new_policy: &SandboxPolicy) -> anyhow::Result<()> {
+    fn can_set(&self, new_policy: &SandboxPolicy) -> anyhow::Result<()> {
         use SandboxPolicy::*;
 
         match (self, new_policy) {

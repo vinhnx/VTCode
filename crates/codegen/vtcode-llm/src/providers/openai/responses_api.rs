@@ -258,7 +258,7 @@ fn append_tool_result_to_instructions(
     instructions_segments.push(s);
 }
 
-pub fn parse_responses_payload(
+pub(crate) fn parse_responses_payload(
     response_json: Value,
     model: String,
     include_cached_prompt_metrics: bool,
@@ -455,7 +455,7 @@ pub fn parse_responses_payload(
 }
 
 /// Build a standard (non-Codex) Responses API payload.
-pub fn build_standard_responses_payload(
+pub(crate) fn build_standard_responses_payload(
     request: &LLMRequest,
     include_structured_history_in_input: bool,
 ) -> Result<OpenAIResponsesPayload, LLMError> {

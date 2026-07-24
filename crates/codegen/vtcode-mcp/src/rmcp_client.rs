@@ -282,7 +282,7 @@ impl RmcpClient {
     }
 
     #[expect(dead_code)]
-    pub(super) async fn list_all_resource_templates(&self, timeout: Option<Duration>) -> Result<Vec<ResourceTemplate>> {
+    async fn list_all_resource_templates(&self, timeout: Option<Duration>) -> Result<Vec<ResourceTemplate>> {
         let service = self.service().await?;
         let rmcp_future = service.peer().list_all_resource_templates();
         let templates = run_with_timeout(rmcp_future, timeout, "resources/templates/list").await?;

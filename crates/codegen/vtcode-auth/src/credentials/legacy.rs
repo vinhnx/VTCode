@@ -11,8 +11,8 @@ use crate::storage_paths::legacy_auth_storage_path;
 
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct LegacyAuthFile {
-    pub(crate) mode: String,
-    pub(crate) provider: String,
+    mode: String,
+    provider: String,
     pub(crate) api_key: String,
 }
 

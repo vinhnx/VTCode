@@ -21,18 +21,18 @@ impl FilePalette {
         false
     }
 
-    pub fn load_files(&mut self, files: Vec<String>) {
+    pub(crate) fn load_files(&mut self, files: Vec<String>) {
         self.populate_all_files(files);
         self.current_dir = self.workspace_root.clone();
         self.set_filter(String::new());
     }
 
-    pub(super) fn populate_all_files(&mut self, files: Vec<String>) {
+    fn populate_all_files(&mut self, files: Vec<String>) {
         listing::build_entries(self, files, true);
         listing::build_dir_index(self);
     }
 
-    pub fn set_filter(&mut self, query: String) {
+    pub(crate) fn set_filter(&mut self, query: String) {
         self.filter_query = query;
         if self.filter_query.is_empty() {
             self.mode = PickerMode::Browse;

@@ -56,7 +56,7 @@ impl ColorDepth {
     }
 
     /// Check if this depth supports color
-    pub fn supports_color(self) -> bool {
+    fn supports_color(self) -> bool {
         self != ColorDepth::None
     }
 
@@ -75,7 +75,7 @@ impl ColorDepth {
 #[derive(Clone, Copy, Debug)]
 pub struct AnsiCapabilities {
     /// Detected color depth
-    pub color_depth: ColorDepth,
+    color_depth: ColorDepth,
     /// Whether unicode is supported
     pub unicode_support: bool,
     /// Whether to force color output

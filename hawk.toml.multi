@@ -1,0 +1,181 @@
+[[production]]
+package = "vtcode"
+bin = "vtcode"
+reason = "shipped terminal coding agent binary"
+
+[[feature-profile]]
+name = "all"
+all-features = true
+
+[[feature-profile]]
+name = "default"
+
+[[feature-profile]]
+name = "minimal"
+no-default-features = true
+
+[[doctest]]
+package = "vtcode-exec-events"
+
+[[doctest]]
+package = "vtcode-commons"
+
+# Published event contract crate — public API is intentional for downstream consumers
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "json"
+level = "allow"
+reason = "published serde-json helpers for downstream consumers"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "schema"
+level = "allow"
+reason = "published JSON Schema export for downstream consumers"
+
+# Published passive schema crate — public API is intentional for downstream consumers
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_utility_tool_specs"
+item = "close_agent_parameters"
+level = "allow"
+reason = "published tool schema for external ACP consumers"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_utility_tool_specs"
+item = "resume_agent_parameters"
+level = "allow"
+reason = "published tool schema for external ACP consumers"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_utility_tool_specs"
+item = "cron_create_parameters"
+level = "allow"
+reason = "published tool schema for external scheduler consumers"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_utility_tool_specs"
+item = "cron_list_parameters"
+level = "allow"
+reason = "published tool schema for external scheduler consumers"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_utility_tool_specs"
+item = "cron_delete_parameters"
+level = "allow"
+reason = "published tool schema for external scheduler consumers"
+
+# vtcode-exec-events trace module — public API for ATIF compliance
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceRecord::add_file"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceRecord::new"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::ToolInfo::new"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceConversation::ai"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceConversation::with_session_url"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::RelatedResource::prompt"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceRange::single_line"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::Contributor::unknown"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::TraceContext::normalized_model_id"
+level = "allow"
+reason = "public ATIF builder API"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "trace::VcsInfo::jj"
+level = "allow"
+reason = "public ATIF builder API"
+
+# vtcode-exec-events log/tracing/otel emitters — feature-gated public API
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "log_support::LogEmitter::new"
+level = "allow"
+reason = "feature-gated public emitter"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "tracing_support::TracingEmitter::new"
+level = "allow"
+reason = "feature-gated public emitter"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "otel_support::OtelEmitter::<T>::new"
+level = "allow"
+reason = "feature-gated public emitter"
+
+# vtcode-exec-events atif module — public ATIF types
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "atif::AtifTrajectoryBuilder::set_session_id"
+level = "allow"
+reason = "public ATIF builder API"
+
+# vtcode-exec-events ToolOutcome — intentional public API
+[[override]]
+lint = "hawk::dead_public"
+crate = "vtcode_exec_events"
+item = "ToolOutcome::is_terminal"
+level = "allow"
+reason = "public API for tool outcome consumers"

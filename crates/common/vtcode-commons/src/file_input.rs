@@ -11,8 +11,8 @@ pub const MAX_INPUT_FILE_BYTES: u64 = 50 * 1024 * 1024;
 pub struct FileInputData {
     pub base64_data: String,
     pub filename: String,
-    pub file_path: String,
-    pub size: u64,
+    file_path: String,
+    size: u64,
 }
 
 /// Read a validated local file path for inline model input.

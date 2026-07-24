@@ -41,10 +41,10 @@ pub(super) enum ServerPhase {
 
 #[derive(Debug, Clone)]
 pub(super) struct ServerStatus {
-    pub(super) phase: ServerPhase,
-    pub(super) model_id: Option<String>,
-    pub(super) model_path: Option<String>,
-    pub(super) error: Option<String>,
+    phase: ServerPhase,
+    model_id: Option<String>,
+    model_path: Option<String>,
+    error: Option<String>,
 }
 
 impl Default for ServerStatus {
@@ -125,7 +125,7 @@ fn managed_server_for(base_url: &str) -> Arc<ManagedLlamaCppServer> {
         .clone()
 }
 
-pub(super) fn provider_error(message: impl Into<String>) -> LLMError {
+fn provider_error(message: impl Into<String>) -> LLMError {
     LLMError::Provider {
         message: error_display::format_llm_error("llama.cpp", &message.into()),
         metadata: None,

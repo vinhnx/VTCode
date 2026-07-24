@@ -59,7 +59,7 @@ impl ItemStatus {
 
     /// Returns `true` if this status indicates a failure.
     #[inline]
-    pub fn is_failure(&self) -> bool {
+    fn is_failure(&self) -> bool {
         matches!(self, Self::Failed | Self::Incomplete)
     }
 }
