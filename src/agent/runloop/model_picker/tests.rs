@@ -23,6 +23,7 @@ fn has_model(options: &[ModelOption], model: ModelId) -> bool {
 #[test]
 fn model_picker_lists_new_anthropic_models() {
     let options = MODEL_OPTIONS.as_slice();
+    assert!(has_model(options, ModelId::ClaudeOpus5));
     assert!(has_model(options, ModelId::ClaudeOpus48));
     assert!(has_model(options, ModelId::ClaudeSonnet46));
     assert!(has_model(options, ModelId::ClaudeHaiku45));

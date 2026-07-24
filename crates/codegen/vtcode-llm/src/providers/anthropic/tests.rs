@@ -519,6 +519,36 @@ mod request_builder_tests {
     }
 
     #[test]
+    fn test_convert_to_anthropic_format_preserves_opus_5_mid_conversation_system_message() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_5.to_string(),
+            messages: vec![
+                Message::user("Review this code.".to_string()),
+                Message::system("From now on, every suggestion must include explicit type annotations.".to_string()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: true,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["messages"][0]["role"], "user");
+        assert_eq!(payload["messages"][1]["role"], "system");
+        assert_eq!(
+            payload["messages"][1]["content"][0]["text"],
+            "From now on, every suggestion must include explicit type annotations."
+        );
+    }
+
+    #[test]
     fn test_convert_to_anthropic_format_preserves_opus_48_mid_conversation_system_message() {
         let request = LLMRequest {
             model: models::CLAUDE_OPUS_4_8.to_string(),

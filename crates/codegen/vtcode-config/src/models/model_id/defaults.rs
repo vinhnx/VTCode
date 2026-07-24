@@ -7,6 +7,7 @@ impl ModelId {
     pub fn fallback_models() -> Vec<ModelId> {
         vec![
             ModelId::ClaudeSonnet5,
+            ModelId::ClaudeOpus5,
             ModelId::Gemini35Flash,
             ModelId::GPT54,
             ModelId::GPT55,

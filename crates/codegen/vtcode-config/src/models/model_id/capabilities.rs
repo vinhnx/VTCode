@@ -150,6 +150,7 @@ impl ModelId {
             ModelId::ClaudeSonnet5
             | ModelId::ClaudeFable5
             | ModelId::ClaudeMythos5
+            | ModelId::ClaudeOpus5
             | ModelId::ClaudeOpus48
             | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeHaiku45),
             ModelId::CopilotGPT54 => Some(ModelId::CopilotGPT54Mini),
@@ -235,6 +236,7 @@ impl ModelId {
             ModelId::ClaudeSonnet5
             | ModelId::ClaudeFable5
             | ModelId::ClaudeMythos5
+            | ModelId::ClaudeOpus5
             | ModelId::ClaudeOpus48
             | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
             ModelId::XaiGrok420Reasoning => Some(ModelId::XaiGrokBuild01),
@@ -284,6 +286,7 @@ impl ModelId {
                 | ModelId::ClaudeSonnet5
                 | ModelId::ClaudeFable5
                 | ModelId::ClaudeMythos5
+                | ModelId::ClaudeOpus5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
                 | ModelId::OpenCodeZenGPT54
@@ -368,6 +371,7 @@ impl ModelId {
                 | ModelId::ClaudeSonnet5
                 | ModelId::ClaudeFable5
                 | ModelId::ClaudeMythos5
+                | ModelId::ClaudeOpus5
                 | ModelId::ClaudeOpus48
                 | ModelId::ClaudeSonnet46
                 | ModelId::OpenCodeZenGPT54
@@ -449,6 +453,7 @@ impl ModelId {
             ModelId::ClaudeSonnet5 => "5",
             ModelId::ClaudeFable5 => "5",
             ModelId::ClaudeMythos5 => "5",
+            ModelId::ClaudeOpus5 => "5",
             ModelId::ClaudeOpus48 => "4.8",
             ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeHaiku45 => "4.5",

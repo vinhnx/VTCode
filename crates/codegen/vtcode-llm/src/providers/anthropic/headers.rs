@@ -20,6 +20,7 @@ pub struct BetaHeaderConfig<'a> {
     pub include_task_budget: bool,
     pub include_server_side_fallback: bool,
     pub include_fallback_credit: bool,
+    pub include_mid_conversation_tool_changes: bool,
 }
 
 pub fn prompt_cache_beta_header_value(cache_enabled: bool, settings: &AnthropicPromptCacheSettings) -> Option<String> {
@@ -62,11 +63,15 @@ pub fn combined_beta_header_value(
     }
 
     if config.include_server_side_fallback {
-        pieces.push("server-side-fallback-2026-06-01".to_owned());
+        pieces.push("server-side-fallback-2026-07-01".to_owned());
     }
 
     if config.include_fallback_credit {
         pieces.push("fallback-credit-2026-06-01".to_owned());
+    }
+
+    if config.include_mid_conversation_tool_changes {
+        pieces.push("mid-conversation-tool-changes-2026-07-01".to_owned());
     }
 
     if let Some(betas) = config.request_betas {

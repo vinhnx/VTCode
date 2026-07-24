@@ -219,6 +219,13 @@ model_id_table! {
         display: "Claude Mythos 5",
         description: "Shares Claude Fable 5's capabilities without safety classifiers. Limited availability through Project Glasswing",
     },
+    ClaudeOpus5 {
+        provider: Anthropic,
+        id: models::CLAUDE_OPUS_5,
+        parse: [models::CLAUDE_OPUS_5],
+        display: "Claude Opus 5",
+        description: "Anthropic's newest Opus-tier model with 1M context, thinking on by default, and full effort ladder support",
+    },
     ClaudeOpus48 {
         provider: Anthropic,
         id: models::CLAUDE_OPUS_4_8,

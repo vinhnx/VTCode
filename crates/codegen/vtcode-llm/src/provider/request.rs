@@ -6,7 +6,7 @@ use vtcode_config::types::{ReasoningEffortLevel, VerbosityLevel};
 use super::{Message, ToolDefinition};
 
 /// Fallback model configuration for Anthropic server-side fallback.
-/// Used with the `server-side-fallback-2026-06-01` beta header.
+/// Used with the `server-side-fallback-2026-07-01` beta header.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FallbackModel {
     /// The model identifier to fall back to (e.g., "claude-opus-4-8")
@@ -192,7 +192,7 @@ pub struct LLMRequest {
     pub prompt_cache_profile: Option<PromptCacheProfile>,
 
     /// Optional fallback models for Anthropic server-side fallback (Claude Fable 5).
-    /// Requires the `server-side-fallback-2026-06-01` beta header.
+    /// Requires the `server-side-fallback-2026-07-01` beta header.
     pub fallbacks: Option<Vec<FallbackModel>>,
 
     /// Optional opaque credit token from a refused request's `stop_details.fallback_credit_token`.

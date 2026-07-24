@@ -408,6 +408,7 @@ impl AnthropicProvider {
                 .and_then(|value| value.as_array())
                 .is_some_and(|arr| !arr.is_empty()),
             include_fallback_credit: request.fallback_credit_token.is_some(),
+            include_mid_conversation_tool_changes: false,
         };
 
         headers::combined_beta_header_value(self.prompt_cache_enabled, &self.prompt_cache_settings, &beta_config)

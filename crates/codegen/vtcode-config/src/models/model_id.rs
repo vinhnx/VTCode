@@ -64,6 +64,8 @@ pub enum ModelId {
     ClaudeFable5,
     /// Claude Mythos 5 - Fable 5-class model without safety classifiers, limited availability through Project Glasswing
     ClaudeMythos5,
+    /// Claude Opus 5 - Anthropic's newest Opus-tier model with 1M context, thinking on by default
+    ClaudeOpus5,
     /// Claude Opus 4.8 - Anthropic's most capable model for complex reasoning and agentic coding
     ClaudeOpus48,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model in VT Code's conservative rollout

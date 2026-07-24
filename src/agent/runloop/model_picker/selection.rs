@@ -347,6 +347,7 @@ pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
             | "claude-sonnet-5"
             | "claude-fable-5"
             | "claude-mythos-5"
+            | "claude-opus-5"
             | "claude-opus-4-8"
     )
 }
@@ -361,6 +362,7 @@ pub(super) fn supports_max_reasoning(model_id: &str) -> bool {
             | "claude-sonnet-5"
             | "claude-fable-5"
             | "claude-mythos-5"
+            | "claude-opus-5"
             | "claude-opus-4-8"
             | "claude-sonnet-4-6"
     )
