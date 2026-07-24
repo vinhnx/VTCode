@@ -580,12 +580,7 @@ impl SimpleIndexer {
     }
 
     /// Get file content with line numbers.
-    fn get_file_content(
-        &self,
-        file_path: &str,
-        start_line: Option<usize>,
-        end_line: Option<usize>,
-    ) -> Result<String> {
+    fn get_file_content(&self, file_path: &str, start_line: Option<usize>, end_line: Option<usize>) -> Result<String> {
         let content = fs::read_to_string(file_path)?;
         let start = start_line.unwrap_or(1).max(1);
         let end = end_line.unwrap_or(usize::MAX);

@@ -9,7 +9,7 @@ use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, Tex
 
 const MAX_TAGGED_NESTING_DEPTH: usize = 256;
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     parse_standard_tagged_tool_call(text).or_else(|| parse_minimax_tool_call(text))
 }

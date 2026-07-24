@@ -1,15 +1,24 @@
+#[cfg(feature = "profiling")]
+use super::provider::LLMNormalizedStream;
 use super::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, NormalizedStreamEvent};
 use futures::StreamExt as _;
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub async fn collect_single_response(
     provider: &(impl LLMProvider + ?Sized),
     request: LLMRequest,
 ) -> Result<LLMResponse, LLMError> {
     if provider.supports_non_streaming(&request.model) {
+        #[cfg(feature = "profiling")]
+        return hotpath::future!(provider.generate(request), label = "llm_non_streaming").await;
+        #[cfg(not(feature = "profiling"))]
         return provider.generate(request).await;
     }
 
+    #[cfg(feature = "profiling")]
+    let mut stream: LLMNormalizedStream =
+        hotpath::future!(provider.stream_normalized(request), label = "llm_streaming").await?;
+    #[cfg(not(feature = "profiling"))]
     let mut stream = provider.stream_normalized(request).await?;
     let mut streamed_content = String::with_capacity(4096);
     let mut streamed_reasoning = String::with_capacity(1024);

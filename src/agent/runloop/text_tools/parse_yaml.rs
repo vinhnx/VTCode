@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 use crate::agent::runloop::text_tools::parse_args::parse_scalar_value;
 use crate::agent::runloop::text_tools::parser::{ParseResult, ParsedToolCall, TextualToolParser};
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) fn parse_yaml_tool_call(text: &str) -> Option<(String, Value)> {
     for segment in text.split("```") {
         if segment.trim().is_empty() {

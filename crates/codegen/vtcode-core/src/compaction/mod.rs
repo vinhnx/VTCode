@@ -127,7 +127,7 @@ impl Default for CompactionConfig {
 }
 
 /// Compact conversation history using the configured summarizer.
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub async fn compact_history(
     provider: &dyn LLMProvider,
     model: &str,
@@ -266,7 +266,7 @@ impl CompactionConfig {
 ///
 /// Returns the compacted messages and the `CompactionMode` that produced them
 /// (`Provider` for native compaction, `Local` for client-side summarization).
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub async fn compact_history_manual(
     provider: &dyn LLMProvider,
     model: &str,

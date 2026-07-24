@@ -320,10 +320,16 @@ hotpath = { workspace = true, optional = true }
 [features]
 default = ["tool-chat", "desktop-notifications"]
 tool-chat = []
-profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "vtcode-core/profiling"]
+profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "hotpath/futures", "hotpath/tokio", "vtcode-core/profiling"]
 hotpath = ["dep:hotpath", "hotpath/hotpath"]
 hotpath-alloc = ["dep:hotpath", "hotpath/hotpath-alloc"]
 hotpath-cpu = ["dep:hotpath", "hotpath/hotpath-cpu"]
+hotpath-futures = ["dep:hotpath", "hotpath/futures"]
+# hotpath/hotpath — function-level timing (sync + async)
+# hotpath/hotpath-cpu — CPU sampling via perf/samply
+# hotpath/hotpath-alloc — allocator tracking
+# hotpath/futures — future poll-level instrumentation
+# hotpath/tokio — tokio runtime monitoring + futures instrumentation
 # Opt into jemalloc (background-thread purging) on any platform. Recommended for
 # Linux servers/containers, where it returns memory to the OS between bursty/sparse
 # idle gaps. On macOS `background_thread` is unsupported, so jemalloc pins like

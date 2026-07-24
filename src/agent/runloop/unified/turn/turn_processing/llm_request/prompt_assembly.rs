@@ -80,7 +80,7 @@ fn append_copilot_runtime_guidance(system_prompt: &mut String) {
     );
 }
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) async fn assemble_prompt(
     ctx: &mut TurnProcessingContext<'_>,
     input: PromptAssemblyInput<'_>,

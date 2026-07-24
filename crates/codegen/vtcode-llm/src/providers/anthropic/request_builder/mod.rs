@@ -49,7 +49,10 @@ fn resolve_messages_ttl(request: &LLMRequest, ctx: &RequestBuilderContext<'_>) -
     }
 }
 
-pub(crate) fn convert_to_anthropic_format(request: &LLMRequest, ctx: &RequestBuilderContext) -> Result<Value, LLMError> {
+pub(crate) fn convert_to_anthropic_format(
+    request: &LLMRequest,
+    ctx: &RequestBuilderContext,
+) -> Result<Value, LLMError> {
     let resolved_model = resolve_model_name(&request.model, ctx.model);
     let tools_ttl = if ctx.prompt_cache_enabled {
         get_tools_cache_ttl(ctx.prompt_cache_settings)

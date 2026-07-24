@@ -553,7 +553,11 @@ pub(crate) fn convert_usage_to_llm_types(usage: crate::provider::Usage) -> llm_t
     usage
 }
 
-pub(crate) fn override_base_url(default_base_url: &str, base_url: Option<String>, env_var_name: Option<&str>) -> String {
+pub(crate) fn override_base_url(
+    default_base_url: &str,
+    base_url: Option<String>,
+    env_var_name: Option<&str>,
+) -> String {
     if let Some(url) = base_url {
         let trimmed = url.trim();
         if !trimmed.is_empty() {
@@ -791,7 +795,10 @@ const KEY_REASONING_CONTENT: &str = "reasoning_content";
 
 /// Serializes messages to OpenAI-compatible JSON format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
-pub(crate) fn serialize_messages_openai_format(request: &LLMRequest, provider_key: &str) -> Result<Vec<Value>, LLMError> {
+pub(crate) fn serialize_messages_openai_format(
+    request: &LLMRequest,
+    provider_key: &str,
+) -> Result<Vec<Value>, LLMError> {
     use serde_json::{Map, json};
 
     let mut messages = Vec::with_capacity(request.messages.len());
@@ -1008,7 +1015,10 @@ fn extract_content_from_message(message: &Value) -> Option<String> {
 
 /// Parses usage information from OpenAI-compatible response format.
 #[inline]
-pub(crate) fn parse_usage_openai_format(response_json: &Value, include_cache_metrics: bool) -> Option<crate::provider::Usage> {
+pub(crate) fn parse_usage_openai_format(
+    response_json: &Value,
+    include_cache_metrics: bool,
+) -> Option<crate::provider::Usage> {
     response_json.get("usage").map(|usage_value| crate::provider::Usage {
         prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,

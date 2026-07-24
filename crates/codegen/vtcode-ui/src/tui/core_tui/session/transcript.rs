@@ -221,12 +221,7 @@ impl Session {
     }
 
     /// Collects a window of visible lines from the transcript
-    fn collect_transcript_window(
-        &mut self,
-        width: u16,
-        start_row: usize,
-        max_rows: usize,
-    ) -> Vec<TranscriptLine> {
+    fn collect_transcript_window(&mut self, width: u16, start_row: usize, max_rows: usize) -> Vec<TranscriptLine> {
         if max_rows == 0 {
             return Vec::new();
         }

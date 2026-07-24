@@ -143,11 +143,7 @@ impl PromptContext {
         self.add_skill_metadata_entries(outcome.skills.into_iter().filter(is_model_catalog_eligible).collect());
     }
 
-    fn replace_available_skills_with_named_and_home_dir(
-        &mut self,
-        names: &[String],
-        home_dir: Option<&Path>,
-    ) {
+    fn replace_available_skills_with_named_and_home_dir(&mut self, names: &[String], home_dir: Option<&Path>) {
         self.available_skills.clear();
         self.available_skill_metadata.clear();
 

@@ -50,10 +50,7 @@ pub(crate) fn ensure_parent_dir(path: &Path) -> Result<()> {
 
 /// Selects the home directory configuration path from the defaults provider or
 /// falls back to the system home directory.
-fn select_home_config_path(
-    defaults_provider: &dyn ConfigDefaultsProvider,
-    config_file_name: &str,
-) -> Option<PathBuf> {
+fn select_home_config_path(defaults_provider: &dyn ConfigDefaultsProvider, config_file_name: &str) -> Option<PathBuf> {
     let home_paths = defaults_provider.home_config_paths(config_file_name);
     home_paths
         .into_iter()

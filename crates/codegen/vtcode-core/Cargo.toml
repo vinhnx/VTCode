@@ -185,7 +185,8 @@ http-server = ["dep:axum", "dep:tower"]
 desktop-notifications = ["dep:notify-rust"]
 sqlite = ["dep:rusqlite"]
 hotpath = ["dep:hotpath"]
-profiling = ["hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "vtcode-llm/profiling"]
+profiling = ["hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "hotpath/futures", "vtcode-llm/profiling"]
+# profiling — function timing + CPU sampling + future poll instrumentation + alloc tracking
 
 [package.metadata.cargo-machete]
 ignored = ["toml_edit", "tower"]

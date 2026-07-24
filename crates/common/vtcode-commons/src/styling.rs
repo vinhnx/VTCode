@@ -8,11 +8,11 @@ use anstyle::{AnsiColor, Color, Effects, Style};
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPalette {
     pub success: Color, // Green
-    error: Color,   // Red
+    error: Color,       // Red
     pub warning: Color, // Red
     pub info: Color,    // Cyan
     pub accent: Color,  // Magenta
-    primary: Color, // Cyan
+    primary: Color,     // Cyan
     pub muted: Color,   // Gray/Dim
 }
 

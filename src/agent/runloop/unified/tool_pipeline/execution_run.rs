@@ -50,7 +50,7 @@ fn structured_failure(tool_name: &str, error: &anyhow::Error) -> ToolExecutionEr
     ToolExecutionError::from_anyhow(tool_name, error, 0, false, false, Some("unified_runloop"))
 }
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 #[allow(clippy::too_many_arguments)] // pipeline entry point, all params needed
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
@@ -97,7 +97,7 @@ pub(crate) async fn run_tool_call(
     .await
 }
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 #[allow(clippy::too_many_arguments)] // pipeline entry point, all params needed
 pub(crate) async fn run_tool_call_with_args(
     ctx: &mut RunLoopContext<'_>,

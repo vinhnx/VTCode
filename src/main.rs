@@ -53,7 +53,7 @@ enum BootstrapOutcome {
     Ready(Box<BootstrapReady>),
 }
 
-#[hotpath::main]
+#[cfg_attr(feature = "profiling", hotpath::main)]
 fn main() -> std::process::ExitCode {
     // Apply process hardening before any other operations.
     // This disables core dumps, caps RLIMIT_STACK (defense-in-depth complement
@@ -205,6 +205,10 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
         .enable_all()
         .build()
         .context("failed to build Tokio runtime")?;
+
+    #[cfg(feature = "profiling")]
+    hotpath::tokio_runtime!(runtime.handle());
+
     let startup = runtime.block_on(resolve_startup_context(&args))?;
 
     Ok(BootstrapOutcome::Ready(Box::new(BootstrapReady {

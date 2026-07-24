@@ -41,7 +41,7 @@ fn parse_dsml_tool_call(text: &str) -> Option<(String, Value)> {
     parse_dsml_tool_call_raw(text)
 }
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 fn parse_dsml_tool_call_raw(text: &str) -> Option<(String, Value)> {
     let invoke_start = text.find(DSML_INVOKE_OPEN)?;
     let after_prefix = &text[invoke_start + DSML_INVOKE_OPEN.len()..];

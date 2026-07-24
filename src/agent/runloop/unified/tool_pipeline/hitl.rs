@@ -8,7 +8,7 @@ use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 use crate::agent::runloop::unified::request_user_input;
 use crate::agent::runloop::unified::state::CtrlCState;
 
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(crate) async fn execute_hitl_tool(
     tool_name: &str,
     handle: &InlineHandle,

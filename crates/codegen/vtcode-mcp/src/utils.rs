@@ -139,7 +139,10 @@ pub(crate) fn schema_requires_field(schema: &Value, field: &str) -> bool {
 }
 
 /// Build HTTP headers from static and environment-based configuration.
-pub(crate) fn build_headers(static_headers: &HashMap<String, String>, env_headers: &HashMap<String, String>) -> HeaderMap {
+pub(crate) fn build_headers(
+    static_headers: &HashMap<String, String>,
+    env_headers: &HashMap<String, String>,
+) -> HeaderMap {
     let mut map = HeaderMap::new();
 
     for (key, value) in static_headers {

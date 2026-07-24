@@ -3,10 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::tools::code_search::CodeSearchRequest;
 use vtcode_commons::canonicalize;
 
-fn normalised_identity_value(
-    args: &serde_json::Value,
-    include_max_results: bool,
-) -> Option<serde_json::Value> {
+fn normalised_identity_value(args: &serde_json::Value, include_max_results: bool) -> Option<serde_json::Value> {
     let request = serde_json::from_value::<CodeSearchRequest>(args.clone()).ok()?;
     let mut normalised = request.normalise().ok()?;
     normalised.filters.file_types.sort_unstable();

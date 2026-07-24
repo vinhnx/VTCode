@@ -87,10 +87,7 @@ impl ResponsesStreamAdapter {
         Self::parse_sse_data_for_provider("OpenAI", data)
     }
 
-    fn parse_sse_data_for_provider(
-        provider_name: &str,
-        data: &str,
-    ) -> Result<ResponsesStreamEvent, LLMError> {
+    fn parse_sse_data_for_provider(provider_name: &str, data: &str) -> Result<ResponsesStreamEvent, LLMError> {
         let trimmed = data.trim();
         if trimmed.is_empty() || trimmed == "[DONE]" {
             return Ok(ResponsesStreamEvent::Unknown);

@@ -204,7 +204,11 @@ impl ResponseBuilder {
     }
 
     /// Processes a normalized provider stream event and emits corresponding Open Responses events.
-    pub(crate) fn process_normalized_event<E: StreamEventEmitter>(&mut self, event: &NormalizedStreamEvent, emitter: &mut E) {
+    pub(crate) fn process_normalized_event<E: StreamEventEmitter>(
+        &mut self,
+        event: &NormalizedStreamEvent,
+        emitter: &mut E,
+    ) {
         if self.response.status.is_terminal() {
             return;
         }

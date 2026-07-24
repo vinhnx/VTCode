@@ -113,10 +113,7 @@ impl FileOpsTool {
         Ok(canonical)
     }
 
-    fn canonicalize_allow_missing<'a>(
-        &'a self,
-        normalized: &'a Path,
-    ) -> impl Future<Output = Result<PathBuf>> + 'a {
+    fn canonicalize_allow_missing<'a>(&'a self, normalized: &'a Path) -> impl Future<Output = Result<PathBuf>> + 'a {
         crate::utils::path::canonicalize_allow_missing(normalized)
     }
 

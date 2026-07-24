@@ -151,12 +151,7 @@ impl ColorContext {
     }
 
     /// 8. User input text color.
-    fn compute_user_color(
-        &self,
-        secondary: RgbColor,
-        info_color: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    fn compute_user_color(&self, secondary: RgbColor, info_color: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
             &[
@@ -188,12 +183,7 @@ impl ColorContext {
     }
 
     /// 11. Secondary accent (for UI chrome).
-    fn compute_secondary_color(
-        &self,
-        secondary: RgbColor,
-        info_color: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    fn compute_secondary_color(&self, secondary: RgbColor, info_color: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             ensure_contrast(secondary, self.background, self.min_contrast, &[info_color, text_color]),
             &[info_color, text_color],
@@ -201,12 +191,7 @@ impl ColorContext {
     }
 
     /// 12. Logo accent color.
-    fn compute_logo_color(
-        &self,
-        logo_accent: RgbColor,
-        secondary_color: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    fn compute_logo_color(&self, logo_accent: RgbColor, secondary_color: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_text_color(
             ensure_contrast(logo_accent, self.background, self.min_contrast, &[secondary_color, text_color]),
             &[secondary_color, text_color],
@@ -214,12 +199,7 @@ impl ColorContext {
     }
 
     /// 13. Status banner color (lightened primary).
-    fn compute_status_color(
-        &self,
-        primary_color: RgbColor,
-        info_color: RgbColor,
-        text_color: RgbColor,
-    ) -> RgbColor {
+    fn compute_status_color(&self, primary_color: RgbColor, info_color: RgbColor, text_color: RgbColor) -> RgbColor {
         self.guaranteed_accent_color(
             lighten(primary_color, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
             &[

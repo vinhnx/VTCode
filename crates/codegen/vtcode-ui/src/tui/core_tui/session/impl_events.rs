@@ -468,11 +468,7 @@ impl Session {
         toggled
     }
 
-    fn transcript_word_selection_range(
-        &mut self,
-        column: u16,
-        row: u16,
-    ) -> Option<((u16, u16), (u16, u16))> {
+    fn transcript_word_selection_range(&mut self, column: u16, row: u16) -> Option<((u16, u16), (u16, u16))> {
         let area = self.transcript_area?;
         if row < area.y
             || row >= area.y.saturating_add(area.height)

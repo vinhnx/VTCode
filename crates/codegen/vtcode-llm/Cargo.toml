@@ -64,7 +64,8 @@ default = []
 http-server = ["dep:tokio-stream"]
 copilot = ["dep:portable-pty"]
 anthropic-api = ["dep:axum", "dep:tower-http", "dep:tokio-stream"]
-profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu"]
+profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-cpu", "hotpath/futures"]
+# profiling — function timing + CPU sampling + future poll instrumentation
 
 [package.metadata.docs.rs]
 all-features = true

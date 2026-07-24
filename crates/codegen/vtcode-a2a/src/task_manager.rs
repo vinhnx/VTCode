@@ -119,7 +119,12 @@ impl TaskManager {
     }
 
     /// Update task status
-    pub(crate) async fn update_status(&self, task_id: &str, state: TaskState, message: Option<Message>) -> A2aResult<Task> {
+    pub(crate) async fn update_status(
+        &self,
+        task_id: &str,
+        state: TaskState,
+        message: Option<Message>,
+    ) -> A2aResult<Task> {
         let mut manager_state = self.state.write().await;
         let task = manager_state
             .tasks

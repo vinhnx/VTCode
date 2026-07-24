@@ -11,7 +11,7 @@ use std::io::IsTerminal;
 use std::sync::Arc;
 
 /// Handle the ask command - single prompt without tools
-#[hotpath::measure]
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub async fn handle_ask_command(
     config: AgentConfig,
     prompt: Vec<String>,

@@ -5,11 +5,7 @@ use super::reasoning_preset;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 
-fn openai_reasoning_efforts(
-    include_none: bool,
-    include_xhigh: bool,
-    include_max: bool,
-) -> Vec<ReasoningEffortPreset> {
+fn openai_reasoning_efforts(include_none: bool, include_xhigh: bool, include_max: bool) -> Vec<ReasoningEffortPreset> {
     let mut efforts = Vec::new();
     if include_none {
         efforts.push(reasoning_preset(ReasoningEffortLevel::None, "Lowest latency"));

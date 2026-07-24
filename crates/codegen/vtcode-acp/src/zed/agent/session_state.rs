@@ -173,11 +173,7 @@ impl ZedAgent {
         true
     }
 
-    fn update_session_reasoning_effort(
-        &self,
-        session: &SessionHandle,
-        reasoning_effort: ReasoningEffortLevel,
-    ) -> bool {
+    fn update_session_reasoning_effort(&self, session: &SessionHandle, reasoning_effort: ReasoningEffortLevel) -> bool {
         let mut data = match session.data.lock() {
             Ok(guard) => guard,
             Err(_) => return false,
@@ -190,12 +186,7 @@ impl ZedAgent {
         true
     }
 
-    fn update_session_provider_and_model(
-        &self,
-        session: &SessionHandle,
-        provider: String,
-        model: String,
-    ) -> bool {
+    fn update_session_provider_and_model(&self, session: &SessionHandle, provider: String, model: String) -> bool {
         let mut data = match session.data.lock() {
             Ok(guard) => guard,
             Err(_) => return false,

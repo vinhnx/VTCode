@@ -35,7 +35,11 @@ pub struct ToolExecutionReport {
 }
 
 impl ToolExecutionReport {
-    pub(crate) fn success(content: Vec<acp::ToolCallContent>, locations: Vec<acp::ToolCallLocation>, payload: Value) -> Self {
+    pub(crate) fn success(
+        content: Vec<acp::ToolCallContent>,
+        locations: Vec<acp::ToolCallLocation>,
+        payload: Value,
+    ) -> Self {
         Self {
             status: acp::ToolCallStatus::Completed,
             llm_response: payload.to_string(),

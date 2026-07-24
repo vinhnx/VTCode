@@ -664,10 +664,7 @@ impl OpenAIProvider {
         request_builder::build_chat_request(request, &ctx)
     }
 
-    fn convert_to_openai_responses_format(
-        &self,
-        request: &provider::LLMRequest,
-    ) -> Result<Value, provider::LLMError> {
+    fn convert_to_openai_responses_format(&self, request: &provider::LLMRequest) -> Result<Value, provider::LLMError> {
         Self::validate_inline_file_inputs(request)?;
 
         let is_native_openai = self.is_native_openai_api();
