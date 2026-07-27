@@ -38,7 +38,7 @@ crossterm = "0.29"
 schemars = "1.2"
 thiserror = "2.0.18"
 unicode-width = "0.2.0"
-vt100 = "0.16"
+rio-vt = "0.5.0"
 serde_json = "1.0"
 tempfile = "3.27"
 tokio = { version = "1.52", features = ["full"] }
