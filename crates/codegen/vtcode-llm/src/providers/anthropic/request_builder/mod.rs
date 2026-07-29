@@ -1,5 +1,6 @@
 //! Request building for Anthropic Claude API.
 
+mod hardening;
 mod messages;
 mod system;
 mod thinking;
@@ -20,8 +21,8 @@ use vtcode_config::core::{AdvisorConfig, AnthropicConfig, AnthropicPromptCacheSe
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
-    default_effort_for_model, effort_allowed_for_model, rejects_sampling, resolve_model_name, supports_effort,
-    supports_task_budget,
+    default_effort_for_model, effort_allowed_for_model, rejects_sampling, resolve_model_name,
+    supports_assistant_prefill, supports_effort, supports_task_budget,
 };
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
@@ -264,7 +265,7 @@ pub(crate) fn convert_to_anthropic_format(
             None
         };
 
-    let anthropic_request = AnthropicRequest {
+    let mut anthropic_request = AnthropicRequest {
         model: resolved_model.to_string(),
         max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
         cache_control: top_level_cache_control,
@@ -307,6 +308,14 @@ pub(crate) fn convert_to_anthropic_format(
         fallback_credit_token: request.fallback_credit_token.clone(),
         stream: request.stream,
     };
+
+    hardening::strip_globally_orphaned_tool_blocks(&mut anthropic_request.messages);
+    hardening::enforce_tool_use_result_adjacency(&mut anthropic_request.messages);
+    hardening::hoist_tool_results_to_front(&mut anthropic_request.messages);
+    hardening::guard_trailing_assistant_message(
+        &mut anthropic_request.messages,
+        supports_assistant_prefill(resolved_model, ctx.model),
+    );
 
     serde_json::to_value(anthropic_request).map_err(|e| LLMError::Provider {
         message: format!("Serialization error: {e}"),
