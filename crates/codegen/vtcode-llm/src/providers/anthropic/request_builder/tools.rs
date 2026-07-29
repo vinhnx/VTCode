@@ -73,7 +73,7 @@ fn push_anthropic_tool(built_tools: &mut Vec<AnthropicTool>, tool: &ToolDefiniti
     built_tools.push(AnthropicTool::Function(AnthropicFunctionTool {
         name: func.name.clone(),
         description: func.description.clone(),
-        input_schema: func.parameters.clone(),
+        input_schema: strip_top_level_schema_composition(func.parameters.clone()),
         input_examples: tool.input_examples.clone(),
         strict: tool.strict,
         allowed_callers: tool.allowed_callers.clone(),
@@ -81,6 +81,35 @@ fn push_anthropic_tool(built_tools: &mut Vec<AnthropicTool>, tool: &ToolDefiniti
         defer_loading: tool.defer_loading,
     }));
     Ok(())
+}
+
+/// Strips `oneOf`/`anyOf`/`allOf` when present at the *top level* of an
+/// `input_schema`, leaving everything else -- including the same keywords
+/// nested inside `properties` -- untouched.
+///
+/// Anthropic's tool-use API rejects `input_schema` outright when one of
+/// these keywords appears at the root (`tools.N.custom.input_schema: input_schema
+/// does not support oneOf, allOf, or anyOf at the top level`), but has no
+/// such restriction on nested usage: a property like `{"anyOf": [...]}`
+/// inside `properties.<name>` is valid and unaffected by this function.
+///
+/// Some built-in tool schemas author top-level `allOf` with `if`/`then`
+/// conditional requirements (e.g. "if action == 'create' then items is
+/// required") -- valid JSON Schema, but not something Anthropic's tool-use
+/// validator accepts at the root. Dropping just the offending top-level key
+/// (rather than the whole schema, or recursively stripping everywhere like
+/// the Gemini sanitizer does) keeps `type`/`properties`/`required` and any
+/// legitimately nested composition intact -- the model still sees every
+/// parameter and its description; only the root-level conditional-validation
+/// hint is lost, which Claude's tool-call generation does not depend on.
+fn strip_top_level_schema_composition(schema: Value) -> Value {
+    let Value::Object(mut map) = schema else {
+        return schema;
+    };
+    for keyword in ["oneOf", "anyOf", "allOf"] {
+        map.remove(keyword);
+    }
+    Value::Object(map)
 }
 
 pub(crate) fn build_tools(
@@ -401,6 +430,97 @@ mod tests {
                             }
                         })])
         ));
+    }
+
+    #[test]
+    fn strip_top_level_schema_composition_removes_root_all_of() {
+        let schema = json!({
+            "type": "object",
+            "properties": {"action": {"type": "string"}},
+            "required": ["action"],
+            "allOf": [
+                {"if": {"properties": {"action": {"const": "create"}}}, "then": {"required": ["items"]}}
+            ]
+        });
+
+        let stripped = strip_top_level_schema_composition(schema);
+
+        assert!(stripped.get("allOf").is_none());
+        assert_eq!(stripped["type"], "object");
+        assert_eq!(stripped["required"], json!(["action"]));
+        assert!(stripped["properties"]["action"].is_object());
+    }
+
+    #[test]
+    fn strip_top_level_schema_composition_removes_root_one_of_and_any_of() {
+        for keyword in ["oneOf", "anyOf"] {
+            let schema = json!({"type": "object", keyword: [{"type": "string"}, {"type": "integer"}]});
+            let stripped = strip_top_level_schema_composition(schema);
+            assert!(stripped.get(keyword).is_none(), "expected {keyword} to be stripped");
+            assert_eq!(stripped["type"], "object");
+        }
+    }
+
+    #[test]
+    fn strip_top_level_schema_composition_preserves_nested_any_of_in_property() {
+        // Mirrors read_file's `indentation` property: legitimate nested
+        // anyOf, which Anthropic accepts and this function must not touch.
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "indentation": {
+                    "anyOf": [
+                        {"type": "boolean"},
+                        {"type": "object", "properties": {"max_levels": {"type": "integer"}}}
+                    ]
+                }
+            }
+        });
+
+        let stripped = strip_top_level_schema_composition(schema.clone());
+
+        assert_eq!(stripped, schema, "nested anyOf inside a property must be left untouched");
+    }
+
+    #[test]
+    fn strip_top_level_schema_composition_noop_on_plain_schema() {
+        let schema = json!({"type": "object", "properties": {"city": {"type": "string"}}});
+        assert_eq!(strip_top_level_schema_composition(schema.clone()), schema);
+    }
+
+    #[test]
+    fn build_tools_strips_top_level_all_of_from_function_tool_schema() {
+        let tool = ToolDefinition::function(
+            "task_tracker".to_string(),
+            "Track tasks".to_string(),
+            json!({
+                "type": "object",
+                "properties": {"action": {"type": "string"}},
+                "required": ["action"],
+                "allOf": [
+                    {"if": {"properties": {"action": {"const": "create"}}}, "then": {"required": ["items"]}}
+                ]
+            }),
+        );
+
+        let request = LLMRequest {
+            messages: vec![Message::user("track this".to_string())].into(),
+            tools: Some(Arc::new(vec![tool])),
+            model: models::anthropic::DEFAULT_MODEL.to_string(),
+            ..Default::default()
+        };
+
+        let tools = build_tools(&request, &None, &mut 0)
+            .expect("tool build")
+            .expect("tools should exist");
+        let AnthropicTool::Function(function) = &tools[0] else {
+            panic!("expected function tool");
+        };
+        assert!(
+            function.input_schema.get("allOf").is_none(),
+            "top-level allOf must be stripped so Anthropic doesn't reject the tool schema"
+        );
+        assert_eq!(function.input_schema["required"], json!(["action"]));
     }
 
     #[test]
