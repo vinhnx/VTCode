@@ -95,7 +95,7 @@ quick_cache = "0.7"
 roff = "1.1"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"], optional = true }
-rusqlite = { version = "0.35", features = ["bundled"], optional = true }
+rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
 ratatui = { workspace = true, features = [
     "crossterm",
@@ -132,7 +132,7 @@ schemars = { workspace = true, optional = true }
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
 url = { workspace = true }
-jsonschema = "0.46"
+jsonschema = "0.49"
 uuid = { workspace = true, features = ["v4", "serde"] }
 which = "8.0.2"
 textwrap = "0.16"
