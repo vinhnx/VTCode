@@ -88,6 +88,14 @@ See the [Configuration guide](../config/config.md#provider-whitelisting) for ful
 -   **Base URL:** `https://api.atlascloud.ai/v1`
 -   **Recommended model:** start with `deepseek-ai/deepseek-v4-flash` (DeepSeek's latest flash model, 1M context, $0.14/M input tokens).
 
+## OmniRoute
+
+-   **Guide:** [OmniRoute Integration](./omniroute.md)
+-   **Integration mode:** configure OmniRoute through `[[custom_providers]]` as an OpenAI-compatible gateway.
+-   **Local base URL:** `http://localhost:20128/v1`
+-   **Default model:** `auto` delegates model selection and fallback to OmniRoute.
+-   **Features:** Chat Completions, optional Responses API routing for compatible models, streaming, and function tools through VT Code's shared OpenAI-compatible transport.
+
 ## Xiaomi MiMo
 
 -   **Provider key:** `mimo`
