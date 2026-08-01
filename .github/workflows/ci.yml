@@ -228,7 +228,7 @@ jobs:
               - '**/*.md'
               - '!.github/workflows/*.yml'
               - '!target/**'
-      - uses: DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd # v23
+      - uses: DavidAnson/markdownlint-cli2-action@6bf21b07787794f89a243495939cd651942aeabe # v24.1.0
         if: steps.filter.outputs.markdown == 'true'
         with:
           globs: |
