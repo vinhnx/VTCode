@@ -72,6 +72,7 @@ pub struct OpenAIProvider {
     backend_setup: OpenAIBackendSetup,
     model: Arc<str>,
     supported_models_override: Option<Vec<String>>,
+    context_window_override: Option<usize>,
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
@@ -185,6 +186,7 @@ impl OpenAIProvider {
             backend_setup,
             model: Arc::from(model.as_str()),
             supported_models_override: None,
+            context_window_override: None,
             prompt_cache_enabled: false,
             prompt_cache_settings: Default::default(),
             responses_api_modes: Mutex::new(HashMap::new()),
@@ -262,6 +264,12 @@ impl OpenAIProvider {
         provider
     }
 
+    /// Set an optional context window override for a custom provider.
+    pub fn with_context_window(mut self, context_window: Option<usize>) -> Self {
+        self.context_window_override = context_window;
+        self
+    }
+
     fn with_model_internal(
         api_key: String,
         openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
@@ -334,6 +342,7 @@ impl OpenAIProvider {
             backend_setup,
             model: Arc::from(model.as_str()),
             supported_models_override: None,
+            context_window_override: None,
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,

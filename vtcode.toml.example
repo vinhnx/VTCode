@@ -25,6 +25,7 @@ reasoning_effort = "low"
 # base_url = "https://api.atlascloud.ai/v1"
 # api_key_env = "ATLASCLOUD_API_KEY"
 # model = "deepseek-ai/deepseek-v4-flash"
+# context_window = 256000
 # models = [
 #     "deepseek-ai/deepseek-v4-flash",
 #     "deepseek-ai/DeepSeek-V3-0324",

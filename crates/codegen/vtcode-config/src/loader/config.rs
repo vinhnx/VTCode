@@ -593,6 +593,7 @@ custom_providers = []
 # base_url = "https://llm.corp.example/v1"
 # api_key_env = "MYCORP_API_KEY"
 # model = "gpt-5-mini"
+# context_window = 256000
 
 [history]
 # Persist local session transcripts to disk

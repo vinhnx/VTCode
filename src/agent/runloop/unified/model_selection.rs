@@ -500,6 +500,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: String::new(),
             auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
                 command: "print-token".to_string(),

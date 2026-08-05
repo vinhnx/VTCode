@@ -25,6 +25,10 @@ impl provider::LLMProvider for OpenAIProvider {
         !self.is_chatgpt_backend() && !Self::requires_streaming_responses(requested)
     }
 
+    fn effective_context_size(&self, _model: &str) -> usize {
+        self.context_window_override.unwrap_or(128_000)
+    }
+
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
             self.model.as_ref()

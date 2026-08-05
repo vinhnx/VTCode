@@ -86,6 +86,13 @@ pub struct CustomProviderConfig {
     /// (e.g., `<https://llm.corp.example/v1>`).
     pub base_url: String,
 
+    /// Optional context window size in tokens for models served by this endpoint.
+    ///
+    /// When omitted, the OpenAI-compatible provider uses its default context
+    /// window size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<usize>,
+
     /// Environment variable name that holds the API key for this endpoint
     /// (e.g., "MYCORP_API_KEY").
     #[serde(default)]
@@ -176,6 +183,10 @@ impl CustomProviderConfig {
             return Err(format!("custom_providers[{}]: `base_url` must not be empty", self.name));
         }
 
+        if self.context_window == Some(0) {
+            return Err(format!("custom_providers[{}]: `context_window` must be greater than 0", self.name));
+        }
+
         if let Some(auth) = &self.auth {
             auth.validate(&self.name)?;
             if !self.api_key_env.trim().is_empty() {
@@ -248,6 +259,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: String::new(),
             auth: None,
             model: "gpt-5-mini".to_string(),
@@ -264,6 +276,7 @@ mod tests {
             name: "My Corp".to_string(),
             display_name: "My Corp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: String::new(),
             auth: None,
             model: "gpt-5-mini".to_string(),
@@ -280,6 +293,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: Some(CustomProviderCommandAuthConfig {
                 command: "print-token".to_string(),
@@ -302,6 +316,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: String::new(),
             auth: Some(CustomProviderCommandAuthConfig {
                 command: "print-token".to_string(),
@@ -324,6 +339,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorp".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: None,
             model: "gpt-5-mini".to_string(),
@@ -335,11 +351,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_zero_context_window() {
+        let config = CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorp".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            context_window: Some(0),
+            api_key_env: String::new(),
+            auth: None,
+            model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
+        };
+
+        let err = config.validate().expect_err("zero context window should fail");
+        assert!(err.contains("`context_window` must be greater than 0"));
+    }
+
+    #[test]
     fn effective_models_uses_models_list_when_present() {
         let config = CustomProviderConfig {
             name: "atlascloud".to_string(),
             display_name: "Atlas Cloud".to_string(),
             base_url: "https://api.atlascloud.ai/v1".to_string(),
+            context_window: None,
             api_key_env: "ATLASCLOUD_API_KEY".to_string(),
             auth: None,
             model: "deepseek-ai/deepseek-v4-flash".to_string(),

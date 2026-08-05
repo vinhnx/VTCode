@@ -149,7 +149,7 @@ vtcode --codex-experimental
 
 ### custom_providers
 
-Use `custom_providers` for named OpenAI-compatible endpoints that are not one of VT Code's built-in providers. Each entry has a stable `name`, a human-friendly `display_name`, a `base_url`, an optional `api_key_env`, and a default `model`. Secure credentials are scoped by `(name, api_key_env)`; they are not shared with another configured endpoint that uses the same API-key environment variable.
+Use `custom_providers` for named OpenAI-compatible endpoints that are not one of VT Code's built-in providers. Each entry has a stable `name`, a human-friendly `display_name`, a `base_url`, an optional `api_key_env`, a default `model`, and an optional `context_window` in tokens. When omitted, the provider uses the default context window. This describes the provider capability; the separate `context.max_context_tokens` setting can still impose a lower session budget. Secure credentials are scoped by `(name, api_key_env)`; they are not shared with another configured endpoint that uses the same API-key environment variable.
 
 ```toml
 [[custom_providers]]
@@ -158,6 +158,7 @@ display_name = "MyCorporateName"
 base_url = "https://llm.corp.example/v1"
 api_key_env = "MYCORP_API_KEY"
 model = "gpt-5.4"
+# context_window = 256000  # Optional context window size in tokens
 ```
 
 Store a custom provider key with the same explicit identity used by the

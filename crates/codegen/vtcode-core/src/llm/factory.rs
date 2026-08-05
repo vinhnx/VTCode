@@ -241,6 +241,7 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
         let supported_models = cp.effective_models();
         let auth_config = cp.auth.clone();
         let api_key_env = cp.resolved_api_key_env();
+        let context_window = cp.context_window;
         let reg_key = key.clone();
 
         factory.register_provider(&reg_key, move |config: ProviderConfig| {
@@ -279,19 +280,22 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                     None
                 };
 
-            Box::new(vtcode_llm::providers::OpenAIProvider::from_custom_config(
-                key.clone(),
-                display_name.clone(),
-                api_key,
-                Some(model),
-                Some(base_url),
-                prompt_cache,
-                timeouts,
-                openai,
-                model_behavior,
-                custom_provider_auth,
-                models_override,
-            ))
+            Box::new(
+                vtcode_llm::providers::OpenAIProvider::from_custom_config(
+                    key.clone(),
+                    display_name.clone(),
+                    api_key,
+                    Some(model),
+                    Some(base_url),
+                    prompt_cache,
+                    timeouts,
+                    openai,
+                    model_behavior,
+                    custom_provider_auth,
+                    models_override,
+                )
+                .with_context_window(context_window),
+            )
         });
 
         tracing::trace!(
@@ -493,6 +497,7 @@ mod tests {
             name: "mycorp".to_string(),
             display_name: "MyCorporateName".to_string(),
             base_url: "https://llm.corp.example/v1".to_string(),
+            context_window: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: None,
             model: "gpt-5-mini".to_string(),
@@ -523,6 +528,43 @@ mod tests {
         register_custom_providers(&[]);
     }
 
+    #[test]
+    #[serial_test::serial(global_llm_factory)]
+    fn custom_openai_compatible_provider_uses_configured_context_window() {
+        register_custom_providers(&[CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorporateName".to_string(),
+            base_url: "https://llm.corp.example/v1".to_string(),
+            context_window: Some(256_000),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
+            model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
+        }]);
+
+        let provider = create_provider_with_config(
+            "mycorp",
+            ProviderConfig {
+                api_key: None,
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some("gpt-5-mini".to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: Some(OpenAIConfig::default()),
+                anthropic: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+        )
+        .expect("custom provider should register");
+
+        assert_eq!(provider.effective_context_size("gpt-5-mini"), 256_000);
+
+        register_custom_providers(&[]);
+    }
+
     /// Sample Atlas Cloud config used across custom-provider tests.
     /// Matches the snippet documented in `docs/providers/atlascloud.md` and
     /// `vtcode.toml.example`.
@@ -531,6 +573,7 @@ mod tests {
             name: "atlascloud".to_string(),
             display_name: "Atlas Cloud".to_string(),
             base_url: "https://api.atlascloud.ai/v1".to_string(),
+            context_window: None,
             api_key_env: "ATLASCLOUD_API_KEY".to_string(),
             auth: None,
             model: "deepseek-ai/deepseek-v4-flash".to_string(),

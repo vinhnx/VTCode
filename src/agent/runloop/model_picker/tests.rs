@@ -163,6 +163,7 @@ fn parse_model_selection_uses_custom_provider_display_and_env_key() {
         name: "mycorp".to_string(),
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
+        context_window: None,
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
         model: "gpt-5-mini".to_string(),
@@ -185,6 +186,7 @@ fn parse_model_selection_marks_command_auth_custom_provider_as_keyless() {
         name: "mycorp".to_string(),
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
+        context_window: None,
         api_key_env: String::new(),
         auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
             command: "print-token".to_string(),
@@ -368,6 +370,7 @@ fn preferred_model_selection_matches_current_custom_provider() {
         name: "mycorp".to_string(),
         display_name: "MyCorporateName".to_string(),
         base_url: "https://llm.corp.example/v1".to_string(),
+        context_window: None,
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
         model: "gpt-5-mini".to_string(),

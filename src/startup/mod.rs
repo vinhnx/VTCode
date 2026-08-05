@@ -768,6 +768,7 @@ mod validation_tests {
             name: "mycorp".to_string(),
             display_name: "MyCorporateName".to_string(),
             base_url: "https://llm.example/v1".to_string(),
+            context_window: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: None,
             model: "gpt-5-mini".to_string(),
