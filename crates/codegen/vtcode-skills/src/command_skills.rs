@@ -172,7 +172,15 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/memory",
         "configuration"
     ),
-    built_in_command_spec!("model", "Launch the interactive model picker", "/model", "configuration"),
+    CommandSkillSpec {
+        slash_name: "model",
+        skill_name: "cmd-model",
+        description: "Launch the interactive model picker",
+        usage: "/model (alias: /models)",
+        category: "configuration",
+        aliases: &["models"],
+        backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
+    },
     built_in_command_spec!(
         "mode",
         "Switch the active agent mode (usage: /mode [build|auto|duck|plan])",
@@ -502,6 +510,13 @@ mod tests {
         let status = find_command_skill_by_slash_name("status").expect("status spec");
         assert!(status.is_built_in());
         assert_eq!(status.skill_name, "cmd-status");
+    }
+
+    #[test]
+    fn models_alias_opens_the_model_picker() {
+        let model = find_command_skill_by_slash_name("models").expect("models alias");
+        assert_eq!(model.slash_name, "model");
+        assert!(model.is_built_in());
     }
 
     #[test]
