@@ -237,11 +237,19 @@ pub enum ModelId {
     /// GLM-5.1 - Z.AI model served through OpenCode Zen
     OpenCodeZenGlm51,
 
-    // OpenCode Go models
+    // OpenCode Go models (20 models - https://opencode.ai/docs/go)
+    /// Grok 4.5 - xAI flagship reasoning model on OpenCode Go
+    OpenCodeGoGrok45,
+    /// GLM-5.3 - Z.AI flagship for frontier long-horizon coding on OpenCode Go
+    OpenCodeGoGlm53,
     /// GLM-5.2 - Z.AI flagship model included with OpenCode Go
     OpenCodeGoGlm52,
     /// GLM-5.1 - Z.AI model included with OpenCode Go
     OpenCodeGoGlm51,
+    /// GPT-5.6 Luna - OpenAI cost-efficient frontier model on OpenCode Go
+    OpenCodeGoGpt56Luna,
+    /// Kimi K3 - Moonshot flagship 2.8T agentic model on OpenCode Go
+    OpenCodeGoKimiK3,
     /// Kimi K2.7 Code - Moonshot.ai's most capable coding model on OpenCode Go
     OpenCodeGoKimiK27Code,
     /// Kimi K2.6 - Moonshot.ai's 1T MoE model on OpenCode Go
@@ -254,6 +262,10 @@ pub enum ModelId {
     OpenCodeGoMinimaxM3,
     /// MiniMax M2.7 - Higher-tier OpenCode Go subscription model
     OpenCodeGoMinimaxM27,
+    /// Muse Spark 1.2 Contributor - Meta long-context reasoning on OpenCode Go (limited regions)
+    OpenCodeGoMuseSpark12Contributor,
+    /// Qwen3.8 Max - Qwen 3.8 flagship on OpenCode Go
+    OpenCodeGoQwen38Max,
     /// Qwen3.7 Max - Qwen flagship on OpenCode Go
     OpenCodeGoQwen37Max,
     /// Qwen3.7 Plus - Qwen balanced tier on OpenCode Go
@@ -264,6 +276,8 @@ pub enum ModelId {
     OpenCodeGoDeepseekV4Pro,
     /// DeepSeek V4 Flash - Fast inference model on OpenCode Go
     OpenCodeGoDeepseekV4Flash,
+    /// Hy3 - High-volume coding model on OpenCode Go
+    OpenCodeGoHy3,
 
     // Qwen models (non-Qwen3 only)
     /// DeepSeek V4 Flash via Qwen Cloud API

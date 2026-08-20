@@ -39,19 +39,26 @@ impl FromStr for ModelId {
 
         if let Some(opencode_model) = trimmed.strip_prefix("opencode-go/") {
             return match opencode_model {
+                m if m == models::opencode_go::GROK_4_5 => Ok(ModelId::OpenCodeGoGrok45),
+                m if m == models::opencode_go::GLM_5_3 => Ok(ModelId::OpenCodeGoGlm53),
                 m if m == models::opencode_go::GLM_5_2 => Ok(ModelId::OpenCodeGoGlm52),
                 m if m == models::opencode_go::GLM_5_1 => Ok(ModelId::OpenCodeGoGlm51),
+                m if m == models::opencode_go::GPT_5_6_LUNA => Ok(ModelId::OpenCodeGoGpt56Luna),
+                m if m == models::opencode_go::KIMI_K3 => Ok(ModelId::OpenCodeGoKimiK3),
                 m if m == models::opencode_go::KIMI_K2_7_CODE => Ok(ModelId::OpenCodeGoKimiK27Code),
                 m if m == models::opencode_go::KIMI_K2_6 => Ok(ModelId::OpenCodeGoKimiK26),
                 m if m == models::opencode_go::MIMO_V2_5 => Ok(ModelId::OpenCodeGoMimoV25),
                 m if m == models::opencode_go::MIMO_V2_5_PRO => Ok(ModelId::OpenCodeGoMimoV25Pro),
                 m if m == models::opencode_go::MINIMAX_M3 => Ok(ModelId::OpenCodeGoMinimaxM3),
                 m if m == models::opencode_go::MINIMAX_M2_7 => Ok(ModelId::OpenCodeGoMinimaxM27),
+                m if m == models::opencode_go::MUSE_SPARK_1_2_CONTRIBUTOR => Ok(ModelId::OpenCodeGoMuseSpark12Contributor),
+                m if m == models::opencode_go::QWEN_3_8_MAX => Ok(ModelId::OpenCodeGoQwen38Max),
                 m if m == models::opencode_go::QWEN_3_7_MAX => Ok(ModelId::OpenCodeGoQwen37Max),
                 m if m == models::opencode_go::QWEN_3_7_PLUS => Ok(ModelId::OpenCodeGoQwen37Plus),
                 m if m == models::opencode_go::QWEN_3_6_PLUS => Ok(ModelId::OpenCodeGoQwen36Plus),
                 m if m == models::opencode_go::DEEPSEEK_V4_PRO => Ok(ModelId::OpenCodeGoDeepseekV4Pro),
                 m if m == models::opencode_go::DEEPSEEK_V4_FLASH => Ok(ModelId::OpenCodeGoDeepseekV4Flash),
+                m if m == models::opencode_go::HY3 => Ok(ModelId::OpenCodeGoHy3),
                 _ => Err(ModelParseError::InvalidModel(trimmed.to_string())),
             };
         }

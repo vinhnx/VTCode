@@ -762,6 +762,20 @@ model_id_table! {
         description: "GLM-5.1 served through OpenCode Zen for lower-cost reasoning and coding work",
     },
     // OpenCode Go models (parse only via the `opencode-go/` prefix)
+    OpenCodeGoGrok45 {
+        provider: OpenCodeGo,
+        id: models::opencode_go::GROK_4_5,
+        parse: [],
+        display: "Grok 4.5 (OpenCode Go)",
+        description: "Grok 4.5 included with the OpenCode Go subscription for flagship reasoning",
+    },
+    OpenCodeGoGlm53 {
+        provider: OpenCodeGo,
+        id: models::opencode_go::GLM_5_3,
+        parse: [],
+        display: "GLM-5.3 (OpenCode Go)",
+        description: "GLM-5.3 included with the OpenCode Go subscription for frontier long-horizon coding",
+    },
     OpenCodeGoGlm52 {
         provider: OpenCodeGo,
         id: models::opencode_go::GLM_5_2,
@@ -775,6 +789,20 @@ model_id_table! {
         parse: [],
         display: "GLM-5.1 (OpenCode Go)",
         description: "GLM-5.1 included with the OpenCode Go subscription for open-model coding workflows",
+    },
+    OpenCodeGoGpt56Luna {
+        provider: OpenCodeGo,
+        id: models::opencode_go::GPT_5_6_LUNA,
+        parse: [],
+        display: "GPT-5.6 Luna (OpenCode Go)",
+        description: "GPT-5.6 Luna included with the OpenCode Go subscription for cost-sensitive workloads",
+    },
+    OpenCodeGoKimiK3 {
+        provider: OpenCodeGo,
+        id: models::opencode_go::KIMI_K3,
+        parse: [],
+        display: "Kimi K3 (OpenCode Go)",
+        description: "Kimi K3 included with the OpenCode Go subscription for frontier agentic coding",
     },
     OpenCodeGoKimiK27Code {
         provider: OpenCodeGo,
@@ -818,6 +846,20 @@ model_id_table! {
         display: "MiniMax-M2.7 (OpenCode Go)",
         description: "MiniMax-M2.7 included with the OpenCode Go subscription for stronger agentic coding",
     },
+    OpenCodeGoMuseSpark12Contributor {
+        provider: OpenCodeGo,
+        id: models::opencode_go::MUSE_SPARK_1_2_CONTRIBUTOR,
+        parse: [],
+        display: "Muse Spark 1.2 Contributor (OpenCode Go)",
+        description: "Muse Spark 1.2 Contributor included with the OpenCode Go subscription (limited regions)",
+    },
+    OpenCodeGoQwen38Max {
+        provider: OpenCodeGo,
+        id: models::opencode_go::QWEN_3_8_MAX,
+        parse: [],
+        display: "Qwen3.8 Max (OpenCode Go)",
+        description: "Qwen3.8 Max included with the OpenCode Go subscription for the highest capability tier",
+    },
     OpenCodeGoQwen37Max {
         provider: OpenCodeGo,
         id: models::opencode_go::QWEN_3_7_MAX,
@@ -852,6 +894,13 @@ model_id_table! {
         parse: [],
         display: "DeepSeek V4 Flash (OpenCode Go)",
         description: "DeepSeek V4 Flash included with the OpenCode Go subscription for fast, low-cost coding",
+    },
+    OpenCodeGoHy3 {
+        provider: OpenCodeGo,
+        id: models::opencode_go::HY3,
+        parse: [],
+        display: "Hy3 (OpenCode Go)",
+        description: "Hy3 included with the OpenCode Go subscription for high-volume coding",
     },
     // Qwen models (picker-only; their ids resolve to the native variants above)
     QwenDeepSeekV4Flash {
