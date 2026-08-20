@@ -2079,6 +2079,131 @@
           ]
         },
         "context": 128000
+      },
+      "grok-4.5": {
+        "id": "grok-4.5",
+        "name": "Grok 4.5 (OpenCode Go)",
+        "description": "Grok 4.5 — xAI flagship reasoning model included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 500000
+      },
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3 (OpenCode Go)",
+        "description": "GLM-5.3 — Z.AI flagship for frontier long-horizon coding included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "max_output_tokens": 128000,
+        "capabilities": {
+          "context_caching": true,
+          "structured_output": true
+        }
+      },
+      "gpt-5.6-luna": {
+        "id": "gpt-5.6-luna",
+        "name": "GPT-5.6 Luna (OpenCode Go)",
+        "description": "GPT-5.6 Luna — OpenAI cost-efficient frontier model included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
+      },
+      "kimi-k3": {
+        "id": "kimi-k3",
+        "name": "Kimi K3 (OpenCode Go)",
+        "description": "Kimi K3 — Moonshot flagship 2.8T agentic model included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576
+      },
+      "muse-spark-1.2-contributor": {
+        "id": "muse-spark-1.2-contributor",
+        "name": "Muse Spark 1.2 Contributor (OpenCode Go)",
+        "description": "Muse Spark 1.2 Contributor — Meta long-context reasoning model included with the OpenCode Go subscription (limited regions).",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576
+      },
+      "qwen3.8-max": {
+        "id": "qwen3.8-max",
+        "name": "Qwen3.8 Max (OpenCode Go)",
+        "description": "Qwen3.8 Max — highest capability Qwen tier included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000
+      },
+      "hy3": {
+        "id": "hy3",
+        "name": "Hy3 (OpenCode Go)",
+        "description": "Hy3 — high-volume coding model included with the OpenCode Go subscription.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576
       }
     }
   },
