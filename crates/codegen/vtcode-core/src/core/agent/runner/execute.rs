@@ -612,7 +612,7 @@ impl AgentRunner {
                 {
                     None
                 } else {
-                    Some(0.7)
+                    Some(self.config().agent.temperature)
                 };
 
                 let (request_messages, previous_response_id) = prepare_responses_request_messages(

@@ -60,10 +60,22 @@ pub(crate) fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str
         .find_map(|name| headers.get(*name).and_then(|value| value.to_str().ok()).map(ToOwned::to_owned))
 }
 
+/// Widens an f32 sampling parameter to f64 through its shortest round-trip
+/// decimal form. Direct `f32 as f64` promotion keeps the binary tail
+/// (`0.7f32` → `0.699999988079071`), which strict backends reject as invalid
+/// precision; routing the value through its shortest repr keeps the wire form
+/// compact (`0.7`) without losing round-trip fidelity.
+pub(crate) fn sampling_param_f64(value: f32) -> f64 {
+    if !value.is_finite() {
+        return f64::from(value);
+    }
+    format!("{value}").parse().unwrap_or_else(|_| f64::from(value))
+}
+
 /// Converts a float parameter (temperature, top_p, …) into a JSON number,
 /// rejecting NaN and infinity with an `LLMError::InvalidRequest`.
 pub(crate) fn float_to_json_number(value: f32) -> Result<serde_json::Number, LLMError> {
-    serde_json::Number::from_f64(f64::from(value)).ok_or_else(|| LLMError::InvalidRequest {
+    serde_json::Number::from_f64(sampling_param_f64(value)).ok_or_else(|| LLMError::InvalidRequest {
         message: "invalid numeric parameter value (NaN or infinity)".to_string(),
         metadata: None,
     })
@@ -1368,9 +1380,9 @@ pub fn make_anthropic_thinking_config(config: &vtcode_config::core::AnthropicCon
 mod tests {
     use super::{
         PROVIDER_ERROR_BODY_MAX_BYTES, assistant_interleaved_history_text, extract_reasoning_text_from_detail_values,
-        extract_reasoning_text_from_serialized_details, is_interleaved_thinking_model, is_minimax_m2_model,
-        normalize_reasoning_detail_object, parse_chat_request_openai_format, parse_response_openai_format,
-        parse_usage_openai_format, read_provider_error_body,
+        extract_reasoning_text_from_serialized_details, float_to_json_number, is_interleaved_thinking_model,
+        is_minimax_m2_model, normalize_reasoning_detail_object, parse_chat_request_openai_format,
+        parse_response_openai_format, parse_usage_openai_format, read_provider_error_body, sampling_param_f64,
     };
     use crate::provider::{AssistantPhase, Message};
     use serde_json::{Value, json};
@@ -1620,5 +1632,35 @@ mod tests {
     fn parse_usage_openai_format_handles_missing_usage() {
         let response = json!({"choices": []});
         assert!(parse_usage_openai_format(&response, true).is_none());
+    }
+
+    #[test]
+    fn float_to_json_number_keeps_shortest_f32_wire_form() {
+        let number = float_to_json_number(0.7).expect("finite value");
+        assert_eq!(number.to_string(), "0.7");
+        assert_ne!(number.to_string(), "0.699999988079071");
+
+        let payload = json!({ "temperature": number });
+        assert_eq!(serde_json::to_string(&payload).unwrap(), r#"{"temperature":0.7}"#);
+    }
+
+    #[test]
+    fn float_to_json_number_round_trips_f32_values() {
+        for raw in [0.5_f32, 0.25, 0.1, 1.0, 2.0, -0.75, 0.123_456_79] {
+            let number = float_to_json_number(raw).expect("finite value");
+            let wire: f64 = number.to_string().parse().expect("wire form parses");
+            assert_eq!(wire as f32, raw, "wire form of {raw} must round-trip");
+        }
+    }
+
+    #[test]
+    fn float_to_json_number_rejects_non_finite() {
+        assert!(float_to_json_number(f32::NAN).is_err());
+        assert!(float_to_json_number(f32::INFINITY).is_err());
+        assert_eq!(
+            sampling_param_f64(0.7_f32).to_bits(),
+            0.7_f64.to_bits(),
+            "widened value must equal the f64 literal"
+        );
     }
 }

@@ -370,7 +370,7 @@ impl OpenAIProvider {
         // Prepare request body for vLLM-style inference server
         let request_body = json!({
             "prompt_token_ids": tokens,
-            "temperature": temperature.unwrap_or(0.7),
+            "temperature": crate::providers::common::sampling_param_f64(temperature.unwrap_or(0.7)),
             "stop_token_ids": stop_token_ids_vec,
             // Additional parameters that might be needed
             "stream": false,

@@ -282,11 +282,11 @@ impl HuggingFaceProvider {
         }
 
         if let Some(temperature) = request.temperature {
-            payload["temperature"] = json!(temperature);
+            payload["temperature"] = json!(super::common::sampling_param_f64(temperature));
         }
 
         if let Some(top_p) = request.top_p {
-            payload["top_p"] = json!(top_p);
+            payload["top_p"] = json!(super::common::sampling_param_f64(top_p));
         }
 
         if let Some(top_k) = request.top_k {
@@ -490,10 +490,10 @@ impl HuggingFaceProvider {
             payload["max_tokens"] = json!(max_tokens);
         }
         if let Some(temperature) = request.temperature {
-            payload["temperature"] = json!(temperature);
+            payload["temperature"] = json!(super::common::sampling_param_f64(temperature));
         }
         if let Some(top_p) = request.top_p {
-            payload["top_p"] = json!(top_p);
+            payload["top_p"] = json!(super::common::sampling_param_f64(top_p));
         }
         if let Some(top_k) = request.top_k {
             payload["top_k"] = json!(top_k);

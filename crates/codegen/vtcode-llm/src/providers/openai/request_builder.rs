@@ -383,7 +383,7 @@ pub(crate) fn build_chat_request(
         && ctx.supports_temperature
         && allows_sampling_parameters(&request.model, effective_reasoning_effort)
     {
-        openai_request["temperature"] = json!(temperature);
+        openai_request["temperature"] = Value::Number(crate::providers::common::float_to_json_number(temperature)?);
     }
 
     if ModelProvider::OpenAI.supports_service_tier(&request.model)
@@ -583,24 +583,27 @@ fn build_responses_request_from_history(
         && ctx.supports_temperature
         && allows_sampling_parameters(&request.model, effective_reasoning_effort)
     {
-        sampling_parameters["temperature"] = json!(temperature);
+        sampling_parameters["temperature"] =
+            Value::Number(crate::providers::common::float_to_json_number(temperature)?);
         has_sampling = true;
     }
 
     if let Some(top_p) = request.top_p
         && allows_sampling_parameters(&request.model, effective_reasoning_effort)
     {
-        sampling_parameters["top_p"] = json!(top_p);
+        sampling_parameters["top_p"] = Value::Number(crate::providers::common::float_to_json_number(top_p)?);
         has_sampling = true;
     }
 
     if let Some(presence_penalty) = request.presence_penalty {
-        sampling_parameters["presence_penalty"] = json!(presence_penalty);
+        sampling_parameters["presence_penalty"] =
+            Value::Number(crate::providers::common::float_to_json_number(presence_penalty)?);
         has_sampling = true;
     }
 
     if let Some(frequency_penalty) = request.frequency_penalty {
-        sampling_parameters["frequency_penalty"] = json!(frequency_penalty);
+        sampling_parameters["frequency_penalty"] =
+            Value::Number(crate::providers::common::float_to_json_number(frequency_penalty)?);
         has_sampling = true;
     }
 

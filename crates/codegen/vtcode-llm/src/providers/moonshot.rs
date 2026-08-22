@@ -31,13 +31,6 @@ impl OpenAiCompatSpec for MoonshotSpec {
         model.trim().to_string()
     }
 
-    fn float_number(value: f32) -> Result<serde_json::Number, LLMError> {
-        serde_json::Number::from_f64(f64::from(value)).ok_or_else(|| LLMError::InvalidRequest {
-            message: "Invalid temperature value".to_string(),
-            metadata: None,
-        })
-    }
-
     fn insert_reasoning(
         _core: &OpenAiCompatCore<Self>,
         request: &LLMRequest,

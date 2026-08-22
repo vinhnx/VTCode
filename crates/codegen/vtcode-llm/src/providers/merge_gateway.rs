@@ -385,10 +385,10 @@ impl MergeGatewayProvider {
             payload.insert("max_tokens".to_owned(), json!(max_tokens));
         }
         if let Some(temperature) = request.temperature {
-            payload.insert("temperature".to_owned(), json!(temperature));
+            payload.insert("temperature".to_owned(), json!(super::common::sampling_param_f64(temperature)));
         }
         if let Some(top_p) = request.top_p {
-            payload.insert("top_p".to_owned(), json!(top_p));
+            payload.insert("top_p".to_owned(), json!(super::common::sampling_param_f64(top_p)));
         }
         if let Some(stop) = Self::native_stop_sequences(request) {
             payload.insert("stop".to_owned(), Value::Array(stop));

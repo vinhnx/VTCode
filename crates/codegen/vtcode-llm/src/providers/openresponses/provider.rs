@@ -388,7 +388,7 @@ impl OpenResponsesProvider {
 
         let mut req = Request::new(&request.model, Vec::new());
         req.stream = stream;
-        req.temperature = request.temperature.map(|t| t as f64);
+        req.temperature = request.temperature.map(crate::providers::common::sampling_param_f64);
         req.max_output_tokens = request.max_tokens.map(|t| t as u64);
         req.previous_response_id = request
             .previous_response_id
@@ -481,7 +481,7 @@ impl OpenResponsesProvider {
         }
 
         if let Some(temp) = request.temperature {
-            payload["temperature"] = json!(temp);
+            payload["temperature"] = json!(crate::providers::common::sampling_param_f64(temp));
         }
 
         if let Some(tools) = &request.tools {
@@ -1025,6 +1025,28 @@ mod tests {
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
         let include = payload.get("include").and_then(Value::as_array).expect("include must exist");
         assert_eq!(include.len(), 2);
+    }
+
+    #[test]
+    fn native_payload_serializes_compact_temperature() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            temperature: Some(0.7),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+
+        assert_eq!(payload.get("temperature").and_then(Value::as_f64), Some(0.7));
+        assert_eq!(
+            payload.get("temperature").expect("temperature present").to_string(),
+            "0.7",
+            "wire form must be compact, not the f32->f64 widening tail"
+        );
     }
 
     #[test]

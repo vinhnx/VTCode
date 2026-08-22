@@ -140,7 +140,7 @@ pub mod request_builder {
         }
 
         if let Some(temp) = temperature {
-            body["temperature"] = serde_json::json!(temp);
+            body["temperature"] = serde_json::json!(crate::providers::common::sampling_param_f64(temp));
         }
 
         if let Some(val) = tools {

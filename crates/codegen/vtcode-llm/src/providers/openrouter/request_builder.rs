@@ -101,7 +101,8 @@ impl OpenRouterProvider {
         }
 
         if let Some(temperature) = request.temperature {
-            provider_request["temperature"] = json!(temperature);
+            provider_request["temperature"] =
+                Value::Number(crate::providers::common::float_to_json_number(temperature)?);
         }
 
         if let Some(tools) = &request.tools
@@ -189,5 +190,27 @@ mod tests {
         let messages = payload["messages"].as_array().expect("messages should be present");
 
         assert_eq!(messages[0]["content"], json!("<think>trace</think>done"));
+    }
+
+    #[test]
+    fn openrouter_payload_serializes_compact_temperature() {
+        let provider = OpenRouterProvider::new("test-key".to_string());
+        let request = LLMRequest {
+            model: "openai/gpt-5".to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            temperature: Some(0.7),
+            ..Default::default()
+        };
+
+        let payload = provider
+            .convert_to_openrouter_format(&request)
+            .expect("payload should serialize");
+
+        assert_eq!(payload["temperature"].as_f64(), Some(0.7));
+        assert_eq!(
+            payload.get("temperature").expect("temperature present").to_string(),
+            "0.7",
+            "wire form must be compact, not the f32->f64 widening tail"
+        );
     }
 }
