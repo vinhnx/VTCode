@@ -144,6 +144,45 @@ configured in `[mcp]`.
 > provider lacks streaming, fall back to a stdio wrapper until the server adopts the reference
 > implementation.
 
+### Phone pairing (Build Remote Agent)
+
+VT Code can attach **Build Remote Agent** as a pairing device: the iOS/Android
+app spectates (and can inject into) this desktop session through the free MIT
+`gbr-agent`. Phone and PC never open ports to each other.
+
+Website: https://grokbuildremote.com/ · Agent:
+https://github.com/LinespottingOrg/GrokBuildRemote-Agents (MIT) · Protocol
+`gbr/1` (agent **v0.6.0+**). Independent product. Not affiliated with xAI or
+SpaceX.
+
+This is not VT Code's HTTP ACP tools (`acp_call` / `acp_discover`). Pairing
+stays `gbr-agent pair` + `gbr-agent run`. Attach is only
+`http://127.0.0.1:8788` or `gbr-mcp` stdio. Phone is spectator + veto.
+
+```bash
+curl -fsSL https://grokbuildremote.com/install.sh | bash
+gbr-agent version
+gbr-agent pair && gbr-agent run
+git clone https://github.com/LinespottingOrg/GrokBuildRemote-Agents.git
+cd GrokBuildRemote-Agents/mcp/gbr-mcp && npm install
+```
+
+```toml
+[[mcp.providers]]
+name = "gbr"
+enabled = true
+command = "node"
+args = ["GrokBuildRemote-Agents/mcp/gbr-mcp/bin/gbr-mcp.js"]
+```
+
+Replace `args` with the absolute path to `bin/gbr-mcp.js`. Never put mailbox
+keys in `vtcode.toml` or `.mcp.json`.
+
+```bash
+curl -sS http://127.0.0.1:8788/health
+curl -sS http://127.0.0.1:8788/v1/sessions
+```
+
 ## Security and validation
 
 VT Code exposes additional security gates through the `[mcp.security]` table. Enable authentication
