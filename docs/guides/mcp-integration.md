@@ -124,16 +124,16 @@ enabled = true
 max_concurrent_requests = 4
 endpoint = "https://mcp.figma.com/mcp"
 api_key_env = "FIGMA_MCP_TOKEN"
-protocol_version = "2025-06-18"
 headers = { "X-Client" = "vtcode", "X-MCP-App" = "vtcode" }
 ```
 
 Environment variables defined under `[mcp.providers.env]` are forwarded to stdio transports and
 composed with the curated whitelist the loader already exposes. Use `working_directory` to stage
 local binaries, credentials, or fixtures that the provider expects on disk. For HTTP transports,
-`protocol_version` determines which MCP schema the client negotiates (the default is the current
-stable `2025-11-25`; you can pin an older supported revision when providers publish compatible
-endpoints). The `handshake` strategy selects the rmcp lifecycle: `legacy` (default) performs the
+the optional `protocol_version` is validated against supported revisions and shown in
+configuration. It does not pin the version sent in the `initialize` request: VT Code currently
+sends the stable `2025-11-25` revision and reports the negotiated version after connecting. The
+`handshake` strategy selects the rmcp lifecycle: `legacy` (default) performs the
 `initialize` handshake directly, while `auto` first probes `server/discover` and falls back to
 legacy. Prefer `auto` only for modern servers — legacy-only servers would otherwise pay the
 discover-timeout penalty on every connect. `vtcode mcp get <name>` reports the configured
@@ -150,10 +150,18 @@ staleness is owned by the registry's `list_changed` refresh instead. Full tool d
 (`get_tool_details`) additionally expose the server's `outputSchema` when advertised, so
 callers can type the result shape without an extra round trip.
 
-> **Note:** Streamable HTTP support is still evolving. The client negotiates the declared
-> `protocol_version`, but servers must expose Server-Sent Events per the transport spec. If an HTTP
-> provider lacks streaming, fall back to a stdio wrapper until the server adopts the reference
-> implementation.
+> **Note:** [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+> servers can return either JSON or Server-Sent Events for POST requests;
+> clients must support both response modes. A standalone GET event stream is optional. The older
+> HTTP+SSE transport is a separate protocol and may need its own compatibility handling.
+
+### Baizhi web research with an API key
+
+The [Baizhi Agent Toolkit guide](baizhi-mcp.md) shows how to configure an
+optional hosted Streamable HTTP provider for web search, page reading, and
+structured extraction using `api_key_env` and a provider-specific tool
+allowlist. It includes configuration inspection steps and the limits of
+local validation.
 
 ### Memcode long-term memory over OAuth
 
