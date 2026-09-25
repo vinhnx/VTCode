@@ -1718,11 +1718,13 @@ async fn registry_exhaustion_latches_runloop_and_blocks_the_next_inspection() {
         turn_modified_files: &mut turn_modified_files,
     };
 
+    let mut exhausted_call_id = None;
     for (index, path) in paths.iter().enumerate() {
+        let call_id = format!("registry-read-{index}");
         outcome_ctx.ctx.harness_state.record_requested_tool_calls(1);
         handle_single_tool_call(
             &mut outcome_ctx,
-            &format!("registry-read-{index}"),
+            &call_id,
             tool_names::READ_FILE,
             json!({
                 "path": path,
@@ -1733,6 +1735,7 @@ async fn registry_exhaustion_latches_runloop_and_blocks_the_next_inspection() {
         .await
         .expect("registry read should be handled");
         if outcome_ctx.ctx.harness_state.model_visible_preview_budget_exhausted() {
+            exhausted_call_id = Some(call_id);
             break;
         }
     }
@@ -1769,7 +1772,7 @@ async fn registry_exhaustion_latches_runloop_and_blocks_the_next_inspection() {
     // replaced by its terminal update: suppression is counted once per call.
     let suppressed_before_replacement = diagnostics.suppressed_tool_previews;
     outcome_ctx.ctx.push_tool_response(
-        "registry-read-0",
+        exhausted_call_id.expect("a registry read should exhaust the preview budget"),
         Some(tool_names::READ_FILE),
         json!({
             "total_output_bytes": 80_000,
