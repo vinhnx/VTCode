@@ -82,7 +82,10 @@ fn exact_shell_learning_target(
     let scope_signature = extract_shell_permission_scope_signature(tool_name, tool_args)?;
 
     if let Some(command_words) = extract_shell_approval_command_words(tool_name, tool_args) {
-        if let Some(target) = segmented_shell_learning_target(&command_words, &scope_signature) {
+        let raw_command_text = extract_shell_raw_command_text(tool_name, tool_args);
+        if let Some(target) =
+            segmented_shell_learning_target(&command_words, &scope_signature, raw_command_text.as_deref())
+        {
             return Some(target);
         }
 
@@ -109,31 +112,63 @@ fn exact_shell_learning_target(
 
 fn segment_readonly_pattern(segment: &[String], scope_signature: &str) -> Option<LearnedPattern> {
     let program = segment.first().map(String::as_str);
+    let basename = program.map(shell_program_basename);
     // Commands with specific pattern rules that rejected this segment get no
     // generic pattern.  This prevents e.g. `find /tmp` from creating a broad
     // `shell-pattern:find` family key when the specific find-pattern rejected
-    // the absolute-path argument.
-    if matches!(program, Some("find" | "sed" | "awk")) {
+    // the absolute-path argument. Match by basename so `/usr/bin/find`,
+    // `./find`, and similar invocations cannot fall through to the generic
+    // path-read family.
+    if matches!(basename.as_deref(), Some("find" | "sed" | "awk")) {
+        return None;
+    }
+    if program.is_some_and(is_wrapper_program) || has_environment_prefix(segment) {
         return None;
     }
     learned_readonly_path_pattern(segment, scope_signature)
 }
 
-fn segmented_shell_learning_target(command_words: &[String], scope_signature: &str) -> Option<ApprovalLearningTarget> {
-    let segments = split_command_words_on_operators(command_words).or_else(|| {
-        vtcode_core::command_safety::shell_parser::parse_shell_commands(&shell_words::join(
-            command_words.iter().map(String::as_str),
-        ))
-        .ok()
-    })?;
+/// Whether a command begins with an `env` wrapper or leading `KEY=value`
+/// assignments. Such prefixes change executable resolution (`PATH=./bin`),
+/// the effective working directory (`env -C`), or the process environment, so
+/// a family key built from the remaining words would let a different program
+/// (or a different directory) inherit a trusted approval. Keep them exact-only.
+fn has_environment_prefix(words: &[String]) -> bool {
+    vtcode_core::tools::command_args::command_words_after_environment_prefix(words).len() != words.len()
+}
 
-    let mut patterns = segments
-        .iter()
-        .filter_map(|segment| segment_readonly_pattern(segment, scope_signature))
-        .collect::<Vec<_>>();
-    if patterns.is_empty() {
+fn segmented_shell_learning_target(
+    command_words: &[String],
+    scope_signature: &str,
+    raw_command_text: Option<&str>,
+) -> Option<ApprovalLearningTarget> {
+    // The word-level splitter can miss operators glued to a token
+    // (`ls src; rm foo` tokenizes as `src;`), so run the authoritative
+    // whole-command read-only check. A command the parser sees as compound or
+    // unsafe stays exact-only rather than leaking a safe sibling's family key.
+    let raw = raw_command_text?;
+    let args = serde_json::json!({ "action": "run", "command": raw });
+    if !vtcode_core::tools::tool_intent::is_readonly_command_session_command(&args) {
         return None;
     }
+
+    // Segment with the shell grammar so glued operators are split; fall back to
+    // the word-level splitter only when the grammar cannot produce a list.
+    let segments = vtcode_core::command_safety::shell_parser::parse_shell_commands(raw)
+        .ok()
+        .filter(|segments| !segments.is_empty())
+        .or_else(|| split_command_words_on_operators(command_words))?;
+
+    // EVERY segment must yield its own family pattern. Dropping a pattern-less
+    // segment and keeping a sibling's key (e.g. `ls src && ./find src -type f`
+    // -> only `shell-pattern:ls`) would let prior `ls` approvals auto-approve
+    // the whole invocation, including an agent-created `./find`. Otherwise the
+    // compound stays exact-only. The whole-command read-only check above
+    // already proves every segment is independently read-only.
+    let mut patterns = segments
+        .iter()
+        .map(|segment| segment_readonly_pattern(segment, scope_signature))
+        .collect::<Option<Vec<_>>>()?;
 
     patterns.sort_by(|left, right| left.key.cmp(&right.key));
     patterns.dedup_by(|left, right| left.key == right.key);
@@ -297,6 +332,15 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
     // nested shell invocations — a broader pattern key must never be trained
     // by commands like `find src && rm -rf target` or `bash -c '...'`.
     let prefix_words = extract_shell_approval_command_prefix_words(tool_name, tool_args);
+    // A wrapper (`sudo`, `nice`, `env`, …) or an environment/assignment prefix
+    // (`PATH=./bin`, `env -C /tmp`, …) can reselect the executable or change the
+    // effective working directory. A family key built from the stripped words
+    // would let that command inherit a trusted approval, so keep it exact-only.
+    if let Some(words) = prefix_words.as_ref()
+        && (has_environment_prefix(words) || words.first().is_some_and(|program| is_wrapper_program(program)))
+    {
+        return None;
+    }
 
     // Specific command patterns first: find, sed, awk.
     // `find`/`sed` use prefix-gated words; `awk` uses its own quote-aware
@@ -307,7 +351,7 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
         if let Some(pattern) = learned_find_pattern(command_words, &scope_signature, raw_command_text.as_deref()) {
             return Some(pattern);
         }
-        if let Some(pattern) = learned_sed_print_pattern(command_words, &scope_signature) {
+        if let Some(pattern) = learned_sed_print_pattern(command_words, &scope_signature, raw_command_text.as_deref()) {
             return Some(pattern);
         }
     }
@@ -323,7 +367,17 @@ fn learned_shell_pattern(tool_name: &str, tool_args: Option<&Value>) -> Option<L
     // Generic read-only path-read pattern as fallback for commands without
     // specific pattern rules (e.g. ls, grep, wc).  If find/sed/awk had specific
     // rules that rejected this invocation, no generic pattern is attached.
+    // Fail closed on dynamic shell syntax: `shell_words` normalisation strips
+    // quotes (so `-ex'ec'` becomes `-exec` and is caught above) but leaves
+    // `$''`/`$@`/`{..}` splices intact (e.g. `-exe$''c` stays `-exe$c`).
+    // Without this gate `/usr/bin/find src -exe$''c …` would inherit a generic
+    // `shell-pattern:/usr/bin/find` family key (GHSA-r249-hpfx-x2w7).
     let command_words = prefix_words?;
+    if let Some(raw) = raw_command_text.as_deref()
+        && vtcode_core::tools::command_args::contains_dynamic_shell_syntax(raw)
+    {
+        return None;
+    }
     segment_readonly_pattern(&command_words, &scope_signature)
 }
 
@@ -344,10 +398,47 @@ fn learned_readonly_path_pattern(command_words: &[String], scope_signature: &str
     })
 }
 
+/// Lowercased basename of a shell program word (`/usr/bin/FIND` → `find`).
+///
+/// Used by the generic path-read rules and the wrapper deny-list so an
+/// absolute path, a `./` prefix, or a mixed-case spelling (the same binary on
+/// case-insensitive filesystems) cannot dodge them. The specific
+/// `find`/`sed`/`awk` family rules deliberately require the bare program name
+/// so a path-qualified executable stays exact-only.
+fn shell_program_basename(program: &str) -> String {
+    std::path::Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase()
+}
+
+/// Wrapper prefixes that must never train a family key. `env`/`sudo`/`nice`
+/// strip to the real program at execution time, so `env find src -exec …`
+/// would otherwise learn a `shell-pattern:env` key that auto-approves the
+/// destructive shape.
+fn is_wrapper_program(program: &str) -> bool {
+    matches!(
+        shell_program_basename(program).as_str(),
+        "env"
+            | "sudo"
+            | "su"
+            | "doas"
+            | "runas"
+            | "nice"
+            | "timeout"
+            | "stdbuf"
+            | "nohup"
+            | "command"
+            | "builtin"
+            | "time"
+    )
+}
+
 fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bool {
     const KNOWN_MUTATING_COMMANDS: &[&str] = &[
-        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "install", "ln", "mkdir", "mv", "perl", "python",
-        "python3", "rm", "rmdir", "rsync", "ruby", "sh", "bash", "zsh", "tee", "touch", "truncate", "wget",
+        "awk", "cargo", "chmod", "chown", "cp", "curl", "dd", "find", "install", "ln", "mkdir", "mv", "perl", "python",
+        "python3", "rm", "rmdir", "rsync", "ruby", "sed", "sh", "bash", "zsh", "tee", "touch", "truncate", "wget",
     ];
     const MUTATING_OPTION_HINTS: &[&str] = &[
         "--delete",
@@ -364,7 +455,7 @@ fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bo
     ];
 
     !program.is_empty()
-        && !KNOWN_MUTATING_COMMANDS.contains(&program)
+        && !KNOWN_MUTATING_COMMANDS.contains(&shell_program_basename(program).as_str())
         && !words.iter().skip(1).any(|word| MUTATING_OPTION_HINTS.contains(&word.as_str()))
         && words.iter().skip(1).any(|word| is_probable_readonly_path_arg(word))
 }
@@ -394,7 +485,8 @@ fn learned_find_pattern(
     scope_signature: &str,
     raw_command_text: Option<&str>,
 ) -> Option<LearnedPattern> {
-    if command_words.first().map(String::as_str) != Some("find") {
+    let program = command_words.first().map(String::as_str)?;
+    if program != "find" {
         return None;
     }
 
@@ -429,8 +521,19 @@ fn is_destructive_find_option(word: &str) -> bool {
     )
 }
 
-fn learned_sed_print_pattern(command_words: &[String], scope_signature: &str) -> Option<LearnedPattern> {
-    if command_words.first().map(String::as_str) != Some("sed") {
+fn learned_sed_print_pattern(
+    command_words: &[String],
+    scope_signature: &str,
+    raw_command_text: Option<&str>,
+) -> Option<LearnedPattern> {
+    let program = command_words.first().map(String::as_str)?;
+    if program != "sed" {
+        return None;
+    }
+    // Fail closed on expansion syntax for the same reason as find/awk.
+    if let Some(raw) = raw_command_text
+        && vtcode_core::tools::command_args::contains_dynamic_shell_syntax(raw)
+    {
         return None;
     }
     let [_, flag, range, path] = command_words else {
@@ -468,7 +571,8 @@ fn learned_awk_read_pattern(
     scope_signature: &str,
     raw_command_text: Option<&str>,
 ) -> Option<LearnedPattern> {
-    if command_words.first().map(String::as_str) != Some("awk") {
+    let program = command_words.first().map(String::as_str)?;
+    if program != "awk" {
         return None;
     }
     let raw = raw_command_text?;
@@ -653,6 +757,99 @@ mod tests {
     }
 
     #[test]
+    fn path_qualified_programs_stay_exact_only() {
+        // A path-qualified executable (`./find`, `/usr/bin/find`, `bin/find`)
+        // can be an agent-created binary, so it must not inherit the bare
+        // `find` family approval, and must not fall through to a generic
+        // `shell-pattern:/usr/bin/find` family either.
+        for command in [
+            "/usr/bin/find src -type f -name '*.rs'",
+            "./find src -type f",
+            "bin/find src -type f",
+            "/usr/bin/FIND src -type f",
+            "/usr/bin/find src -delete",
+            "/usr/bin/find src -maxdepth 0 -exe$''c touch /tmp/VT_BYPASS_POC {} +",
+            "/usr/bin/find src -maxdepth 0 -ex'ec' touch /tmp/VT_BYPASS_POC {} +",
+            "/bin/find src -del'ete'",
+        ] {
+            assert!(pattern_for(command).is_none(), "path-qualified program must stay exact-only: {command}");
+        }
+        // The bare program still learns.
+        assert!(pattern_for("find src -type f -name '*.rs'").is_some());
+    }
+
+    #[test]
+    fn wrapper_and_env_prefixes_do_not_learn_families() {
+        // Wrappers and environment/assignment prefixes can reselect the
+        // executable or change the effective directory, so they never train
+        // (or inherit) a family key — including the CodeRabbit-reported
+        // `env PATH=./bin find` and `env -C <dir> sed` shapes.
+        for command in [
+            "env find src -type f",
+            "FOO=bar find src -type f",
+            "PATH=./bin find src -type f",
+            "env PATH=./bin find src -type f",
+            "env -C /tmp sed -n '1p' src/file.rs",
+            "env find src -maxdepth 0 -exe$''c touch /tmp/VT_BYPASS_POC {} +",
+            "FOO=bar find src -delete",
+            "sudo find src -type f",
+            "nice find src -type f",
+            "env sudo find src -type f",
+            "FOO=bar grep -r foo src",
+            "FOO=bar rm -rf target",
+            "sudo ls src",
+        ] {
+            assert!(pattern_for(command).is_none(), "wrapper/env must stay exact-only: {command}");
+        }
+    }
+
+    #[test]
+    fn compound_with_unsafe_segment_does_not_learn() {
+        // A safe segment must not supply a family key that would let
+        // `prompt_tool_permission` auto-approve a sibling unsafe segment.
+        for command in [
+            "ls src && rm foo.txt",
+            "ls src; python3 mutate.py",
+            "ls src && PATH=./bin find src -type f",
+            "cat docs/a.md && sed -i 's/a/b/' src/lib.rs",
+        ] {
+            let args = json!({ "action": "run", "command": command });
+            let key = exact_shell_learning_target("exec_command", Some(&args), "Run Command")
+                .expect("exact target")
+                .approval_key;
+            assert!(
+                !key.starts_with("shell-pattern:"),
+                "compound with an unsafe segment must not learn a family key: {command} -> {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn generic_pattern_rejects_dynamic_shell_syntax() {
+        assert!(pattern_for("ls src").is_some());
+        for command in ["ls src/$FOO", "grep -r foo src/*.rs", "wc -l src/file.txt; echo hi"] {
+            // `;` is already rejected by the prefix gate; `$`/glob shapes must
+            // fail closed via the new dynamic-syntax gate.
+            if command.contains(';') {
+                assert!(pattern_for(command).is_none());
+            } else {
+                assert!(pattern_for(command).is_none(), "dynamic generic must not learn: {command}");
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_case_and_spliced_programs_stay_exact_only() {
+        // Only the bare lowercase program trains a family; uppercase or
+        // quoted-spliced spellings stay exact-only (and cannot dodge the
+        // find-specific rules via the generic fallback).
+        assert!(pattern_for("FIND src -type f").is_none());
+        assert!(pattern_for("/usr/bin/FIND src -delete").is_none());
+        assert!(pattern_for("find src -del'ete'").is_none());
+        assert!(pattern_for("/usr/bin/find src -del'ete'").is_none());
+    }
+
+    #[test]
     fn compound_shell_commands_do_not_get_pattern() {
         assert!(pattern_for("find src -type f ; rm -rf target").is_none());
         assert!(pattern_for("find src -type f && rm -rf target").is_none());
@@ -834,7 +1031,7 @@ rest=substr(line,3); g=index(rest,"|")+1; guide=substr(rest,g+2); gp=0; gg=guide
     fn compound_ls_commands_use_compact_segmented_target() {
         let args = json!({
             "action": "run",
-            "command": "ls /Users/me/project/.agents/ 2>/dev/null; echo '---'; ls /Users/me/project/docs/ 2>/dev/null"
+            "command": "ls /Users/me/project/.agents/ 2>/dev/null; ls /Users/me/project/docs/ 2>/dev/null"
         });
         let target = exact_shell_learning_target("exec_command", Some(&args), "Run Command").expect("target");
 
@@ -843,6 +1040,27 @@ rest=substr(line,3); g=index(rest,"|")+1; guide=substr(rest,g+2); gp=0; gg=guide
             "shell-pattern:ls|sandbox_permissions=\"use_default\"|additional_permissions=null"
         );
         assert_eq!(target.display_label, "safe `ls` path reads");
+    }
+
+    #[test]
+    fn compound_with_a_patternless_segment_stays_exact_only() {
+        // CodeRabbit: a safe segment must not supply a lone key for a
+        // path-qualified `./find` segment (agent-created binary), a bare
+        // find/sed/awk segment, or any unsafe segment.
+        for command in [
+            "ls src && ./find src -type f",
+            "ls src && find src -type f",
+            "ls src; python3 mutate.py",
+        ] {
+            let args = json!({ "action": "run", "command": command });
+            let key = exact_shell_learning_target("exec_command", Some(&args), "Run Command")
+                .expect("exact target")
+                .approval_key;
+            assert!(
+                !key.starts_with("shell-pattern:"),
+                "compound with a pattern-less/unsafe segment must stay exact-only: {command} -> {key}"
+            );
+        }
     }
 
     #[test]
