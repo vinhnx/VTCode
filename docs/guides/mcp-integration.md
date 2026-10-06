@@ -144,6 +144,12 @@ registry's `list_changed` refresh instead. Full tool definitions (`get_tool_deta
 > servers must expose Server-Sent Events per the transport spec. If an HTTP provider lacks streaming, fall back to a
 > stdio wrapper until the server adopts the reference implementation.
 
+### Parallel web search without an API key
+
+[Parallel Search MCP](parallel-search-mcp.md) provides opt-in web search and page extraction over Streamable HTTP.
+Use the [runnable TOML example](../examples/parallel-search-mcp.toml) to add the anonymous endpoint alongside your
+existing providers. It requires no Parallel API key or OAuth login; the free tier is rate limited.
+
 ### Memcode long-term memory over OAuth
 
 [Memcode](https://memcode.in) exposes an optional hosted Streamable HTTP server for persistent personal memory. VT Code
