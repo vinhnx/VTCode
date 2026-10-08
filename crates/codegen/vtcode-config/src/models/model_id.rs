@@ -301,6 +301,8 @@ pub enum ModelId {
     OpenRouterXiaomiMimoV26Flash,
     /// MiMo-V2.6-Pro-UltraSpeed - Xiaomi's fastest flagship variant via OpenRouter
     OpenRouterXiaomiMimoV26ProUltraspeed,
+    /// Step 5 Preview - StepFun's flagship agentic model via OpenRouter
+    OpenRouterStepfunStep5Preview,
 
     // Vercel AI Gateway models (namespaced as `vendor/model` on the gateway)
     /// Claude Sonnet 5 served through the Vercel AI Gateway

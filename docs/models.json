@@ -2672,6 +2672,41 @@
           "generation": "6",
           "doc_comment": "GPT-6 Luna - Fast cost-efficient model in the GPT-6 series via OpenRouter"
         }
+      },
+      "stepfun/step-5-preview": {
+        "id": "stepfun/step-5-preview",
+        "name": "StepFun: Step 5 Preview",
+        "description": "Step 5 Preview is StepFun's flagship model for agentic work, built on a sparse Mixture-of-Experts architecture (27B active / 600B total parameters). It performs strongly in software engineering and professional scenarios with 1M context and native multimodal capabilities.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 64000,
+        "cost": {
+          "input": 1e-06,
+          "output": 2.7e-06,
+          "cache_read": 5e-08
+        },
+        "vtcode": {
+          "variant": "OpenRouterStepfunStep5Preview",
+          "constant": "STEPFUN_STEP_5_PREVIEW",
+          "vendor": "stepfun",
+          "display": "Step 5 Preview",
+          "description": "StepFun Step 5 Preview flagship agentic model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "5",
+          "doc_comment": "Step 5 Preview - StepFun's flagship agentic model via OpenRouter"
+        }
       }
     },
     "default_model": "xiaomi/mimo-v2.6-pro"
