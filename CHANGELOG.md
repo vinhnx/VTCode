@@ -2,6 +2,19 @@
 
 All notable changes to vtcode will be documented in this file.
 
+## 0.175.1 - 2026-10-08
+
+### Highlights
+#### Bug Fixes
+
+- Revert parallel asset uploads that wedged Step 4 (804fd340) 
+#### Features
+
+- Emit determinate progress via OSC 7501 (74d51498) 
+### Other Changes
+#### Performance
+
+- Replace RwLock with ArcSwap for read-heavy theme runtime (dad2216a) 
 ## 0.175.0 - 2026-10-08
 
 ### Highlights
