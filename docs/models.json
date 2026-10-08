@@ -4450,16 +4450,8 @@
       "anthropic/claude-haiku-5-5": {
         "id": "anthropic/claude-haiku-5-5",
         "name": "Claude Haiku 5.5 (Merge Gateway)",
-        "description": "Anthropic Claude Haiku 5.5 for high-volume latency-sensitive work served through Merge Gateway's native Responses API.",
-        "reasoning": true,
-        "reasoning_efforts": [
-          "minimal",
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max"
-        ],
+        "description": "Anthropic Claude Haiku 5.5 fast, cost-efficient model served through Merge Gateway. Reasoning is not forwarded: the gateway has no vendor serving reasoning jointly with tools for this route yet.",
+        "reasoning": false,
         "tool_call": true,
         "modalities": {
           "input": [

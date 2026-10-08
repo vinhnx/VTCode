@@ -164,6 +164,32 @@ fn reasoning_capability_rejection_attribution_matches_gateway_body() {
 }
 
 #[test]
+fn native_payload_omits_reasoning_for_haiku_5_5_route() {
+    // Like the `xiaomimimo/` routes, the gateway has no vendor serving
+    // reasoning jointly with tools for `anthropic/claude-haiku-5-5`
+    // (`capability_unavailable` for `['reasoning', 'tools']`), so the route
+    // stays unclassified and reasoning controls are omitted.
+    let provider = test_provider("http://127.0.0.1:1");
+    let model = models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5;
+    assert!(!provider.supports_reasoning(model), "{model} must not advertise reasoning");
+    assert!(!provider.supports_reasoning_effort(model), "{model} must not advertise reasoning effort");
+    let payload = provider
+        .build_native_payload(
+            &LLMRequest {
+                messages: vec![Message::user("hello".to_string())].into(),
+                model: model.to_string(),
+                reasoning_effort: Some(vtcode_config::types::ReasoningEffortLevel::High),
+                max_tokens: Some(4096),
+                ..Default::default()
+            },
+            false,
+        )
+        .expect("payload builds");
+    assert!(payload.get("reasoning_effort").is_none(), "{model} must not forward reasoning_effort");
+    assert!(payload.get("thinking").is_none(), "{model} must not forward thinking");
+}
+
+#[test]
 fn native_payload_omits_reasoning_for_xiaomimimo_routes() {
     // The gateway has no vendor serving reasoning jointly with tools for
     // `xiaomimimo/` routes: forwarding `thinking` turns every agentic request

@@ -88,16 +88,16 @@ pub const REASONING_EFFORT_ROUTES: &[&str] = &[
 
 /// Routes that advertise Gateway-controlled `thinking.budget_tokens` controls.
 ///
-/// `xiaomimimo/` routes are intentionally absent: Merge Gateway currently has
-/// no vendor serving reasoning jointly with tools for them (a `thinking`
-/// payload turns every agentic request into a `capability_unavailable`
-/// rejection), so they stay conservative until the route gains one.
+/// `xiaomimimo/` routes and `anthropic/claude-haiku-5-5` are intentionally
+/// absent: Merge Gateway currently has no vendor serving reasoning jointly
+/// with tools for them (a `thinking` payload turns every agentic request
+/// into a `capability_unavailable` rejection), so they stay conservative
+/// until the route gains one.
 pub const THINKING_BUDGET_ROUTES: &[&str] = &[
     ANTHROPIC_CLAUDE_OPUS_5,
     ANTHROPIC_CLAUDE_OPUS_5_5,
     ANTHROPIC_CLAUDE_SONNET_5,
     ANTHROPIC_CLAUDE_SONNET_5_5,
-    ANTHROPIC_CLAUDE_HAIKU_5_5,
     ANTHROPIC_CLAUDE_FABLE_5_1,
     GOOGLE_GEMINI_3_6_FLASH,
     GOOGLE_GEMINI_3_7_FLASH,
@@ -109,13 +109,13 @@ pub const THINKING_BUDGET_ROUTES: &[&str] = &[
 
 /// Curated Merge Gateway routes that support reasoning. Reasoning is controlled
 /// per route: either a provider-native `reasoning_effort` or a Gateway-managed
-/// thinking budget.
+/// thinking budget. `anthropic/claude-haiku-5-5` is intentionally absent: the
+/// gateway has no vendor serving reasoning jointly with tools for it yet.
 pub const REASONING_MODELS: &[&str] = &[
     ANTHROPIC_CLAUDE_OPUS_5,
     ANTHROPIC_CLAUDE_OPUS_5_5,
     ANTHROPIC_CLAUDE_SONNET_5,
     ANTHROPIC_CLAUDE_SONNET_5_5,
-    ANTHROPIC_CLAUDE_HAIKU_5_5,
     ANTHROPIC_CLAUDE_FABLE_5_1,
     GOOGLE_GEMINI_3_8_FLASH,
     DEEPSEEK_FLASH,

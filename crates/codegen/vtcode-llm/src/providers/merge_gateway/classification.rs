@@ -127,8 +127,16 @@ pub(crate) enum MergeReasoningControl {
 /// has no vendor serving reasoning jointly with tools for them, so forwarding
 /// a `thinking` block turns every agentic request into a
 /// `capability_unavailable` rejection.
+///
+/// `anthropic/claude-haiku-5-5` is unclassified for the same reason: the
+/// gateway reports `has no vendor that supports the requested capabilities
+/// (['reasoning', 'tools'])` for it, so reasoning controls are omitted until
+/// the route gains a joint vendor.
 pub(crate) fn merge_reasoning_control_for_model(model: &str) -> Option<MergeReasoningControl> {
     let model = model.trim();
+    if model == models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5 {
+        return None;
+    }
     if model.starts_with("openai/")
         || model.starts_with("xai/")
         || model.starts_with("moonshot/")

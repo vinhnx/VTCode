@@ -453,7 +453,7 @@ model_id_table! {
         id: models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5,
         parse: [models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5],
         display: "Claude Haiku 5.5 (Merge Gateway)",
-        description: "Anthropic Claude Haiku 5.5 for high-volume latency-sensitive work with adaptive thinking, 1M context, and 128K output via Merge Gateway",
+        description: "Anthropic Claude Haiku 5.5 fast, cost-efficient model accessed through Merge Gateway (reasoning not forwarded: no joint reasoning+tools vendor yet)",
     },
     MergeGatewayAnthropicClaudeFable51 {
         provider: MergeGateway,
