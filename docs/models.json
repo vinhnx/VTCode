@@ -1441,6 +1441,40 @@
           "xhigh",
           "max"
         ]
+      },
+      "claude-haiku-5-5": {
+        "id": "claude-haiku-5-5",
+        "name": "Claude Haiku 5.5",
+        "description": "High-volume latency-sensitive work for classification, routing, extraction, and subagents with adaptive thinking, 1M context, 128K output, default effort medium",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "status": "current",
+        "version": "5.5",
+        "cost": {
+          "input": 1e-07,
+          "output": 5e-07,
+          "cache_read": 1e-08,
+          "cache_write": 1.25e-07
+        },
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
       }
     }
   },
@@ -4412,6 +4446,37 @@
           "structured_output": true
         },
         "is_pro": true
+      },
+      "anthropic/claude-haiku-5-5": {
+        "id": "anthropic/claude-haiku-5-5",
+        "name": "Claude Haiku 5.5 (Merge Gateway)",
+        "description": "Anthropic Claude Haiku 5.5 for high-volume latency-sensitive work served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        }
       }
     }
   },

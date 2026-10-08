@@ -243,6 +243,7 @@ fn test_models_for_provider() {
     assert!(anthropic_models.contains(&ModelId::ClaudeOpus5));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet5));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet55));
+    assert!(anthropic_models.contains(&ModelId::ClaudeHaiku55));
     assert!(!anthropic_models.contains(&ModelId::GPT56Sol));
 
     let deepseek_models = ModelId::models_for_provider(Provider::DeepSeek);
@@ -264,7 +265,7 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 26);
+    assert_eq!(merge_gateway_models.len(), 27);
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayDefaultRouting));
@@ -277,6 +278,7 @@ fn test_models_for_provider() {
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt61Sol));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Luna));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku4520251001));
+    assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku55));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXaiGrok47));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayMistralLarge4));
 

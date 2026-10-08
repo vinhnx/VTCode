@@ -24,6 +24,7 @@ pub const OPENAI_GPT_6_1_SOL: &str = "openai/gpt-6.1-sol";
 pub const OPENAI_GPT_6_LUNA: &str = "openai/gpt-6-luna";
 pub const GOOGLE_GEMINI_3_8_FLASH: &str = "google/gemini-3.8-flash";
 pub const ANTHROPIC_CLAUDE_HAIKU_4_5_20251001: &str = "anthropic/claude-haiku-4-5-20251001";
+pub const ANTHROPIC_CLAUDE_HAIKU_5_5: &str = "anthropic/claude-haiku-5-5";
 pub const ANTHROPIC_CLAUDE_FABLE_5_1: &str = "anthropic/claude-fable-5-1";
 pub const DEEPSEEK_FLASH: &str = "deepseek/deepseek-v4.1-flash";
 pub const XIAOMIMIMO_MIMO_V2_6_PRO: &str = "xiaomimimo/mimo-v2.6-pro";
@@ -42,6 +43,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     ANTHROPIC_CLAUDE_SONNET_5,
     ANTHROPIC_CLAUDE_SONNET_5_5,
     ANTHROPIC_CLAUDE_HAIKU_4_5_20251001,
+    ANTHROPIC_CLAUDE_HAIKU_5_5,
     ANTHROPIC_CLAUDE_FABLE_5_1,
     GOOGLE_GEMINI_3_6_FLASH,
     GOOGLE_GEMINI_3_7_FLASH,
@@ -95,6 +97,7 @@ pub const THINKING_BUDGET_ROUTES: &[&str] = &[
     ANTHROPIC_CLAUDE_OPUS_5_5,
     ANTHROPIC_CLAUDE_SONNET_5,
     ANTHROPIC_CLAUDE_SONNET_5_5,
+    ANTHROPIC_CLAUDE_HAIKU_5_5,
     ANTHROPIC_CLAUDE_FABLE_5_1,
     GOOGLE_GEMINI_3_6_FLASH,
     GOOGLE_GEMINI_3_7_FLASH,
@@ -112,6 +115,7 @@ pub const REASONING_MODELS: &[&str] = &[
     ANTHROPIC_CLAUDE_OPUS_5_5,
     ANTHROPIC_CLAUDE_SONNET_5,
     ANTHROPIC_CLAUDE_SONNET_5_5,
+    ANTHROPIC_CLAUDE_HAIKU_5_5,
     ANTHROPIC_CLAUDE_FABLE_5_1,
     GOOGLE_GEMINI_3_8_FLASH,
     DEEPSEEK_FLASH,

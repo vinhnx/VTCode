@@ -71,6 +71,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5,
+            "Claude Haiku 5.5 (Merge Gateway)",
+            "Anthropic Claude Haiku 5.5 for high-volume latency-sensitive work through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
             models::merge_gateway::ANTHROPIC_CLAUDE_FABLE_5_1,
             "Claude Fable 5.1 (Merge Gateway)",
             "Anthropic Claude Fable 5.1 through Merge Gateway",

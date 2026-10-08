@@ -52,6 +52,8 @@ pub enum ModelId {
     ClaudeSonnet5,
     /// Claude Sonnet 5.5 - Latest Sonnet: best speed/intelligence balance, 1M context, 128K output, `between_tools` as the lowest thinking setting, default effort high
     ClaudeSonnet55,
+    /// Claude Haiku 5.5 - High-volume latency-sensitive work: classification, routing, extraction, subagents; adaptive thinking, 1M context, 128K output, default effort medium
+    ClaudeHaiku55,
     /// Claude Fable 5 - Anthropic's most capable widely released model for demanding reasoning and long-horizon agentic work
     ClaudeFable5,
     /// Claude Fable 5.1 - successor to Fable 5 for demanding reasoning and long-horizon agentic work, 1M context, adaptive thinking always on, cache reads at 1/4 cost
@@ -130,6 +132,8 @@ pub enum ModelId {
     MergeGatewayGoogleGemini38Flash,
     /// Anthropic Claude Haiku 4.5 through Merge Gateway
     MergeGatewayAnthropicClaudeHaiku4520251001,
+    /// Anthropic Claude Haiku 5.5 through Merge Gateway
+    MergeGatewayAnthropicClaudeHaiku55,
     /// Anthropic Claude Fable 5.1 through Merge Gateway
     MergeGatewayAnthropicClaudeFable51,
     /// OpenAI GPT-6 Astra through Merge Gateway

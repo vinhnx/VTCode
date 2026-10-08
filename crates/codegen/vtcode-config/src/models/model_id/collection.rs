@@ -31,6 +31,7 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeSonnet5,
             ModelId::ClaudeSonnet55,
+            ModelId::ClaudeHaiku55,
             ModelId::ClaudeFable5,
             ModelId::ClaudeFable51,
             ModelId::ClaudeOpus5,
@@ -68,6 +69,7 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt56Terra,
             ModelId::MergeGatewayGoogleGemini38Flash,
             ModelId::MergeGatewayAnthropicClaudeHaiku4520251001,
+            ModelId::MergeGatewayAnthropicClaudeHaiku55,
             ModelId::MergeGatewayAnthropicClaudeFable51,
             ModelId::MergeGatewayDeepseekFlash,
             ModelId::MergeGatewayOpenAIGpt6Astra,

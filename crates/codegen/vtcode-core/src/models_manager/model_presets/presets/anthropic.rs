@@ -234,6 +234,44 @@ pub(crate) fn anthropic_presets() -> Vec<ModelPreset> {
             context_window: Some(1_000_000),
         },
         ModelPreset {
+            id: "claude-haiku-5-5".to_string(),
+            model: "claude-haiku-5-5".to_string(),
+            display_name: "Claude Haiku 5.5".to_string(),
+            description:
+                "High-volume latency-sensitive work for classification, routing, extraction, and subagents with adaptive thinking, 1M context, 128K output, and default medium effort"
+                    .to_string(),
+            provider: Provider::Anthropic,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Default adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep adaptive effort".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::XHigh,
+                    description: "Extended capability for the hardest coding and agentic tasks".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum adaptive effort for intelligence-demanding tasks"
+                        .to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+        ModelPreset {
             id: "claude-opus-5".to_string(),
             model: "claude-opus-5".to_string(),
             display_name: "Claude Opus 4.8".to_string(),

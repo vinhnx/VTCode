@@ -255,7 +255,9 @@ impl ModelId {
                 | ModelId::VercelDeepseekFlash
                 | ModelId::VercelOpenAiGpt56Luna
                 | ModelId::VercelAnthropicClaudeHaiku45
+                | ModelId::ClaudeHaiku55
                 | ModelId::MergeGatewayAnthropicClaudeHaiku4520251001
+                | ModelId::MergeGatewayAnthropicClaudeHaiku55
                 | ModelId::StepFun37Flash
                 | ModelId::MergeGatewayDeepseekFlash
                 | ModelId::DeepSeekFlash
@@ -288,6 +290,8 @@ impl ModelId {
                 | ModelId::MergeGatewayOpenAIGpt56Luna
                 | ModelId::MergeGatewayOpenAIGpt6Luna
                 | ModelId::CopilotGPT54Mini
+                | ModelId::ClaudeHaiku55
+                | ModelId::MergeGatewayAnthropicClaudeHaiku55
                 | ModelId::DeepSeekFlash
                 | ModelId::MergeGatewayDeepseekFlash
                 | ModelId::MetaMuseSpark11
@@ -401,6 +405,7 @@ impl ModelId {
             // Anthropic generations
             ModelId::ClaudeSonnet5 => "5",
             ModelId::ClaudeSonnet55 => "5.5",
+            ModelId::ClaudeHaiku55 => "5.5",
             ModelId::ClaudeFable5 => "5",
             ModelId::ClaudeFable51 => "5.1",
             ModelId::ClaudeOpus5 => "5",
@@ -462,6 +467,7 @@ impl ModelId {
             ModelId::MergeGatewayAnthropicClaudeOpus55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeSonnet5 => "5",
             ModelId::MergeGatewayAnthropicClaudeSonnet55 => "5.5",
+            ModelId::MergeGatewayAnthropicClaudeHaiku55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeFable51 => "5.1",
             ModelId::MergeGatewayAnthropicClaudeHaiku4520251001 => "4.5",
             ModelId::MergeGatewayMinimaxH3 => "H3",

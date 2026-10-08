@@ -170,6 +170,13 @@ model_id_table! {
         display: "Claude Sonnet 5.5",
         description: "Latest Anthropic Sonnet with the best combination of speed and intelligence, adaptive thinking on by default, 1M context, 128K output, and `between_tools` as the lowest thinking setting",
     },
+    ClaudeHaiku55 {
+        provider: Anthropic,
+        id: models::CLAUDE_HAIKU_5_5,
+        parse: [models::CLAUDE_HAIKU_5_5],
+        display: "Claude Haiku 5.5",
+        description: "High-volume latency-sensitive work for classification, routing, extraction, and subagents with adaptive thinking, 1M context, 128K output, and default effort medium",
+    },
     ClaudeFable5 {
         provider: Anthropic,
         id: models::CLAUDE_FABLE_5,
@@ -440,6 +447,13 @@ model_id_table! {
         parse: [models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_4_5_20251001],
         display: "Claude Haiku 4.5 (Merge Gateway)",
         description: "Anthropic Claude Haiku 4.5 fast, cost-efficient model accessed through Merge Gateway",
+    },
+    MergeGatewayAnthropicClaudeHaiku55 {
+        provider: MergeGateway,
+        id: models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5,
+        parse: [models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5],
+        display: "Claude Haiku 5.5 (Merge Gateway)",
+        description: "Anthropic Claude Haiku 5.5 for high-volume latency-sensitive work with adaptive thinking, 1M context, and 128K output via Merge Gateway",
     },
     MergeGatewayAnthropicClaudeFable51 {
         provider: MergeGateway,
