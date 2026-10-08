@@ -118,3 +118,14 @@ This is amplified by PGO: building the instrumented binary become >90% faster. (
 According to Codex, by decreasing to codegen-units = 1, we sacrificed parallelism within each crate, but substantially reduced the total work especially in the fat-LTO step, because we end up with less "intermediate code, profiling data, and retained function bodies to process".
 
 https://github.com/astral-sh/uv/pull/22303
+
+---
+
+check session `session-vtcode-20261008T094713Z_891943-41907` being get turn blocked and can't continue .vtcode/tasks/blockerssession-vtcode-20261008t094713z_891943-41907-20261008T104149Z-45acdf07-4dce-41ab-8ef8-99e6e8a4acd5.md
+and also the session logs for further investigation for errors/warnings that prevent vtcode from progressing.
+
+===
+
+check and rework the background task modal to use inline bottom view instead of a separate popup. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-08 at 17.46.31.png'
+
+check the original /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/screenshots/vtcode-01237.png and allow expand 70-80% of the view.
