@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 
+## 0.174.0 - 2026-10-08
+
+### Highlights
+#### Bug Fixes
+
+- Leave claude-haiku-5-5 unclassified for reasoning (148d867f) 
+- Align prefix classifier and vision for haiku routes (7199ec47) 
+#### Features
+
+- Add claude-haiku-5-5 to anthropic and merge gateway (79f15708) 
+### Other Changes
 ## 0.173.2 - 2026-10-07
 
 ### Highlights
@@ -32,16 +43,6 @@ All notable changes to vtcode will be documented in this file.
 - Benchmark directory listing responsiveness (d3b74089) 
 - Clarify size fixtures and strengthen section boundaries (6de9c827) 
 ## 0.173.1 - 2026-10-07
-
-### Highlights
-#### Documentation
-
-- Add opt-in Parallel Search configuration  (6462f5b8) (@georgeatparallel)
-#### Features
-
-- Add mistral-large-4-0 route (40c6f044) 
-### Other Changes
-## 0.174.0 - 2026-10-07
 
 ### Highlights
 #### Documentation
