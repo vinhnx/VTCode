@@ -150,6 +150,17 @@ pub(crate) fn is_budget_exhausted_verification_block(lower: &str) -> bool {
             || lower.contains("budget ran out"))
 }
 
+/// Hard-handoff signals that veto a budget-exhausted verification auto-retry.
+/// Shared by the tracker and plan-mode classifiers so compound reasons cannot
+/// auto-queue past a permission/interview wait. `extra_deny` holds
+/// mode-specific tokens (tracker extras vs plan-mode's broad `"awaiting"`).
+fn budget_exhausted_verification_is_hard_deny(lower: &str, extra_deny: &[&str]) -> bool {
+    RECOVERABLE_BLOCK_BASE_DENY_TOKENS
+        .iter()
+        .filter(|token| **token != "verification is still pending")
+        .chain(extra_deny.iter())
+        .any(|token| lower.contains(token))
+}
 /// Whether a blocked/completed turn reason is recoverable for tracker auto-queue
 /// (budget/preview/tool-free recovery) rather than a user-input handoff.
 ///
@@ -172,12 +183,7 @@ pub(crate) fn tracker_auto_continue_is_recoverable_block(reason: Option<&str>) -
     // fresh execution budget. Still deny when harder handoff signals are
     // present (permission / safety / compaction / contract violation).
     if is_budget_exhausted_verification_block(&reason) {
-        let hard_deny = RECOVERABLE_BLOCK_BASE_DENY_TOKENS
-            .iter()
-            .filter(|token| **token != "verification is still pending")
-            .chain(TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS.iter())
-            .any(|token| reason.contains(token));
-        return !hard_deny;
+        return !budget_exhausted_verification_is_hard_deny(&reason, TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS);
     }
     // Deny production constants that must never auto-queue (true handoffs).
     // RECOVERY_CONTRACT_VIOLATION_REASON: "...final tool-free synthesis pass...attempted more tool calls."
@@ -313,7 +319,7 @@ pub(crate) fn plan_mode_recoverable_block(reason: &str) -> bool {
     // Budget-only verification blocks can retry on a fresh turn, same as the
     // tracker gate. Other verification blocks stay terminal.
     if is_budget_exhausted_verification_block(&lower) {
-        return !lower.contains("awaiting");
+        return !budget_exhausted_verification_is_hard_deny(&lower, &["awaiting"]);
     }
     // True handoffs deny even when recovery/budget tokens are also present
     // (compound reasons must not auto-queue past a permission/interview wait).

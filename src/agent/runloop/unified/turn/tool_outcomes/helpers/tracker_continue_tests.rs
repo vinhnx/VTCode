@@ -207,6 +207,14 @@ fn plan_mode_recoverable_block_allow_list() {
     // Compound recovery+permission must deny (true handoff first).
     assert!(!plan_mode_recoverable_block("recovery fallback after permission denied for exec_command"));
     assert!(!plan_mode_recoverable_block("tool budget exhausted while awaiting user approval"));
+    // Budget-exhausted verification blocks retry, unless a harder handoff
+    // signal shares the reason.
+    assert!(plan_mode_recoverable_block(
+        "Verification is still pending: the turn tool-call budget is exhausted; resume with fresh execution budget."
+    ));
+    assert!(!plan_mode_recoverable_block(
+        "Verification is still pending: the turn tool-call budget is exhausted; permission denied by policy."
+    ));
 }
 
 #[test]
