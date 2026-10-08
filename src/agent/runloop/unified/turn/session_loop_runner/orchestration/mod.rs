@@ -2132,6 +2132,16 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     } else {
                         latest_assistant_result_text(&runtime.state.messages)
                     };
+                    // Adoption gate: a fresh informational turn must not be
+                    // pulled into unrelated workspace tracker work. Completed
+                    // turns only auto-queue tracker work adopted by this
+                    // session (progressive-work request, recent tool activity,
+                    // or follow-up). Blocked recoverable ends keep their own
+                    // classifier; explicit resume bypasses this entirely.
+                    let tracker_adoption_allowed =
+                        crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(
+                            &runtime.state.messages,
+                        );
                     let final_text_is_safety_handoff =
                         vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(
                             final_text.as_deref().unwrap_or(""),
@@ -2150,7 +2160,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         max_turns,
                         final_text_is_safety_handoff,
                         final_text_requires_user_input,
-                    );
+                    ) && (!turn_completed || tracker_adoption_allowed);
                     // Plan-mode outer auto-continue: only recoverable *blocked*
                     // planning ends (budget/safety-cap/tool-free recovery) queue
                     // another turn. Completed planning turns may be interview or

@@ -204,7 +204,11 @@ pub(super) fn escape_untrusted_evidence(value: &str) -> String {
 }
 
 pub(super) fn safe_error_text(error: &anyhow::Error) -> String {
-    let sanitized = sanitize_diagnostic_text(&error.to_string());
+    // Preserve the bounded, sanitized cause chain (`{:#}` joins anyhow
+    // contexts with ": ") so auth/param/transport failures stay
+    // distinguishable. Raw bodies/credentials are still stripped by the
+    // sanitizer and the result stays bounded to DIAGNOSIS_MAX_FIELD_BYTES.
+    let sanitized = sanitize_diagnostic_text(&format!("{error:#}"));
     bound_text(sanitized.trim(), DIAGNOSIS_MAX_FIELD_BYTES)
 }
 

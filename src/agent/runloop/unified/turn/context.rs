@@ -27,6 +27,7 @@ use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
+pub(crate) use self::continuation::tracker_continuation_adoption_allowed;
 use self::continuation::{
     AUTONOMOUS_CONTINUE_DIRECTIVE, InterimTextContinuationDecision, apply_tracker_continuation_override,
     continuation_telemetry_outcome, evaluate_interim_text_continuation, push_system_directive_once,

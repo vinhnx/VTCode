@@ -278,6 +278,15 @@ fn recoverable_block_classification_allow_list() {
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "Turn blocked after repeated unverified assistant responses; verification is still pending."
     )));
+    // Session-vtcode-20261008T094713Z: budget-exhausted verification block
+    // resumes on a fresh turn with fresh execution budget.
+    assert!(tracker_auto_continue_is_recoverable_block(Some(
+        "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
+    )));
+    // Budget exception still denies harder handoffs sharing the same wording.
+    assert!(!tracker_auto_continue_is_recoverable_block(Some(
+        "Verification is still pending: the turn tool-call budget is exhausted; permission denied by policy."
+    )));
     // Production POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.
     assert!(!tracker_auto_continue_is_recoverable_block(Some(
         "The provider rejected the follow-up because the context exceeded its capacity, and the bounded recovery compaction could not reduce the request."
@@ -398,6 +407,32 @@ fn outer_queue_gate_blocks_unknown_and_contract_violation() {
             "Turn ended with a recovery fallback; the requested work was not confirmed. The current plan and task state were retained."
         ),
         false,
+        Some(&incomplete),
+        8,
+        false,
+        false
+    ));
+    // Budget-exhausted verification blocks queue a bounded fresh-turn retry,
+    // even though generic verification blocks do not.
+    assert!(should_queue_tracker_auto_continue(
+        true,
+        false,
+        false,
+        Some(
+            "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget."
+        ),
+        true,
+        Some(&incomplete),
+        8,
+        false,
+        false
+    ));
+    assert!(!should_queue_tracker_auto_continue(
+        true,
+        false,
+        false,
+        Some(crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON),
+        true,
         Some(&incomplete),
         8,
         false,

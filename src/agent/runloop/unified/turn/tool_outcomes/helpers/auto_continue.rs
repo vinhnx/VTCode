@@ -136,6 +136,20 @@ const TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS: &[&str] = &[
     "approval-ready plan remains",
 ];
 
+/// Budget-only verification block: `verification is still pending` caused by
+/// tool-call budget exhaustion (fresh turn gets fresh execution budget, so a
+/// verifier can run). Session `session-vtcode-20261008T094713Z` blocked on
+/// exactly this shape and required manual `continue`; other verification
+/// blocks (failing verifier, safety, permission) stay terminal.
+pub(crate) fn is_budget_exhausted_verification_block(lower: &str) -> bool {
+    lower.contains("verification is still pending")
+        && (lower.contains("tool-call budget")
+            || lower.contains("tool budget")
+            || lower.contains("turn budget")
+            || lower.contains("budget exhausted")
+            || lower.contains("budget ran out"))
+}
+
 /// Whether a blocked/completed turn reason is recoverable for tracker auto-queue
 /// (budget/preview/tool-free recovery) rather than a user-input handoff.
 ///
@@ -154,6 +168,17 @@ pub(crate) fn tracker_auto_continue_is_recoverable_block(reason: Option<&str>) -
         // Blocked { reason: None } must not auto-queue.
         return false;
     };
+    // Budget-exhausted verification blocks can resume on a fresh turn with
+    // fresh execution budget. Still deny when harder handoff signals are
+    // present (permission / safety / compaction / contract violation).
+    if is_budget_exhausted_verification_block(&reason) {
+        let hard_deny = RECOVERABLE_BLOCK_BASE_DENY_TOKENS
+            .iter()
+            .filter(|token| **token != "verification is still pending")
+            .chain(TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS.iter())
+            .any(|token| reason.contains(token));
+        return !hard_deny;
+    }
     // Deny production constants that must never auto-queue (true handoffs).
     // RECOVERY_CONTRACT_VIOLATION_REASON: "...final tool-free synthesis pass...attempted more tool calls."
     // PENDING_VERIFICATION_BLOCK_REASON: "...verification is still pending."
@@ -202,8 +227,17 @@ pub(crate) fn should_queue_tracker_auto_continue(
     if turn_completed {
         return incomplete_items.is_some_and(|items| !items.is_empty());
     }
-    if is_verification_block || blocked_reason.is_none() {
+    if blocked_reason.is_none() {
         return false;
+    }
+    if is_verification_block {
+        // Budget-only verification blocks get a bounded fresh-turn retry
+        // (fresh execution budget can run the verifier). Other verification
+        // blocks keep their existing recovery path first.
+        let lower = blocked_reason.map(str::to_ascii_lowercase).unwrap_or_default();
+        if !is_budget_exhausted_verification_block(&lower) {
+            return false;
+        }
     }
     tracker_auto_continue_is_recoverable_block(blocked_reason)
 }
@@ -276,6 +310,11 @@ pub(crate) fn plan_mode_recoverable_block(reason: &str) -> bool {
         return false;
     }
     let lower = reason.to_ascii_lowercase();
+    // Budget-only verification blocks can retry on a fresh turn, same as the
+    // tracker gate. Other verification blocks stay terminal.
+    if is_budget_exhausted_verification_block(&lower) {
+        return !lower.contains("awaiting");
+    }
     // True handoffs deny even when recovery/budget tokens are also present
     // (compound reasons must not auto-queue past a permission/interview wait).
     // "awaiting" is deliberately broader than the tracker's "awaiting approval".

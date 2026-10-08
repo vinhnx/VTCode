@@ -540,6 +540,20 @@ fn last_user_message_is_follow_up(history: &[uni::Message]) -> bool {
         })
 }
 
+/// Whether workspace tracker state may drive automatic continuation.
+///
+/// A fresh informational question (`what is vtcode`) must not be redirected
+/// into unrelated edits just because `.vtcode/tasks/current_task.md` has
+/// incomplete steps from another session. Require adoption: the current
+/// request asked for progressive work, recent tool activity exists in this
+/// session, or the last user message is a harness follow-up (`continue`
+/// resume). Explicit `--resume` paths bypass this gate (explicit adoption).
+pub(crate) fn tracker_continuation_adoption_allowed(history: &[uni::Message]) -> bool {
+    last_user_message_is_follow_up(history)
+        || has_recent_tool_activity(history)
+        || last_user_requested_progressive_work(history)
+}
+
 fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
     history.iter().rev().take(16).any(|message| {
         message.role == uni::MessageRole::Tool || message.tool_call_id.is_some() || message.tool_calls.is_some()
@@ -988,6 +1002,34 @@ mod tests {
             "Continue autonomously from the last stalled turn. Stall reason: x."
         ));
         assert!(!crate::agent::runloop::unified::state::is_follow_up_prompt_like("run cargo clippy and fix"));
+    }
+
+    #[test]
+    fn tracker_adoption_requires_progressive_work_or_activity() {
+        // Fresh informational question with no tool activity must not adopt
+        // unrelated workspace tracker work (session-vtcode-20261008T094713Z:
+        // `what is vtcode` redirected into README edits).
+        let fresh_info = vec![uni::Message::user("what is vtcode".to_string())];
+        assert!(!tracker_continuation_adoption_allowed(&fresh_info));
+        // Progressive-work request adopts.
+        let progressive = vec![uni::Message::user("please fix the README table".to_string())];
+        assert!(tracker_continuation_adoption_allowed(&progressive));
+        // Recent tool activity in this session adopts.
+        let with_tools = vec![
+            uni::Message::user("what is vtcode".to_string()),
+            uni::Message::assistant_with_tools(
+                String::new(),
+                vec![vtcode_core::llm::provider::ToolCall::function(
+                    "call_1".to_string(),
+                    "exec_command".to_string(),
+                    "{}".to_string(),
+                )],
+            ),
+        ];
+        assert!(tracker_continuation_adoption_allowed(&with_tools));
+        // Explicit follow-up adopts.
+        let follow_up = vec![uni::Message::user("continue".to_string())];
+        assert!(tracker_continuation_adoption_allowed(&follow_up));
     }
 
     #[test]

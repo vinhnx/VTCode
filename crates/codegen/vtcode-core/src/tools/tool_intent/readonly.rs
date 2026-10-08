@@ -593,6 +593,13 @@ mod tests {
             "awk 'BEGIN{print systime()}' README.md",
             "/usr/bin/awk 'NR>=1 && NR<=5' README.md",
             "awk 'NR>=1 && NR<=5' README.md | sort",
+            // Blocked-session regression: numeric `>` comparisons without
+            // `print` redirection are reads, not writes.
+            "awk '$3>100' README.md",
+            "awk '{if(p2==0 && i>1) print}' README.md",
+            "awk '{if(NR>1 && $2>10) print $1}' README.md",
+            "awk 'NR>=65 && NR<=71 {n=length($0); print n}' README.md",
+            "awk '{print (a>b)}' README.md",
         ] {
             assert!(is_readonly_command_session_command(&run_cmd(command)), "expected readonly command: {command}");
         }
@@ -603,6 +610,7 @@ mod tests {
         for command in [
             "awk '{print > \"out.txt\"}' README.md",
             "awk '{print >> \"out.txt\"}' README.md",
+            "awk '{print x > \"out.txt\"}' README.md",
             "awk '{print | \"sort\"}' README.md",
             "awk '\"sort\" | getline line' README.md",
             "awk 'BEGIN{system(\"touch out\")}' README.md",
@@ -616,9 +624,8 @@ mod tests {
             "awk '@include \"x.awk\"' README.md",
             "awk '@load \"ext\"' README.md",
             "awk '{print \"a@b\"}' README.md",
-            // Bare `>` comparisons and `|` alternations are indistinguishable
-            // from redirection/pipes without a full parser — fail closed.
-            "awk '$3>100' README.md",
+            // `|` alternations inside regex stay conservative without a full
+            // parser; single `>` without `print` is now a comparison above.
             "awk '/error|warning/' README.md",
             "awk -i inplace '{print}' README.md",
             "awk -f program.awk README.md",

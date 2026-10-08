@@ -713,6 +713,12 @@ impl<'a> TurnProcessingContext<'a> {
         // still has incomplete steps, status recaps must continue instead of
         // ending the turn and nudging the user.
         //
+        // Adoption gate: a fresh informational request must not be redirected
+        // into unrelated workspace tracker work. Require progressive-work
+        // intent, recent tool activity, or a follow-up in this session before
+        // the workspace tracker can force continuation. Explicit `--resume`
+        // paths bypass this (explicit adoption).
+        //
         // Tool-free recovery stays terminal in-turn: finish_recovery_pass()
         // would re-enable tools and can re-enter recovery (see the
         // `tool_free_recovery_terminal` branch above). Outer auto-queue after
@@ -722,10 +728,14 @@ impl<'a> TurnProcessingContext<'a> {
         // `cross_turn_turns == 0` disables only the outer auto-queue.
         // Complete probes clear the cache so auto-continue stops when the
         // tracker finishes; Unavailable keeps the last known incomplete set.
+        let tracker_adoption_allowed = continuation_decision.last_user_requested_progressive_work
+            || continuation_decision.recent_tool_activity
+            || continuation_decision.last_user_follow_up;
         let live_probe = if !continuation_decision.should_continue
             && !tool_free_recovery_pass
             && proposed_plan.is_none()
             && !self.is_planning_active()
+            && tracker_adoption_allowed
             && crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_auto_continue_enabled(self.vt_cfg)
         {
             crate::agent::runloop::unified::turn::tool_outcomes::helpers::probe_tracker_incomplete(self.tool_registry)
@@ -739,6 +749,7 @@ impl<'a> TurnProcessingContext<'a> {
             && !tool_free_recovery_pass
             && proposed_plan.is_none()
             && !self.is_planning_active()
+            && tracker_adoption_allowed
             && crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_auto_continue_enabled(self.vt_cfg)
             && tracker_incomplete
         {

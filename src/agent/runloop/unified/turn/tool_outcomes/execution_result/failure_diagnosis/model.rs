@@ -71,6 +71,8 @@ pub(super) async fn diagnose_with_optional_model(
         Err(error) => {
             tracing::warn!(
                 tool = %tool_name,
+                route_provider = %resolution.primary.provider_name,
+                route_model = %resolution.primary.model,
                 error = %safe_error_text(&error),
                 "tool failure diagnosis failed on lightweight route"
             );
@@ -91,6 +93,8 @@ pub(super) async fn diagnose_with_optional_model(
             Err(error) => {
                 tracing::warn!(
                     tool = %tool_name,
+                    route_provider = %fallback_route.provider_name,
+                    route_model = %fallback_route.model,
                     error = %safe_error_text(&error),
                     "tool failure diagnosis fallback failed"
                 );

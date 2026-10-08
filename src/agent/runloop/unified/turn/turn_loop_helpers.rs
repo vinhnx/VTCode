@@ -355,24 +355,27 @@ fn apply_tool_loop_grant(
     let status_message = match grant_source {
         ToolLoopGrantSource::FullAuto => {
             format!(
-                "Full-auto auto-granted +{} tool loops (limit {}, cap {})",
+                "Full-auto auto-granted +{} tool loops (limit {}, cap {}); per-turn tool-call budget unchanged",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::SessionPreauthorized => {
             format!(
-                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases",
+                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases; per-turn tool-call budget unchanged",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual if requested_increment != increment => {
             format!(
-                "Tool loop limit increased to {} (+{}, requested +{}, cap {})",
+                "Tool loop limit increased to {} (+{}, requested +{}, cap {}); per-turn tool-call budget unchanged",
                 *current_max_tool_loops, increment, requested_increment, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual => {
-            format!("Tool loop limit increased to {} (+{}, cap {})", *current_max_tool_loops, increment, hard_cap,)
+            format!(
+                "Tool loop limit increased to {} (+{}, cap {}); per-turn tool-call budget unchanged",
+                *current_max_tool_loops, increment, hard_cap,
+            )
         }
     };
     display_status(ctx.renderer, &status_message)?;

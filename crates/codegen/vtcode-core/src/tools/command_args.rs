@@ -836,11 +836,17 @@ fn has_unsafe_awk_options(arguments: &[String]) -> bool {
 }
 
 /// Return whether an `awk` program can write files, pipe into commands,
-/// execute them, or load external code. `>` (unless the `>=` comparison) and
-/// bare `|` (unless the `||` operator) are output redirection and command
-/// pipes; `system()` runs shell commands; `@` invokes gawk indirect calls
-/// (`@func()`) and directives (`@include`, `@load`), which can execute or load
-/// arbitrary code — including a `system` name smuggled via `-v`.
+/// execute them, or load external code. Single `>` (output redirection /
+/// append `>>`) and bare `|` (command pipe) are writes; `>=` and `||` are
+/// comparisons/operators. `system()` runs shell commands; `@` invokes gawk
+/// indirect calls (`@func()`) and directives (`@include`, `@load`), which can
+/// execute or load arbitrary code — including a `system` name smuggled via `-v`.
+///
+/// A single `>` is a comparison (not redirection) when it cannot be `print` /
+/// `printf` redirection: inside `(...)` / `[...]` parentheses (e.g.
+/// `if(p2==0 && i>1)`), or in a statement with no prior `print` / `printf`
+/// (e.g. pattern `$3>100`). `print > file`, `print x > file`, and `print >>`
+/// stay mutating. `|` stays conservative: only `||` and quoted `"|"` pass.
 ///
 /// Double-quoted string literals are scanned as data: a quoted `"|"` passed to
 /// `index()` is a literal, not a command pipe, so the read-only shape
@@ -857,6 +863,13 @@ fn awk_program_may_write(program: &str) -> bool {
     // Whether the previous significant token can end an operand. This decides
     // whether `/` opens a regex literal or is a division operator.
     let mut prev_operand = false;
+    // `print` / `printf` seen in the current statement (reset on `;`/`{`/`}`).
+    // A single `>` can only be output redirection inside such a statement;
+    // without it (pattern `$3>100`) or inside parens (e.g. `if(i>1)`) it is a
+    // numeric comparison. `>>` is always redirection.
+    let mut seen_print_in_statement = false;
+    let mut paren_depth: usize = 0;
+    let mut bracket_depth: usize = 0;
     while index < chars.len() {
         let character = chars[index];
         if character.is_whitespace() {
@@ -947,7 +960,19 @@ fn awk_program_may_write(program: &str) -> bool {
                 prev_operand = false;
                 continue;
             }
-            return true;
+            // `>>` is always append-redirection.
+            if chars.get(index + 1) == Some(&'>') {
+                return true;
+            }
+            // Single `>` is redirection only inside a `print`/`printf`
+            // statement at paren/bracket depth 0. Otherwise it is a numeric
+            // comparison (`if(p2==0 && i>1)`, pattern `$3>100`).
+            if paren_depth == 0 && bracket_depth == 0 && seen_print_in_statement {
+                return true;
+            }
+            index += 1;
+            prev_operand = false;
+            continue;
         }
         if character == '|' {
             if chars.get(index + 1) == Some(&'|') {
@@ -969,11 +994,45 @@ fn awk_program_may_write(program: &str) -> bool {
                 index += 1;
             }
             let word: String = chars[start..index].iter().collect();
+            if word == "print" || word == "printf" {
+                seen_print_in_statement = true;
+            }
             prev_operand = !is_awk_keyword(&word);
             continue;
         }
-        if character == ')' || character == ']' || character == '$' {
+        if character == '(' {
+            paren_depth = paren_depth.saturating_add(1);
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        if character == '[' {
+            bracket_depth = bracket_depth.saturating_add(1);
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        if character == ')' {
+            paren_depth = paren_depth.saturating_sub(1);
             prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == ']' {
+            bracket_depth = bracket_depth.saturating_sub(1);
+            prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == '$' {
+            prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == ';' || character == '{' || character == '}' {
+            // New statement: a later `>` needs its own `print`/`printf`.
+            seen_print_in_statement = false;
+            prev_operand = false;
             index += 1;
             continue;
         }
