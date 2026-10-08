@@ -40,8 +40,8 @@ and nested headings, literal shell-like text, and both callers' shared helper.
 Removal fixtures verify middle/first/last extraction, exact-match safety on
 version prefixes (9.9 vs 9.9.9), and no-op behavior for absent versions and
 missing files, so re-runs regenerate stale entries instead of skipping.
-Upload fixtures stub the per-file retry wrapper to assert parallel fan-out
-(including throttled and spaced filenames), failure propagation, and
-`UPLOAD_PARALLEL_JOBS` fallback. A metadata guard asserts no workspace
-manifest sets docs.rs `rustc-args`.
+Upload fixtures stub `gh` to assert the sequential per-file retry wrapper
+attempts every asset (including spaced filenames) and rejects bad usage;
+parallel fan-out was reverted after it wedged the 0.175.0 release. A metadata
+guard asserts no workspace manifest sets docs.rs `rustc-args`.
 It does not run the release entrypoint's dry-run orchestration or publication.

@@ -331,50 +331,47 @@ before=$(cat "$fixture_dir/changelogs/CHANGELOG.md")
 )
 assert_equal "$(cat "$fixture_dir/changelogs/CHANGELOG.md")" "$before" "absent version removal is a no-op"
 
-# upload_release_assets_parallel: orchestration with stubbed per-file upload
-# (stubs the retry wrapper so failure cases run without backoff sleeps).
+# upload_release_asset_with_retry: sequential per-file upload with retry.
+# Step 4 uploads assets sequentially: parallel fan-out wedged the 0.175.0
+# release when one stalled `gh` blocked the batch `wait` with no per-upload
+# timeout, so each asset is attempted in order with failures retried
+# independently instead of fanning out background jobs.
 # shellcheck disable=SC1091
 source "$repo_scripts/release-assets.sh"
-: >"$fixture_dir/upload-calls"
-upload_release_asset_with_retry() {
-	printf '%s\n' "$(basename "$2")" >>"$fixture_dir/upload-calls"
-	case "$2" in
-	*bad-*) return 1 ;;
-	*) return 0 ;;
-	esac
-}
+if upload_release_asset_with_retry "9.9.9-test"; then
+	printf 'FAIL: retry helper accepted a missing file argument\n' >&2
+	exit 1
+fi
+checks=$((checks + 1))
 mkdir -p "$fixture_dir/uploads"
 : >"$fixture_dir/uploads/ok-a.bin"
-: >"$fixture_dir/uploads/ok-b.bin"
-: >"$fixture_dir/uploads/bad-c.bin"
-if ! upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/ok-a.bin" "$fixture_dir/uploads/ok-b.bin"; then
-	printf 'FAIL: parallel upload failed on healthy assets\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-# Independent oracle: every asset was attempted (order-insensitive).
-if [[ "$(sort "$fixture_dir/upload-calls" | tr '\n' ' ')" != 'ok-a.bin ok-b.bin ' ]]; then
-	printf 'FAIL: parallel upload did not attempt every asset\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
+: >"$fixture_dir/uploads/sp ace.bin"
 : >"$fixture_dir/upload-calls"
-if upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/ok-a.bin" "$fixture_dir/uploads/bad-c.bin"; then
-	printf 'FAIL: parallel upload hid a failed asset\n' >&2
+gh() {
+	printf '%s\n' "$(basename "$4")" >>"$fixture_dir/upload-calls"
+	return 0
+}
+export -f gh
+if ! upload_release_asset_with_retry "9.9.9-test" "$fixture_dir/uploads/ok-a.bin"; then
+	printf 'FAIL: retry helper failed on a healthy asset\n' >&2
 	exit 1
 fi
 checks=$((checks + 1))
-if [[ "$(sort "$fixture_dir/upload-calls" | tr '\n' ' ')" != 'bad-c.bin ok-a.bin ' ]]; then
-	printf 'FAIL: failed asset was not attempted alongside healthy ones\n' >&2
+# Filenames with spaces are passed through intact.
+if ! upload_release_asset_with_retry "9.9.9-test" "$fixture_dir/uploads/sp ace.bin"; then
+	printf 'FAIL: retry helper failed on a spaced filename\n' >&2
 	exit 1
 fi
 checks=$((checks + 1))
-# Invalid UPLOAD_PARALLEL_JOBS falls back to the default instead of stalling.
-if ! UPLOAD_PARALLEL_JOBS=bogus upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/ok-a.bin"; then
-	printf 'FAIL: invalid UPLOAD_PARALLEL_JOBS broke the upload\n' >&2
+if [[ "$(cat "$fixture_dir/upload-calls")" != 'ok-a.bin
+sp ace.bin' ]]; then
+	printf 'FAIL: spaced filename was mangled in transit\n' >&2
 	exit 1
 fi
 checks=$((checks + 1))
+# Restore the publication guard so later checks still catch real uploads.
+gh() { forbidden_publication; }
+export -f gh
 
 # docs.rs metadata guard: --cfg docsrs must only reach rustdoc, never rustc
 # (RUSTFLAGS --cfg docsrs breaks generic-array 0.14.7 on nightly: E0557
@@ -394,57 +391,6 @@ if [[ "$manifest_count" -lt 2 ]]; then
 	exit 1
 fi
 checks=$((checks + 1))
-
-# Throttle path: UPLOAD_PARALLEL_JOBS=1 serializes but still attempts every asset.
-: >"$fixture_dir/upload-calls"
-if ! UPLOAD_PARALLEL_JOBS=1 upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/ok-a.bin" "$fixture_dir/uploads/ok-b.bin"; then
-	printf 'FAIL: throttled parallel upload failed on healthy assets\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-if [[ "$(sort "$fixture_dir/upload-calls" | tr '\n' ' ')" != 'ok-a.bin ok-b.bin ' ]]; then
-	printf 'FAIL: throttled upload did not attempt every asset\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-
-# Filenames with spaces are attempted intact.
-: >"$fixture_dir/uploads/sp ace.bin"
-: >"$fixture_dir/upload-calls"
-if ! upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/sp ace.bin"; then
-	printf 'FAIL: parallel upload failed on a spaced filename\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-if [[ "$(cat "$fixture_dir/upload-calls")" != 'sp ace.bin' ]]; then
-	printf 'FAIL: spaced filename was mangled in transit\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-
-# A job killed before writing its status file must fail the release, never
-# pass silently. Simulate by overriding the single-asset helper for one file.
-_upload_single_asset() {
-	case "$2" in
-	*ghost-*) return 0 ;;
-	*)
-		if upload_release_asset_with_retry "$1" "$2"; then
-			echo "0" >"$3"
-		else
-			echo "1:$2" >"$3"
-		fi
-		;;
-	esac
-}
-: >"$fixture_dir/uploads/ghost-d.bin"
-if upload_release_assets_parallel "9.9.9-test" "$fixture_dir/uploads/ok-a.bin" "$fixture_dir/uploads/ghost-d.bin"; then
-	printf 'FAIL: missing status file reported success\n' >&2
-	exit 1
-fi
-checks=$((checks + 1))
-# Restore the real helpers (re-source is side-effect free: definitions only).
-# shellcheck disable=SC1091
-source "$repo_scripts/release-assets.sh"
 
 # No-op boundary: missing CHANGELOG.md creates nothing.
 mkdir -p "$fixture_dir/no-changelog"

@@ -89,11 +89,6 @@ Options:
                       Useful when macOS binaries already built locally
   -h, --help          Show this help message
 
-Environment:
-  UPLOAD_PARALLEL_JOBS
-                      Parallel GitHub Release asset uploads in Step 4
-                      (default 4).
-
 Cost Optimization:
   Default mode (recommended):
     • macOS binaries: built locally (no CI cost, faster)
@@ -1226,16 +1221,24 @@ main() {
 		# Two-phase upload: compatibility assets first, then normal archives,
 		# checksums, and install scripts. Upload order does NOT control legacy
 		# selection (GitHub re-sorts assets alphabetically by name; the `compat-`
-		# prefix is what makes the legacy updater pick them). Each phase
-		# uploads in parallel (UPLOAD_PARALLEL_JOBS, default 4); per-file
-		# retry handles transient HTTP 500s from uploads.github.com on large
-		# (~40-80MB) raw compat binaries.
+		# prefix is what makes the legacy updater pick them). Uploading compat
+		# first is harmless defense-in-depth kept for clarity.
 		local upload_failed=0
 		if [[ ${#compat_assets[@]} -gt 0 ]]; then
 			print_info "Uploading compatibility assets (legacy bridge)..."
-			if ! upload_release_assets_parallel "$released_version" "${compat_assets[@]}"; then
+			# Per-file upload with retry: uploads.github.com intermittently
+			# returns HTTP 500 on large (~40-80MB) raw compat binaries. A
+			# single batch upload would fail all remaining assets on one
+			# transient error, so each asset is retried independently.
+			local compat_file
+			for compat_file in "${compat_assets[@]}"; do
+				if ! upload_release_asset_with_retry "$released_version" "$compat_file"; then
+					print_error "Failed to upload compatibility asset $(basename "$compat_file") to GitHub Release"
+					upload_failed=1
+				fi
+			done
+			if [[ "$upload_failed" -ne 0 ]]; then
 				print_error "Failed to upload compatibility assets to GitHub Release"
-				upload_failed=1
 			fi
 		fi
 
@@ -1265,9 +1268,15 @@ main() {
 		fi
 		if [[ ${#filtered_normal_files[@]} -gt 0 ]]; then
 			print_info "Uploading normal archives, checksums, and install scripts..."
-			if ! upload_release_assets_parallel "$released_version" "${filtered_normal_files[@]}"; then
+			local normal_file
+			for normal_file in "${filtered_normal_files[@]}"; do
+				if ! upload_release_asset_with_retry "$released_version" "$normal_file"; then
+					print_error "Failed to upload $(basename "$normal_file") to GitHub Release"
+					upload_failed=1
+				fi
+			done
+			if [[ "$upload_failed" -ne 0 ]]; then
 				print_error "Failed to upload binaries to GitHub Release"
-				upload_failed=1
 			fi
 		fi
 
