@@ -10,8 +10,11 @@ the configured status-line content: Git/worktree context in `auto` mode, custom 
 and no configured text in `hidden` mode. The existing `ui.status_line` settings, clock visibility, command refresh
 interval/timeout, automatic fallback for a missing command, and live configuration reload remain effective.
 Configured output is retained by source, so text such as `Running custom dashboard` is not discarded as tool activity.
-Copy notifications and independent background
-or shell hints retain their footer presentation.
+The footer reserves persistent regions before fitting optional content: mode, configured right-side content, configured
+context, then hints. Each region is truncated independently by terminal columns. Loading phases and elapsed seconds
+cannot push out the mode or move the right-side content. When the transcript row cannot fit, loading uses a bounded
+24-column optional footer slot after context. Copy notifications and independent background or shell hints retain
+their footer presentation when space permits.
 
 `ProgressOperation`, `ProgressPhase`, and `ProgressUpdate` live in `vtcode-commons::ui_protocol`. The UI accepts a new
 operation identity, updates only that active identity, and clears only the matching operation. Finished identities
@@ -64,10 +67,44 @@ clocks. Compare rebuilt release binaries in three paired runs and report provide
 The prompt worker acquires the existing exclusive rewind lock, captures content, serializes JSON, and durably
 publishes the checkpoint and navigation record on the blocking pool. Its lease remains held until the turn settles.
 Independent dirty-worktree inspection starts before checkpoint preparation and is awaited before request dispatch.
-If checkpointing fails, drain that worker and retain the existing prompt restoration path.
+If checkpointing fails, drain that worker and retain the existing prompt restoration path. Cancellation interrupts
+preparation waits before tools are admitted. The worker retains ownership through safe checkpoint publication and
+lease release even when the caller stops waiting; cancelled preparation never grants a tool execution lease.
 
 Hot retention discovers retired records before parsing live checkpoint JSON. With no retired records, it skips live
 record parsing, content-store opening, and garbage collection. Reclamation still checks every live reference before
 deleting retired sessions, and corrupt metadata defers cleanup. Explicit full maintenance also collects old orphaned
 content when no retired records exist. Existing resource, catalog, connection, and request-prefix caches retain their
 current ownership and invalidation rules.
+
+## Cancellation and exit
+
+First Ctrl+C cancels the current task; a second press within one second exits. The TUI callback publishes exit
+immediately, including during initialization and preparation. Exit is irreversible within a session. A fresh
+submission may clear handled cancellation; it cannot clear an exit request. Cancelled provider follow-ups end as
+Cancelled rather than entering recovery, fallback synthesis, or automatic planning/tracker continuation. Completed
+output, task state, queued user messages, and composer drafts remain available. Fresh user input is required to resume.
+During initialization, first cancellation pauses the remaining initialization work; submitting fresh input resumes it.
+Preparation assembles transient system notes without changing conversation history. Notes enter history only after
+the cancellable preparation wait succeeds, so interrupted preparation cannot leave them in later requests or archives.
+
+Exit cleanup uses one 1.5-second session deadline and the existing 500 ms runtime shutdown allowance. Independent
+persistence, hooks, child cleanup, and TUI finalization run concurrently under the remaining deadline. Cancellation
+and exit skip LLM-backed memory finalization. Completed canonical persistence errors, code-change snapshots, and saved
+archive identifiers are retained independently when other maintenance times out. Archive identifiers are published
+after the atomic write, before later hooks. Terminal restoration and the exit summary always run after maintenance.
+Terminal event draining uses an atomic timed read in the maintained crossterm fork, with a 20 ms deadline and 128-event
+maximum. Registry crossterm builds use a bounded 10 ms poll to collect pending terminal replies; they avoid a subsequent
+blocking read because registry crossterm has no atomic timed-read API.
+
+Content-free `vtcode.shutdown` diagnostics record exit acceptance, teardown, persistence, TUI closure, terminal
+restoration, postamble completion, and runtime shutdown/process return. Durations use monotonic clocks; no prompts,
+responses, or credentials are recorded. The PTY regression script checks cooked-mode restoration, one complete
+postamble, child cleanup, and accepted-exit-to-shell-return latency with continuing events and stalled hooks:
+
+```sh
+python3 scripts/tests/test_exit_latency.py target/debug/vtcode --baseline /path/to/rebuilt/baseline --runs 3
+```
+
+The baseline is observational; the candidate must return within two seconds. Use binaries built with the same
+profile and record their provenance. The fixture uses isolated temporary configuration and makes no provider calls.

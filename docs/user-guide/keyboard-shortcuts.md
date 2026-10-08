@@ -131,3 +131,8 @@ Rebindable actions (`open_transcript_review`, `toggle_transcript_render_mode`, `
 `ui.keybindings` (`KeyBindingConfig::bindings` / `UserPreferences::keybindings`, `cmd`/`super` = Command). Composer
 editing keys above (`Tab`, `Esc`, `Cmd+A`, arrows, readline) are intentionally hardcoded in `session/events.rs` and not
 rebindable. See [Configuration](../config/config.md) and [Interactive Mode](./interactive-mode.md).
+
+Cancellation stops the active task without discarding completed output or composer drafts. Press Ctrl+C again within
+one second to exit; a fresh submission cannot override an accepted exit. Cancelled work requires fresh user input
+to resume and never triggers automatic recovery or continuation. During initialization, cancellation pauses the
+remaining setup work until a fresh submission. See [response progress](../development/response-progress.md).

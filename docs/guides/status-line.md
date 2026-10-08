@@ -25,7 +25,9 @@ timeouts, and other I/O failures remain errors.
 
 During response progress, the transcript owns the loading row and the footer keeps this configured content:
 automatic context, your command's output, or no configured text in hidden mode. Live configuration changes still
-apply, including switching modes, changing the command, and hiding the clock.
+apply, including switching modes, changing the command, and hiding the clock. Mode and configured right-side content
+keep their slots across loading phases. Narrow layouts retain mode first, then right-side content, context, and optional
+hints; each region is truncated separately. A bounded loading fallback appears after context only when space remains.
 
 ```toml
 [ui.status_line]

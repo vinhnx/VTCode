@@ -76,6 +76,7 @@ pub(super) async fn finalize_session(
     async_mcp_manager: Option<&AsyncMcpManager>,
     handle: &InlineHandle,
     session: &mut InlineSession,
+    completed_output: &mut Option<FinalizationOutput>,
 ) -> Result<FinalizationOutput> {
     let transcript_lines = transcript::snapshot();
     let mut archive_path: Option<PathBuf> = None;
@@ -126,6 +127,9 @@ pub(super) async fn finalize_session(
             match tokio::time::timeout(archive_timeout, finalize_task).await {
                 Ok(Ok(Ok(path))) => {
                     archive_path = Some(path.clone());
+                    // Preserve the durable path even if later hooks or TUI
+                    // maintenance exhaust the caller's teardown deadline.
+                    *completed_output = Some(FinalizationOutput { archive_path: Some(path.clone()) });
                     if let Some(hooks) = lifecycle_hooks {
                         hooks.update_transcript_path(Some(path.clone())).await;
                     }

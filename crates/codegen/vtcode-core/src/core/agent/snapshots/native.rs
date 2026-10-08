@@ -502,6 +502,28 @@ impl SnapshotManager {
         prompt: &str,
         conversation: &[SessionMessage],
     ) -> Result<PromptCheckpointLease> {
+        self.begin_prompt_with_cancellation(
+            turn,
+            session,
+            prompt,
+            conversation,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await?
+        .context("checkpoint preparation cancelled")
+    }
+
+    /// Prepare a checkpoint while allowing the caller to stop waiting. The
+    /// blocking worker retains the rewind lock through atomic publication and
+    /// drops its lease on cancellation; no tool may run without that lease.
+    pub async fn begin_prompt_with_cancellation(
+        &self,
+        turn: usize,
+        session: &str,
+        prompt: &str,
+        conversation: &[SessionMessage],
+        cancellation: tokio_util::sync::CancellationToken,
+    ) -> Result<Option<PromptCheckpointLease>> {
         let manager = self.clone();
         let session = session.to_owned();
         let prompt = prompt.to_owned();
@@ -509,13 +531,36 @@ impl SnapshotManager {
         // Lock acquisition, scanning, serialization and durable publication
         // all belong on the blocking worker. Its lease retains the same lock
         // through pruning and the complete agent turn, including on cancellation.
-        let lease =
-            tokio::task::spawn_blocking(move || manager.begin_prompt_blocking(turn, &session, &prompt, &conversation))
-                .await
-                .context("checkpoint preparation worker failed")??;
-        if let Err(error) = self.prune_snapshot_budget().await {
-            tracing::debug!(%error, "checkpoint budget prune failed");
+        let worker_cancel = cancellation.clone();
+        let worker = tokio::task::spawn_blocking(move || -> Result<Option<PromptCheckpointLease>> {
+            if worker_cancel.is_cancelled() {
+                return Ok(None);
+            }
+            let lease = manager.begin_prompt_blocking(turn, &session, &prompt, &conversation)?;
+            if worker_cancel.is_cancelled() {
+                Ok(None)
+            } else {
+                Ok(Some(lease))
+            }
+        });
+        // Cancel the worker's publication ownership even if this future is
+        // dropped by a caller racing a stop request.
+        let cancel_on_drop = cancellation.clone().drop_guard();
+        let lease = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Ok(None),
+            result = worker => result.context("checkpoint preparation worker failed")??,
+        };
+        if lease.is_some() {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return Ok(None),
+                result = self.prune_snapshot_budget() => {
+                    if let Err(error) = result { tracing::debug!(%error, "checkpoint budget prune failed"); }
+                }
+            }
         }
+        let _ = cancel_on_drop.disarm();
         Ok(lease)
     }
 
@@ -841,6 +886,29 @@ mod tests {
         ] {
             assert!(paths(script).is_empty(), "must not guess paths for {script}");
         }
+    }
+
+    #[tokio::test]
+    async fn cancelled_prompt_preparation_never_admits_a_lease_and_a_fresh_prompt_can_start() -> Result<()> {
+        let dir = TempDir::new()?;
+        let manager = SnapshotManager::new(SnapshotConfig::new(dir.path().into()))?;
+        let session = uuid::Uuid::new_v4().to_string();
+        let cancellation = tokio_util::sync::CancellationToken::new();
+        cancellation.cancel();
+        assert!(
+            manager
+                .begin_prompt_with_cancellation(1, &session, "cancelled", &[], cancellation)
+                .await?
+                .is_none()
+        );
+        assert!(!active_map().lock().unwrap().contains_key(&session));
+        let lease = manager.begin_prompt(2, &session, "fresh", &[]).await?;
+        assert!(active_map().lock().unwrap().contains_key(&session));
+        assert!(manager.begin_prompt(3, &session, "must not overlap", &[]).await.is_err());
+        drop(lease);
+        assert!(!active_map().lock().unwrap().contains_key(&session));
+        let _next_lease = manager.begin_prompt(3, &session, "after release", &[]).await?;
+        Ok(())
     }
 
     #[tokio::test]

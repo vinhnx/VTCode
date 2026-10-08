@@ -233,6 +233,8 @@ pub struct Session {
     placeholder_style: Option<InlineTextStyle>,
     pub(crate) input_status_left: Option<String>,
     footer_context_status: Option<String>,
+    footer_context_right: Option<String>,
+    footer_context_configured: bool,
     pub(crate) input_status_right: Option<String>,
     /// Transient "copied"/"copy failed" confirmation shown in the input status row.
     copy_notification_until: Option<Instant>,

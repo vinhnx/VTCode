@@ -255,13 +255,13 @@ pub(super) fn build_unrelated_dirty_worktree_note(
     )))
 }
 
-/// Append transient system notes for the upcoming turn.
+/// Assemble transient system notes without mutating model history.
+/// The caller publishes them only after its cancellable preparation wait succeeds.
 ///
 /// `unrelated_dirty_note` is pre-fetched by the caller via `spawn_blocking`
 /// (see `orchestration.rs`) because `build_unrelated_dirty_worktree_note`
 /// spawns blocking `git` subprocesses — see the `# Blocking` docs in `git.rs`.
-pub(super) async fn append_transient_turn_notes(
-    history: &mut Vec<vtcode_core::llm::provider::Message>,
+pub(super) async fn prepare_transient_turn_notes(
     workspace: &std::path::Path,
     tool_registry: &ToolRegistry,
     unrelated_dirty_note: Option<String>,
@@ -273,13 +273,11 @@ pub(super) async fn append_transient_turn_notes(
         let stale_paths = tool_registry.edited_file_monitor_ref().stale_tracked_paths();
         build_tracked_file_freshness_note(workspace, &stale_paths)
     } {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     if let Some(note) = unrelated_dirty_note {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     // Cross-turn exec-session resume: when the previous turn ended with a
@@ -287,13 +285,11 @@ pub(super) async fn append_transient_turn_notes(
     // pre-filled wait call so it needs zero reconstruction. This also covers
     // session restore — both paths flow through the same turn loop.
     if let Some(note) = build_exec_session_resume_note(tool_registry).await {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     if let Some(note) = background_completion_note {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     transient_system_notes
@@ -858,19 +854,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn append_transient_turn_notes_omits_resume_hint_without_sessions() {
+    async fn cancelled_note_preparation_does_not_publish_transient_history() {
+        use super::{Notify, ToolRegistry};
+        use crate::agent::runloop::unified::state::CtrlCState;
+        use crate::agent::runloop::unified::stop_requests::await_with_stop;
+        use vtcode_core::llm::provider::Message;
+        let temp = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let state = CtrlCState::new();
+        let notify = Notify::new();
+        let mut history = vec![Message::user("preserved request".to_owned())];
+        let preparation = async {
+            let notes = super::prepare_transient_turn_notes(
+                temp.path(),
+                &registry,
+                Some("dirty workspace evidence".to_owned()),
+                Some("completed background job".to_owned()),
+            )
+            .await;
+            assert_eq!(notes, ["dirty workspace evidence", "completed background job"]);
+            // Exercise the harder boundary: preparation finished, but stop is
+            // accepted before its result is admitted to the request history.
+            state.request_local_cancel();
+            notes
+        };
+        if let Some(notes) = await_with_stop(&state, &notify, preparation).await {
+            history.extend(notes.into_iter().map(Message::system));
+        }
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].content.as_text(), "preserved request");
+    }
+
+    #[tokio::test]
+    async fn prepare_transient_turn_notes_omits_resume_hint_without_sessions() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
         assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
-        assert!(history.is_empty(), "no hint must leave history untouched");
+        assert!(transient.is_empty(), "no sessions must produce no notes");
     }
 
     #[tokio::test]
     #[cfg(unix)]
-    async fn append_transient_turn_notes_injects_bounded_resume_hint() {
+    async fn prepare_transient_turn_notes_injects_bounded_resume_hint() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
         let run = registry
@@ -882,8 +908,7 @@ mod tests {
             .expect("run should start");
         let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
         let hint = transient
             .iter()
@@ -891,11 +916,7 @@ mod tests {
             .expect("transient list must carry the resume hint");
         assert!(hint.contains(&session_id));
         assert!(hint.len() < 1_024);
-        assert_eq!(history.len(), 1, "hint must append exactly one system message");
-        let last = history.last().expect("history has hint");
-        assert_eq!(last.role, vtcode_core::llm::provider::MessageRole::System);
-        assert!(last.tool_calls.is_none(), "hint must never auto-execute a wait");
-        assert!(last.content.as_text().contains(&session_id), "history hint must carry the session id");
+        assert_eq!(transient.len(), 1, "exactly one resume note");
 
         // Hint suggests the wait; it must not settle the session on its own.
         assert!(
@@ -907,7 +928,7 @@ mod tests {
 
     #[tokio::test]
     #[cfg(unix)]
-    async fn append_transient_turn_notes_omits_retained_background_sessions() {
+    async fn prepare_transient_turn_notes_omits_retained_background_sessions() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
         let run = registry
@@ -919,11 +940,10 @@ mod tests {
             .expect("background run should start");
         let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
         assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
-        assert!(history.is_empty(), "retained background work must not force a resume wait");
+        assert!(transient.is_empty(), "retained background work must not force a resume wait");
         registry.close_harness_exec_session(&session_id).await.expect("close session");
     }
 

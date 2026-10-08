@@ -560,6 +560,16 @@ fn ensure_completed_turn_response(
     Ok(response_was_fallback)
 }
 
+fn provider_stop_outcome(
+    state: &crate::agent::runloop::unified::state::CtrlCState,
+    error: &anyhow::Error,
+) -> Option<TurnLoopResult> {
+    crate::agent::runloop::unified::stop_requests::stop_outcome(state).or_else(|| {
+        matches!(vtcode_commons::classify_anyhow_error(error), vtcode_commons::ErrorCategory::Cancelled)
+            .then_some(TurnLoopResult::Cancelled)
+    })
+}
+
 /// True when a `Completed` turn must publish a final assistant response.
 ///
 /// Primary-agent handoffs (plan entry via `SwitchPrimaryAgent`, deferred
@@ -980,6 +990,10 @@ pub(crate) async fn run_turn_loop(
     let mut last_planning_active = ctx.is_planning_active();
 
     loop {
+        if let Some(stop) = crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state) {
+            result = stop;
+            break;
+        }
         if handle_steering_messages(&mut ctx, working_history, &mut result).await? {
             break;
         }
@@ -1423,6 +1437,11 @@ pub(crate) async fn run_turn_loop(
         let (response, response_streamed) = match request_result {
             Ok(val) => val,
             Err(err) => {
+                if let Some(stop) = provider_stop_outcome(turn_processing_ctx.ctrl_c_state, &err) {
+                    turn_processing_ctx.restore_input_status(restore_status_left, restore_status_right);
+                    result = stop;
+                    break;
+                }
                 if err
                     .downcast_ref::<vtcode_core::llm::reasoning_effort::ReasoningEffortUnsupported>()
                     .is_some()
@@ -1670,6 +1689,14 @@ pub(crate) async fn run_turn_loop(
             continue;
         }
 
+        // A successful provider response may race the user's stop. Never admit
+        // its tools or planning continuation after that stop is accepted.
+        if let Some(stop) =
+            crate::agent::runloop::unified::stop_requests::stop_outcome(turn_processing_ctx.ctrl_c_state)
+        {
+            result = stop;
+            break;
+        }
         // Process the LLM response
         let processing_result_outcome = {
             let allow_plan_interview = turn_processing_ctx.is_planning_active()
@@ -2034,6 +2061,11 @@ pub(crate) async fn run_turn_loop(
         }
     }
 
+    if let Some(stop) = crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state) {
+        result = stop;
+        pending_primary_agent = None;
+        pending_plan_execution_target = None;
+    }
     if let TurnLoopResult::Blocked { reason } = &result {
         ensure_blocked_turn_response(
             &mut ctx,
@@ -2052,7 +2084,8 @@ pub(crate) async fn run_turn_loop(
     // Consume the deferred plan-entry switch *before* the guard: mid-turn
     // `start_planning` queues it without breaking the turn, and the handoff
     // must be exempt like an explicit `SwitchPrimaryAgent("plan")`.
-    let deferred_plan_entry_switch = ctx.plan_session.take_plan_entry_agent_switch();
+    let deferred_plan_entry_switch = ctx.plan_session.take_plan_entry_agent_switch()
+        && !matches!(result, TurnLoopResult::Cancelled | TurnLoopResult::Exit);
     let primary_agent_handoff =
         is_primary_agent_handoff(&pending_primary_agent, &pending_plan_execution_target, deferred_plan_entry_switch);
     let final_response_was_fallback = if completed_turn_requires_final_response(&result, primary_agent_handoff) {
@@ -2131,10 +2164,21 @@ pub(crate) async fn run_turn_loop(
         matches!(&result, TurnLoopResult::Completed { plan_approved_execution_pending: true });
     ctx.session_stats
         .set_verification_snapshot(repeated_tool_attempts.verification_snapshot());
+    let in_progress_sessions = if matches!(result, TurnLoopResult::Cancelled | TurnLoopResult::Exit) {
+        Vec::new()
+    } else {
+        crate::agent::runloop::unified::stop_requests::await_with_stop(
+            ctx.ctrl_c_state,
+            ctx.ctrl_c_notify,
+            ctx.tool_registry.in_progress_exec_sessions(4),
+        )
+        .await
+        .unwrap_or_default()
+    };
     let turn_diagnostics = ctx
         .harness_state
         .snapshot_turn_diagnostics(turn_usage.clone(), repeated_tool_attempts.low_signal_tool_calls)
-        .with_in_progress_exec_sessions(ctx.tool_registry.in_progress_exec_sessions(4).await);
+        .with_in_progress_exec_sessions(in_progress_sessions);
     // Touched files include reads/searches recorded during this turn plus
     // every modified file, so checkpoint replay shows evidence even for
     // read-only turns without snapshotting file contents. `recent_touched_files`
@@ -2202,20 +2246,25 @@ async fn finalize_turn(
     if let Some(emitter) = ctx.harness_emitter {
         // Exit is a graceful user-initiated action, not a failure
         let event = match result {
-            TurnLoopResult::Completed { .. } | TurnLoopResult::Exit => {
+            TurnLoopResult::Exit => turn_completed_event(turn_usage.clone()),
+            TurnLoopResult::Completed { .. } => {
                 // Capture live exec sessions only for the completed path so
                 // `turn.completed` carries the same bounded id set as
                 // `SnapshotTurnDiagnostics` for cross-turn resume correlation.
                 // Backend-checked, newest first, capped at 4 by the helper.
-                // Queried after Cancelled/Exit termination above, so the ids
-                // reflect what actually survived shutdown.
-                let in_progress_ids: Vec<String> = ctx
-                    .tool_registry
-                    .in_progress_exec_sessions(vtcode_core::exec::events::MAX_IN_PROGRESS_EXEC_SESSIONS)
-                    .await
-                    .into_iter()
-                    .map(|session| session.id.as_str().to_string())
-                    .collect();
+                // Stops skip this optional lookup so reader contention cannot
+                // delay accepted exit.
+                let in_progress_ids: Vec<String> = crate::agent::runloop::unified::stop_requests::await_with_stop(
+                    ctx.ctrl_c_state,
+                    ctx.ctrl_c_notify,
+                    ctx.tool_registry
+                        .in_progress_exec_sessions(vtcode_core::exec::events::MAX_IN_PROGRESS_EXEC_SESSIONS),
+                )
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|session| session.id.as_str().to_string())
+                .collect();
                 if in_progress_ids.is_empty() {
                     turn_completed_event(turn_usage.clone())
                 } else {
@@ -2308,12 +2357,16 @@ async fn finalize_turn(
             ));
         }
     }
-    emit_turn_outcome_notification(
-        effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
-        working_history,
-        ctx.config.workspace.as_path(),
-        ctx.harness_state,
-        result,
+    let _ = crate::agent::runloop::unified::stop_requests::await_with_stop(
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        emit_turn_outcome_notification(
+            effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
+            working_history,
+            ctx.config.workspace.as_path(),
+            ctx.harness_state,
+            result,
+        ),
     )
     .await;
 }

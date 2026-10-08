@@ -11,7 +11,7 @@ not dispatch turns or create another session runner.
 | `orchestration/session_bootstrap.rs` | Thread/archive preparation, summarized-fork history, primary-agent persistence, plan-selection failure tails, and completion classification | Constructs a provider only for summarized forks; prepares identity/archive before summarizing and activating the thread |
 | `session_setup` | Critical/UI setup, registry completion, deferred hydration, and session-start hooks | Typeable shell comes first; hooks follow hydration |
 | `turn_tail` | Per-turn metrics and persistence | Turn outcome and checkpoint metadata remain loop-owned inputs |
-| `orchestration/session_teardown.rs` | Bounded drains, completed-artifact cleanup, persistent-memory kickoff, and subagent shutdown | The loop emits the canonical terminal event before draining; cleanup completes before persistent-memory finalization |
+| `orchestration/session_teardown.rs` | Bounded drains, completed-artifact cleanup, persistent-memory kickoff, and subagent shutdown | The loop emits the canonical terminal event before draining; completed results survive the shared deadline independently of optional maintenance |
 
 Thread preparation returns a named record containing identity, bootstrap history,
 and optional archive. The loop supplies history policy and reserved identity;

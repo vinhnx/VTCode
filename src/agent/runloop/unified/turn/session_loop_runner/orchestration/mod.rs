@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -32,10 +32,10 @@ use super::handoff::{
 use super::metrics::{capture_code_change_snapshot, estimate_history_bytes};
 use super::plan_seed::load_active_plan_seed;
 use super::support::{
-    ExecutionSummaryStatus, RefusedTurnRollback, append_transient_turn_notes, approved_plan_execution_summary,
-    build_unrelated_dirty_worktree_note, build_withdrawn_turn_changes_note, checkpoint_session_archive_start,
-    checkpoint_unavailable_notice, force_reload_workspace_config_for_execution, format_workspace_relative_paths,
-    latest_assistant_result_text, prompt_startup_planning_workflow, remove_transient_system_notes,
+    ExecutionSummaryStatus, RefusedTurnRollback, approved_plan_execution_summary, build_unrelated_dirty_worktree_note,
+    build_withdrawn_turn_changes_note, checkpoint_session_archive_start, checkpoint_unavailable_notice,
+    force_reload_workspace_config_for_execution, format_workspace_relative_paths, latest_assistant_result_text,
+    prepare_transient_turn_notes, prompt_startup_planning_workflow, remove_transient_system_notes,
     take_pending_resumed_user_prompt,
 };
 use super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
@@ -164,13 +164,10 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             None
         };
         let (settings_sender, shell_settings_receiver) = mpsc::unbounded_channel();
-        // Overlap shell spawn with critical-path state: both are independent
-        // (provider construction, resume history, cheap bootstrap) and
-        // previously summed on the `/new` fresh-prompt path.
         let session_critical_phase = vtcode_commons::startup_trace::phase_started();
         let thread_id_for_critical = thread_handle.thread_id().to_string();
-        let (shell_result, critical_result) = tokio::join!(
-            crate::agent::runloop::unified::session_setup::initialize_session_shell(
+        let (mut shell, critical_result) = {
+            let shell_future = crate::agent::runloop::unified::session_setup::initialize_session_shell(
                 &config,
                 vt_cfg.as_ref(),
                 crate::agent::runloop::unified::session_setup::SessionUiLaunchOptions {
@@ -180,8 +177,8 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     steering_sender: steering_sender_for_shell,
                     settings_sender: settings_sender.clone(),
                 },
-            ),
-            initialize_session_critical(
+            );
+            let critical = initialize_session_critical(
                 &config,
                 vt_cfg.as_ref(),
                 full_auto,
@@ -189,9 +186,41 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 resume_ref,
                 thread_id_for_critical.as_str(),
                 session_primary_agent_override.as_deref(),
+            );
+            tokio::pin!(shell_future, critical);
+            let (shell, ready) = tokio::select! {
+                result = &mut critical => (shell_future.await?, Some(result)),
+                result = &mut shell_future => (result?, None),
+            };
+            let result = match ready {
+                Some(result) => Some(result),
+                None => {
+                    crate::agent::runloop::unified::stop_requests::await_initialization(
+                        &shell.ctrl_c_state,
+                        &shell.ctrl_c_notify,
+                        critical,
+                    )
+                    .await
+                }
+            };
+            (shell, result)
+        };
+        let Some(critical_result) = critical_result else {
+            crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
+                &shell.handle,
+                &mut shell.session,
+                &shell.ctrl_c_state,
+                crate::agent::runloop::unified::stop_requests::InitializationExitContext {
+                    emitter: None,
+                    session_id: thread_handle.thread_id().as_str(),
+                    config: &config,
+                    full_auto,
+                    started: session_started_at,
+                },
             )
-        );
-        let shell = shell_result?;
+            .await;
+            return Ok(());
+        };
         let mut settings_receiver = shell_settings_receiver;
         let mut session_state = critical_result?;
         vtcode_commons::startup_trace::record_phase("session_setup_critical", session_critical_phase);
@@ -231,6 +260,13 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             session_trigger,
             resume_ref,
             shell,
+            crate::agent::runloop::unified::stop_requests::InitializationExitContext {
+                emitter: harness_emitter.as_ref(),
+                session_id: thread_handle.thread_id().as_str(),
+                config: &config,
+                full_auto,
+                started: session_started_at,
+            },
             crate::agent::runloop::unified::session_setup::SessionUiLaunchOptions {
                 session_archive,
                 full_auto,
@@ -240,27 +276,51 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             },
         )
         .await;
-        let mut ui_setup = harness_try!(ui_setup);
+        let Some(mut ui_setup) = harness_try!(ui_setup) else {
+            return Ok(());
+        };
         let initialization_progress = ui_setup
             .handle
             .resume_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
         vtcode_commons::startup_trace::record_phase("session_setup_ui", session_ui_phase);
 
-        // Registry-light critical path: ToolRegistry + discovery run after the
-        // typeable shell / ready wiring so first paint never waits on them.
-        harness_try!(
-            crate::agent::runloop::unified::session_setup::complete_session_registry(
-                &mut session_state,
-                &config,
-                vt_cfg.as_ref(),
-                full_auto,
-                primary_agent_explicitly_configured,
-                resume_ref,
-                thread_handle.thread_id().as_str(),
-                session_primary_agent_override.as_deref(),
-            )
-            .await
-        );
+        macro_rules! initialization_wait {
+            ($future:expr) => {{
+                let state = ui_setup.ctrl_c_state.clone();
+                let notify = ui_setup.ctrl_c_notify.clone();
+                match crate::agent::runloop::unified::stop_requests::await_initialization(&state, &notify, $future)
+                    .await
+                {
+                    Some(result) => harness_try!(result),
+                    None => {
+                        crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
+                            &ui_setup.handle,
+                            &mut ui_setup.session,
+                            &state,
+                            crate::agent::runloop::unified::stop_requests::InitializationExitContext {
+                                emitter: harness_emitter.as_ref(),
+                                session_id: &turn_run_id.0,
+                                config: &config,
+                                full_auto,
+                                started: session_started_at,
+                            },
+                        )
+                        .await;
+                        return Ok(());
+                    }
+                }
+            }};
+        }
+        initialization_wait!(crate::agent::runloop::unified::session_setup::complete_session_registry(
+            &mut session_state,
+            &config,
+            vt_cfg.as_ref(),
+            full_auto,
+            primary_agent_explicitly_configured,
+            resume_ref,
+            thread_handle.thread_id().as_str(),
+            session_primary_agent_override.as_deref(),
+        ));
 
         // Retention walks the session store and may rmtree dozens of dirs.
         // Scheduled only after first paint is available so a large archive
@@ -278,20 +338,17 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
         // The interaction loop must not dispatch a model turn until this
         // completes; setup failures abort with the historical setup error.
         let session_hydrate_phase = vtcode_commons::startup_trace::phase_started();
-        harness_try!(
-            hydrate_session_runtime(
-                &mut session_state,
-                &mut ui_setup.context_manager,
-                &config,
-                vt_cfg.as_ref(),
-                full_auto,
-                primary_agent_explicitly_configured,
-                resume_ref,
-                thread_handle.thread_id().as_str(),
-                session_primary_agent_override.as_deref(),
-            )
-            .await
-        );
+        initialization_wait!(hydrate_session_runtime(
+            &mut session_state,
+            &mut ui_setup.context_manager,
+            &config,
+            vt_cfg.as_ref(),
+            full_auto,
+            primary_agent_explicitly_configured,
+            resume_ref,
+            thread_handle.thread_id().as_str(),
+            session_primary_agent_override.as_deref(),
+        ));
         vtcode_commons::startup_trace::record_phase("session_setup_hydrate", session_hydrate_phase);
 
         // Re-drive UI surfaces that depend on hydrated session state.
@@ -310,25 +367,30 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
         // hook. Timeout skips remaining hooks (warn, continue) instead of
         // aborting the session — startup keeps full budgets.
         if matches!(session_trigger, SessionStartTrigger::NewSession) {
-            match tokio::time::timeout(
-                Duration::from_secs(2),
-                run_session_start_hooks(&ui_setup.lifecycle_hooks, &mut ui_setup.renderer, &mut session_state),
-            )
-            .await
-            {
-                Ok(result) => {
-                    harness_try!(result);
+            initialization_wait!(async {
+                match tokio::time::timeout(
+                    Duration::from_secs(2),
+                    run_session_start_hooks(&ui_setup.lifecycle_hooks, &mut ui_setup.renderer, &mut session_state),
+                )
+                .await
+                {
+                    Ok(result) => {
+                        harness_try!(result);
+                    }
+                    Err(_elapsed) => {
+                        tracing::warn!(
+                            "session-start hooks timed out on /new fast path; continuing without remaining hooks"
+                        );
+                    }
                 }
-                Err(_elapsed) => {
-                    tracing::warn!(
-                        "session-start hooks timed out on /new fast path; continuing without remaining hooks"
-                    );
-                }
-            }
+                Ok::<(), anyhow::Error>(())
+            });
         } else {
-            harness_try!(
-                run_session_start_hooks(&ui_setup.lifecycle_hooks, &mut ui_setup.renderer, &mut session_state).await
-            );
+            initialization_wait!(run_session_start_hooks(
+                &ui_setup.lifecycle_hooks,
+                &mut ui_setup.renderer,
+                &mut session_state
+            ));
         }
 
         drop(initialization_progress);
@@ -444,7 +506,9 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             }
         } else if resume_ref.is_some() {
             use crate::agent::runloop::unified::turn::tool_outcomes::helpers as tracker_continue;
-            let auto_continue_enabled = tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
+            let auto_continue_enabled = crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state)
+                .is_none()
+                && tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
             let cross_turn_turns = tracker_continue::tracker_cross_turn_turns(vt_cfg.as_ref());
             let incomplete = if auto_continue_enabled && cross_turn_turns > 0 {
                 tracker_continue::incomplete_tracker_items(&tool_registry).await
@@ -800,10 +864,13 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     controller.set_parent_messages(&runtime.state.messages).await;
                 }
 
-                if pending_background_completions.should_schedule_continuation(
-                    !queued_inputs.is_empty() || !session.events.is_empty(),
-                    runtime.has_pending_follow_up_inputs(),
-                ) {
+                if crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
+                    && !matches!(last_turn_result, Some(RunLoopTurnLoopResult::Cancelled | RunLoopTurnLoopResult::Exit))
+                    && pending_background_completions.should_schedule_continuation(
+                        !queued_inputs.is_empty() || !session.events.is_empty(),
+                        runtime.has_pending_follow_up_inputs(),
+                    )
+                {
                     match runtime.try_queue_follow_up_input(background_completion_continuation_prompt()) {
                         Ok(()) => pending_background_completions.mark_continuation_queued(),
                         Err(error) => tracing::warn!(%error, "Unable to queue background completion continuation"),
@@ -811,7 +878,9 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 }
 
                 let mut active_task_follow_up = false;
-                let interaction_outcome = if pending_approved_plan_execution_input {
+                let can_resume = !ctrl_c_state.is_cancel_handled()
+                    && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none();
+                let interaction_outcome = if pending_approved_plan_execution_input && can_resume {
                     // An approved-plan handoff is an internal state transition,
                     // not ordinary user steering. Consume it directly so a
                     // full or reordered steering FIFO cannot leave the newly
@@ -824,7 +893,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         prompt_message_index: Some(prompt_message_index),
                         turn_id,
                     }
-                } else if let Some(input) = runtime.run_until_idle() {
+                } else if let Some(input) = can_resume.then(|| runtime.run_until_idle()).flatten() {
                     active_task_follow_up = true;
                     let turn_id = SessionId::generate().into_inner();
                     InteractionOutcome::Continue { input, prompt_message_index: None, turn_id }
@@ -1283,6 +1352,43 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     completed_turn_prompt_message_index,
                     &next_turn_input,
                 );
+                macro_rules! preparation_wait {
+                    ($future:expr) => {{
+                        match crate::agent::runloop::unified::stop_requests::await_with_stop(
+                            &ctrl_c_state,
+                            &ctrl_c_notify,
+                            $future,
+                        )
+                        .await
+                        {
+                            Some(value) => value,
+                            None => {
+                                if let Some(emitter) = harness_emitter.as_ref() {
+                                    let _ = emitter.emit(
+                                        crate::agent::runloop::unified::inline_events::harness::turn_failed_event(
+                                            "turn cancelled during preparation",
+                                            None,
+                                        ),
+                                    );
+                                }
+                                // Preparation has not admitted tools. Keep the user's
+                                // request as a draft, and require a new submission.
+                                handle.set_placeholder(Some(
+                                    vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned(),
+                                ));
+                                handle.set_activity_state(ActivityState::Idle);
+                                last_turn_result = Some(RunLoopTurnLoopResult::Cancelled);
+                                if ctrl_c_state.is_exit_requested() {
+                                    session_end_reason = SessionEndReason::Exit;
+                                    break;
+                                }
+                                ctrl_c_state.mark_cancel_handled();
+                                session_end_reason = SessionEndReason::Cancelled;
+                                continue;
+                            }
+                        }
+                    }};
+                }
                 let workspace_buf = config.workspace.clone();
                 let touched_clone = agent_touched_paths.clone();
                 let dirty_worktree_task = tokio::task::spawn_blocking(move || {
@@ -1296,14 +1402,23 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         .min(working_history.len());
                     let conversation: Vec<_> = working_history[..prefix].iter().map(SessionMessage::from).collect();
                     let session_id = tool_registry.harness_context_snapshot().session_id;
-                    let lease = match manager
-                        .begin_prompt(next_checkpoint_turn, &session_id, &next_turn_input, &conversation)
-                        .await
+                    // A missing lease (cooperative cancellation) shares the
+                    // unavailable-checkpoint recovery below: retain the prompt
+                    // and retry instead of panicking on a supposedly
+                    // impossible arm.
+                    let lease = match preparation_wait!(manager.begin_prompt_with_cancellation(
+                        next_checkpoint_turn,
+                        &session_id,
+                        &next_turn_input,
+                        &conversation,
+                        CancellationToken::new()
+                    ))
+                    .and_then(|lease| lease.context("checkpoint preparation cancelled"))
                     {
                         Ok(lease) => lease,
                         Err(err) => {
                             // Drain the independent worker before retrying this prompt.
-                            let _ = dirty_worktree_task.await;
+                            let _ = preparation_wait!(dirty_worktree_task);
                             tracing::warn!(error = %err, "Checkpoint unavailable; prompt retained in input");
                             let message = checkpoint_unavailable_notice(&format!("{err:#}"));
                             let _ = renderer.line(MessageStyle::Info, message);
@@ -1344,7 +1459,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 tracing::debug!(target: "vtcode.response_latency", operation_id = turn_progress.operation().id(),
                     checkpoint_ms = checkpoint_started_at.elapsed().as_secs_f64() * 1000.0, "checkpoint preparation complete");
                 handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::PreparingContext);
-                let unrelated_dirty_note = match dirty_worktree_task.await {
+                let unrelated_dirty_note = match preparation_wait!(dirty_worktree_task) {
                     Ok(Ok(Some(note))) => Some(note),
                     Ok(Err(err)) => {
                         tracing::warn!(
@@ -1359,14 +1474,18 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     }
                     Ok(Ok(None)) => None,
                 };
-                let transient_system_notes = append_transient_turn_notes(
-                    working_history,
+                let transient_system_notes = preparation_wait!(prepare_transient_turn_notes(
                     config.workspace.as_path(),
                     &tool_registry,
                     unrelated_dirty_note,
                     pending_background_completions.take_transient_note(),
-                )
-                .await;
+                ));
+                working_history.extend(
+                    transient_system_notes
+                        .iter()
+                        .cloned()
+                        .map(vtcode_core::llm::provider::Message::system),
+                );
                 tracing::debug!(target: "vtcode.response_latency", operation_id = turn_progress.operation().id(),
                     preparation_ms = preparation_started_at.elapsed().as_secs_f64() * 1000.0,
                     accepted_to_prepared_ms = turn_progress.operation().started_at().elapsed().as_secs_f64() * 1000.0,
@@ -1902,33 +2021,57 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         ),
                     );
                 }
-                vtcode_core::tools::cache::FILE_CACHE.check_pressure_and_evict().await;
-                tool_result_cache.write().await.check_pressure_and_evict();
-                let blocked_turn = matches!(&outcome_result, RunLoopTurnLoopResult::Blocked { .. });
-                persist_primary_agent(&mut session_archive, &active_primary_agent);
-                let checkpoint_outcome = complete_turn_persistence_tail(TurnPersistenceTail {
-                    outcome: match &outcome_result {
-                        RunLoopTurnLoopResult::Completed { .. } => "completed",
-                        RunLoopTurnLoopResult::Aborted => "aborted",
-                        RunLoopTurnLoopResult::Cancelled => "cancelled",
-                        RunLoopTurnLoopResult::Exit => "exit",
-                        RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                // Stop can arrive after the provider finishes. Do not hold
+                // exit behind cache locks or checkpoint maintenance; archive
+                // workers retain ownership of their atomic writes.
+                let checkpoint_outcome = match crate::agent::runloop::unified::stop_requests::await_with_stop(
+                    &ctrl_c_state,
+                    &ctrl_c_notify,
+                    async {
+                        vtcode_core::tools::cache::FILE_CACHE.check_pressure_and_evict().await;
+                        tool_result_cache.write().await.check_pressure_and_evict();
+                        let blocked_turn = matches!(&outcome_result, RunLoopTurnLoopResult::Blocked { .. });
+                        persist_primary_agent(&mut session_archive, &active_primary_agent);
+                        complete_turn_persistence_tail(TurnPersistenceTail {
+                            outcome: match &outcome_result {
+                                RunLoopTurnLoopResult::Completed { .. } => "completed",
+                                RunLoopTurnLoopResult::Aborted => "aborted",
+                                RunLoopTurnLoopResult::Cancelled => "cancelled",
+                                RunLoopTurnLoopResult::Exit => "exit",
+                                RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                            },
+                            history_snapshot_bytes,
+                            timeout_secs: harness_config.max_tool_wall_clock_secs,
+                            elapsed_ms: turn_elapsed.as_millis(),
+                            blocked_turn,
+                            turn_diagnostics: Some(turn_diagnostics),
+                            runtime: &mut runtime,
+                            session_archive: &mut session_archive,
+                            next_checkpoint_turn,
+                            session_stats: &session_stats,
+                            loaded_skills: &loaded_skills,
+                            workspace: config.workspace.as_path(),
+                            session_id: &harness_snapshot.session_id,
+                            vt_cfg: vt_cfg.as_ref(),
+                        })
+                        .await
                     },
-                    history_snapshot_bytes,
-                    timeout_secs: harness_config.max_tool_wall_clock_secs,
-                    elapsed_ms: turn_elapsed.as_millis(),
-                    blocked_turn,
-                    turn_diagnostics: Some(turn_diagnostics),
-                    runtime: &mut runtime,
-                    session_archive: &mut session_archive,
-                    next_checkpoint_turn,
-                    session_stats: &session_stats,
-                    loaded_skills: &loaded_skills,
-                    workspace: config.workspace.as_path(),
-                    session_id: &harness_snapshot.session_id,
-                    vt_cfg: vt_cfg.as_ref(),
-                })
-                .await;
+                )
+                .await
+                {
+                    Some(checkpoint) => checkpoint,
+                    None => {
+                        if ctrl_c_state.is_exit_requested() {
+                            session_end_reason = SessionEndReason::Exit;
+                            break;
+                        }
+                        ctrl_c_state.mark_cancel_handled();
+                        session_end_reason = SessionEndReason::Cancelled;
+                        last_turn_result = Some(RunLoopTurnLoopResult::Cancelled);
+                        handle.set_activity_state(ActivityState::Idle);
+                        continue;
+                    }
+                };
                 // Tracker-aware outer auto-continue after checkpoint/persistence:
                 // incomplete tracker work + recoverable turn end → queue the next
                 // turn instead of nudging the user. Verification blocks keep their
@@ -1943,7 +2086,10 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 {
                     use crate::agent::runloop::unified::turn::tool_outcomes::helpers as tracker_continue;
                     let planning_active = tool_registry.is_planning_active();
-                    let tracker_kill_switch = tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
+                    let tracker_kill_switch =
+                        !matches!(outcome_result, RunLoopTurnLoopResult::Cancelled | RunLoopTurnLoopResult::Exit)
+                            && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
+                            && tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
                     let is_verification_block = matches!(&outcome_result, RunLoopTurnLoopResult::Blocked { reason }
                     if reason.as_deref().is_some_and(|r| {
                         r.contains(
@@ -2038,6 +2184,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         let directive = tracker_continue::plan_mode_auto_continue_directive();
                         let budget_remaining = session_stats.plan_continuation_turns() < max_turns;
                         let queued = budget_remaining
+                            && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
                             && match runtime.try_queue_follow_up_input(follow_up) {
                                 Ok(()) => {
                                     session_stats.record_plan_continuation_turn_with_limit(max_turns);
@@ -2102,6 +2249,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         };
                         let budget_remaining = session_stats.tracker_continuation_turns() < max_turns;
                         let queued = budget_remaining
+                            && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
                             && match runtime.try_queue_follow_up_input(follow_up) {
                                 Ok(()) => {
                                     session_stats.record_tracker_continuation_turn_with_limit(max_turns);
@@ -2413,9 +2561,15 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
         // NewSession/resume, which recreate the TUI afterwards.
         handle.shutdown();
         let session_tail_started = Instant::now();
+        let deadline = ctrl_c_state
+            .exit_deadline()
+            .unwrap_or_else(|| tokio::time::Instant::now() + Duration::from_millis(1500));
         if let Some(archive) = session_archive.as_mut() {
             archive.set_primary_agent(active_primary_agent.active().name());
-            let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
+            let skill_names = tokio::time::timeout_at(deadline, loaded_skills.read())
+                .await
+                .map(|skills| skills.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
             archive.set_loaded_skills(skill_names);
             archive.set_continuation_metadata(session_stats.budget_limit().map(|(max_budget_usd, actual_cost_usd)| {
                 session_archive::SessionContinuationMetadata::budget_limit(
@@ -2462,79 +2616,13 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
         } else {
             None
         };
-        let session_teardown::SessionTeardownOutput { harness_finish_error, end_code_changes } =
-            session_teardown::drain_session_teardown(session_teardown::SessionTeardownContext {
-                harness_emitter: harness_emitter.as_ref(),
-                checkpoint_manager: checkpoint_manager.as_ref(),
-                tool_registry: &tool_registry,
-                workspace: &config.workspace,
-                session_stats: &session_stats,
-                subtype,
-                session_end_reason,
-            })
-            .await;
-        if let Some(error) = harness_finish_error {
-            if terminal_event_error.is_none() {
-                return Err(error);
-            }
-        }
-        if let Some(error) = terminal_event_error {
-            return Err(error);
-        }
-        session_teardown::cleanup_completed_artifacts(
-            &config.workspace,
-            &turn_run_id.0,
-            &tool_registry.harness_context_snapshot().session_id,
-        )
-        .await;
-        agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
-        // Skip persistent memory on interrupt-exits (it makes LLM API calls which
-        // delay shutdown significantly). `/new` detaches it so the fresh
-        // session paints immediately while memory still finalizes in the
-        // background. For normal exits, wait up to 5 s for the kickoff; the
-        // spawned task is *not* cancelled on timeout — it detaches and keeps
-        // running (coordinated by the memory lock) while the TUI finalizes,
-        // instead of being dropped mid-flight.
-        if matches!(session_end_reason, SessionEndReason::Exit) {
-            // Skipped: LLM-backed, would park the shell return.
-        } else if matches!(session_end_reason, SessionEndReason::NewSession) {
-            let finalize_config = config.clone();
-            let finalize_vt_cfg = vt_cfg.clone();
-            let finalize_messages = runtime.state.messages.clone();
-            let finalize_session_id = turn_run_id.0.clone();
-            tokio::spawn(async move {
-                session_teardown::finalize_persistent_memory(
-                    finalize_config,
-                    finalize_vt_cfg,
-                    finalize_messages,
-                    finalize_session_id,
-                )
-                .await;
-            });
-        } else {
-            session_teardown::finalize_persistent_memory(
-                config.clone(),
-                vt_cfg.clone(),
-                runtime.state.messages.clone(),
-                turn_run_id.0.clone(),
-            )
-            .await;
-        }
 
-        // Capture the response before finalization shuts down the inline TUI
-        // and clears its screen. The owned copy remains available for the
-        // plain stdout postamble after terminal restoration. On interrupt
-        // exits (Exit/Cancelled) the postamble suppresses this dump and
-        // prints a concise notice instead (see postamble::render_exit_postamble).
+        tracing::debug!(target: "vtcode.shutdown", boundary = "teardown_started", accepted_exit_elapsed_ms = ?ctrl_c_state.exit_elapsed_ms(), elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
         let final_response = latest_assistant_result_text(&runtime.state.messages);
         if matches!(session_end_reason, SessionEndReason::NewSession) {
             next_session_primary_agent = Some(active_primary_agent.active().name().to_owned());
         }
-        let code_change_delta =
-            compute_session_code_change_delta(start_code_changes.as_ref(), end_code_changes.as_ref());
-        // The config-reload check is polling bookkeeping that only matters for
-        // a continuing session; keep it ahead of teardown so nothing sits
-        // between the terminal restore and the exit summary.
+        agent_touched_paths.extend(context_manager.tracked_instruction_activity_paths());
         session_bootstrap::poll_config_reload(
             &mut config_watcher,
             &mut vt_cfg,
@@ -2542,44 +2630,69 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             &mut renderer,
             "Configuration reloaded during idle period",
         )?;
-        // Shut down background work before the postamble so no late task can
-        // write after the terminal is restored and the summary is printed.
-        // Bounded: nested close_tree walks can stall on contended locks, and
-        // this previously ran after the terminal was restored, directly
-        // delaying the shell return — now it overlaps the finalization below.
-        // Aborts only skip waiting; the process exit reaps any remainder.
-        let ((), finalization_output) = tokio::join!(session_teardown::shutdown_subagents(&tool_registry), async {
-            match finalize_session(
-                &mut renderer,
-                lifecycle_hooks.as_ref(),
-                &turn_id,
-                session_end_reason,
-                &mut session_archive,
-                &session_stats,
-                last_turn_diagnostics,
-                &runtime.state.messages,
-                linked_directories,
-                async_mcp_manager.as_deref(),
-                &handle,
-                &mut session,
+        // One deadline owns every independent cleanup branch. Atomic archive
+        // workers retain ownership if we stop waiting; terminal restoration and
+        // the postamble run outside this best-effort maintenance group.
+        let mut teardown_output = session_teardown::SessionTeardownOutput::default();
+        let mut finalization_output = None;
+        let maintenance = tokio::time::timeout_at(deadline, async {
+            tokio::join!(
+                async {
+                    session_teardown::drain_session_teardown(session_teardown::SessionTeardownContext {
+                        harness_emitter: harness_emitter.as_ref(), checkpoint_manager: checkpoint_manager.as_ref(),
+                        tool_registry: &tool_registry, workspace: &config.workspace, session_stats: &session_stats,
+                        subtype, session_end_reason,
+                    }, &mut teardown_output).await;
+                    session_teardown::cleanup_completed_artifacts(&config.workspace, &turn_run_id.0, &tool_registry.harness_context_snapshot().session_id).await;
+                    tracing::debug!(target: "vtcode.shutdown", boundary = "persistence_finished", elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
+                },
+                async {
+                    match finalize_session(
+                        &mut renderer, lifecycle_hooks.as_ref(), &turn_id, session_end_reason,
+                        &mut session_archive, &session_stats, last_turn_diagnostics, &runtime.state.messages,
+                        linked_directories, async_mcp_manager.as_deref(), &handle, &mut session, &mut finalization_output,
+                    ).await {
+                        Ok(output) => finalization_output = Some(output),
+                        Err(error) => { tracing::error!(%error, "failed to finalize session"); }
+                    }
+                },
+                session_teardown::shutdown_subagents(&tool_registry),
+                async {
+                    if !matches!(session_end_reason, SessionEndReason::Exit | SessionEndReason::Cancelled) {
+                        session_teardown::finalize_persistent_memory(config.clone(), vt_cfg.clone(), runtime.state.messages.clone(), turn_run_id.0.clone()).await;
+                    }
+                },
             )
-            .await
-            {
-                Ok(output) => Some(output),
-                Err(err) => {
-                    tracing::error!("Failed to finalize session: {}", err);
-                    renderer
-                        .line(MessageStyle::Error, &format!("Failed to finalize session: {err}"))
-                        .ok();
-                    None
-                }
-            }
-        });
+        }).await;
+        if maintenance.is_err() {
+            tracing::warn!(target: "vtcode.shutdown", boundary = "maintenance_deadline", elapsed_ms = session_tail_started.elapsed().as_millis() as u64, "session maintenance deadline expired");
+        }
+        // A timed-out archive or hook must never bypass restoration or suppress
+        // the summary. Join the already-stopping TUI only for remaining time.
+        let tui_closed = session
+            .wait_for_exit(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await;
+        tracing::debug!(target: "vtcode.shutdown", boundary = "tui_wait_finished", tui_closed, elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
+        let _ = vtcode_ui::tui::panic_hook::restore_tui_keep_raw_mode();
+        vtcode_ui::tui::panic_hook::finish_deferred_raw_mode_restore();
+        vtcode_core::utils::transcript::clear_inline_handle();
+        vtcode_core::ui::set_tui_mode(false);
+        tracing::debug!(target: "vtcode.shutdown", boundary = "terminal_restored", elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
+        let session_teardown::SessionTeardownOutput { harness_finish_error, end_code_changes } = teardown_output;
+        let teardown_error = terminal_event_error.or(harness_finish_error);
+        let code_change_delta =
+            compute_session_code_change_delta(start_code_changes.as_ref(), end_code_changes.as_ref());
         if let Some(next_resume) = resume_state.as_ref() {
+            if let Some(error) = teardown_error {
+                return Err(error);
+            }
             refresh_runtime_debug_context_for_next_session(config.workspace.as_path(), Some(next_resume)).await?;
             continue;
         }
         if matches!(session_end_reason, SessionEndReason::NewSession) {
+            if let Some(error) = teardown_error {
+                return Err(error);
+            }
             session_bootstrap::poll_config_reload(
                 &mut config_watcher,
                 &mut vt_cfg,
@@ -2650,6 +2763,11 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             first_call_composition: session_stats.first_call_composition(),
             session_end_reason,
         });
+        tracing::debug!(target: "vtcode.shutdown", boundary = "postamble_finished", accepted_exit_elapsed_ms = ?ctrl_c_state.exit_elapsed_ms(), elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
+        if let Some(error) = teardown_error {
+            return Err(error);
+        }
+
         if matches!(session_end_reason, SessionEndReason::Error) {
             return Err(anyhow::anyhow!(
                 "{}",

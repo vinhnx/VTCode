@@ -65,6 +65,7 @@ pub(super) struct InputRender {
 struct InputStatusLine {
     line: Line<'static>,
     background_hits: Vec<(u16, u16)>,
+    progress_start: u16,
     progress_columns: u16,
 }
 
@@ -355,7 +356,8 @@ impl Session {
                 paint_pre_wrapped_line(&status.line, status_area, buf, self.styles.default_style());
             }
             if status.progress_columns > 0 {
-                let feedback_area = Rect::new(status_area.x, status_area.y, status.progress_columns, 1);
+                let feedback_area =
+                    Rect::new(status_area.x + status.progress_start, status_area.y, status.progress_columns, 1);
                 self.set_progress_feedback_area(feedback_area.intersection(frame.area()));
             }
             let hits = status
@@ -990,70 +992,43 @@ impl Session {
         }
 
         let copy_notification = self.copy_notification_text();
-        let progress_row_visible = self.progress_row_visible();
-        let showing_progress = copy_notification.is_none() && self.progress.is_active() && !progress_row_visible;
-        // The transcript owns progress when it fits. Keep the footer fallback
-        // for constrained layouts without repeating legacy foreground activity.
-        let mut left = copy_notification.or_else(|| {
-            if progress_row_visible {
-                self.progress_footer_status_text().map(str::to_owned)
-            } else {
-                self.progress.text().or_else(|| self.status_left_text().map(str::to_owned))
-            }
+        let showing_progress = copy_notification.is_none() && self.progress.is_active() && !self.progress_row_visible();
+        // Configured context survives every foreground phase. Runtime activity
+        // belongs to the transcript, or a bounded optional footer slot.
+        let left = copy_notification.or_else(|| {
+            self.progress_footer_status_text().map(str::to_owned).or_else(|| {
+                (!self.progress.is_active() && !self.footer_context_configured)
+                    .then(|| self.status_left_text().map(str::to_owned))
+                    .flatten()
+            })
         });
-        let progress_columns = if showing_progress {
-            left.as_deref().map(measure_text_width).unwrap_or_default()
+        // Thinking fallback when nothing else owns the composer line. Plain
+        // text renders as one span through the shared git-status path, so the
+        // spinner frame and label stay a single static unit.
+        let left = left.or_else(|| {
+            (self.thinking_spinner.is_active && !self.progress.is_active()).then(|| {
+                if self.appearance.should_animate_progress_status() {
+                    format!("{} Thinking", self.thinking_spinner.current_frame())
+                } else {
+                    "Thinking".to_owned()
+                }
+            })
+        });
+        let configured_right = if self.footer_context_configured {
+            self.footer_context_right.as_deref()
         } else {
-            0
+            self.status_right_text()
         };
-        let right = self.status_right_text().map(str::to_string);
-
-        if let Some(shell_hint) = self.shell_mode_status_hint() {
-            left = Some(match left {
-                Some(existing) => format!("{existing} · {shell_hint}"),
-                None => shell_hint.to_string(),
-            });
-        }
-        // Foreground PTY/pipe hint stays out of the shimmered `left` string so
-        // the shortcut keeps a distinct key style as a visual indicator.
-        let background_hint = self.local_agents_input_status_hint();
-        // Background tasks are asynchronous, so they surface here (not in
-        // `status_left_text`) to keep turn-busy guards off while still driving
-        // the shared loading shimmer with a visible, shimmer-eligible status.
-        // While a turn or foreground command owns the status, skip it: that
-        // status already shimmers and adding a second "Running" is noise.
-        if !self.is_running_activity()
-            && let Some(background_status) = self.background_activity_status_text()
-        {
-            left = Some(match left {
-                Some(existing) => format!("{existing} · {background_status}"),
-                None => background_status,
-            });
-        }
-
-        let right = match (right, self.vim_state.status_label()) {
+        let right = match (configured_right, self.vim_state.status_label()) {
             (Some(existing), Some(vim_label)) => Some(format!("{vim_label} · {existing}")),
             (None, Some(vim_label)) => Some(vim_label.to_string()),
-            (existing, None) => existing,
+            (existing, None) => existing.map(str::to_owned),
         };
-
-        let scroll_indicator = self.build_scroll_indicator();
         let mode_pill = self.primary_mode_pill();
-
-        if left.is_none()
-            && background_hint.is_none()
-            && right.is_none()
-            && scroll_indicator.is_none()
-            && mode_pill.is_none()
-            && !self.thinking_spinner.is_active
-        {
-            return None;
-        }
-
+        let background_hint = self.local_agents_input_status_hint();
         let background_status = (!self.is_running_activity())
             .then(|| self.background_activity_status_text())
             .flatten();
-
         let dim_style = {
             let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
             if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
@@ -1075,116 +1050,144 @@ impl Session {
             }
             style
         };
-        let mut spans: Vec<Span<'static>> = Vec::new();
-        let mut background_hits: Vec<(u16, u16)> = Vec::new();
-
-        // Add left content (git status or shimmered activity)
-        if let Some(left_value) = left.as_ref() {
-            let before: u16 = spans.iter().map(|s| measure_text_width(&s.content)).sum();
-            if (if showing_progress {
-                self.progress.is_animated()
-            } else {
-                status_requires_shimmer(left_value)
-            }) && self.appearance.should_animate_progress_status()
-            {
-                spans.extend(shimmer_spans_with_style_at_phase(
-                    left_value,
-                    self.styles.accent_style().add_modifier(Modifier::DIM),
-                    self.shimmer_state.phase(),
-                ));
-            } else {
-                spans.extend(self.create_git_status_spans(left_value, dim_style));
+        // Allocate persistent regions first. Mode has first claim, then the
+        // configured right side, then context, then optional activity/hints.
+        let mut right_spans = Vec::new();
+        if let Some((label, style)) = mode_pill {
+            right_spans =
+                truncate_line_with_ellipsis_if_overflow(Line::from(Span::styled(label, style)), usize::from(width))
+                    .spans;
+        }
+        let mode_width = Line::from(right_spans.clone()).width() as u16;
+        if let Some(value) = right {
+            let separator = u16::from(mode_width > 0);
+            let budget = width.saturating_sub(mode_width.saturating_add(separator));
+            if budget > 0 {
+                if separator > 0 {
+                    right_spans.push(Span::raw(" "));
+                }
+                right_spans.extend(
+                    truncate_line_with_ellipsis_if_overflow(
+                        Line::from(Span::styled(value, dim_style)),
+                        usize::from(budget),
+                    )
+                    .spans,
+                );
             }
-            if let Some(status) = background_status.as_deref()
-                && let Some(rel_start) = left_value.find(status).map(|idx| measure_text_width(&left_value[..idx]))
-            {
-                let start = before.saturating_add(rel_start);
-                let end = start.saturating_add(measure_text_width(status));
-                if start < end {
-                    background_hits.push((start, end));
+        }
+        let right_width = Line::from(right_spans.clone()).width() as u16;
+        let left_budget = width.saturating_sub(right_width.saturating_add(u16::from(right_width > 0)));
+        let mut spans = left
+            .as_ref()
+            .map(|text| {
+                if !self.footer_context_configured
+                    && status_requires_shimmer(text)
+                    && self.appearance.should_animate_progress_status()
+                {
+                    shimmer_spans_with_style_at_phase(
+                        text,
+                        self.styles.accent_style().add_modifier(Modifier::DIM),
+                        self.shimmer_state.phase(),
+                    )
+                } else {
+                    self.create_git_status_spans(text, dim_style)
+                }
+            })
+            .unwrap_or_default();
+        spans = if left_budget == 0 {
+            Vec::new()
+        } else {
+            truncate_line_with_ellipsis_if_overflow(Line::from(spans), usize::from(left_budget)).spans
+        };
+        let mut background_hits = Vec::new();
+        let mut progress_start = 0;
+        let mut progress_columns = 0;
+
+        if showing_progress && let Some(text) = self.progress.text() {
+            let used = Line::from(spans.clone()).width() as u16;
+            let separator = u16::from(used > 0);
+            let budget = left_budget.saturating_sub(used + separator).min(24);
+            if budget > 1 {
+                if separator > 0 {
+                    spans.push(Span::raw(" "));
+                }
+                progress_start = used + separator;
+                let truncated = measure_text_width(&text) > budget;
+                let style = self.styles.accent_style().add_modifier(Modifier::DIM);
+                let progress_spans = if self.progress.is_animated() && self.appearance.should_animate_progress_status()
+                {
+                    shimmer_spans_with_style_at_phase(&text, style, self.shimmer_state.phase())
+                } else {
+                    vec![Span::styled(text, dim_style)]
+                };
+                let line = truncate_line_with_ellipsis_if_overflow(Line::from(progress_spans), usize::from(budget));
+                let actual = line.width() as u16;
+                progress_columns = actual.saturating_sub(u16::from(truncated));
+                spans.extend(line.spans);
+                spans.push(Span::raw(" ".repeat(usize::from(budget.saturating_sub(actual)))));
+            }
+        }
+        if let Some(status) = background_status {
+            let used = Line::from(spans.clone()).width() as u16;
+            let separator = u16::from(used > 0);
+            let budget = left_budget.saturating_sub(used + separator * 3);
+            if measure_text_width(&status) <= budget {
+                let start = used + separator * 3;
+                if separator > 0 {
+                    spans.push(Span::raw(" · "));
+                }
+                background_hits.push((start, start + measure_text_width(&status)));
+                if self.appearance.should_animate_progress_status() {
+                    spans.extend(shimmer_spans_with_style_at_phase(&status, dim_style, self.shimmer_state.phase()));
+                } else {
+                    spans.push(Span::styled(status, dim_style));
                 }
             }
-        } else if self.thinking_spinner.is_active && !progress_row_visible {
-            if self.appearance.should_animate_progress_status() {
-                spans.push(Span::styled(self.thinking_spinner.current_frame(), dim_style));
-                spans.push(Span::raw(" "));
-            }
-            spans.push(Span::styled("Thinking", dim_style));
         }
-
-        if let Some(hint) = background_hint.as_deref() {
-            let hint_start = spans.iter().map(|s| measure_text_width(&s.content)).sum::<u16>();
-            let key_hit_rel = Self::append_background_hint_spans(
-                &mut spans,
-                hint,
+        if let Some(hint) = background_hint {
+            let used = Line::from(spans.clone()).width() as u16;
+            let mut hint_spans = Vec::new();
+            let hit = Self::append_background_hint_spans(
+                &mut hint_spans,
+                &hint,
                 self.background_shortcut_label(),
                 dim_style,
                 key_style,
                 label_style,
             );
-            if let Some((rel_start, rel_end)) = key_hit_rel {
-                let start = hint_start.saturating_add(rel_start);
-                let end = hint_start.saturating_add(rel_end);
-                if start < end {
-                    background_hits.push((start, end));
+            if Line::from(hint_spans.clone()).width() <= usize::from(left_budget.saturating_sub(used)) {
+                spans.extend(hint_spans);
+                if let Some((start, end)) = hit {
+                    background_hits.push((used + start, used + end));
                 }
             }
         }
-
-        // Build right side spans (mode pill + scroll indicator + optional right content)
-        let mut right_spans: Vec<Span<'static>> = Vec::new();
-        if let Some((label, style)) = mode_pill {
-            right_spans.push(Span::styled(label, style));
-        }
-        if let Some(scroll) = &scroll_indicator {
-            right_spans.push(Span::styled(scroll.clone(), dim_style));
-        }
-        if let Some(right_value) = &right {
-            if !right_spans.is_empty() {
-                right_spans.push(Span::raw(" "));
+        for hint in [
+            self.shell_mode_status_hint().map(str::to_owned),
+            self.build_scroll_indicator(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let used = Line::from(spans.clone()).width() as u16;
+            let separator = u16::from(used > 0);
+            if measure_text_width(&hint) + separator * 3 <= left_budget.saturating_sub(used) {
+                if separator > 0 {
+                    spans.push(Span::raw(" · "));
+                }
+                spans.push(Span::styled(hint, dim_style));
             }
-            right_spans.push(Span::styled(right_value.clone(), dim_style));
         }
-
         if !right_spans.is_empty() {
-            let left_width: u16 = spans.iter().map(|s| measure_text_width(&s.content)).sum();
-            let right_width: u16 = right_spans.iter().map(|s| measure_text_width(&s.content)).sum();
-            let padding = width.saturating_sub(left_width + right_width);
-
-            if padding > 0 {
-                spans.push(Span::raw(" ".repeat(padding as usize)));
-            } else if !spans.is_empty() {
-                spans.push(Span::raw(" "));
-            }
+            let used = Line::from(spans.clone()).width() as u16;
+            spans.push(Span::raw(" ".repeat(usize::from(width.saturating_sub(used + right_width)))));
             spans.extend(right_spans);
         }
-
-        if spans.is_empty() {
-            return None;
-        }
-
-        let total_width: u16 = spans.iter().map(|s| measure_text_width(&s.content)).sum();
-        let mut line = Line::from(spans);
-        // Apply ellipsis truncation to prevent status line from overflowing
-        line = truncate_line_with_ellipsis_if_overflow(line, usize::from(width));
-        // Hits are measured pre-truncation. Keep only columns that still map to
-        // real content (exclude the ellipsis and anything dropped).
-        let content_width = if total_width > width {
-            width.saturating_sub(1)
-        } else {
-            width
-        };
-        let hits = background_hits
-            .into_iter()
-            .filter_map(|(start, end)| {
-                let clamped_end = end.min(content_width);
-                (start < clamped_end).then_some((start, clamped_end))
-            })
-            .collect::<Vec<_>>();
-        Some(InputStatusLine {
-            line,
-            background_hits: hits,
-            progress_columns: progress_columns.min(content_width),
+        (!spans.is_empty()).then_some(InputStatusLine {
+            line: Line::from(spans),
+            background_hits,
+            progress_start,
+            progress_columns,
         })
     }
 

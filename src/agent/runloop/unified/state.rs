@@ -1260,6 +1260,7 @@ impl CtrlCPhase {
 #[derive(Default)]
 pub(crate) struct CtrlCState {
     phase: AtomicU8,
+    exit_started: std::sync::OnceLock<std::time::Instant>,
     last_signal_time: AtomicU64,
     /// Shared event-delivery counter: incremented by the UI event callback
     /// each time a Steer input is accepted by the live steering channel,
@@ -1285,7 +1286,14 @@ impl CtrlCState {
     }
 
     fn set_phase(&self, phase: CtrlCPhase) {
-        self.phase.store(phase as u8, Ordering::SeqCst);
+        if phase == CtrlCPhase::ExitRequested {
+            self.exit_started.get_or_init(std::time::Instant::now);
+        }
+        // Exit is terminal for this session, including when a UI reset races
+        // the callback that accepts exit.
+        let _ = self.phase.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            (current != CtrlCPhase::ExitRequested as u8).then_some(phase as u8)
+        });
     }
 
     /// Register a Ctrl+C signal and return the appropriate signal type.
@@ -1349,6 +1357,23 @@ impl CtrlCState {
         self.last_signal_time.store(0, Ordering::SeqCst);
     }
 
+    pub(crate) fn request_exit(&self) {
+        self.exit_started.get_or_init(std::time::Instant::now);
+        self.phase.store(CtrlCPhase::ExitRequested as u8, Ordering::SeqCst);
+    }
+
+    pub(crate) fn exit_deadline(&self) -> Option<tokio::time::Instant> {
+        self.exit_started
+            .get()
+            .map(|started| tokio::time::Instant::from_std(*started + Duration::from_millis(1500)))
+    }
+
+    pub(crate) fn exit_elapsed_ms(&self) -> Option<u64> {
+        self.exit_started
+            .get()
+            .map(|started| started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64)
+    }
+
     pub(crate) fn reset(&self) {
         self.set_phase(CtrlCPhase::Idle);
         self.last_signal_time.store(0, Ordering::SeqCst);
@@ -1372,9 +1397,12 @@ impl CtrlCState {
     }
 
     pub(crate) fn mark_cancel_handled(&self) {
-        if matches!(self.phase(), CtrlCPhase::CancelRequested) {
-            self.set_phase(CtrlCPhase::ExitArmed);
-        }
+        let _ = self.phase.compare_exchange(
+            CtrlCPhase::CancelRequested as u8,
+            CtrlCPhase::ExitArmed as u8,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
     }
 
     pub(crate) fn is_cancel_requested(&self) -> bool {
@@ -1383,6 +1411,10 @@ impl CtrlCState {
 
     pub(crate) fn is_exit_requested(&self) -> bool {
         matches!(self.phase(), CtrlCPhase::ExitRequested)
+    }
+
+    pub(crate) fn is_cancel_handled(&self) -> bool {
+        matches!(self.phase(), CtrlCPhase::ExitArmed)
     }
 
     /// Check if cancellation or exit has been requested and return an error if so
@@ -2234,7 +2266,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_c_state_reset_clears_all_state() {
+    fn ctrl_c_state_reset_preserves_exit() {
         let state = CtrlCState::new();
 
         // Get to exit state
@@ -2243,13 +2275,12 @@ mod tests {
         assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
         assert!(state.is_exit_requested());
 
-        // Reset should clear everything
+        // Only a new session may clear exit, by creating a new state.
         state.reset();
 
-        // Should be back to idle
         assert!(!state.is_cancel_requested());
-        assert!(!state.is_exit_requested());
-        assert!(state.check_cancellation().is_ok());
+        assert!(state.is_exit_requested());
+        assert!(state.check_cancellation().is_err());
     }
 
     #[test]

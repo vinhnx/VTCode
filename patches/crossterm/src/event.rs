@@ -249,6 +249,22 @@ pub fn read() -> std::io::Result<Event> {
     }
 }
 
+/// Read an event within `timeout`, including time spent acquiring the shared
+/// reader. Availability and consumption use one lock, so another reader cannot
+/// consume the event between a successful poll and this read.
+pub fn read_timeout(timeout: Duration) -> std::io::Result<Option<Event>> {
+    let budget = PollTimeout::new(Some(timeout));
+    let Some(mut reader) = try_lock_internal_event_reader_for(timeout) else {
+        return Ok(None);
+    };
+    match reader.read_timeout(budget.leftover().unwrap_or_default(), &EventFilter)? {
+        Some(InternalEvent::Event(event)) => Ok(Some(event)),
+        None => Ok(None),
+        #[cfg(unix)]
+        _ => unreachable!(),
+    }
+}
+
 /// Polls to check if there are any `InternalEvent`s that can be read within the given duration.
 pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> std::io::Result<bool>
 where
@@ -1717,5 +1733,26 @@ mod tests {
             assert_eq!(event.as_paste_event(), Some(""));
             assert_eq!(event.as_key_event(), None);
         }
+    }
+}
+
+#[cfg(test)]
+mod timed_read_tests {
+    #[test]
+    fn timed_read_includes_reader_lock_contention_in_its_budget() {
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let owner = std::thread::spawn(move || {
+            let _guard = super::INTERNAL_EVENT_READER.lock();
+            locked_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        locked_rx.recv().unwrap();
+        let started = std::time::Instant::now();
+        let result = super::read_timeout(std::time::Duration::from_millis(20));
+        release_tx.send(()).unwrap();
+        owner.join().unwrap();
+        assert!(result.unwrap().is_none());
+        assert!(started.elapsed() < std::time::Duration::from_millis(250));
     }
 }

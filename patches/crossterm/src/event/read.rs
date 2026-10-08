@@ -89,6 +89,18 @@ impl InternalEventReader {
         }
     }
 
+    pub(crate) fn read_timeout<F>(&mut self, timeout: Duration, filter: &F) -> io::Result<Option<InternalEvent>>
+    where
+        F: Filter,
+    {
+        if self.poll(Some(timeout), filter)? {
+            // This reader remains exclusively borrowed between poll and read.
+            self.read(filter).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub(crate) fn read<F>(&mut self, filter: &F) -> io::Result<InternalEvent>
     where
         F: Filter,
@@ -136,6 +148,20 @@ mod tests {
         fn eval(&self, _: &InternalEvent) -> bool {
             true
         }
+    }
+
+    #[test]
+    fn timed_read_consumes_one_matching_event_and_preserves_other_events() {
+        let first = InternalEvent::Event(Event::Resize(10, 20));
+        let second = InternalEvent::Event(Event::Resize(30, 40));
+        let mut reader = InternalEventReader {
+            events: VecDeque::new(),
+            source: Some(Box::new(FakeSource::with_events(&[first.clone(), second.clone()]))),
+            skipped_events: Vec::new(),
+        };
+        assert_eq!(reader.read_timeout(Duration::ZERO, &InternalEventFilter).unwrap(), Some(first));
+        assert_eq!(reader.read_timeout(Duration::ZERO, &InternalEventFilter).unwrap(), Some(second));
+        assert_eq!(reader.read_timeout(Duration::ZERO, &InternalEventFilter).unwrap(), None);
     }
 
     #[test]

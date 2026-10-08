@@ -105,6 +105,8 @@ impl Session {
                 self.apply_input_status(left, right);
             }
             InlineCommand::SetConfiguredInputStatus { left, right } => {
+                self.footer_context_configured = true;
+                self.footer_context_right = right.clone();
                 self.footer_context_status = left
                     .as_deref()
                     .map(str::trim)

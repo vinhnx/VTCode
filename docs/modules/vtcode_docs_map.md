@@ -245,7 +245,7 @@ below based on the topic area.
 
 - **File**: `docs/development/response-progress.md`
   - **Content**: Response progress and latency
-  - **Topics**: Measurements, Checkpoint preparation
+  - **Topics**: Measurements, Checkpoint preparation, Cancellation and exit
   - **User Questions**: "What can you tell me about Response progress and latency?", "How does Measurements work?", "How
     does Checkpoint preparation work?"
 

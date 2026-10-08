@@ -392,7 +392,7 @@ fn progress_footer_fallback_tracks_current_frame_even_without_a_transcript_body(
                 .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
                 .unwrap_or_default();
             assert_eq!(footer_text.contains("Saving checkpoint"), height == 0);
-            assert_eq!(footer_text.contains("topic/footer*"), height > 0);
+            assert!(footer_text.contains("topic/footer*"), "configured context survives fallback: {footer_text}");
         }
     }
 }
@@ -620,5 +620,100 @@ fn progress_only_transcript_excludes_drag_and_completed_selection() {
                 assert_eq!(session.mouse_selection.extract_text(frame.buffer_mut(), viewport), "overlay");
             })
             .unwrap();
+    }
+}
+
+#[test]
+fn persistent_footer_coordinates_survive_phases_elapsed_time_and_runtime_status() {
+    for width in [120, 48, 24, 12, 4] {
+        for context in [Some("topic/stable*"), Some("Running custom dashboard"), None] {
+            let mut session = Session::new(InlineTheme::default(), None, 20);
+            session.handle_command(InlineCommand::SetPrimaryAgent { name: Some("build".to_owned()), color: None });
+            session.handle_command(InlineCommand::SetConfiguredInputStatus {
+                left: context.map(str::to_owned),
+                right: Some("10:30".to_owned()),
+            });
+            let operation = ProgressOperation::start();
+            session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+                operation,
+                phase: ProgressPhase::PreparingContext,
+            }));
+            let mut persistent = None;
+            for phase in [
+                ProgressPhase::PreparingContext,
+                ProgressPhase::SavingCheckpoint,
+                ProgressPhase::WaitingForModel,
+                ProgressPhase::ReceivingResponse,
+                ProgressPhase::WaitingForApproval,
+            ] {
+                session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Phase { operation, phase }));
+                session.handle_command(InlineCommand::SetInputStatus {
+                    left: Some("Running tool: apply_patch".to_owned()),
+                    right: None,
+                });
+                for elapsed in [0, 9999] {
+                    session.progress.elapsed_secs = elapsed;
+                    let line = session.render_input_status_line(width).unwrap();
+                    let mut buffer = Buffer::empty(Rect::new(0, 0, width, 1));
+                    Paragraph::new(line).render(buffer.area, &mut buffer);
+                    let cells = buffer.content.iter().map(|cell| cell.symbol().to_owned()).collect::<Vec<_>>();
+                    // Independently locate persistent text from rendered cells,
+                    // rather than reusing the footer's allocation calculations.
+                    let text = cells.concat();
+                    let locate =
+                        |needle: &str| cells.windows(needle.chars().count()).position(|slice| slice.concat() == needle);
+                    let positions = (locate("Build"), locate("10:30"), context.and_then(locate));
+                    if let Some(expected) = persistent {
+                        assert_eq!(positions, expected, "{width}: {text}");
+                    }
+                    persistent = Some(positions);
+                    assert!(!text.contains("apply_patch"));
+                    if width >= 24 {
+                        assert!(text.contains("Build") && text.contains("10:30"), "{text}");
+                    }
+                    if width >= 48
+                        && let Some(context) = context
+                    {
+                        assert!(text.contains(context), "{text}");
+                    }
+                }
+            }
+            session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
+            let mut buffer = Buffer::empty(Rect::new(0, 0, width, 1));
+            Paragraph::new(session.render_input_status_line(width).unwrap()).render(buffer.area, &mut buffer);
+            let cells = buffer.content.iter().map(|cell| cell.symbol().to_owned()).collect::<Vec<_>>();
+            let locate =
+                |needle: &str| cells.windows(needle.chars().count()).position(|slice| slice.concat() == needle);
+            let positions = (locate("Build"), locate("10:30"), context.and_then(locate));
+            assert_eq!(Some(positions), persistent, "persistent slots survive completion: {}", cells.concat());
+        }
+    }
+}
+
+#[test]
+fn zero_left_allocation_preserves_mode_in_full_session() {
+    for width in [7, 8] {
+        for context in [None, Some("topic/stable*")] {
+            let mut session = Session::new(InlineTheme::default(), None, 20);
+            session.handle_command(InlineCommand::SetPrimaryAgent { name: Some("build".to_owned()), color: None });
+            session.handle_command(InlineCommand::SetConfiguredInputStatus {
+                left: context.map(str::to_owned),
+                right: None,
+            });
+            let mut terminal = Terminal::new(TestBackend::new(width, 12)).unwrap();
+            terminal.draw(|frame| session.render(frame)).unwrap();
+            let rows = terminal
+                .backend()
+                .buffer()
+                .content
+                .chunks(usize::from(width))
+                .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+                .collect::<Vec<_>>();
+            assert!(
+                rows.iter()
+                    .any(|row| row == &format!("{}• Build", " ".repeat(usize::from(width - 7)))),
+                "{rows:?}"
+            );
+        }
     }
 }

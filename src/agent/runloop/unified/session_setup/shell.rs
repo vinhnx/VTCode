@@ -236,6 +236,13 @@ pub(crate) fn build_session_event_callback(
         InlineEvent::Interrupt => {
             crate::agent::runloop::unified::stop_requests::request_local_cancel(&state, &notify);
         }
+        InlineEvent::Exit => {
+            crate::agent::runloop::unified::stop_requests::request_local_exit(&state, &notify);
+        }
+        InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) if state.is_cancel_handled() => {
+            state.reset();
+            notify.notify_one();
+        }
         InlineEvent::BackgroundOperation => {
             // Registry-backed manager is attached after critical init; until
             // then the shell is typeable but tools are not live yet.

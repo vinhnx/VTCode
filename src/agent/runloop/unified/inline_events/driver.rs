@@ -350,6 +350,12 @@ impl<'a> InlineEventLoop<'a> {
     }
 
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
+        if self.ctrl_c_state.is_cancel_requested()
+            || self.ctrl_c_state.is_cancel_handled()
+            || self.ctrl_c_state.is_exit_requested()
+        {
+            return None;
+        }
         let queued = self.queue.take_batched_submission()?;
         self.queue.flush_sync();
         if queued.input.is_empty() {

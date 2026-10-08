@@ -101,8 +101,9 @@ pub(crate) async fn initialize_session_ui(
     session_trigger: SessionStartTrigger,
     resume_state: Option<&ResumeSession>,
     shell: SessionShell,
+    exit_context: crate::agent::runloop::unified::stop_requests::InitializationExitContext<'_>,
     options: SessionUiLaunchOptions,
-) -> Result<SessionUISetup> {
+) -> Result<Option<SessionUISetup>> {
     let SessionUiLaunchOptions {
         session_archive,
         full_auto,
@@ -125,12 +126,35 @@ pub(crate) async fn initialize_session_ui(
         skip_confirmations,
         legacy_key_bindings,
     } = shell;
+    macro_rules! ui_wait {
+        ($future:expr) => {{
+            match crate::agent::runloop::unified::stop_requests::await_initialization(
+                &ctrl_c_state,
+                &ctrl_c_notify,
+                $future,
+            )
+            .await
+            {
+                Some(value) => value,
+                None => {
+                    crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
+                        &handle,
+                        &mut session,
+                        &ctrl_c_state,
+                        exit_context,
+                    )
+                    .await;
+                    return Ok(None);
+                }
+            }
+        }};
+    }
     let initialization_progress = handle.begin_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     session_state.session_bootstrap.legacy_key_bindings = legacy_key_bindings;
     // Embedded callers without the CLI bootstrap snapshot: load dot-config
     // after the shell is painted so first paint never waits on disk I/O.
     if session_state.session_bootstrap.legacy_key_bindings.is_empty()
-        && let Some(dot) = vtcode_core::utils::dot_config::load_user_config().await.ok()
+        && let Some(dot) = ui_wait!(vtcode_core::utils::dot_config::load_user_config()).ok()
     {
         session_state.session_bootstrap.legacy_key_bindings = dot
             .preferences
@@ -192,7 +216,7 @@ pub(crate) async fn initialize_session_ui(
     // exec manager and continue wiring session state into the live session.
     // Drain the palette probe after spawn so a silent terminal cannot delay
     // the first frame. Theme/palette settle here before the first model turn.
-    crate::agent::probe::await_terminal_palette_probe().await;
+    ui_wait!(crate::agent::probe::await_terminal_palette_probe());
 
     set_global_terminal_focused(true);
     if skip_confirmations {
@@ -328,11 +352,9 @@ pub(crate) async fn initialize_session_ui(
     checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
     checkpoint_config.max_snapshots = config.checkpointing_max_snapshots;
     checkpoint_config.max_age_days = config.checkpointing_max_age_days;
-    let checkpoint_manager = match tokio::task::spawn_blocking(move || {
+    let checkpoint_manager = match ui_wait!(tokio::task::spawn_blocking(move || {
         vtcode_core::core::agent::snapshots::SnapshotManager::new(checkpoint_config)
-    })
-    .await
-    {
+    })) {
         Ok(Ok(manager)) => Some(manager),
         Ok(Err(err)) => {
             warn!("Failed to initialize checkpoint manager: {}", err);
@@ -345,7 +367,7 @@ pub(crate) async fn initialize_session_ui(
     };
 
     if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
-        hooks.update_transcript_path(Some(archive.path().to_path_buf())).await;
+        ui_wait!(hooks.update_transcript_path(Some(archive.path().to_path_buf())));
     }
 
     // Workspace-controlled lifecycle hooks never execute without explicit
@@ -357,14 +379,14 @@ pub(crate) async fn initialize_session_ui(
         // Approval / skip notices stay on the first-frame path. Executing
         // session-start hooks waits until after hydration so they observe the
         // fully initialized tool registry (`run_session_start_hooks`).
-        if hooks.workspace_hooks_need_approval().await {
+        if ui_wait!(hooks.workspace_hooks_need_approval()) {
             let digest = hooks.command_digest().to_string();
             let pre_approved = matches!(
-                vtcode_core::load_lifecycle_hook_approval(&config.workspace).await,
+                ui_wait!(vtcode_core::load_lifecycle_hook_approval(&config.workspace)),
                 Ok(Some(record)) if record.config_digest == digest
             );
             if pre_approved {
-                hooks.approve_workspace_hooks().await;
+                ui_wait!(hooks.approve_workspace_hooks());
             } else if full_auto || skip_confirmations {
                 renderer.line(
                     MessageStyle::Warning,
@@ -383,13 +405,15 @@ pub(crate) async fn initialize_session_ui(
                 .await
                 {
                     Ok(hook_approval::HookApprovalDecision::Approved) => {
-                        if let Err(err) = vtcode_core::update_lifecycle_hook_approval(&config.workspace, digest).await {
+                        if let Err(err) =
+                            ui_wait!(vtcode_core::update_lifecycle_hook_approval(&config.workspace, digest))
+                        {
                             tracing::warn!(
                                 error = %err,
                                 "Failed to persist workspace lifecycle hook approval; approval applies to this session only"
                             );
                         }
-                        hooks.approve_workspace_hooks().await;
+                        ui_wait!(hooks.approve_workspace_hooks());
                     }
                     Ok(hook_approval::HookApprovalDecision::Denied) => {
                         renderer.line(
@@ -412,7 +436,7 @@ pub(crate) async fn initialize_session_ui(
 
     handle.set_placeholder(default_placeholder.clone());
 
-    let mut header_context = initialize_header_context(
+    let mut header_context = ui_wait!(initialize_header_context(
         &mut renderer,
         &handle,
         HeaderContextInit {
@@ -422,8 +446,7 @@ pub(crate) async fn initialize_session_ui(
             provider_client: &*session_state.provider_client,
             header_provider_label,
         },
-    )
-    .await?;
+    ))?;
     let primary_agent_name = session_state.active_primary_agent.active().display_name.clone();
     let primary_agent_color = session_state
         .active_primary_agent
@@ -477,7 +500,7 @@ pub(crate) async fn initialize_session_ui(
 
     let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
         let manager = manager.clone();
-        match tokio::task::spawn_blocking(move || manager.next_turn_number()).await {
+        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number())) {
             Ok(Ok(turn)) => turn,
             Ok(Err(error)) => {
                 warn!(%error, "Failed to inspect checkpoint turn numbers");
@@ -492,8 +515,9 @@ pub(crate) async fn initialize_session_ui(
         1
     };
 
+    ui_wait!(async {});
     initialization_progress.transfer();
-    Ok(SessionUISetup {
+    Ok(Some(SessionUISetup {
         settings_task_guard,
         renderer,
         session,
@@ -520,7 +544,7 @@ pub(crate) async fn initialize_session_ui(
         editor_open_coordinator_task_guard,
         exec_sessions: Some(exec_sessions),
         pty_counter: Some(pty_counter),
-    })
+    }))
 }
 
 /// Shared agent-palette + background-refresh wiring used both when a

@@ -31,12 +31,18 @@ pub(super) struct SessionTeardownContext<'a> {
     pub session_end_reason: SessionEndReason,
 }
 
+#[derive(Default)]
 pub(super) struct SessionTeardownOutput {
     pub harness_finish_error: Option<anyhow::Error>,
     pub end_code_changes: Option<HashMap<PathBuf, FileStat>>,
 }
 
-pub(super) async fn drain_session_teardown(context: SessionTeardownContext<'_>) -> SessionTeardownOutput {
+/// Publish a branch's result before another branch can exhaust the shared deadline.
+pub(super) async fn retain_completed_result<T>(slot: &mut T, work: impl Future<Output = T>) {
+    *slot = work.await;
+}
+
+pub(super) async fn drain_session_teardown(context: SessionTeardownContext<'_>, output: &mut SessionTeardownOutput) {
     let SessionTeardownContext {
         harness_emitter,
         checkpoint_manager,
@@ -60,8 +66,8 @@ pub(super) async fn drain_session_teardown(context: SessionTeardownContext<'_>) 
     } else {
         EXIT_BACKGROUND_SHUTDOWN_TIMEOUT
     };
-    let (harness_finish_error, (), (), end_code_changes) = tokio::join!(
-        async {
+    tokio::join!(
+        retain_completed_result(&mut output.harness_finish_error, async {
             let emitter = harness_emitter?;
             // Fire one best-effort session-completion notification, mirroring
             // the per-turn outcome helper. Reuses the same
@@ -99,7 +105,7 @@ pub(super) async fn drain_session_teardown(context: SessionTeardownContext<'_>) 
                     None
                 }
             }
-        },
+        }),
         async {
             if let Some(manager) = checkpoint_manager {
                 let session_id = tool_registry.harness_context_snapshot().session_id;
@@ -144,15 +150,14 @@ pub(super) async fn drain_session_teardown(context: SessionTeardownContext<'_>) 
                 }
             }
         },
-        async {
+        retain_completed_result(&mut output.end_code_changes, async {
             if is_new_session {
                 None
             } else {
                 capture_code_change_snapshot(workspace, "end").await
             }
-        },
+        }),
     );
-    SessionTeardownOutput { harness_finish_error, end_code_changes }
 }
 
 /// Await filesystem cleanup on the blocking pool before starting the next lifecycle phase.
@@ -261,6 +266,40 @@ pub(super) async fn shutdown_subagents(tool_registry: &ToolRegistry) {
 mod tests {
     use super::cleanup_completed_artifacts;
     use vtcode_core::core::agent::harness_artifacts::current_task_path;
+
+    #[tokio::test]
+    async fn deadline_preserves_completed_results_and_canonical_errors() {
+        use super::{SessionTeardownOutput, retain_completed_result};
+        use crate::agent::runloop::unified::turn::finalization::FinalizationOutput;
+        let mut teardown = SessionTeardownOutput::default();
+        let mut archive = None;
+        let mut unfinished = None::<usize>;
+        let work = async {
+            tokio::join!(
+                retain_completed_result(&mut teardown.harness_finish_error, async {
+                    Some(anyhow::anyhow!("canonical write failed"))
+                }),
+                retain_completed_result(&mut teardown.end_code_changes, async {
+                    Some(super::HashMap::from_iter([(
+                        "changed.rs".into(),
+                        super::FileStat { additions: 17, deletions: 3 },
+                    )]))
+                }),
+                retain_completed_result(&mut archive, async {
+                    Some(FinalizationOutput { archive_path: Some("saved-session.json".into()) })
+                }),
+                retain_completed_result(&mut unfinished, std::future::pending()),
+            );
+        };
+        assert!(tokio::time::timeout(std::time::Duration::from_millis(20), work).await.is_err());
+        assert_eq!(teardown.harness_finish_error.unwrap().to_string(), "canonical write failed");
+        assert_eq!(
+            teardown.end_code_changes.unwrap().get(std::path::Path::new("changed.rs")),
+            Some(&super::FileStat { additions: 17, deletions: 3 })
+        );
+        assert_eq!(archive.unwrap().archive_path.unwrap(), std::path::PathBuf::from("saved-session.json"));
+        assert!(unfinished.is_none());
+    }
 
     #[tokio::test(flavor = "current_thread")]
     async fn cleanup_archives_completed_tracker_before_returning() {

@@ -61,6 +61,31 @@ fn session_tui_interrupt_callback_only_cancels_after_cancel_is_handled() {
     assert!(!state.is_exit_requested());
 }
 
+#[tokio::test]
+async fn session_tui_exit_callback_wakes_waiters_and_survives_a_fresh_submission() {
+    let state = Arc::new(state::CtrlCState::new());
+    let notify = Arc::new(Notify::new());
+    let (settings_events, _) = tokio::sync::mpsc::unbounded_channel();
+    let callback = build_session_event_callback(
+        state.clone(),
+        notify.clone(),
+        None,
+        settings_events,
+        Arc::new(EditorOpenDispatcher::new(true)),
+        PathBuf::from("/tmp"),
+        test_exec_sessions(),
+    );
+    callback(&InlineEvent::Interrupt);
+    state.mark_cancel_handled();
+    callback(&InlineEvent::Exit);
+    callback(&InlineEvent::Submit("a fresh request".into()));
+    state.reset();
+    assert!(state.is_exit_requested());
+    tokio::time::timeout(Duration::from_millis(100), notify.notified())
+        .await
+        .expect("stored stop notification");
+}
+
 #[test]
 fn structured_resume_lines_preserve_tool_context() {
     let mut assistant = uni::Message::assistant("cargo fmt completed successfully.".to_string());

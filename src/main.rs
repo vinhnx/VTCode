@@ -114,7 +114,10 @@ fn main() -> std::process::ExitCode {
                     // reap, or provider read can park the process after the
                     // terminal is already restored. A short budget caps that
                     // tail; normal teardown exits well within it.
+                    let runtime_shutdown_started = std::time::Instant::now();
+                    tracing::debug!(target: "vtcode.shutdown", boundary = "runtime_shutdown_started", elapsed_ms = 0u64);
                     runtime.shutdown_timeout(std::time::Duration::from_millis(500));
+                    tracing::debug!(target: "vtcode.shutdown", boundary = "process_return", elapsed_ms = runtime_shutdown_started.elapsed().as_millis() as u64);
                     result
                 }
             }
