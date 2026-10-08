@@ -164,7 +164,7 @@ generate_checksums_manifest() {
     local archive
     for archive in "${archives[@]}"; do
         (
-            cd "$stage_dir"
+            cd "$stage_dir" || return 1
             "${checksum_command[@]}" "$(basename "$archive")"
         ) >>"$manifest_tmp"
     done

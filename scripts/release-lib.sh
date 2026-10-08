@@ -50,7 +50,8 @@ add_username_tags() {
 			local hash author_email
 			hash=$(echo "$line" | cut -d'|' -f1)
 			author_email=$(echo "$line" | cut -d'|' -f2)
-			local username=$(get_github_username "$author_email")
+			local username
+			username=$(get_github_username "$author_email")
 			echo "$hash|$username"
 		fi
 	done >"$temp_mapping_file"
@@ -177,7 +178,7 @@ generate_structured_changelog() {
 			prefix=$(get_type_prefix "$type")
 			echo "### $title"
 			echo ""
-			echo "$type_commits" | while IFS='|' read -r t hash msg; do
+			echo "$type_commits" | while IFS='|' read -r _ hash msg; do
 				echo "${prefix}${msg} (${hash})"
 			done
 			echo ""
@@ -580,7 +581,8 @@ trigger_and_wait_ci() {
 	print_success "CI workflow triggered for $released_version"
 	print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
 
-	local wait_start=$(date +%s)
+	local wait_start
+	wait_start=$(date +%s)
 	local timeout=3600
 	local run_id=""
 	local attempts=0
@@ -605,7 +607,8 @@ trigger_and_wait_ci() {
 		run_info=$(gh run view "$run_id" --json status,conclusion 2>/dev/null || echo '{"status":"failed","conclusion":"failure"}')
 		status=$(echo "$run_info" | jq -r '.status')
 		conclusion=$(echo "$run_info" | jq -r '.conclusion')
-		local now=$(date +%s)
+		local now
+		now=$(date +%s)
 		local elapsed=$((now - wait_start))
 		if [[ $elapsed -gt $timeout ]]; then
 			print_warning "CI build timeout after $timeout seconds"
@@ -638,7 +641,8 @@ create_and_upload_release() {
 	fi
 
 	if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-		export GITHUB_TOKEN=$(gh auth token)
+		GITHUB_TOKEN=$(gh auth token)
+		export GITHUB_TOKEN
 	fi
 
 	if ! gh release view "$released_version" &>/dev/null; then
@@ -684,7 +688,7 @@ create_and_upload_release() {
 
 	# Generate consolidated checksums.txt
 	(
-		cd "$binaries_dir"
+		cd "$binaries_dir" || return 1
 		local shacmd=""
 		if command -v sha256sum &>/dev/null; then
 			shacmd="sha256sum"
