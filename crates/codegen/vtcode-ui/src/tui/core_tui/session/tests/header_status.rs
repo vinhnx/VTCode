@@ -379,6 +379,21 @@ fn non_bang_input_uses_default_padding() {
 }
 
 #[test]
+fn header_badge_reports_finished_history_statically() {
+    let mut session = fresh_session();
+    session.set_background_finished_count(2);
+
+    assert_eq!(session.background_header_badge_text().as_deref(), Some("✓ 2 done"));
+    assert!(session.header_meta_line().to_string().contains("✓ 2 done"));
+
+    let idle = session
+        .render_input_status_line(VIEW_WIDTH)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
+        .unwrap_or_default();
+    assert!(idle.contains("2 agents finished"), "{idle}");
+}
+
+#[test]
 fn question_mark_opens_help_overlay_when_input_is_empty() {
     let mut session = fresh_session();
 

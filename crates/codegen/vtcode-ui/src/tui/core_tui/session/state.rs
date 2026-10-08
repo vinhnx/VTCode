@@ -592,6 +592,10 @@ impl Session {
     /// through the shared loading path. When nothing is live but finished
     /// history remains, show a finished summary instead so the indicator stays
     /// openable.
+    ///
+    /// The bottom-line copy is idle-only: while `progress` owns the transcript
+    /// loading row the count moves to that row (plus a static header badge),
+    /// so the composer line never blinks as turn phases toggle underneath.
     pub(crate) fn background_activity_status_text(&self) -> Option<String> {
         if self.has_background_activity() {
             return Some(format!(
@@ -607,6 +611,17 @@ impl Session {
                 if self.background_finished_count == 1 { "" } else { "s" }
             )
         })
+    }
+
+    /// Short static header badge for background work (`• N bg` live,
+    /// `✓ N done` retained). Intentionally free of shimmer needles so the
+    /// header never animates or reflows while a long-lived task runs.
+    pub(crate) fn background_header_badge_text(&self) -> Option<String> {
+        if self.has_background_activity() {
+            return Some(format!("• {} bg", self.background_activity_count));
+        }
+        self.has_background_history()
+            .then(|| format!("✓ {} done", self.background_finished_count))
     }
 
     pub(crate) fn background_shortcut_label(&self) -> &str {
@@ -649,9 +664,11 @@ impl Session {
     /// Kept out of [`Self::is_shimmer_active`] so a long-lived background task
     /// does not pin the cursor to steady mode; the tick handler ORs this with
     /// the turn shimmer instead, and short-circuiting avoids updating the
-    /// shared shimmer phase twice in one tick.
+    /// shared shimmer phase twice in one tick. Suppressed while `progress`
+    /// owns the transcript loading row: that row already drives the tick when
+    /// animated, and its `· N bg` suffix plus the header badge are static.
     pub(crate) fn background_status_shimmer_active(&self) -> bool {
-        self.has_background_activity()
+        self.has_background_activity() && !self.progress.is_active()
     }
 
     pub(crate) fn use_steady_cursor(&self) -> bool {

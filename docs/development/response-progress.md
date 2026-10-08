@@ -13,8 +13,12 @@ Configured output is retained by source, so text such as `Running custom dashboa
 The footer reserves persistent regions before fitting optional content: mode, configured right-side content, configured
 context, then hints. Each region is truncated independently by terminal columns. Loading phases and elapsed seconds
 cannot push out the mode or move the right-side content. When the transcript row cannot fit, loading uses a bounded
-24-column optional footer slot after context. Copy notifications and independent background or shell hints retain
-their footer presentation when space permits.
+24-column optional footer slot after context. Copy notifications and shell hints retain
+their footer presentation when space permits. Background activity stays out of the bottom line while loading: the
+transcript loading row carries a static `· N bg` suffix and the header carries a short `• N bg` / `✓ N done` badge,
+so the composer line never hides/shows as turn status or the fallback budget toggles. The `Running N background
+tasks...` copy and drawer hint return to the bottom line (clickable, width-deterministic) only once loading clears.
+The foreground-PTY hint stays in the bottom line throughout when space permits so a running command can still be backgrounded with one click.
 
 `ProgressOperation`, `ProgressPhase`, and `ProgressUpdate` live in `vtcode-commons::ui_protocol`. The UI accepts a new
 operation identity, updates only that active identity, and clears only the matching operation. Finished identities

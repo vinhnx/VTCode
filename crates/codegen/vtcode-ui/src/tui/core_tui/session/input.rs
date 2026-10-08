@@ -1025,10 +1025,26 @@ impl Session {
             (existing, None) => existing.map(str::to_owned),
         };
         let mode_pill = self.primary_mode_pill();
-        let background_hint = self.local_agents_input_status_hint();
-        let background_status = (!self.is_running_activity())
-            .then(|| self.background_activity_status_text())
-            .flatten();
+        // Bottom-line background copy is idle-only. While the transcript owns
+        // the loading row, the live count moves there (plus a static header
+        // badge), so this line never blinks as turn phases or the progress
+        // fallback budget toggles underneath. When idle the copy is
+        // width-deterministic (budget decides) rather than state-gated, so a
+        // fitting count stays put across tool gaps. The foreground-PTY hint
+        // stays clickable even while loading so a running command can still
+        // be backgrounded with one click; drawer discovery moves to the
+        // header/keyboard until loading clears.
+        let in_loading = self.progress.is_active();
+        let background_hint = if in_loading {
+            self.foreground_pty_background_hint()
+        } else {
+            self.local_agents_input_status_hint()
+        };
+        let background_status = if in_loading {
+            None
+        } else {
+            self.background_activity_status_text()
+        };
         let dim_style = {
             let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
             if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {

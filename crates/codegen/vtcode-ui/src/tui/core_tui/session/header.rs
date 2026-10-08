@@ -482,6 +482,23 @@ impl Session {
             push_badge(&mut spans, format!(" {label} "), badge_style, &mut first_section);
         }
 
+        // Persistent background-work badge. The bottom-line background copy is
+        // idle-only (loading moves to the transcript progress row), so the
+        // header carries the always-visible count with short static text that
+        // never shimmers or changes width per-second.
+        if let Some(badge) = self.background_header_badge_text() {
+            let style = if self.has_background_activity() {
+                // Live work stays prominent: undimmed primary bold, unlike the
+                // dimmed secondary used for retained history below.
+                self.header_primary_style()
+                    .remove_modifier(Modifier::DIM)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                self.header_secondary_style().add_modifier(Modifier::DIM)
+            };
+            push_badge(&mut spans, badge, style, &mut first_section);
+        }
+
         // Show blocked/recovery badge so a stalled turn is visible in the header,
         // not only in the footer hint. Uses ActivityState plus the blocked
         // status needles shared with the footer hint (see blocked_status): the

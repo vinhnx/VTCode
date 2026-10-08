@@ -28,6 +28,12 @@ automatic context, your command's output, or no configured text in hidden mode. 
 apply, including switching modes, changing the command, and hiding the clock. Mode and configured right-side content
 keep their slots across loading phases. Narrow layouts retain mode first, then right-side content, context, and optional
 hints; each region is truncated separately. A bounded loading fallback appears after context only when space remains.
+Background work leaves the bottom line while loading: the live count rides the transcript loading row (`· N bg`,
+static, no shimmer) and a short header badge (`• N bg` live, `✓ N done` retained) stays always visible. The
+`Running N background tasks...` copy and drawer hint return to the bottom line only once loading clears, so the
+composer line never blinks as turn phases toggle underneath. The foreground-`Ctrl+B background` hint is the
+exception: it stays in the bottom line during loading when space permits so a running command can still be
+backgrounded with one click. Open the Background window anytime with `Ctrl+B`, `Alt+S`, or `/subprocesses`.
 
 ```toml
 [ui.status_line]

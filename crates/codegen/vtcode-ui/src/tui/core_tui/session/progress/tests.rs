@@ -717,3 +717,162 @@ fn zero_left_allocation_preserves_mode_in_full_session() {
         }
     }
 }
+
+#[test]
+fn loading_moves_background_off_bottom_line_onto_transcript_row() {
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    session.handle_command(InlineCommand::SetConfiguredInputStatus {
+        left: Some("topic/stable*".to_owned()),
+        right: Some("10:30".to_owned()),
+    });
+    session.set_background_activity_count(2);
+
+    // Idle: bottom line carries the background copy and the header badge is short/static.
+    let idle: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(idle.contains("Running 2 background tasks"), "{idle}");
+    assert!(idle.contains("topic/stable*"), "{idle}");
+    assert_eq!(session.background_header_badge_text().as_deref(), Some("• 2 bg"));
+    assert!(session.header_meta_line().to_string().contains("• 2 bg"));
+
+    // Loading: transcript owns the row, bottom line keeps only configured context.
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::WaitingForModel,
+    }));
+    let area = Rect::new(0, 0, 80, 1);
+    let mut buf = Buffer::empty(area);
+    session.render_progress(area, &mut buf);
+    assert!(session.progress_row_visible());
+    let row_text = rendered_text(&buf);
+    assert!(row_text.contains("Waiting for model"), "{row_text}");
+    assert!(row_text.contains("2 bg"), "transcript row must carry the live count: {row_text}");
+
+    let loading: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(!loading.contains("background task"), "bottom line must not blink during loading: {loading}");
+    assert!(!loading.contains("Ctrl+B"), "background hint must leave the bottom line during loading: {loading}");
+    assert!(loading.contains("topic/stable*"), "configured context survives loading: {loading}");
+    // The drawer click target is intentionally gone while loading; keyboard
+    // entry points stay available. The foreground-PTY hint below is the only
+    // bottom-line click target preserved during loading.
+    let (loading_line, loading_hits) = session.render_input_status_line_with_hit(80).expect("loading status line");
+    let loading_hit_text: String = loading_line.spans.iter().map(|span| span.content.as_ref()).collect();
+    assert!(loading_hit_text.contains("topic/stable*"), "{loading_hit_text}");
+    assert!(loading_hits.is_empty(), "no drawer click target while loading: {loading_hits:?}");
+
+    // Completion restores the idle bottom-line copy without a state toggle.
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
+    let restored: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(restored.contains("Running 2 background tasks"), "{restored}");
+}
+
+#[test]
+fn loading_preserves_foreground_pty_hint_for_one_click_backgrounding() {
+    use std::sync::atomic::AtomicUsize;
+
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
+    session.set_background_activity_count(1);
+
+    let idle: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(idle.contains("background"), "{idle}");
+
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::RunningTools,
+    }));
+    let loading: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(!loading.contains("background task"), "live count must stay off the bottom line: {loading}");
+    assert!(loading.contains("background"), "foreground-PTY hint must survive loading: {loading}");
+    let (pty_line, pty_hits) = session.render_input_status_line_with_hit(80).expect("pty status line");
+    let pty_text: String = pty_line.spans.iter().map(|span| span.content.as_ref()).collect();
+    assert!(pty_text.contains("background"), "{pty_text}");
+    assert!(!pty_hits.is_empty(), "PTY hint must stay clickable while loading");
+    // Narrow rows keep the no-overflow contract even when the hint competes
+    // with the fallback budget: best-effort presence, guaranteed fit.
+    let narrow = session.render_input_status_line(24).expect("narrow status line");
+    assert!(narrow.width() <= 24, "narrow bottom line must not overflow");
+}
+
+#[test]
+fn loading_fallback_without_transcript_row_keeps_header_only_background() {
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    session.handle_command(InlineCommand::SetConfiguredInputStatus {
+        left: Some("topic/stable*".to_owned()),
+        right: None,
+    });
+    session.set_background_activity_count(3);
+
+    // Progress accepted but no transcript row painted yet (zero-height body,
+    // overlay cover, progress-only allocation): the bounded footer fallback
+    // shows the phase, never the background copy.
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::WaitingForModel,
+    }));
+    assert!(!session.progress_row_visible());
+    let fallback: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(fallback.contains("Waiting for model"), "{fallback}");
+    assert!(fallback.contains("topic/stable*"), "{fallback}");
+    assert!(!fallback.contains("background task"), "{fallback}");
+    assert!(session.header_meta_line().to_string().contains("• 3 bg"));
+}
+
+#[test]
+fn narrow_transcript_row_prioritizes_phase_with_header_as_guaranteed_home() {
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    session.set_background_activity_count(2);
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::WaitingForModel,
+    }));
+    let area = Rect::new(0, 0, 20, 1);
+    let mut buf = Buffer::empty(area);
+    session.render_progress(area, &mut buf);
+    let row_text = rendered_text(&buf);
+    // Phase label is primary and must survive truncation; the `bg` suffix is
+    // best-effort and the header badge is the guaranteed home.
+    assert!(row_text.contains("Waiting"), "{row_text}");
+    assert!(session.header_meta_line().to_string().contains("• 2 bg"));
+}
+
+#[test]
+fn idle_background_survives_running_turn_status_without_blinking() {
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    session.set_background_activity_count(1);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: edit_file".to_owned()),
+        right: None,
+    });
+    assert!(session.is_running_activity(), "fixture must look like an active turn");
+
+    // No progress row owns loading here, so the bottom line keeps both the
+    // turn status and the background count stably instead of hiding one.
+    let text: String = session
+        .render_input_status_line(100)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(text.contains("Running tool: edit_file"), "{text}");
+    assert!(text.contains("Running 1 background task"), "{text}");
+}

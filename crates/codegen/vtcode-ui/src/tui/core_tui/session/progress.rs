@@ -126,13 +126,25 @@ impl Session {
         let Some(text) = self.progress.text() else { return };
         let feedback_columns = measure_text_width(&text).min(area.width);
         let style = self.styles.default_style().add_modifier(Modifier::DIM);
-        let spans = if self.progress.is_animated() && self.appearance.should_animate_progress_status() {
+        let mut spans = if self.progress.is_animated() && self.appearance.should_animate_progress_status() {
             tui_shimmer::shimmer_spans_with_style_at_phase(&text, style, self.shimmer_state.phase())
         } else {
             vec![Span::styled(text, style)]
         };
+        // Live background count rides the transcript loading row while it owns
+        // foreground progress, so the bottom line stays reserved for configured
+        // context. Static dim text (no shimmer) keeps the row width stable:
+        // only task start/finish changes it, never per-second ticks. The
+        // combined line truncates head-first, so the phase label wins on
+        // narrow rows and the header badge remains the guaranteed home.
+        if self.has_background_activity() {
+            let suffix = format!(" · {} bg", self.background_activity_count);
+            spans.push(Span::styled(suffix, style));
+        }
+        let line =
+            utils::line_truncation::truncate_line_with_ellipsis_if_overflow(Line::from(spans), usize::from(area.width));
         Clear.render(area, buf);
-        Paragraph::new(Line::from(spans)).render(area, buf);
+        Paragraph::new(line).render(area, buf);
         self.set_progress_feedback_area(Rect::new(area.x, area.y, feedback_columns, 1));
     }
 }
