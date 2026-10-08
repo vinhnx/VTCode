@@ -392,3 +392,34 @@ fn program_status_commands_do_not_change_input_or_accessibility() {
     assert_eq!(session.activity_state, original_activity);
     assert!(!session.needs_animation_tick());
 }
+
+#[test]
+fn program_status_task_progress_emits_determinate_working_only() {
+    let mut status = enabled();
+    let operation = ProgressOperation::start();
+    status.progress(ProgressUpdate::Begin { operation, phase: ProgressPhase::RunningTools });
+    assert_eq!(status.desired()[&status.parent].progress, None);
+    status.apply(ProgramStatusUpdate::Progress { percent: Some(40) });
+    assert_eq!(status.desired()[&status.parent].progress, Some(40));
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(String::from_utf8(output).unwrap().contains(":progress=40:"));
+    status.apply(ProgramStatusUpdate::Outcome(ProgramState::Done));
+    assert_eq!(status.desired()[&status.parent].progress, None);
+    let mut output = Vec::new();
+    status.deliver(&mut output).unwrap();
+    assert!(!String::from_utf8(output).unwrap().contains("progress="));
+    // Invalid values are ignored, retaining the last good percent. Use a
+    // fresh operation so Begin is accepted and the state is Working.
+    status.apply(ProgramStatusUpdate::Outcome(ProgramState::Idle));
+    let next = ProgressOperation::start();
+    status.progress(ProgressUpdate::Begin {
+        operation: next,
+        phase: ProgressPhase::RunningTools,
+    });
+    assert_eq!(status.desired()[&status.parent].progress, Some(40));
+    status.apply(ProgramStatusUpdate::Progress { percent: Some(101) });
+    assert_eq!(status.desired()[&status.parent].progress, Some(40));
+    status.apply(ProgramStatusUpdate::Progress { percent: None });
+    assert_eq!(status.desired()[&status.parent].progress, None);
+}

@@ -52,10 +52,22 @@ impl InteractionKind {
 /// Projection commands carry no input or execution authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgramStatusUpdate {
-    Configure { enabled: bool },
-    Wait { token: u64, kind: InteractionKind },
-    Resume { token: u64 },
+    Configure {
+        enabled: bool,
+    },
+    Wait {
+        token: u64,
+        kind: InteractionKind,
+    },
+    Resume {
+        token: u64,
+    },
     Outcome(ProgramState),
+    /// Determinate task progress (0-100). `None` means indeterminate and
+    /// omits `progress`, per OSC 7501. Only emitted with `working`/`blocked`.
+    Progress {
+        percent: Option<u8>,
+    },
 }
 
 /// Generate an opaque ASCII segment without copying source identity onto the wire.
@@ -98,10 +110,15 @@ fn encode_text(text: &str, limit: usize) -> Result<String> {
 
 /// Encode a complete replacement record. An explicit owned ID is mandatory;
 /// callers cannot accidentally clear the terminal's root or unrelated records.
+///
+/// `progress` follows OSC 7501: only emitted with `working`/`blocked` when
+/// `Some(0..=100)`. Any other state, `None`, or out-of-range value omits the
+/// key (absent means indeterminate).
 pub fn encode_report(
     id: &str,
     state: ProgramState,
     kind: Option<InteractionKind>,
+    progress: Option<u8>,
     title: &str,
     message: &str,
 ) -> Result<String> {
@@ -117,6 +134,13 @@ pub fn encode_report(
     {
         report.push_str(":kind=");
         report.push_str(kind.as_str());
+    }
+    if matches!(state, ProgramState::Working | ProgramState::Blocked)
+        && let Some(percent) = progress
+        && percent <= 100
+    {
+        report.push_str(":progress=");
+        report.push_str(&percent.to_string());
     }
     report.push_str(":title=");
     report.push_str(&title);

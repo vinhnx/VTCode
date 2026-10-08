@@ -25,6 +25,7 @@ static CLEANUP_RECORDS: Mutex<BTreeMap<String, ProgramState>> = Mutex::new(BTree
 struct Report {
     state: ProgramState,
     kind: Option<InteractionKind>,
+    progress: Option<u8>,
     title: &'static str,
     message: &'static str,
 }
@@ -38,6 +39,7 @@ pub(crate) struct ProgramStatus {
     operation: Option<u64>,
     newest_operation: u64,
     phase: Option<ProgressPhase>,
+    task_progress: Option<u8>,
     waits: BTreeMap<u64, InteractionKind>,
     children: BTreeMap<String, Report>,
     // A failed flush may still have reached the terminal. Retain owned IDs
@@ -62,6 +64,7 @@ impl Default for ProgramStatus {
             operation: None,
             newest_operation: 0,
             phase: None,
+            task_progress: None,
             waits: BTreeMap::new(),
             children: BTreeMap::new(),
             attempted: BTreeSet::new(),
@@ -97,6 +100,19 @@ impl ProgramStatus {
                 ) {
                     self.underlying = state;
                     self.phase = None;
+                }
+            }
+            ProgramStatusUpdate::Progress { percent } => {
+                // Task-scoped, not turn-scoped: retained across Outcome/Finish
+                // and disable/enable so the next Working re-emits the last
+                // known task percent until typed metadata clears or updates
+                // it. `desired()` still gates emission to working/blocked.
+                // Invalid values are ignored (retain last good), matching the
+                // Outcome/Begin ignore-stale pattern; explicit None clears.
+                match percent {
+                    None => self.task_progress = None,
+                    Some(value) if value <= 100 => self.task_progress = Some(value),
+                    Some(_) => {}
                 }
             }
         }
@@ -167,6 +183,7 @@ impl ProgramStatus {
                     Report {
                         state: entry.program_status,
                         kind: None,
+                        progress: None,
                         title,
                         message: entry.program_status.as_str(),
                     },
@@ -202,7 +219,11 @@ impl ProgramStatus {
                 _ => "Idle",
             }
         };
-        records.insert(self.parent.clone(), Report { state, kind, title: "VT Code", message });
+        let progress = match state {
+            ProgramState::Working | ProgramState::Blocked => self.task_progress,
+            _ => None,
+        };
+        records.insert(self.parent.clone(), Report { state, kind, progress, title: "VT Code", message });
         if self.closed {
             records.retain(|_, report| report.state.is_finished());
         }
@@ -222,7 +243,7 @@ impl ProgramStatus {
             } else {
                 ProgramState::Clear
             };
-            let wire = encode_report(&id, state, None, "", "")?;
+            let wire = encode_report(&id, state, None, None, "", "")?;
             // Even a failed flush may change the terminal. A subtree clear
             // invalidates all successful-report cache entries beneath it.
             if id == self.parent && state == ProgramState::Clear {
@@ -244,7 +265,7 @@ impl ProgramStatus {
             if self.delivered.get(&id) == Some(&report) {
                 continue;
             }
-            let wire = encode_report(&id, report.state, report.kind, report.title, report.message)?;
+            let wire = encode_report(&id, report.state, report.kind, report.progress, report.title, report.message)?;
             self.attempted.insert(id.clone());
             self.delivered.remove(&id);
             writer.write_all(wire.as_bytes()).context("writing program status record")?;
@@ -301,7 +322,7 @@ fn retire_records(records: &BTreeMap<String, ProgramState>, writer: &mut impl Wr
         } else {
             ProgramState::Clear
         };
-        if let Err(error) = encode_report(id, state, None, "", "").and_then(|wire| {
+        if let Err(error) = encode_report(id, state, None, None, "", "").and_then(|wire| {
             writer.write_all(wire.as_bytes())?;
             writer.flush()?;
             Ok(())

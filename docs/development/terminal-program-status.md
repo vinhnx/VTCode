@@ -2,6 +2,11 @@
 
 VT Code can report its activity and child tasks through the
 [Program Status Protocol (OSC 7501)](https://www.superlogical.com/rex/docs/build/program-status).
+See also Mitchell Hashimoto's rationale in
+[A Terminal Protocol for Program Status (OSC 7501)](https://mitchellh.com/writing/program-status-osc7501):
+the program that knows its state should report it over the pty, so inboxes and
+terminals do not have to guess from window-title spinners or screen contents,
+or integrate with per-inbox socket APIs.
 Reporting is disabled by default. Enable it in any normal configuration layer:
 
 ```toml
@@ -30,9 +35,14 @@ logger. Keep these responsibilities distinct:
 | OSC 7501 | Bounded current terminal state with generic labels |
 
 Do not read telemetry files or parse display strings to drive status. Actual interaction ownership belongs to wait
-guards; execution outcomes come from runtime evidence. Delivery caches and restoration metadata are temporary
+guards; execution outcomes come from runtime evidence. OSC 7501 is the machine-readable authority for external
+inboxes; the window title (including Braille spinners such as `⠋`) remains human-only and must never be treated
+as a status API. Delivery caches and restoration metadata are temporary
 terminal bookkeeping, not another execution state machine. Keep desktop notification preferences independent:
-a terminal can choose to notify on status changes, potentially duplicating VT Code's configured alerts.
+a terminal can choose to notify on status changes, potentially duplicating VT Code's configured alerts. VT Code
+may still send one-time OSC 9 / OSC 777 / bell attention signals for HITL waits; those are events, while OSC 7501
+records are state. OSC 133 shell integration continues to mark prompt/command boundaries; it cannot describe what
+the program is doing or whether it is stuck.
 
 Before adding an automatic mode, verify Rex presentation and representative unsupported terminals, recorders,
 multiplexers, and SSH paths. Positive terminfo `Pst` advertising can permit reports; its absence does not prove
@@ -43,7 +53,8 @@ input reader and preserve startup/input ordering. Keep explicit enable/disable o
 
 | Runtime evidence | Terminal state |
 | --- | --- |
-| Accepted operation or foreground tool phase | `working` |
+| Accepted operation or foreground tool phase | `working`, indeterminate unless task metadata supplies `progress` |
+| Task panel with typed `completed`/`total` metadata | `working` with `progress=0-100` (absent when idle, done, error, or unknown) |
 | Actual approval, question, or authentication wait | `blocked`, with `permission`, `question`, or `auth` kind |
 | Recovery handoff awaiting guidance | `blocked`, without a kind |
 | Successful terminal turn | `done` |
@@ -76,7 +87,10 @@ deduplication, terminal writes, and restoration cleanup. Runtime turn outcomes a
 
 Reports contain `app=vtcode` and generic phase/task labels. They exclude prompts, commands, paths, summaries,
 previews, credentials, and exception text. Free text uses standard base64; controls and invalid identifiers are
-rejected, directional overrides are stripped, and all protocol byte limits are enforced.
+rejected, directional overrides are stripped, and all protocol byte limits are enforced. `progress` is only sent
+with `working` or `blocked` (never with `idle`, `done`, `error`, or `clear`) and is normally driven by typed
+task metadata; child records remain indeterminate (no `progress`) until a typed percent source exists.
+Out-of-range values are omitted on the wire and ignored by the adapter, retaining the last good value.
 
 While disabled, the adapter keeps only parent lifecycle and wait ownership up to date. It projects children from the
 existing Local Agents snapshot on enable, without sorting or hashing child records while off. Once owned clears

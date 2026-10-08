@@ -909,6 +909,17 @@ impl AppSession {
                                 "{}/{}",
                                 metadata.completed, metadata.total
                             )));
+                            let percent = if metadata.total == 0 {
+                                None
+                            } else {
+                                let completed = metadata.completed.min(metadata.total) as u64;
+                                let total = metadata.total as u64;
+                                let percent = completed.saturating_mul(100) / total.max(1);
+                                Some(u8::try_from(percent.min(100)).unwrap_or(100))
+                            };
+                            self.core
+                                .program_status
+                                .apply(vtcode_commons::program_status::ProgramStatusUpdate::Progress { percent });
                             self.task_panel_metadata = Some(metadata);
                         }
                         None => {
@@ -917,6 +928,9 @@ impl AppSession {
                             // panel header or terminal title.
                             self.task_panel_metadata = None;
                             self.core.set_task_panel_progress_label(None);
+                            self.core
+                                .program_status
+                                .apply(vtcode_commons::program_status::ProgramStatusUpdate::Progress { percent: None });
                         }
                     }
                 }
