@@ -7,22 +7,7 @@ All notable changes to vtcode will be documented in this file.
 ### Highlights
 #### Bug Fixes
 
-- Stabilize loading, cancellation, and session exit (7f5f4738) 
-- Regenerate stale changelog entries and parallelize asset uploads (335e8cb4) 
-- Clear shellcheck warnings in release helpers (b978463e) 
-- Move background status off bottom line during loading (5c8ae96b) 
-- Session-891943 block recovery - tracker adoption, budget verify, awk readonly, diagnosis chain (1628b3f3) 
-- Session-891943 followups - exec-session action log, blocker scope wording, grep chain hint (ba808ba7) 
-- Share budget-verification hard-deny between tracker and plan classifiers (61728b57) 
-- Preserve tracker scope and verifier recovery (737d126c) 
-#### Documentation
-
-- Repair 0.174.0 entry content and ordering (4511839e) 
-- Tighten wording, fix table alignment, and enforce MD013 (67688f74) 
-#### Features
-
-- Add opt-in terminal program status (916d169f) 
-- Add stepfun/step-5-preview to openrouter (0688a7b7) 
+- Revert parallel asset uploads that wedged Step 4 (804fd340) 
 ### Other Changes
 ## 0.174.0 - 2026-10-08
 
