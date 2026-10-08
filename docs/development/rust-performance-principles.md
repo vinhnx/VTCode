@@ -551,6 +551,27 @@ deltas, per-delta UI events, per-segment rendered markdown. For those types the 
 - **Downstream sizes follow automatically.** Queues and budgets keyed on `size_of::<T>()` (e.g. the `QueuedSessionEvent`
   channel budget) shrink with the enum — no separate tuning needed.
 
+## RwLock vs Lock-Free Placement
+
+Per-item `RwLock` in a traversal loop pays two atomic read-modify-writes per element (reader-count
+increment on acquire, decrement on release) even with zero writer contention. At 16k elements × 16k
+traversals/s that is ~500M atomics/s — the lock bookkeeping, not the data, becomes the bottleneck
+([source](https://pranitha.dev/posts/rwlock-vs-lockfree/)).
+
+### VT Code guidelines
+
+- **Never put a `RwLock` around each element of a traversed collection.** Hoist to one coarse lock
+  around the whole container when mutations are infrequent (article: coarse `RwLock` around a `Vec`
+  with ~1 insert/s still reached ~200k reads/s).
+- **For read-heavy / rare-write globals, prefer whole-value `ArcSwap`.** `vtcode-commons`
+  `vtcodegitignore` global, `vtcode-indexer` `FileIndexCache` snapshot, and `vtcode-ui` theme runtime
+  all follow this: readers do a lock-free `load_full()`, writers `store()` a new `Arc`.
+- **Know the alternatives' costs.** Per-item `ArcSwap::load()` still pays per-item overhead versus a
+  single epoch `pin()` for a whole traversal; `left-right` (`vtcode-commons::LrMap`) gives wait-free
+  reads but doubles memory — only use it when the map fits twice in memory.
+- **Match the lock to the context.** `parking_lot` for short sync sections (no poisoning, no async
+  yield); `tokio::sync` only in async code and never held across `.await` in a per-item loop.
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:
@@ -567,6 +588,12 @@ When reviewing or writing a hot path in vtcode:
       consider [branchless](#branchless-programming-removing-unpredictable-branches) — but run the sorted-vs-shuffled
       diagnostic first, and prefer `memchr` for delimiter scans.
 - [ ] Does the code use `Arc<RwLock<T>>` when `&mut T` or `Box<T>` would suffice?
+- [ ] Does a traversal loop acquire a `RwLock` per element? Each acquisition pays an atomic read-modify-write
+      even without contention — hoist to one coarse lock around the whole container, or swap the whole value
+      with `ArcSwap` when writes are rare. See [RwLock vs Lock-Free Placement](#rwlock-vs-lock-free-placement).
+- [ ] For read-heavy / rare-write shared state, is whole-value `ArcSwap` (or `LrMap`/`FileIndexCache` snapshot)
+      used instead of per-item locks? Prefer `parking_lot` for sync short sections, never hold `tokio::sync`
+      locks across `.await` in a per-item loop.
 - [ ] Is the type stored in a bulk collection (`Vec`, queue, per-line buffer)? If so, is its enum footprint minimal —
       sparse large payloads boxed, and a `size_of` guard test pinning it? See
       [Enum Footprint](#enum-footprint-in-bulk-collections).
@@ -597,6 +624,9 @@ When reviewing or writing a hot path in vtcode:
 - [TIL: Rust's derive often implies inline](https://yossarian.net/til/post/rust-s-derive-often-implies-inline/) —
   yossarian.net (source of the Derived trait impls subsection: derive emits `#[inline]`; nested error `Debug` impls
   inline transitively; `uv` reclaimed ~160 KB with an `#[inline(never)]` Debug derive).
+- [The Performance Cost of RwLock in Our Read-Heavy Workload](https://pranitha.dev/posts/rwlock-vs-lockfree/) —
+  Pranitha Madapathi, 2026 (source of the RwLock vs Lock-Free section: per-item `RwLock` atomic RMW cost,
+  single-`pin()` epoch traversal, coarse-lock vs `ArcSwap` vs `left-right` tradeoffs).
 - VT Code internal: `docs/development/performance.md`
 - VT Code internal: `docs/development/performance-hasher-policy.md`
 - VT Code internal: `docs/development/async-performance-audit.md`

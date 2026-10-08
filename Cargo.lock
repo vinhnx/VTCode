@@ -8945,6 +8945,7 @@ dependencies = [
  "anstyle-ls",
  "anyhow",
  "arboard",
+ "arc-swap",
  "base64 0.23.1",
  "better-panic",
  "catppuccin",

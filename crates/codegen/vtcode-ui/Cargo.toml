@@ -37,6 +37,7 @@ image            = { workspace = true }
 line-clipping    = "0.3"
 nucleo-matcher   = "0.3"
 once_cell        = { workspace = true }
+arc-swap         = { workspace = true }
 parking_lot      = "0.12"
 pulldown-cmark   = { version = "0.13", default-features = false, features = ["html"] }
 ratatui          = { workspace = true, features = ["crossterm", "unstable-rendered-line-info", "unstable-widget-ref"] }

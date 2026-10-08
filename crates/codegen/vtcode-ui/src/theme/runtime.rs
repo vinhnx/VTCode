@@ -1,7 +1,8 @@
 use anstyle::{Color, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
+use arc_swap::{ArcSwap, ArcSwapOption};
 use once_cell::sync::Lazy;
-use parking_lot::RwLock;
+use std::sync::Arc;
 use vtcode_config::constants::ui;
 
 use crate::theme::color_math::{contrast_ratio, ensure_contrast, lighten};
@@ -16,42 +17,48 @@ struct ActiveTheme {
     styles: ThemeStyles,
 }
 
-static COLOR_CONFIG: Lazy<RwLock<ColorAccessibilityConfig>> =
-    Lazy::new(|| RwLock::new(ColorAccessibilityConfig::default()));
+static COLOR_CONFIG: Lazy<ArcSwap<ColorAccessibilityConfig>> =
+    Lazy::new(|| ArcSwap::from_pointee(ColorAccessibilityConfig::default()));
 
-fn current_color_config() -> impl std::ops::Deref<Target = ColorAccessibilityConfig> {
-    COLOR_CONFIG.read()
+fn current_color_config() -> Arc<ColorAccessibilityConfig> {
+    COLOR_CONFIG.load_full()
 }
 
-static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
+static ACTIVE: Lazy<ArcSwap<ActiveTheme>> = Lazy::new(|| {
     let default = theme_definition(DEFAULT_THEME_ID).expect("default theme must exist");
     let styles = default.palette.build_styles_with_accessibility(&current_color_config());
-    RwLock::new(ActiveTheme { definition: default, styles })
+    ArcSwap::from_pointee(ActiveTheme { definition: default, styles })
 });
 
 /// Preview state: when set, `active_styles()` returns the preview styles
 /// instead of the committed theme styles. This allows theme palette
 /// navigation to show a live preview without committing the selection.
-static PREVIEW: Lazy<RwLock<Option<ActiveTheme>>> = Lazy::new(|| RwLock::new(None));
+///
+/// Read-mostly whole-value state (reads on every render, writes only on
+/// theme switch/preview): `ArcSwap` keeps reads lock-free while preserving
+/// atomic replacement. This follows the RwLock-vs-lockfree guidance — a
+/// coarse `RwLock` would work but pays an atomic read-modify-write per
+/// acquisition even without contention; whole-value swap avoids it.
+static PREVIEW: Lazy<ArcSwapOption<ActiveTheme>> = Lazy::new(ArcSwapOption::empty);
 
 /// Update the runtime color accessibility configuration.
 pub fn set_color_accessibility_config(config: ColorAccessibilityConfig) {
-    *COLOR_CONFIG.write() = config;
+    COLOR_CONFIG.store(Arc::new(config));
 }
 
 /// Return the currently configured minimum contrast ratio.
 pub fn get_minimum_contrast() -> f32 {
-    COLOR_CONFIG.read().minimum_contrast
+    COLOR_CONFIG.load_full().minimum_contrast
 }
 
 /// Report whether bold text should avoid terminal bright-color behavior.
 pub fn is_bold_bright_mode() -> bool {
-    COLOR_CONFIG.read().bold_is_bright
+    COLOR_CONFIG.load_full().bold_is_bright
 }
 
 /// Report whether the UI should restrict itself to safe ANSI colors.
 pub fn is_safe_colors_only() -> bool {
-    COLOR_CONFIG.read().safe_colors_only
+    COLOR_CONFIG.load_full().safe_colors_only
 }
 
 /// Activate a built-in theme by identifier.
@@ -64,30 +71,28 @@ pub fn set_active_theme(theme_id: &str) -> Result<()> {
     let theme = theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
 
     let styles = theme.palette.build_styles_with_accessibility(&current_color_config());
-    *PREVIEW.write() = None;
-    let mut active = ACTIVE.write();
-    active.definition = theme;
-    active.styles = styles;
+    PREVIEW.store(None);
+    ACTIVE.store(Arc::new(ActiveTheme { definition: theme, styles }));
     Ok(())
 }
 
 /// Return the active theme identifier.
 pub fn active_theme_id() -> String {
-    ACTIVE.read().definition.id.to_string()
+    ACTIVE.load_full().definition.id.to_string()
 }
 
 /// Return the active theme label.
 pub fn active_theme_label() -> String {
-    ACTIVE.read().definition.label.to_string()
+    ACTIVE.load_full().definition.label.to_string()
 }
 
 /// Return a clone of the active style set.
 /// When a preview theme is active, returns the preview styles instead.
 pub fn active_styles() -> ThemeStyles {
-    if let Some(preview) = PREVIEW.read().as_ref() {
+    if let Some(preview) = PREVIEW.load_full() {
         return preview.styles.clone();
     }
-    ACTIVE.read().styles.clone()
+    ACTIVE.load_full().styles.clone()
 }
 
 /// Set a preview theme by identifier. The preview is returned by
@@ -96,27 +101,26 @@ pub fn set_preview_theme(theme_id: &str) -> Result<()> {
     let id_lc = theme_id.trim().to_lowercase();
     let theme = theme_definition(id_lc.as_str()).ok_or_else(|| anyhow!("Unknown theme '{theme_id}'"))?;
     let styles = theme.palette.build_styles_with_accessibility(&current_color_config());
-    *PREVIEW.write() = Some(ActiveTheme { definition: theme, styles });
+    PREVIEW.store(Some(Arc::new(ActiveTheme { definition: theme, styles })));
     Ok(())
 }
 
 /// Return true when a preview theme is active.
 pub fn has_preview_theme() -> bool {
-    PREVIEW.read().is_some()
+    PREVIEW.load_full().is_some()
 }
 
 /// Clear the preview theme, reverting `active_styles()` to the committed theme.
 pub fn clear_preview_theme() {
-    *PREVIEW.write() = None;
+    PREVIEW.store(None);
 }
 
 /// Return a readable accent color for banner-like copy.
 pub fn banner_color() -> RgbColor {
-    let guard = ACTIVE.read();
-    let accent = guard.definition.palette.logo_accent;
-    let secondary = guard.definition.palette.secondary_accent;
-    let background = guard.definition.palette.background;
-    drop(guard);
+    let active = ACTIVE.load_full();
+    let accent = active.definition.palette.logo_accent;
+    let secondary = active.definition.palette.secondary_accent;
+    let background = active.definition.palette.background;
 
     let min_contrast = get_minimum_contrast();
     let candidate = lighten(accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO);
@@ -140,7 +144,7 @@ pub fn banner_style() -> Style {
 
 /// Return the raw logo accent color from the active theme.
 pub fn logo_accent_color() -> RgbColor {
-    ACTIVE.read().definition.palette.logo_accent
+    ACTIVE.load_full().definition.palette.logo_accent
 }
 
 /// Contrast ratio of a style's foreground against the active theme background.
@@ -154,7 +158,7 @@ pub fn style_contrast_ratio(style: &Style) -> Option<f32> {
     let Color::Rgb(foreground) = style.get_fg_color()? else {
         return None;
     };
-    let background = ACTIVE.read().definition.palette.background;
+    let background = ACTIVE.load_full().definition.palette.background;
     Some(contrast_ratio(RgbColor(foreground.r(), foreground.g(), foreground.b()), background))
 }
 
@@ -183,11 +187,13 @@ pub fn ensure_theme(theme_id: &str) -> Result<&'static str> {
 
 /// Rebuild the active styles after accessibility settings change.
 pub fn rebuild_active_styles() {
-    let mut guard = ACTIVE.write();
-    guard.styles = guard
+    let current = ACTIVE.load_full();
+    let mut updated = (*current).clone();
+    updated.styles = updated
         .definition
         .palette
         .build_styles_with_accessibility(&current_color_config());
+    ACTIVE.store(Arc::new(updated));
 }
 
 /// Validate a theme's base palette contrast ratios.
