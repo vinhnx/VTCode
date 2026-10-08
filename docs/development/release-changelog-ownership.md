@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `scripts/release.sh` | Release arguments, versioning, changelog file updates, packaging, tagging, and publication | Sources the canonical formatter; publication stays entrypoint-owned |
 | `scripts/release-changelog.sh` | Canonical username mapping, author tags, grouped release notes, and contributors | Sourceable without release work; reads the supplied Git range and formats output |
-| `scripts/release-changelog-common.sh` | Conventional commit type parsing, exclusion predicate, and changelog entry insertion | Shared by canonical and legacy adapters; sourcing only defines functions, while explicit insertion updates the caller's `CHANGELOG.md` |
+| `scripts/release-changelog-common.sh` | Conventional commit type parsing, exclusion predicate, changelog entry insertion, and version-section removal | Shared by canonical and legacy adapters; sourcing only defines functions, while explicit insertion updates the caller's `CHANGELOG.md` |
 | `scripts/release-lib.sh` | Existing legacy formatting and release helpers | Shares classification while retaining its different titles, author mapping, and CI-marker cleanup |
 
 Canonical notes retain Highlights/Other Changes grouping, newest-first order
@@ -37,4 +37,11 @@ entrypoint help wiring. Publication commands are instrumented to fail. The suite
 also confirms that formatting leaves HEAD, worktree, and tags unchanged.
 Insertion fixtures verify repeated version order, preservation of old bodies
 and nested headings, literal shell-like text, and both callers' shared helper.
+Removal fixtures verify middle/first/last extraction, exact-match safety on
+version prefixes (9.9 vs 9.9.9), and no-op behavior for absent versions and
+missing files, so re-runs regenerate stale entries instead of skipping.
+Upload fixtures stub the per-file retry wrapper to assert parallel fan-out
+(including throttled and spaced filenames), failure propagation, and
+`UPLOAD_PARALLEL_JOBS` fallback. A metadata guard asserts no workspace
+manifest sets docs.rs `rustc-args`.
 It does not run the release entrypoint's dry-run orchestration or publication.

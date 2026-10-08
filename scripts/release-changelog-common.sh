@@ -54,3 +54,27 @@ insert_changelog_entry() {
 
 	mv "$tmp" CHANGELOG.md
 }
+
+# Remove an existing `## <version> ...` section (up to the next `## ` heading or
+# EOF) so a re-run replaces stale content instead of skipping. This handles
+# aborted releases that already inserted a changelog entry for the same version
+# (e.g. stale 0.174.0 left behind by an earlier `--minor` run that was later
+# released as 0.173.1): without removal the next run sees
+# `grep -q "^## $version "` and skips, leaving the file out of order.
+remove_changelog_version_section() {
+	local version=$1
+	[[ -f CHANGELOG.md ]] || return 0
+	# Escape dots: the version is interpolated into a regex, where `.`
+	# would otherwise match any character.
+	grep -q "^## ${version//./\\.} " CHANGELOG.md || return 0
+	local tmp
+	tmp=$(mktemp)
+	awk -v ver="$version" '
+		/^## / {
+			if ($2 == ver) { skip=1; next }
+			else { skip=0 }
+		}
+		!skip { print }
+	' CHANGELOG.md >"$tmp"
+	mv "$tmp" CHANGELOG.md
+}

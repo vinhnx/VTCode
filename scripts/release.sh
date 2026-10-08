@@ -89,6 +89,11 @@ Options:
                       Useful when macOS binaries already built locally
   -h, --help          Show this help message
 
+Environment:
+  UPLOAD_PARALLEL_JOBS
+                      Parallel GitHub Release asset uploads in Step 4
+                      (default 4).
+
 Cost Optimization:
   Default mode (recommended):
     • macOS binaries: built locally (no CI cost, faster)
@@ -197,16 +202,19 @@ update_changelog_from_commits() {
 			} >"$RELEASE_NOTES_FILE"
 
 			if [[ -f CHANGELOG.md ]]; then
-				# Check if this version already exists in the changelog
+				# A re-run must replace a stale section (e.g. an aborted
+				# `--minor` run that pre-inserted this version) instead of
+				# skipping: skipping leaves the file out of order and drops
+				# the real commits for this release.
 				if grep -q "^## $version " CHANGELOG.md; then
-					print_warning "Version $version already exists in CHANGELOG.md, skipping update"
+					print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+					remove_changelog_version_section "$version"
+				fi
+				# Insert git-cliff's generated content above the newest version
+				if [[ -n "$version_section" ]]; then
+					insert_changelog_entry "$version_section"
 				else
-					# Insert git-cliff's generated content above the newest version
-					if [[ -n "$version_section" ]]; then
-						insert_changelog_entry "$version_section"
-					else
-						insert_changelog_entry "$changelog_content"
-					fi
+					insert_changelog_entry "$changelog_content"
 				fi
 			else
 				# Create new changelog with git-cliff output
@@ -293,13 +301,12 @@ update_changelog_builtin() {
 	changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 
 	if [[ -f CHANGELOG.md ]]; then
-		# Check if this version already exists in the changelog
 		if grep -q "^## $version " CHANGELOG.md; then
-			print_warning "Version $version already exists in CHANGELOG.md, skipping update"
-		else
-			# Insert new entry above the newest version
-			insert_changelog_entry "$changelog_entry"
+			print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+			remove_changelog_version_section "$version"
 		fi
+		# Insert new entry above the newest version
+		insert_changelog_entry "$changelog_entry"
 	else
 		{
 			printf '%s\n' "# Changelog - vtcode"
@@ -1219,24 +1226,16 @@ main() {
 		# Two-phase upload: compatibility assets first, then normal archives,
 		# checksums, and install scripts. Upload order does NOT control legacy
 		# selection (GitHub re-sorts assets alphabetically by name; the `compat-`
-		# prefix is what makes the legacy updater pick them). Uploading compat
-		# first is harmless defense-in-depth kept for clarity.
+		# prefix is what makes the legacy updater pick them). Each phase
+		# uploads in parallel (UPLOAD_PARALLEL_JOBS, default 4); per-file
+		# retry handles transient HTTP 500s from uploads.github.com on large
+		# (~40-80MB) raw compat binaries.
 		local upload_failed=0
 		if [[ ${#compat_assets[@]} -gt 0 ]]; then
 			print_info "Uploading compatibility assets (legacy bridge)..."
-			# Per-file upload with retry: uploads.github.com intermittently
-			# returns HTTP 500 on large (~40-80MB) raw compat binaries. A
-			# single batch upload would fail all remaining assets on one
-			# transient error, so each asset is retried independently.
-			local compat_file
-			for compat_file in "${compat_assets[@]}"; do
-				if ! upload_release_asset_with_retry "$released_version" "$compat_file"; then
-					print_error "Failed to upload compatibility asset $(basename "$compat_file") to GitHub Release"
-					upload_failed=1
-				fi
-			done
-			if [[ "$upload_failed" -ne 0 ]]; then
+			if ! upload_release_assets_parallel "$released_version" "${compat_assets[@]}"; then
 				print_error "Failed to upload compatibility assets to GitHub Release"
+				upload_failed=1
 			fi
 		fi
 
@@ -1266,15 +1265,9 @@ main() {
 		fi
 		if [[ ${#filtered_normal_files[@]} -gt 0 ]]; then
 			print_info "Uploading normal archives, checksums, and install scripts..."
-			local normal_file
-			for normal_file in "${filtered_normal_files[@]}"; do
-				if ! upload_release_asset_with_retry "$released_version" "$normal_file"; then
-					print_error "Failed to upload $(basename "$normal_file") to GitHub Release"
-					upload_failed=1
-				fi
-			done
-			if [[ "$upload_failed" -ne 0 ]]; then
+			if ! upload_release_assets_parallel "$released_version" "${filtered_normal_files[@]}"; then
 				print_error "Failed to upload binaries to GitHub Release"
+				upload_failed=1
 			fi
 		fi
 

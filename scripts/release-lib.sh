@@ -248,14 +248,14 @@ update_changelog_from_commits() {
 			} >"$RELEASE_NOTES_FILE"
 			if [[ -f CHANGELOG.md ]]; then
 				if grep -q "^## $version " CHANGELOG.md; then
-					print_warning "Version $version already exists in CHANGELOG.md, skipping update"
+					print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+					remove_changelog_version_section "$version"
+				fi
+				# Insert git-cliff's generated content above the newest version
+				if [[ -n "$version_section" ]]; then
+					insert_changelog_entry "$version_section"
 				else
-					# Insert git-cliff's generated content above the newest version
-					if [[ -n "$version_section" ]]; then
-						insert_changelog_entry "$version_section"
-					else
-						insert_changelog_entry "$changelog_content"
-					fi
+					insert_changelog_entry "$changelog_content"
 				fi
 			else
 				cp "$temp_changelog" CHANGELOG.md
@@ -325,11 +325,11 @@ update_changelog_builtin() {
 	changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 	if [[ -f CHANGELOG.md ]]; then
 		if grep -q "^## $version " CHANGELOG.md; then
-			print_warning "Version $version already exists in CHANGELOG.md, skipping update"
-		else
-			# Insert new entry above the newest version
-			insert_changelog_entry "$changelog_entry"
+			print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+			remove_changelog_version_section "$version"
 		fi
+		# Insert new entry above the newest version
+		insert_changelog_entry "$changelog_entry"
 	else
 		{
 			printf '%s\n' "# Changelog - vtcode"
