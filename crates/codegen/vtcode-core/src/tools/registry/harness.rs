@@ -5,6 +5,7 @@
 
 use arc_swap::{ArcSwap, ArcSwapOption};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::SystemTime;
 
 use super::execution_history::HarnessContextSnapshot;
@@ -16,6 +17,7 @@ use super::execution_history::HarnessContextSnapshot;
 pub struct HarnessContext {
     session_id: Arc<ArcSwap<String>>,
     task_id: Arc<ArcSwapOption<String>>,
+    pub(super) tracker_adopted: Arc<AtomicBool>,
     pub(super) decision_validator:
         Arc<parking_lot::RwLock<Option<crate::core::agent::events::DecisionEvidenceValidator>>>,
 }
@@ -39,6 +41,7 @@ impl Default for HarnessContext {
         Self {
             session_id: Arc::new(ArcSwap::from_pointee(session_id)),
             task_id: Arc::new(ArcSwapOption::empty()),
+            tracker_adopted: Arc::default(),
             decision_validator: Arc::default(),
         }
     }
@@ -50,6 +53,7 @@ impl HarnessContext {
         Self {
             session_id: Arc::new(ArcSwap::from_pointee(session_id.into())),
             task_id: Arc::new(ArcSwapOption::empty()),
+            tracker_adopted: Arc::default(),
             decision_validator: Arc::default(),
         }
     }

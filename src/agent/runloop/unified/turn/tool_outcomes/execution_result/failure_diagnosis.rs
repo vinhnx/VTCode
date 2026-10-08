@@ -201,6 +201,21 @@ pub(super) async fn diagnose_output(
 mod tests {
     use super::*;
 
+    #[test]
+    fn diagnosis_error_chain_keeps_cause_and_redacts_credentials() {
+        let error = anyhow::anyhow!(
+            "unsupported parameter response_format; Authorization: Bearer sk-sensitive1234567890123456"
+        )
+        .context("tool failure diagnosis request failed");
+        let text = evidence::safe_error_text(&error);
+        assert!(text.contains("tool failure diagnosis request failed"));
+        assert!(text.contains("unsupported parameter response_format"));
+        assert!(!text.contains("sk-sensitive1234567890123456"));
+        let large =
+            anyhow::anyhow!("{}", "transport failure ".repeat(100)).context("tool failure diagnosis request failed");
+        assert!(evidence::safe_error_text(&large).len() <= DIAGNOSIS_MAX_FIELD_BYTES);
+    }
+
     #[tokio::test]
     async fn missing_exec_session_diagnosis_preserves_model_budget() {
         use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;

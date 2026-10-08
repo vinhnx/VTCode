@@ -619,6 +619,7 @@ pub(super) async fn run_interaction_loop_impl(
                         crate::agent::runloop::unified::turn::tool_outcomes::helpers::resolve_harness_verifier_command(
                             ctx.vt_cfg.as_ref(),
                             ctx.config.workspace.as_path(),
+                            ctx.conversation_history,
                         );
                     ctx.conversation_history
                         .push(uni::Message::system(stalled_verification_resume_directive(verifier.as_deref())));

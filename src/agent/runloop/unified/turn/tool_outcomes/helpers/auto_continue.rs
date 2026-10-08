@@ -117,6 +117,9 @@ const RECOVERABLE_BLOCK_BASE_DENY_TOKENS: &[&str] = &[
     "request_user_input",
     "interview",
     "verification is still pending",
+    "unverified assistant responses",
+    "anti-blind",
+    "verification gate",
     "compaction could not reduce",
     "unmatched tool result",
     "attempted more tool calls",
@@ -127,9 +130,6 @@ const RECOVERABLE_BLOCK_BASE_DENY_TOKENS: &[&str] = &[
 const TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS: &[&str] = &[
     "safety fuse",
     "manual intervention",
-    "unverified assistant responses",
-    "anti-blind",
-    "verification gate",
     "context exceeded",
     "stale recovery state",
     "awaiting approval",
@@ -154,12 +154,36 @@ pub(crate) fn is_budget_exhausted_verification_block(lower: &str) -> bool {
 /// Shared by the tracker and plan-mode classifiers so compound reasons cannot
 /// auto-queue past a permission/interview wait. `extra_deny` holds
 /// mode-specific tokens (tracker extras vs plan-mode's broad `"awaiting"`).
-fn budget_exhausted_verification_is_hard_deny(lower: &str, extra_deny: &[&str]) -> bool {
+fn verification_block_has_hard_deny(lower: &str, extra_deny: &[&str]) -> bool {
     RECOVERABLE_BLOCK_BASE_DENY_TOKENS
         .iter()
-        .filter(|token| **token != "verification is still pending")
+        .filter(|token| {
+            !matches!(
+                **token,
+                "verification is still pending" | "unverified assistant responses" | "anti-blind" | "verification gate"
+            )
+        })
         .chain(extra_deny.iter())
         .any(|token| lower.contains(token))
+}
+
+pub(crate) fn is_pending_verification_block(reason: &str) -> bool {
+    reason.contains(crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON)
+        || reason
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("verification is still pending:")
+}
+
+/// Verification recovery owns its separate turn/failure limits. Pending-gate
+/// wording must not veto it, but genuine policy and user handoffs still win.
+pub(crate) fn verification_block_allows_auto_recovery(reason: &str, final_text: &str) -> bool {
+    use vtcode_core::core::agent::completion;
+
+    is_pending_verification_block(reason)
+        && !verification_block_has_hard_deny(&reason.to_ascii_lowercase(), TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS)
+        && !completion::tracker_final_text_is_policy_handoff(final_text)
+        && !completion::tracker_final_text_requires_user_input(final_text)
 }
 /// Whether a blocked/completed turn reason is recoverable for tracker auto-queue
 /// (budget/preview/tool-free recovery) rather than a user-input handoff.
@@ -183,7 +207,7 @@ pub(crate) fn tracker_auto_continue_is_recoverable_block(reason: Option<&str>) -
     // fresh execution budget. Still deny when harder handoff signals are
     // present (permission / safety / compaction / contract violation).
     if is_budget_exhausted_verification_block(&reason) {
-        return !budget_exhausted_verification_is_hard_deny(&reason, TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS);
+        return !verification_block_has_hard_deny(&reason, TRACKER_AUTO_CONTINUE_EXTRA_DENY_TOKENS);
     }
     // Deny production constants that must never auto-queue (true handoffs).
     // RECOVERY_CONTRACT_VIOLATION_REASON: "...final tool-free synthesis pass...attempted more tool calls."
@@ -237,13 +261,9 @@ pub(crate) fn should_queue_tracker_auto_continue(
         return false;
     }
     if is_verification_block {
-        // Budget-only verification blocks get a bounded fresh-turn retry
-        // (fresh execution budget can run the verifier). Other verification
-        // blocks keep their existing recovery path first.
-        let lower = blocked_reason.map(str::to_ascii_lowercase).unwrap_or_default();
-        if !is_budget_exhausted_verification_block(&lower) {
-            return false;
-        }
+        // The dedicated verifier-first path owns its smaller cross-turn and
+        // consecutive-failure limits, including budget-only verification ends.
+        return false;
     }
     tracker_auto_continue_is_recoverable_block(blocked_reason)
 }
@@ -251,10 +271,14 @@ pub(crate) fn should_queue_tracker_auto_continue(
 /// Pure gate for resume auto-queue of incomplete tracker work.
 pub(crate) fn should_queue_tracker_resume_continuation(
     auto_continue_enabled: bool,
+    tracker_adoption_allowed: bool,
     cross_turn_turns: u8,
     incomplete_items: Option<&[String]>,
 ) -> bool {
-    auto_continue_enabled && cross_turn_turns > 0 && incomplete_items.is_some_and(|items| !items.is_empty())
+    auto_continue_enabled
+        && tracker_adoption_allowed
+        && cross_turn_turns > 0
+        && incomplete_items.is_some_and(|items| !items.is_empty())
 }
 
 /// Pure gate for plan-mode outer auto-continue.
@@ -319,7 +343,7 @@ pub(crate) fn plan_mode_recoverable_block(reason: &str) -> bool {
     // Budget-only verification blocks can retry on a fresh turn, same as the
     // tracker gate. Other verification blocks stay terminal.
     if is_budget_exhausted_verification_block(&lower) {
-        return !budget_exhausted_verification_is_hard_deny(&lower, &["awaiting"]);
+        return !verification_block_has_hard_deny(&lower, &["awaiting"]);
     }
     // True handoffs deny even when recovery/budget tokens are also present
     // (compound reasons must not auto-queue past a permission/interview wait).

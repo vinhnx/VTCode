@@ -11,6 +11,19 @@ use super::ToolRegistry;
 use crate::config::constants::tools;
 
 impl ToolRegistry {
+    /// Begin a genuine request, optionally restoring adoption from its persisted
+    /// history or explicit continuation. Internal turns must not reset this latch.
+    pub fn begin_tracker_request(&self, adopted: bool) {
+        self.harness_context
+            .tracker_adopted
+            .store(adopted, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Successful current-request adoption is independent of compactable history.
+    pub fn tracker_adopted_for_request(&self) -> bool {
+        self.harness_context.tracker_adopted.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Attach the canonical queue barrier used by public decision recording.
     pub fn set_decision_evidence_validator(&self, validator: crate::core::agent::events::DecisionEvidenceValidator) {
         *self.harness_context.decision_validator.write() = Some(validator);

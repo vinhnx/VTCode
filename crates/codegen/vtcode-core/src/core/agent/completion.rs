@@ -1,6 +1,57 @@
 use crate::core::agent::session::AgentSessionState;
 use crate::llm::provider::MessageRole;
 
+/// Successful tracker mutations establish adoption within the caller's current
+/// request history. Listing, rejected calls, and unrelated tool results do not.
+pub fn tracker_was_adopted(history: &[crate::llm::provider::Message]) -> bool {
+    let mut pending_tracker_calls = std::collections::HashMap::new();
+    for message in history {
+        if message.role == MessageRole::Assistant {
+            // Call IDs can be reused between batches; never match an unanswered
+            // tracker request to a later batch's result.
+            pending_tracker_calls.clear();
+            for call in message.tool_calls.iter().flatten() {
+                let Some(function) = call
+                    .function
+                    .as_ref()
+                    .filter(|function| function.name == crate::config::constants::tools::TASK_TRACKER)
+                else {
+                    continue;
+                };
+                let Ok(args) = serde_json::from_str::<serde_json::Value>(&function.arguments) else {
+                    continue;
+                };
+                if matches!(args.get("action").and_then(serde_json::Value::as_str), Some("create" | "update" | "add")) {
+                    pending_tracker_calls.insert(call.id.as_str(), args);
+                }
+            }
+        } else if message.role == MessageRole::Tool
+            && let Some(args) = message.tool_call_id.as_deref().and_then(|id| pending_tracker_calls.remove(id))
+            && let Ok(output) = serde_json::from_str::<serde_json::Value>(message.content.as_text().as_ref())
+            && tracker_adoption_succeeded(crate::config::constants::tools::TASK_TRACKER, &args, &output)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Observe adoption before tool output or conversation history is compacted.
+pub fn tracker_adoption_succeeded(tool_name: &str, args: &serde_json::Value, output: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    tool_name == crate::config::constants::tools::TASK_TRACKER
+        && output.get("error").is_none()
+        && output.get("success").and_then(Value::as_bool) != Some(false)
+        && output.get("blocked").and_then(Value::as_bool) != Some(true)
+        && output.get("not_executed").and_then(Value::as_bool) != Some(true)
+        && matches!(
+            (args.get("action").and_then(Value::as_str), output.get("status").and_then(Value::as_str)),
+            (Some("create"), Some("created" | "replaced" | "unchanged"))
+                | (Some("update"), Some("updated" | "unchanged"))
+                | (Some("add"), Some("added"))
+        )
+}
+
 /// True when assistant text is a genuine safety/permission handoff that must
 /// not be auto-continued, even if `task_tracker` still has incomplete steps.
 ///
@@ -10,6 +61,18 @@ use crate::llm::provider::MessageRole;
 /// policy denial still counts as a handoff. Pure budget/recovery recaps are
 /// not handoffs (outer/in-turn recoverable classifiers treat those as continue).
 pub fn tracker_final_text_is_safety_handoff(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    tracker_final_text_is_policy_handoff(text)
+        || lower.contains("verification is still pending")
+        || lower.contains("unverified assistant responses")
+        || lower.contains("anti-blind")
+        || lower.contains("verification gate")
+}
+
+/// Permission, policy, safety, and credential handoffs remain terminal even
+/// when a pending-verification block can recover with fresh execution budget.
+/// Verification wording is handled separately by the turn's recovery gate.
+pub fn tracker_final_text_is_policy_handoff(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     if lower.trim().is_empty() {
         return false;
@@ -29,13 +92,6 @@ pub fn tracker_final_text_is_safety_handoff(text: &str) -> bool {
         || lower.contains("denied by tool policy")
         || lower.contains("execution denied by policy")
         || lower.contains("blocked by tool policy")
-        // Verification-gate recaps are outer-loop true handoffs: in-turn
-        // tracker continuation must not race past an anti-blind checkpoint
-        // that `should_queue_tracker_auto_continue` will refuse to auto-queue.
-        || lower.contains("verification is still pending")
-        || lower.contains("unverified assistant responses")
-        || lower.contains("anti-blind")
-        || lower.contains("verification gate")
     {
         return true;
     }
@@ -315,6 +371,26 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
 mod tests {
     use super::*;
     use crate::llm::provider::Message;
+
+    #[test]
+    fn policy_handoffs_are_distinct_from_pending_verification_recaps() {
+        for text in [
+            "Verification is still pending after the tool-call budget was exhausted.",
+            "Repeated unverified assistant responses reached the anti-blind verification gate.",
+        ] {
+            assert!(tracker_final_text_is_safety_handoff(text));
+            assert!(!tracker_final_text_is_policy_handoff(text));
+        }
+        for text in [
+            "Verification is still pending; permission denied.",
+            "Tool budget exhausted; blocked by tool policy.",
+            "Missing credentials for the verifier.",
+            "Tool-call safety fuse stopped verification.",
+        ] {
+            assert!(tracker_final_text_is_policy_handoff(text));
+            assert!(tracker_final_text_is_safety_handoff(text));
+        }
+    }
 
     #[test]
     fn tracker_final_text_is_safety_handoff_vocabulary() {

@@ -129,14 +129,24 @@ pub(crate) fn verification_max_consecutive_failures(vt_cfg: Option<&vtcode_core:
 /// `[agent.harness.verification].default_verifier_override` first (validated
 /// as a standalone verifier or pure `&&` chain — anything else falls back to
 /// detection so a misconfigured override can never smuggle a mutation or a
-/// status-masking pipeline into autonomous execution), then
+/// status-masking pipeline into autonomous execution), then a recorded failed
+/// checker for documentation-only work, then
 /// [`vtcode_core::tools::tool_intent::default_verifier_for_workspace`].
 /// Returns `None` when neither yields a runnable verifier; callers must then
 /// fall through to the manual blocked handoff.
+/// Code/unknown mutations and unsafe command shapes retain the ordinary
+/// project verifier. Execution uses the existing gates.
 pub(crate) fn resolve_harness_verifier_command(
     vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
     workspace_root: &Path,
+    history: &[uni::Message],
 ) -> Option<String> {
+    configured_verifier(vt_cfg)
+        .or_else(|| failed_docs_verifier(history))
+        .or_else(|| vtcode_core::tools::tool_intent::default_verifier_for_workspace(workspace_root))
+}
+
+fn configured_verifier(vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>) -> Option<String> {
     if let Some(override_command) = vt_cfg
         .and_then(|cfg| cfg.agent.harness.verification.default_verifier_override.as_deref())
         .map(str::trim)
@@ -154,7 +164,175 @@ pub(crate) fn resolve_harness_verifier_command(
             "Ignoring [agent.harness.verification].default_verifier_override: not a standalone verifier or pure && chain; falling back to workspace detection"
         );
     }
-    vtcode_core::tools::tool_intent::default_verifier_for_workspace(workspace_root)
+    None
+}
+
+#[derive(Clone, Copy)]
+enum DocsVerifierCallKind {
+    Launch,
+    Observe,
+    Cleanup,
+}
+
+struct PendingDocsVerifier<'a> {
+    command: String,
+    session_id: Option<vtcode_core::types::CompactStr>,
+    pending_calls: FxHashMap<&'a str, DocsVerifierCallKind>,
+}
+
+fn docs_checker_session_id(output: &serde_json::Value) -> Option<&str> {
+    use vtcode_core::tools::command_args::session_id_text;
+    session_id_text(output)
+        .or_else(|| output.get("next_wait_args").and_then(session_id_text))
+        .or_else(|| output.get("next_continue_args").and_then(session_id_text))
+}
+
+fn failed_docs_verifier(history: &[uni::Message]) -> Option<String> {
+    let request_start = history.iter().rposition(|message| {
+        let text = message.content.as_text();
+        message.role == uni::MessageRole::User
+            && !crate::agent::runloop::unified::state::is_follow_up_prompt_like(text.as_ref())
+            && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(text.as_ref())
+    })?;
+    let mut latest_checker: Option<PendingDocsVerifier<'_>> = None;
+    let mut failed_command = None;
+    let mut has_docs_write = false;
+    for message in history.iter().skip(request_start) {
+        match message.role {
+            uni::MessageRole::Assistant => {
+                if let Some(checker) = &mut latest_checker {
+                    // Call IDs are scoped to an assistant batch; session IDs
+                    // remain valid across batches until terminal completion.
+                    checker.pending_calls.clear();
+                }
+                for call in message.tool_calls.iter().flatten() {
+                    let function = call.function.as_ref()?;
+                    let args: serde_json::Value = serde_json::from_str(&function.arguments).ok()?;
+                    let name = canonical_tool_name(&function.name);
+                    if classify_shell_activity(name, &args) == ShellActivity::Verification {
+                        // A newer checker supersedes earlier failed evidence,
+                        // even if its completion has not been recorded yet.
+                        failed_command = None;
+                        latest_checker = None;
+                        // Do not drop launch context or argv suffixes when
+                        // turning an invocation into a replayable command.
+                        if [
+                            "args",
+                            "cwd",
+                            "workdir",
+                            "working_dir",
+                            "working_directory",
+                            "env",
+                            "shell",
+                            "login",
+                            "stdin",
+                            "tty",
+                            "background",
+                            "rows",
+                            "cols",
+                            "session_id",
+                            "s",
+                            "timeout_ms",
+                            "confirm",
+                            "prefix_rule",
+                            "justification",
+                            "sandbox_permissions",
+                            "additional_permissions",
+                        ]
+                        .iter()
+                        .any(|key| args.get(*key).is_some())
+                        {
+                            continue;
+                        }
+                        let Some(command) = vtcode_core::tools::command_args::raw_command_text(&args) else {
+                            continue;
+                        };
+                        if classify_shell_activity(name, &serde_json::json!({"cmd": command}))
+                            == ShellActivity::Verification
+                        {
+                            latest_checker = Some(PendingDocsVerifier {
+                                command,
+                                session_id: None,
+                                pending_calls: FxHashMap::from_iter([(call.id.as_str(), DocsVerifierCallKind::Launch)]),
+                            });
+                        }
+                    } else if vtcode_core::tools::tool_intent::is_exec_session_cleanup_call(name, &args) {
+                        if let Some(checker) = &mut latest_checker
+                            && let Some(session_id) = checker.session_id.as_deref()
+                            && vtcode_core::tools::command_args::session_id_text(&args) == Some(session_id)
+                        {
+                            checker.pending_calls.insert(call.id.as_str(), DocsVerifierCallKind::Cleanup);
+                        }
+                    } else if is_session_follow_up(name, &args)
+                        && !vtcode_core::tools::tool_intent::classify_tool_intent(name, &args).mutating
+                    {
+                        if let Some(checker) = &mut latest_checker
+                            && let Some(session_id) = checker.session_id.as_deref()
+                            && vtcode_core::tools::command_args::session_id_text(&args) == Some(session_id)
+                        {
+                            checker.pending_calls.insert(call.id.as_str(), DocsVerifierCallKind::Observe);
+                        }
+                    } else if is_docs_only_write(name, &args) {
+                        has_docs_write = true;
+                    } else if vtcode_core::tools::tool_intent::classify_tool_intent(name, &args).mutating
+                        && !is_plan_artifact_write(name, &args)
+                    {
+                        // Any possible code mutation makes this a mixed/code
+                        // task; a prose checker alone cannot verify it.
+                        return None;
+                    }
+                }
+            }
+            uni::MessageRole::Tool => {
+                let Some(checker) = &mut latest_checker else {
+                    continue;
+                };
+                let Some(kind) = message.tool_call_id.as_deref().and_then(|id| checker.pending_calls.remove(id)) else {
+                    continue;
+                };
+                let output: serde_json::Value = serde_json::from_str(message.content.as_text().as_ref()).ok()?;
+                if output.get("blocked").and_then(serde_json::Value::as_bool) == Some(true)
+                    || output.get("not_executed").and_then(serde_json::Value::as_bool) == Some(true)
+                    || output.get("cancelled").and_then(serde_json::Value::as_bool) == Some(true)
+                {
+                    continue;
+                }
+                if let Some(error) = output.get("error") {
+                    let error_text = error
+                        .as_str()
+                        .or_else(|| error.get("message").and_then(serde_json::Value::as_str));
+                    if error_text.is_some_and(error_text_indicates_lost_session) {
+                        checker.session_id = None;
+                        checker.pending_calls.clear();
+                    }
+                    continue;
+                }
+                if matches!(kind, DocsVerifierCallKind::Cleanup) {
+                    if output.get("success").and_then(serde_json::Value::as_bool) != Some(false) {
+                        checker.session_id = None;
+                        checker.pending_calls.clear();
+                    }
+                    continue;
+                }
+                if matches!(kind, DocsVerifierCallKind::Observe)
+                    && docs_checker_session_id(&output).is_some_and(|id| checker.session_id.as_deref() != Some(id))
+                {
+                    continue;
+                }
+                if let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64) {
+                    checker.session_id = None;
+                    checker.pending_calls.clear();
+                    failed_command = (exit_code != 0).then(|| checker.command.clone());
+                } else if matches!(kind, DocsVerifierCallKind::Launch)
+                    && let Some(session_id) = docs_checker_session_id(&output)
+                {
+                    checker.session_id = Some(session_id.into());
+                }
+            }
+            _ => {}
+        }
+    }
+    has_docs_write.then_some(failed_command).flatten()
 }
 
 pub(crate) fn resolve_max_tool_retries(
@@ -165,3 +343,6 @@ pub(crate) fn resolve_max_tool_retries(
         .map(|cfg| cfg.agent.harness.max_tool_retries as usize)
         .unwrap_or(vtcode_config::constants::defaults::DEFAULT_MAX_TOOL_RETRIES as usize)
 }
+
+#[cfg(test)]
+mod tests;

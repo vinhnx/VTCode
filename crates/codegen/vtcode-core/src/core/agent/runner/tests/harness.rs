@@ -13,10 +13,14 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    vt_cfg.automation.full_auto.max_turns = 3;
+    vt_cfg.automation.full_auto.max_turns = 4;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-continuation-success")).await;
     runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({"action":"create", "title":"Current task", "items":["Finish tracker step"]}),
+        ),
         text_response("The task is complete."),
         tool_call_response(
             tools::TASK_TRACKER,
@@ -39,6 +43,39 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
 
     let tracker = fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
     assert!(tracker.contains("- [x] Finish tracker step"));
+}
+
+#[tokio::test]
+async fn informational_exec_does_not_continue_or_edit_an_unadopted_workspace_tracker() {
+    for full_auto in [false, true] {
+        for answer in [
+            "VT Code is a coding assistant. The task is complete.",
+            "The task is complete.",
+        ] {
+            let temp = TempDir::new().expect("tempdir");
+            let workspace = workspace_root(&temp);
+            seed_tracker(&workspace, json!(["Unrelated README edits"])).await;
+            let tracker_path = workspace.join(".vtcode/tasks/current_task.md");
+            let before = fs::read_to_string(&tracker_path).expect("old tracker");
+            let mut cfg = VTCodeConfig::default();
+            cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+            let mut runner = Box::pin(make_runner(&temp, cfg, "thread-informational-tracker")).await;
+            if full_auto {
+                runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
+            }
+            runner.provider_client = Box::new(QueuedProvider::new(vec![
+                text_response(answer),
+                tool_call_response(tools::TASK_TRACKER, json!({"action":"update", "index":1,"status":"completed"})),
+                text_response("All work is complete."),
+            ]));
+            let result = Box::pin(runner.execute_task(&task("what is vtcode", "informational-task"), &[]))
+                .await
+                .expect("task result");
+            assert_eq!(result.turns_executed, 1, "full_auto={full_auto}, answer={answer}");
+            assert!(!harness_events(&result).contains(&HarnessEventKind::ContinuationStarted));
+            assert_eq!(fs::read_to_string(&tracker_path).expect("preserved tracker"), before);
+        }
+    }
 }
 
 #[tokio::test]
@@ -111,7 +148,17 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-success")).await;
     runner.enable_full_auto(&[]).await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action":"create", "title":"Current verification", "items":[{
+                    "description":"Verify harness", "status":"completed", "verify":"pwd"
+                }]
+            }),
+        ),
+        text_response("The task is complete."),
+    ]));
 
     let result = Box::pin(runner.execute_task(&task("Verification success", "exec-task"), &[]))
         .await
@@ -141,10 +188,18 @@ async fn exec_full_auto_retries_after_verification_failure() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    vt_cfg.automation.full_auto.max_turns = 2;
+    vt_cfg.automation.full_auto.max_turns = 3;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-failure")).await;
     runner.enable_full_auto(&[]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action":"create", "title":"Current verification", "items":[{
+                    "description":"Verify harness", "status":"completed", "verify":"cat missing-verification-target"
+                }]
+            }),
+        ),
         text_response("The task is complete."),
         text_response("Task is now complete."),
     ]));

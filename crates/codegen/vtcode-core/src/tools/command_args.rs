@@ -876,6 +876,14 @@ fn awk_program_may_write(program: &str) -> bool {
             index += 1;
             continue;
         }
+        if character == '#' {
+            // Comments are not AWK syntax. In particular, a commented `(`
+            // must not make a later print redirection look parenthesized.
+            while index < chars.len() && chars[index] != '\n' {
+                index += 1;
+            }
+            continue;
+        }
         if character == '"' {
             index += 1;
             let mut terminated = false;

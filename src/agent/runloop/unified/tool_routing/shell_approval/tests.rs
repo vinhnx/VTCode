@@ -329,6 +329,8 @@ fn safe_awk_read_offers_learned_family_permanent_target() {
         r#"awk 'NR>=208 && NR<=212 {n=index(rest,"| "); print n}' README.md"#,
         "awk 'NR>=1 && NR<=5' README.md",
         "awk -F: '{print $1}' README.md",
+        "awk '$3>100' README.md",
+        "awk '{if(p2==0 && i>1) print}' README.md",
     ] {
         let args = json!({"action": "run", "command": command});
         match persistent_approval_target("exec_command", Some(&args), "Run Command") {
@@ -364,7 +366,8 @@ fn awk_mutating_shapes_have_no_pattern() {
         "awk -v f=system 'BEGIN{@f(\"id\")}' README.md",
         "awk 'BEGIN{@s(\"id\")}' README.md",
         "awk -l injail '{print}' README.md",
-        "awk '$3>100' README.md",
+        "awk 'BEGIN { # (\n print \"written\" > \"out.txt\" }' README.md",
+        "awk 'BEGIN { # [\n printf \"written\" > \"out.txt\" }' README.md",
         "awk '/error|warning/' README.md",
         "awk 'NR>=1' README.md > out.txt",
         "awk -F:",

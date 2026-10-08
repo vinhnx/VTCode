@@ -508,6 +508,7 @@ impl AgentRunner {
 
     /// Execute a task with this agent
     pub async fn execute_task(&mut self, task: &Task, contexts: &[ContextItem]) -> Result<TaskResults> {
+        self.tool_registry.begin_tracker_request(false);
         self.tool_registry.begin_patch_recovery_turn();
         // Phase 1: Setup — harness alignment, conversation building, session init,
         // orchestration planning. Extracted to `prepare_task_execution` for testability.
@@ -1249,7 +1250,11 @@ impl AgentRunner {
                                 .bold()
                         ));
                         let assessment = continuation_controller
-                            .assess_completion(&effective_task, &runtime.state)
+                            .assess_completion(
+                                &effective_task,
+                                &runtime.state,
+                                self.tool_registry.tracker_adopted_for_request(),
+                            )
                             .await?;
 
                         // Verify requires running verification commands before
@@ -1336,7 +1341,9 @@ impl AgentRunner {
                             let safety_handoff =
                                 crate::core::agent::completion::tracker_final_text_is_safety_handoff(status_text);
                             if !safety_handoff {
-                                let incomplete = continuation_controller.incomplete_tracker_labels().await?;
+                                let incomplete = continuation_controller
+                                    .incomplete_tracker_labels(self.tool_registry.tracker_adopted_for_request())
+                                    .await?;
                                 if !incomplete.is_empty() {
                                     let joined = incomplete.join(", ");
                                     let reason = format!("Task tracker is incomplete: {joined}.");

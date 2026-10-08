@@ -135,8 +135,9 @@ impl ContinuationController {
             return Ok(());
         }
 
-        if let Some(checklist) = self.load_tracker().await? {
-            self.manages_internal_scaffold = is_internal_scaffold(&checklist);
+        if self.load_tracker().await?.is_some() {
+            // Existing workspace state is not owned by this fresh task, even
+            // when it was an internal scaffold in another run.
             return Ok(());
         }
 
@@ -149,7 +150,10 @@ impl ContinuationController {
     ///
     /// Never creates the internal scaffold and never mutates checklist state.
     /// Returns an empty list when no tracker exists or every step is completed.
-    pub(super) async fn incomplete_tracker_labels(&self) -> Result<Vec<String>> {
+    pub(super) async fn incomplete_tracker_labels(&self, tracker_adopted: bool) -> Result<Vec<String>> {
+        if !self.manages_internal_scaffold && !tracker_adopted {
+            return Ok(Vec::new());
+        }
         let Some(checklist) = self.load_tracker().await? else {
             return Ok(Vec::new());
         };
@@ -172,6 +176,7 @@ impl ContinuationController {
         &mut self,
         task: &Task,
         session_state: &AgentSessionState,
+        tracker_adopted: bool,
     ) -> Result<CompletionAssessment> {
         if !self.continuation_enabled() {
             return Ok(CompletionAssessment::SkipAccept {
@@ -181,6 +186,12 @@ impl ContinuationController {
                     self.planning_active,
                     self.review_like,
                 ),
+            });
+        }
+
+        if !self.manages_internal_scaffold && !tracker_adopted {
+            return Ok(CompletionAssessment::SkipAccept {
+                reason: "The current task has not adopted the existing workspace checklist.".to_string(),
             });
         }
 
@@ -657,6 +668,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tracker_adoption_survives_compaction_before_first_assessment() {
+        use crate::llm::provider::{Message, ToolCall};
+        use crate::tools::registry::ToolRegistry;
+
+        let temp = TempDir::new().expect("tempdir");
+        let mut previous = make_controller(&temp, ContinuationPolicy::All, false);
+        previous.prepare(&sample_task()).await.expect("old scaffold");
+        let mut state = AgentSessionState::new("fresh-session".to_string(), 5, 5, 10_000);
+        state.messages = std::sync::Arc::new(vec![
+            Message::assistant_with_tools(
+                String::new(),
+                vec![ToolCall::function(
+                    "old-adoption".to_string(),
+                    "task_tracker".to_string(),
+                    json!({"action":"update", "index":1, "status":"in_progress"}).to_string(),
+                )],
+            ),
+            Message::tool_response("old-adoption".to_string(), json!({"status":"updated"}).to_string()),
+        ]);
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        registry.begin_tracker_request(false);
+        let mut current = make_controller(&temp, ContinuationPolicy::All, false);
+        current.prepare(&sample_task()).await.expect("fresh task");
+        assert!(
+            current
+                .incomplete_tracker_labels(registry.tracker_adopted_for_request())
+                .await
+                .expect("unowned labels")
+                .is_empty()
+        );
+        assert!(matches!(
+            current
+                .assess_completion(&sample_task(), &state, registry.tracker_adopted_for_request())
+                .await
+                .expect("bootstrap assessment"),
+            CompletionAssessment::SkipAccept { .. }
+        ));
+
+        registry
+            .execute_tool("task_tracker", json!({"action":"update", "index":1, "status":"in_progress"}))
+            .await
+            .expect("current adoption");
+        // Compact before the first assessment following the actual mutation.
+        state.messages = std::sync::Arc::new(vec![Message::user("Compacted current-task progress".to_string())]);
+        assert!(
+            !current
+                .incomplete_tracker_labels(registry.tracker_adopted_for_request())
+                .await
+                .expect("retained ownership")
+                .is_empty()
+        );
+        assert!(matches!(
+            current
+                .assess_completion(&sample_task(), &state, registry.tracker_adopted_for_request())
+                .await
+                .expect("adopted assessment"),
+            CompletionAssessment::Continue { .. }
+        ));
+        registry.begin_tracker_request(false);
+        assert!(
+            current
+                .incomplete_tracker_labels(registry.tracker_adopted_for_request())
+                .await
+                .expect("fresh request")
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_internal_scaffold_is_not_adopted_by_a_new_task() {
+        let temp = TempDir::new().expect("tempdir");
+        let mut previous = make_controller(&temp, ContinuationPolicy::All, false);
+        previous.prepare(&sample_task()).await.expect("old scaffold");
+        let tracker_path = temp.path().join(".vtcode/tasks/current_task.md");
+        let before = std::fs::read_to_string(&tracker_path).expect("old tracker");
+        let mut current = make_controller(&temp, ContinuationPolicy::All, false);
+        current.prepare(&sample_task()).await.expect("fresh task");
+        let state = AgentSessionState::new("fresh-session".to_string(), 5, 5, 10_000);
+        assert!(current.incomplete_tracker_labels(false).await.expect("labels").is_empty());
+        assert!(matches!(
+            current
+                .assess_completion(&sample_task(), &state, false)
+                .await
+                .expect("assessment"),
+            CompletionAssessment::SkipAccept { .. }
+        ));
+        assert_eq!(std::fs::read_to_string(&tracker_path).expect("preserved tracker"), before);
+    }
+
+    #[tokio::test]
     async fn prepare_creates_internal_scaffold_when_missing() {
         let temp = TempDir::new().expect("tempdir");
         let mut controller = make_controller(&temp, ContinuationPolicy::ExecOnly, false);
@@ -675,7 +776,7 @@ mod tests {
 
         let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
         let assessment = controller
-            .assess_completion(&sample_task(), &session_state)
+            .assess_completion(&sample_task(), &session_state, false)
             .await
             .expect("assessment");
 
@@ -709,7 +810,7 @@ mod tests {
 
         let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
         let assessment = controller
-            .assess_completion(&sample_task(), &session_state)
+            .assess_completion(&sample_task(), &session_state, false)
             .await
             .expect("assessment");
 
@@ -724,7 +825,7 @@ mod tests {
 
         let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
         let assessment = controller
-            .assess_completion(&sample_task(), &session_state)
+            .assess_completion(&sample_task(), &session_state, false)
             .await
             .expect("assessment");
 
@@ -739,7 +840,7 @@ mod tests {
 
         let session_state = AgentSessionState::new("session".to_string(), 5, 5, 10_000);
         let assessment = controller
-            .assess_completion(&sample_task(), &session_state)
+            .assess_completion(&sample_task(), &session_state, false)
             .await
             .expect("assessment");
 
@@ -771,7 +872,7 @@ mod tests {
     async fn incomplete_tracker_labels_are_read_only_when_absent() {
         let temp = TempDir::new().expect("tempdir");
         let controller = make_controller(&temp, ContinuationPolicy::All, false);
-        let labels = controller.incomplete_tracker_labels().await.expect("labels");
+        let labels = controller.incomplete_tracker_labels(false).await.expect("labels");
         assert!(labels.is_empty(), "absent tracker must not invent incomplete work");
     }
 

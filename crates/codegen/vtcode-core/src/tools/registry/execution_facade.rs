@@ -585,9 +585,10 @@ impl ToolRegistry {
         }
 
         let fresh_patch_read = self.consume_patch_recovery_read(&tool_name, args);
-        // Public decisions must validate the current canonical task on every
-        // call, including repeats after a task or permission change.
-        let reusable_result = readonly_classification && tool_name != tools::RECORD_DECISION;
+        // Stateful tracker/decision calls must observe the current canonical
+        // task, including identical calls after request or permission changes.
+        let reusable_result =
+            readonly_classification && !matches!(tool_name.as_str(), tools::RECORD_DECISION | tools::TASK_TRACKER);
         let skip_loop_detection = self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
         if skip_loop_detection {
             trace!(

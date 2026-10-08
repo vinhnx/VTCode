@@ -611,6 +611,9 @@ mod tests {
             "awk '{print > \"out.txt\"}' README.md",
             "awk '{print >> \"out.txt\"}' README.md",
             "awk '{print x > \"out.txt\"}' README.md",
+            "awk 'BEGIN { # (\n print \"written\" > \"out.txt\" }'",
+            "awk 'BEGIN { # [\n printf \"written\" > \"out.txt\" }'",
+            "awk 'BEGIN { # ( [ {\n print \"written\" > \"out.txt\" }'",
             "awk '{print | \"sort\"}' README.md",
             "awk '\"sort\" | getline line' README.md",
             "awk 'BEGIN{system(\"touch out\")}' README.md",
@@ -656,6 +659,7 @@ mod tests {
             r#"awk '$3>=100 && $4||$5 {print $1}' README.md"#,
             // Division must not be mistaken for a regex literal.
             r#"awk '{print $1 / $2}' README.md"#,
+            "awk '{ # ( [ > system(\n if (NR>1) print $1 }' README.md",
             // Exact reported shape: a multi-line program whose `index(rest,"|")`
             // carries a quoted pipe and a `# ...` comment line.
             r#"awk 'NR>=208 && NR<=212 {line=$0; body=substr(line,1,length(line)-1); n=0; while (body ~ / \$/) { body=substr(body,1,length(body)-1); n++ }} # find guide start after label cell

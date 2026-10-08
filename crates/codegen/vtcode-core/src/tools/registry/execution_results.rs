@@ -22,6 +22,11 @@ impl ToolRegistry {
         is_mcp: bool,
         max_output_tokens: usize,
     ) -> ExecutionOutput {
+        if !is_mcp && crate::core::agent::completion::tracker_adoption_succeeded(tool_name, args, &value) {
+            self.harness_context
+                .tracker_adopted
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         // Dynamic context discovery: spool large outputs to files
         let mut value = value;
         if tool_intent::is_spool_file_read_command(tool_name, args) {

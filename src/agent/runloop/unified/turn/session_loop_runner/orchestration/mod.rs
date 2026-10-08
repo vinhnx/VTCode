@@ -486,6 +486,11 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             steering_receiver.take(),
         );
         runtime.state.messages = conversation_history.into();
+        tool_registry.begin_tracker_request(
+            crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(
+                &runtime.state.messages,
+            ),
+        );
         let durable_session_id = tool_registry.harness_context_snapshot().session_id;
         if let Some(envelope) = vtcode_core::compaction::memory_envelope::load_latest_memory_envelope_async(
             config.workspace.as_path(),
@@ -510,7 +515,8 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 .is_none()
                 && tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
             let cross_turn_turns = tracker_continue::tracker_cross_turn_turns(vt_cfg.as_ref());
-            let incomplete = if auto_continue_enabled && cross_turn_turns > 0 {
+            let tracker_adoption_allowed = tool_registry.tracker_adopted_for_request();
+            let incomplete = if auto_continue_enabled && tracker_adoption_allowed && cross_turn_turns > 0 {
                 tracker_continue::incomplete_tracker_items(&tool_registry).await
             } else {
                 None
@@ -557,6 +563,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             } else if !tool_registry.is_planning_active()
                 && tracker_continue::should_queue_tracker_resume_continuation(
                     auto_continue_enabled,
+                    tracker_adoption_allowed,
                     cross_turn_turns,
                     incomplete.as_deref(),
                 )
@@ -1328,6 +1335,14 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                 if next_turn_input.trim().is_empty() {
                     continue;
                 }
+                if !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(&next_turn_input) {
+                    tool_registry.begin_tracker_request(
+                        executing_approved_plan
+                            || crate::agent::runloop::unified::turn::context::tracker_request_explicitly_adopts(
+                                &next_turn_input,
+                            ),
+                    );
+                }
                 if let Some(emitter) = harness_emitter.as_ref() {
                     use vtcode_core::exec::events::InputOrigin;
                     let origin = if executing_approved_plan {
@@ -2094,17 +2109,14 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                             && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
                             && tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
                     let is_verification_block = matches!(&outcome_result, RunLoopTurnLoopResult::Blocked { reason }
-                    if reason.as_deref().is_some_and(|r| {
-                        r.contains(
-                            crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON,
-                        )
-                    }));
+                    if reason.as_deref().is_some_and(tracker_continue::is_pending_verification_block));
                     let turn_completed = matches!(&outcome_result, RunLoopTurnLoopResult::Completed { .. });
                     let blocked_reason = match &outcome_result {
                         RunLoopTurnLoopResult::Blocked { reason } => reason.as_deref(),
                         _ => None,
                     };
-                    let incomplete = if tracker_kill_switch && !planning_active {
+                    let tracker_adoption_allowed = tool_registry.tracker_adopted_for_request();
+                    let incomplete = if tracker_kill_switch && !planning_active && tracker_adoption_allowed {
                         let probe = tracker_continue::probe_tracker_incomplete(&tool_registry).await;
                         // Complete clears the cache so auto-queue stops after tracker finishes.
                         session_stats.apply_tracker_probe(probe).map(|items| items.to_vec())
@@ -2118,6 +2130,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     // work that keeps completing steps must not stall on stale
                     // verification misses for new work.
                     if tracker_kill_switch
+                        && tracker_adoption_allowed
                         && let Some(completed) = tracker_continue::tracker_completed_count(&tool_registry).await
                         && session_stats.note_tracker_completed_count(completed)
                     {
@@ -2135,13 +2148,9 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     // Adoption gate: a fresh informational turn must not be
                     // pulled into unrelated workspace tracker work. Completed
                     // turns only auto-queue tracker work adopted by this
-                    // session (progressive-work request, recent tool activity,
-                    // or follow-up). Blocked recoverable ends keep their own
-                    // classifier; explicit resume bypasses this entirely.
-                    let tracker_adoption_allowed =
-                        crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(
-                            &runtime.state.messages,
-                        );
+                    // request through successful tracker use or explicit
+                    // continuation. Blocked recoverable ends keep their own
+                    // classifier; restored sessions use the same adoption gate.
                     let final_text_is_safety_handoff =
                         vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(
                             final_text.as_deref().unwrap_or(""),
@@ -2350,8 +2359,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     use crate::agent::runloop::unified::turn::tool_outcomes::helpers as verification_gate;
 
                     let base = reason.as_deref().unwrap_or("Turn blocked due to repeated failing behavior.");
-                    let is_verification_block = base
-                        .contains(crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON);
+                    let is_verification_block = verification_gate::is_pending_verification_block(base);
                     // Recoverable tracker/plan budget ends that already printed
                     // the exhausted auto-continue info line must not stack a
                     // second "Type continue" blocked-handoff nudge.
@@ -2372,6 +2380,10 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     // human-gated stop.
                     if is_verification_block
                         && !escalated
+                        && verification_gate::verification_block_allows_auto_recovery(
+                            base,
+                            latest_assistant_result_text(&runtime.state.messages).as_deref().unwrap_or(""),
+                        )
                         && session_stats.record_verification_auto_recovery_turn_with_limit(
                             verification_gate::verification_cross_turn_turns(vt_cfg.as_ref()),
                         )
@@ -2381,6 +2393,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         let default_verifier = verification_gate::resolve_harness_verifier_command(
                             vt_cfg.as_ref(),
                             config.workspace.as_path(),
+                            &runtime.state.messages,
                         );
                         let directive = vtcode_core::tools::tool_intent::verification_recovery_directive(
                             default_verifier.as_deref(),
@@ -2434,6 +2447,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         let verifier = verification_gate::resolve_harness_verifier_command(
                             vt_cfg.as_ref(),
                             config.workspace.as_path(),
+                            &runtime.state.messages,
                         );
                         let attempt = session_stats.verification_auto_recovery_turns();
                         let max = verification_gate::verification_cross_turn_turns(vt_cfg.as_ref());

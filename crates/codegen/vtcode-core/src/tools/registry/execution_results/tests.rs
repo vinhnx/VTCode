@@ -12,6 +12,67 @@ struct OutputCase {
 }
 
 #[tokio::test]
+async fn tracker_adoption_latches_only_successful_current_request_results() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    for (action, output, is_mcp) in [
+        ("list", json!({"status":"updated"}), false),
+        ("update", json!({"status":"created"}), false),
+        ("update", json!({"status":"updated", "success":false}), false),
+        ("update", json!({"status":"updated", "blocked":true}), false),
+        ("update", json!({"status":"updated", "not_executed":true}), false),
+        ("update", json!({"status":"updated", "error":"rejected"}), false),
+        ("update", json!({"status":"updated"}), true),
+    ] {
+        registry
+            .prepare_execution_output(tools::TASK_TRACKER, &json!({"action":action}), output, is_mcp, 2000)
+            .await;
+        assert!(!registry.tracker_adopted_for_request());
+    }
+    registry
+        .prepare_execution_output(
+            tools::TASK_TRACKER,
+            &json!({"action":"update"}),
+            json!({"status":"updated"}),
+            false,
+            2000,
+        )
+        .await;
+    assert!(registry.tracker_adopted_for_request());
+    registry
+        .prepare_execution_output(
+            tools::TASK_TRACKER,
+            &json!({"action":"list"}),
+            json!({"status":"empty"}),
+            false,
+            2000,
+        )
+        .await;
+    assert!(registry.tracker_adopted_for_request(), "later reads must retain adoption");
+    registry.begin_tracker_request(false);
+    assert!(!registry.tracker_adopted_for_request());
+    registry.begin_tracker_request(true);
+    assert!(registry.tracker_adopted_for_request(), "explicit continuation restores adoption");
+    Ok(())
+}
+
+#[tokio::test]
+async fn tracker_adoption_reexecutes_identical_calls_after_a_request_reset() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let args = json!({"action":"create", "title":"Current task", "items":["Finish implementation"]});
+    let first = registry.execute_tool(tools::TASK_TRACKER, args.clone()).await?;
+    assert_eq!(first["status"], "created");
+    assert!(registry.tracker_adopted_for_request());
+    registry.begin_tracker_request(false);
+    let current = registry.execute_tool(tools::TASK_TRACKER, args).await?;
+    assert!(registry.tracker_adopted_for_request(), "a current-request tracker call must execute and adopt");
+    assert_eq!(current["status"], "unchanged", "replay must not masquerade as a fresh create");
+    assert!(current.get("reused_recent_result").is_none());
+    Ok(())
+}
+
+#[tokio::test]
 async fn prepared_output_distinguishes_payload_errors_from_success() -> Result<()> {
     let workspace = TempDir::new()?;
     let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;

@@ -15,6 +15,11 @@ VT Code does not expose Claude-specific SDK structs. The canonical stream stays 
 The harness continues instead of ending the turn and nudging the user to resume in two cases: when `task_tracker` still
 has incomplete steps, and when a turn ends on a recoverable block — in every mode, even with an empty or absent tracker:
 
+- Tracker scope: a workspace checklist drives continuation only after a successful tracker create/update/add for the
+  current request, explicit continuation, or approved-plan handoff. Ordinary inspections and work-intent words
+  do not adopt an unrelated checklist. A new user request resets this adoption boundary; internal follow-ups retain it.
+  Successful adoption is latched when tool results are processed, before output or history compaction, and survives
+  internal continuations. The headless runner ignores bootstrap adoption and only owns scaffolds created for its run.
 - In-turn: status-only assistant text (including budget/tool-loop/recovery recaps) is forced to continue unless it is a
   true user handoff (trailing question / interview ask) or a hard permission/policy/safety/credentials/
   **verification-pending** handoff. Mid-text `?` and optional-offer closers are not handoffs while tracker work remains.
@@ -26,8 +31,10 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   implementation turn. After a **recoverable Blocked** turn — with or without tracker steps — it queues a bounded
   blocked-end resume ("The previous turn ended on a recoverable block: …"). Recoverable means the production
   blocked-reason constants only (turn / tool / tool-loop budgets, per-result preview limits, safety caps, blocked-tool
-  fuse and tool-call limits, tool-free recovery); provider refusals, verification blocks, true handoffs, and unknown
-  reasons never auto-queue. Verification-blocked turns keep their own recovery path until that recovery is exhausted.
+  fuse and tool-call limits, tool-free recovery). Pending verification, including exhaustion of the tool-call budget,
+  uses the separate verifier-first recovery path and its verification turn/failure limits, preserving the pending gate.
+  A pending-verification recap does not veto that budget-only retry; genuine policy or user-decision handoffs still do.
+  Provider refusals, true handoffs, and unknown reasons never auto-queue.
   Successful auto-queue never prints “Type `continue`”.
 - Exhausted-path UX: when tracker/plan/blocked-end auto-queue is eligible but cannot resume (queue full or
   `cross_turn_turns` exhausted), the harness prints **one** info line and skips the generic blocked handoff nudge stack
@@ -36,8 +43,8 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   (`Blocked-end auto-continue could not resume automatically.` or `Blocked-end auto-continue budget exhausted.`, each
   ending “Type `continue` to retry the request.”). True handoffs, verification escalation, and unknown blocked reasons
   still use the normal blocked handoff.
-- Resume: sessions restored with incomplete tracker steps auto-queue one continuation turn after injecting
-  remaining-step context.
+- Resume: restored sessions use the same current-request adoption gate before probing workspace tracker state or
+  auto-queuing one continuation turn. Restoring an informational session does not adopt an unrelated checklist.
 - Plan mode: while planning is active and no validated plan is ready for approval, **recoverable blocked** planning ends
   (budget / safety-cap / tool-free recovery, including blocked-tool fuse trips and turns ending without a
   harness-visible final assistant response) auto-queue another planning turn (same `cross_turn_turns` budget).
@@ -296,7 +303,14 @@ one of the configured in-turn attempts (default 2) that reset the streak and inj
 exact detected verifier (`default_verifier_for_workspace`: `Cargo.toml` → `cargo check --locked`, `go.mod` →
 `go test ./...`, `package.json` scripts → `npm test`/`npm run check`/`lint`/`build`, pytest markers → `pytest -q`,
 `Makefile` → `make test`, `justfile` → `just test`; standalone or pure-`&&` chain, `max_output_tokens` for truncation;
-`[agent.harness.verification].default_verifier_override` wins when set and valid). When the directive budget is
+`[agent.harness.verification].default_verifier_override` wins when set and valid). For documentation-only work,
+recovery prefers the latest recorded failed checker for the current request, such as README Markdown lint, over the
+workspace build. Running checkers retain their exec-session identity through read-only polls/waits until a matching
+terminal result arrives; unrelated sessions and superseded checkers cannot supply that verdict. Rejected or cancelled
+polls retain identity, while terminal completion, lost sessions, and successful cleanup retire it. Code or unknown
+mutations, uncompleted/rejected checks, and commands with launch context that command-only replay cannot preserve
+(including directory aliases, environment, shell/login, and sandbox overrides) fall back to workspace detection.
+The same resolver drives manual resume, in-turn verification, and cross-turn recovery. When the directive budget is
 exhausted, the harness runs that verifier itself once per turn through the normal tool pipeline (admission, permissions,
 budget, and gate accounting identical to a model-run verifier; kill-switch
 `[agent.harness.verification].auto_execute = false`): exit 0 clears the gate and the turn continues, a non-zero exit

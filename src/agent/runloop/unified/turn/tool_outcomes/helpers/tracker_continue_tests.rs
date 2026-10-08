@@ -420,9 +420,9 @@ fn outer_queue_gate_blocks_unknown_and_contract_violation() {
         false,
         false
     ));
-    // Budget-exhausted verification blocks queue a bounded fresh-turn retry,
-    // even though generic verification blocks do not.
-    assert!(should_queue_tracker_auto_continue(
+    // Budget-exhausted verification blocks use the separate verifier-first
+    // recovery path rather than spending the tracker continuation budget.
+    assert!(!should_queue_tracker_auto_continue(
         true,
         false,
         false,
@@ -655,10 +655,79 @@ fn outer_queue_gate_respects_planning_verification_and_budget() {
 #[test]
 fn resume_gate_honors_zero_cross_turn_budget() {
     let incomplete = ["#1 analyze (in_progress)".to_string()];
-    assert!(should_queue_tracker_resume_continuation(true, 8, Some(&incomplete)));
-    assert!(!should_queue_tracker_resume_continuation(true, 0, Some(&incomplete)));
-    assert!(!should_queue_tracker_resume_continuation(false, 8, Some(&incomplete)));
-    assert!(!should_queue_tracker_resume_continuation(true, 8, None));
+    assert!(should_queue_tracker_resume_continuation(true, true, 8, Some(&incomplete)));
+    assert!(!should_queue_tracker_resume_continuation(true, false, 8, Some(&incomplete)));
+    assert!(!should_queue_tracker_resume_continuation(true, true, 0, Some(&incomplete)));
+    assert!(!should_queue_tracker_resume_continuation(false, true, 8, Some(&incomplete)));
+    assert!(!should_queue_tracker_resume_continuation(true, true, 8, None));
+}
+
+#[test]
+fn restored_informational_session_does_not_adopt_workspace_tracker() {
+    use crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed;
+
+    let incomplete = ["#1 unrelated README work (pending)".to_string()];
+    let mut history = vec![
+        uni::Message::user("what is vtcode".to_string()),
+        uni::Message::assistant("VT Code is a coding assistant.".to_string()),
+    ];
+    assert!(!should_queue_tracker_resume_continuation(
+        true,
+        tracker_continuation_adoption_allowed(&history),
+        8,
+        Some(&incomplete),
+    ));
+    history.push(uni::Message::user("continue".to_string()));
+    assert!(should_queue_tracker_resume_continuation(
+        true,
+        tracker_continuation_adoption_allowed(&history),
+        8,
+        Some(&incomplete),
+    ));
+}
+
+#[test]
+fn budget_verification_retry_survives_the_real_final_response_handoff_check() {
+    let reason = "Verification is still pending: the turn tool-call budget is exhausted. No verifier was scheduled; resume with fresh execution budget.";
+    let text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(reason);
+    // The ordinary classifier must still stop in-turn continuation.
+    assert!(vtcode_core::core::agent::completion::tracker_final_text_is_safety_handoff(&text));
+    assert!(is_pending_verification_block(reason));
+    assert!(verification_block_allows_auto_recovery(reason, &text));
+    assert!(!should_queue_tracker_auto_continue(
+        true,
+        false,
+        false,
+        Some(reason),
+        true,
+        None,
+        8,
+        true,
+        vtcode_core::core::agent::completion::tracker_final_text_requires_user_input(&text),
+    ));
+    for hard_handoff in [
+        format!("{text} Permission denied for exec_command."),
+        format!("{text} The safety fuse prevents execution."),
+        format!("{text} Missing credentials."),
+    ] {
+        assert!(!verification_block_allows_auto_recovery(reason, &hard_handoff));
+    }
+    assert!(!verification_block_allows_auto_recovery("unknown block", &text));
+    assert!(!is_pending_verification_block(
+        "Analysis quoted 'verification is still pending' from an older turn."
+    ));
+    assert!(verification_block_allows_auto_recovery(
+        crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON,
+        &text,
+    ));
+    assert!(!verification_block_allows_auto_recovery(&format!("{reason} Permission denied."), &text));
+    assert!(!verification_block_allows_auto_recovery(reason, "Which verifier should I run?"));
+    let mut stats = crate::agent::runloop::unified::state::SessionStats::default();
+    // This path gets two verification recovery turns, not the tracker limit of 32.
+    assert!(stats.record_verification_auto_recovery_turn_with_limit(verification_cross_turn_turns(None)));
+    assert!(stats.record_verification_auto_recovery_turn_with_limit(verification_cross_turn_turns(None)));
+    assert!(!stats.record_verification_auto_recovery_turn_with_limit(verification_cross_turn_turns(None)));
+    assert_eq!(stats.tracker_continuation_turns(), 0);
 }
 
 #[test]

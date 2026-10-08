@@ -206,7 +206,7 @@ impl TurnProcessingContext<'_> {
             let attempt = repeated_tool_attempts.verification_auto_recovery_attempts();
             let workspace_root = self.tool_registry.workspace_root();
             let default_verifier =
-                vtcode_core::tools::tool_intent::default_verifier_for_workspace(workspace_root.as_path());
+                helpers::resolve_harness_verifier_command(self.vt_cfg, workspace_root.as_path(), self.working_history);
             let directive = vtcode_core::tools::tool_intent::verification_recovery_directive(
                 default_verifier.as_deref(),
                 attempt,
@@ -253,8 +253,11 @@ impl TurnProcessingContext<'_> {
             && self.session_stats.verification_consecutive_failures() < max_failures
             && repeated_tool_attempts.should_auto_execute_verifier()
         {
-            let command =
-                helpers::resolve_harness_verifier_command(self.vt_cfg, self.tool_registry.workspace_root().as_path());
+            let command = helpers::resolve_harness_verifier_command(
+                self.vt_cfg,
+                self.tool_registry.workspace_root().as_path(),
+                self.working_history,
+            );
             return command.or_else(|| {
                 repeated_tool_attempts
                     .pending_verifier_session_id
@@ -1100,9 +1103,13 @@ mod tests {
         let outcome = ctx
             .handle_pending_verification_text_response(&mut tracker, "The change is complete.")
             .unwrap();
-        assert!(
-            matches!(outcome, super::PendingVerificationTextOutcome::Block { reason } if reason.contains("tool-call budget"))
-        );
+        let super::PendingVerificationTextOutcome::Block { reason } = outcome else {
+            panic!("exhausted execution budget must produce a verification block");
+        };
+        assert!(reason.contains("tool-call budget"));
+        let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
+        assert!(super::helpers::is_pending_verification_block(&reason));
+        assert!(super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
         assert_eq!(tracker.verification_auto_recovery_attempts(), 0);
         assert!(!tracker.auto_verification_executed);
         assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
