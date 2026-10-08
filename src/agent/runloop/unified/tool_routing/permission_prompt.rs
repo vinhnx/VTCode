@@ -19,7 +19,7 @@ use vtcode_ui::tui::app::{
 use super::HitlDecision;
 use super::shell_approval::{ApprovalLearningTarget, PersistentApprovalTarget};
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
@@ -837,7 +837,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     }
     handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {
@@ -970,12 +970,21 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
 
     handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
     let result =
-        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => Some(HitlDecision::Enable),
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => Some(HitlDecision::DeniedOnce),
-            TransientSubmission::Selection(_) => Some(HitlDecision::DeniedOnce),
-            _ => None,
-        })
+        show_permission_and_wait(
+            handle,
+            session,
+            overlay,
+            ctrl_c_state,
+            ctrl_c_notify,
+            |submission| match submission {
+                TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => Some(HitlDecision::Enable),
+                TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
+                    Some(HitlDecision::DeniedOnce)
+                }
+                TransientSubmission::Selection(_) => Some(HitlDecision::DeniedOnce),
+                _ => None,
+            },
+        )
         .await?;
 
     match result {

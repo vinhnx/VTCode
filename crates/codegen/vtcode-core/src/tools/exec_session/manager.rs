@@ -387,6 +387,12 @@ impl ExecSessionManager {
         }
     }
 
+    pub(crate) async fn termination_requested(&self, session_id: &str) -> bool {
+        self.session_record(session_id)
+            .await
+            .is_ok_and(|record| record.termination_requested.load(Ordering::Acquire))
+    }
+
     /// Return one retained background session snapshot for the Local Agents drawer.
     pub async fn background_session_snapshot(&self, session_id: &str) -> Result<ExecSessionUiSnapshot> {
         let record = self.session_record(session_id).await?;
@@ -399,7 +405,19 @@ impl ExecSessionManager {
         // `read_session_output`, so this remains inspectable after a tool turn.
         let _ = self.read_session_output(session_id, false).await?;
         let metadata = self.snapshot_session(session_id).await?;
-        Ok(ExecSessionUiSnapshot { metadata, preview: record.preview() })
+        let updated_at = {
+            let mut completed_at = record.completed_at.lock();
+            if metadata.exit_code.is_some() {
+                completed_at.get_or_insert_with(Utc::now);
+            }
+            (*completed_at).or(metadata.started_at).unwrap_or_else(Utc::now)
+        };
+        Ok(ExecSessionUiSnapshot {
+            updated_at,
+            metadata,
+            preview: record.preview(),
+            termination_requested: record.termination_requested.load(Ordering::Acquire),
+        })
     }
 
     /// Return all background raw command sessions, including exited sessions
@@ -1116,6 +1134,7 @@ impl ExecSessionManager {
             loop {
                 match manager.is_session_completed(session_id.as_str()).await {
                     Ok(Some(exit_code)) => {
+                        record_for_task.completed_at.lock().get_or_insert_with(Utc::now);
                         manager.capture_background_completion_output(session_id.as_str()).await;
                         if record_for_task
                             .background_completion_published

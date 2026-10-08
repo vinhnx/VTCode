@@ -108,6 +108,7 @@ impl Session {
             // --- UI State ---
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
+            program_status: super::super::program_status::ProgramStatus::default(),
             activity_state: ActivityState::Idle,
             image_input_enabled: false,
             cursor_visible: true,

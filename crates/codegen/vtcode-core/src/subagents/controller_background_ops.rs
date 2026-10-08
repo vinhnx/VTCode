@@ -193,6 +193,10 @@ impl SubagentController {
                 exec_session_id,
                 archive_path,
                 transcript_path,
+                termination_requested: state
+                    .background_children
+                    .get(record_id)
+                    .is_some_and(|record| record.termination_requested),
                 exit_code,
             }
         };
@@ -409,16 +413,26 @@ impl SubagentController {
         record_id: &str,
         snapshot: Option<crate::tools::types::VTCodeExecSession>,
     ) -> Result<Option<(String, String, u8)>> {
+        let termination_requested = if let Some(snapshot) = snapshot.as_ref() {
+            self.config.exec_sessions.termination_requested(snapshot.id.as_str()).await
+        } else {
+            false
+        };
         let mut state = self.state.write().await;
         let Some(record) = state.background_children.get_mut(record_id) else {
             return Ok(None);
         };
-        record.updated_at = Utc::now();
-
         let Some(snapshot) = snapshot else {
             return Self::handle_missing_background_snapshot(record, &self.config);
         };
 
+        // A previous execution may finish while the stable task is restarting.
+        if record.exec_session_id != snapshot.id.as_str() {
+            return Ok(None);
+        }
+        record.updated_at = Utc::now();
+        record.exit_code = snapshot.exit_code;
+        record.termination_requested |= termination_requested;
         record.pid = snapshot.child_pid;
         record.started_at = snapshot.started_at.or(record.started_at);
 
@@ -620,6 +634,7 @@ impl SubagentController {
                 .background_children
                 .get_mut(target)
                 .ok_or_else(|| anyhow!("Unknown background subprocess {target}"))?;
+            record.termination_requested = true;
             record.desired_enabled = false;
             record.status = BackgroundSubprocessStatus::Stopped;
             record.summary = Some("Background subprocess stopped".to_string());
@@ -654,6 +669,7 @@ impl SubagentController {
                 .background_children
                 .get_mut(target)
                 .ok_or_else(|| anyhow!("Unknown background subprocess {target}"))?;
+            record.termination_requested = true;
             record.desired_enabled = false;
             record.status = BackgroundSubprocessStatus::Stopped;
             record.summary = Some("Background subprocess stopped".to_string());
@@ -779,5 +795,62 @@ impl SubagentController {
             snapshot,
             recent_events,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::subagents::tests::{read_only_test_spec, test_background_record, test_controller_config};
+
+    #[tokio::test]
+    async fn program_status_stale_snapshot_does_not_settle_restarted_background_task() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let controller =
+            SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+                .await
+                .unwrap();
+        let spec = read_only_test_spec("demo");
+        let record =
+            test_background_record(&spec, "stable-task", BackgroundSubprocessStatus::Running, true, "exec-current");
+        let updated_at = record.updated_at;
+        controller
+            .state
+            .write()
+            .await
+            .background_children
+            .insert(record.id.clone(), record);
+        let snapshot = serde_json::from_value(serde_json::json!({
+            "id":"exec-old", "backend":"pipe", "command":"ignored", "args":[], "lifecycle_state":"exited", "exit_code":19
+        })).unwrap();
+        assert!(
+            controller
+                .update_background_record_state("stable-task", Some(snapshot))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let state = controller.state.read().await;
+        let record = &state.background_children["stable-task"];
+        assert_eq!(record.status, BackgroundSubprocessStatus::Running);
+        assert_eq!(record.exec_session_id, "exec-current");
+        assert_eq!(record.exit_code, None);
+        assert_eq!(record.updated_at, updated_at);
+        assert!(!record.termination_requested);
+    }
+
+    #[test]
+    fn program_status_completion_evidence_survives_persistence() {
+        let spec = read_only_test_spec("demo");
+        let mut record =
+            test_background_record(&spec, "stable-task", BackgroundSubprocessStatus::Stopped, false, "exec-terminated");
+        record.exit_code = Some(137);
+        record.termination_requested = true;
+        let persisted = record.into_persisted();
+        let bytes = serde_json::to_vec(&persisted).unwrap();
+        let decoded: PersistedBackgroundRecord = serde_json::from_slice(&bytes).unwrap();
+        let restored = BackgroundRecord::from_persisted(decoded).build_status_entry();
+        assert_eq!(restored.exit_code, Some(137));
+        assert!(restored.termination_requested);
     }
 }

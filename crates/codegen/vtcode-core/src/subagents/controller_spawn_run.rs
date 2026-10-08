@@ -607,6 +607,8 @@ impl SubagentController {
             state.background_children.insert(
                 record_id.clone(),
                 BackgroundRecord {
+                    exit_code: None,
+                    termination_requested: false,
                     id: record_id.clone(),
                     agent_name: spec.name.clone(),
                     display_label: subagent_display_label(&spec),

@@ -10,6 +10,7 @@ pub(crate) mod blocked_status;
 pub(crate) mod language_badge;
 pub mod log;
 pub mod panic_hook;
+pub(crate) mod program_status;
 pub mod runner;
 pub mod session;
 pub mod style;

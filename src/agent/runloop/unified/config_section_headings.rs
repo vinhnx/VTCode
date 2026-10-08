@@ -153,6 +153,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("tools.web_fetch", "Web Fetch", "Remote fetch limits and safety checks."),
     ("ui", "Interface", "Appearance, layout, and transcript behavior."),
     ("ui.keyboard_protocol", "Keyboard Protocol", "Enhanced terminal keyboard reporting."),
+    ("ui.program_status", "Terminal program status", "Opt-in terminal activity and child-task reports."),
     ("ui.notifications", "Notifications", "Desktop and in-app notification delivery."),
     ("ui.status_line", "Status Line", "Bottom status bar content and refresh behavior."),
 ];

@@ -18,6 +18,38 @@ pub(crate) enum OverlayWaitOutcome<T> {
     Exit,
 }
 
+pub(crate) async fn show_permission_and_wait<S, T, F>(
+    handle: &InlineHandle,
+    session: &mut S,
+    request: TransientRequest,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    map_submission: F,
+) -> Result<OverlayWaitOutcome<T>>
+where
+    S: UiSession + ?Sized,
+    F: FnMut(TransientSubmission) -> Option<T>,
+{
+    let _wait = handle.program_status_wait(vtcode_commons::program_status::InteractionKind::Permission);
+    show_overlay_and_wait(handle, session, request, ctrl_c_state, ctrl_c_notify, map_submission).await
+}
+
+pub(crate) async fn show_question_and_wait<S, T, F>(
+    handle: &InlineHandle,
+    session: &mut S,
+    request: TransientRequest,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    map_submission: F,
+) -> Result<OverlayWaitOutcome<T>>
+where
+    S: UiSession + ?Sized,
+    F: FnMut(TransientSubmission) -> Option<T>,
+{
+    let _wait = handle.program_status_wait(vtcode_commons::program_status::InteractionKind::Question);
+    show_overlay_and_wait(handle, session, request, ctrl_c_state, ctrl_c_notify, map_submission).await
+}
+
 pub(crate) async fn show_overlay_and_wait<S, T, F>(
     handle: &InlineHandle,
     session: &mut S,
@@ -198,5 +230,70 @@ mod tests {
         assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ShowTransient { .. })));
         assert!(matches!(command_receiver.recv().await, Some(InlineCommand::CloseTransient)));
         assert!(matches!(command_receiver.recv().await, Some(InlineCommand::ForceRedraw)));
+    }
+
+    #[tokio::test]
+    async fn program_status_wait_restores_on_denial_cancellation_and_failed_deferral() {
+        use vtcode_commons::program_status::{InteractionKind, ProgramStatusUpdate};
+        use vtcode_ui::tui::app::{InlineListSelection, ListOverlayRequest};
+        let events = [
+            InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(
+                InlineListSelection::ToolApproval(false),
+            ))),
+            InlineEvent::Cancel,
+            InlineEvent::WebmcpSubmit("deferred".into()),
+        ];
+        for (index, event) in events.into_iter().enumerate() {
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            let handle = InlineHandle::new_for_tests(sender);
+            let mut session = FailingDeferralSession { handle: handle.clone(), event: Some(event) };
+            let request = TransientRequest::List(ListOverlayRequest {
+                title: "Approval".into(),
+                lines: vec![],
+                footer_hint: None,
+                items: vec![],
+                selected: None,
+                search: None,
+                hotkeys: vec![],
+                status: None,
+            });
+            let result = show_permission_and_wait(
+                &handle,
+                &mut session,
+                request,
+                &Arc::new(CtrlCState::new()),
+                &Arc::new(Notify::new()),
+                |submission| match submission {
+                    TransientSubmission::Selection(InlineListSelection::ToolApproval(approved)) => Some(approved),
+                    _ => None,
+                },
+            )
+            .await;
+            match index {
+                0 => assert!(matches!(result, Ok(OverlayWaitOutcome::Submitted(false)))),
+                1 => assert!(matches!(result, Ok(OverlayWaitOutcome::Cancelled))),
+                _ => assert!(result.is_err()),
+            }
+            let mut updates = Vec::new();
+            while let Ok(command) = receiver.try_recv() {
+                if let InlineCommand::ProgramStatus(update) = command {
+                    updates.push(update);
+                }
+            }
+            let token = match updates[0] {
+                ProgramStatusUpdate::Wait { token, kind } => {
+                    assert_eq!(kind, InteractionKind::Permission);
+                    token
+                }
+                _ => panic!("expected owned wait"),
+            };
+            assert_eq!(
+                updates,
+                vec![
+                    ProgramStatusUpdate::Wait { token, kind: InteractionKind::Permission },
+                    ProgramStatusUpdate::Resume { token }
+                ]
+            );
+        }
     }
 }

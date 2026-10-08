@@ -55,6 +55,8 @@ pub(crate) fn bounded_completion_command(command: &str) -> String {
 pub struct ExecSessionUiSnapshot {
     pub metadata: VTCodeExecSession,
     pub preview: String,
+    pub termination_requested: bool,
+    pub updated_at: chrono::DateTime<Utc>,
 }
 
 /// Notification emitted after a background process has been confirmed exited.
@@ -88,6 +90,7 @@ pub(crate) struct ExecSessionRecord {
     pub(crate) background_slot_reserved: AtomicBool,
     pub(crate) background_completion_published: AtomicBool,
     pub(crate) termination_requested: AtomicBool,
+    pub(crate) completed_at: ParkingMutex<Option<chrono::DateTime<Utc>>>,
     preview: ParkingMutex<SessionPreviewState>,
     pub(crate) output_read_lock: Mutex<()>,
     pub(crate) background_watch: ParkingMutex<Option<JoinHandle<()>>>,
@@ -113,6 +116,7 @@ impl ExecSessionRecord {
             background_slot_reserved: AtomicBool::new(background_slot_reserved),
             background_completion_published: AtomicBool::new(false),
             termination_requested: AtomicBool::new(false),
+            completed_at: ParkingMutex::new(None),
             preview: ParkingMutex::new(SessionPreviewState::default()),
             output_read_lock: Mutex::new(()),
             background_watch: ParkingMutex::new(None),

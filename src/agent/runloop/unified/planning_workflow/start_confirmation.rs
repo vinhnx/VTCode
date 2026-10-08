@@ -13,7 +13,7 @@ use vtcode_ui::tui::app::{
     InlineHandle, InlineListSelection, InlineSession, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 const START_PLANNING_APPROVE_ACTION: &str = "planning:start";
@@ -80,20 +80,27 @@ pub(crate) async fn present_start_planning_confirmation(
     });
 
     let confirmation =
-        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == START_PLANNING_APPROVE_ACTION =>
-            {
-                Some(StartPlanningDecision::Enter)
-            }
-            TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
-                if action == START_PLANNING_STAY_ACTION =>
-            {
-                Some(StartPlanningDecision::Stay)
-            }
-            TransientSubmission::Selection(_) => Some(StartPlanningDecision::Stay),
-            _ => None,
-        })
+        show_permission_and_wait(
+            handle,
+            session,
+            overlay,
+            ctrl_c_state,
+            ctrl_c_notify,
+            |submission| match submission {
+                TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
+                    if action == START_PLANNING_APPROVE_ACTION =>
+                {
+                    Some(StartPlanningDecision::Enter)
+                }
+                TransientSubmission::Selection(InlineListSelection::ConfigAction(action))
+                    if action == START_PLANNING_STAY_ACTION =>
+                {
+                    Some(StartPlanningDecision::Stay)
+                }
+                TransientSubmission::Selection(_) => Some(StartPlanningDecision::Stay),
+                _ => None,
+            },
+        )
         .await;
 
     Ok(match confirmation {

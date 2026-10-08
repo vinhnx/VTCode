@@ -310,6 +310,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about TUI-Only Tool Permission Refactoring?", "How does Overview work?",
     "How does Problem Statement work?"
 
+- **File**: `docs/development/terminal-program-status.md`
+  - **Content**: Terminal program status
+  - **Topics**: Adoption and existing telemetry, Lifecycle, Ownership and privacy, Verification
+  - **User Questions**: "What can you tell me about Terminal program status?", "How does Adoption and existing telemetry
+    work?", "How does Lifecycle work?"
+
 - **File**: `docs/development/grep-tool-guide.md`
   - **Content**: Text Search Guide
   - **Topics**: Overview, Architecture, Basic Usage, Flag Reference, Common Patterns
@@ -704,7 +710,7 @@ below based on the topic area.
 
 - **File**: `docs/guides/terminal-optimization.md`
   - **Content**: VT Code Terminal Optimization Guide
-  - **Topics**: Theme and Appearance, Profile Icon, Line Break Options, Paste Handling, Notification Setup
+  - **Topics**: Theme and Appearance, Profile Icon, Program Status, Line Break Options, Paste Handling
   - **User Questions**: "What can you tell me about VT Code Terminal Optimization Guide?", "How does Theme and
     Appearance work?", "How does Profile Icon work?"
 
@@ -1020,7 +1026,7 @@ below based on the topic area.
 
 - **File**: `docs/reference/ansi-quick-reference.md`
   - **Content**: ANSI Quick Reference for VT Code Development
-  - **Topics**: Most Common Sequences, VT Code Usage Examples, Regex Patterns, Testing Helpers, Common Mistakes
+  - **Topics**: Most Common Sequences, VT Code Usage Examples, Regex Patterns, Program Status Protocol, Testing Helpers
   - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does Most
     Common Sequences work?", "How does VT Code Usage Examples work?"
 

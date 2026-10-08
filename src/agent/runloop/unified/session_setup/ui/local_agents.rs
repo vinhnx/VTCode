@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
+use vtcode_commons::program_status::ProgramState;
 use vtcode_core::subagents::{
     BackgroundSubprocessEntry, BackgroundSubprocessSnapshot, BackgroundSubprocessStatus, SubagentController,
     SubagentStatus, SubagentStatusEntry, SubagentThreadSnapshot,
@@ -68,6 +69,8 @@ async fn build_local_agent_entries(
                 agent_name: entry.agent_name.clone(),
                 color: entry.color.clone(),
                 kind: LocalAgentKind::Delegated,
+                program_status: delegated_program_state(entry.status),
+                updated_at: entry.updated_at.timestamp_millis(),
                 status: entry.status.as_str().to_string(),
                 summary,
                 preview,
@@ -104,6 +107,8 @@ async fn build_local_agent_entries(
                 agent_name: entry.agent_name.clone(),
                 color: entry.color.clone(),
                 kind: LocalAgentKind::Background,
+                program_status: background_program_state(&entry),
+                updated_at: entry.ended_at.unwrap_or(entry.updated_at).timestamp_millis(),
                 status: entry.status.as_str().to_string(),
                 summary: Some(background_local_agent_summary(&entry)),
                 preview,
@@ -122,6 +127,8 @@ async fn build_local_agent_entries(
                 agent_name: "exec-session".to_string(),
                 color: None,
                 kind: LocalAgentKind::ExecSession,
+                program_status: command_program_state(&metadata, snapshot.termination_requested),
+                updated_at: snapshot.updated_at.timestamp_millis(),
                 status: metadata.status_label(),
                 summary: Some(exec_session_summary(&metadata)),
                 preview: snapshot.preview,
@@ -132,6 +139,43 @@ async fn build_local_agent_entries(
 
     entries.sort_by_key(|left| std::cmp::Reverse(left.0));
     entries.into_iter().map(|(_, entry)| entry).collect()
+}
+
+fn delegated_program_state(status: SubagentStatus) -> ProgramState {
+    match status {
+        SubagentStatus::Queued | SubagentStatus::Running | SubagentStatus::Waiting => ProgramState::Working,
+        SubagentStatus::Completed => ProgramState::Done,
+        SubagentStatus::Failed => ProgramState::Error,
+        SubagentStatus::Closed => ProgramState::Idle,
+    }
+}
+
+fn background_program_state(entry: &BackgroundSubprocessEntry) -> ProgramState {
+    if entry.termination_requested {
+        return ProgramState::Idle;
+    }
+    match entry.status {
+        BackgroundSubprocessStatus::Starting | BackgroundSubprocessStatus::Running => ProgramState::Working,
+        BackgroundSubprocessStatus::Error => ProgramState::Error,
+        BackgroundSubprocessStatus::Stopped => match entry.exit_code {
+            Some(0) => ProgramState::Done,
+            Some(_) => ProgramState::Error,
+            None => ProgramState::Idle,
+        },
+    }
+}
+
+fn command_program_state(metadata: &VTCodeExecSession, termination_requested: bool) -> ProgramState {
+    use vtcode_core::tools::types::VTCodeSessionLifecycleState;
+    if termination_requested {
+        return ProgramState::Idle;
+    }
+    match metadata.exit_code {
+        Some(0) => ProgramState::Done,
+        Some(_) => ProgramState::Error,
+        None if metadata.lifecycle_state == Some(VTCodeSessionLifecycleState::Running) => ProgramState::Working,
+        None => ProgramState::Idle,
+    }
 }
 
 fn exec_session_summary(metadata: &VTCodeExecSession) -> String {
@@ -371,4 +415,38 @@ fn truncate_preview_text(text: String, max_chars: usize) -> String {
     let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
     truncated.push_str("...");
     truncated
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn program_status_child_outcomes_use_typed_evidence() {
+        for status in [SubagentStatus::Queued, SubagentStatus::Running, SubagentStatus::Waiting] {
+            assert_eq!(delegated_program_state(status), ProgramState::Working);
+        }
+        assert_eq!(delegated_program_state(SubagentStatus::Completed), ProgramState::Done);
+        assert_eq!(delegated_program_state(SubagentStatus::Failed), ProgramState::Error);
+        let mut metadata: VTCodeExecSession = serde_json::from_value(serde_json::json!({"id":"opaque-session", "command":"ignored", "backend":"pipe", "args":[], "working_dir":null})).unwrap();
+        assert_eq!(command_program_state(&metadata, false), ProgramState::Idle);
+        metadata.lifecycle_state = Some(vtcode_core::tools::types::VTCodeSessionLifecycleState::Running);
+        assert_eq!(command_program_state(&metadata, false), ProgramState::Working);
+        metadata.exit_code = Some(0);
+        assert_eq!(command_program_state(&metadata, false), ProgramState::Done);
+        metadata.exit_code = Some(17);
+        assert_eq!(command_program_state(&metadata, false), ProgramState::Error);
+        assert_eq!(command_program_state(&metadata, true), ProgramState::Idle);
+        let now = chrono::Utc::now();
+        let mut entry: BackgroundSubprocessEntry = serde_json::from_value(serde_json::json!({
+            "id":"stable", "session_id":"old", "exec_session_id":"old", "agent_name":"demo", "display_label":"demo", "description":"", "source":"test", "status":"stopped", "desired_enabled":false, "created_at":now, "updated_at":now
+        })).unwrap();
+        assert_eq!(background_program_state(&entry), ProgramState::Idle);
+        entry.exit_code = Some(0);
+        assert_eq!(background_program_state(&entry), ProgramState::Done);
+        entry.exit_code = Some(23);
+        assert_eq!(background_program_state(&entry), ProgramState::Error);
+        entry.termination_requested = true;
+        assert_eq!(background_program_state(&entry), ProgramState::Idle);
+    }
 }

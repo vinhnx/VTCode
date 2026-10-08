@@ -76,6 +76,7 @@ impl ModelPickerState {
             return Err(anyhow!("API key requested before selecting a model"));
         };
         if self.settings.inline_enabled {
+            self.status_wait = renderer.program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
             show_secure_api_modal(renderer, selection, self.settings.workspace.as_deref());
             return Ok(());
         }
@@ -528,6 +529,7 @@ impl ModelPickerState {
             return self.handle_skip_api_key(renderer, selection.clone()).await;
         }
 
+        self.status_wait = None;
         self.pending_api_key = Some(input.trim().to_string());
         self.pending_credential_source = None;
         renderer.close_modal();
@@ -584,7 +586,10 @@ impl ModelPickerState {
         let Some(ctrl_c_notify) = self.settings.ctrl_c_notify.as_ref() else {
             return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
         };
-        match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await {
+        let _auth_wait = renderer.program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
+        let login_result = complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await;
+        self.status_wait = None;
+        match login_result {
             Ok(_) => {}
             Err(err) if is_oauth_flow_cancelled(&err) => {
                 if ctrl_c_state.is_exit_requested() {
@@ -625,6 +630,7 @@ impl ModelPickerState {
                 renderer.line(MessageStyle::Info, &message)?;
                 self.selection = Some(selection);
                 let result = self.build_result();
+                self.status_wait = None;
                 Ok(ModelPickerProgress::Completed(result?))
             }
             None => {

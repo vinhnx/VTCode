@@ -69,6 +69,15 @@ impl AnsiRenderer {
         renderer
     }
 
+    /// Own a presentation-only authentication wait on the interactive terminal.
+    #[cfg(feature = "tui")]
+    pub fn program_status_wait(
+        &self,
+        kind: vtcode_commons::program_status::InteractionKind,
+    ) -> Option<vtcode_ui::tui::core_tui::types::ProgramStatusWaitGuard> {
+        self.sink.as_ref().map(|sink| sink.handle.program_status_wait(kind))
+    }
+
     /// Override the syntax highlighting configuration.
     pub fn set_highlight_config(&mut self, config: SyntaxHighlightingConfig) {
         if let Some(sink) = &mut self.sink {

@@ -869,6 +869,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.notifications.suppress_when_focused` | `boolean` | no | `true` | Suppress notifications while terminal focus is active. |
 | `ui.notifications.tool_failure` | `boolean` | no | `false` | Notify when a tool call fails. |
 | `ui.notifications.tool_success` | `boolean` | no | `false` | Notify on successful tool calls. |
+| `ui.program_status.enabled` | `boolean` | no | `false` | Emit OSC 7501 status reports on the interactive TUI terminal stream. |
 | `ui.reasoning_display_mode` | `string` | no | `"toggle"` | Reasoning display mode for chat UI ("always", "toggle", or "hidden") |
 | `ui.reasoning_visible_default` | `boolean` | no | `true` | Default visibility for reasoning when display mode is "toggle" |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while reduce_motion_mode is enabled. Screen reader mode still disables progress animation. |

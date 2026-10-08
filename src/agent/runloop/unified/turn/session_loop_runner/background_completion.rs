@@ -256,6 +256,7 @@ pub(crate) fn background_completion_from_exec_session(
     };
 
     Some(BackgroundCompletionEvent {
+        termination_requested: event.termination_requested,
         task_id,
         status,
         summary,
@@ -321,6 +322,7 @@ mod tests {
 
     fn completion(task_id: &str, status: BackgroundSubprocessStatus) -> BackgroundCompletionEvent {
         BackgroundCompletionEvent {
+            termination_requested: false,
             task_id: task_id.to_string(),
             status,
             summary: Some(format!("summary-{task_id}")),

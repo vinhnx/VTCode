@@ -1294,6 +1294,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::SetConfiguredInputStatus { left, right } => {
             CoreCommand::SetConfiguredInputStatus { left: left.clone(), right: right.clone() }
         }
+        InlineCommand::ProgramStatus(update) => CoreCommand::ProgramStatus(*update),
         InlineCommand::SetActivityState(state) => CoreCommand::SetActivityState(*state),
         InlineCommand::UpdateProgress(update) => CoreCommand::UpdateProgress(*update),
         InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems { items: items.clone() },
@@ -1419,6 +1420,18 @@ impl TuiSessionDriver for AppSession {
 
     fn update_terminal_title(&mut self) {
         self.core.update_terminal_title();
+    }
+
+    fn attach_program_status_terminal(&mut self) {
+        self.core.program_status.attach_terminal();
+    }
+
+    fn flush_program_status(&mut self) {
+        self.core.program_status.flush();
+    }
+
+    fn shutdown_program_status(&mut self) {
+        self.core.program_status.shutdown();
     }
 
     fn clear_terminal_title(&mut self) {

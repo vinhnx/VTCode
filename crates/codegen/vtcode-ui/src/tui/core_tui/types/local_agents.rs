@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LocalAgentKind {
     Delegated,
     Background,
@@ -35,6 +35,10 @@ pub struct LocalAgentEntry {
     pub agent_name: String,
     pub color: Option<String>,
     pub kind: LocalAgentKind,
+    /// Typed terminal projection, derived from runtime state and exit evidence.
+    pub program_status: vtcode_commons::program_status::ProgramState,
+    /// Unix milliseconds used to prioritize recently updated retained records.
+    pub updated_at: i64,
     pub status: String,
     pub summary: Option<String>,
     pub preview: String,

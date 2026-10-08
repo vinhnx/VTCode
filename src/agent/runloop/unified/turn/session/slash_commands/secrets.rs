@@ -567,6 +567,9 @@ fn storage_mode(ctx: &SlashCommandContext<'_>) -> AuthCredentialsStoreMode {
 // --- Input ---
 
 async fn wait_for_secure_prompt_input(ctx: &mut SlashCommandContext<'_>) -> Option<String> {
+    let _status_wait = ctx
+        .handle
+        .program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
     loop {
         if ctx.ctrl_c_state.is_cancel_requested() {
             dismiss_modal(ctx);

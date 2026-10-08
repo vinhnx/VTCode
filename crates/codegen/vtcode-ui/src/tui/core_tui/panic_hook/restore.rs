@@ -76,6 +76,7 @@ fn emit_restore_to_all_targets(clear_alternate: bool) -> Option<io::Error> {
     let profile_restore = state::take_iterm2_profile_to_restore();
 
     let mut stderr = io::stderr();
+    crate::tui::core_tui::program_status::cleanup_before_restore(&mut stderr);
     if let Err(error) = emit_restore_sequence(&mut stderr, clear_alternate) {
         first_error.get_or_insert(error);
     }

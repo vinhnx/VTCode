@@ -6,6 +6,7 @@ This guide covers the terminal-specific settings that matter most when using VT 
 
 - [Theme and Appearance](#theme-and-appearance)
 - [Profile Icon](#profile-icon)
+- [Program Status](#program-status)
 - [Line Break Options](#line-break-options)
 - [Paste Handling](#paste-handling)
 - [Notification Setup](#notification-setup)
@@ -62,6 +63,25 @@ the profile file when it is missing or the bundled profile/artwork changed, so d
 only until the next launch. If a tab is already stuck showing the VT Code icon (from an older build), run
 `/terminal-setup reset-iterm2-icon` in it or open a new tab. There is no config key to disable the install; `--quiet`
 suppresses only the install notice.
+
+## Program Status
+
+If your terminal supports the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status),
+enable live working, permission/question/authentication wait, and completion indicators in `vtcode.toml`:
+
+```toml
+[ui.program_status]
+enabled = true
+```
+
+Reporting is opt-in and applies only to interactive sessions with terminal-connected stdin, stdout, and stderr.
+Rex documents support; other terminals and multiplexer/SSH combinations need their own compatibility checks.
+VT Code sends generic labels without prompts, commands, paths, or credentials. Set `enabled = false` to disable
+reporting and clear the current session's owned records; valid live reloads apply both changes.
+
+Status indicators and `[ui.notifications]` are independent. If your terminal also creates notifications from status
+changes, choose your notification preferences in the terminal and VT Code to avoid duplicate alerts. Enabling status
+does not change either notification policy. See the [lifecycle and privacy guide](../development/terminal-program-status.md).
 
 ## Line Break Options
 

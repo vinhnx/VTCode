@@ -142,6 +142,7 @@ pub(crate) struct ModelPickerState {
     pending_api_key: Option<String>,
     pending_credential_source: Option<vtcode_config::api_keys::CredentialSource>,
     plain_mode_active: bool,
+    status_wait: Option<vtcode_ui::tui::core_tui::types::ProgramStatusWaitGuard>,
 }
 
 pub(crate) enum ModelPickerStart {
@@ -216,6 +217,7 @@ impl ModelPickerState {
             pending_credential_source: None,
             dynamic_models,
             plain_mode_active: false,
+            status_wait: None,
         };
 
         if inline_enabled {
@@ -274,6 +276,7 @@ impl ModelPickerState {
         self.selected_mimo_auth = None;
         self.pending_api_key = None;
         self.pending_credential_source = None;
+        self.status_wait = None;
         self.step = PickerStep::AwaitModel;
         if self.settings.inline_enabled {
             render_step_one_inline(
@@ -303,6 +306,7 @@ impl ModelPickerState {
 
     /// Follow-up steps return to the model list without cancelling the picker.
     fn back_to_model_list(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
+        self.status_wait = None;
         self.step = PickerStep::AwaitModel;
         self.selection = None;
         self.selected_reasoning = None;
@@ -341,6 +345,7 @@ impl ModelPickerState {
             if !self.settings.inline_enabled {
                 renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
             }
+            self.status_wait = None;
             return Ok(ModelPickerProgress::Cancelled);
         }
 

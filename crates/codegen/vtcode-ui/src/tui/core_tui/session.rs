@@ -245,6 +245,7 @@ pub struct Session {
     // --- UI State ---
     navigation_state: ListState,
     input_enabled: bool,
+    pub(crate) program_status: super::program_status::ProgramStatus,
     pub(crate) activity_state: ActivityState,
     image_input_enabled: bool,
     cursor_visible: bool,

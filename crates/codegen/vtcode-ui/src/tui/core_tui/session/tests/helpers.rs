@@ -177,6 +177,8 @@ pub(crate) fn sample_local_agent_entry_with_id(
     kind: app_types::LocalAgentKind,
 ) -> LocalAgentEntry {
     LocalAgentEntry {
+        program_status: vtcode_commons::program_status::ProgramState::Idle,
+        updated_at: 0,
         id: id.to_string(),
         display_label: display_label.to_string(),
         agent_name: display_label.to_string(),

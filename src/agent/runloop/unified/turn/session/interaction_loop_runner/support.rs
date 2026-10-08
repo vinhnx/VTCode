@@ -667,6 +667,9 @@ pub(super) fn apply_live_theme_and_appearance(
     let styles = theme::active_styles();
     handle.set_theme(inline_theme_from_core_styles(&styles));
     handle.set_appearance(to_tui_appearance(cfg));
+    handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
+        enabled: cfg.ui.program_status.enabled,
+    });
     handle.set_fullscreen_interaction(to_tui_fullscreen(cfg));
     handle.set_key_bindings(session_bootstrap.effective_key_bindings(cfg));
     crate::agent::runloop::unified::palettes::apply_prompt_style(handle);
@@ -1093,6 +1096,25 @@ mod tests {
     use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault};
     use vtcode_config::{SubagentSource, SubagentSpec};
     use vtcode_core::tools::tool_intent::GENERIC_VERIFIER_DESCRIPTION;
+
+    #[test]
+    fn program_status_live_reload_projects_opt_in_and_disable() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = vtcode_ui::tui::app::InlineHandle::new_for_tests(sender);
+        let mut cfg = VTCodeConfig::default();
+        let bootstrap = SessionBootstrap::default();
+        for enabled in [true, false] {
+            cfg.ui.program_status.enabled = enabled;
+            apply_live_theme_and_appearance(&handle, &cfg, &bootstrap);
+            let mut projections = Vec::new();
+            while let Ok(command) = receiver.try_recv() {
+                if let vtcode_ui::tui::app::InlineCommand::ProgramStatus(update) = command {
+                    projections.push(update);
+                }
+            }
+            assert_eq!(projections, vec![vtcode_commons::program_status::ProgramStatusUpdate::Configure { enabled }]);
+        }
+    }
 
     #[test]
     fn next_primary_agent_name_starts_with_first_sorted_agent() {

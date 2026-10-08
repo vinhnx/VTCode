@@ -42,6 +42,8 @@ fn test_subagent_entry(id: &str, status: SubagentStatus) -> SubagentStatusEntry 
 
 fn test_background_entry() -> BackgroundSubprocessEntry {
     BackgroundSubprocessEntry {
+        exit_code: None,
+        termination_requested: false,
         id: "background-rust-engineer".to_string(),
         session_id: "session-123".to_string(),
         exec_session_id: "exec-session-123".to_string(),

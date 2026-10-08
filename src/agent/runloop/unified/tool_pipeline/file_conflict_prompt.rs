@@ -18,7 +18,7 @@ use vtcode_ui::tui::app::{
 };
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 use super::CancellationTokens;
@@ -258,7 +258,7 @@ where
             "Reload uses the external disk version. Diff preview is unavailable for this file content.".to_string()
         },
     ];
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {
@@ -296,7 +296,7 @@ where
             Ok(OverlayWaitOutcome::Submitted(ConflictResolution::Abort))
         }
         OverlayWaitOutcome::Submitted(InlineListSelection::FileConflictViewDiff) if can_show_diff => {
-            show_overlay_and_wait(
+            show_permission_and_wait(
                 handle,
                 session,
                 TransientRequest::Diff(DiffOverlayRequest {

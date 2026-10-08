@@ -357,6 +357,8 @@ mod tests {
         SidebarWidget::new(&styles)
             .local_agents(vec![
                 crate::tui::core_tui::types::LocalAgentEntry {
+                    program_status: vtcode_commons::program_status::ProgramState::Idle,
+                    updated_at: 0,
                     id: "thread-1".to_string(),
                     display_label: "rust-engineer".to_string(),
                     agent_name: "rust-engineer".to_string(),
@@ -368,6 +370,8 @@ mod tests {
                     transcript_path: None,
                 },
                 crate::tui::core_tui::types::LocalAgentEntry {
+                    program_status: vtcode_commons::program_status::ProgramState::Idle,
+                    updated_at: 0,
                     id: "bg-1".to_string(),
                     display_label: "reviewer".to_string(),
                     agent_name: "reviewer".to_string(),
@@ -400,6 +404,8 @@ mod tests {
 
         SidebarWidget::new(&styles)
             .local_agents(vec![crate::tui::core_tui::types::LocalAgentEntry {
+                program_status: vtcode_commons::program_status::ProgramState::Idle,
+                updated_at: 0,
                 id: "thread-1".to_string(),
                 display_label: "rust-engineer".to_string(),
                 agent_name: "rust-engineer".to_string(),

@@ -1617,6 +1617,9 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                         );
                         handle.set_activity_state(ActivityState::Idle);
                         let _ = renderer.line_if_not_empty(MessageStyle::Output);
+                        handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Outcome(
+                            vtcode_commons::program_status::ProgramState::Error,
+                        ));
                         tracing::error!("Turn execution error: {}", err);
                         let _ = renderer.line(MessageStyle::Error, &format!("Error: {err}"));
                         TurnLoopOutcome {

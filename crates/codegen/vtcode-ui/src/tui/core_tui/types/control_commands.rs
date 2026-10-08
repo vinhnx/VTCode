@@ -50,6 +50,22 @@ macro_rules! impl_inline_control_methods {
             self.send_command($command::UpdateProgress(update));
         }
 
+        pub fn program_status(&self, update: vtcode_commons::program_status::ProgramStatusUpdate) {
+            self.send_command($command::ProgramStatus(update));
+        }
+
+        pub fn program_status_wait(
+            &self,
+            kind: vtcode_commons::program_status::InteractionKind,
+        ) -> $crate::tui::core_tui::types::ProgramStatusWaitGuard {
+            use vtcode_commons::program_status::ProgramStatusUpdate;
+            use $crate::tui::core_tui::types::ProgramStatusWaitGuard;
+            let token = ProgramStatusWaitGuard::token();
+            self.program_status(ProgramStatusUpdate::Wait { token, kind });
+            let handle = self.clone();
+            ProgramStatusWaitGuard::new(move || handle.program_status(ProgramStatusUpdate::Resume { token }))
+        }
+
         pub fn set_activity_state(&self, state: vtcode_commons::ui_protocol::ActivityState) {
             self.send_command($command::SetActivityState(state));
         }

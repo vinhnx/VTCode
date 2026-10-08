@@ -93,6 +93,8 @@ pub struct BackgroundCompletionEvent {
     pub transcript_path: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub termination_requested: bool,
 }
 
 // ─── Public DTOs ────────────────────────────────────────────────────────────
@@ -154,6 +156,10 @@ pub struct BackgroundSubprocessEntry {
     pub archive_path: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcript_path: Option<PathBuf>,
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub termination_requested: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -322,6 +328,10 @@ pub struct PersistedBackgroundRecord {
     model_override: Option<String>,
     reasoning_override: Option<String>,
     restart_attempts: u8,
+    #[serde(default)]
+    exit_code: Option<i32>,
+    #[serde(default)]
+    termination_requested: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -356,6 +366,10 @@ pub struct BackgroundRecord {
     pub(crate) model_override: Option<String>,
     pub(crate) reasoning_override: Option<String>,
     pub(crate) restart_attempts: u8,
+    #[serde(default)]
+    pub(crate) exit_code: Option<i32>,
+    #[serde(default)]
+    pub(crate) termination_requested: bool,
 }
 
 // ─── Status Entry Builders ──────────────────────────────────────────────────
@@ -379,6 +393,8 @@ impl StatusEntryBuilder for BackgroundRecord {
             source: self.source.clone(),
             color: self.color.clone(),
             status: self.status,
+            exit_code: self.exit_code,
+            termination_requested: self.termination_requested,
             desired_enabled: self.desired_enabled,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -497,6 +513,8 @@ impl BackgroundRecord {
             color: self.color,
             session_id: self.session_id,
             exec_session_id: self.exec_session_id,
+            exit_code: self.exit_code,
+            termination_requested: self.termination_requested,
             desired_enabled: self.desired_enabled,
             status: self.status,
             created_at: self.created_at,
@@ -526,6 +544,8 @@ impl BackgroundRecord {
             color: record.color,
             session_id: record.session_id,
             exec_session_id: record.exec_session_id,
+            exit_code: record.exit_code,
+            termination_requested: record.termination_requested,
             desired_enabled: record.desired_enabled,
             status: record.status,
             created_at: record.created_at,

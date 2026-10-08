@@ -333,6 +333,10 @@ show_diagnostics_in_transcript = false
 # Show timeline navigation panel
 show_timeline_pane = false
 
+# Optional terminal activity reporting (interactive TUI only).
+[ui.program_status]
+enabled = false
+
 # Runtime notification preferences
 [ui.notifications]
 # Master toggle for terminal/desktop notifications

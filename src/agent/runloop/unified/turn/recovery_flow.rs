@@ -12,7 +12,7 @@ use vtcode_ui::tui::app::{
     TransientRequest, TransientSubmission,
 };
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_question_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(crate) struct RecoveryPromptBuilder {
@@ -234,7 +234,7 @@ pub(crate) async fn execute_recovery_prompt(
         fuzzy: false,
     });
 
-    let outcome = show_overlay_and_wait(
+    let outcome = show_question_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {

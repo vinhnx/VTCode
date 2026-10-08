@@ -230,6 +230,8 @@ fn apply_persistent_memory_header_guide_sets_badge_and_highlight() {
 #[test]
 fn background_local_agent_visibility_keeps_stopped_entries() {
     let entry = vtcode_core::subagents::BackgroundSubprocessEntry {
+        exit_code: None,
+        termination_requested: false,
         id: "background-default".to_string(),
         session_id: "session-456".to_string(),
         exec_session_id: String::new(),
@@ -371,6 +373,8 @@ fn delegated_local_agent_preview_uses_failure_message() {
 #[test]
 fn background_local_agent_preview_uses_status_placeholder() {
     let entry = vtcode_core::subagents::BackgroundSubprocessEntry {
+        exit_code: None,
+        termination_requested: false,
         id: "background-default".to_string(),
         session_id: "session-456".to_string(),
         exec_session_id: String::new(),

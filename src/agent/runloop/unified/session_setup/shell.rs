@@ -200,6 +200,9 @@ pub(crate) async fn initialize_session_shell(
         .map(|cfg| matches!(cfg.ui.color_scheme_mode, ColorSchemeMode::Auto | ColorSchemeMode::Unknown))
         .unwrap_or(true);
     session.set_color_scheme_auto(color_scheme_auto);
+    handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
+        enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_status.enabled),
+    });
 
     vtcode_commons::startup_trace::record_phase("session_setup_shell", shell_phase);
 

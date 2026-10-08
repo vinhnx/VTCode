@@ -175,6 +175,7 @@ fn handle_inline_command<S: TuiSessionDriver>(
     }
 
     session.handle_command(command);
+    session.flush_program_status();
 
     Ok(EventStreamAction::None)
 }

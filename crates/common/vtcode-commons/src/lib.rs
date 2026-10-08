@@ -53,6 +53,7 @@ pub mod modal_hints;
 pub mod model_family;
 pub mod paths;
 pub mod preview;
+pub mod program_status;
 pub mod project;
 pub mod provider;
 pub mod reasoning;

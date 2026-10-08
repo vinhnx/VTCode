@@ -341,6 +341,9 @@ pub(crate) async fn refresh_runtime_config_from_manager(
     let styles = theme::active_styles();
     handle.set_theme(inline_theme_from_core_styles(&styles));
     handle.set_appearance(to_tui_appearance(&runtime_config));
+    handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
+        enabled: runtime_config.ui.program_status.enabled,
+    });
     handle.set_fullscreen_interaction(to_tui_fullscreen(&runtime_config));
     handle.set_key_bindings(session_bootstrap.effective_key_bindings(&runtime_config));
 

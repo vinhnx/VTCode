@@ -383,6 +383,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         pending_api_key: None,
         pending_credential_source: None,
         plain_mode_active: false,
+        status_wait: None,
     }
 }
 

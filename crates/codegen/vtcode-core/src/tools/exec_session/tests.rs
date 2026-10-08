@@ -597,6 +597,7 @@ async fn force_termination_retains_active_background_session_until_close() -> an
 
     let snapshot = manager.background_session_snapshot("background-force").await?;
     assert!(snapshot.metadata.exit_code.is_some());
+    assert!(snapshot.termination_requested);
     assert!(snapshot.preview.contains("before-termination"));
     timeout(Duration::from_secs(2), async {
         loop {

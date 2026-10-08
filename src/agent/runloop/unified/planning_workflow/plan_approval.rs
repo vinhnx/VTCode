@@ -632,6 +632,7 @@ pub(crate) async fn execute_plan_confirmation_with_context(
     // immediately. The transcript fills in behind the overlay (wheel-scroll
     // passes through) rather than blocking the gate.
     let first_request = build_plan_confirmation_request_with_context(&plan, draft_incomplete, context_usage_percent);
+    let _status_wait = handle.program_status_wait(vtcode_commons::program_status::InteractionKind::Permission);
     handle.show_transient(first_request);
     handle.force_redraw();
     tokio::task::yield_now().await;

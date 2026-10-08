@@ -93,13 +93,29 @@ mod tests {
         .expect("wizard should return a successful result");
 
         assert_eq!(result["answers"]["scope"]["selected"], json!(["Focused"]));
+        let token = match command_rx.try_recv().unwrap() {
+            InlineCommand::ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate::Wait { token, kind }) => {
+                assert_eq!(kind, vtcode_commons::program_status::InteractionKind::Question);
+                token
+            }
+            _ => panic!("expected owned question wait"),
+        };
         assert!(matches!(command_rx.try_recv(), Ok(InlineCommand::ShowTransient { request: _ })));
-        loop {
-            match command_rx.try_recv() {
-                Ok(InlineCommand::CloseTransient) => break,
-                Ok(_) => {}
-                Err(error) => panic!("expected close command, got {error:?}"),
+        let mut resumed = false;
+        let mut closed = false;
+        while let Ok(command) = command_rx.try_recv() {
+            if matches!(command, InlineCommand::CloseTransient) {
+                closed = true;
+            }
+            if let InlineCommand::ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate::Resume {
+                token: resumed_token,
+            }) = command
+            {
+                assert_eq!(token, resumed_token);
+                resumed = true;
             }
         }
+        assert!(resumed);
+        assert!(closed);
     }
 }

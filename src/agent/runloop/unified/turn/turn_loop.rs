@@ -2213,6 +2213,14 @@ async fn finalize_turn(
     result: &TurnLoopResult,
     turn_usage: &HarnessUsage,
 ) {
+    use vtcode_commons::program_status::{ProgramState, ProgramStatusUpdate};
+    let state = match result {
+        TurnLoopResult::Completed { .. } => ProgramState::Done,
+        TurnLoopResult::Aborted => ProgramState::Error,
+        TurnLoopResult::Blocked { .. } => ProgramState::Blocked,
+        TurnLoopResult::Cancelled | TurnLoopResult::Exit => ProgramState::Idle,
+    };
+    ctx.handle.program_status(ProgramStatusUpdate::Outcome(state));
     if let TurnLoopResult::Blocked { reason } = result {
         let reason_text = reason.as_deref().unwrap_or("turn blocked");
         let outcome = if reason_text.contains(ASSISTANT_TEXT_RESPONSE_CAP_REASON) {

@@ -26,7 +26,7 @@ fn readonly_agent_permissions() -> AgentPermissionsConfig {
     permissions
 }
 
-fn test_controller_config(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> SubagentControllerConfig {
+pub(super) fn test_controller_config(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> SubagentControllerConfig {
     let pty_sessions = PtySessionManager::new(workspace_root.clone(), vt_cfg.pty.clone());
     let exec_sessions = ExecSessionManager::new(workspace_root.clone(), pty_sessions.clone());
     SubagentControllerConfig {
@@ -87,7 +87,7 @@ fn test_child_record(
     }
 }
 
-fn test_background_record(
+pub(super) fn test_background_record(
     spec: &SubagentSpec,
     id: &str,
     status: BackgroundSubprocessStatus,
@@ -96,6 +96,8 @@ fn test_background_record(
 ) -> BackgroundRecord {
     let now = Utc::now();
     BackgroundRecord {
+        exit_code: None,
+        termination_requested: false,
         id: id.to_string(),
         agent_name: spec.name.clone(),
         display_label: subagent_display_label(spec),
@@ -429,7 +431,7 @@ async fn wait_for_effective_model(controller: &SubagentController, target: &str)
     Err(anyhow!("Subagent {target} did not capture an effective runtime configuration in time"))
 }
 
-fn read_only_test_spec(name: &str) -> SubagentSpec {
+pub(super) fn read_only_test_spec(name: &str) -> SubagentSpec {
     SubagentSpec {
         name: name.to_string(),
         description: "test".to_string(),
@@ -1539,6 +1541,8 @@ async fn spawn_background_subprocess_returns_active_record_when_settings_match()
         state.background_children.insert(
             record_id.clone(),
             BackgroundRecord {
+                exit_code: None,
+                termination_requested: false,
                 id: record_id.clone(),
                 agent_name: spec.name.clone(),
                 display_label: subagent_display_label(&spec),
@@ -1600,6 +1604,8 @@ async fn spawn_background_subprocess_rejects_conflicting_active_record_settings(
         state.background_children.insert(
             record_id,
             BackgroundRecord {
+                exit_code: None,
+                termination_requested: false,
                 id: background_record_id(spec.name.as_str()),
                 agent_name: spec.name.clone(),
                 display_label: subagent_display_label(&spec),
@@ -1760,6 +1766,7 @@ async fn managed_background_completion_persists_before_delivery() {
         .expect("completion should arrive")
         .expect("completion channel should remain open");
     assert_eq!(event.task_id, record_id);
+    assert!(!event.termination_requested);
     assert_eq!(event.status, BackgroundSubprocessStatus::Stopped);
     assert_eq!(event.exit_code, Some(0));
     let status = controller
@@ -1831,6 +1838,7 @@ async fn managed_background_graceful_stop_delivers_one_terminal_completion() {
         .expect("stop completion should arrive")
         .expect("completion channel should remain open");
     assert_eq!(event.task_id, record_id);
+    assert!(event.termination_requested);
     assert_eq!(event.status, BackgroundSubprocessStatus::Stopped);
     assert!(event.error.is_none());
     assert!(
@@ -1886,6 +1894,7 @@ async fn managed_background_force_cancel_delivers_one_terminal_completion() {
         .expect("force-cancel completion should arrive")
         .expect("completion channel should remain open");
     assert_eq!(event.task_id, record_id);
+    assert!(event.termination_requested);
     assert_eq!(event.status, BackgroundSubprocessStatus::Stopped);
     assert_eq!(event.exit_code, None);
     assert!(event.error.is_none());
@@ -1953,6 +1962,7 @@ async fn parent_subscription_replays_completion_published_before_receiver() {
         .expect("parent subscription should replay completion")
         .expect("completion channel should remain open");
     assert_eq!(event.task_id, record_id);
+    assert!(!event.termination_requested);
     assert_eq!(event.status, BackgroundSubprocessStatus::Stopped);
     assert_eq!(event.exit_code, Some(0));
 
@@ -3070,6 +3080,8 @@ async fn background_clean_exit_zero_becomes_stopped_without_restart() {
         state.background_children.insert(
             "background-clean".to_string(),
             BackgroundRecord {
+                exit_code: None,
+                termination_requested: false,
                 id: "background-clean".to_string(),
                 agent_name: "demo".to_string(),
                 display_label: "demo".to_string(),
@@ -3103,6 +3115,8 @@ async fn background_clean_exit_zero_becomes_stopped_without_restart() {
     // Clean `exit 0` must surface as Stopped (matching `exited (0)`), not Error,
     // and must not consume the restart budget.
     assert_eq!(entry.status, BackgroundSubprocessStatus::Stopped);
+    assert_eq!(entry.exit_code, Some(0));
+    assert!(!entry.termination_requested);
     assert!(entry.error.is_none());
     assert!(!entry.desired_enabled);
     let state = controller.state.read().await;
@@ -3143,6 +3157,8 @@ async fn background_nonzero_exit_becomes_error_when_restore_disabled() {
         state.background_children.insert(
             "background-failing".to_string(),
             BackgroundRecord {
+                exit_code: None,
+                termination_requested: false,
                 id: "background-failing".to_string(),
                 agent_name: "demo".to_string(),
                 display_label: "demo".to_string(),
@@ -3176,6 +3192,8 @@ async fn background_nonzero_exit_becomes_error_when_restore_disabled() {
     // Asymmetric oracle vs exit 0: non-zero must stay Error with diagnostic,
     // never collapse to a clean Stopped.
     assert_eq!(entry.status, BackgroundSubprocessStatus::Error);
+    assert_eq!(entry.exit_code, Some(1));
+    assert!(!entry.termination_requested);
     assert!(entry.error.as_deref().is_some_and(|e| e.contains('1')));
     assert!(entry.desired_enabled);
 }
@@ -3211,6 +3229,8 @@ async fn background_graceful_stop_stays_stopped_while_process_drains() {
         state.background_children.insert(
             "background-stopping".to_string(),
             BackgroundRecord {
+                exit_code: None,
+                termination_requested: false,
                 id: "background-stopping".to_string(),
                 agent_name: "demo".to_string(),
                 display_label: "demo".to_string(),

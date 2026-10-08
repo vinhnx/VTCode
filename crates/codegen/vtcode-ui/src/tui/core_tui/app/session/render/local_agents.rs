@@ -324,6 +324,8 @@ mod tests {
 
     fn sample_entry(status: &str) -> LocalAgentEntry {
         LocalAgentEntry {
+            program_status: vtcode_commons::program_status::ProgramState::Idle,
+            updated_at: 0,
             id: "thread-1".to_string(),
             display_label: "rust-engineer".to_string(),
             agent_name: "rust-engineer".to_string(),

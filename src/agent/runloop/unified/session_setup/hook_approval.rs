@@ -22,7 +22,7 @@ use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(crate) enum HookApprovalDecision {
@@ -82,7 +82,7 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
     ];
 
     handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {

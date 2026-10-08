@@ -76,6 +76,7 @@ pub(crate) async fn execute_request_user_input_tool(
     });
 
     let safe_current_step = current_step.min(steps.len().saturating_sub(1));
+    let _status_wait = handle.program_status_wait(vtcode_commons::program_status::InteractionKind::Question);
     match show_wizard_modal_and_wait(
         handle,
         session,

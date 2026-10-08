@@ -3,6 +3,7 @@ mod control_commands;
 mod local_agents;
 mod message_commands;
 mod overlay;
+mod program_status;
 mod protocol;
 mod selection;
 mod style;
@@ -16,6 +17,7 @@ pub use overlay::{
     ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey,
     OverlayRequest, OverlaySelectionChange, OverlaySubmission, WizardOverlayRequest,
 };
+pub use program_status::ProgramStatusWaitGuard;
 pub use protocol::{
     ActivityState, FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
     InlineMessageKind, InlineSession, PreviewCallback, SubmittedInput,

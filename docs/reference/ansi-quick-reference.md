@@ -161,6 +161,14 @@ r"\x1b\[38;5;(\d+)m"
 r"\x1b\[38;2;(\d+);(\d+);(\d+)m"
 ```
 
+## Program Status Protocol
+
+Enable `[ui.program_status] enabled = true` to emit bounded OSC 7501 reports on the interactive TUI terminal.
+The sequence is `ESC ] 7501 ; state=working:id=<owned-id>:app=vtcode:title=<base64>:msg=<base64> ESC \`.
+Reports use complete replacements, generic labels, and session-owned opaque IDs. `clear` removes an owned record
+and its descendants; VT Code never clears the terminal root. See the
+[lifecycle and privacy guide](../development/terminal-program-status.md).
+
 ## Testing Helpers
 
 ### Generate Test Strings

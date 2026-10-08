@@ -202,6 +202,7 @@ impl Session {
 
     pub(crate) fn set_local_agents(&mut self, entries: Vec<LocalAgentEntry>) {
         if self.local_agents != entries {
+            self.program_status.children(&entries);
             self.local_agents = entries;
             self.invalidate_sidebar_cache();
         }

@@ -9,7 +9,7 @@ use vtcode_core::config::constants::tool_limits::MAX_TOOL_LOOP_INCREMENT_PER_PRO
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_ui::tui::app::{InlineHandle, ListOverlayRequest, TransientRequest, TransientSubmission};
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(super) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
@@ -212,7 +212,7 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
     // Re-show this limit prompt and continue waiting so that a transient
     // bridge event cannot accidentally become a denial of the grant.
     loop {
-        let outcome = show_overlay_and_wait(
+        let outcome = show_permission_and_wait(
             handle,
             session,
             TransientRequest::List(ListOverlayRequest {

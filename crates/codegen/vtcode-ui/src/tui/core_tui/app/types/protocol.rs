@@ -129,6 +129,7 @@ define_inline_message_commands! {
             left: Option<String>,
             right: Option<String>,
         },
+        ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate),
         SetActivityState(ActivityState),
         UpdateProgress(vtcode_commons::ui_protocol::ProgressUpdate),
         SetTerminalTitleItems {

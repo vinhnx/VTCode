@@ -114,7 +114,15 @@ impl Session {
                     .map(str::to_owned);
                 self.apply_input_status(left, right);
             }
+            InlineCommand::ProgramStatus(update) => {
+                self.program_status.apply(update);
+                if matches!(update, vtcode_commons::program_status::ProgramStatusUpdate::Configure { enabled: true }) {
+                    self.program_status.children(&self.local_agents);
+                }
+                command_needs_redraw = false;
+            }
             InlineCommand::UpdateProgress(update) => {
+                self.program_status.progress(update);
                 if self.progress.apply(update) {
                     self.request_transcript_clear();
                 } else {
@@ -122,6 +130,7 @@ impl Session {
                 }
             }
             InlineCommand::SetActivityState(state) => {
+                self.program_status.activity(state);
                 self.activity_state = state;
                 self.input_status_left = state.status().map(ToOwned::to_owned);
                 let enabled = !state.is_busy();
