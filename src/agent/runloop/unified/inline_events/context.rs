@@ -463,14 +463,14 @@ impl<'a> InlineEventContext<'a> {
             ExecSessionAction::Inspect => {
                 let snapshot = match exec_sessions.background_session_snapshot(&session_id).await {
                     Ok(snapshot) => snapshot,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 self.render_exec_session_inspection(&snapshot)?;
             }
             ExecSessionAction::Preview => {
                 let snapshot = match exec_sessions.background_session_snapshot(&session_id).await {
                     Ok(snapshot) => snapshot,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 self.handle.show_modal(
                     format!("Exec session {}", snapshot.metadata.id.as_str()),
@@ -498,7 +498,7 @@ impl<'a> InlineEventContext<'a> {
                     }
                     Ok(None) => {
                         if let Err(error) = exec_sessions.terminate_session(&session_id).await {
-                            return self.render_exec_session_error(&session_id, error);
+                            return self.render_exec_session_error(&session_id, action, error);
                         }
                         // Peek the retained preview so the drawer/inspect path
                         // shows output captured up to termination.
@@ -508,13 +508,13 @@ impl<'a> InlineEventContext<'a> {
                             &format!("Requested graceful termination for exec session {session_id}."),
                         )?;
                     }
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 }
             }
             ExecSessionAction::ForceTerminateOrClose => {
                 let already_exited = match exec_sessions.force_terminate_or_close(&session_id).await {
                     Ok(already_exited) => already_exited,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 let message = if already_exited {
                     format!("Closed completed exec session {session_id}.")
@@ -532,7 +532,7 @@ impl<'a> InlineEventContext<'a> {
                     )?;
                 } else {
                     if let Err(error) = exec_sessions.focus_background_session(&session_id).await {
-                        return self.render_exec_session_error(&session_id, error);
+                        return self.render_exec_session_error(&session_id, action, error);
                     }
                     self.state.renderer().line(
                         MessageStyle::Info,
@@ -545,10 +545,28 @@ impl<'a> InlineEventContext<'a> {
         Ok(self.input_processor().passive())
     }
 
-    fn render_exec_session_error(&mut self, session_id: &str, error: anyhow::Error) -> Result<InlineLoopAction> {
-        self.state
-            .renderer()
-            .line(MessageStyle::Error, &format!("Exec session {session_id} action failed: {error}"))?;
+    fn render_exec_session_error(
+        &mut self,
+        session_id: &str,
+        action: ExecSessionAction,
+        error: anyhow::Error,
+    ) -> Result<InlineLoopAction> {
+        // Session-891943: the only debug ERROR was a UI action on an already
+        // exited session whose result was recorded. Log the action and cause
+        // chain so a missing session is not mistaken for a lost verifier
+        // result, and tell the user to reuse recorded output.
+        tracing::warn!(
+            session_id = %session_id,
+            action = ?action,
+            error = %format!("{error:#}"),
+            "exec session action failed"
+        );
+        self.state.renderer().line(
+            MessageStyle::Error,
+            &format!(
+                "Exec session {session_id} action {action:?} failed: {error:#}. If its command already exited, reuse the recorded output instead of rerunning."
+            ),
+        )?;
         Ok(self.input_processor().passive())
     }
 

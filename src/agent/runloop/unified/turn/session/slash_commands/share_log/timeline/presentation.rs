@@ -958,7 +958,7 @@ fn harness_title(event: &HarnessEventKind) -> &'static str {
         HarnessEventKind::BlockedRecoveryStarted => "Blocked recovery started",
         HarnessEventKind::BlockedRecoveryFinished => "Blocked recovery finished",
         HarnessEventKind::BlockedHandoffWritten => "Blocked handoff written",
-        HarnessEventKind::BlockedHandoffResolved => "Blocked handoff resolved",
+        HarnessEventKind::BlockedHandoffResolved => "Blocked handoff resolved (turn recovered)",
         HarnessEventKind::EvaluationStarted => "Evaluation started",
         HarnessEventKind::EvaluationPassed => "Evaluation passed",
         HarnessEventKind::EvaluationFailed => "Evaluation failed",

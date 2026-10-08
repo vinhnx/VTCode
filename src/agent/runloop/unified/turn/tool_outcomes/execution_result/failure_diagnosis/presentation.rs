@@ -122,6 +122,29 @@ mod tests {
     }
 
     #[test]
+    fn aborted_grep_chain_hint_names_unrun_checks() {
+        use serde_json::json;
+        // Session-891943 events 618-619: first grep no-match aborts `&&`.
+        let args = json!({"cmd":"grep -n foo README.md && grep -n bar README.md"});
+        let out = super::super::deterministic_output_diagnosis("exec_command", &args, &json!({"exit_code":1}));
+        assert!(out.next_action.contains("aborts `&&` chains"), "chain hint: {}", out.next_action);
+        // Standalone grep no-match keeps its existing empty-result guidance.
+        let single = super::super::deterministic_output_diagnosis(
+            "exec_command",
+            &json!({"cmd":"grep absent sample.txt"}),
+            &json!({"exit_code":1}),
+        );
+        assert!(!single.next_action.contains("aborts `&&` chains"));
+        // Real errors keep generic guidance.
+        let err = super::super::deterministic_output_diagnosis(
+            "exec_command",
+            &args,
+            &json!({"exit_code":1,"stderr":"invalid argument"}),
+        );
+        assert!(!err.next_action.contains("aborts `&&` chains"));
+    }
+
+    #[test]
     fn concise_line_bounds_long_observed_asymmetrically() {
         let short = ToolFailureDiagnosis::new("exit 1", "cause", "next");
         let short_line = concise_diagnosis_line("exec_command", &short);

@@ -2486,7 +2486,10 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                                 if let Some(emitter) = harness_emitter.as_ref() {
                                     let _ = emitter.emit(harness_event(
                                         vtcode_core::exec::events::HarnessEventKind::BlockedHandoffResolved,
-                                        Some("Blocked handoff resolved".to_owned()),
+                                        Some(
+                                            "Blocked handoff resolved (turn recovered; task may remain incomplete)"
+                                                .to_owned(),
+                                        ),
                                         None,
                                         None,
                                         None,

@@ -53,6 +53,7 @@ pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, outp
     let command = args
         .get("command")
         .and_then(Value::as_str)
+        .or_else(|| args.get("cmd").and_then(Value::as_str))
         .or_else(|| output.get("command").and_then(Value::as_str))
         .map(bounded_field);
 
@@ -99,7 +100,11 @@ pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, outp
     } else if exit_code == Some(127) || command_not_found {
         "Check the command name and PATH, then retry."
     } else if exit_code.is_some() {
-        "Inspect the reported error and retry with corrected arguments or a narrower scope."
+        if is_aborted_grep_chain(command.as_deref(), output) {
+            "A `grep` no-match (exit 1) aborts `&&` chains; later checks did not run and this does not establish they passed. Rerun remaining checks with `;` or append `|| true` to no-match searches."
+        } else {
+            "Inspect the reported error and retry with corrected arguments or a narrower scope."
+        }
     } else {
         "Review the returned error and retry with corrected arguments."
     };
@@ -248,6 +253,24 @@ fn first_text_field<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
         .filter_map(|key| value.get(*key).and_then(Value::as_str))
         .map(str::trim)
         .find(|text| !text.is_empty())
+}
+
+/// Session-891943 (events 618-619): a `grep` no-match (exit 1) as the first
+/// segment of an `&&` chain aborts the chain, so later checks never run.
+/// Diagnosis-only hint: the verdict stays failure-like; only the next action
+/// changes. Deliberately narrow (exit 1, `&&`, grep/rg token, no stderr) so
+/// real compound failures keep generic guidance.
+fn is_aborted_grep_chain(command: Option<&str>, output: &Value) -> bool {
+    let Some(cmd) = command else {
+        return false;
+    };
+    if output.get("exit_code").and_then(Value::as_i64) != Some(1) {
+        return false;
+    }
+    if !(cmd.contains("&&") && (cmd.contains("grep") || cmd.contains("rg "))) {
+        return false;
+    }
+    first_text_field(output, &["stderr", "stderr_preview", "error", "message"]).is_none()
 }
 
 fn diagnostic_fields(value: &Value) -> impl Iterator<Item = &str> {
