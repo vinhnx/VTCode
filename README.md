@@ -62,13 +62,13 @@ resumable sessions.
 Explore a codebase, plan changes, run tools, and review edits in the interactive TUI, or run `vtcode exec` headless.
 Pick your model and set your permissions; the runtime handles context management, tools, and execution policy.
 
-| At a glance      | What you get                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| **Planning**     | [Read-only planning](./docs/guides/planning-workflow.md), then reviewable turn diffs. |
-| **Safety**       | [Command policy and sandboxing](./docs/security/SECURITY_MODEL.md) you can audit.     |
-| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md), compaction, resumption, and logs.    |
-| **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, and editor bridges.         |
-| **Models**       | [Hosted or local providers](./docs/README.md#provider-index), chosen per task.        |
+| At a glance      | What you get                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| **Planning**     | [Plan read-only](./docs/guides/planning-workflow.md), then review turn diffs.              |
+| **Safety**       | [Auditable command policy](./docs/security/SECURITY_MODEL.md) and sandboxing.              |
+| **Long runs**    | [Headless exec](./docs/user-guide/exec-mode.md) with compaction, resumption, and logs.     |
+| **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, and editor bridges.              |
+| **Models**       | [Hosted or local providers](./docs/README.md#provider-index), chosen per task.             |
 
 The sections below follow that arc: install, configure, run a first task, then go deeper.
 
@@ -141,8 +141,8 @@ Use `vtcode` to explore, plan, and implement changes in the TUI. For larger task
 [turn diffs](./docs/development/diff-preview.md) before committing. See the
 [interactive guide](./docs/user-guide/interactive-mode.md) for controls.
 
-After a task, enter `/explain` to review its outcome, changes, recorded decisions, verification, and review priorities
-without another model call:
+After a task, `/explain` reviews outcome, changes, decisions, verification, and review priorities without another
+model call:
 
 - `/explain --details` adds evidence.
 - `/explain diagram` shows execution relationships.
@@ -162,9 +162,9 @@ vtcode exec "refactor main.rs"    # headless task with the full tool loop
 vtcode review                     # agent review of uncommitted changes
 ```
 
-`exec` requires autonomous execution in `[automation.full_auto]` plus `full_auto` workspace trust: terminals prompt for
-trust, and non-TTY runs fail unless you set `VTCODE_TRUST_WORKSPACE=full-auto`. The tool allow-list, explicit denies,
-and execution policy still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
+`exec` requires `[automation.full_auto]` plus `full_auto` workspace trust. Terminals prompt for trust; non-TTY runs
+fail unless `VTCODE_TRUST_WORKSPACE=full-auto` is set. The tool allow-list, explicit denies, and execution policy
+still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
 [full automation](./docs/guides/full-automation.md) for trust, output, and configuration details.
 
 For repeatable, environment-checked results, use the [eval framework](./docs/guides/eval.md). A completion message
@@ -251,8 +251,8 @@ cargo nextest run          # tests (requires cargo-nextest)
 ```
 
 CI sets `RUSTFLAGS="-D warnings"` and builds with `--locked`; match locally with
-`RUSTFLAGS="-D warnings" cargo check --locked`. Setup and checks: [development overview](./docs/development/README.md) ·
-[testing guide](./docs/development/testing.md).
+`RUSTFLAGS="-D warnings" cargo check --locked`. Setup and checks: [development overview](./docs/development/README.md)
+and the [testing guide](./docs/development/testing.md).
 
 Release binaries and notes: [GitHub releases](https://github.com/vinhnx/VTCode/releases).
 
@@ -376,5 +376,5 @@ VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors
 
 ## License
 
-First-party code is **MIT OR Apache-2.0** ([LICENSE](LICENSE)); third-party code keeps its original licenses
-([THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES)).
+First-party code is **MIT OR Apache-2.0** under [LICENSE](LICENSE). Third-party code keeps its original licenses,
+listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
