@@ -97,3 +97,24 @@ Remove only the temporary probe afterward. Check the scoped diff and final workt
 ===
 
 https://developers.openai.com/api/docs/guides/decisions
+
+===
+
+For VT Code, I'd treat this as a desirable agent-loop behavior:
+Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis
+
+===
+
+https://github.com/astral-sh/astral-html
+
+===
+
+Switching to codegen-units = 1 made the uv build ~50% faster, cut peak memory by 67%, and reduced binary size by 17%.
+
+I was really surprised by this... Increasing the number of codegen units typically _improves_ build times.
+
+This is amplified by PGO: building the instrumented binary become >90% faster. (The final, non-instrumented build also got faster, but less dramatically so.)
+
+According to Codex, by decreasing to codegen-units = 1, we sacrificed parallelism within each crate, but substantially reduced the total work especially in the fat-LTO step, because we end up with less "intermediate code, profiling data, and retained function bodies to process".
+
+https://github.com/astral-sh/uv/pull/22303
