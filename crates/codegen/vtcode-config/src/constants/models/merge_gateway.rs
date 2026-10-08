@@ -149,8 +149,15 @@ pub fn route_uses_reasoning_effort(model: &str) -> bool {
 /// Returns true when the route exposes a Gateway-managed `thinking.budget_tokens`
 /// control. Explicit `provider/model` route identifiers follow the same prefix
 /// convention as the curated routes.
+///
+/// `anthropic/claude-haiku-5-5` is excluded: the gateway has no vendor serving
+/// reasoning jointly with tools for it yet (see `THINKING_BUDGET_ROUTES` and
+/// `merge_reasoning_control_for_model`).
 pub fn route_uses_thinking_budget(model: &str) -> bool {
     let model = model.trim();
+    if model == ANTHROPIC_CLAUDE_HAIKU_5_5 {
+        return false;
+    }
     model.starts_with("anthropic/")
         || model.starts_with("google/gemini-")
         || model.starts_with("deepseek/")

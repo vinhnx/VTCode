@@ -477,6 +477,26 @@ fn test_gpt_5_5_dated_alias_round_trips_to_gpt55_capabilities() {
 }
 
 #[test]
+fn test_merge_gateway_haiku_55_stays_out_of_reasoning() {
+    // The gateway has no vendor serving reasoning jointly with tools for
+    // `anthropic/claude-haiku-5-5`: every reasoning classifier must agree it
+    // is non-reasoning so effort is omitted instead of 400ing.
+    let route = models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5;
+    assert!(!models::merge_gateway::route_uses_thinking_budget(route));
+    assert!(!models::merge_gateway::route_supports_reasoning(route));
+    assert!(!models::merge_gateway::REASONING_MODELS.contains(&route));
+    assert!(!models::merge_gateway::THINKING_BUDGET_ROUTES.contains(&route));
+    assert!(!Provider::MergeGateway.supports_reasoning(route));
+    assert!(!Provider::MergeGateway.supports_reasoning_effort(route));
+    assert!(Provider::MergeGateway.supported_reasoning_efforts(route).is_empty());
+    // Control: a reasoning route still advertises thinking-budget support.
+    let sonnet = models::merge_gateway::ANTHROPIC_CLAUDE_SONNET_5_5;
+    assert!(models::merge_gateway::route_uses_thinking_budget(sonnet));
+    assert!(models::merge_gateway::route_supports_reasoning(sonnet));
+    assert!(Provider::MergeGateway.supports_reasoning_effort(sonnet));
+}
+
+#[test]
 fn test_gpt_61_sol_openai_and_merge_gateway() {
     // OpenAI native route
     assert_eq!(ModelId::from_str(models::openai::GPT_6_1_SOL).unwrap(), ModelId::GPT61Sol);

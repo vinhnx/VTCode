@@ -190,6 +190,19 @@ fn native_payload_omits_reasoning_for_haiku_5_5_route() {
 }
 
 #[test]
+fn haiku_routes_advertise_vision_matching_catalog() {
+    // Both gateway Haiku entries declare image input in `docs/models.json`;
+    // the provider must agree so image payloads are not dropped client-side.
+    let provider = test_provider("http://127.0.0.1:1");
+    for model in [
+        models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_4_5_20251001,
+        models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5,
+    ] {
+        assert!(provider.supports_vision(model), "{model} must advertise vision");
+    }
+}
+
+#[test]
 fn native_payload_omits_reasoning_for_xiaomimimo_routes() {
     // The gateway has no vendor serving reasoning jointly with tools for
     // `xiaomimimo/` routes: forwarding `thinking` turns every agentic request
