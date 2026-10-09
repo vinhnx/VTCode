@@ -325,7 +325,15 @@ impl MergeGatewayProvider {
         Ok(Value::Object(payload))
     }
 
-    async fn generate_native(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+    async fn generate_native(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.generate_native_with_streaming_retry(request, true).await
+    }
+
+    async fn generate_native_with_streaming_retry(
+        &self,
+        mut request: LLMRequest,
+        allow_streaming_retry: bool,
+    ) -> Result<LLMResponse, LLMError> {
         self.prepare_native_request(&mut request);
         LLMProvider::validate_request(self, &request)?;
         // Fail fast only when this request would put tools on the wire and the
@@ -365,7 +373,20 @@ impl MergeGatewayProvider {
                     "Merge Gateway route is not priced for service_tier; retrying once without it"
                 );
                 request.service_tier = None;
-                return Box::pin(self.generate_native(request)).await;
+                return Box::pin(self.generate_native_with_streaming_retry(request, allow_streaming_retry)).await;
+            }
+            // Some vendors behind the gateway (e.g. `zai/`) only serve
+            // streaming requests: retry once via the streaming transport and
+            // collect the terminal response. Terminates: the streaming path
+            // never falls back to non-streaming when the retry flag is
+            // cleared, so this branch cannot refire.
+            if allow_streaming_retry && is_streaming_only_rejection(status, &body) {
+                tracing::warn!(
+                    model = %request.model,
+                    status = %status,
+                    "Merge Gateway route requires streaming; retrying once with streaming"
+                );
+                return Box::pin(self.collect_streamed_response(request)).await;
             }
             // Non-streaming tool requests fail here only when no vendor serves
             // tools at all: remember the verdict so later turns fail fast.
@@ -388,7 +409,35 @@ impl MergeGatewayProvider {
         Self::parse_native_response_payload(json, request.model)
     }
 
-    async fn stream_native_normalized(&self, mut request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
+    async fn collect_streamed_response(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let mut stream = self.stream_native_normalized_inner(request, false).await?;
+        let mut completed = None;
+        while let Some(event) = stream.next().await {
+            match event? {
+                NormalizedStreamEvent::Done { response } => {
+                    completed = Some(*response);
+                    break;
+                }
+                NormalizedStreamEvent::Usage { .. }
+                | NormalizedStreamEvent::TextDelta { .. }
+                | NormalizedStreamEvent::ReasoningDelta { .. }
+                | NormalizedStreamEvent::ReasoningStage { .. }
+                | NormalizedStreamEvent::ToolCallStart { .. }
+                | NormalizedStreamEvent::ToolCallDelta { .. } => {}
+            }
+        }
+        completed.ok_or_else(|| provider_error("Merge Gateway streamed fallback ended without a completed response"))
+    }
+
+    async fn stream_native_normalized(&self, request: LLMRequest) -> Result<LLMNormalizedStream, LLMError> {
+        self.stream_native_normalized_inner(request, true).await
+    }
+
+    async fn stream_native_normalized_inner(
+        &self,
+        mut request: LLMRequest,
+        allow_non_streaming_fallback: bool,
+    ) -> Result<LLMNormalizedStream, LLMError> {
         self.prepare_native_request(&mut request);
         LLMProvider::validate_request(self, &request)?;
         if self.tool_vendor_known_missing(&request.model)
@@ -422,15 +471,21 @@ impl MergeGatewayProvider {
             // failing combo is `streaming_tools`, not `tools`). Retry once
             // without streaming; tool definitions are preserved. If the route
             // has no tool vendor at all the retry fails too and its error —
-            // naming exactly what is missing — is surfaced.
-            if is_capability_unavailable(status, &body) {
+            // naming exactly what is missing — is surfaced. Streaming-only
+            // routes (e.g. `zai/`) never take this path: non-streaming is
+            // known to fail there, so surface the capability error instead of
+            // ping-ponging between transports.
+            if allow_non_streaming_fallback
+                && is_capability_unavailable(status, &body)
+                && !is_streaming_only_model(&request.model)
+            {
                 tracing::warn!(
                     model = %request.model,
                     status = %status,
                     "Merge Gateway rejected streaming capabilities; retrying once without streaming"
                 );
                 request.stream = false;
-                let fallback = self.generate_native(request).await?;
+                let fallback = Box::pin(self.generate_native_with_streaming_retry(request, false)).await?;
                 let completed = LLMStreamEvent::Completed { response: Box::new(fallback) };
                 let stream = try_stream! {
                     for event in completed.into_normalized() {
@@ -448,7 +503,7 @@ impl MergeGatewayProvider {
                     "Merge Gateway route is not priced for service_tier; retrying once without it"
                 );
                 request.service_tier = None;
-                return Box::pin(self.stream_native_normalized(request)).await;
+                return Box::pin(self.stream_native_normalized_inner(request, allow_non_streaming_fallback)).await;
             }
             return Err(merge_request_error(status, &body));
         }
@@ -1142,12 +1197,15 @@ impl LLMProvider for MergeGatewayProvider {
         true
     }
 
-    fn supports_non_streaming(&self, _model: &str) -> bool {
+    fn supports_non_streaming(&self, model: &str) -> bool {
         // The native `/responses` surface services non-streaming generation on
-        // every route, and the harness's stream-timeout retry falls back to
-        // non-streaming only when this capability is advertised. Pin it here so
-        // the fallback cannot silently disappear with a trait-default change.
-        true
+        // most routes, and the harness's stream-timeout retry falls back to
+        // non-streaming only when this capability is advertised. Streaming-only
+        // routes (e.g. `zai/`) reject non-streaming with `streaming_only`, so
+        // they must not advertise the fallback: `collect_single_response` then
+        // uses the streaming transport directly and the timeout retry cannot
+        // re-hit the known-failing mode.
+        !is_streaming_only_model(model)
     }
 
     fn supports_structured_output(&self, _model: &str) -> bool {

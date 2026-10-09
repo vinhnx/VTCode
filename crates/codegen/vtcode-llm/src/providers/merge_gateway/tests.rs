@@ -31,14 +31,46 @@ fn sse_data(data: Value) -> String {
 fn non_streaming_capability_is_pinned_for_stream_timeout_fallback() {
     // The harness's stream-timeout retry falls back to non-streaming only
     // when this capability is advertised; losing it silently re-streams
-    // every retry into the first-token timeout watchdog.
+    // every retry into the first-token timeout watchdog. Streaming-only
+    // routes (`zai/`) are the intentional exception: they reject
+    // non-streaming with `streaming_only`, so advertising the fallback would
+    // re-hit the known-failing mode.
     let provider = test_provider("http://127.0.0.1:1");
     for model in models::merge_gateway::SUPPORTED_MODELS {
-        assert!(
-            LLMProvider::supports_non_streaming(&provider, model),
-            "route {model} must advertise non-streaming fallback capability"
-        );
+        if is_streaming_only_model(model) {
+            assert!(
+                !LLMProvider::supports_non_streaming(&provider, model),
+                "streaming-only route {model} must not advertise non-streaming"
+            );
+        } else {
+            assert!(
+                LLMProvider::supports_non_streaming(&provider, model),
+                "route {model} must advertise non-streaming fallback capability"
+            );
+        }
     }
+}
+
+#[test]
+fn streaming_only_detection_matches_gateway_body() {
+    let body = r#"{"error":{"type":"provider_error","message":"Only streaming requests are supported. Set stream to true.","code":"streaming_only","param":"stream","source":"provider","provider":"zai"}}"#;
+    assert!(is_streaming_only_rejection(StatusCode::BAD_REQUEST, body));
+    assert!(is_streaming_only_rejection(StatusCode::UNPROCESSABLE_ENTITY, body));
+    assert!(!is_streaming_only_rejection(StatusCode::BAD_REQUEST, r#"{"error":{"code":"invalid_parameter"}}"#));
+    assert!(!is_streaming_only_rejection(StatusCode::INTERNAL_SERVER_ERROR, body));
+    assert!(!is_streaming_only_rejection(StatusCode::BAD_REQUEST, ""));
+    // Disjoint from the other classifiers.
+    assert!(!is_capability_unavailable(StatusCode::BAD_REQUEST, body));
+    assert!(!is_merge_tier_pricing_rejection(StatusCode::BAD_REQUEST, body));
+}
+
+#[test]
+fn streaming_only_model_matches_zai_prefix() {
+    assert!(is_streaming_only_model(models::merge_gateway::ZAI_GLM_5_3_FLASH));
+    assert!(is_streaming_only_model(models::merge_gateway::ZAI_GLM_5_3_FLASHX));
+    assert!(is_streaming_only_model("zai/glm-future"));
+    assert!(!is_streaming_only_model(models::merge_gateway::OPENAI_GPT_6_1_SOL));
+    assert!(!is_streaming_only_model(models::merge_gateway::DEFAULT_ROUTING));
 }
 
 #[test]
@@ -364,6 +396,119 @@ async fn native_stream_retries_without_streaming_on_capability_unavailable() {
 
     // First attempt streams with tools; the retry keeps tools but drops streaming.
     assert_eq!(seen.lock().expect("mutex not poisoned").as_slice(), &[(true, true), (false, true)]);
+}
+
+#[tokio::test]
+async fn native_generate_retries_with_streaming_on_streaming_only() {
+    use std::sync::Mutex;
+
+    // `zai/` routes reject non-streaming `/responses` with 400
+    // `streaming_only`. `generate` must retry once via streaming and return
+    // the collected response instead of surfacing the transport mismatch.
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_for_mock = Arc::clone(&seen);
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(move |req: &wiremock::Request| {
+            let payload: Value = serde_json::from_slice(&req.body).expect("valid json body");
+            let streaming = payload.get("stream").and_then(Value::as_bool).unwrap_or(false);
+            seen_for_mock.lock().expect("mutex not poisoned").push(streaming);
+            if streaming {
+                let body = [sse(
+                    "response.completed",
+                    json!({
+                        "response": {
+                            "id": "resp_stream_fallback",
+                            "object": "response",
+                            "created_at": "2026-03-23T12:03:00Z",
+                            "model": "zai/glm-5.3-flash",
+                            "output": [{
+                                "type": "message",
+                                "id": "msg_1",
+                                "role": "assistant",
+                                "content": [{"type": "text", "text": "Hello"}],
+                                "finish_reason": "stop"
+                            }],
+                            "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+                        }
+                    }),
+                )]
+                .concat();
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_string(body)
+            } else {
+                ResponseTemplate::new(400).set_body_json(json!({
+                    "error": {
+                        "type": "provider_error",
+                        "message": "Only streaming requests are supported. Set stream to true.",
+                        "code": "streaming_only",
+                        "param": "stream",
+                        "source": "provider",
+                        "provider": "zai"
+                    }
+                }))
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let response = provider
+        .generate(LLMRequest {
+            messages: vec![Message::user("hello".to_string())].into(),
+            model: models::merge_gateway::ZAI_GLM_5_3_FLASH.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("streaming-only retry should succeed");
+    assert_eq!(response.content.as_deref(), Some("Hello"));
+    assert_eq!(seen.lock().expect("mutex not poisoned").as_slice(), &[false, true]);
+}
+
+#[tokio::test]
+async fn native_stream_does_not_downgrade_streaming_only_routes() {
+    // A `capability_unavailable` streaming failure on a streaming-only route
+    // must surface directly: downgrading to non-streaming is known to fail
+    // with `streaming_only`, so the transport must not ping-pong.
+    let server = MockServer::start().await;
+    let provider = test_provider(&server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Model 'zai/glm-5.3-flash' has no vendor that supports the requested capabilities (['streaming_tools', 'tools']).",
+                "source": "gateway",
+                "code": "capability_unavailable",
+                "param": "model"
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let result = provider
+        .stream_normalized(LLMRequest {
+            messages: vec![Message::user("hello".to_string())].into(),
+            model: models::merge_gateway::ZAI_GLM_5_3_FLASH.to_string(),
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get weather".to_string(),
+                json!({"type": "object", "properties": {}}),
+            )])),
+            ..Default::default()
+        })
+        .await;
+    let err = match result {
+        Ok(_) => panic!("streaming-only capability failure must not downgrade"),
+        Err(err) => err,
+    };
+    assert!(err.to_string().contains("capability"), "got: {err}");
 }
 
 #[tokio::test]

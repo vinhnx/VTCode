@@ -54,6 +54,26 @@ pub(crate) fn is_capability_unavailable(status: StatusCode, body: &str) -> bool 
     lower.contains("capability_unavailable") || lower.contains("has no vendor that supports")
 }
 
+/// Whether a Merge Gateway route requires streaming. The `zai/` vendor
+/// rejects non-streaming `/responses` requests fail-closed with 400
+/// `streaming_only` ("Only streaming requests are supported").
+pub(crate) fn is_streaming_only_model(model: &str) -> bool {
+    model.trim().starts_with("zai/")
+}
+
+/// Detects Merge Gateway `streaming_only` rejections: the vendor behind the
+/// route only serves streaming requests. Disjoint from
+/// [`is_capability_unavailable`] (capability bodies name capabilities, never
+/// the stream mode) and [`is_merge_tier_pricing_rejection`] (tier bodies name
+/// the tier field).
+pub(crate) fn is_streaming_only_rejection(status: StatusCode, body: &str) -> bool {
+    if !matches!(status, StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY) {
+        return false;
+    }
+    let lower = body.to_ascii_lowercase();
+    lower.contains("streaming_only") || lower.contains("only streaming requests")
+}
+
 /// Whether a `capability_unavailable` rejection names `reasoning` in the
 /// requested capability set (e.g. `requested capabilities (['reasoning',
 /// 'tools'])`). Such a rejection blames the reasoning+tools combination, not
