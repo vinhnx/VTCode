@@ -50,9 +50,10 @@ resumable sessions.
     - [Main Contributor](#main-contributor)
     - [Core Contributors](#core-contributors)
     - [Contributors](#contributors)
-      - [Resources](#resources)
-      - [Share VT Code](#share-vt-code)
-      - [Sponsorship](#sponsorship)
+  - [Support the project](#support-the-project)
+    - [Resources](#resources)
+    - [Share VT Code](#share-vt-code)
+    - [Sponsorship](#sponsorship)
   - [License](#license)
 
 </details>
@@ -70,7 +71,7 @@ Pick your model and set your permissions; the runtime handles context management
 | **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, and editor bridges.              |
 | **Models**       | [Hosted or local providers](./docs/README.md#provider-index), chosen per task.             |
 
-The sections below follow that arc: install, configure, run a first task, then go deeper.
+The sections below walk through install, configure, first task, then deeper topics.
 
 ## Quick start
 
@@ -153,8 +154,8 @@ Scopes and report options: [explanation usage](./docs/user-guide/commands.md#exe
 
 ### Headless
 
-Run tasks without the TUI: `ask` for a tool-free answer, `exec` for a tool-enabled coding task, and `review` for
-uncommitted changes:
+Three commands cover automation: `ask` for a tool-free answer, `exec` for a tool-enabled coding task, and `review`
+for uncommitted changes:
 
 ```bash
 vtcode ask "explain Rc vs Arc"    # one-shot answer, no session, no tools
@@ -184,7 +185,7 @@ vtcode schedule create --name "weekly-dep-audit" \
 
 ### Sessions
 
-Resume or inspect earlier work from the same commands:
+Resume or inspect earlier work:
 
 ```bash
 # Resume the most recent interactive session
@@ -276,8 +277,8 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community
 
-Thanks to everyone who builds, tests, and improves VT Code. For partnerships and collaboration, reach the maintainer
-at `vinhnguyen2308 [at] gmail [dot] com`; bugs and feature requests belong in
+Thanks to everyone who builds, tests, and improves VT Code. For partnerships, reach the maintainer at
+`vinhnguyen2308 [at] gmail [dot] com`; bugs and feature requests belong in
 [GitHub Issues](https://github.com/vinhnx/VTCode/issues).
 
 <details open>
@@ -337,6 +338,8 @@ Want to see your avatar here? Every bit counts: one-line fixes, bug reports, and
 [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
 [Share feedback](https://github.com/vinhnx/VTCode/discussions) ·
 [Star the repo](https://github.com/vinhnx/VTCode/stargazers) · [Contribute](./docs/CONTRIBUTING.md)
+
+## Support the project
 
 #### Resources
 
