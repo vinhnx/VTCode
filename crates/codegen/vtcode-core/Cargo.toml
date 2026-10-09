@@ -139,6 +139,8 @@ jsonschema = "0.58"
 uuid = { workspace = true, features = ["v4", "serde"] }
 which = "8.0.2"
 textwrap = "0.16"
+# Phase 1 pilot: DDG HTML parsing in web_search only (pinned; revisit on 0.1+)
+astral-html = "=0.0.3"
 rustc-hash = { workspace = true }
 arc-swap = "1.9"
 linkme = { workspace = true }

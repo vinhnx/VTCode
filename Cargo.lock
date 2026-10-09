@@ -387,6 +387,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "astral-html"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff63706e5b5a70969c3c4b0a759634304fe219dcbbf9364e7320c1441def346e"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8604,6 +8613,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "assert_fs",
+ "astral-html",
  "async-process",
  "async-stream",
  "async-trait",
