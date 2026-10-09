@@ -175,30 +175,19 @@ pub fn truncate_path_middle(path: &str, max_len: usize) -> String {
         return "…".to_string();
     }
 
-    // Try to find a good break point at a path separator
+    // Work in char offsets throughout: byte offsets from `rfind`/`find` would
+    // overshoot the budget on multi-byte paths.
+    let chars: Vec<char> = path.chars().collect();
     let head_budget = max_len / 2;
     let tail_budget = max_len.saturating_sub(head_budget + 1);
 
-    // Find the last '/' in the head portion
-    // Collect chars directly into a String — `String: FromIterator<char>`,
-    // so the intermediate `Vec<char>` of the prior two-step collect is redundant.
-    let head_str: String = path.chars().take(head_budget).collect();
-    let head_break = head_str.rfind('/').unwrap_or(head_budget);
+    let head_break = chars.iter().take(head_budget).rposition(|c| *c == '/').unwrap_or(head_budget);
 
-    // Find the first '/' in the tail portion (from the end)
-    let tail_chars: Vec<char> = path.chars().rev().take(tail_budget).collect();
-    let tail_str: String = tail_chars.iter().rev().collect();
-    let tail_break_from_end = tail_str.find('/').map(|pos| tail_str.len() - pos).unwrap_or(tail_budget);
+    let tail: Vec<char> = chars.iter().rev().take(tail_budget).rev().copied().collect();
+    let tail_len = tail.iter().position(|c| *c == '/').map_or(tail_budget, |pos| tail_budget - pos);
 
-    let head: String = path.chars().take(head_break).collect();
-    let tail: String = path
-        .chars()
-        .rev()
-        .take(tail_break_from_end)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
+    let head: String = chars.iter().take(head_break).collect();
+    let tail: String = tail.iter().skip(tail_budget - tail_len).collect();
 
     format!("{head}…{tail}")
 }
@@ -1190,4 +1179,15 @@ mod tests {
         assert_eq!(truncate_path_middle("foo/bar/baz/qux", 12), "foo…/qux");
         assert_eq!(truncate_path_middle("abc", 0), "");
     }
+
+    #[test]
+    fn truncate_path_middle_counts_chars_not_bytes() {
+        // Found by generative_tests: byte offsets from rfind/find overshot the budget.
+        let out = truncate_path_middle("日本/日本語/日本語日本語/xyz", 6);
+        assert!(out.chars().count() <= 6, "{out:?}");
+        assert_eq!(truncate_path_middle("日本/日本語/xyz", 8), "日本…xyz");
+    }
 }
+
+#[cfg(test)]
+mod generative_tests;

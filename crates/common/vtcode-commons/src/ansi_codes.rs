@@ -617,7 +617,7 @@ pub fn ends_with_ansi(text: &str) -> bool {
 #[inline]
 #[must_use]
 pub fn display_width(text: &str) -> usize {
-    crate::ansi::strip_ansi(text).len()
+    crate::preview::display_width(&crate::ansi::strip_ansi(text))
 }
 
 pub fn pad_to_width(text: &str, width: usize, pad_char: char) -> String {
@@ -632,12 +632,11 @@ pub fn pad_to_width(text: &str, width: usize, pad_char: char) -> String {
 
 pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str) -> String {
     let stripped = crate::ansi::strip_ansi(text);
-    if stripped.len() <= max_width {
+    if crate::preview::display_width(&stripped) <= max_width {
         return text.to_string();
     }
 
-    let truncate_at = max_width.saturating_sub(ellipsis.len());
-    let truncated_plain: String = stripped.chars().take(truncate_at).collect();
+    let truncated_plain = crate::preview::truncate_with_ellipsis(&stripped, max_width, ellipsis);
 
     if starts_with_ansi(text) {
         let mut ansi_prefix = String::new();
@@ -650,9 +649,9 @@ pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str) -> String
                 break;
             }
         }
-        format!("{ansi_prefix}{truncated_plain}{ellipsis}{RESET}")
+        format!("{ansi_prefix}{truncated_plain}{RESET}")
     } else {
-        format!("{truncated_plain}{ellipsis}")
+        truncated_plain
     }
 }
 
@@ -785,5 +784,14 @@ mod tests {
     fn iterm2_profile_switch_uses_proprietary_sequence() {
         assert_eq!(set_iterm2_profile("VT Code"), "\x1b]1337;SetProfile=VT Code\x07");
         assert_eq!(set_iterm2_profile("Default"), "\x1b]1337;SetProfile=Default\x07");
+    }
+
+    #[test]
+    fn width_helpers_measure_cells_not_bytes_and_ignore_ansi() {
+        assert_eq!(display_width("\x1b[1m日本\x1b[0m"), 4);
+        // Two chars (4 bytes) fit a 3-cell budget; bytes would have truncated them.
+        assert_eq!(truncate_to_width("éé", 3, "…"), "éé");
+        assert_eq!(truncate_to_width("日本語", 5, "…"), "日本…");
+        assert_eq!(truncate_to_width("\x1b[1mabcdef\x1b[0m", 4, "…"), format!("\x1b[1mabc…{RESET}"));
     }
 }

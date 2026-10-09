@@ -17,6 +17,8 @@ Stable-toolchain generative tests (no nightly required) live next to the code:
 
 - `vtcode-diff`: `generative_small_docs_round_trip_across_algorithms_and_unified` cross-checks `Myers` vs `Patience` vs
   `Histogram` plus a unified format/parse round-trip on tiny swarmed inputs.
+- `vtcode-commons`: `formatting/generative_tests.rs` checks the truncation and wrapping helpers against char-based
+  oracles on swarmed ASCII + multi-byte alphabets (found a byte-vs-char overshoot in `truncate_path_middle`).
 
 ## Oracles
 

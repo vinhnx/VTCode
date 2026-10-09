@@ -209,16 +209,7 @@ fn truncate_header_text(text: &str, max_chars: usize) -> String {
     if max_chars == 0 {
         return String::new();
     }
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-
-    let mut out = String::new();
-    for c in text.chars().take(max_chars.saturating_sub(1)) {
-        out.push(c);
-    }
-    out.push('…');
-    out
+    vtcode_commons::formatting::truncate_within(text, max_chars, "…")
 }
 
 fn is_home_directory(workspace_path: &Path) -> bool {

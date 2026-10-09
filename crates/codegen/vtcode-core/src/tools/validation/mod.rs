@@ -162,14 +162,7 @@ pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
 }
 
 fn truncate_for_error(raw: &str, limit: usize) -> String {
-    if raw.len() <= limit {
-        return raw.to_string();
-    }
-    let mut end = limit;
-    while !raw.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}…", &raw[..end])
+    vtcode_commons::formatting::truncate_byte_budget(raw, limit, "…")
 }
 
 fn forbidden_properties_from_not_schema(schema: &Value) -> Vec<String> {
