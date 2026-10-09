@@ -616,7 +616,7 @@ impl ConfigManager {
     }
 
     fn disabled_layer_from_error(source: ConfigLayerSource, error: anyhow::Error) -> ConfigLayerEntry {
-        let reason = if error.to_string().contains("parse") {
+        let reason = if error.is::<toml::de::Error>() {
             LayerDisabledReason::ParseError
         } else {
             LayerDisabledReason::LoadError
@@ -1736,6 +1736,27 @@ max_consecutive_denials = 3
             &ConfigLayerSource::Workspace { file: PathBuf::from("/workspace/vtcode.toml") },
             &error
         ));
+    }
+
+    #[test]
+    fn disabled_layer_reason_tracks_concrete_error_type() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let parse_path = temp_dir.path().join("invalid.toml");
+        fs::write(&parse_path, "key = [").expect("write invalid TOML");
+        let parse_error = ConfigManager::load_toml_from_file(&parse_path).expect_err("invalid TOML should fail");
+        let parse_layer =
+            ConfigManager::disabled_layer_from_error(ConfigLayerSource::Project { file: parse_path }, parse_error);
+
+        assert_eq!(parse_layer.disabled_reason, Some(LayerDisabledReason::ParseError));
+
+        let read_path = temp_dir.path().join("parse");
+        fs::create_dir(&read_path).expect("create directory at config path");
+        let read_error = ConfigManager::load_toml_from_file(&read_path).expect_err("reading a directory should fail");
+        assert!(read_error.to_string().contains("parse"));
+        let read_layer =
+            ConfigManager::disabled_layer_from_error(ConfigLayerSource::Project { file: read_path }, read_error);
+
+        assert_eq!(read_layer.disabled_reason, Some(LayerDisabledReason::LoadError));
     }
 }
 
