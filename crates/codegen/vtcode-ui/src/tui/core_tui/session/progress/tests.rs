@@ -825,11 +825,14 @@ fn busy_bottom_line_hides_pty_hint_while_header_keeps_discovery() {
     assert!(pty_text.contains("topic/stable*"), "{pty_text}");
     assert!(pty_hits.is_empty(), "no bottom-line click target while busy: {pty_hits:?}");
 
-    // The transcript row still owns the phase.
+    // The transcript row still owns the phase plus the inline PTY hint.
     let area = Rect::new(0, 0, 80, 1);
     let mut buf = Buffer::empty(area);
     session.render_progress(area, &mut buf);
-    assert!(rendered_text(&buf).contains("Running tools"), "progress row must own the phase");
+    let row_text = rendered_text(&buf);
+    assert!(row_text.contains("Running tools"), "progress row must own the phase: {row_text}");
+    assert!(row_text.contains("Ctrl+B"), "progress row must surface the inline PTY hint: {row_text}");
+    assert!(row_text.contains("background"), "progress row must explain background: {row_text}");
 
     // Narrow rows keep the no-overflow contract with no hint competing for
     // the fallback budget.
@@ -850,6 +853,65 @@ fn busy_bottom_line_hides_pty_hint_while_header_keeps_discovery() {
         .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
         .unwrap_or_default();
     assert!(!header_text.contains("Ctrl+B"), "header discovery must drop with the PTY: {header_text}");
+}
+
+#[test]
+fn progress_row_pty_hint_follows_pty_liveness_and_rebound_shortcut() {
+    use std::sync::atomic::AtomicUsize;
+
+    use crate::tui::core_tui::session::action::BindingStore;
+
+    fn row_text(session: &mut Session, width: u16) -> String {
+        let area = Rect::new(0, 0, width, 1);
+        let mut buf = Buffer::empty(area);
+        session.render_progress(area, &mut buf);
+        rendered_text(&buf)
+    }
+
+    // Loading without a foreground command: phase only, no background hint.
+    let mut session = Session::new(InlineTheme::default(), None, 20);
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::RunningTools,
+    }));
+    let row = row_text(&mut session, 80);
+    assert!(row.contains("Running tools"), "{row}");
+    assert!(!row.contains("Ctrl+B"), "no PTY, no background hint: {row}");
+    assert!(!row.contains("background"), "no PTY, no background hint: {row}");
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
+
+    // Foreground command starts under a new loading operation: the static
+    // inline suffix appears alongside the phase.
+    let pty = Arc::new(AtomicUsize::new(1));
+    session.active_pty_sessions = Some(Arc::clone(&pty));
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::RunningTools,
+    }));
+    let row = row_text(&mut session, 80);
+    assert!(row.contains("Running tools"), "{row}");
+    assert!(row.contains("Ctrl+B"), "running PTY must surface the inline hint: {row}");
+    assert!(row.contains("background"), "running PTY must explain background: {row}");
+
+    // Rebound shortcut flows through instead of a hardcoded `Ctrl+B`.
+    let mut overlay = hashbrown::HashMap::new();
+    overlay.insert("background_operation".to_owned(), vec!["ctrl+x".to_owned()]);
+    session.set_bindings(BindingStore::new(overlay));
+    let row = row_text(&mut session, 80);
+    assert!(row.contains("Ctrl+X"), "row must use the rebound shortcut: {row}");
+    assert!(!row.contains("Ctrl+B"), "row must not keep the stale shortcut: {row}");
+
+    // Narrow rows keep the phase label even with the suffix competing.
+    let narrow = row_text(&mut session, 20);
+    assert!(narrow.contains("Running"), "phase must survive narrow truncation: {narrow}");
+
+    // PTY ends while loading continues: suffix drops, phase stays.
+    pty.store(0, std::sync::atomic::Ordering::Relaxed);
+    let row = row_text(&mut session, 80);
+    assert!(row.contains("Running tools"), "{row}");
+    assert!(!row.contains("background"), "hint must drop with the PTY: {row}");
 }
 
 #[test]

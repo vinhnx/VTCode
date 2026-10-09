@@ -134,11 +134,18 @@ impl Session {
         // Live background count rides the transcript loading row while it owns
         // foreground progress, so the bottom line stays reserved for configured
         // context. Static dim text (no shimmer) keeps the row width stable:
-        // only task start/finish changes it, never per-second ticks. The
-        // combined line truncates head-first, so the phase label wins on
-        // narrow rows and the header badge remains the guaranteed home.
+        // only task start/finish changes it, never per-second ticks. A live
+        // foreground command appends the same kind of static suffix
+        // (`· Ctrl+B background`, rebound-aware) so the one-click entry point
+        // stays visible inline while the command runs. The combined line
+        // truncates tail-first, so the phase label wins on narrow rows while
+        // the header badge and suggestions remain the guaranteed homes.
         if self.has_background_activity() {
             let suffix = format!(" · {} bg", self.background_activity_count);
+            spans.push(Span::styled(suffix, style));
+        }
+        if self.has_active_foreground_pty() {
+            let suffix = format!(" · {} background", self.background_shortcut_label());
             spans.push(Span::styled(suffix, style));
         }
         let line =

@@ -29,8 +29,10 @@ apply, including switching modes, changing the command, and hiding the clock. Mo
 keep their slots across loading phases. Narrow layouts retain mode first, then right-side content, context, and optional
 hints; each region is truncated separately. A bounded loading fallback appears after context only when space remains.
 Background work leaves the bottom line while anything is busy (loading row, foreground command, or in-flight turn):
-the live count rides the transcript loading row (`· N bg`, static, no shimmer) and a short header badge
-(`• N bg` live, `✓ N done` retained) stays always visible. The `Running N background tasks...` copy and drawer hint
+the live count rides the transcript loading row (`· N bg`, static, no shimmer) and a running foreground command
+appends `· Ctrl+B background` there (static, rebound-aware) so the one-click entry point stays visible inline.
+A short header badge (`• N bg` live, `✓ N done` retained) stays always visible. The `Running N background tasks...`
+copy and drawer hint
 return to the bottom line only once everything is idle, so the composer line never blinks as turn phases, the progress
 fallback budget, or the foreground-command counter toggle underneath. There is no bottom-line exception for the
 foreground command: the `Ctrl+B background` hint never appears after the branch status while busy. Background a

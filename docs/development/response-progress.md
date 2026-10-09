@@ -16,7 +16,9 @@ cannot push out the mode or move the right-side content. When the transcript row
 24-column optional footer slot after context. Copy notifications and shell hints retain
 their footer presentation when space permits. Background activity stays out of the bottom line while anything is
 busy (transcript loading row, foreground command, or in-flight turn): the transcript loading row carries a static
-`· N bg` suffix and the header carries a short `• N bg` / `✓ N done` badge, so the composer line never hides/shows
+`· N bg` suffix — plus a static `· Ctrl+B background` suffix (rebound-aware) while a foreground command runs, so the
+one-click entry point stays visible inline — and the header carries a short `• N bg` / `✓ N done` badge, so the
+composer line never hides/shows
 as turn status, the fallback budget, or the foreground-command counter toggles. The `Running N background tasks...`
 copy and drawer hint return to the bottom line (clickable, width-deterministic) only once everything is idle. The
 foreground-PTY `Ctrl+B background` hint never appears in the bottom line while busy; background a running command
