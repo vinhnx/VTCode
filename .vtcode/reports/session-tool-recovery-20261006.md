@@ -70,3 +70,28 @@ cargo nextest run --locked -p vtcode-core -p vtcode --no-fail-fast --status-leve
 ```
 
 Final `./scripts/check-dev.sh --quiet` passed formatting, all-targets/all-features Clippy with warnings denied, compilation, and shell lint. Final `env RUSTFLAGS="-D warnings" cargo check --locked -p vtcode -p vtcode-core` passed. Changed Markdown and diff checks passed. Windows/non-POSIX execution and a live-provider session replay remain outside this validation scope.
+
+## Revalidation, 2026-10-09
+
+Reconstructed the archive and checkpoint again against checkout `527717af1` (0.175.1).
+The production fix is already present in `6b4886dd9`; no additional production changes or duplicate regressions were needed.
+Reviewed subsequent diffs in the read guards, patch recovery, verifier classification, execution kernel/facade, and launch preparation. No reintroduction of the reported failure was found.
+
+The exact checkpoint evidence remains `.vtcode/checkpoints/turn_1620.json`, conversation indices 230 and 233: the total fuse tripped at 7/6 with a consecutive streak of only 2/3. Events 766 and 814 used filtering pipelines, while event 693 used a status-masking semicolon/echo tail. The checker reported real README lint failures; safe pipeline handling must preserve those failures and grant the bounded repair window, rather than falsely clear verification.
+
+The patch at event 898 supplied rows absent from the file. Its atomic context rejection at 900 was correct. Events 908/913 prove fresh-read-to-corrected-patch recovery, and 919/930 prove an edit from retained context after a read-cap rejection. The session later reports scoped verification and commits the README work as `b85747827` (event 1350). The quoted stop was an intermediate blocked pass, not the final state of the archive.
+
+Fresh checks:
+
+- Focused locked nextest: **32 passed, 7,691 excluded, zero failures**. Covers path caps, intermittent versus consecutive rejections, stale cached context, recovery-read reservation at both caps, checker/filter exit status, and successful loop continuation.
+- Broader locked nextest: **1,246 passed, 6,477 excluded, zero failures**. Covers tool outcomes, tool intent, command arguments/policy, registry/routing, apply_patch, and compiled prompt presence/budget tests.
+- `./scripts/check-dev.sh --quiet`: passed formatting, all-targets/all-features Clippy with warnings denied, compilation, and shell lint. Tests ran separately above.
+- `env RUSTFLAGS="-D warnings" cargo check --locked -p vtcode -p vtcode-core`: passed.
+- Pinned markdownlint-cli2 0.23.3 on this report and `git diff --check`: passed.
+
+```sh
+cargo nextest run --locked -p vtcode -p vtcode-core --no-fail-fast --status-level fail -E 'test(intermittent_path_cap) | test(filtered_verifier) | test(piped_verifier) | test(patch_context_mismatch) | test(patch_recovery) | test(repeated_paginated_sed) | test(blocked_tool) | test(verifier_pipeline)'
+cargo nextest run --locked -p vtcode -p vtcode-core --no-fail-fast --status-level fail -E 'test(tool_outcomes) | test(tools::tool_intent) | test(tools::command_args) | test(tools::command_policy) | test(tools::registry) | test(apply_patch) | test(prompts::system) | test(prompts::runtime_guidance) | test(session_tool_catalog) | test(piped_verifier)'
+```
+
+Limits, permissions, containment, exact patch matching, and terminal-success requirements are unchanged. The archived executable's deployment SHA remains unknown. These checks reproduce the tooling/runloop boundaries locally; they do not establish live-provider convergence or Windows/non-POSIX behavior.
