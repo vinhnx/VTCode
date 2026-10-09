@@ -106,6 +106,33 @@ impl TestContext {
 
 mod run_tool_call;
 
+#[test]
+fn cancellation_tokens_share_caller_handles() {
+    let state = Arc::new(CtrlCState::new());
+    let notify = Arc::new(Notify::new());
+    let tokens = CancellationTokens::new(&state, &notify);
+
+    assert!(Arc::ptr_eq(&tokens.state, &state));
+    assert!(Arc::ptr_eq(&tokens.notify, &notify));
+    assert!(!tokens.state.is_cancel_requested());
+
+    state.request_local_cancel();
+    assert!(tokens.state.is_cancel_requested());
+}
+
+#[tokio::test]
+async fn execute_tool_with_timeout_honors_cancel_requested_before_start() {
+    let registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    ctrl_c_state.request_local_cancel();
+
+    let result =
+        execute_tool_with_timeout(&registry, "test_tool", json!({}), &ctrl_c_state, &ctrl_c_notify, None, 0).await;
+
+    assert!(matches!(result, ToolExecutionStatus::Cancelled), "got {result:?}");
+}
+
 #[tokio::test]
 async fn test_execute_tool_with_timeout() {
     // Setup test dependencies

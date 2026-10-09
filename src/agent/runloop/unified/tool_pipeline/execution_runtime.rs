@@ -20,7 +20,7 @@ use crate::agent::runloop::unified::tool_reads::spool_chunk_read_path;
 
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
-use super::{CancellationTokens, streams_pty_output};
+use super::streams_pty_output;
 
 use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts};
 use super::execution::execute_tool_with_timeout_ref_prevalidated;
@@ -166,49 +166,6 @@ pub(super) async fn execute_with_cache_and_streaming(
     safety_prevalidated: bool,
     show_live_pty_preview: bool,
 ) -> RuntimeToolExecution {
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
-    execute_with_cache_and_streaming_inner(
-        registry,
-        tool_result_cache,
-        name,
-        tool_item_id,
-        tool_call_id,
-        args_val,
-        &tokens,
-        handle,
-        harness_emitter,
-        vt_cfg,
-        max_tool_retries,
-        exec_settlement_mode,
-        safety_prevalidated,
-        show_live_pty_preview,
-    )
-    .await
-}
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)] // internal pipeline function, all params needed
-async fn execute_with_cache_and_streaming_inner(
-    registry: &mut ToolRegistry,
-    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
-    name: &str,
-    tool_item_id: &str,
-    tool_call_id: &str,
-    args_val: &Value,
-    tokens: &CancellationTokens,
-    handle: &vtcode_ui::tui::app::InlineHandle,
-    harness_emitter: Option<HarnessEventEmitter>,
-    vt_cfg: Option<&VTCodeConfig>,
-    max_tool_retries: usize,
-    exec_settlement_mode: ExecSettlementMode,
-    safety_prevalidated: bool,
-    show_live_pty_preview: bool,
-) -> RuntimeToolExecution {
     let is_cacheable_tool = is_tool_cacheable(name, args_val) && !registry.has_patch_recovery_read(name, args_val);
     let cache_target = cache_target_path(name, args_val);
 
@@ -288,8 +245,8 @@ async fn execute_with_cache_and_streaming_inner(
         registry,
         name,
         args_val,
-        &tokens.state,
-        &tokens.notify,
+        ctrl_c_state,
+        ctrl_c_notify,
         progress_reporter.as_ref(),
         max_tool_retries,
         exec_settlement_mode,

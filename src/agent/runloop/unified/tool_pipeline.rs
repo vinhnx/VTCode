@@ -18,6 +18,15 @@ pub(super) struct CancellationTokens {
     pub notify: Arc<Notify>,
 }
 
+impl CancellationTokens {
+    pub(super) fn new(state: &Arc<CtrlCState>, notify: &Arc<Notify>) -> Self {
+        Self {
+            state: Arc::clone(state),
+            notify: Arc::clone(notify),
+        }
+    }
+}
+
 mod execution;
 pub(crate) mod execution_attempts;
 mod execution_events;

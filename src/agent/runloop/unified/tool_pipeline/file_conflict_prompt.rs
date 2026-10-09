@@ -21,7 +21,6 @@ use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
-use super::CancellationTokens;
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_runtime::{PendingFileConflictStatus, RuntimeToolExecution};
 use super::status::ToolExecutionStatus;
@@ -44,6 +43,11 @@ enum ConflictResolution {
     Proceed,
 }
 
+/// Maximum number of file conflict resolution attempts before aborting.
+/// This prevents an infinite loop when the file keeps changing on disk
+/// between re-executions (e.g., from a file watcher or formatter).
+const MAX_CONFLICT_RESOLUTION_ATTEMPTS: u32 = 10;
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Intentional compatibility, platform, or test-only suppression."
@@ -57,62 +61,9 @@ pub(super) async fn resolve_file_conflict_status<S>(
     tool_item_id: &str,
     tool_call_id: &str,
     args_val: &Value,
-    execution: RuntimeToolExecution,
+    mut execution: RuntimeToolExecution,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    harness_emitter: Option<HarnessEventEmitter>,
-    vt_cfg: Option<&VTCodeConfig>,
-    max_tool_retries: usize,
-    safety_prevalidated: bool,
-    show_live_pty_preview: bool,
-) -> Result<ToolExecutionStatus>
-where
-    S: UiSession + ?Sized,
-{
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
-    resolve_file_conflict_status_inner(
-        registry,
-        tool_result_cache,
-        session,
-        handle,
-        name,
-        tool_item_id,
-        tool_call_id,
-        args_val,
-        execution,
-        &tokens,
-        harness_emitter,
-        vt_cfg,
-        max_tool_retries,
-        safety_prevalidated,
-        show_live_pty_preview,
-    )
-    .await
-}
-
-/// Maximum number of file conflict resolution attempts before aborting.
-/// This prevents an infinite loop when the file keeps changing on disk
-/// between re-executions (e.g., from a file watcher or formatter).
-const MAX_CONFLICT_RESOLUTION_ATTEMPTS: u32 = 10;
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)] // internal pipeline function, all params needed
-async fn resolve_file_conflict_status_inner<S>(
-    registry: &mut ToolRegistry,
-    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
-    session: &mut S,
-    handle: &InlineHandle,
-    name: &str,
-    tool_item_id: &str,
-    tool_call_id: &str,
-    args_val: &Value,
-    mut execution: RuntimeToolExecution,
-    tokens: &CancellationTokens,
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
@@ -132,8 +83,8 @@ where
         match prompt_for_conflict_resolution(
             session,
             handle,
-            &tokens.state,
-            &tokens.notify,
+            ctrl_c_state,
+            ctrl_c_notify,
             &conflict,
             vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
         )
@@ -174,8 +125,8 @@ where
                     tool_item_id,
                     tool_call_id,
                     &override_args,
-                    &tokens.state,
-                    &tokens.notify,
+                    ctrl_c_state,
+                    ctrl_c_notify,
                     handle,
                     harness_emitter.clone(),
                     vt_cfg,
