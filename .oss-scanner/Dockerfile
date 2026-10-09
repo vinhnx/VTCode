@@ -25,12 +25,12 @@ WORKDIR /src
 # Pre-fetch all crates so offline audit can build/test without network.
 RUN cargo fetch --locked
 
-# Build as maintainers build it, with debug info (-g) and frame pointers.
+# Build as maintainers build it, with debug info and frame pointers (cargo-style -C flags).
 # A step that fails here fails the build and notifies primary_contact.
-RUN RUSTFLAGS="-g -fno-omit-frame-pointer" cargo build --locked --workspace -j"$(nproc)"
+RUN RUSTFLAGS="-C debuginfo=2 -C force-frame-pointers=yes" cargo build --locked --workspace -j"$(nproc)"
 
 # Compile tests so agents can run them offline. Do not let failures abort the build.
-RUN RUSTFLAGS="-g -fno-omit-frame-pointer" cargo test --locked --workspace --no-run -j"$(nproc)" || echo "WARNING: cargo test --no-run reported failures"
+RUN RUSTFLAGS="-C debuginfo=2 -C force-frame-pointers=yes" cargo test --locked --workspace --no-run -j"$(nproc)" || echo "WARNING: cargo test --no-run reported failures"
 
 # Run a cheap subset to prove the image works. Leave full binaries/test drivers in place.
 RUN (cargo test --locked -p vtcode-commons -j"$(nproc)" || echo "WARNING: cheap tests reported failures")
