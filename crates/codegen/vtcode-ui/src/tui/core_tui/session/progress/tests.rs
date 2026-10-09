@@ -437,7 +437,7 @@ fn another_submission_during_preparation_does_not_replace_active_progress() {
         Some(InlineEvent::Submit(_))
     ));
     assert_eq!(session.progress.active.unwrap().operation, operation);
-    assert_eq!(session.progress.text().as_deref(), Some("Saving checkpoint · 0s"));
+    assert_eq!(session.progress.text().as_deref(), Some("Saving checkpoint"));
     session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
     assert!(!session.progress.is_active());
 }
@@ -549,7 +549,7 @@ fn progress_rejects_stale_updates_and_late_restart() {
     }));
     assert!(!progress.apply(ProgressUpdate::Phase { operation: old, phase: ProgressPhase::RunningTools }));
     assert!(!progress.apply(ProgressUpdate::Finish { operation: old }));
-    assert_eq!(progress.text().as_deref(), Some("Saving checkpoint · 0s"));
+    assert_eq!(progress.text().as_deref(), Some("Saving checkpoint"));
     assert!(progress.apply(ProgressUpdate::Finish { operation: new }));
     assert!(!progress.apply(ProgressUpdate::Begin { operation: old, phase: ProgressPhase::Retrying }));
     assert!(!progress.apply(ProgressUpdate::Phase { operation: new, phase: ProgressPhase::Processing }));

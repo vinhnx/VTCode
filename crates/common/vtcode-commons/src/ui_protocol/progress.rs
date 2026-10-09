@@ -63,7 +63,11 @@ impl ProgressPhase {
     }
 
     pub fn format(self, elapsed_secs: u64) -> String {
-        format!("{} · {elapsed_secs}s", self.label())
+        if elapsed_secs == 0 {
+            self.label().to_string()
+        } else {
+            format!("{} · {elapsed_secs}s", self.label())
+        }
     }
 }
 
