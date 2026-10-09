@@ -1010,8 +1010,13 @@ mod tests {
         assert!(reparsed.mcp.allowlist.providers.contains_key("provider.with.dot"));
     }
 
-    #[test]
-    fn missing_service_tier_cycle_creates_value() {
+    /// Drive one `CycleNext` on `provider.openai.service_tier` from `preset` and
+    /// return the resulting tier. One helper covers the whole ring
+    /// (missing→flex→priority→ultrafast→flex) so each test only names its
+    /// fixture and oracle.
+    fn cycle_service_tier_from(
+        preset: Option<vtcode_config::OpenAIServiceTier>,
+    ) -> Option<vtcode_config::OpenAIServiceTier> {
         let mut state = SettingsPaletteState {
             workspace: PathBuf::from("."),
             source_path: PathBuf::from("vtcode.toml"),
@@ -1023,59 +1028,43 @@ mod tests {
             pending_edit_path: None,
             status: None,
         };
+        state.draft.provider.openai.service_tier = preset;
 
         mutate_draft(&mut state, |draft| {
             apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
         })
-        .expect("service tier should be inserted");
+        .expect("service tier should advance");
 
-        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Flex));
+        state.draft.provider.openai.service_tier
+    }
+
+    #[test]
+    fn missing_service_tier_cycle_creates_value() {
+        assert_eq!(cycle_service_tier_from(None), Some(vtcode_config::OpenAIServiceTier::Flex));
     }
 
     #[test]
     fn service_tier_cycle_advances_from_flex_to_priority() {
-        let mut state = SettingsPaletteState {
-            workspace: PathBuf::from("."),
-            source_path: PathBuf::from("vtcode.toml"),
-            source_label: None,
-            draft: VTCodeConfig::default(),
-            view_path: Some("provider.openai".to_string()),
-            last_selection: None,
-            selection_by_view: BTreeMap::new(),
-            pending_edit_path: None,
-            status: None,
-        };
-        state.draft.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Flex);
-
-        mutate_draft(&mut state, |draft| {
-            apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
-        })
-        .expect("service tier should advance");
-
-        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Priority));
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Flex)),
+            Some(vtcode_config::OpenAIServiceTier::Priority)
+        );
     }
 
     #[test]
     fn service_tier_cycle_advances_from_priority_to_ultrafast() {
-        let mut state = SettingsPaletteState {
-            workspace: PathBuf::from("."),
-            source_path: PathBuf::from("vtcode.toml"),
-            source_label: None,
-            draft: VTCodeConfig::default(),
-            view_path: Some("provider.openai".to_string()),
-            last_selection: None,
-            selection_by_view: BTreeMap::new(),
-            pending_edit_path: None,
-            status: None,
-        };
-        state.draft.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Priority);
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Priority)),
+            Some(vtcode_config::OpenAIServiceTier::Ultrafast)
+        );
+    }
 
-        mutate_draft(&mut state, |draft| {
-            apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
-        })
-        .expect("service tier should advance");
-
-        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Ultrafast));
+    #[test]
+    fn service_tier_cycle_wraps_from_ultrafast_to_flex() {
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Ultrafast)),
+            Some(vtcode_config::OpenAIServiceTier::Flex)
+        );
     }
 
     #[test]

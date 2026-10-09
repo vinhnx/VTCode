@@ -467,6 +467,72 @@ fn header_title_line_shows_model_context_window() {
 }
 
 #[test]
+fn header_title_line_shows_service_tier_when_configured() {
+    let mut session = fresh_session();
+    session.header_context.provider = format!("{}openai", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}gpt-6-astra", ui::HEADER_MODEL_PREFIX);
+    session.header_context.service_tier = Some(format!("{}ultrafast", ui::HEADER_SERVICE_TIER_PREFIX));
+
+    let summary = line_text(&session.header_title_line());
+    assert!(summary.contains("Ultrafast"), "tier should appear in title line, got: {summary}");
+
+    session.header_context.service_tier = Some(format!("{}priority", ui::HEADER_SERVICE_TIER_PREFIX));
+    let summary = line_text(&session.header_title_line());
+    assert!(summary.contains("Priority"), "tier label should follow configuration, got: {summary}");
+}
+
+#[test]
+fn header_title_line_omits_service_tier_when_unset() {
+    let mut session = fresh_session();
+    session.header_context.provider = format!("{}openai", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}gpt-6-astra", ui::HEADER_MODEL_PREFIX);
+    session.header_context.service_tier = None;
+
+    let summary = line_text(&session.header_title_line());
+    assert!(
+        !summary.contains("Ultrafast") && !summary.contains("Priority") && !summary.contains("Tier:"),
+        "unset tier must stay hidden, got: {summary}"
+    );
+}
+
+#[test]
+fn hidden_header_summary_shows_service_tier_on_top_right() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.provider = format!("{}openai", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}gpt-6-astra", ui::HEADER_MODEL_PREFIX);
+    session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+    session.header_context.service_tier = Some(format!("{}ultrafast", ui::HEADER_SERVICE_TIER_PREFIX));
+
+    let lines = session.header_lines();
+    assert_eq!(lines.len(), 1);
+
+    let summary = line_text(&lines[0]);
+    assert!(summary.contains("Ultrafast"), "tier should appear in top-right summary, got: {summary}");
+}
+
+#[test]
+fn hidden_header_summary_live_reloads_service_tier_changes() {
+    let mut session = fresh_session();
+    session.appearance.hide_header = true;
+    session.apply_transcript_width(VIEW_WIDTH);
+    session.header_context.provider = format!("{}openai", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model = format!("{}gpt-6-astra", ui::HEADER_MODEL_PREFIX);
+    session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+
+    let initial = header_line_text(&mut session);
+    assert!(!initial.contains("Ultrafast"));
+
+    let mut next_context = session.header_context.clone();
+    next_context.service_tier = Some(format!("{}ultrafast", ui::HEADER_SERVICE_TIER_PREFIX));
+    session.handle_command(InlineCommand::SetHeaderContext { context: Box::new(next_context) });
+
+    let updated = header_line_text(&mut session);
+    assert!(updated.contains("Ultrafast"), "tier should appear after context update, got: {updated}");
+}
+
+#[test]
 fn hidden_header_summary_combines_provider_model_and_styles_effort_label() {
     let mut session = fresh_session();
     session.appearance.hide_header = true;

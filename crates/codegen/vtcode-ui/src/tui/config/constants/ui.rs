@@ -132,6 +132,7 @@ pub const HEADER_PRIMARY_SEPARATOR: &str = " | ";
 pub const HEADER_SECONDARY_SEPARATOR: &str = " | ";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
+pub const HEADER_SERVICE_TIER_PREFIX: &str = vtcode_config::constants::ui::HEADER_SERVICE_TIER_PREFIX;
 pub const HEADER_REASONING_PREFIX: &str = "";
 pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
 pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";

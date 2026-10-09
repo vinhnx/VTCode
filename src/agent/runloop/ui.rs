@@ -277,6 +277,13 @@ pub(crate) async fn build_inline_header_context(
     } else {
         format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label.trim())
     };
+    // Surface the configured native OpenAI service tier (flex/priority/
+    // ultrafast) when set; `None` hides the indicator. Rebuilt with the
+    // header on session start, `/model`, and `/config`, so it tracks the
+    // persisted `provider.openai.service_tier` without extra plumbing.
+    let service_tier = vt_cfg
+        .and_then(|cfg| cfg.provider.openai.service_tier)
+        .map(|tier| format!("{}{}", ui::HEADER_SERVICE_TIER_PREFIX, tier.as_str()));
 
     let trust_value = match session_bootstrap.acp_workspace_trust {
         Some(level) => {
@@ -344,6 +351,7 @@ pub(crate) async fn build_inline_header_context(
         pr_review: None,
         git: chain_entries.get(1).cloned().unwrap_or_default(),
         reasoning,
+        service_tier,
         workspace_trust: trust_value,
         tools: chain_entries.first().cloned().unwrap_or_default(),
         mcp: mcp_value,

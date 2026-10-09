@@ -235,6 +235,16 @@ impl Session {
             spans.push(Span::styled(reasoning, value_style));
         }
 
+        if let Some(tier) = self.header_service_tier_short_value() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
+            }
+            spans.push(Span::styled(
+                capitalize_first_letter(&tier),
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ));
+        }
+
         spans
     }
 
@@ -277,6 +287,13 @@ impl Session {
             }
 
             spans.push(Span::styled(reasoning.to_string(), style));
+        }
+
+        if let Some(tier) = self.header_service_tier_short_value() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(Span::styled(capitalize_first_letter(&tier), self.header_secondary_style()));
         }
 
         if spans.is_empty() {
@@ -382,6 +399,12 @@ impl Session {
     fn header_reasoning_short_value(&self) -> String {
         let value = self.header_reasoning_value().unwrap_or_default();
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX).trim().to_owned()
+    }
+
+    fn header_service_tier_short_value(&self) -> Option<String> {
+        let raw = self.header_context.service_tier.as_deref()?;
+        let tier = Self::strip_prefix(raw, ui::HEADER_SERVICE_TIER_PREFIX).trim();
+        (!tier.is_empty() && !tier.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| tier.to_owned())
     }
 
     pub fn header_chain_values(&self) -> Vec<String> {

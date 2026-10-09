@@ -230,6 +230,9 @@ pub struct InlineHeaderContext {
     pub git: String,
     pub reasoning: String,
     pub reasoning_stage: Option<String>,
+    /// Configured native OpenAI `service_tier` (`Tier: <name>`), when set.
+    /// Rendered in the header summary only when present; `None` hides it.
+    pub service_tier: Option<String>,
     pub workspace_trust: String,
     pub tools: String,
     pub mcp: String,
@@ -259,6 +262,7 @@ impl Default for InlineHeaderContext {
             git: "git: unavailable".to_string(),
             reasoning: "unavailable".to_string(),
             reasoning_stage: None,
+            service_tier: None,
             workspace_trust: "Trust: unavailable".to_string(),
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),

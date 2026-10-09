@@ -81,6 +81,7 @@ pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
 pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
+pub const HEADER_SERVICE_TIER_PREFIX: &str = "Tier: ";
 pub const HEADER_REASONING_PREFIX: &str = "";
 pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
 pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
