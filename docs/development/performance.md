@@ -168,24 +168,24 @@ the binary's allocator selection.
 `runtime_paths` adds deterministic offline coverage through existing entrypoints. It uses temporary workspaces and
 loopback/stdio peers; it requires Python 3 for the synthetic MCP peer and does not call a live provider.
 
-| Group | Workload and measurement boundary |
-| --- | --- |
-| `request_history` | Shared clean histories and request-only missing-result repair, 8/128/2,048 turns |
-| `transcript_interaction` (existing `transcript` bench) | Full idle/streaming frames, mouse scrolling, and selection through app events |
-| `admitted_tool_dispatch` | Warm internal registry/cache calls for eight fixture file reads, sequential/joined futures/spawned tasks |
-| `stream_framing_helper` | Exact private SSE/UTF-8 helper source, LF/CRLF bursts and 17-byte fragments; helper attribution only |
-| `responses_provider_loopback` | Public normalized provider stream consuming 8/256/4,096 recorded text events and completion |
-| `responses_boundaries` | Explicit Responses profile through the existing custom-provider router: seven-byte reasoning/tool chunks, GPT summary suppression, malformed/incomplete input and recovery |
-| `workspace_search` | Live bounded no-follow walker, 8/256/4,096 files, wide/deep trees up to 63 levels, cancellation and visible file mutation |
-| `file_listing` | Public basic-list tool, 8/256/4,096 mixed file/directory entries with dotfiles and selective globs, directory-cache misses/hits, listing latency and concurrent timer wake delay on current-thread and normal multithreaded Tokio runtimes |
-| `session_store` | Canonical event append/flush, reopen, snapshot replay, and invalidated-index rebuild; durability included |
-| `session_retention` | Completed nonempty sessions, count-based eviction while preserving one session; durable setup excluded |
-| `runner_output` | Pipe bursts, slow consumers, and bounded PTY previews from 1 KiB to 1 MiB fixtures |
-| `runner_cancellation` | Spawn, terminate and reap an owned child, including closed output and exit notification |
-| `mcp_stdio` | Real client handshake, cached discovery/search, and tool requests to a synthetic stdio peer |
-| `mcp_boundaries` | Five-millisecond peer delay, 32 outstanding requests, cancelled-call recovery and disconnect notification |
-| `a2a_loopback` | Authenticated discovery and bounded-history reads from 8/64/512-message tasks |
-| `a2a_boundaries` | Five-millisecond authenticated request delay and cancelled-call recovery |
+| Group                                                  | Workload and measurement boundary                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `request_history`                                      | Shared clean histories and request-only missing-result repair, 8/128/2,048 turns                                                                                                                                                           |
+| `transcript_interaction` (existing `transcript` bench) | Full idle/streaming frames, mouse scrolling, and selection through app events                                                                                                                                                              |
+| `admitted_tool_dispatch`                               | Warm internal registry/cache calls for eight fixture file reads, sequential/joined futures/spawned tasks                                                                                                                                   |
+| `stream_framing_helper`                                | Exact private SSE/UTF-8 helper source, LF/CRLF bursts and 17-byte fragments; helper attribution only                                                                                                                                       |
+| `responses_provider_loopback`                          | Public normalized provider stream consuming 8/256/4,096 recorded text events and completion                                                                                                                                                |
+| `responses_boundaries`                                 | Explicit Responses profile through the existing custom-provider router: seven-byte reasoning/tool chunks, GPT summary suppression, malformed/incomplete input and recovery                                                                 |
+| `workspace_search`                                     | Live bounded no-follow walker, 8/256/4,096 files, wide/deep trees up to 63 levels, cancellation and visible file mutation                                                                                                                  |
+| `file_listing`                                         | Public basic-list tool, 8/256/4,096 mixed file/directory entries with dotfiles and selective globs, directory-cache misses/hits, listing latency and concurrent timer wake delay on current-thread and normal multithreaded Tokio runtimes |
+| `session_store`                                        | Canonical event append/flush, reopen, snapshot replay, and invalidated-index rebuild; durability included                                                                                                                                  |
+| `session_retention`                                    | Completed nonempty sessions, count-based eviction while preserving one session; durable setup excluded                                                                                                                                     |
+| `runner_output`                                        | Pipe bursts, slow consumers, and bounded PTY previews from 1 KiB to 1 MiB fixtures                                                                                                                                                         |
+| `runner_cancellation`                                  | Spawn, terminate and reap an owned child, including closed output and exit notification                                                                                                                                                    |
+| `mcp_stdio`                                            | Real client handshake, cached discovery/search, and tool requests to a synthetic stdio peer                                                                                                                                                |
+| `mcp_boundaries`                                       | Five-millisecond peer delay, 32 outstanding requests, cancelled-call recovery and disconnect notification                                                                                                                                  |
+| `a2a_loopback`                                         | Authenticated discovery and bounded-history reads from 8/64/512-message tasks                                                                                                                                                              |
+| `a2a_boundaries`                                       | Five-millisecond authenticated request delay and cancelled-call recovery                                                                                                                                                                   |
 
 The helper benches compile the owning private source files directly to avoid widening public APIs. Pair these with the
 provider entrypoint measurement before claiming an end-to-end streaming improvement. The older `tool_pipeline`
@@ -385,6 +385,19 @@ For each case and launch mode, retain the raw millisecond samples and report the
 primary central result; p95 exposes startup tail behavior. Use the same binary, machine, environment, sample count, and
 isolation layout for before/after comparisons. Keep `VTCODE_STARTUP_TRACE=0` (or unset) during timed runs; enable
 `VTCODE_STARTUP_TRACE=1` only for a separate diagnostic run.
+
+For a quick A/B check of two release binaries, `scripts/bench-startup.sh` uses [hyperfine](https://github.com/sharkdp/hyperfine)
+when installed (`brew install hyperfine` or `cargo install --locked hyperfine`). It runs without an intermediate shell
+(`-N`) after 3 warmup runs and reports mean, standard deviation, and outliers across `--version`, `--help`, and
+`schema tools`. It isolates only `HOME` (not the config-file path, data root, or workspace), so use
+`cargo bench --bench startup` for recorded results.
+
+```bash
+VTCODE_BIN="$PWD/target/release/vtcode" VTCODE_BASELINE_BIN=/path/to/previous/vtcode \
+  VTCODE_BENCH_RUNS=30 VTCODE_BENCH_JSON=/tmp/vtcode-startup.json ./scripts/bench-startup.sh
+```
+
+Without hyperfine the script falls back to a plain timing loop; `VTCODE_BASELINE_BIN` requires hyperfine.
 
 The broader capture remains available when its additional workloads are needed:
 
