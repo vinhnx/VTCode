@@ -184,6 +184,15 @@ pub(crate) struct ExecReadTarget {
     pub(crate) verbatim: bool,
 }
 
+/// Lexically normalize a shell-measurement target path so spelling variants
+/// (`./README.md`, `docs/../README.md`) share one family key, path count, and
+/// evidence identity. Reuses the shared code_search loop-identity normalizer:
+/// leading `..` is preserved (fail-closed, never collides with in-workspace
+/// entries), so workspace escape via `../` cannot masquerade as a local read.
+fn normalised_shell_read_path(path: &str) -> String {
+    vtcode_core::tools::normalised_code_search_path(path)
+}
+
 pub(crate) fn parse_simple_exec_read_target(args: &Value) -> Option<ExecReadTarget> {
     let parts = vtcode_core::tools::command_args::command_words(args).ok()??;
     // Measurement loops hide a simple read behind a pipe
@@ -241,7 +250,7 @@ fn parse_simple_awk_read_target(parts: &[String]) -> Option<ExecReadTarget> {
     let (start, end) = awk_nr_line_range(program)?;
     let limit = end.saturating_sub(start).saturating_add(1);
     Some(ExecReadTarget {
-        path: path.to_string(),
+        path: normalised_shell_read_path(path),
         start_line: start,
         slice_suffix: format!("::off={start}::lim={limit}"),
         verbatim: false,
@@ -331,7 +340,7 @@ fn parse_simple_sed_read_target(parts: &[String]) -> Option<ExecReadTarget> {
     let (start, end) = parse_simple_sed_print_range(script)?;
     let limit = end.saturating_sub(start).saturating_add(1);
     Some(ExecReadTarget {
-        path: path.to_string(),
+        path: normalised_shell_read_path(path),
         start_line: start,
         slice_suffix: format!("::off={start}::lim={limit}"),
         // Bare `sed -n '<range>p' <file>` prints the file's own lines. The
@@ -881,6 +890,20 @@ mod tests {
         let awk = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
         assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &piped_sed), Some("README.md".to_string()));
         assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &awk), Some("README.md".to_string()));
+    }
+
+    #[test]
+    fn spelling_variants_share_shell_family_and_path_count() {
+        // `./` and interior `..` spellings are the same file: one family key
+        // and one path bucket. A leading `..` escapes and stays distinct.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let dotted = serde_json::json!({"cmd": "sed -n '65,71p' ./README.md | awk '{print n}'"});
+        let escaping = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' ../README.md"});
+        let bare_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &bare);
+        assert_eq!(bare_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &dotted), bare_key);
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &dotted), Some("README.md".to_string()));
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &escaping), Some("../README.md".to_string()));
     }
 
     #[test]
