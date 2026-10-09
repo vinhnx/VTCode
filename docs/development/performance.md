@@ -467,8 +467,10 @@ startup work is observable without adding work to normal launches.
 
 ### Release artifact assumptions
 
-The shipped `release` profile remains tuned for launch size and dead-code removal: `opt-level = "z"`, full LTO,
-`codegen-units = 1`, stripping, and an abort-on-panic runtime. macOS release scripts and `.cargo/config.toml` also apply
+The shipped `release` profile remains tuned for launch size and dead-code removal: `opt-level = "z"`, fat LTO,
+`codegen-units = 1`, stripping, and an abort-on-panic runtime. Keep `codegen-units = 1` for fat-LTO builds:
+uv#22303 showed higher values increase total LTO/IR work and peak RSS despite more backend parallelism.
+macOS release scripts and `.cargo/config.toml` also apply
 `-Wl,-dead_strip`. Verify the effective profile and the measured binary size before attributing a result to Rust startup
 code; a debug binary is not a valid proxy for the shipped launch path.
 
@@ -600,7 +602,9 @@ Compare repeated local medians rather than adding a noisy hard gate:
 ```
 
 Rustc-specific AST shrinking, compiler incremental-cache changes, and PGO are outside this runtime-focused wave. Revisit
-them only with a confirmed VT Code profile hotspot and a separate build-performance budget.
+them only with a confirmed VT Code profile hotspot and a separate build-performance budget. If PGO is adopted,
+use `codegen-units = 1` for both instrumented and final builds (uv#22303: instrumented stage held 87-92% of
+savings; profiling keeps function bodies alive, so 1 CGU enables earlier cleanup before fat LTO).
 
 ## Optimization Rules
 

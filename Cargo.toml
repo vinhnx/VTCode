@@ -441,8 +441,13 @@ codegen-units = 16
 strip = true
 
 [profile.release]
-codegen-units = 1 # Allows compiler to perform better optimization.
-lto = true        # Enables Link-time Optimization for better performance and size reduction.
+# Keep codegen-units = 1 with fat LTO: less IR to merge, smaller binary, lower
+# peak RSS, despite losing intra-crate parallelism. See uv#22303 (-17% size,
+# -48-60% PGO build time, neutral runtime; savings dominated by the
+# PGO-instrumented stage where profiling keeps fns alive). Do not raise this
+# without re-measuring fat-LTO + (future) PGO.
+codegen-units = 1
+lto = true        # Fat LTO: better performance and size reduction.
 # Optimize for binary size: cold launch is dominated by dyld loading the Mach-O.
 # Measured: opt-level=3 → 61 MB / __text 45.9 MB (~1.16 s cold start);
 #           opt-level="z" → 34 MB / __text 17.2 MB (~0.7 s cold start).
@@ -468,7 +473,9 @@ incremental = false
 overflow-checks = false
 
 [profile.bench]
-# Optimize benchmarks for accurate performance measurement
+# Standalone (no inherits): avoids release's strip/panic=abort/debug-assertions,
+# which would distort benchmarks. opt-level=3 (not "z") measures CPU throughput,
+# not size-optimized codegen.
 codegen-units = 1
 lto = true
 opt-level = 3
