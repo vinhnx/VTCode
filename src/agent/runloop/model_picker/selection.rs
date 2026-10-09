@@ -508,9 +508,10 @@ pub(super) fn service_tier_choice_meta(tier: Option<OpenAIServiceTier>) -> (&'st
         Some(OpenAIServiceTier::Priority) => {
             ("Priority", "Send service_tier=priority for lower and more consistent latency.")
         }
-        Some(OpenAIServiceTier::Ultrafast) => {
-            ("Ultrafast", "Send service_tier=ultrafast for fastest processing at higher cost (US/global only).")
-        }
+        Some(OpenAIServiceTier::Ultrafast) => (
+            "Ultrafast",
+            "Send service_tier=ultrafast for fastest processing at higher cost (Astra US/global, 6.1-sol US/EU/global).",
+        ),
     }
 }
 

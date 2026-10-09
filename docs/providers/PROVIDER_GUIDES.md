@@ -241,9 +241,9 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra; sampling and logprobs unsupported.
 - **Service tiers:** `provider.openai.service_tier` accepts `flex`, `priority`, and `ultrafast` (`ultrafast` is
   native-OpenAI-only; see the config field reference). `ultrafast` is the fastest tier: GA for `gpt-6-astra`
-  (`model = "gpt-6-astra"` + `service_tier = "ultrafast"` on every `response.create`), preview-only for
-  `gpt-5.6-sol` (contact your OpenAI account team). It costs more, starts at low TPM limits (T1-3 500k / T4 1M /
-  T5 5M), and supports US/global processing only (no EU/regional endpoints). Pair it with
+  and `gpt-6.1-sol` (`model = "gpt-6-astra"` + `service_tier = "ultrafast"` on every `response.create`), preview-only for
+  `gpt-5.6-sol` (contact your OpenAI account team). It costs more, starts at low TPM limits (Astra 500k / 1M /
+  5M; 6.1-sol 1M / 4M / 40M), and supports US/global processing on Astra vs US/EU/global on 6.1-sol. Pair it with
   `provider.openai.websocket_mode = true` to keep one persistent Responses WebSocket + `previous_response_id`
   chain across turns and tool results — HTTP handshake overhead erodes the speedup on agentic tool-call bursts.
   When OpenAI rejects the requested tier for a model — unsupported

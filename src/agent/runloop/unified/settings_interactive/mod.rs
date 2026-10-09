@@ -1056,6 +1056,29 @@ mod tests {
     }
 
     #[test]
+    fn service_tier_cycle_advances_from_priority_to_ultrafast() {
+        let mut state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: None,
+            draft: VTCodeConfig::default(),
+            view_path: Some("provider.openai".to_string()),
+            last_selection: None,
+            selection_by_view: BTreeMap::new(),
+            pending_edit_path: None,
+            status: None,
+        };
+        state.draft.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Priority);
+
+        mutate_draft(&mut state, |draft| {
+            apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
+        })
+        .expect("service tier should advance");
+
+        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Ultrafast));
+    }
+
+    #[test]
     fn curated_groups_resolve_to_their_declared_field_paths() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),

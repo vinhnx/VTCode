@@ -399,8 +399,8 @@ pub struct OpenAIConfig {
     /// native OpenAI and OpenAI-compatible Responses endpoints.
     /// This is an opt-in path designed for long-running, tool-heavy workflows.
     /// A persistent connection removes per-request HTTP handshake overhead, so
-    /// pair it with `service_tier = "ultrafast"` on `gpt-6-astra` for agentic
-    /// tool-call bursts (Ultrafast docs strongly recommend WebSockets).
+    /// pair it with `service_tier = "ultrafast"` on `gpt-6-astra`/`gpt-6.1-sol`
+    /// for agentic tool-call bursts (Ultrafast docs strongly recommend WebSockets).
     /// Streaming falls back to HTTP only before any output event is exposed.
     #[serde(default)]
     pub websocket_mode: bool,
@@ -418,10 +418,10 @@ pub struct OpenAIConfig {
     /// Optional native OpenAI `service_tier` request parameter.
     /// Leave unset to inherit the Project-level default service tier.
     /// Options: "flex", "priority", "ultrafast".
-    /// "ultrafast" is the fastest tier: GA for `gpt-6-astra`, preview-only for
-    /// `gpt-5.6-sol` (contact your OpenAI account team). It costs more, starts
-    /// at low TPM limits (T1-3 500k / T4 1M / T5 5M), supports US/global
-    /// processing only, and pairs best with `websocket_mode = true`.
+    /// "ultrafast" is the fastest tier: GA for `gpt-6-astra` and `gpt-6.1-sol`,
+    /// preview-only for `gpt-5.6-sol` (contact your OpenAI account team). It costs more,
+    /// starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global
+    /// processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<OpenAIServiceTier>,
 

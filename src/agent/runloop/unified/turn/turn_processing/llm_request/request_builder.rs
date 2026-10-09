@@ -459,7 +459,8 @@ pub(super) async fn build_turn_request(
     // default; compat gateways forward `request.service_tier`). Custom
     // providers with an OpenAI api_format ride the same path, except for
     // `ultrafast`, which is native-OpenAI-only and never forwarded. Ultrafast
-    // is US/global only; the backend rejects EU-routed requests.
+    // residency is model-scoped (Astra US/global only, 6.1-sol US/EU/global);
+    // the backend rejects out-of-region requests.
     if let Some(cfg) = ctx.vt_cfg
         && let Some(tier) = cfg.provider.openai.service_tier
     {
