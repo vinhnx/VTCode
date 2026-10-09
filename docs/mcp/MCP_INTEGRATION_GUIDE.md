@@ -74,20 +74,20 @@ max_concurrent_requests = 1
 ### Configuration Precedence
 
 1. **Environment Variables** (highest priority)
-   - `MCP_TIMEOUT`: Startup timeout in milliseconds (default: 10000)
-   - `MAX_MCP_OUTPUT_TOKENS`: Maximum output token limit (default: 25000)
-   - API keys and authentication tokens
-   - Custom timezone via `VT_LOCAL_TIMEZONE`
+    - `MCP_TIMEOUT`: Startup timeout in milliseconds (default: 10000)
+    - `MAX_MCP_OUTPUT_TOKENS`: Maximum output token limit (default: 25000)
+    - API keys and authentication tokens
+    - Custom timezone via `VT_LOCAL_TIMEZONE`
 
 2. **vtcode.toml** (runtime configuration)
-   - MCP enablement
-   - Timeout settings
-   - Provider definitions
-   - Security policies
+    - MCP enablement
+    - Timeout settings
+    - Provider definitions
+    - Security policies
 
 3. **Code Constants** (`crates/codegen/vtcode-core/src/config/constants.rs`)
-   - Default values
-   - Built-in limits
+    - Default values
+    - Built-in limits
 
 ## Transport Types
 
@@ -205,6 +205,7 @@ pub async fn refresh_tools(&self, allowlist: &McpAllowListConfig, timeout: Durat
 - Applies allowlist filtering
 - Caches tool metadata
 - Validates input schemas
+- Sorts tools by name, resources by URI, and prompts by name per provider, and aggregates providers in name order, so the catalog (and the LLM prompt-cache prefix) is stable regardless of server ordering; when providers expose the same tool name, the first provider by name owns it
 
 ### Tool Execution
 
@@ -281,25 +282,25 @@ pub async fn get_prompt(
 **From MCP Provider to VT Code**:
 
 1. **Logging** (`on_logging_message`)
-   - Standard logging integration
-   - Severity levels: debug, info, warning, error
+    - Standard logging integration
+    - Severity levels: debug, info, warning, error
 
 2. **Progress** (`on_progress`)
-   - Long-running operation feedback
-   - Token-based tracking
-   - Message and percentage updates
+    - Long-running operation feedback
+    - Token-based tracking
+    - Message and percentage updates
 
 3. **Resource Updates** (`on_resource_updated`, `on_resource_list_changed`)
-   - File/data modifications
-   - Cache invalidation signals
+    - File/data modifications
+    - Cache invalidation signals
 
 4. **Tool List Changes** (`on_tool_list_changed`)
-   - Dynamic tool availability
-   - Discovery cache refresh triggers
+    - Dynamic tool availability
+    - Discovery cache refresh triggers
 
 5. **Prompt List Changes** (`on_prompt_list_changed`)
-   - Template updates
-   - Cache invalidation
+    - Template updates
+    - Cache invalidation
 
 ### Elicitation (User Interaction)
 
@@ -422,9 +423,11 @@ pub struct McpProvider {
 // /etc/claude-code/managed-mcp.json (Linux/WSL)
 // C:\Program Files\ClaudeCode\managed-mcp.json (Windows)
 {
-  "mcpServers": {
-    "approved_server": { /* config */ }
-  }
+    "mcpServers": {
+        "approved_server": {
+            /* config */
+        }
+    }
 }
 ```
 
@@ -440,14 +443,12 @@ pub struct McpProvider {
 
 ```json
 {
-  "allowedMcpServers": [
-    { "name": "fetch" },
-    { "command": "uvx mcp-server-*" },
-    { "serverUrl": "https://mcp.company.com/*" }
-  ],
-  "deniedMcpServers": [
-    { "name": "dangerous_server" }
-  ]
+    "allowedMcpServers": [
+        { "name": "fetch" },
+        { "command": "uvx mcp-server-*" },
+        { "serverUrl": "https://mcp.company.com/*" }
+    ],
+    "deniedMcpServers": [{ "name": "dangerous_server" }]
 }
 ```
 
@@ -538,31 +539,31 @@ Implement additional transport types by extending `rmcp_transport.rs`:
 ## Best Practices
 
 1. **Security First**
-   - Always use allowlists in production
-   - Validate all external tool inputs
-   - Never hardcode API keys
-   - Use environment variables for secrets
+    - Always use allowlists in production
+    - Validate all external tool inputs
+    - Never hardcode API keys
+    - Use environment variables for secrets
 
 2. **Error Handling**
-   - Always use `.with_context()` for error messages
-   - Never use `.unwrap()` in production code
-   - Provide detailed error messages to users
+    - Always use `.with_context()` for error messages
+    - Never use `.unwrap()` in production code
+    - Provide detailed error messages to users
 
 3. **Performance**
-   - Set appropriate timeout values based on tool behavior
-   - Use resource pagination for large datasets
-   - Monitor token usage with `MAX_MCP_OUTPUT_TOKENS`
+    - Set appropriate timeout values based on tool behavior
+    - Use resource pagination for large datasets
+    - Monitor token usage with `MAX_MCP_OUTPUT_TOKENS`
 
 4. **Configuration Management**
-   - Configure MCP providers in `vtcode.toml`
-   - Keep secrets in environment variables
-   - Document custom servers in project README
+    - Configure MCP providers in `vtcode.toml`
+    - Keep secrets in environment variables
+    - Document custom servers in project README
 
 5. **Testing**
-   - Mock MCP providers in unit tests
-   - Integration tests with real providers
-   - Test timeout and error scenarios
-   - Validate allowlist enforcement
+    - Mock MCP providers in unit tests
+    - Integration tests with real providers
+    - Test timeout and error scenarios
+    - Validate allowlist enforcement
 
 ## Related Documentation
 

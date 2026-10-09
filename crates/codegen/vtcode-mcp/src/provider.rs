@@ -595,49 +595,72 @@ impl McpProvider {
     }
 
     fn filter_tools(&self, tools: Vec<Tool>, allowlist: &McpAllowListConfig) -> Vec<McpToolInfo> {
-        tools
-            .into_iter()
-            .filter(|tool| allowlist.is_tool_allowed(&self.name, &tool.name))
-            .map(|tool| {
-                let parsed = parse_mcp_tool(&tool);
-                McpToolInfo {
-                    description: parsed.description,
-                    input_schema: parsed.input_schema,
-                    output_schema: parsed.output_schema,
-                    provider: self.name.clone(),
-                    name: parsed.name,
-                }
-            })
-            .collect()
+        filter_tools_sorted(&self.name, tools, allowlist)
     }
 
     fn filter_resources(&self, resources: Vec<Resource>, allowlist: &McpAllowListConfig) -> Vec<McpResourceInfo> {
-        resources
-            .into_iter()
-            .filter(|resource| allowlist.is_resource_allowed(&self.name, &resource.uri))
-            .map(|resource| McpResourceInfo {
-                provider: self.name.clone(),
-                uri: resource.uri.clone(),
-                name: resource.name.clone(),
-                description: resource.description.clone(),
-                mime_type: resource.mime_type.clone(),
-                size: resource.size.map(|s| i64::try_from(s).unwrap_or(i64::MAX)),
-            })
-            .collect()
+        filter_resources_sorted(&self.name, resources, allowlist)
     }
 
     fn filter_prompts(&self, prompts: Vec<Prompt>, allowlist: &McpAllowListConfig) -> Vec<McpPromptInfo> {
-        prompts
-            .into_iter()
-            .filter(|prompt| allowlist.is_prompt_allowed(&self.name, &prompt.name))
-            .map(|prompt| McpPromptInfo {
-                provider: self.name.clone(),
-                name: prompt.name.clone(),
-                description: prompt.description.clone(),
-                arguments: prompt.arguments.clone().unwrap_or_default(),
-            })
-            .collect()
+        filter_prompts_sorted(&self.name, prompts, allowlist)
     }
+}
+
+// Servers may reorder lists between calls; a stable order keeps LLM prompt-cache prefixes valid.
+fn filter_tools_sorted(provider: &str, tools: Vec<Tool>, allowlist: &McpAllowListConfig) -> Vec<McpToolInfo> {
+    let mut filtered: Vec<McpToolInfo> = tools
+        .into_iter()
+        .filter(|tool| allowlist.is_tool_allowed(provider, &tool.name))
+        .map(|tool| {
+            let parsed = parse_mcp_tool(&tool);
+            McpToolInfo {
+                description: parsed.description,
+                input_schema: parsed.input_schema,
+                output_schema: parsed.output_schema,
+                provider: provider.to_owned(),
+                name: parsed.name,
+            }
+        })
+        .collect();
+    filtered.sort_by(|a, b| a.name.cmp(&b.name));
+    filtered
+}
+
+fn filter_resources_sorted(
+    provider: &str,
+    resources: Vec<Resource>,
+    allowlist: &McpAllowListConfig,
+) -> Vec<McpResourceInfo> {
+    let mut filtered: Vec<McpResourceInfo> = resources
+        .into_iter()
+        .filter(|resource| allowlist.is_resource_allowed(provider, &resource.uri))
+        .map(|resource| McpResourceInfo {
+            provider: provider.to_owned(),
+            uri: resource.uri.clone(),
+            name: resource.name.clone(),
+            description: resource.description.clone(),
+            mime_type: resource.mime_type.clone(),
+            size: resource.size.map(|s| i64::try_from(s).unwrap_or(i64::MAX)),
+        })
+        .collect();
+    filtered.sort_by(|a, b| a.uri.cmp(&b.uri));
+    filtered
+}
+
+fn filter_prompts_sorted(provider: &str, prompts: Vec<Prompt>, allowlist: &McpAllowListConfig) -> Vec<McpPromptInfo> {
+    let mut filtered: Vec<McpPromptInfo> = prompts
+        .into_iter()
+        .filter(|prompt| allowlist.is_prompt_allowed(provider, &prompt.name))
+        .map(|prompt| McpPromptInfo {
+            provider: provider.to_owned(),
+            name: prompt.name.clone(),
+            description: prompt.description.clone(),
+            arguments: prompt.arguments.clone().unwrap_or_default(),
+        })
+        .collect();
+    filtered.sort_by(|a, b| a.name.cmp(&b.name));
+    filtered
 }
 
 fn mcp_tool_call_span(provider_name: &str, tool_name: &str, transport: &McpTransportConfig) -> Span {
@@ -832,5 +855,47 @@ mod tests {
         *provider.initialize_result.lock().await =
             Some(ServerPeerInfo::new(ProtocolVersion::V_2025_11_25, ServerCapabilities::default()));
         assert_eq!(provider.negotiated_protocol_version().await.as_deref(), Some("2025-11-25"));
+    }
+
+    #[test]
+    fn filtered_catalogs_are_sorted_regardless_of_server_order() {
+        use super::{filter_prompts_sorted, filter_resources_sorted, filter_tools_sorted};
+        use rmcp::model::{Prompt, Resource, Tool};
+        use serde_json::Map;
+        use std::sync::Arc;
+        use vtcode_config::mcp::McpAllowListConfig;
+
+        let allowlist = McpAllowListConfig::default();
+        // Uppercase sorts before lowercase and a prefix sorts before its extension in byte order.
+        let tool_names = ["search_v2", "Zeta", "search", "alpha"];
+        let tools = tool_names
+            .iter()
+            .map(|name| Tool::new(*name, "desc", Arc::new(Map::new())))
+            .collect();
+        let sorted_tools: Vec<String> = filter_tools_sorted("p", tools, &allowlist)
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        assert_eq!(sorted_tools, ["Zeta", "alpha", "search", "search_v2"]);
+
+        let resources = ["file:///b", "file:///a/z", "file:///a"]
+            .iter()
+            .map(|uri| Resource::new(*uri, "r"))
+            .collect();
+        let sorted_resources: Vec<String> = filter_resources_sorted("p", resources, &allowlist)
+            .into_iter()
+            .map(|resource| resource.uri)
+            .collect();
+        assert_eq!(sorted_resources, ["file:///a", "file:///a/z", "file:///b"]);
+
+        let prompts = ["review", "Explain", "review2"]
+            .iter()
+            .map(|name| Prompt::new(*name, None::<String>, None))
+            .collect();
+        let sorted_prompts: Vec<String> = filter_prompts_sorted("p", prompts, &allowlist)
+            .into_iter()
+            .map(|prompt| prompt.name)
+            .collect();
+        assert_eq!(sorted_prompts, ["Explain", "review", "review2"]);
     }
 }

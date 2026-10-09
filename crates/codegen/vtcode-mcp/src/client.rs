@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use rmcp::model::{CallToolResult, ClientCapabilities, InitializeRequestParams, RootsCapabilities};
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,6 +26,13 @@ struct McpClientState {
     tool_provider_index: FxHashMap<String, String>,
     resource_provider_index: FxHashMap<String, String>,
     prompt_provider_index: FxHashMap<String, String>,
+}
+
+/// Stable provider order keeps the aggregated catalog (and LLM prompt-cache prefix) deterministic.
+fn providers_sorted_by_name<V: Clone>(providers: &FxHashMap<String, V>) -> Vec<V> {
+    let mut entries: Vec<(&String, &V)> = providers.iter().collect();
+    entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    entries.into_iter().map(|(_, provider)| provider.clone()).collect()
 }
 
 pub struct McpClient {
@@ -282,7 +290,8 @@ impl McpClient {
         let state = self.state.read();
         let providers = &state.providers;
         // Use iterator to collect keys directly without intermediate push
-        let configured_providers: Vec<String> = providers.keys().cloned().collect();
+        let mut configured_providers: Vec<String> = providers.keys().cloned().collect();
+        configured_providers.sort_unstable();
         McpClientStatus {
             enabled: self.config.enabled,
             provider_count: providers.len(),
@@ -428,7 +437,7 @@ impl McpClient {
             .with_context(|| format!("Failed to create MCP tools directory: {}", tools_dir.display()))?;
 
         // Group tools by provider
-        let mut by_provider: FxHashMap<String, Vec<&McpToolInfo>> = FxHashMap::default();
+        let mut by_provider: BTreeMap<String, Vec<&McpToolInfo>> = BTreeMap::new();
         for tool in &tools {
             by_provider.entry(tool.provider.clone()).or_default().push(tool);
         }
@@ -475,11 +484,7 @@ impl McpClient {
     }
 
     /// Generate INDEX.md content for MCP tools
-    fn generate_tools_index(
-        &self,
-        tools: &[McpToolInfo],
-        by_provider: &FxHashMap<String, Vec<&McpToolInfo>>,
-    ) -> String {
+    fn generate_tools_index(&self, tools: &[McpToolInfo], by_provider: &BTreeMap<String, Vec<&McpToolInfo>>) -> String {
         let mut content = String::new();
         content.push_str("# MCP Tools Index\n\n");
         content.push_str("This file lists all available MCP tools for dynamic discovery.\n");
@@ -546,7 +551,7 @@ impl McpClient {
         // Collect provider references in one pass
         let (providers, allowlist) = {
             let state = self.state.read();
-            (state.providers.values().cloned().collect::<Vec<_>>(), state.allowlist.clone())
+            (providers_sorted_by_name(&state.providers), state.allowlist.clone())
         };
 
         if providers.is_empty() {
@@ -568,7 +573,7 @@ impl McpClient {
             match tools {
                 Ok(tools) => {
                     for tool in &tools {
-                        drop(index_updates.insert(tool.name.clone(), provider_name.clone()));
+                        let _ = index_updates.entry(tool.name.clone()).or_insert_with(|| provider_name.clone());
                     }
                     all_tools.extend(tools);
                 }
@@ -594,7 +599,7 @@ impl McpClient {
         // Collect provider references in one pass
         let (providers, allowlist) = {
             let state = self.state.read();
-            (state.providers.values().cloned().collect::<Vec<_>>(), state.allowlist.clone())
+            (providers_sorted_by_name(&state.providers), state.allowlist.clone())
         };
 
         if providers.is_empty() {
@@ -626,7 +631,7 @@ impl McpClient {
         let index = &mut state.resource_provider_index;
         index.clear();
         for resource in &all_resources {
-            drop(index.insert(resource.uri.clone(), resource.provider.clone()));
+            let _ = index.entry(resource.uri.clone()).or_insert_with(|| resource.provider.clone());
         }
 
         Ok(all_resources)
@@ -636,7 +641,7 @@ impl McpClient {
         // Collect provider references in one pass
         let (providers, allowlist) = {
             let state = self.state.read();
-            (state.providers.values().cloned().collect::<Vec<_>>(), state.allowlist.clone())
+            (providers_sorted_by_name(&state.providers), state.allowlist.clone())
         };
 
         if providers.is_empty() {
@@ -668,7 +673,7 @@ impl McpClient {
         let index = &mut state.prompt_provider_index;
         index.clear();
         for prompt in &all_prompts {
-            drop(index.insert(prompt.name.clone(), prompt.provider.clone()));
+            let _ = index.entry(prompt.name.clone()).or_insert_with(|| prompt.provider.clone());
         }
 
         Ok(all_prompts)
@@ -687,7 +692,7 @@ impl McpClient {
 
         let (allowlist, providers) = {
             let state = self.state.read();
-            (state.allowlist.clone(), state.providers.values().cloned().collect::<Vec<_>>())
+            (state.allowlist.clone(), providers_sorted_by_name(&state.providers))
         };
         let timeout = self.tool_timeout();
 
@@ -757,7 +762,7 @@ impl McpClient {
 
         let (allowlist, providers) = {
             let state = self.state.read();
-            (state.allowlist.clone(), state.providers.values().cloned().collect::<Vec<_>>())
+            (state.allowlist.clone(), providers_sorted_by_name(&state.providers))
         };
         let timeout = self.request_timeout();
 
@@ -791,7 +796,7 @@ impl McpClient {
 
         let (allowlist, providers) = {
             let state = self.state.read();
-            (state.allowlist.clone(), state.providers.values().cloned().collect::<Vec<_>>())
+            (state.allowlist.clone(), providers_sorted_by_name(&state.providers))
         };
         let timeout = self.request_timeout();
 
@@ -820,7 +825,14 @@ impl McpClient {
         let mut state = self.state.write();
         let index = &mut state.tool_provider_index;
         for tool in tools {
-            drop(index.insert(tool.name.clone(), provider.to_string()));
+            let _ = index
+                .entry(tool.name.clone())
+                .and_modify(|owner| {
+                    if provider < owner.as_str() {
+                        *owner = provider.to_string();
+                    }
+                })
+                .or_insert_with(|| provider.to_string());
         }
     }
 
@@ -1098,6 +1110,7 @@ impl McpToolExecutor for McpClient {
 #[cfg(test)]
 mod tests {
     use super::McpClient;
+    use rustc_hash::FxHashMap;
     use vtcode_config::mcp::{
         McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpRequirementsConfig, McpStdioServerConfig,
         McpTransportConfig,
@@ -1213,5 +1226,49 @@ mod tests {
             .await
             .expect_err("missing server should error");
         assert!(err.to_string().contains("not connected"));
+    }
+
+    #[test]
+    fn providers_sorted_by_name_ignores_insertion_order() {
+        let names = ["zeta", "Alpha", "alpha", "beta", "alpha2"];
+        let forward: FxHashMap<String, usize> =
+            names.iter().enumerate().map(|(idx, name)| ((*name).to_owned(), idx)).collect();
+        let reverse: FxHashMap<String, usize> = names
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(idx, name)| ((*name).to_owned(), idx))
+            .collect();
+
+        // Values are the original indices of Alpha, alpha, alpha2, beta, zeta.
+        let expected = vec![1, 2, 4, 3, 0];
+        assert_eq!(super::providers_sorted_by_name(&forward), expected);
+        assert_eq!(super::providers_sorted_by_name(&reverse), expected);
+    }
+
+    #[test]
+    fn record_tool_provider_keeps_first_provider_by_name_regardless_of_connect_order() {
+        use super::McpToolInfo;
+        use serde_json::json;
+
+        let tool = |provider: &str, name: &str| McpToolInfo {
+            name: name.to_owned(),
+            description: String::new(),
+            provider: provider.to_owned(),
+            input_schema: json!({}),
+            output_schema: None,
+        };
+
+        for order in [["alpha", "beta"], ["beta", "alpha"]] {
+            let client = McpClient::new(base_config());
+            for provider in order {
+                client.record_tool_provider(
+                    provider,
+                    &[tool(provider, "shared"), tool(provider, &format!("{provider}_only"))],
+                );
+            }
+            assert_eq!(client.provider_for_tool("shared").as_deref(), Some("alpha"), "order {order:?}");
+            assert_eq!(client.provider_for_tool("beta_only").as_deref(), Some("beta"));
+        }
     }
 }

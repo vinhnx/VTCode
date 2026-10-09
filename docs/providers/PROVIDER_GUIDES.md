@@ -205,6 +205,18 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Logout semantics:** `vtcode logout openai` (or `/logout openai`) clears VT Code's managed session only. If Codex's
   auth.json exists, VT Code will continue using it as a fallback until you run `codex logout`.
 - See the [OAuth authentication guide](../guides/oauth-authentication.md) for full details.
+- **Endpoint override (`OPENAI_BASE_URL`):** intentional and stable. Resolution order is explicit config `base_url` →
+  `OPENAI_BASE_URL` → built-in default, and the same override applies to both the API-key path
+  (`https://api.openai.com/v1`) and the ChatGPT-subscription path (`https://chatgpt.com/backend-api/codex`), so a
+  local recording proxy works without code changes or TLS interception. Point it at a proxy for one run to capture the
+  full exchange, then replay offline:
+  ```bash
+  OPENAI_BASE_URL=http://127.0.0.1:8931/v1 vtcode ask "say ok"
+  ```
+  VT Code speaks the Responses API: it appends `/responses` to the resolved base URL, so a gateway must serve
+  `POST <base>/responses` returning `{"output": [...]}`. A Chat-Completions-only gateway fails with
+  `Invalid Responses API format: missing output array`, which means the endpoint was reached but answered in the
+  wrong dialect.
 - VT Code's default OpenAI profile is `gpt-5.4` with `reasoning_effort = "none"` and `verbosity = "medium"`; raise
   reasoning only when the task shape justifies the extra latency.
 - VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk

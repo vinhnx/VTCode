@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 use vtcode_config::TimeoutsConfig;
 use vtcode_config::auth::{AuthCredentialsStoreMode, OpenAIChatGptAuthHandle, OpenAIChatGptSession};
-use vtcode_config::constants::urls;
+use vtcode_config::constants::{env_vars, urls};
 use vtcode_config::core::CustomProviderCommandAuthConfig;
 use vtcode_config::core::{
     CustomProviderApiFormat, OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
@@ -488,6 +488,38 @@ fn chatgpt_auth_backend_setup_uses_rig_chatgpt_by_default() {
     assert!(responses.include_encrypted_reasoning);
     assert!(!responses.include_structured_history_in_input);
     assert!(responses.preserve_structured_history_on_replay);
+}
+
+#[test]
+fn openai_base_url_override_applies_to_api_key_and_subscription_paths() {
+    // Locks `OPENAI_BASE_URL` handling on both OpenAI backends (discussion #764):
+    // config `base_url` wins, then `OPENAI_BASE_URL`, then the built-in default.
+    // Keeping the override on the ChatGPT-subscription path is intentional so a
+    // local recording proxy can capture/replay a session without code changes
+    // or TLS interception.
+    let env = vtcode_commons::env_lock::lock();
+    let previous = std::env::var_os(env_vars::OPENAI_BASE_URL);
+    env.set_var(env_vars::OPENAI_BASE_URL, "http://127.0.0.1:8931/v1");
+
+    let api_key_setup = OpenAIBackendSetup::from_api_key_config(None);
+    assert_eq!(api_key_setup.base_url(), "http://127.0.0.1:8931/v1");
+    assert!(matches!(api_key_setup.kind(), OpenAIBackendKind::ApiKey));
+
+    let subscription_setup = OpenAIBackendSetup::from_chatgpt_subscription_config(None);
+    assert_eq!(subscription_setup.base_url(), "http://127.0.0.1:8931/v1");
+    assert!(matches!(
+        subscription_setup.kind(),
+        OpenAIBackendKind::ChatGptSubscription(ChatGptSubscriptionAuthSource::RigChatGpt)
+    ));
+
+    let explicit_api_key = OpenAIBackendSetup::from_api_key_config(Some("https://proxy.example/v1".to_string()));
+    assert_eq!(explicit_api_key.base_url(), "https://proxy.example/v1");
+
+    let explicit_subscription =
+        OpenAIBackendSetup::from_chatgpt_subscription_config(Some("https://proxy.example/codex".to_string()));
+    assert_eq!(explicit_subscription.base_url(), "https://proxy.example/codex");
+
+    env.restore_var(env_vars::OPENAI_BASE_URL, previous);
 }
 
 #[test]

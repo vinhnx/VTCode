@@ -16,6 +16,13 @@ use super::ToolRegistry;
 use super::mcp_helpers::normalize_mcp_tool_identifier;
 use super::registration::ToolCatalogSource;
 
+/// Provider-name order keeps listings and collision ownership independent of hash order.
+fn sorted_providers(index: &FxHashMap<String, Vec<String>>) -> Vec<(&String, &Vec<String>)> {
+    let mut providers: Vec<_> = index.iter().collect();
+    providers.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    providers
+}
+
 fn mcp_refresh_retry_allowed(error: &anyhow::Error) -> bool {
     vtcode_commons::detect_misconfiguration_in_anyhow(error).is_none()
 }
@@ -95,8 +102,10 @@ impl ToolRegistry {
             return Ok(Vec::new());
         }
 
+        let providers = sorted_providers(&index);
+
         let mut mcp_tools = Vec::new();
-        for (provider, tools) in index.iter() {
+        for (provider, tools) in providers {
             for tool_name in tools {
                 let canonical_name = format!("mcp::{provider}::{tool_name}");
                 if let Some(registration) = self.inventory.get_registration(&canonical_name) {
@@ -258,9 +267,10 @@ impl ToolRegistry {
                 let mut reverse_index = self.mcp_reverse_index.write().await;
                 reverse_index.clear();
                 let index = self.mcp_tool_index.read().await;
-                for (provider, tools) in index.iter() {
+                // First provider by name owns a colliding tool name, matching `McpClient` routing.
+                for (provider, tools) in sorted_providers(&index) {
                     for tool in tools {
-                        reverse_index.insert(tool.clone(), provider.clone());
+                        let _ = reverse_index.entry(tool.clone()).or_insert_with(|| provider.clone());
                     }
                 }
             }
@@ -299,12 +309,24 @@ impl ToolRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::mcp_refresh_retry_allowed;
+    use super::{mcp_refresh_retry_allowed, sorted_providers};
     use anyhow::anyhow;
+    use rustc_hash::FxHashMap;
 
     #[test]
     fn mcp_refresh_skips_configuration_failures_but_retries_transient_errors() {
         assert!(!mcp_refresh_retry_allowed(&anyhow!("MCP server URL invalid: endpoint must use https")));
         assert!(mcp_refresh_retry_allowed(&anyhow!("MCP server connection reset by peer")));
+    }
+
+    #[test]
+    fn sorted_providers_orders_by_name_independent_of_insertion() {
+        let mut index: FxHashMap<String, Vec<String>> = FxHashMap::default();
+        for name in ["zeta", "Alpha", "alpha", "beta"] {
+            drop(index.insert(name.to_owned(), vec![format!("{name}_tool")]));
+        }
+
+        let names: Vec<&str> = sorted_providers(&index).iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["Alpha", "alpha", "beta", "zeta"]);
     }
 }
