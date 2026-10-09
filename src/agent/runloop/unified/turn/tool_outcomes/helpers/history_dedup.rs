@@ -413,6 +413,13 @@ pub(super) fn navigation_evidence(
         }
         let target =
             crate::agent::runloop::unified::turn::tool_outcomes::handlers::parse_simple_exec_read_target(args)?;
+        // Piped stages and awk programs transform the output (column widths,
+        // counts), so those lines are not the file's own content and must
+        // never be fingerprinted as positioned evidence. Loop guards still
+        // count such reads via path/slice; only evidence needs verbatim.
+        if !target.verbatim {
+            return None;
+        }
         output.get("output")?.as_str()?.lines().enumerate().map(|(offset, text)| {
             serde_json::json!({"path":target.path, "cwd":vtcode_core::tools::command_args::working_dir_text(args), "line":target.start_line.saturating_add(offset), "text":text})
         }).collect()

@@ -153,9 +153,11 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
             if let Some(exec_read) = parse_simple_exec_read_target(args) {
                 return Some(format!("unified_exec::read::{}{}", exec_read.path, exec_read.slice_suffix));
             }
-            // Track file-reading shell commands in the family guard to prevent
-            // bypass via unified_exec. Only commands on the is_readonly_unified_exec_command
-            // allowlist (tool_intent.rs) reach this point — cat, head, tail, bat.
+            // Track remaining file-reading shell commands in the family guard to
+            // prevent bypass via unified_exec. Simple `sed -n` ranges and `awk`
+            // `NR`-range measurements are handled above; only commands on the
+            // is_readonly_unified_exec_command allowlist (tool_intent.rs)
+            // reach this fallback — cat, head, tail, bat.
             let parts = vtcode_core::tools::command_args::command_words(args).ok()??;
             let command_name = parts.first()?.as_str();
             if !matches!(command_name, "cat" | "head" | "tail" | "bat") {
@@ -174,15 +176,132 @@ pub(crate) struct ExecReadTarget {
     pub(crate) path: String,
     pub(crate) start_line: usize,
     slice_suffix: String,
+    /// Whether the command output is the file's own lines. Only a bare
+    /// `sed -n '<range>p' <file>` (no pipe) is verbatim: piped stages and awk
+    /// programs transform the output, so it must never be fingerprinted as
+    /// positioned file evidence (see `navigation_evidence`). Loop guards use
+    /// path/slice regardless of this flag.
+    pub(crate) verbatim: bool,
 }
 
 pub(crate) fn parse_simple_exec_read_target(args: &Value) -> Option<ExecReadTarget> {
     let parts = vtcode_core::tools::command_args::command_words(args).ok()??;
-    if parts.iter().any(|part| matches!(part.as_str(), "&&" | "|" | ";")) {
+    // Measurement loops hide a simple read behind a pipe
+    // (`sed -n '65,71p' README.md | awk ...`, `awk 'NR...' README.md | cat`):
+    // only the leading pipeline stage determines what is read, so parse that
+    // and ignore trailing pipe stages. Only `|` is split: `;`/`&&`/`||`
+    // compounds keep their legacy untracked behavior (the full word list
+    // fails the simple-shape parse below), which under-counts rather than
+    // over-blocks multi-read one-liners.
+    let leading = leading_shell_segment(parts.as_slice());
+    let piped = leading.len() != parts.len();
+    parse_simple_sed_read_target(leading)
+        .or_else(|| parse_simple_awk_read_target(leading))
+        .map(|mut target| {
+            // A stripped pipe stage transforms the output downstream, so the
+            // lines that reach the model are not the file's own lines.
+            target.verbatim = target.verbatim && !piped;
+            target
+        })
+}
+
+/// Leading pipeline stage before the first `|` token. `command_words` splits
+/// via `shell_words`, so a `|` inside a quoted awk program stays embedded in
+/// the program word and never splits; only a standalone pipe operator cuts.
+fn leading_shell_segment(parts: &[String]) -> &[String] {
+    let end = parts.iter().position(|part| part.as_str() == "|").unwrap_or(parts.len());
+    &parts[..end]
+}
+
+/// Parse `awk '<program>' <single-file>` ranged measurement reads.
+///
+/// KISS scope: exactly `awk`, one program word, one file word — no options
+/// (`-F`, `-v` fail closed to `None`), no multi-file scans, and the program
+/// must reference an `NR` line range (see [`awk_nr_line_range`]). Whole-file
+/// scans stay untracked: distinct whole-file queries are diverse research, not
+/// pagination (mirrors the `code_search` per-path exclusion), so counting them
+/// would false-trip the path cap. The read guard only runs for
+/// readonly-classified calls, so mutating programs (`>`, `|`, `system()`, `@`)
+/// never reach here; no need to re-scan the program for writes. The file word
+/// must not look like a flag. Awk output is always computed, never the file's
+/// own lines, so `verbatim` is always false.
+fn parse_simple_awk_read_target(parts: &[String]) -> Option<ExecReadTarget> {
+    if parts.len() != 3 || parts.first().map(String::as_str) != Some("awk") {
+        return None;
+    }
+    let program = parts.get(1)?.as_str();
+    if program.trim().is_empty() {
+        return None;
+    }
+    let path = parts.get(2)?.as_str();
+    if path.starts_with('-') || path.is_empty() {
         return None;
     }
 
-    parse_simple_sed_read_target(parts.as_slice())
+    let (start, end) = awk_nr_line_range(program)?;
+    let limit = end.saturating_sub(start).saturating_add(1);
+    Some(ExecReadTarget {
+        path: path.to_string(),
+        start_line: start,
+        slice_suffix: format!("::off={start}::lim={limit}"),
+        verbatim: false,
+    })
+}
+
+/// Extract the line range referenced by `NR` comparisons in an awk program.
+///
+/// Scans for `NR` then an optional comparison operator (`>`, `<`, `=`, `!`
+/// combos) then a decimal number. Only numbers in that position count, so
+/// thresholds like `length > 120` (no `NR`) do not masquerade as line ranges.
+/// Requires at least two numbers: a single `NR` reference (`NR>1` header-skip,
+/// one `NR==67` probe, one `/NR==65/` regex hit) cannot delimit a range, and
+/// grouping all such open-ended scans by path alone would trip the family cap
+/// on diverse column queries over the same file. Returns `(min, max)` over
+/// all matches.
+fn awk_nr_line_range(program: &str) -> Option<(usize, usize)> {
+    let bytes = program.as_bytes();
+    let mut numbers: Vec<usize> = Vec::new();
+    let mut index = 0;
+    while index + 1 < bytes.len() {
+        if bytes[index] == b'N' && bytes[index + 1] == b'R' {
+            let mut cursor = index + 2;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+                cursor += 1;
+            }
+            while cursor < bytes.len() && matches!(bytes[cursor], b'>' | b'<' | b'=' | b'!') {
+                cursor += 1;
+            }
+            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+                cursor += 1;
+            }
+            let start = cursor;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+                cursor += 1;
+            }
+            if start < cursor
+                && let Ok(number) = program[start..cursor].parse::<usize>()
+            {
+                numbers.push(number);
+            }
+            index = cursor.max(index + 1);
+        } else {
+            index += 1;
+        }
+    }
+    let min = *numbers.iter().min()?;
+    let max = *numbers.iter().max()?;
+    // A lone `NR` reference cannot delimit a range (see doc comment); without
+    // this, every `NR>1` header-skip would collapse to `off=1::lim=1` and trip
+    // the family cap on diverse same-file queries.
+    if numbers.len() < 2 {
+        return None;
+    }
+    // Sanity: line numbers, not byte counts. Ranges spanning millions of
+    // lines are not real file slices; leave untracked.
+    if max == 0 || max.saturating_sub(min) > 1_000_000 {
+        return None;
+    }
+    Some((min, max))
 }
 
 fn parse_simple_sed_read_target(parts: &[String]) -> Option<ExecReadTarget> {
@@ -203,6 +322,11 @@ fn parse_simple_sed_read_target(parts: &[String]) -> Option<ExecReadTarget> {
     if cursor + 1 != parts.len() {
         return None;
     }
+    // Fail closed on flag-like paths (`sed -n '1p' --help`); mirrors the awk
+    // parser below. `-` (stdin) is not a file read either.
+    if path.starts_with('-') {
+        return None;
+    }
 
     let (start, end) = parse_simple_sed_print_range(script)?;
     let limit = end.saturating_sub(start).saturating_add(1);
@@ -210,6 +334,9 @@ fn parse_simple_sed_read_target(parts: &[String]) -> Option<ExecReadTarget> {
         path: path.to_string(),
         start_line: start,
         slice_suffix: format!("::off={start}::lim={limit}"),
+        // Bare `sed -n '<range>p' <file>` prints the file's own lines. The
+        // caller clears this when a pipe stage was stripped.
+        verbatim: true,
     })
 }
 
@@ -615,6 +742,145 @@ mod tests {
         let args = serde_json::json!({"command": "sed -n '440,520p' Cargo.toml extra.txt"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
         assert_eq!(key, None);
+    }
+
+    #[test]
+    fn piped_sed_measurement_shares_family_with_bare_sed_same_range() {
+        // Blocked session 20261008T094713Z: `sed -n '65,71p' README.md | awk ...`
+        // measured the same table as the bare sed. Both must share one family
+        // key so the consecutive family cap converges the loop.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md"});
+        let piped = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{n=length($0); print n}'"});
+        let bare_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &bare);
+        let piped_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &piped);
+        assert_eq!(bare_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(piped_key, bare_key);
+    }
+
+    #[test]
+    fn piped_sed_different_ranges_stay_distinct_families() {
+        // Asymmetric side: diverse pagination must NOT group. Same shape as
+        // above but disjoint ranges → distinct keys, no false cap trip.
+        let first = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let second = serde_json::json!({"cmd": "sed -n '154,180p' README.md | awk '{print n}'"});
+        let first_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first);
+        let second_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &second);
+        assert_eq!(first_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(second_key, Some("unified_exec::read::README.md::off=154::lim=27".to_string()));
+        assert_ne!(first_key, second_key);
+    }
+
+    #[test]
+    fn semicolon_compound_keeps_legacy_untracked_behavior() {
+        // `;` compounds carry multiple reads in one call. They keep the legacy
+        // `None` (under-count rather than over-block); pipe stages above are
+        // the measurement-loop shape this fix covers.
+        let args = serde_json::json!({"cmd": "sed -n '65,71p' README.md; echo ---; sed -n '202,260p' README.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+    }
+
+    #[test]
+    fn awk_nr_range_measurement_groups_same_slice() {
+        // The late-turn loop ran `awk 'NR>=65 && NR<=71 ...' README.md` with
+        // varying bodies. Same NR range → same family regardless of body.
+        let first = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print NR\": \"$0}' README.md"});
+        let second = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {n=length($0); print NR\": len=\"n}' README.md"});
+        let first_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first);
+        let second_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &second);
+        assert_eq!(first_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(second_key, first_key);
+    }
+
+    #[test]
+    fn awk_nr_equality_alternatives_extract_min_max() {
+        // `NR==67 || NR==68 || ... || NR==71` targets lines 67-71.
+        let args = serde_json::json!({"cmd": "awk 'NR==67 || NR==68 || NR==69 || NR==70 || NR==71 {print}' README.md"});
+        let key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args);
+        assert_eq!(key, Some("unified_exec::read::README.md::off=67::lim=5".to_string()));
+    }
+
+    #[test]
+    fn awk_whole_file_scan_stays_untracked() {
+        // Asymmetric side: `length > 120` names a byte threshold, not a line
+        // range (no NR) → untracked, so diverse whole-file queries never trip
+        // the read caps (mirrors the `code_search` per-path exclusion).
+        let whole = serde_json::json!({"cmd": "awk 'length > 120 {print}' README.md"});
+        let ranged = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&whole), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &whole), None);
+        assert_eq!(
+            repeated_file_read_family_key(tool_names::EXEC_COMMAND, &ranged),
+            Some("unified_exec::read::README.md::off=65::lim=7".to_string())
+        );
+    }
+
+    #[test]
+    fn awk_piped_measurement_still_counts_leading_read() {
+        let args = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md | cat"});
+        let key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args);
+        assert_eq!(key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+    }
+
+    #[test]
+    fn only_bare_sed_is_verbatim_for_positioned_evidence() {
+        // Guards count pipes and awk via path/slice, but positioned evidence
+        // needs the file's own lines: only a bare `sed -n` range print is
+        // verbatim. Piped and awk outputs are transformed downstream.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md"});
+        assert!(parse_simple_exec_read_target(&bare).is_some_and(|target| target.verbatim));
+        let piped = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        assert!(parse_simple_exec_read_target(&piped).is_some_and(|target| !target.verbatim));
+        let awk = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert!(parse_simple_exec_read_target(&awk).is_some_and(|target| !target.verbatim));
+    }
+
+    #[test]
+    fn awk_single_nr_reference_stays_untracked() {
+        // One `NR` number cannot delimit a range: `NR>1` header-skips with
+        // different bodies are diverse queries, not a retry loop. Grouping
+        // them would trip the family cap on legitimate research.
+        let first = serde_json::json!({"cmd": "awk 'NR>1 {print $1}' README.md"});
+        let second = serde_json::json!({"cmd": "awk 'NR>1 {print $2}' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&first), None);
+        assert_eq!(parse_simple_exec_read_target(&second), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first), None);
+    }
+
+    #[test]
+    fn sed_flag_like_path_stays_untracked() {
+        let args = serde_json::json!({"cmd": "sed -n '1p' --help"});
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+    }
+
+    #[test]
+    fn awk_with_options_or_multiple_files_stays_untracked() {
+        // Fail closed: options and multi-file scans are not simple reads.
+        let flagged = serde_json::json!({"cmd": "awk -F: '{print $1}' README.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &flagged), None);
+        let multi = serde_json::json!({"cmd": "awk '{print}' README.md CHANGELOG.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &multi), None);
+    }
+
+    #[test]
+    fn grep_measurement_probe_is_not_a_read_target() {
+        // `grep -c` is search, not a positioned read: distinct queries are
+        // diverse research (mirrors the code_search per-path exclusion), so it
+        // must stay out of the read family/path caps.
+        let args = serde_json::json!({"cmd": "grep -c '—' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+    }
+
+    #[test]
+    fn repeated_read_path_counts_piped_sed_and_awk_measurements() {
+        // Per-path total (not just family streak) must see the bypass shapes,
+        // so 7+ README measurements trip the path cap even with mixed bodies.
+        let piped_sed = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let awk = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &piped_sed), Some("README.md".to_string()));
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &awk), Some("README.md".to_string()));
     }
 
     #[test]
