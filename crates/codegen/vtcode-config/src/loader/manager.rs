@@ -434,11 +434,13 @@ impl ConfigManager {
                 .into_iter()
                 .map(|source| s.spawn(move || Self::load_optional_layer(source)))
                 .collect::<Vec<_>>();
-            handles
+            // Join every handle first: `scope` re-panics if any panicked thread is left unjoined.
+            let joined = handles.into_iter().map(|h| h.join()).collect::<Vec<_>>();
+            joined
                 .into_iter()
-                .map(|h| h.join().expect("config layer thread panicked"))
-                .collect()
-        });
+                .map(|r| r.map_err(|_payload| anyhow::anyhow!("config layer loader thread panicked")))
+                .collect::<Result<Vec<_>>>()
+        })?;
 
         let mut layer_stack = ConfigLayerStack::default();
         for layer in raw_layers.into_iter().flatten() {
