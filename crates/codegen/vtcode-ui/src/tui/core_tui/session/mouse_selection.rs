@@ -389,6 +389,13 @@ fn trace_clipboard(message: &str) {
     tracing::debug!(target: "vtcode_ui::clipboard", "{message}");
 }
 
+/// Waits on `child` from a detached thread so no zombie accumulates and the caller never blocks.
+fn reap_in_background(mut child: std::process::Child) {
+    let _ = std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
 fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
     use std::process::Stdio;
 
@@ -475,22 +482,15 @@ fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
                         "'{program}' still running after {WAIT_BUDGET:?}; input {}",
                         if ok { "accepted" } else { "failed" }
                     ));
-                    // Fork-and-hold helpers legitimately outlive the copy call;
-                    // reap from a detached thread so no zombie accumulates.
-                    let _ = std::thread::spawn(move || {
-                        let mut child = child;
-                        let _ = child.wait();
-                    });
+                    // Fork-and-hold helpers legitimately outlive the copy call.
+                    reap_in_background(child);
                     return ok;
                 }
                 std::thread::sleep(POLL_INTERVAL);
             }
             Err(err) => {
                 trace_clipboard(&format!("'{program}' wait failed: {err}"));
-                let _ = std::thread::spawn(move || {
-                    let mut child = child;
-                    let _ = child.wait();
-                });
+                reap_in_background(child);
                 return false;
             }
         }
