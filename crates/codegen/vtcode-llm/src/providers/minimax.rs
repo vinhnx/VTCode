@@ -71,7 +71,7 @@ impl MinimaxProvider {
     }
 }
 
-fn resolve_minimax_base_url(base_url: Option<String>) -> String {
+pub(crate) fn resolve_minimax_base_url(base_url: Option<String>) -> String {
     fn sanitize(value: &str) -> Option<String> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -237,6 +237,10 @@ mod tests {
     fn resolve_minimax_base_url_respects_custom_proxy_path() {
         assert_eq!(
             resolve_minimax_base_url(Some("https://proxy.example.com/minimax".to_string())),
+            "https://proxy.example.com/minimax/v1"
+        );
+        assert_eq!(
+            resolve_minimax_base_url(Some("https://proxy.example.com/minimax/v1".to_string())),
             "https://proxy.example.com/minimax/v1"
         );
     }

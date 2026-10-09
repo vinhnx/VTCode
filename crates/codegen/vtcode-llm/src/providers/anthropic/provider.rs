@@ -32,7 +32,6 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use serde_json::Value;
-use std::env;
 
 const ANTHROPIC_COMPACT_BETA: &str = "compact-2026-01-12";
 const ANTHROPIC_CONTEXT_MANAGEMENT_BETA: &str = "context-management-2025-06-27";
@@ -147,7 +146,7 @@ impl AnthropicProvider {
         );
 
         let base_url_value = if models::minimax::SUPPORTED_MODELS.contains(&model.as_str()) {
-            Self::resolve_minimax_base_url(base_url)
+            crate::providers::minimax::resolve_minimax_base_url(base_url)
         } else {
             override_base_url(urls::ANTHROPIC_API_BASE, base_url, Some(env_vars::ANTHROPIC_BASE_URL))
         };
@@ -168,56 +167,6 @@ impl AnthropicProvider {
     pub(crate) fn with_custom_auth(mut self, custom_provider_auth: Option<CustomProviderAuthHandle>) -> Self {
         self.custom_provider_auth = custom_provider_auth;
         self
-    }
-
-    fn resolve_minimax_base_url(base_url: Option<String>) -> String {
-        fn sanitize(value: &str) -> Option<String> {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.trim_end_matches('/').to_string())
-            }
-        }
-
-        fn is_official_minimax_host(url: &str) -> bool {
-            let lower = url.to_ascii_lowercase();
-            [
-                "://api.minimax.io",
-                "://platform.minimax.io",
-                "api.minimax.io",
-                "platform.minimax.io",
-            ]
-            .iter()
-            .any(|marker| lower.contains(marker))
-        }
-
-        let resolved = base_url
-            .and_then(|value| sanitize(&value))
-            .or_else(|| env::var(env_vars::MINIMAX_BASE_URL).ok().and_then(|value| sanitize(&value)))
-            .or_else(|| sanitize(urls::MINIMAX_API_BASE))
-            .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
-
-        let mut normalized = resolved;
-
-        if normalized.ends_with("/messages") {
-            normalized = normalized.trim_end_matches("/messages").trim_end_matches('/').to_string();
-        }
-
-        if let Some(pos) = normalized.find("/v1/") {
-            normalized = normalized[..pos + 3].to_string();
-        }
-
-        let mut without_v1 = normalized.trim_end_matches('/').to_string();
-        if without_v1.ends_with("/v1") {
-            without_v1 = without_v1.trim_end_matches("/v1").trim_end_matches('/').to_string();
-        }
-
-        if is_official_minimax_host(&without_v1) && !without_v1.to_ascii_lowercase().contains("/anthropic") {
-            without_v1 = format!("{}/anthropic", without_v1.trim_end_matches('/'));
-        }
-
-        format!("{}/v1", without_v1.trim_end_matches('/'))
     }
 
     fn requires_advanced_tool_use_beta(&self, request: &LLMRequest) -> bool {

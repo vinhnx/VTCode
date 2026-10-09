@@ -419,43 +419,6 @@ fn with_leak_protection_sets_system_prompt_when_absent() {
 }
 
 #[test]
-fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
-    assert_eq!(AnthropicProvider::resolve_minimax_base_url(None), "https://api.minimax.io/anthropic/v1");
-}
-
-#[test]
-fn resolve_minimax_base_url_normalizes_root_host_to_anthropic_v1() {
-    assert_eq!(
-        AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io".to_string())),
-        "https://api.minimax.io/anthropic/v1"
-    );
-    assert_eq!(
-        AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io/v1".to_string())),
-        "https://api.minimax.io/anthropic/v1"
-    );
-}
-
-#[test]
-fn resolve_minimax_base_url_keeps_explicit_anthropic_path() {
-    assert_eq!(
-        AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io/anthropic".to_string())),
-        "https://api.minimax.io/anthropic/v1"
-    );
-    assert_eq!(
-        AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io/anthropic/v1/messages".to_string())),
-        "https://api.minimax.io/anthropic/v1"
-    );
-}
-
-#[test]
-fn resolve_minimax_base_url_respects_custom_proxy_path() {
-    assert_eq!(
-        AnthropicProvider::resolve_minimax_base_url(Some("https://proxy.example.com/minimax/v1".to_string())),
-        "https://proxy.example.com/minimax/v1"
-    );
-}
-
-#[test]
 fn native_structured_outputs_do_not_require_structured_output_beta() {
     let provider = AnthropicProvider::with_model("test-key".to_string(), models::CLAUDE_SONNET_5.to_string());
     let request = LLMRequest {

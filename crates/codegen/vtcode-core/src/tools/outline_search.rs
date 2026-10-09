@@ -4,9 +4,10 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
+use tokio::io::BufReader;
 use tokio::process::Command;
 
+use super::grep_backend::{BoundedRecordRead, read_bounded_record};
 use crate::tools::ast_grep_installer::AstGrepStatus;
 use crate::tools::ast_grep_language::AstGrepLanguage;
 use vtcode_commons::canonicalize;
@@ -47,48 +48,6 @@ pub(crate) struct DeclarationSearchOutcome {
 async fn kill_and_reap_declaration_child(child: &mut tokio::process::Child) {
     let _ = child.start_kill();
     let _ = child.wait().await;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BoundedRecordRead {
-    Record,
-    Eof,
-    Exhausted,
-}
-
-async fn read_bounded_record<R: AsyncBufRead + Unpin>(
-    reader: &mut R,
-    record: &mut Vec<u8>,
-    bytes_read: &mut usize,
-    byte_cap: usize,
-) -> std::io::Result<BoundedRecordRead> {
-    loop {
-        let available = reader.fill_buf().await?;
-        if available.is_empty() {
-            return Ok(if record.is_empty() {
-                BoundedRecordRead::Eof
-            } else {
-                BoundedRecordRead::Record
-            });
-        }
-        if *bytes_read >= byte_cap {
-            return Ok(BoundedRecordRead::Exhausted);
-        }
-
-        let remaining = byte_cap - *bytes_read;
-        let bounded = &available[..available.len().min(remaining)];
-        let consumed = bounded
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map_or(bounded.len(), |index| index + 1);
-        let record_complete = bounded.get(consumed.saturating_sub(1)) == Some(&b'\n');
-        record.extend_from_slice(&bounded[..consumed]);
-        reader.consume(consumed);
-        *bytes_read += consumed;
-        if record_complete {
-            return Ok(BoundedRecordRead::Record);
-        }
-    }
 }
 
 fn smart_case_eq(left: &str, query: &str) -> bool {
