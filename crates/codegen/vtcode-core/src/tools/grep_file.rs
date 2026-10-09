@@ -23,7 +23,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
-use tokio::task::spawn_blocking;
 use tracing::warn;
 
 // Backend items (input/result types, streaming helpers) are re-exported here
@@ -128,9 +127,19 @@ impl GrepSearchManager {
         let state = self.state.clone();
         let search_dir = self.search_dir.clone();
         let cache = self.cache.clone();
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            warn!("grep search query ignored: no active Tokio runtime");
+            if let Ok(mut st) = self.state.lock() {
+                st.is_search_scheduled = false;
+                // Clear so the same query is not deduped away once a runtime exists.
+                st.latest_query.clear();
+            }
+            return;
+        };
         // Run debounce and search spawn on a blocking thread to avoid
         // blocking the async runtime or reader threads.
-        spawn_blocking(move || {
+        let search_runtime = runtime.clone();
+        drop(runtime.spawn_blocking(move || {
             // Always do a minimum debounce, but then poll until the
             // `active_search` is cleared.
             thread::sleep(SEARCH_DEBOUNCE);
@@ -169,8 +178,14 @@ impl GrepSearchManager {
             // Spawn the search on the async runtime so it can be killed on
             // timeout or cancellation. The debounce loop above already ensured
             // no active search is running.
-            tokio::spawn(GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state, Some(cache)));
-        });
+            drop(search_runtime.spawn(GrepSearchManager::spawn_grep_file(
+                query,
+                search_dir,
+                cancellation_token,
+                state,
+                Some(cache),
+            )));
+        }));
     }
 
     /// Retrieve the last successful search result
@@ -733,6 +748,16 @@ mod tests {
     fn test_grep_search_manager_creation() {
         let manager = GrepSearchManager::new(PathBuf::from("."));
         assert_eq!(manager.search_dir, PathBuf::from("."));
+    }
+
+    #[test]
+    fn on_user_query_without_runtime_does_not_panic_and_allows_retry() {
+        let manager = GrepSearchManager::new(PathBuf::from("."));
+        manager.on_user_query("first");
+        manager.on_user_query("first");
+        let state = manager.state.lock().expect("state lock");
+        assert!(state.latest_query.is_empty());
+        assert!(!state.is_search_scheduled);
     }
 
     #[test]

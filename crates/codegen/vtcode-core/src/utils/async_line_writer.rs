@@ -92,6 +92,8 @@ impl AsyncLineWriter {
         buffer_bytes: usize,
         flush_interval: Duration,
     ) -> Result<Self> {
+        let runtime = tokio::runtime::Handle::try_current()
+            .context("AsyncLineWriter::new requires an active Tokio runtime; use new_async or call within one")?;
         if let Some(parent) = path.parent() {
             ensure_dir_exists_sync(parent)
                 .with_context(|| format!("Failed to create log directory: {}", parent.display()))?;
@@ -104,7 +106,7 @@ impl AsyncLineWriter {
             .open(&path)
             .with_context(|| format!("Failed to create log file: {}", path.display()))?;
 
-        Ok(Self::spawn_actor(path, channel_capacity, buffer_bytes, flush_interval))
+        Ok(Self::spawn_actor(&runtime, path, channel_capacity, buffer_bytes, flush_interval))
     }
 
     async fn new_async_with_limits(
@@ -127,10 +129,17 @@ impl AsyncLineWriter {
             .await
             .with_context(|| format!("Failed to create log file: {}", path.display()))?;
 
-        Ok(Self::spawn_actor(path, channel_capacity, buffer_bytes, flush_interval))
+        let runtime = tokio::runtime::Handle::current();
+        Ok(Self::spawn_actor(&runtime, path, channel_capacity, buffer_bytes, flush_interval))
     }
 
-    fn spawn_actor(path: PathBuf, channel_capacity: usize, buffer_bytes: usize, flush_interval: Duration) -> Self {
+    fn spawn_actor(
+        runtime: &tokio::runtime::Handle,
+        path: PathBuf,
+        channel_capacity: usize,
+        buffer_bytes: usize,
+        flush_interval: Duration,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel(channel_capacity.max(1));
         let reserved_bytes = Arc::new(AtomicUsize::new(0));
         let diagnostics = Arc::new(Diagnostics::default());
@@ -138,7 +147,7 @@ impl AsyncLineWriter {
         // Spawn the actor task. It owns the file and runs the message loop.
         let actor_reserved_bytes = Arc::clone(&reserved_bytes);
         let actor_diagnostics = Arc::clone(&diagnostics);
-        tokio::spawn(async move {
+        runtime.spawn(async move {
             actor_task(
                 &path,
                 receiver,
@@ -333,6 +342,17 @@ mod tests {
         let diagnostics = writer.diagnostics();
         assert_eq!(diagnostics.dropped_lines, 2);
         assert_eq!(diagnostics.dropped_bytes, 15);
+    }
+
+    #[test]
+    fn sync_constructor_without_runtime_errors_without_creating_file() {
+        let temp_dir = TempDir::new().expect("temp directory");
+        let path = temp_dir.path().join("nested").join("trajectory.jsonl");
+
+        let result = AsyncLineWriter::new_with_limits(path.clone(), 4, 1024, Duration::from_secs(60));
+
+        assert!(result.is_err());
+        assert!(!path.exists());
     }
 
     #[tokio::test]

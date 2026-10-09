@@ -512,7 +512,8 @@ impl Drop for MyHandle {
 }
 ```
 
-**Good:** Use a channel-based cleanup task instead:
+**Good:** Use a queue the owner drains instead (a channel-fed actor works when a runtime is guaranteed; a synchronous
+queue drained by async methods works everywhere, see Anti-Pattern 6):
 
 ```rust
 impl Drop for MyHandle {
@@ -558,6 +559,21 @@ tokio::spawn(async move {
 // Later:
 cancel_clone.cancel();  // Gracefully stop the task
 ```
+
+### Anti-Pattern 6: Ambient `tokio::spawn` in sync constructors and globals
+
+`tokio::spawn` and `spawn_blocking` read a hidden thread-local runtime context and panic off-runtime (std threads, rayon
+workers, `Lazy` initializers). A global that spawns an actor in its constructor also binds to whichever runtime touched
+it first and goes dead when that runtime drops.
+
+**Good:**
+
+- Sync constructors that must spawn call `Handle::try_current()` first and return an error (or degrade with a warning)
+  before any side effect; async constructors take `Handle::current()` and spawn through the explicit handle.
+- Globals and `Drop`-driven cleanup avoid tasks: push to a synchronous queue (`Mutex<Vec<_>>`, stamped with the event
+  time) that async methods drain (`TimeoutDetector::drain_pending_ends`).
+
+Greppable rule: a `tokio::spawn` inside a non-`async` `fn` needs a reason or a `Handle` parameter.
 
 ## Task Extent, Error Propagation, and Cancel-Safety
 
