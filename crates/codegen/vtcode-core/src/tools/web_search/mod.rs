@@ -18,6 +18,7 @@
 
 use super::traits::Tool;
 use crate::config::constants::tools;
+use crate::tools::web_fetch::classify_helpers::decode_html_entities;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use regex::Regex;
@@ -369,11 +370,27 @@ fn build_youcom_client(timeout_secs: u64) -> Result<reqwest::Client> {
 // DuckDuckGo (keyless, best-effort HTML scraping)
 // ---------------------------------------------------------------------------
 
-static DDG_RESULT_ANCHOR: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).expect("valid DDG anchor regex")
+static DDG_ANCHOR_ALL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?is)<a\b(?P<attrs>[^>]{0,4096})>(?P<inner>.*?)</a>"#).expect("valid DDG anchor regex")
 });
-static DDG_SNIPPET: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?s)class="result__snippet"[^>]*>(.*?)</a>"#).expect("valid DDG snippet regex"));
+static DDG_CLASS_RESULT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)\bclass\s*=\s*(?:"[^"]{0,1024}result__a[^"]{0,1024}"|'[^']{0,1024}result__a[^']{0,1024}'|[^\s>]{0,1024}result__a[^\s>]{0,1024})"#)
+        .expect("valid DDG result class regex")
+});
+static DDG_HREF: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)\bhref\s*=\s*(?:"(?P<dq>[^"]{0,2048})"|'(?P<sq>[^']{0,2048})'|(?P<uq>[^\s>]{1,2048}))"#)
+        .expect("valid DDG href regex")
+});
+static DDG_SNIPPET: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?is)\bclass\s*=\s*(?:"[^"]{0,1024}result__snippet[^"]{0,1024}"|'[^']{0,1024}result__snippet[^']{0,1024}')[^>]{0,2048}>(?P<text>.*?)</(?:a|td|div)>"#,
+    )
+    .expect("valid DDG snippet regex")
+});
+/// Maximum bytes of page source scanned for a snippet belonging to one
+/// result. Bounds the per-result window when the next anchor is far away
+/// (or missing for the last result).
+const DDG_SNIPPET_WINDOW_CAP: usize = 8192;
 
 async fn duckduckgo_search(query: &str, max_results: usize, timeout_secs: u64) -> Result<Vec<SearchResult>> {
     let client = build_client(timeout_secs)?;
@@ -409,22 +426,59 @@ async fn duckduckgo_search(query: &str, max_results: usize, timeout_secs: u64) -
 /// Extract ranked results from a DuckDuckGo HTML body. Pure function so it can
 /// be exercised in unit tests against a local fixture (no live network).
 pub fn parse_duckduckgo_html(body: &str, max_results: usize) -> Vec<SearchResult> {
-    let snippets: Vec<String> = DDG_SNIPPET.captures_iter(body).map(|c| clean_html(&c[1])).collect();
+    // Collect result anchors with their source spans first so each snippet
+    // can be looked up in the window belonging to its own anchor (up to the
+    // next result anchor). A previous version collected all snippets
+    // globally and aligned them by index, which misaligned every snippet
+    // after a single missing-snippet result.
+    let anchors: Vec<(usize, usize, String, String)> = DDG_ANCHOR_ALL
+        .captures_iter(body)
+        .filter_map(|caps| {
+            let whole = caps.get(0)?;
+            let attrs = caps.name("attrs").map(|m| m.as_str().to_string()).unwrap_or_default();
+            if !DDG_CLASS_RESULT.is_match(&attrs) {
+                return None;
+            }
+            let inner = caps.name("inner").map(|m| m.as_str().to_string()).unwrap_or_default();
+            Some((whole.start(), whole.end(), attrs, inner))
+        })
+        .collect();
 
     let mut results = Vec::new();
-    for (idx, caps) in DDG_RESULT_ANCHOR.captures_iter(body).enumerate() {
+    for (pos, (_, end, attrs, inner)) in anchors.iter().enumerate() {
         if results.len() >= max_results {
             break;
         }
-        let raw_href = &caps[1];
-        let title = clean_html(&caps[2]);
-        let Some(url) = normalize_ddg_url(raw_href) else {
+        let Some(raw_href) = extract_ddg_href(attrs) else {
+            continue;
+        };
+        let title = clean_html(inner);
+        let Some(url) = normalize_ddg_url(&raw_href) else {
             continue;
         };
         if title.is_empty() {
             continue;
         }
-        let snippet = snippets.get(idx).cloned().unwrap_or_default();
+        // Snippet window: from this anchor's end to the next result anchor's
+        // start (capped), so a missing snippet yields empty rather than the
+        // next result's snippet.
+        let mut window_end = anchors
+            .get(pos + 1)
+            .map(|next| next.0)
+            .unwrap_or(body.len())
+            .min(end.saturating_add(DDG_SNIPPET_WINDOW_CAP))
+            .min(body.len());
+        // The cap addition can land mid-character; back off to a boundary so
+        // `body.get()` keeps the whole window instead of yielding empty.
+        while window_end > *end && !body.is_char_boundary(window_end) {
+            window_end -= 1;
+        }
+        let window = body.get(*end..window_end).unwrap_or_default();
+        let snippet = DDG_SNIPPET
+            .captures(window)
+            .and_then(|caps| caps.name("text"))
+            .map(|m| clean_html(m.as_str()))
+            .unwrap_or_default();
         results.push(SearchResult {
             title: truncate_chars(&title, MAX_TITLE_CHARS),
             url,
@@ -433,6 +487,20 @@ pub fn parse_duckduckgo_html(body: &str, max_results: usize) -> Vec<SearchResult
     }
 
     results
+}
+
+/// Extract the `href` value from a matched `<a ...>` attribute string.
+/// Accepts double-quoted, single-quoted, and unquoted values in any
+/// attribute order. Returns `None` when no `href` is present.
+fn extract_ddg_href(attrs: &str) -> Option<String> {
+    let caps = DDG_HREF.captures(attrs)?;
+    if let Some(value) = caps.name("dq").map(|m| m.as_str()) {
+        return Some(value.to_string());
+    }
+    if let Some(value) = caps.name("sq").map(|m| m.as_str()) {
+        return Some(value.to_string());
+    }
+    caps.name("uq").map(|m| m.as_str().to_string())
 }
 
 /// Resolve a DuckDuckGo result href into a real https/http URL.
@@ -598,19 +666,6 @@ fn clean_html(input: &str) -> String {
     decode_html_entities(without_tags.trim())
 }
 
-fn decode_html_entities(input: &str) -> String {
-    input
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&#x27;", "'")
-        .replace("&#x2F;", "/")
-        .replace("&nbsp;", " ")
-        .replace("&hellip;", "…")
-}
-
 fn truncate_chars(input: &str, max_chars: usize) -> String {
     vtcode_commons::formatting::truncate_text(input.trim(), max_chars, "…")
 }
@@ -734,6 +789,102 @@ mod tests {
         // how to surface this to the agent.
         let challenge = r#"<html><body>Anomaly detected.</body></html>"#;
         assert!(parse_duckduckgo_html(challenge, 10).is_empty());
+    }
+
+    #[test]
+    fn parse_accepts_href_before_class_and_single_quotes() {
+        // Asymmetric attribute order + quote style: the old regex required
+        // `class="result__a"` before `href="..."` with double quotes.
+        let body = r#"
+            <a href='https://example.com/b-first' class='result__a'>B first</a>
+            <a class="result__snippet">Snippet B.</a>
+            <a href="https://example.com/a-second" class="result__a extra">A second</a>
+            <a class="result__snippet">Snippet A.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].url, "https://example.com/b-first");
+        assert_eq!(results[0].snippet, "Snippet B.");
+        assert_eq!(results[1].url, "https://example.com/a-second");
+        assert_eq!(results[1].snippet, "Snippet A.");
+    }
+
+    #[test]
+    fn parse_accepts_uppercase_tags_and_classes() {
+        let body = r#"
+            <A CLASS="RESULT__A" HREF="https://example.com/upper">Upper Title</A>
+            <A CLASS="RESULT__SNIPPET">Upper snippet.</A>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Upper Title");
+        assert_eq!(results[0].snippet, "Upper snippet.");
+    }
+
+    #[test]
+    fn parse_missing_first_snippet_does_not_shift_second() {
+        // Regression for index-aligned snippet lookup: a missing snippet for
+        // the first result must yield empty, not the second result's snippet.
+        let body = r#"
+            <a class="result__a" href="https://example.com/no-snippet">No Snippet</a>
+            <a class="result__a" href="https://example.com/with-snippet">With Snippet</a>
+            <a class="result__snippet">Second snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].snippet, "");
+        assert_eq!(results[1].snippet, "Second snippet.");
+    }
+
+    #[test]
+    fn parse_skipped_anchors_do_not_steal_snippets() {
+        // Asymmetric: [bad, good] vs [good, bad]. A skipped `javascript:`
+        // anchor must not consume or shift the good result's snippet.
+        let bad_first = r#"
+            <a class="result__a" href="javascript:alert(1)">Bad</a>
+            <a class="result__snippet">Bad snippet.</a>
+            <a class="result__a" href="https://example.com/good">Good</a>
+            <a class="result__snippet">Good snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(bad_first, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].url, "https://example.com/good");
+        assert_eq!(results[0].snippet, "Good snippet.");
+
+        let good_first = r#"
+            <a class="result__a" href="https://example.com/good">Good</a>
+            <a class="result__snippet">Good snippet.</a>
+            <a class="result__a" href="javascript:alert(1)">Bad</a>
+            <a class="result__snippet">Bad snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(good_first, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].snippet, "Good snippet.");
+    }
+
+    #[test]
+    fn decode_numeric_hex_and_named_entities() {
+        assert_eq!(decode_html_entities("&#65;&#x42;&#X43;"), "ABC");
+        assert_eq!(decode_html_entities("&rsquo;&ldquo;&mdash;"), "’“—");
+        assert_eq!(decode_html_entities("&amp;lt;"), "&lt;");
+        assert_eq!(decode_html_entities("&#9999999;"), "&#9999999;");
+    }
+
+    #[test]
+    fn parse_accepts_unquoted_href_and_td_closed_snippet() {
+        let body = r#"
+            <a class=result__a href=https://example.com/unquoted>Unquoted</a>
+            <td class="result__snippet">TD snippet.</td>
+            <abbr title="abbreviation">abbr</abbr>
+            <a class="result__a" href="https://example.com/second">Second</a>
+            <a class="result__snippet">Second snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].url, "https://example.com/unquoted");
+        assert_eq!(results[0].snippet, "TD snippet.");
+        assert_eq!(results[1].url, "https://example.com/second");
+        assert_eq!(results[1].snippet, "Second snippet.");
     }
 
     #[test]
