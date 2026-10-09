@@ -59,6 +59,35 @@ fn get_command_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
 /// Grace period to wait for threads to exit after killing the process (ms)
 const THREAD_JOIN_GRACE_PERIOD_MS: u64 = 500;
 
+const PTY_OUTPUT_TRUNCATED_MARKER: &[u8] = b"\n[... output truncated: capture limit reached ...]";
+
+/// Reads to EOF but retains at most `max_bytes`; the surplus is still drained so the child never blocks on a full PTY.
+fn read_pty_output_capped(mut reader: impl Read, max_bytes: usize) -> Result<Vec<u8>> {
+    let mut buffer = [0u8; 4096];
+    let mut collected = Vec::new();
+    let mut truncated = false;
+
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(bytes_read) => {
+                let room = max_bytes.saturating_sub(collected.len());
+                if bytes_read > room {
+                    truncated = true;
+                }
+                collected.extend_from_slice(&buffer[..bytes_read.min(room)]);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error).context("failed to read PTY command output"),
+        }
+    }
+
+    if truncated {
+        collected.extend_from_slice(PTY_OUTPUT_TRUNCATED_MARKER);
+    }
+    Ok(collected)
+}
+
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::telemetry::perf;
@@ -145,6 +174,7 @@ impl PtyManager {
         let workspace_root = self.workspace_root.clone();
         let extra_paths = self.extra_paths.read().clone();
         let max_tokens = request.max_tokens;
+        let max_capture_bytes = self.config.max_scrollback_bytes;
 
         // Determine if this command needs serialization to avoid contention
         let needs_lock = is_long_running_command(&program)
@@ -227,28 +257,7 @@ impl PtyManager {
                 status
             });
 
-            let reader_thread = thread::spawn(move || -> Result<Vec<u8>> {
-                let mut reader = reader;
-                let mut buffer = [0u8; 4096];
-                let mut collected = Vec::new();
-
-                loop {
-                    match reader.read(&mut buffer) {
-                        Ok(0) => break,
-                        Ok(bytes_read) => {
-                            collected.extend_from_slice(&buffer[..bytes_read]);
-                        }
-                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
-                            continue;
-                        }
-                        Err(error) => {
-                            return Err(error).context("failed to read PTY command output");
-                        }
-                    }
-                }
-
-                Ok(collected)
-            });
+            let reader_thread = thread::spawn(move || read_pty_output_capped(reader, max_capture_bytes));
 
             let wait_result = match wait_rx.recv_timeout(timeout_duration) {
                 Ok(()) => wait_thread
@@ -828,3 +837,6 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
         ensure_path_within_workspace(candidate, &self.workspace_root).map(|_| ())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -110,6 +110,29 @@ mod tests {
     }
 
     #[test]
+    fn pty_stream_state_bounds_newline_free_line_and_recovers_on_next_line() {
+        let mut state = PtyStreamState::new(None, test_pty_config(), None);
+        for _ in 0..8 {
+            state.apply_chunk(&"x".repeat(4096), 5);
+        }
+        let last = state.last_display_line(5).expect("line expected");
+        assert!(last.len() <= 8 * 1024 + '…'.len_utf8());
+        assert!(last.ends_with('…'));
+
+        state.apply_chunk("\nok\n", 5);
+        assert_eq!(state.last_display_line(5), Some("ok".to_string()));
+    }
+
+    #[test]
+    fn pty_stream_state_line_cap_respects_utf8_boundaries() {
+        let mut state = PtyStreamState::new(None, test_pty_config(), None);
+        state.apply_chunk(&"é".repeat(8 * 1024), 5);
+        let last = state.last_display_line(5).expect("line expected");
+        assert!(last.ends_with('…'));
+        assert!(last.chars().filter(|c| *c == 'é').count() * 2 <= 8 * 1024);
+    }
+
+    #[test]
     fn pty_stream_state_renders_command_prompt_without_output() {
         let state = PtyStreamState::new(Some("cargo check".to_string()), test_pty_config(), None);
         let rendered = state.render_lines(5);
