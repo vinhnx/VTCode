@@ -907,6 +907,41 @@ mod tests {
     }
 
     #[test]
+    fn blocked_session_measurement_loop_trips_path_cap() {
+        // Incident-shaped replay: session 20261008T094713Z burned 32 tool calls
+        // on consecutive `README.md:65-71` table-width probes. The per-path cap
+        // (`MAX_SAME_FILE_PATH_READ_CALLS`) must trip on this sequence even
+        // though the bodies vary per call. `;`-compounds, `grep -c` searches,
+        // and whole-file `length` scans stay untracked by design, so the hit
+        // count is below the raw call count — but still above the cap.
+        let probe_shapes = [
+            r#"sed -n '65,71p' README.md | cat -A | head -20"#,
+            r#"awk 'NR>=65 && NR<=71 {print NR": ["$0"]"}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {print NR": "$0}' README.md | awk '{print length($0), $0}'"#,
+            r#"awk 'NR==67 || NR==68 || NR==69 || NR==70 || NR==71 {print}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {print}' README.md; sed -n '65p' README.md | wc -c"#,
+            r#"awk 'NR>=65 && NR<=71 {n=length($0); print NR": len="n}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {n=length($0); print NR": c="n}' README.md"#,
+            r#"sed -n '65,71p' README.md | awk '{n=length($0); print n}'"#,
+            r#"grep -c 'x' README.md"#,
+            r#"awk 'length > 120 {print}' README.md"#,
+            r#"awk 'NR==67 {print $0} NR==68 {print $0}' README.md | cat"#,
+            r#"sed -n '65,71p' README.md | awk '{n=length($0); print n}'"#,
+        ];
+        let hits = probe_shapes
+            .iter()
+            .filter(|command| {
+                repeated_read_path(tool_names::EXEC_COMMAND, &serde_json::json!({"cmd": command}))
+                    == Some("README.md".to_string())
+            })
+            .count();
+        assert!(
+            hits > MAX_SAME_FILE_PATH_READ_CALLS,
+            "incident loop must exceed the per-path cap: {hits} hits, cap {MAX_SAME_FILE_PATH_READ_CALLS}"
+        );
+    }
+
+    #[test]
     fn repeated_file_read_family_key_returns_none_for_missing_command() {
         let args = serde_json::json!({});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
