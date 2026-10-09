@@ -15,10 +15,6 @@ Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothes
 
 ===
 
-https://github.com/astral-sh/astral-html
-
-===
-
 check and rework the background task modal to use inline bottom view instead of a separate popup. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-08 at 17.46.31.png'
 
 check the original /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/resources/screenshots/vtcode-01237.png and allow expand 70-80% of the view.
