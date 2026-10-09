@@ -302,6 +302,10 @@ Each of these "defense in depth" decisions has a performance cost. Rust eliminat
 - Do not reach for `Arc<RwLock<T>>` by default. A `&mut T` or a simple `Box<T>` with exclusive access is faster.
 - Use `Rc<T>` for single-threaded shared ownership when the reference is immutable; avoid `Arc` unless cross-thread
   sharing is proven necessary.
+- Through a lock guard (`MutexGuard`, `RwLockWriteGuard`, `parking_lot` guards) every field access calls
+  `Deref`/`DerefMut` on the whole guard, so the borrow checker cannot see `guard.a` and `guard.b` as disjoint. Reborrow
+  once (`let state = &mut *guard;`) instead of cloning, copying fields out early, or splitting the critical section.
+  Example: `ToolRegistry::record_tool_latency`. Source: Tyler Mandry, "Beyond the &", RustConf 2026.
 
 ---
 

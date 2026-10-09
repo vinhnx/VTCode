@@ -183,6 +183,14 @@ struct MonitorState {
     watched_parents: HashSet<PathBuf>,
 }
 
+impl MonitorState {
+    fn tracked_entry(&mut self, path: &Path) -> &mut TrackedFileState {
+        self.tracked_files
+            .entry(path.to_path_buf())
+            .or_insert_with(TrackedFileState::new)
+    }
+}
+
 struct EditedFileMonitorInner {
     state: Mutex<MonitorState>,
     watcher: StdMutex<Option<RecommendedWatcher>>,
@@ -331,7 +339,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             entry.last_read_snapshot = Some(snapshot.clone());
             entry.last_known_disk_snapshot = Some(snapshot);
             entry.stale_conflict = None;
@@ -348,7 +356,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             let snap_for_disk = snapshot.clone();
             entry.last_read_snapshot = Some(snap_for_disk);
             entry.last_known_disk_snapshot = Some(snapshot.clone());
@@ -431,7 +439,7 @@ impl EditedFileMonitor {
         loop {
             let notify = {
                 let mut state = self.inner.state.lock();
-                let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+                let entry = state.tracked_entry(&path);
 
                 if entry.active_mutation.is_none() {
                     if let Some(front) = entry.pending_mutations.front() {
@@ -481,7 +489,7 @@ impl EditedFileMonitor {
 
         let maybe_conflict = {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             entry.last_known_disk_snapshot = Some(current_snapshot.clone());
 
             if entry

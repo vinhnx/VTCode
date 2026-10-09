@@ -113,7 +113,10 @@ impl ToolRegistry {
     }
 
     pub(super) fn record_tool_latency(&self, category: ToolTimeoutCategory, duration: Duration) {
-        let mut state = self.resiliency.lock();
+        let mut guard = self.resiliency.lock();
+        // Reborrow once so the borrow checker sees `latency_stats` and
+        // `adaptive_timeout_ceiling` as disjoint fields, not two `DerefMut` calls on the guard.
+        let state = &mut *guard;
         let tuning = state.adaptive_tuning;
 
         let stats = state.latency_stats.entry(category).or_insert_with(|| ToolLatencyStats::new(50));
@@ -215,5 +218,25 @@ mod tests {
         assert_eq!(category, ToolTimeoutCategory::LongRunningCommand);
         let timeout = registry.effective_timeout_for_call(category, &args);
         assert!(timeout.is_some(), "the long-run classification must not disable the outer timeout");
+    }
+
+    #[tokio::test]
+    async fn latency_above_ceiling_pins_adaptive_ceiling_to_base_ceiling() {
+        let temp = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let category = ToolTimeoutCategory::Default;
+        let base = registry.timeout_policy.read().ceiling_for(category).expect("default ceiling");
+
+        let before = registry.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied();
+        registry.record_tool_latency(category, Duration::from_millis(1));
+        assert_eq!(
+            registry.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied(),
+            before,
+            "a fast sample must not change the adaptive ceiling"
+        );
+
+        registry.record_tool_latency(category, base + Duration::from_secs(3600));
+        let adaptive = registry.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied();
+        assert_eq!(adaptive, Some(base), "p95 above the ceiling is capped at the configured ceiling");
     }
 }
