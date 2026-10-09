@@ -23,6 +23,7 @@ use vtcode_commons::VtCodePaths;
 
 pub mod classify_helpers;
 pub mod domains;
+mod html_preview;
 pub use classify_helpers::extract_http_status;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
 
@@ -37,7 +38,7 @@ const TEMP_SUBDIR: &str = "web_fetch";
 /// Max age in seconds before temp files are cleaned up (1 hour).
 const TEMP_MAX_AGE_SECS: u64 = 3600;
 
-pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetch a remote URL and return the start of the page inline. The result contains `preview` (the first 8000 bytes of the body), `content_length`, and a `temp_file` path holding the full fetched body; read `temp_file` only when the preview is not enough. The tool does not analyze the page: `prompt` is returned with the result to guide your own reading. Set format=markdown to get cleaned markdown inline from the defuddle.md extraction service instead; that mode allows 1 call per session. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Prefer llms.txt over llms-full.txt, which can be multi-megabyte. A body larger than max_bytes is cut off and the result reports truncated_by_max_bytes and source_size_bytes, so you can retry with a larger max_bytes. Temp files are ephemeral and may be cleaned up after about an hour.";
+pub(crate) const WEB_FETCH_DESCRIPTION: &str = "Fetch a remote URL and return the start of the page inline. The result contains `preview` (readable text extracted for HTML pages with scripts and styles removed, otherwise the first 8000 bytes of the body), `preview_kind` (`text` or `raw`), `content_length`, and a `temp_file` path holding the full fetched body; read `temp_file` only when the preview is not enough. The tool does not analyze the page: `prompt` is returned with the result to guide your own reading. Set format=markdown to get cleaned markdown inline from the defuddle.md extraction service instead; that mode allows 1 call per session. For docs domains, try /llms.txt first: for 'abc.com', fetch https://abc.com/llms.txt before the homepage, then traverse linked URLs for relevant Markdown sources. Prefer llms.txt over llms-full.txt, which can be multi-megabyte. A body larger than max_bytes is cut off and the result reports truncated_by_max_bytes and source_size_bytes, so you can retry with a larger max_bytes. Temp files are ephemeral and may be cleaned up after about an hour.";
 
 /// Parameter schema for `web_fetch`, shared by the distributed builtin
 /// registration and the web tool pack so the two surfaces cannot drift.
@@ -599,13 +600,36 @@ impl WebFetchTool {
         let temp_path = write_to_temp_file(&content, &args.url).await?;
         let temp_path_str = temp_path.to_string_lossy().to_string();
 
-        // Truncate preview for UI display only
+        // Preview prefers extracted readable text for HTML pages (scripts,
+        // styles, and head metadata removed); other bodies preview raw.
+        // The full body always lands in `temp_file` untouched.
         let preview_limit = 8000;
-        let (preview, truncated) = if content_length > preview_limit {
-            let truncated_content = vtcode_commons::formatting::truncate_byte_budget(&content, preview_limit, "...");
-            (truncated_content, true)
+        let extracted_text = if html_preview::looks_like_html(&content) {
+            let text = html_preview::extract_text_preview(&content);
+            (!text.is_empty()).then_some(text)
         } else {
-            (content.clone(), false)
+            None
+        };
+        let (preview, truncated, preview_kind, preview_basis_len) = match extracted_text {
+            Some(text) => {
+                let basis_len = text.len();
+                let truncated = basis_len > preview_limit;
+                let preview = if truncated {
+                    vtcode_commons::formatting::truncate_byte_budget(&text, preview_limit, "...")
+                } else {
+                    text
+                };
+                (preview, truncated, "text", basis_len)
+            }
+            None => {
+                let truncated = content_length > preview_limit;
+                let preview = if truncated {
+                    vtcode_commons::formatting::truncate_byte_budget(&content, preview_limit, "...")
+                } else {
+                    content.clone()
+                };
+                (preview, truncated, "raw", content_length)
+            }
         };
 
         // Cleanup: periodically remove old temp files (every ~50 calls)
@@ -624,15 +648,20 @@ impl WebFetchTool {
             "prompt": args.prompt,
             "temp_file": temp_path_str,
             "preview": preview,
+            "preview_kind": preview_kind,
             "content_length": content_length,
             "truncated": truncated,
             "no_spool": true,
-            "next_action_hint": "Analyze the inline `preview` (the start of the page) using `prompt` and answer the user directly. Only read `temp_file` if you need content beyond the preview; it is ephemeral and may already be cleaned up."
+            "next_action_hint": if preview_kind == "text" {
+                "Analyze the inline `preview` (readable text extracted from the page; scripts and styles removed) using `prompt` and answer the user directly. Only read `temp_file` (raw HTML) if you need content beyond the preview; it is ephemeral and may already be cleaned up."
+            } else {
+                "Analyze the inline `preview` (the start of the page) using `prompt` and answer the user directly. Only read `temp_file` if you need content beyond the preview; it is ephemeral and may already be cleaned up."
+            }
         });
 
         // Add overflow indicator if preview was truncated
         if truncated {
-            response["overflow"] = json!(format!("[+{} more characters]", content_length - preview_limit));
+            response["overflow"] = json!(format!("[+{} more characters]", preview_basis_len - preview_limit));
         }
 
         if fetched.truncated_by_max_bytes {
