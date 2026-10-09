@@ -502,27 +502,46 @@ fn header_suggestions_show_background_shortcut_when_foreground_pty_active() {
 }
 
 #[test]
-fn foreground_pty_hint_visible_with_non_empty_composer() {
+fn foreground_pty_hint_leaves_bottom_line_for_header_while_running() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_input("cargo check".to_string());
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
+    // Busy bottom line keeps only stable context: no PTY hint flicker even
+    // with a non-empty composer.
     let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
-    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+    let rendered = line_text(&line);
+    assert!(!rendered.contains("Ctrl+B"), "busy bottom line must not flicker PTY hint, got: {rendered:?}");
+    assert!(!rendered.contains("background"), "busy bottom line keeps only stable context, got: {rendered:?}");
 
-    assert!(rendered.contains("Ctrl+B"), "PTY hint must survive non-empty input, got: {rendered:?}");
+    // Discovery moves to the header while a foreground command runs.
+    let header = session.header_suggestions_line().expect("header suggestions line");
+    let header_text = line_text(&header);
+    assert!(header_text.contains("Ctrl+B"), "header must keep one-click discovery, got: {header_text:?}");
+    assert!(header_text.contains("background"), "header must explain background, got: {header_text:?}");
 }
 
 #[test]
-fn foreground_pty_hint_does_not_duplicate_local_agents_hint() {
+fn foreground_pty_hint_surfaces_once_in_header_while_running() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)];
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
+    // While the foreground command runs the bottom line stays clean; the
+    // header carries each shortcut exactly once.
     let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
-    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+    let rendered = line_text(&line);
+    assert!(!rendered.contains("Ctrl+B"), "busy bottom line must not flicker PTY hint, got: {rendered:?}");
+    assert!(!rendered.contains("Alt+S"), "drawer discovery waits for idle, got: {rendered:?}");
 
-    assert_eq!(rendered.matches("Ctrl+B").count(), 1, "Ctrl+B must appear once, got: {rendered:?}");
+    let header = session.header_suggestions_line().expect("header suggestions line");
+    let header_text = line_text(&header);
+    assert!(header_text.contains("Alt+S"), "header must keep drawer shortcut, got: {header_text:?}");
+    assert_eq!(
+        header_text.matches("Ctrl+B").count(),
+        1,
+        "background shortcut must not duplicate, got: {header_text:?}"
+    );
 }
 
 #[test]
@@ -535,6 +554,47 @@ fn empty_input_status_shows_subagent_shortcuts() {
 
     assert!(rendered.contains("Alt+S"));
     assert!(rendered.contains("Ctrl+B"));
+}
+
+#[test]
+fn turn_busy_hides_drawer_hint_until_idle_restores_it() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)];
+
+    // Idle: drawer discovery visible.
+    let idle = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let idle_text = line_text(&idle);
+    assert!(idle_text.contains("Alt+S"), "idle must surface drawer discovery, got: {idle_text:?}");
+    assert!(idle_text.contains("Ctrl+B"), "idle must surface background discovery, got: {idle_text:?}");
+
+    // In-flight turn with no progress row and no foreground PTY: the bottom
+    // line keeps the turn status while the drawer hint leaves, so the line
+    // never reflows across tool gaps. The header keeps discovery.
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: edit_file".to_owned()),
+        right: None,
+    });
+    assert!(session.is_running_activity(), "fixture must look like an active turn");
+    let busy = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let busy_text = line_text(&busy);
+    assert!(busy_text.contains("Running tool: edit_file"), "{busy_text:?}");
+    assert!(!busy_text.contains("Alt+S"), "drawer discovery waits for idle, got: {busy_text:?}");
+    assert!(!busy_text.contains("Ctrl+B"), "busy bottom line must not flicker hints, got: {busy_text:?}");
+    let header = session.header_suggestions_line().expect("header suggestions line");
+    let header_text = line_text(&header);
+    assert!(header_text.contains("Alt+S"), "header must keep drawer shortcut, got: {header_text:?}");
+    assert!(header_text.contains("Ctrl+B"), "header must keep background shortcut, got: {header_text:?}");
+
+    // Turn ends: drawer discovery returns without a state toggle.
+    session.handle_command(InlineCommand::SetInputStatus { left: None, right: None });
+    assert!(!session.is_running_activity());
+    let restored = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let restored_text = line_text(&restored);
+    assert!(restored_text.contains("Alt+S"), "drawer discovery must return when idle, got: {restored_text:?}");
+    assert!(
+        restored_text.contains("Ctrl+B"),
+        "background discovery must return when idle, got: {restored_text:?}"
+    );
 }
 
 #[test]
@@ -765,16 +825,21 @@ fn load_primary_agent_palette(session: &mut AppSession) {
 }
 
 #[test]
-fn foreground_pty_footer_hint_styles_shortcut_as_visual_indicator() {
+fn foreground_pty_hint_lives_in_header_not_footer_while_running() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
     let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
     let rendered = line_text(&line);
-    assert!(rendered.contains("Ctrl+B"), "PTY hint must show shortcut, got: {rendered:?}");
-    assert!(rendered.contains("background"), "PTY hint must explain background, got: {rendered:?}");
+    assert!(!rendered.contains("Ctrl+B"), "busy bottom line must not flicker PTY hint, got: {rendered:?}");
+    assert!(!rendered.contains("background"), "busy bottom line keeps only stable context, got: {rendered:?}");
 
-    let key_span = line
+    let header = session.header_suggestions_line().expect("header suggestions line");
+    let header_text = line_text(&header);
+    assert!(header_text.contains("Ctrl+B"), "header must show shortcut, got: {header_text:?}");
+    assert!(header_text.contains("background"), "header must explain background, got: {header_text:?}");
+
+    let key_span = header
         .spans
         .iter()
         .find(|span| span.content.as_ref() == "Ctrl+B")
@@ -797,9 +862,11 @@ fn foreground_pty_hint_follows_rebound_background_shortcut() {
     session.set_bindings(bindings);
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
+    // Busy bottom line stays clean under a rebound shortcut; the header
+    // carries the rebound label.
     let status = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
     let rendered = line_text(&status);
-    assert!(rendered.contains("Ctrl+X"), "footer must use rebound shortcut, got: {rendered:?}");
+    assert!(!rendered.contains("Ctrl+X"), "busy bottom line must not flicker PTY hint, got: {rendered:?}");
     assert!(!rendered.contains("Ctrl+B"), "footer must not keep stale shortcut, got: {rendered:?}");
 
     let header = session.header_suggestions_line().expect("header suggestions line");
@@ -808,23 +875,34 @@ fn foreground_pty_hint_follows_rebound_background_shortcut() {
 }
 
 #[test]
-fn combined_drawer_and_pty_hint_styles_both_shortcuts_once() {
+fn combined_drawer_and_pty_hint_styles_both_shortcuts_once_in_header() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.local_agents = vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)];
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
 
+    // Busy bottom line stays clean; the header keeps each shortcut once,
+    // styled as its own bold span.
     let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
     let rendered = line_text(&line);
-    assert!(rendered.contains("Alt+S"), "combined hint must keep drawer shortcut, got: {rendered:?}");
-    assert!(rendered.contains("Ctrl+B"), "combined hint must keep background shortcut, got: {rendered:?}");
-    assert_eq!(rendered.matches("Ctrl+B").count(), 1, "background shortcut must not duplicate, got: {rendered:?}");
+    assert!(!rendered.contains("Alt+S"), "drawer discovery waits for idle, got: {rendered:?}");
+    assert!(!rendered.contains("Ctrl+B"), "busy bottom line must not flicker PTY hint, got: {rendered:?}");
+
+    let header = session.header_suggestions_line().expect("header suggestions line");
+    let header_text = line_text(&header);
+    assert!(header_text.contains("Alt+S"), "header must keep drawer shortcut, got: {header_text:?}");
+    assert!(header_text.contains("Ctrl+B"), "header must keep background shortcut, got: {header_text:?}");
+    assert_eq!(
+        header_text.matches("Ctrl+B").count(),
+        1,
+        "background shortcut must not duplicate, got: {header_text:?}"
+    );
 
     for key in ["Alt+S", "Ctrl+B"] {
-        let span = line
+        let span = header
             .spans
             .iter()
             .find(|span| span.content.as_ref() == key)
-            .unwrap_or_else(|| panic!("{key} must be its own styled span, got: {rendered:?}"));
+            .unwrap_or_else(|| panic!("{key} must be its own styled span, got: {header_text:?}"));
         assert!(span.style.add_modifier.contains(Modifier::BOLD), "{key} must be bold as a visual indicator");
     }
 }

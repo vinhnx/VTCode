@@ -1025,22 +1025,24 @@ impl Session {
             (existing, None) => existing.map(str::to_owned),
         };
         let mode_pill = self.primary_mode_pill();
-        // Bottom-line background copy is idle-only. While the transcript owns
-        // the loading row, the live count moves there (plus a static header
-        // badge), so this line never blinks as turn phases or the progress
-        // fallback budget toggles underneath. When idle the copy is
+        // Bottom-line background affordances are idle-only. While anything is
+        // busy — the transcript loading row, a foreground command, or an
+        // in-flight turn — the composer line keeps only configured context so
+        // it never reflows as progress phases or the PTY counter toggle
+        // underneath (the `· Ctrl+B background` flicker after the branch
+        // status). The live count moves to the transcript loading row plus a
+        // static header badge, and `Ctrl+B` discovery moves to the header
+        // suggestions line; the `Ctrl+B`, `Alt+S`, `/jobs`, and empty-Enter
+        // entry points keep working while busy. When idle the copy is
         // width-deterministic (budget decides) rather than state-gated, so a
-        // fitting count stays put across tool gaps. The foreground-PTY hint
-        // stays clickable even while loading so a running command can still
-        // be backgrounded with one click; drawer discovery moves to the
-        // header/keyboard until loading clears.
-        let in_loading = self.progress.is_active();
-        let background_hint = if in_loading {
-            self.foreground_pty_background_hint()
+        // fitting count stays put across tool gaps.
+        let busy = self.progress.is_active() || self.has_active_foreground_pty() || self.is_running_activity();
+        let background_hint = if busy {
+            None
         } else {
             self.local_agents_input_status_hint()
         };
-        let background_status = if in_loading {
+        let background_status = if self.progress.is_active() {
             None
         } else {
             self.background_activity_status_text()

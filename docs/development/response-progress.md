@@ -14,11 +14,14 @@ The footer reserves persistent regions before fitting optional content: mode, co
 context, then hints. Each region is truncated independently by terminal columns. Loading phases and elapsed seconds
 cannot push out the mode or move the right-side content. When the transcript row cannot fit, loading uses a bounded
 24-column optional footer slot after context. Copy notifications and shell hints retain
-their footer presentation when space permits. Background activity stays out of the bottom line while loading: the
-transcript loading row carries a static `· N bg` suffix and the header carries a short `• N bg` / `✓ N done` badge,
-so the composer line never hides/shows as turn status or the fallback budget toggles. The `Running N background
-tasks...` copy and drawer hint return to the bottom line (clickable, width-deterministic) only once loading clears.
-The foreground-PTY hint stays in the bottom line throughout when space permits so a running command can still be backgrounded with one click.
+their footer presentation when space permits. Background activity stays out of the bottom line while anything is
+busy (transcript loading row, foreground command, or in-flight turn): the transcript loading row carries a static
+`· N bg` suffix and the header carries a short `• N bg` / `✓ N done` badge, so the composer line never hides/shows
+as turn status, the fallback budget, or the foreground-command counter toggles. The `Running N background tasks...`
+copy and drawer hint return to the bottom line (clickable, width-deterministic) only once everything is idle. The
+foreground-PTY `Ctrl+B background` hint never appears in the bottom line while busy; background a running command
+with `Ctrl+B`, empty-Enter (`/jobs`), or `/subprocesses` — the header suggestions line keeps showing the shortcut
+while a foreground command runs.
 
 `ProgressOperation`, `ProgressPhase`, and `ProgressUpdate` live in `vtcode-commons::ui_protocol`. The UI accepts a new
 operation identity, updates only that active identity, and clears only the matching operation. Finished identities

@@ -758,9 +758,9 @@ fn loading_moves_background_off_bottom_line_onto_transcript_row() {
     assert!(!loading.contains("background task"), "bottom line must not blink during loading: {loading}");
     assert!(!loading.contains("Ctrl+B"), "background hint must leave the bottom line during loading: {loading}");
     assert!(loading.contains("topic/stable*"), "configured context survives loading: {loading}");
-    // The drawer click target is intentionally gone while loading; keyboard
-    // entry points stay available. The foreground-PTY hint below is the only
-    // bottom-line click target preserved during loading.
+    // No bottom-line click target while busy: keyboard entry points
+    // (`Ctrl+B`, `Alt+S`, `/jobs`, empty-Enter) stay available and the header
+    // carries discovery.
     let (loading_line, loading_hits) = session.render_input_status_line_with_hit(80).expect("loading status line");
     let loading_hit_text: String = loading_line.spans.iter().map(|span| span.content.as_ref()).collect();
     assert!(loading_hit_text.contains("topic/stable*"), "{loading_hit_text}");
@@ -776,19 +776,38 @@ fn loading_moves_background_off_bottom_line_onto_transcript_row() {
 }
 
 #[test]
-fn loading_preserves_foreground_pty_hint_for_one_click_backgrounding() {
+fn busy_bottom_line_hides_pty_hint_while_header_keeps_discovery() {
     use std::sync::atomic::AtomicUsize;
 
     let mut session = Session::new(InlineTheme::default(), None, 20);
-    session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
+    let pty = Arc::new(AtomicUsize::new(1));
+    session.active_pty_sessions = Some(Arc::clone(&pty));
+    session.handle_command(InlineCommand::SetConfiguredInputStatus {
+        left: Some("topic/stable*".to_owned()),
+        right: Some("10:30".to_owned()),
+    });
     session.set_background_activity_count(1);
 
-    let idle: String = session
+    // Foreground command running outside loading: bottom line keeps only
+    // configured context, never the `· Ctrl+B background` flicker after the
+    // branch status. The header carries discovery instead.
+    let running: String = session
         .render_input_status_line(80)
         .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
         .unwrap_or_default();
-    assert!(idle.contains("background"), "{idle}");
+    assert!(running.contains("topic/stable*"), "{running}");
+    assert!(!running.contains("Ctrl+B"), "bottom line must not flicker PTY hint: {running}");
+    assert!(
+        running.contains("Running 1 background task"),
+        "stable background count survives PTY busy: {running}"
+    );
+    let header_text: String = session
+        .header_suggestions_line()
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(header_text.contains("Ctrl+B"), "header must keep discovery while busy: {header_text}");
 
+    // Loading as well: still clean, with no click targets to reflow.
     let operation = ProgressOperation::start();
     session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
         operation,
@@ -798,16 +817,39 @@ fn loading_preserves_foreground_pty_hint_for_one_click_backgrounding() {
         .render_input_status_line(80)
         .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
         .unwrap_or_default();
-    assert!(!loading.contains("background task"), "live count must stay off the bottom line: {loading}");
-    assert!(loading.contains("background"), "foreground-PTY hint must survive loading: {loading}");
+    assert!(loading.contains("topic/stable*"), "{loading}");
+    assert!(!loading.contains("Ctrl+B"), "loading bottom line must not flicker PTY hint: {loading}");
+    assert!(!loading.contains("background task"), "live count stays off the bottom line: {loading}");
     let (pty_line, pty_hits) = session.render_input_status_line_with_hit(80).expect("pty status line");
     let pty_text: String = pty_line.spans.iter().map(|span| span.content.as_ref()).collect();
-    assert!(pty_text.contains("background"), "{pty_text}");
-    assert!(!pty_hits.is_empty(), "PTY hint must stay clickable while loading");
-    // Narrow rows keep the no-overflow contract even when the hint competes
-    // with the fallback budget: best-effort presence, guaranteed fit.
+    assert!(pty_text.contains("topic/stable*"), "{pty_text}");
+    assert!(pty_hits.is_empty(), "no bottom-line click target while busy: {pty_hits:?}");
+
+    // The transcript row still owns the phase.
+    let area = Rect::new(0, 0, 80, 1);
+    let mut buf = Buffer::empty(area);
+    session.render_progress(area, &mut buf);
+    assert!(rendered_text(&buf).contains("Running tools"), "progress row must own the phase");
+
+    // Narrow rows keep the no-overflow contract with no hint competing for
+    // the fallback budget.
     let narrow = session.render_input_status_line(24).expect("narrow status line");
     assert!(narrow.width() <= 24, "narrow bottom line must not overflow");
+
+    // Command and loading both clear: header discovery drops with the PTY,
+    // while the idle background count returns to the bottom line.
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
+    pty.store(0, std::sync::atomic::Ordering::Relaxed);
+    let idle: String = session
+        .render_input_status_line(80)
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(idle.contains("Running 1 background task"), "{idle}");
+    let header_text: String = session
+        .header_suggestions_line()
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
+        .unwrap_or_default();
+    assert!(!header_text.contains("Ctrl+B"), "header discovery must drop with the PTY: {header_text}");
 }
 
 #[test]
