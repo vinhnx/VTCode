@@ -1,6 +1,6 @@
 use crate::error::{Result, WebmcpError};
 use crate::event_hub::{EventHubConfig, EventHubSubscription, MAX_EVENT_BYTES, WebmcpEventHub};
-use crate::pairing::{PairingDisplay, PairingManager, is_valid_origin};
+use crate::pairing::{PairingDisplay, PairingManager};
 use crate::protocol::{
     BridgeEventMessage, BridgeRequest, BridgeResponse, BridgeSettings, PROTOCOL_VERSION, PairPayload, StatusPayload,
     is_valid_request_id, response_request_id,
@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
+use vtcode_commons::validation::is_valid_origin;
 
 const MAX_PAIRED_CONNECTIONS: usize = 64;
 const MAX_CONNECTIONS: usize = 128;

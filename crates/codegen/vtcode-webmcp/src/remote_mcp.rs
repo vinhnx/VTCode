@@ -6,7 +6,6 @@
 //! OAuth bearer token and inject the configured internal bearer token.
 
 use crate::error::{Result as WebmcpResult, WebmcpError};
-use crate::pairing::is_valid_origin;
 use crate::runtime::RuntimeAdapter;
 use axum::Router;
 use axum::body::{self, Body};
@@ -44,6 +43,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use url::Url;
 use uuid::Uuid;
+use vtcode_commons::validation::is_valid_origin;
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const DEFAULT_MAX_SCAN_FILES: usize = 256;

@@ -85,6 +85,25 @@ pub fn validate_url_format(url: &str, field_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether `origin` is a bare `http(s)://host[:port]` web origin: no wildcard,
+/// whitespace, credentials, path (including a trailing slash), query, or fragment.
+#[must_use]
+pub fn is_valid_origin(origin: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(origin) else {
+        return false;
+    };
+    origin == origin.trim()
+        && !origin.chars().any(char::is_whitespace)
+        && !origin.contains('*')
+        && matches!(parsed.scheme(), "http" | "https")
+        && parsed.host_str().is_some_and(|host| !host.is_empty())
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && (parsed.path().is_empty() || (parsed.path() == "/" && !origin.ends_with('/')))
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+}
+
 /// Validate alphanumeric identifier
 pub fn validate_identifier(id: &str, field_name: &str) -> Result<()> {
     if id.is_empty() {
@@ -413,6 +432,27 @@ impl<'a, T> NonEmptySlice<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_valid_origin_accepts_only_bare_web_origins() {
+        for ok in ["http://localhost", "https://example.com", "http://127.0.0.1:3000"] {
+            assert!(is_valid_origin(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "https://*.example.com",
+            "https://example.com/",
+            "https://example.com/path",
+            "https://example.com?q=1",
+            "https://example.com#frag",
+            "https://user:pw@example.com",
+            "ftp://example.com",
+            " https://example.com",
+            "https://exa mple.com",
+        ] {
+            assert!(!is_valid_origin(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn test_validate_non_empty() {
