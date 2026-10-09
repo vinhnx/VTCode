@@ -24,6 +24,8 @@ pub(crate) use session_mode::active_primary_agent_from_specs_for_mode;
 pub(crate) use shell::initialize_session_shell;
 pub(crate) use signal::{mark_exit_postamble_armed, spawn_signal_handler};
 pub(crate) use types::SessionState;
+#[cfg(test)]
+pub(crate) use ui::summarize_thread_event_preview;
 pub(crate) use ui::{
     SessionUiLaunchOptions, apply_post_hydration_ui, initialize_session_ui, refresh_local_agents,
     run_session_start_hooks,

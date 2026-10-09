@@ -9,7 +9,7 @@ fn has_text_output_field(value: &Value) -> bool {
 }
 
 fn is_pty_output_response(tool_name: &str, value: &Value) -> bool {
-    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some() && has_text_output_field(value)
+    crate::tools::tool_intent::is_command_session_tool(tool_name) && has_text_output_field(value)
 }
 
 fn output_field_bytes(value: &Value) -> usize {

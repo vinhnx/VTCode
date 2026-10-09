@@ -50,7 +50,7 @@ impl Summarizer for BashSummarizer {
 
         // Command header
         if let Some(cmd) = result.command {
-            summary.push_str(&format!("Command: {}\n", truncate_command(&cmd, 100)));
+            summary.push_str(&format!("Command: {}\n", truncate_line(&cmd, 100)));
         }
 
         // Exit status
@@ -214,15 +214,6 @@ fn parse_output_lines(output: &str, result: &mut BashResult) {
     }
 }
 
-/// Truncate command string to max length
-fn truncate_command(cmd: &str, max_len: usize) -> String {
-    if cmd.len() <= max_len {
-        cmd.to_string()
-    } else {
-        vtcode_commons::formatting::truncate_byte_budget(cmd, max_len.saturating_sub(3), "...")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,10 +318,18 @@ mod tests {
     #[test]
     fn test_truncate_command() {
         let long_cmd = "a".repeat(200);
-        let truncated = truncate_command(&long_cmd, 50);
+        let truncated = truncate_line(&long_cmd, 50);
 
         assert!(truncated.len() <= 50);
         assert!(truncated.ends_with("..."));
+    }
+
+    #[test]
+    fn truncate_line_rounds_down_to_char_boundary_and_borrows_short_input() {
+        // Budget of 6 bytes keeps 3 before "..."; byte 3 lands mid-`日` (bytes 2..5).
+        assert_eq!(truncate_line("AB日本語", 6), "AB...");
+        assert!(matches!(truncate_line("short", 10), std::borrow::Cow::Borrowed("short")));
+        assert_eq!(truncate_line("abcdef", 5), "ab...");
     }
 
     #[test]

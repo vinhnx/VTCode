@@ -19,9 +19,9 @@ pub use activity::{
 };
 pub use classify::{
     builtin_tool_behavior, canonical_command_session_tool_name, classify_tool_intent, is_command_run_tool,
-    is_command_run_tool_call, is_command_tool, is_edited_file_conflict_guarded_call, is_exec_session_cleanup_call,
-    is_parallel_safe_call, is_parallel_safe_call_with_intent, is_turn_budget_exempt_call, planning_allowed_actions,
-    remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
+    is_command_run_tool_call, is_command_session_tool, is_command_tool, is_edited_file_conflict_guarded_call,
+    is_exec_session_cleanup_call, is_parallel_safe_call, is_parallel_safe_call_with_intent, is_turn_budget_exempt_call,
+    planning_allowed_actions, remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
 };
 pub use readonly::{is_readonly_command_session_command, is_spool_file_read_command};
 pub use types::{ToolBehavior, ToolIntent, ToolIntentClassifier, ToolMutationModel, ToolSurfaceKind};
@@ -30,8 +30,9 @@ pub use types::{ToolBehavior, ToolIntent, ToolIntentClassifier, ToolMutationMode
 mod tests {
     use super::{
         canonical_command_session_tool_name, classify_tool_intent, file_operation_action, is_command_run_tool_call,
-        is_edited_file_conflict_guarded_call, is_parallel_safe_call, is_parallel_safe_call_with_intent,
-        remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
+        is_command_session_tool, is_edited_file_conflict_guarded_call, is_parallel_safe_call,
+        is_parallel_safe_call_with_intent, remap_file_operation_command_args_to_command_session,
+        should_use_spool_reference_only,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -460,7 +461,10 @@ mod tests {
             "container.exec",
         ] {
             assert_eq!(canonical_command_session_tool_name(alias), Some(tools::UNIFIED_EXEC));
+            assert!(is_command_session_tool(alias));
         }
+        assert!(!is_command_session_tool(tools::READ_FILE));
+        assert!(!is_command_session_tool(""));
     }
 
     #[test]

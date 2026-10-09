@@ -96,6 +96,12 @@ pub fn canonical_command_session_tool_name(tool_name: &str) -> Option<&'static s
     }
 }
 
+/// Returns `true` if `tool_name` is any alias of the unified command-session tool.
+#[must_use]
+pub fn is_command_session_tool(tool_name: &str) -> bool {
+    canonical_command_session_tool_name(tool_name).is_some()
+}
+
 pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) -> bool {
     let Some(obj) = output.as_object() else {
         return false;
@@ -113,7 +119,7 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
         return false;
     }
 
-    if tool_name.is_some_and(|name| canonical_command_session_tool_name(name).is_some()) {
+    if tool_name.is_some_and(is_command_session_tool) {
         return true;
     }
 
@@ -144,9 +150,7 @@ pub fn should_use_spool_reference_only(tool_name: Option<&str>, output: &Value) 
 /// This includes PTY session tools and all unified exec aliases.
 #[must_use]
 pub fn is_command_tool(tool_name: &str) -> bool {
-    tool_name == tools::CREATE_PTY_SESSION
-        || tool_name == tools::SEND_PTY_INPUT
-        || canonical_command_session_tool_name(tool_name).is_some()
+    tool_name == tools::CREATE_PTY_SESSION || tool_name == tools::SEND_PTY_INPUT || is_command_session_tool(tool_name)
 }
 
 /// Returns `true` if `tool_name` is a direct command-run tool whose output is

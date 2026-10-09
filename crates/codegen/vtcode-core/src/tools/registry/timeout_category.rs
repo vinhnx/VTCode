@@ -46,7 +46,7 @@ impl ToolRegistry {
         // long-running command: the executor enforces its own yield deadline
         // (`MAX_EXEC_YIELD_MS` clamp) and an outer default-ceiling timeout
         // would kill a healthy in-progress session instead of returning it.
-        if crate::tools::tool_intent::canonical_command_session_tool_name(name).is_some()
+        if crate::tools::tool_intent::is_command_session_tool(name)
             && crate::tools::tool_intent::command_session_action_is(args, "run")
             && args
                 .get("yield_time_ms")

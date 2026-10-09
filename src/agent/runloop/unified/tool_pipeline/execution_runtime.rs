@@ -181,7 +181,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     // structured modified_files list. Invalidate filesystem-derived results
     // before executing a cache miss, while preserving cache hits for genuinely
     // read-only command results such as path-scoped `git diff`.
-    if is_command_tool(name) {
+    if tool_intent::is_command_session_tool(name) {
         let mut cache = tool_result_cache.write().await;
         cache.invalidate_after_external_command();
     }
@@ -383,7 +383,7 @@ fn should_cache_success_output(name: &str, output: &Value, command_success: bool
         return false;
     }
 
-    if !is_command_tool(name) {
+    if !tool_intent::is_command_session_tool(name) {
         return true;
     }
 
@@ -401,10 +401,6 @@ fn should_cache_success_output(name: &str, output: &Value, command_success: bool
     }
 
     true
-}
-
-fn is_command_tool(name: &str) -> bool {
-    tool_intent::canonical_command_session_tool_name(name).is_some()
 }
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {

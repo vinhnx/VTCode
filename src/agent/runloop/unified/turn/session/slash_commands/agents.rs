@@ -19,9 +19,10 @@ mod authoring;
 mod runtime;
 
 #[cfg(test)]
+use crate::agent::runloop::unified::session_setup::summarize_thread_event_preview;
+#[cfg(test)]
 use runtime::{
-    active_subagent_entries, background_subprocess_summary, subprocess_action_prompt, summarize_thread_event_preview,
-    visible_subagent_entries,
+    active_subagent_entries, background_subprocess_summary, subprocess_action_prompt, visible_subagent_entries,
 };
 use runtime::{
     apply_background_subprocess_action, background_completion_control, close_subagent_entry,

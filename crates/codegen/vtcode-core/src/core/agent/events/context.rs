@@ -413,7 +413,7 @@ impl ExecutionContextTracker {
             ThreadItemDetails::ToolInvocation(t) => t
                 .arguments
                 .as_ref()
-                .filter(|_| crate::tools::tool_intent::canonical_command_session_tool_name(&t.tool_name).is_some())
+                .filter(|_| crate::tools::tool_intent::is_command_session_tool(&t.tool_name))
                 .map(|args| classify_shell_activity(&t.tool_name, args)),
             ThreadItemDetails::CommandExecution(t) => {
                 Some(classify_shell_activity("exec_command", &serde_json::json!({"cmd": t.command})))

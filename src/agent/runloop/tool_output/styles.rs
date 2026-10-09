@@ -204,7 +204,7 @@ pub(crate) fn select_line_style(
     }
 
     if tool_name.is_some_and(|name| {
-        tool_intent::canonical_command_session_tool_name(name).is_some()
+        tool_intent::is_command_session_tool(name)
             || matches!(name, tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH)
     }) && let Some(style) = ls.style_for_line(trimmed)
     {

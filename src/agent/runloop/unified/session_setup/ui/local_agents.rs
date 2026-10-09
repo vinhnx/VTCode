@@ -318,7 +318,7 @@ fn summarize_subagent_sidebar_preview(snapshot: &SubagentThreadSnapshot) -> Stri
     lines.join("\n")
 }
 
-fn summarize_thread_event_preview(events: &[ThreadEvent]) -> String {
+pub(crate) fn summarize_thread_event_preview(events: &[ThreadEvent]) -> String {
     let mut items = Vec::<(String, String)>::new();
     for event in events {
         let Some((item_id, line)) = thread_event_preview_line(event) else {

@@ -46,6 +46,8 @@ use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, SlashCommandItem};
 
 use self::header_context::{HeaderContextInit, initialize_header_context, maybe_render_system_prompt_budget_warning};
 pub(crate) use self::local_agents::refresh_local_agents;
+#[cfg(test)]
+pub(crate) use self::local_agents::summarize_thread_event_preview;
 use self::resume_render::render_resume_state_if_present;
 pub(crate) use self::resume_render::{build_structured_resume_lines, render_resume_lines};
 

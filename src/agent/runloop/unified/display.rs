@@ -8,6 +8,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
 use vtcode_ui::tui::app::InlineHandle;
+use vtcode_ui::tui::ui::shell_syntax::{is_bash_keyword, is_command_separator, tokenize_preserve_whitespace};
 
 pub(crate) async fn persist_theme_preference(
     renderer: &mut AnsiRenderer,
@@ -54,77 +55,6 @@ pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -
 pub(crate) fn reset_inline_input(handle: &InlineHandle, placeholder: Option<String>) {
     handle.clear_input();
     handle.set_placeholder(placeholder);
-}
-
-fn is_bash_keyword(token: &str) -> bool {
-    matches!(
-        token,
-        "if" | "then"
-            | "else"
-            | "elif"
-            | "fi"
-            | "for"
-            | "in"
-            | "do"
-            | "done"
-            | "while"
-            | "until"
-            | "case"
-            | "esac"
-            | "function"
-            | "select"
-            | "time"
-            | "coproc"
-            | "{"
-            | "}"
-            | "[["
-            | "]]"
-    )
-}
-
-fn is_command_separator(token: &str) -> bool {
-    matches!(token, "|" | "||" | "&&" | ";" | ";;" | "&")
-}
-
-fn tokenize_preserve_whitespace(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut escaped = false;
-    let mut token_start: Option<usize> = None;
-    let mut token_is_whitespace = false;
-
-    for (idx, ch) in text.char_indices() {
-        if escaped {
-            escaped = false;
-        } else if ch == '\\' && !in_single {
-            escaped = true;
-        } else if ch == '\'' && !in_double {
-            in_single = !in_single;
-        } else if ch == '"' && !in_single {
-            in_double = !in_double;
-        }
-
-        let is_whitespace = !in_single && !in_double && ch.is_whitespace();
-        match token_start {
-            None => {
-                token_start = Some(idx);
-                token_is_whitespace = is_whitespace;
-            }
-            Some(start) if token_is_whitespace != is_whitespace => {
-                parts.push(&text[start..idx]);
-                token_start = Some(idx);
-                token_is_whitespace = is_whitespace;
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(start) = token_start {
-        parts.push(&text[start..]);
-    }
-
-    parts
 }
 
 fn style_for_token(token: &str, expect_command: &mut bool) -> Option<AnsiStyle> {

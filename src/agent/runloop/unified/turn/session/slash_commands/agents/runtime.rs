@@ -6,8 +6,6 @@ use std::time::Duration;
 use vtcode_commons::modal_hints::truncate_modal_text;
 use vtcode_core::subagents::{BackgroundSubprocessEntry, SubagentStatusEntry};
 use vtcode_core::utils::ansi::MessageStyle;
-#[cfg(test)]
-use vtcode_core::{CommandExecutionStatus, ThreadEvent, ThreadItemDetails, ToolCallStatus};
 use vtcode_ui::tui::app::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, ListOverlayRequest, TransientEvent, TransientHotkey,
     TransientHotkeyAction, TransientHotkeyKey, TransientRequest, TransientSelectionChange, TransientSubmission,
@@ -596,112 +594,6 @@ fn background_subprocess_preview_placeholder(entry: &BackgroundSubprocessEntry) 
         vtcode_core::subagents::BackgroundSubprocessStatus::Stopped
         | vtcode_core::subagents::BackgroundSubprocessStatus::Error => "No recent output yet.".to_string(),
     }
-}
-
-#[cfg(test)]
-pub(super) fn summarize_thread_event_preview(events: &[ThreadEvent]) -> String {
-    let mut items = Vec::<(String, String)>::new();
-    for event in events {
-        let Some((item_id, line)) = thread_event_preview_line(event) else {
-            continue;
-        };
-        if let Some((_, current)) = items.iter_mut().find(|(id, _)| id == &item_id) {
-            *current = line;
-        } else {
-            items.push((item_id, line));
-        }
-    }
-
-    // Take the 16 newest passing lines (rev → take) then restore chronological
-    // order with an in-place `reverse()` — one allocation instead of two
-    // (`collect` → `into_iter().rev().collect()` allocated a second Vec).
-    let mut lines: Vec<String> = items.into_iter().map(|(_, line)| line).rev().take(16).collect();
-    lines.reverse();
-    lines.join("\n")
-}
-
-#[cfg(test)]
-fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
-    let item = match event {
-        ThreadEvent::ItemStarted(event) => &event.item,
-        ThreadEvent::ItemUpdated(event) => &event.item,
-        ThreadEvent::ItemCompleted(event) => &event.item,
-        _ => return None,
-    };
-
-    let line = match &item.details {
-        ThreadItemDetails::AgentMessage(message) => {
-            format!("assistant: {}", summarize_preview_text(&message.text)?)
-        }
-        ThreadItemDetails::Reasoning(reasoning) => {
-            format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
-        }
-        ThreadItemDetails::ToolInvocation(tool) => {
-            format!("tool {}: {}", tool.tool_name, tool_status_label(tool.status.clone()))
-        }
-        ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
-            .map(|text| format!("tool output: {text}"))
-            .unwrap_or_else(|| format!("tool output: {}", tool_status_label(output.status.clone()))),
-        ThreadItemDetails::CommandExecution(command) => summarize_preview_text(&command.aggregated_output)
-            .map(|text| format!("command {}: {}", command.command, text))
-            .unwrap_or_else(|| {
-                format!("command {}: {}", command.command, command_status_label(command.status.clone()))
-            }),
-        _ => return None,
-    };
-
-    Some((item.id.clone(), line))
-}
-
-#[cfg(test)]
-fn tool_status_label(status: ToolCallStatus) -> &'static str {
-    match status {
-        ToolCallStatus::Completed => "completed",
-        ToolCallStatus::Failed => "failed",
-        ToolCallStatus::InProgress => "running",
-    }
-}
-
-#[cfg(test)]
-fn command_status_label(status: CommandExecutionStatus) -> &'static str {
-    match status {
-        CommandExecutionStatus::Completed => "completed",
-        CommandExecutionStatus::Failed => "failed",
-        CommandExecutionStatus::InProgress => "running",
-    }
-}
-
-#[cfg(test)]
-fn summarize_preview_text(text: &str) -> Option<String> {
-    let preview = text
-        .lines()
-        .rev()
-        .find_map(|line| {
-            let collapsed = collapse_preview_whitespace(line);
-            (!collapsed.is_empty()).then_some(collapsed)
-        })
-        .or_else(|| {
-            let collapsed = collapse_preview_whitespace(text);
-            (!collapsed.is_empty()).then_some(collapsed)
-        })?;
-
-    Some(truncate_preview_text(preview, 180))
-}
-
-#[cfg(test)]
-fn collapse_preview_whitespace(text: &str) -> String {
-    vtcode_commons::formatting::collapse_whitespace(text)
-}
-
-#[cfg(test)]
-fn truncate_preview_text(text: String, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text;
-    }
-
-    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
-    truncated.push_str("...");
-    truncated
 }
 
 fn active_agent_inspector_items(entry: &SubagentStatusEntry) -> Vec<InlineListItem> {

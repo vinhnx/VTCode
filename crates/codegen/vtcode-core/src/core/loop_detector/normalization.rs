@@ -19,10 +19,7 @@ pub(super) fn base_tool_name(tool_name: &str) -> &str {
     tool_name.split_once("::").map(|(base, _)| base).unwrap_or(tool_name)
 }
 
-#[inline]
-pub(super) fn is_command_tool_name(tool_name: &str) -> bool {
-    tool_intent::canonical_command_session_tool_name(tool_name).is_some()
-}
+pub(super) use tool_intent::is_command_session_tool as is_command_tool_name;
 
 /// Returns `true` when the tool is a file-mutating tool. Write/edit tools are
 /// excluded from identical-call enforcement because their normalized hash nulls

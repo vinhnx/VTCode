@@ -16,9 +16,10 @@ mod tests {
     use vtcode_ui::tui::app::{InlineCommand, InlineHandle, InlineSegment};
 
     use super::runtime::PtyStreamRuntime;
-    use super::segments::{PtyLineStyles, line_to_segments, tokenize_preserve_whitespace};
+    use super::segments::{PtyLineStyles, line_to_segments};
     use super::state::PtyStreamState;
     use crate::agent::runloop::unified::progress::ProgressReporter;
+    use vtcode_ui::tui::ui::shell_syntax::tokenize_preserve_whitespace;
 
     struct DropNotifier(Option<oneshot::Sender<()>>);
 

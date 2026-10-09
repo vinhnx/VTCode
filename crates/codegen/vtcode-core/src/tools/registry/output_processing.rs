@@ -197,7 +197,7 @@ impl ToolRegistry {
             // fields. Sanitize those fields before trusting the marker; the
             // marker only describes storage, not the safety of the payload.
             ensure_spooled_reference_metadata(&mut value);
-            if crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
+            if crate::tools::tool_intent::is_command_session_tool(tool_name)
                 && let Some(content) = value
                     .get("preview")
                     .and_then(Value::as_str)

@@ -46,10 +46,6 @@ const COMMAND_PREVIEW_MAX_BYTES: usize = 6 * 1024;
 const COMMAND_PREVIEW_MAX_LINES: usize = 80;
 const PREVIEW_NOTICE_RESERVE_BYTES: usize = 64;
 
-fn is_command_session_tool_name(tool_name: &str) -> bool {
-    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
-}
-
 fn condense_content(content: &str) -> String {
     condense_text_bytes(content, CONDENSE_HEAD_BYTES, CONDENSE_TAIL_BYTES)
 }
@@ -598,7 +594,7 @@ impl ToolOutputSpooler {
                 );
                 json_to_string_pretty(value)
             }
-        } else if is_command_session_tool_name(tool_name) && !is_mcp {
+        } else if crate::tools::tool_intent::is_command_session_tool(tool_name) && !is_mcp {
             // For command-session tools and legacy PTY helpers,
             // extract the actual command output from the "output" field.
             // This ensures the spooled file contains the raw command output, not the JSON wrapper.
@@ -784,7 +780,7 @@ impl ToolOutputSpooler {
                 debug!(error = %e, "Periodic spool cleanup failed");
             }
         }
-        let condensed = if is_command_session_tool_name(tool_name) {
+        let condensed = if crate::tools::tool_intent::is_command_session_tool(tool_name) {
             command_preview_content(tool_name, &value, &spool_result.content, max_preview_bytes)
         } else {
             let condensed = condense_content(&spool_result.content);
@@ -798,7 +794,7 @@ impl ToolOutputSpooler {
             Value::Object(map) => Value::Object(map),
             _ => json!({}),
         };
-        let is_pty_tool = is_command_session_tool_name(tool_name);
+        let is_pty_tool = crate::tools::tool_intent::is_command_session_tool(tool_name);
         let use_output_field =
             is_pty_tool || response.get("output").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
         let source_path = if tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE {
