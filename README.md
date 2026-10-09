@@ -60,8 +60,9 @@ resumable sessions.
 
 ## Overview
 
-Explore a codebase, plan changes, run tools, and review edits in the interactive TUI, or run `vtcode exec` headless.
-Pick your model and set your permissions; the runtime handles context management, tools, and execution policy.
+Explore a codebase, plan changes, run tools, and review edits, in the interactive TUI or headless with
+`vtcode exec`. You pick the model and the permissions; the runtime handles context management, tool calls, and
+execution policy.
 
 | At a glance      | What you get                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------ |
@@ -71,7 +72,7 @@ Pick your model and set your permissions; the runtime handles context management
 | **Integrations** | [MCP](./docs/guides/mcp-integration.md), Skills, plugins, and editor bridges.              |
 | **Models**       | [Hosted or local providers](./docs/README.md#provider-index), chosen per task.             |
 
-The sections below walk through install, configure, first task, then deeper topics.
+The rest of this page covers installation, configuration, a first task, and the deeper topics.
 
 ## Quick start
 
@@ -163,9 +164,9 @@ vtcode exec "refactor main.rs"    # headless task with the full tool loop
 vtcode review                     # agent review of uncommitted changes
 ```
 
-`exec` requires `[automation.full_auto]` plus `full_auto` workspace trust. Terminals prompt for trust; non-TTY runs
-fail unless `VTCODE_TRUST_WORKSPACE=full-auto` is set. The tool allow-list, explicit denies, and execution policy
-still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
+`exec` runs the full tool loop, so it requires `[automation.full_auto]` and `full_auto` workspace trust. Interactive
+terminals prompt for trust; non-TTY runs fail unless `VTCODE_TRUST_WORKSPACE=full-auto` is set. The tool allow-list,
+explicit denies, and execution policy still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
 [full automation](./docs/guides/full-automation.md) for trust, output, and configuration details.
 
 For repeatable, environment-checked results, use the [eval framework](./docs/guides/eval.md). A completion message
@@ -215,7 +216,7 @@ Enable these only when you need them; none are required for the quick start.
 
 ## Documentation
 
-Guides by task; the full catalog lives in the [documentation index](./docs/INDEX.md), the
+Guides grouped by task. The full catalog lives in the [documentation index](./docs/INDEX.md), the
 [docs overview](./docs/README.md), and the [Wiki](https://github.com/vinhnx/VTCode/wiki):
 
 | Goal                 | Guides                                                                                                                                                                                                                                                                                                         |
@@ -240,8 +241,8 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-The full 23-crate map lives in the [architecture guide](./docs/ARCHITECTURE.md). Building requires Rust 1.98.1+
-(edition 2024); tests need `cargo-nextest`:
+Building requires Rust 1.98.1+ (edition 2024); tests need `cargo-nextest`. The full 23-crate map lives in the
+[architecture guide](./docs/ARCHITECTURE.md).
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git
@@ -251,9 +252,9 @@ cd VTCode
 cargo nextest run          # tests (requires cargo-nextest)
 ```
 
-CI sets `RUSTFLAGS="-D warnings"` and builds with `--locked`; match locally with
-`RUSTFLAGS="-D warnings" cargo check --locked`. Setup and checks: [development overview](./docs/development/README.md)
-and the [testing guide](./docs/development/testing.md).
+CI builds with `--locked` and `RUSTFLAGS="-D warnings"`; match locally with
+`RUSTFLAGS="-D warnings" cargo check --locked`. Setup and checks are documented in the
+[development overview](./docs/development/README.md) and the [testing guide](./docs/development/testing.md).
 
 Release binaries and notes: [GitHub releases](https://github.com/vinhnx/VTCode/releases).
 
@@ -341,15 +342,15 @@ Want to see your avatar here? Every bit counts: one-line fixes, bug reports, and
 
 ## Support the project
 
-#### Resources
+### Resources
 
 - [Building VT Code, a year in](https://huggingface.co/blog/vinhnx90/building-vtcode-a-year-in): harness design,
   evals, security, and lessons learned.
 - [Podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [Video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
-#### Share VT Code
+### Share VT Code
 
-If VT Code helped you ship something, telling other developers is the easiest way to support it:
+If VT Code helped you ship something, spread the word:
 
 [Share on X](https://twitter.com/intent/tweet?text=VT%20Code%20is%20an%20open-source%20coding%20agent%20for%20your%20terminal&url=https%3A%2F%2Fgithub.com%2Fvinhnx%2Fvtcode)
 ·
@@ -359,7 +360,7 @@ If VT Code helped you ship something, telling other developers is the easiest wa
 ·
 [Share via SMS](sms:?&body=Check%20out%20VT%20Code%2C%20an%20open-source%20coding%20agent%20for%20your%20terminal%3A%20https%3A%2F%2Fgithub.com%2Fvinhnx%2Fvtcode)
 
-#### Sponsorship
+### Sponsorship
 
 VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors/vinhnx) keeps it independent.
 
