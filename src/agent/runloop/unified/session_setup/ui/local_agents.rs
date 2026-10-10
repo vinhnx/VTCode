@@ -60,7 +60,8 @@ async fn build_local_agent_entries(
             .unwrap_or_else(|| delegated_local_agent_preview_placeholder(&entry));
         let summary = snapshot
             .as_ref()
-            .map(|snapshot| delegated_local_agent_summary(&entry, snapshot));
+            .map(|snapshot| delegated_local_agent_summary(&entry, snapshot))
+            .or_else(|| entry.summary.clone());
         entries.push((
             Some(entry.updated_at),
             LocalAgentEntry {

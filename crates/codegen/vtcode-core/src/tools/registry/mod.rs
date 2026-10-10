@@ -226,6 +226,8 @@ pub struct ToolRegistry {
     tool_catalog_state: Arc<SessionToolCatalogState>,
     /// Shared subagent controller when the session enables delegated child agents.
     subagent_controller: Arc<RwLock<Option<Arc<SubagentController>>>>,
+    matrix_worker: Arc<parking_lot::RwLock<Option<crate::subagents::matrix::MatrixWorkerContext>>>,
+    matrix_coordinator: Arc<std::sync::atomic::AtomicBool>,
     /// Session-scoped scheduled prompts for interactive loops and cron tools.
     session_scheduler: Arc<tokio::sync::Mutex<crate::scheduler::SessionScheduler>>,
     /// Live model-facing tool definitions attached by the runloop.

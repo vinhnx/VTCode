@@ -66,6 +66,54 @@ fn decision_validator(state: Arc<SessionStoreSinkState>) -> DecisionEvidenceVali
     })
 }
 
+fn matrix_persistence(state: Arc<SessionStoreSinkState>) -> crate::subagents::matrix::MatrixPersistence {
+    let write_state = Arc::clone(&state);
+    crate::subagents::matrix::MatrixPersistence {
+        persist: Arc::new(move |snapshot| {
+            let state = Arc::clone(&write_state);
+            Box::pin(async move {
+                anyhow::ensure!(!state.health.failed.load(Ordering::Acquire), "canonical persistence failed");
+                let event = ThreadEvent::MatrixUpdated(Box::new(snapshot));
+                let queued = prepare_queued_session_event(&state, &event)?;
+                let reserved_bytes = queued.reserved_bytes;
+                let (reply, receiver) = tokio::sync::oneshot::channel();
+                let sent = state
+                    .sender
+                    .lock()
+                    .as_ref()
+                    .context("canonical event sink is closed")
+                    .and_then(|sender| {
+                        sender
+                            .try_send(SessionStoreRequest::MatrixPersist(queued, reply))
+                            .map_err(|error| anyhow!("canonical matrix queue unavailable: {error}"))
+                    });
+                if let Err(error) = sent {
+                    release_reserved_bytes(&state, reserved_bytes);
+                    state.health.failed.store(true, Ordering::Release);
+                    return Err(error);
+                }
+                state.health.accepted_events.fetch_add(1, Ordering::Relaxed);
+                receiver.await.context("matrix persistence barrier unavailable")?
+            })
+        }),
+        load: Arc::new(move || {
+            let state = Arc::clone(&state);
+            Box::pin(async move {
+                anyhow::ensure!(!state.health.failed.load(Ordering::Acquire), "canonical persistence failed");
+                let (reply, receiver) = tokio::sync::oneshot::channel();
+                state
+                    .sender
+                    .lock()
+                    .as_ref()
+                    .context("canonical event sink is closed")?
+                    .try_send(SessionStoreRequest::MatrixLoad(reply))
+                    .map_err(|error| anyhow!("canonical matrix queue unavailable: {error}"))?;
+                receiver.await.context("matrix replay barrier unavailable")?
+            })
+        }),
+    }
+}
+
 #[derive(Debug, Default)]
 struct SessionStoreSinkHealth {
     accepted_events: AtomicU64,
@@ -102,6 +150,8 @@ impl SessionStoreSinkHealth {
 }
 
 enum SessionStoreRequest {
+    MatrixPersist(QueuedSessionEvent, tokio::sync::oneshot::Sender<Result<()>>),
+    MatrixLoad(tokio::sync::oneshot::Sender<Result<Vec<crate::exec::events::matrix::MatrixSnapshot>>>),
     Event(QueuedSessionEvent),
     ValidateDecision(String, Vec<String>, tokio::sync::oneshot::Sender<Result<()>>),
     Explanation(
@@ -143,6 +193,9 @@ pub(crate) struct SessionStoreSinkHandle {
 }
 
 impl SessionStoreSinkHandle {
+    pub(crate) fn matrix_persistence(&self) -> crate::subagents::matrix::MatrixPersistence {
+        matrix_persistence(Arc::clone(&self.state))
+    }
     pub(crate) fn decision_validator(&self) -> DecisionEvidenceValidator {
         decision_validator(Arc::clone(&self.state))
     }
@@ -180,6 +233,10 @@ pub struct SessionStoreSink {
 }
 
 impl SessionStoreSink {
+    /// Ordered, acknowledged matrix writes and replay through this session drain.
+    pub fn matrix_persistence(&self) -> crate::subagents::matrix::MatrixPersistence {
+        matrix_persistence(Arc::clone(&self.state))
+    }
     /// Validate task-owned evidence after all previously accepted events.
     pub fn decision_validator(&self) -> DecisionEvidenceValidator {
         decision_validator(Arc::clone(&self.state))
@@ -378,6 +435,74 @@ fn cached_explanation(
     Ok(model)
 }
 
+fn matrix_command_completed_event(
+    snapshot: &crate::exec::events::matrix::MatrixSnapshot,
+    task: &crate::exec::events::matrix::MatrixTaskState,
+    evidence: &crate::exec::events::matrix::MatrixCommandEvidence,
+    session_id: &str,
+) -> ThreadEvent {
+    ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            id: evidence.event_id.clone(),
+            context: Some(Box::new(crate::exec::events::ItemContext {
+                task_id: format!("{}/{}", snapshot.spec.id, task.id),
+                turn_id: evidence.attempt_id.clone(),
+                actor_id: evidence.worker_id.clone(),
+                parent_actor_id: Some(session_id.to_owned()),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                activity: Some(crate::exec::events::CommandActivity::Verification),
+            })),
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                command: evidence.command.clone(),
+                arguments: Some(serde_json::json!({
+                    "matrix_id":snapshot.spec.id, "task_id":task.id,
+                    "attempt_id":evidence.attempt_id, "worker_id":evidence.worker_id,
+                    "generation":evidence.generation, "cancelled":evidence.cancelled,
+                })),
+                aggregated_output: String::new(),
+                exit_code: evidence.exit_code,
+                status: if evidence.exit_code == Some(0) && !evidence.cancelled {
+                    CommandExecutionStatus::Completed
+                } else {
+                    CommandExecutionStatus::Failed
+                },
+            })),
+        },
+    })
+}
+
+fn restore_matrix_evidence_ids(
+    log: &vtcode_memory::SessionEventLog,
+    ids: &mut std::collections::HashSet<String>,
+) -> Result<()> {
+    log.visit_snapshot(|_, bytes| {
+        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes) {
+            match versioned.into_event() {
+                ThreadEvent::ItemCompleted(event)
+                    if matches!(event.item.details, ThreadItemDetails::CommandExecution(_)) =>
+                {
+                    ids.insert(event.item.id);
+                }
+                ThreadEvent::MatrixUpdated(snapshot) => {
+                    // Cap rewrites can retain checkpoints after evicting the
+                    // command records. Their evidence remains historical.
+                    ids.extend(
+                        snapshot
+                            .tasks
+                            .into_iter()
+                            .flat_map(|task| task.attempts)
+                            .flat_map(|attempt| attempt.evidence)
+                            .map(|evidence| evidence.event_id),
+                    );
+                }
+                _ => {}
+            }
+        }
+    })
+    .context("restore canonical matrix command identities")?;
+    Ok(())
+}
+
 fn drain_session_events(
     rx: Receiver<SessionStoreRequest>,
     log: vtcode_memory::SessionEventLog,
@@ -385,8 +510,81 @@ fn drain_session_events(
     state: Arc<SessionStoreSinkState>,
 ) {
     let mut explanations = Vec::new();
+    let mut matrix_evidence_ids = std::collections::HashSet::new();
+    let mut matrix_evidence_restored = false;
     while let Ok(request) = rx.recv() {
         let queued = match request {
+            SessionStoreRequest::MatrixPersist(queued, reply) => {
+                let result = (|| -> Result<()> {
+                    if let ThreadEvent::MatrixUpdated(snapshot) = &queued.event {
+                        if !matrix_evidence_restored {
+                            restore_matrix_evidence_ids(&log, &mut matrix_evidence_ids)?;
+                            matrix_evidence_restored = true;
+                        }
+                        for task in &snapshot.tasks {
+                            for attempt in &task.attempts {
+                                for evidence in &attempt.evidence {
+                                    if matrix_evidence_ids.insert(evidence.event_id.clone()) {
+                                        log.append(&matrix_command_completed_event(
+                                            snapshot,
+                                            task,
+                                            evidence,
+                                            &session_id,
+                                        ))?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    log.append(&queued.event)?;
+                    log.flush()?;
+                    Ok(())
+                })();
+                release_reserved_bytes(&state, queued.reserved_bytes);
+                let failed = result.is_err();
+                if failed {
+                    state.health.append_failures.fetch_add(1, Ordering::Relaxed);
+                    state.health.failed.store(true, Ordering::Release);
+                } else {
+                    state.health.persisted_events.fetch_add(1, Ordering::Relaxed);
+                }
+                explanations.clear();
+                let _ = reply.send(result);
+                if failed {
+                    break;
+                }
+                continue;
+            }
+            SessionStoreRequest::MatrixLoad(reply) => {
+                let result = (|| -> Result<_> {
+                    let mut latest = std::collections::BTreeMap::<String, vtcode_memory::matrix::MatrixState>::new();
+                    let mut replay_error = None;
+                    log.visit_snapshot(|_, bytes| {
+                        if replay_error.is_some() {
+                            return;
+                        }
+                        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes)
+                            && let ThreadEvent::MatrixUpdated(snapshot) = versioned.into_event()
+                        {
+                            let previous = latest.remove(&snapshot.spec.id);
+                            let events = previous
+                                .into_iter()
+                                .map(|state| state.event())
+                                .chain([ThreadEvent::MatrixUpdated(snapshot)]);
+                            match vtcode_memory::matrix::replay(events) {
+                                Ok(replayed) => latest.extend(replayed),
+                                Err(error) => replay_error = Some(error),
+                            }
+                        }
+                    })?;
+                    if let Some(error) = replay_error {
+                        return Err(error.into());
+                    }
+                    Ok(latest.into_values().map(|state| state.snapshot().clone()).collect())
+                })();
+                let _ = reply.send(result);
+                continue;
+            }
             SessionStoreRequest::Event(event) => event,
             SessionStoreRequest::ValidateDecision(task_id, ids, reply) => {
                 let result = (|| -> Result<()> {
@@ -450,7 +648,8 @@ fn drain_session_events(
                 );
                 release_reserved_bytes(&state, reserved_bytes);
                 while let Ok(request) = rx.try_recv() {
-                    if let SessionStoreRequest::Event(queued) = request {
+                    if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request
+                    {
                         release_reserved_bytes(&state, queued.reserved_bytes);
                     }
                 }
@@ -471,7 +670,7 @@ fn drain_session_events(
     }
 }
 
-fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<()> {
+fn prepare_queued_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<QueuedSessionEvent> {
     if state.health.failed.load(Ordering::Acquire) {
         state.health.channel_failures.fetch_add(1, Ordering::Relaxed);
         return Err(anyhow!("canonical session event sink has failed"));
@@ -500,7 +699,12 @@ fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> 
         return Err(anyhow!("canonical session event queue reached its bounded byte capacity"));
     }
 
-    let queued = QueuedSessionEvent { event: event.clone(), reserved_bytes };
+    Ok(QueuedSessionEvent { event: event.clone(), reserved_bytes })
+}
+
+fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<()> {
+    let queued = prepare_queued_session_event(state, event)?;
+    let reserved_bytes = queued.reserved_bytes;
     let sender = state.sender.lock();
     let Some(sender) = sender.as_ref() else {
         release_reserved_bytes(state, reserved_bytes);
@@ -514,7 +718,7 @@ fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> 
             Ok(())
         }
         Err(TrySendError::Full(request) | TrySendError::Disconnected(request)) => {
-            if let SessionStoreRequest::Event(queued) = request {
+            if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request {
                 release_reserved_bytes(state, queued.reserved_bytes);
             }
             state.health.failed.store(true, Ordering::Release);

@@ -27,12 +27,13 @@ format.
 
 ## Built-in primary agents
 
-| Agent   | Default model | Mutates files?           | Purpose                                                                                     |
-| ------- | ------------- | ------------------------ | ------------------------------------------------------------------------------------------- |
-| `build` | `inherit`     | yes                      | Implementation agent for normal build and repair work                                       |
-| `auto`  | `inherit`     | yes, classifier-reviewed | Build-oriented agent that routes configured tools through `permissions.auto`                |
-| `plan`  | `inherit`     | no                       | Discussion-first, read-only planning workflow for repository evidence and proposal drafting |
-| `duck`  | `inherit`     | no                       | Discussion-first agent for scope, constraints, and trade-offs                               |
+| Agent         | Default model | Mutates files?           | Purpose                                                                                     |
+| ------------- | ------------- | ------------------------ | ------------------------------------------------------------------------------------------- |
+| `build`       | `inherit`     | yes                      | Implementation agent for normal build and repair work                                       |
+| `auto`        | `inherit`     | yes, classifier-reviewed | Build-oriented agent that routes configured tools through `permissions.auto`                |
+| `coordinator` | `inherit`     | delegated only           | Opt-in deterministic matrix scheduling, decisions, and final verification tracking          |
+| `plan`        | `inherit`     | no                       | Discussion-first, read-only planning workflow for repository evidence and proposal drafting |
+| `duck`        | `inherit`     | no                       | Discussion-first agent for scope, constraints, and trade-offs                               |
 
 Custom project or user specs with the same name override these built-ins using the normal discovery precedence. Use
 `mode: primary` for main-session agents, `mode: subagent` for delegated-only definitions, and `mode: all` for
@@ -40,6 +41,36 @@ definitions that should support both.
 
 Primary agents replace old behaviour labels: choose `duck` for discussion, `plan` for planning workflow, `build` for
 implementation, and `auto` for classifier-reviewed build work.
+
+## Matrix quick reference
+
+Select `coordinator` for durable, explicit local task matrices. The coordinator defines stable task IDs,
+instructions, dependencies, workspace access, checks, named resource needs, and required timeouts. Workers perform
+execution and verification under inherited sandbox and approval policies. Build behavior remains unchanged.
+Explicit permission denials also apply to scheduler-issued verification, even with full-auto grants.
+
+| `matrix` action | Purpose |
+| --- | --- |
+| `create` with `spec` | Persist explicit tasks and positive resource capacities without launching |
+| `start` with `matrix_id` | Freeze the specification and dispatch ready tasks |
+| `status` | Inspect queued tasks, resource waits, active attempts, failures, and final verification |
+| `pause` / `resume` | Stop dispatch / reconcile durable state before continuing |
+| `retry` with `task_id` | Request a coordinator-approved new attempt |
+| `cancel` | Stop work terminally; a new matrix is required to execute again |
+| `report` | Worker-only outcome/evidence submission; runtime owns task and attempt identity |
+
+Writers exclude all other matrix tasks; readers may overlap. Named pools serialize shared targets or devices.
+Active workers are capped at `min(subagents.max_concurrent, 5)`, with the existing default of three. Matrix workers
+cannot nest delegation. Discovery delegation is available to the coordinator only while the matrix is idle.
+
+Final success needs every declared check against the fingerprinted final workspace generation. Any source change
+reruns complete final verification. Summaries alone do not prove success. Automatic retry is limited to one
+interrupted/timeout retry, explicitly `replay_safe` tasks, and confirmed cleanup. Other failures require decisions.
+Explicit session resume replays canonical state and reconciles ownership; uncertain surviving processes block reuse.
+Replay restores delegation admission during session startup. Internal driver errors allow explicit continuation
+after their cause and cleanup are reconciled; user cancellation stays terminal. Submodule commits and tracked
+changes participate in verification generations. Completion is delivered while idle without waiting for user input.
+See [matrix orchestration](../development/matrix-orchestration.md) for definitions, evidence, and recovery details.
 
 ## Built-in subagents
 
@@ -681,6 +712,10 @@ For a minimal demo pair, see [background-subagent-demo.md](../examples/backgroun
 Delegated child threads keep their own history. VT Code can continue them with follow-up input instead of starting from
 scratch. The runtime exposes `send_input`, `resume_agent`, `wait_agent`, and `close_agent` to the model for this
 purpose.
+
+Interrupt and close wait for the owned launch to stop before its concurrency slot is reused. Follow-up input for an
+active or waiting child stays queued on that launch. A launch rejected at the concurrency cap remains failed and can be
+resumed after a slot becomes available; retry preserves the queued input without duplicating it.
 
 `wait_agent` blocks the current turn until a child finishes or the timeout expires. It accepts delegated child thread
 ids and managed background subprocess ids (`background-<name>`): launch long-lived helpers with

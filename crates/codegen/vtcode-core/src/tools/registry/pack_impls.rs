@@ -191,6 +191,9 @@ impl ToolPack for MultiAgentPack {
                     "wait_subagent",
                     "close_subagent",
                 ]),
+            ToolRegistration::new("matrix", CapabilityLevel::Basic, false, ToolRegistry::matrix_executor)
+                .with_description(vtcode_utility_tool_specs::MATRIX_DESCRIPTION)
+                .with_parameter_schema(vtcode_utility_tool_specs::matrix_parameters()),
         ];
         batch_register(inventory, registrations);
     }

@@ -167,7 +167,8 @@ impl ResponseBuilder {
             ThreadEvent::Unknown
             | ThreadEvent::PermissionRequested(_)
             | ThreadEvent::PermissionResolved(_)
-            | ThreadEvent::Interjected(_) => {}
+            | ThreadEvent::Interjected(_)
+            | ThreadEvent::MatrixUpdated(_) => {}
         }
     }
 

@@ -120,6 +120,7 @@ pub(super) async fn build_prompt_sections(
     if let Some(cfg) = vtcode_config {
         let agent_label = agent_identity_label(&cfg.default_primary_agent);
         base_prompt = apply_agent_identity(&base_prompt, &agent_label);
+        apply_coordinator_role_guidance(&mut base_prompt, cfg.default_primary_agent == "coordinator");
     }
 
     let mut sections = vec![PromptSection { kind: SectionKind::BaseContract, text: base_prompt }];
@@ -256,6 +257,48 @@ pub(super) fn stable_prompt_sections_digest(sections: &[PromptSection]) -> u64 {
         .map(|section| (section.kind.name(), section.text.as_str()))
         .collect::<Vec<_>>();
     crate::core::agent::hash_utils::hash_value(&stable_sections)
+}
+
+/// Align cached base guidance with the selected role, including switches away from the coordinator.
+pub fn apply_coordinator_role_guidance(prompt: &mut String, coordinator_active: bool) {
+    use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
+
+    const ORDINARY_DELEGATION: &str = "- Delegate only sizeable, independent work to subagents; keep small tasks and verification in the main thread.";
+    const COORDINATOR_DELEGATION: &str = "- As coordinator, delegate execution and verification to scheduler-owned matrix workers; keep decisions in the main thread.";
+
+    if !coordinator_active && !prompt.contains("## Coordinator Role") && !prompt.contains(COORDINATOR_DELEGATION) {
+        return;
+    }
+
+    let coordinator_role =
+        format!("## Coordinator Role\n{}\n", vtcode_config::subagents::builtin_primary_coordinator_agent().prompt);
+    if coordinator_active
+        && prompt.matches("## Coordinator Role").count() == 1
+        && prompt.contains(COORDINATOR_DELEGATION)
+        && let Some((start, end)) =
+            find_prompt_section_bounds(prompt, "## Coordinator Role", SectionBoundaryMode::BracketOrMarkdown)
+        && prompt
+            .get(start..end)
+            .is_some_and(|section| section.trim() == coordinator_role.trim())
+    {
+        return;
+    }
+
+    while let Some((start, end)) =
+        find_prompt_section_bounds(prompt, "## Coordinator Role", SectionBoundaryMode::BracketOrMarkdown)
+    {
+        prompt.replace_range(start..end, "");
+    }
+    let (previous, current) = if coordinator_active {
+        (ORDINARY_DELEGATION, COORDINATOR_DELEGATION)
+    } else {
+        (COORDINATOR_DELEGATION, ORDINARY_DELEGATION)
+    };
+    *prompt = prompt.replace(previous, current);
+    if coordinator_active {
+        prompt.push_str("\n\n");
+        prompt.push_str(&coordinator_role);
+    }
 }
 
 /// Apply agent identity to the system prompt by replacing the title and intro lines.

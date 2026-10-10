@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 mod collaboration;
 mod json_schema;
+mod matrix;
 #[cfg(feature = "mcp")]
 mod mcp_tool;
 mod responses_api;
@@ -23,6 +24,7 @@ pub use collaboration::{
     spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
+pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
 #[cfg(feature = "mcp")]
 pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
 pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};

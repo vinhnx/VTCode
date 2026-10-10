@@ -280,6 +280,8 @@ impl ToolRegistry {
         prevalidated: bool,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
+        let resolved = self.resolve_tool_name_with_display(name);
+        self.enforce_matrix_role(&resolved.canonical)?;
         if let Err(error) = crate::core::agent::snapshots::declare_prompt_edit(
             self.harness_context_snapshot().session_id,
             name.to_owned(),
@@ -587,8 +589,14 @@ impl ToolRegistry {
         let fresh_patch_read = self.consume_patch_recovery_read(&tool_name, args);
         // Stateful tracker/decision calls must observe the current canonical
         // task, including identical calls after request or permission changes.
-        let reusable_result =
-            readonly_classification && !matches!(tool_name.as_str(), tools::RECORD_DECISION | tools::TASK_TRACKER);
+        let matrix_verification = self
+            .matrix_worker
+            .read()
+            .as_ref()
+            .is_some_and(|worker| worker.assignment.phase == crate::exec::events::matrix::MatrixPhase::Verify);
+        let reusable_result = readonly_classification
+            && !matrix_verification
+            && !matches!(tool_name.as_str(), tools::RECORD_DECISION | tools::TASK_TRACKER | tools::MATRIX);
         let skip_loop_detection = self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
         if skip_loop_detection {
             trace!(

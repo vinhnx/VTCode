@@ -57,6 +57,9 @@ struct HarnessEventEmitterInner {
 }
 
 impl HarnessEventEmitter {
+    pub(crate) fn matrix_persistence(&self) -> Option<vtcode_core::subagents::matrix::MatrixPersistence> {
+        self.inner.canonical.as_ref().map(CanonicalEventSink::matrix_persistence)
+    }
     pub(crate) fn decision_validator(&self) -> Option<vtcode_core::core::agent::events::DecisionEvidenceValidator> {
         self.inner.canonical.as_ref().map(CanonicalEventSink::decision_validator)
     }

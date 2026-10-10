@@ -33,6 +33,7 @@ static APPROVAL_REGEX_CACHE: std::sync::Mutex<Option<(IndexSet<String>, Vec<Rege
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::START_PLANNING,
     tools::TASK_TRACKER,
+    tools::MATRIX,
     tools::RECORD_DECISION,
     tools::READ_FILE,
     // This tool dispatches to the interactive front-end wizard. Asking the

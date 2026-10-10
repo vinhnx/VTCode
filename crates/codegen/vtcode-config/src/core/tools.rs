@@ -448,6 +448,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Core workflow tools (non-destructive)
     (tools::START_PLANNING, ToolPolicy::Allow),
     (tools::TASK_TRACKER, ToolPolicy::Allow),
+    (tools::MATRIX, ToolPolicy::Allow),
     // Public model-facing tools.
     (tools::CODE_SEARCH, ToolPolicy::Allow),
     (tools::EXEC_COMMAND, ToolPolicy::Allow),

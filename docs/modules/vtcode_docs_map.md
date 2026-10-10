@@ -170,6 +170,13 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Diff Preview Architecture?", "How does Turn aggregation, event
     fields, and themes work?", "How does Readability: wrap and expand work?"
 
+- **File**: `docs/development/matrix-orchestration.md`
+  - **Content**: Durable local matrix orchestration
+  - **Topics**: Define and control a matrix, Resource reservations and workspace access, Execution and final
+    verification, Restart reconciliation and retries, Development verification
+  - **User Questions**: "What can you tell me about Durable local matrix orchestration?", "How does Define and control a
+    matrix work?", "How does Resource reservations and workspace access work?"
+
 - **File**: `docs/development/execution-explanations.md`
   - **Content**: Execution explanations
   - **Topics**: Canonical contract, Queries and reports, Validation
@@ -463,9 +470,9 @@ below based on the topic area.
 
 - **File**: `docs/user-guide/subagents.md`
   - **Content**: Subagents
-  - **Topics**: Built-in primary agents, Built-in subagents, Summary, Facts, Touched Files
+  - **Topics**: Built-in primary agents, Matrix quick reference, Built-in subagents, Summary, Facts
   - **User Questions**: "What can you tell me about Subagents?", "How does Built-in primary agents work?", "How does
-    Built-in subagents work?"
+    Matrix quick reference work?"
 
 - **File**: `docs/user-guide/tree-sitter-integration.md`
   - **Content**: Tree-sitter Integration

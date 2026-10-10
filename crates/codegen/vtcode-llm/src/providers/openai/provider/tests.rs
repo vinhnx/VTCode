@@ -1461,7 +1461,10 @@ fn responses_payload_emits_allowed_tools_for_native_openai_from_stable_catalogue
     assert_str_field_obj(choice, "mode", "auto");
     assert_eq!(
         choice["tools"].as_array().expect("allowed tools array"),
-        &vec![json!("search_workspace"), json!("web_search")]
+        &vec![
+            json!({"type":"function", "name":"search_workspace"}),
+            json!({"type":"web_search"})
+        ]
     );
 }
 
@@ -1474,6 +1477,33 @@ fn responses_payload_emits_allowed_tools_for_chatgpt_backend() {
         .expect("conversion should succeed");
 
     assert_eq!(payload["tool_choice"]["type"].as_str(), Some("allowed_tools"));
+    assert_eq!(payload["tool_choice"]["tools"][0], json!({"type":"function", "name":"search_workspace"}));
+}
+
+#[test]
+fn responses_allowed_tools_references_match_serialized_catalogue_and_deduplicate() {
+    let provider = native_openai_provider(models::openai::GPT_5);
+    let mut request = responses_allowed_tools_request(models::openai::GPT_5);
+    request.tools = Some(Arc::new(vec![
+        sample_tool(),
+        sample_tool(),
+        provider::ToolDefinition::mcp(json!({"server_label":"docs", "server_url":"https://example.test/mcp"})),
+    ]));
+    request.tool_choice = Some(provider::ToolChoice::allowed_tools_auto(vec![
+        "mcp".into(),
+        "missing".into(),
+        "search_workspace".into(),
+        "search_workspace".into(),
+    ]));
+    let payload = provider.convert_to_openai_responses_format(&request).expect("conversion");
+    assert_eq!(payload["tools"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        payload["tool_choice"]["tools"],
+        json!([
+            {"type":"function", "name":"search_workspace"},
+            {"type":"mcp", "server_label":"docs"},
+        ])
+    );
 }
 
 #[test]

@@ -543,7 +543,7 @@ impl SessionEventLog {
         // needs the complete on-disk file before rewriting it.
         self.flush_write_buf_locked(&mut st)?;
 
-        let (evicted, remaining, previous_file_len) = {
+        let (evicted, mut remaining, previous_file_len) = {
             let mut file_slot = self.shared.file.lock().map_err(poison)?;
             let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
             let file_len = file
@@ -589,6 +589,32 @@ impl SessionEventLog {
         let evicted_events = decode_events(&evicted);
         (self.eviction_summary_hook)(&evicted_events)?;
 
+        // Matrix snapshots are complete session-level checkpoints. Preserve the
+        // latest evicted checkpoint only when no newer snapshot survives.
+        let mut matrix_checkpoints = BTreeMap::new();
+        for event in &evicted_events {
+            if let ThreadEvent::MatrixUpdated(snapshot) = event {
+                matrix_checkpoints.insert(snapshot.spec.id.clone(), event);
+            }
+        }
+        for event in decode_events(&remaining) {
+            if let ThreadEvent::MatrixUpdated(snapshot) = event {
+                matrix_checkpoints.remove(&snapshot.spec.id);
+            }
+        }
+        let mut checkpoint_prefix = Vec::new();
+        for event in matrix_checkpoints.values() {
+            serde_json::to_writer(&mut checkpoint_prefix, &VersionedThreadEvent::new((*event).clone()))
+                .map_err(|error| SessionStoreError::io(&self.events_path, std::io::Error::other(error)))?;
+            checkpoint_prefix.push(b'\n');
+        }
+        let checkpoint_bytes = checkpoint_prefix.len() as u64;
+        let checkpoint_count = matrix_checkpoints.len() as u64;
+        if !checkpoint_prefix.is_empty() {
+            checkpoint_prefix.extend_from_slice(&remaining);
+            remaining = checkpoint_prefix;
+        }
+
         let new_file_len = u64::try_from(remaining.len()).map_err(|error| {
             SessionStoreError::io(&self.events_path, std::io::Error::new(std::io::ErrorKind::InvalidData, error))
         })?;
@@ -600,6 +626,11 @@ impl SessionEventLog {
         let next_offset = self.replace_event_file_contents(&remaining)?;
         let mut st = self.shared.state.lock().map_err(poison)?;
         st.apply_cap_eviction(plan, next_offset);
+        for entry in &mut st.index.entries {
+            entry.start_offset += checkpoint_bytes;
+            entry.end_offset += checkpoint_bytes;
+        }
+        st.manifest.event_count += checkpoint_count;
         // The rewrite changed byte offsets and retained counts; persist the
         // derived metadata before exposing the append as successful.
         self.persist_meta_locked(&mut st)?;

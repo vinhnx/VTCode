@@ -1,3 +1,10 @@
+struct MatrixInterruptGuard(tokio::task::JoinHandle<()>);
+impl Drop for MatrixInterruptGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 use std::collections::VecDeque;
 use std::time::Instant;
 
@@ -685,10 +692,30 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
         let mut background_completion_receiver = tool_registry
             .subagent_controller()
             .map(|controller| controller.subscribe_parent_background_completions());
+        let _matrix_interrupt_guard = if let Some(controller) = tool_registry.subagent_controller() {
+            if let Some(persistence) = harness_emitter.as_ref().and_then(|emitter| emitter.matrix_persistence()) {
+                harness_try!(controller.set_matrix_persistence(persistence).await);
+            }
+            let interrupt_state = std::sync::Arc::clone(&ctrl_c_state);
+            Some(MatrixInterruptGuard(tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    if interrupt_state.is_cancel_requested() || interrupt_state.is_exit_requested() {
+                        if let Err(error) = controller.cancel_matrix().await {
+                            tracing::warn!(%error, "matrix interruption persistence failed");
+                        }
+                    }
+                }
+            })))
+        } else {
+            None
+        };
         let exec_session_manager = tool_registry.exec_session_manager();
         let mut exec_completion_receiver = Some(exec_session_manager.subscribe_completion());
         let exec_completion_notify = Some(exec_session_manager.completion_notify());
         let mut pending_background_completions = PendingBackgroundCompletions::default();
+        let mut pending_matrix_note: Option<String> = None;
+        let mut displayed_matrix_revision: Option<(String, u64)> = None;
         let (webmcp_prompt_sender, webmcp_prompt_receiver) = crate::agent::runloop::unified::webmcp::prompt_channel();
         let mut webmcp_prompt_receiver = Some(webmcp_prompt_receiver);
         let mut webmcp_bridge = None;
@@ -869,17 +896,49 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
 
                 if let Some(controller) = tool_registry.subagent_controller() {
                     controller.set_parent_messages(&runtime.state.messages).await;
+                    if let Some(projection) = controller.matrix_tracker_projection().await {
+                        let revision = (
+                            projection["matrix_id"].as_str().unwrap_or_default().to_owned(),
+                            projection["revision"].as_u64().unwrap_or_default(),
+                        );
+                        if displayed_matrix_revision.as_ref() != Some(&revision) {
+                            let (rows, statuses, current) =
+                                crate::agent::runloop::tool_output::tracker_panel_rows(&projection);
+                            handle.update_task_panel_with_statuses(
+                                rows,
+                                statuses,
+                                current,
+                                crate::agent::runloop::tool_output::tracker_panel_metadata(&projection),
+                            );
+                            displayed_matrix_revision = Some(revision);
+                        }
+                    }
+                    if let Some(snapshot) = controller.take_matrix_completion() {
+                        pending_matrix_note = Some(format!(
+                            "Authoritative matrix completion: {} is {:?}. Use matrix status for task outcomes and verification evidence before reporting results.",
+                            snapshot.spec.id, snapshot.lifecycle
+                        ));
+                    }
                 }
 
+                let background_continuation_requested = pending_background_completions.should_schedule_continuation(
+                    !queued_inputs.is_empty() || !session.events.is_empty(),
+                    runtime.has_pending_follow_up_inputs(),
+                );
                 if crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
                     && !matches!(last_turn_result, Some(RunLoopTurnLoopResult::Cancelled | RunLoopTurnLoopResult::Exit))
-                    && pending_background_completions.should_schedule_continuation(
-                        !queued_inputs.is_empty() || !session.events.is_empty(),
-                        runtime.has_pending_follow_up_inputs(),
-                    )
+                    && (background_continuation_requested
+                        || (pending_matrix_note.is_some()
+                            && queued_inputs.is_empty()
+                            && session.events.is_empty()
+                            && !runtime.has_pending_follow_up_inputs()))
                 {
                     match runtime.try_queue_follow_up_input(background_completion_continuation_prompt()) {
-                        Ok(()) => pending_background_completions.mark_continuation_queued(),
+                        Ok(()) => {
+                            if background_continuation_requested {
+                                pending_background_completions.mark_continuation_queued();
+                            }
+                        }
                         Err(error) => tracing::warn!(%error, "Unable to queue background completion continuation"),
                     }
                 }
@@ -1493,7 +1552,10 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
                     config.workspace.as_path(),
                     &tool_registry,
                     unrelated_dirty_note,
-                    pending_background_completions.take_transient_note(),
+                    match (pending_background_completions.take_transient_note(), pending_matrix_note.take()) {
+                        (Some(background), Some(matrix)) => Some(format!("{background}\n{matrix}")),
+                        (background, matrix) => background.or(matrix),
+                    },
                 ));
                 working_history.extend(
                     transient_system_notes

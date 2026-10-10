@@ -52,7 +52,7 @@ pub(super) fn has_renderable_stream_content(output: &serde_json::Value) -> bool 
 }
 
 pub(super) fn is_task_tracker_tool(name: &str) -> bool {
-    matches!(name, tools::TASK_TRACKER)
+    matches!(name, tools::TASK_TRACKER | tools::MATRIX)
 }
 
 pub(super) fn task_tracker_block_lines(output: &serde_json::Value, expanded: bool) -> Vec<TrackerLine> {

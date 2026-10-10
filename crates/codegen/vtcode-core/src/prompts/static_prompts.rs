@@ -18,6 +18,7 @@ pub fn agent_identity_label(agent_name: &str) -> String {
     match agent_name {
         "build" => "VT Code (Build mode)".to_string(),
         "auto" => "VT Code (Auto mode)".to_string(),
+        "coordinator" => "VT Code (Coordinator mode)".to_string(),
         "duck" => "VT Code (Duck mode)".to_string(),
         "plan" => "VT Code (Plan mode)".to_string(),
         "explorer" => "VT Code (Explorer mode)".to_string(),

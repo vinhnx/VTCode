@@ -734,6 +734,20 @@ impl Default for LoopDetector {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn matrix_actions_are_distinct_but_repeated_status_still_hits_the_limit() {
+        let mut detector = LoopDetector::with_max_repeated_calls(2);
+        for action in ["create", "start", "status"] {
+            detector.record_call(tools::MATRIX, &serde_json::json!({"action":action,"matrix_id":"work"}));
+            assert!(!detector.is_hard_limit_exceeded(tools::MATRIX));
+        }
+        assert!(
+            detector
+                .record_call(tools::MATRIX, &serde_json::json!({"action":"status","matrix_id":"work"}))
+                .is_some()
+        );
+        assert!(detector.is_hard_limit_exceeded(tools::MATRIX));
+    }
     use super::*;
     use serde_json::json;
 

@@ -59,6 +59,15 @@ fn repeated_follow_up_directive(stalled: bool) -> String {
 const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
 const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+fn idle_completion_outcome(
+    action: &InlineLoopAction,
+    ordinary_completions: usize,
+    matrix_ready: bool,
+) -> Option<InteractionOutcome> {
+    (matches!(action, InlineLoopAction::Continue) && (ordinary_completions > 0 || matrix_ready))
+        .then_some(InteractionOutcome::BackgroundCompletionReady)
+}
+
 #[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
@@ -255,15 +264,19 @@ pub(super) async fn run_interaction_loop_impl(
                     let _ = emitter.emit(background_completion_thread_event(event));
                 }
             }
-            if completion_drain.added.saturating_add(exec_completion_drain.added) > 0 {
-                let controller = ctx.tool_registry.subagent_controller();
+            let controller = ctx.tool_registry.subagent_controller();
+            if let Some(outcome) = idle_completion_outcome(
+                &inline_action,
+                completion_drain.added.saturating_add(exec_completion_drain.added),
+                controller.as_ref().is_some_and(|controller| controller.has_matrix_completion()),
+            ) {
                 if let Err(error) =
                     refresh_local_agents(ctx.handle, controller.as_ref(), ctx.tool_registry.exec_session_manager())
                         .await
                 {
                     tracing::warn!(%error, "Failed to synchronize Local Agents after background completion");
                 }
-                return Ok(InteractionOutcome::BackgroundCompletionReady);
+                return Ok(outcome);
             }
         }
 
@@ -676,3 +689,6 @@ pub(super) async fn run_interaction_loop_impl(
         });
     }
 }
+
+#[cfg(test)]
+mod tests;

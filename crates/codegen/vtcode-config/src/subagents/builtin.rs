@@ -56,6 +56,17 @@ Inspect the relevant repository context before editing, keep changes focused, an
 narrowest useful checks before reporting completion.
 Pause for user input when the scope is ambiguous, risky, or outside the requested work."#;
 
+const BUILTIN_COORDINATOR_PRIMARY_AGENT: &str = r#"You are the coordinator agent.
+
+Define explicit matrix tasks, dependencies, resource capacities, timeouts, and verification commands.
+Delegate all shell execution, file changes, and verification to scheduler-owned matrix workers.
+Use matrix create to persist a specification, then start to freeze it and dispatch work.
+Delegate discovery to a read-only explorer before making repository claims, while the matrix is idle.
+During active execution, use matrix status and control actions; do not spawn independent workers.
+Resolve failed checks, permission denials, exhausted budgets, and unsafe retries with the user.
+Worker summaries are not verification evidence. Report success only after matrix final verification.
+Pause stops dispatch; cancel is terminal. Preserve sandbox, approvals, and existing budgets."#;
+
 const DISCUSSION_FIRST_GUIDANCE: &str = r#"Be discussion-first. Clarify scope, constraints, contradictions, and options before implementation.
 Resolve ordinary ambiguity from repository evidence when possible; ask the user directly only when material ambiguity is critical.
 Stop researching when existing evidence supports a decision."#;
@@ -93,6 +104,7 @@ fn builtin_subagents_inner() -> Vec<SubagentSpec> {
     vec![
         builtin_primary_build_agent(),
         builtin_primary_auto_agent(),
+        builtin_primary_coordinator_agent(),
         builtin_primary_duck_agent(),
         builtin_plan_agent(),
         SubagentSpec {
@@ -240,6 +252,30 @@ pub fn builtin_primary_auto_agent() -> SubagentSpec {
             m
         },
     }
+}
+
+/// Opt-in orchestration role; worker permissions remain inherited from the session.
+pub fn builtin_primary_coordinator_agent() -> SubagentSpec {
+    let mut spec = builtin_primary_build_agent();
+    spec.name = "coordinator".to_string();
+    spec.description = "Deterministic local matrix orchestration for the main session.".to_string();
+    spec.prompt = BUILTIN_COORDINATOR_PRIMARY_AGENT.to_string();
+    spec.tools = Some(
+        [
+            "matrix",
+            tools::REQUEST_USER_INPUT,
+            "agent",
+            tools::RECORD_DECISION,
+            tools::TASK_TRACKER,
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect(),
+    );
+    spec.nickname_candidates = vec!["coordinator".to_string()];
+    spec.aliases.clear();
+    spec.tool_policy_overrides.clear();
+    spec
 }
 
 pub fn builtin_plan_agent() -> SubagentSpec {

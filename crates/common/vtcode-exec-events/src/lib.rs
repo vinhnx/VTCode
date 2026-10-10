@@ -21,10 +21,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod atif;
+pub mod matrix;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.17.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.18.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -366,6 +367,9 @@ pub mod schema {
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 #[serde(tag = "type")]
 pub enum ThreadEvent {
+    /// Replayable local matrix lifecycle checkpoint.
+    #[serde(rename = "matrix.updated")]
+    MatrixUpdated(Box<matrix::MatrixSnapshot>),
     /// Indicates that a new execution thread has started.
     #[serde(rename = "thread.started")]
     ThreadStarted(ThreadStartedEvent),

@@ -322,6 +322,7 @@ impl AgentRunner {
         );
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
+        tool_registry.set_matrix_coordinator(session_config.effective().default_primary_agent == "coordinator");
         tool_registry.set_agent_type(agent_type.to_string());
         tool_registry.initialize_async().await?;
         if let Err(err) = tool_registry
@@ -369,6 +370,7 @@ impl AgentRunner {
             .map(|tool| tool.function_name().to_string())
             .collect::<Vec<_>>();
         let mut prompt_context = PromptContext::from_workspace_tools(&workspace, available_tools);
+        prompt_context.set_current_directory(workspace.clone());
         prompt_context.load_available_skills_async().await;
         let (system_prompt, system_prompt_report) = helpers::compose_system_prompt_with_appendix(
             workspace.as_path(),
@@ -394,6 +396,32 @@ impl AgentRunner {
         let thread_handle =
             crate::core::threads::ThreadManager::new().start_thread_with_identifier(session_id.clone(), bootstrap);
         let max_turns = session_config.effective().automation.full_auto.max_turns.max(1);
+        if session_config.effective().default_primary_agent == "coordinator" {
+            let controller =
+                Box::pin(crate::subagents::SubagentController::new(crate::subagents::SubagentControllerConfig {
+                    workspace_root: workspace.clone(),
+                    parent_session_id: session_id.clone(),
+                    parent_model: model.to_string(),
+                    parent_provider: provider_name,
+                    parent_reasoning_effort: settings
+                        .reasoning_effort
+                        .unwrap_or(session_config.effective().agent.reasoning_effort),
+                    api_key: api_key.clone(),
+                    vt_cfg: session_config.effective().clone(),
+                    openai_chatgpt_auth,
+                    depth: 0,
+                    workspace_gated: session_config
+                        .effective()
+                        .workspace_lifecycle_hooks
+                        .as_ref()
+                        .is_some_and(|hooks| !hooks.is_empty()),
+                    exec_sessions: tool_registry.exec_session_manager(),
+                    pty_manager: tool_registry.pty_manager().clone(),
+                    managed_background_runtime: false,
+                }))
+                .await?;
+            tool_registry.set_subagent_controller(Arc::new(controller));
+        }
 
         Ok(Self {
             agent_type,
@@ -527,6 +555,8 @@ impl AgentRunner {
 
     /// Apply active primary-agent tool and permission policy to this runner.
     pub fn set_active_primary_agent(&mut self, active_primary_agent: ActivePrimaryAgent) {
+        self.tool_registry
+            .set_matrix_coordinator(active_primary_agent.identity.name == "coordinator");
         self.active_primary_agent = Some(active_primary_agent);
     }
 

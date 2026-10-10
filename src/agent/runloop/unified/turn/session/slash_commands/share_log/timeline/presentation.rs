@@ -24,6 +24,28 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
     records
         .iter()
         .map(|record| match &record.event {
+            ThreadEvent::MatrixUpdated(snapshot) => timeline_row(
+                record.sequence,
+                TIMELINE_SOURCE_THREAD_EVENTS,
+                "matrix.updated",
+                None,
+                "matrix",
+                Some(match snapshot.lifecycle {
+                    vtcode_core::exec::events::matrix::MatrixLifecycle::Succeeded => "completed",
+                    vtcode_core::exec::events::matrix::MatrixLifecycle::Cancelled => "cancelled",
+                    vtcode_core::exec::events::matrix::MatrixLifecycle::Blocked => "failed",
+                    vtcode_core::exec::events::matrix::MatrixLifecycle::Created => "pending",
+                    vtcode_core::exec::events::matrix::MatrixLifecycle::Paused => "paused",
+                    _ => "in_progress",
+                }),
+                record.turn_id.as_deref(),
+                record.submission_id.as_ref().map(|value| value.as_str()),
+                format!("Matrix {}: {:?}", snapshot.spec.id, snapshot.lifecycle),
+                String::new(),
+                String::new(),
+                pretty_json_string(&record.event),
+                false,
+            ),
             ThreadEvent::ThreadStarted(event) => timeline_row(
                 record.sequence,
                 TIMELINE_SOURCE_THREAD_EVENTS,

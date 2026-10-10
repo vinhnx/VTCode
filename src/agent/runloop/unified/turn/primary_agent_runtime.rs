@@ -53,6 +53,8 @@ pub(crate) fn sync_primary_agent_permissions(
 }
 
 pub(crate) async fn sync_primary_agent_runtime(ctx: &mut PrimaryAgentRuntimeSyncContext<'_>) -> Result<()> {
+    ctx.tool_registry
+        .set_matrix_coordinator(ctx.active_primary_agent.name() == "coordinator");
     let Some(cfg) = ctx.vt_cfg else {
         *ctx.lifecycle_hooks = None;
         set_global_notification_hook_engine(None);

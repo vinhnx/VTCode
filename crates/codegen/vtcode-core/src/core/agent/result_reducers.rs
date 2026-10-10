@@ -43,7 +43,7 @@ pub fn reduce_tool_result(tool_name: &str, result: Value) -> Value {
 /// results without a `view` field) so the common path pays zero allocation.
 pub fn strip_tui_display_fields<'a>(tool_name: &str, value: &'a Value) -> Cow<'a, Value> {
     let canonical = tool_intent::canonical_command_session_tool_name(tool_name).unwrap_or(tool_name);
-    if canonical != tools::TASK_TRACKER {
+    if canonical != tools::TASK_TRACKER && canonical != tools::MATRIX {
         return Cow::Borrowed(value);
     }
     let Some(obj) = value.as_object() else {

@@ -659,6 +659,192 @@ fn filter_child_tools_keeps_command_session_for_shell_capable_agents() {
 }
 
 #[test]
+fn build_child_config_does_not_inherit_coordinator_role_or_remove_discovery_permissions() {
+    let mut parent = VTCodeConfig {
+        default_primary_agent: "coordinator".into(),
+        ..Default::default()
+    };
+    parent.permissions.allow = vec![tools::READ_FILE.into(), tools::CODE_SEARCH.into()];
+    parent.permissions.deny = vec![tools::APPLY_PATCH.into()];
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.matches_name("explore"))
+        .unwrap();
+
+    let child = build_child_config(&parent, &spec, models::openai::GPT_5_6_SOL, None, false);
+
+    assert_eq!(child.default_primary_agent, "build");
+    assert_eq!(child.permissions.allow, parent.permissions.allow);
+    assert!(child.permissions.deny.contains(&tools::APPLY_PATCH.into()));
+    assert!(child.permissions.deny.contains(&tools::SPAWN_AGENT.into()));
+    assert_eq!(child.runtime_agent_permissions.as_ref(), Some(&spec.permissions));
+    assert_eq!(parent.default_primary_agent, "coordinator");
+}
+
+#[tokio::test]
+async fn subagent_restart_at_cap_waits_for_aborted_launch_before_restarting() {
+    for interrupt in [false, true] {
+        let root = TempDir::new().unwrap();
+        let mut cfg = VTCodeConfig::default();
+        cfg.subagents.max_concurrent = 1;
+        let controller = SubagentController::new(test_controller_config(root.path().to_path_buf(), cfg))
+            .await
+            .unwrap();
+        let spec = vtcode_config::builtin_subagents()
+            .into_iter()
+            .find(|spec| spec.name == "default")
+            .unwrap();
+        let mut child =
+            test_child_record("existing", "child-session", "parent-session", &spec, SubagentStatus::Running, 1, None);
+        let permit = controller.admission.clone().try_acquire_owned().unwrap();
+        let (started, receiver) = tokio::sync::oneshot::channel();
+        child.handle = Some(tokio::spawn(async move {
+            let _permit = permit;
+            started.send(()).unwrap();
+            std::future::pending::<()>().await;
+        }));
+        controller.state.write().await.children.insert("existing".into(), child);
+        receiver.await.unwrap();
+        assert_eq!(controller.admission.available_permits(), 0);
+
+        for message in ["Inspect source.rs", "Also inspect the second input"] {
+            let waiting = controller
+                .send_input(SendInputRequest {
+                    target: "existing".into(),
+                    message: Some(message.into()),
+                    items: vec![],
+                    interrupt: false,
+                })
+                .await
+                .unwrap();
+            assert_eq!(waiting.status, SubagentStatus::Waiting);
+            assert_eq!(controller.admission.available_permits(), 0);
+        }
+
+        let resumed = tokio::time::timeout(Duration::from_millis(100), controller.resume("existing"))
+            .await
+            .expect("resuming a waiting child must not wait for its active launch")
+            .unwrap();
+        assert_eq!(resumed.status, SubagentStatus::Waiting);
+        assert_eq!(controller.state.read().await.children["existing"].queued_prompts.len(), 2);
+        assert_eq!(controller.admission.available_permits(), 0);
+
+        let restarted = if interrupt {
+            controller
+                .send_input(SendInputRequest {
+                    target: "existing".into(),
+                    message: Some("Inspect source.rs".into()),
+                    items: vec![],
+                    interrupt: true,
+                })
+                .await
+        } else {
+            controller.close("existing").await.unwrap();
+            assert_eq!(controller.admission.available_permits(), 1, "close must finish releasing the owned launch");
+            controller.resume("existing").await
+        };
+        // Stop the replacement before it can execute provider work.
+        controller.close("existing").await.unwrap();
+        assert!(
+            restarted.is_ok(),
+            "a stopped child must be able to reuse its launch slot: interrupt={interrupt}, {restarted:?}"
+        );
+        tokio::task::yield_now().await;
+        assert_eq!(controller.admission.available_permits(), 1);
+        controller.signal_shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn subagent_restart_at_cap_failure_keeps_one_prompt_and_allows_later_resume() {
+    let root = TempDir::new().unwrap();
+    let mut cfg = VTCodeConfig::default();
+    cfg.subagents.max_concurrent = 1;
+    let controller = SubagentController::new(test_controller_config(root.path().to_path_buf(), cfg))
+        .await
+        .unwrap();
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "default")
+        .unwrap();
+    let mut child =
+        test_child_record("existing", "child-session", "parent-session", &spec, SubagentStatus::Completed, 1, None);
+    child.last_prompt = Some("Inspect source.rs".into());
+    controller.state.write().await.children.insert("existing".into(), child);
+    let occupied = controller.admission.clone().try_acquire_owned().unwrap();
+
+    assert!(
+        controller
+            .resume("existing")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("concurrency limit")
+    );
+    {
+        let state = controller.state.read().await;
+        let child = &state.children["existing"];
+        assert_eq!(child.status, SubagentStatus::Failed, "failed admission must not leave a phantom queued launch");
+        assert_eq!(child.queued_prompts.len(), 1);
+        assert!(child.handle.is_none());
+        assert!(child.error.as_deref().unwrap().contains("concurrency limit"));
+    }
+    drop(occupied);
+
+    controller.resume("existing").await.unwrap();
+    assert_eq!(controller.admission.available_permits(), 0);
+    assert_eq!(controller.state.read().await.children["existing"].queued_prompts.len(), 1);
+    controller.close("existing").await.unwrap();
+    assert_eq!(controller.admission.available_permits(), 1);
+    controller.signal_shutdown().await;
+}
+
+#[tokio::test]
+async fn matrix_active_admission_rejects_child_resume_and_input_without_mutation() {
+    let root = TempDir::new().unwrap();
+    let controller =
+        SubagentController::new(test_controller_config(root.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .unwrap();
+    let spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "default")
+        .unwrap();
+    controller.state.write().await.children.insert(
+        "existing".into(),
+        test_child_record("existing", "child-session", "parent-session", &spec, SubagentStatus::Completed, 1, None),
+    );
+    controller.matrix.executing.store(true, Ordering::Release);
+    for result in [
+        controller.resume("existing").await,
+        controller
+            .send_input(SendInputRequest {
+                target: "existing".into(),
+                message: Some("Inspect source.rs".into()),
+                items: vec![],
+                interrupt: false,
+            })
+            .await,
+    ] {
+        assert!(result.unwrap_err().to_string().contains("scheduler-owned workers"));
+    }
+    assert!(
+        controller
+            .launch_child("existing")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("scheduler-owned workers")
+    );
+    let state = controller.state.read().await;
+    let child = &state.children["existing"];
+    assert_eq!(child.status, SubagentStatus::Completed);
+    assert!(child.queued_prompts.is_empty());
+    assert!(child.handle.is_none());
+    assert_eq!(controller.admission.available_permits(), 3);
+}
+
+#[test]
 fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
     let mut parent = VTCodeConfig::default();
     parent.permissions.allow = vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()];
@@ -2499,6 +2685,70 @@ async fn spawn_rejects_fourth_active_subagent() {
                 SUBAGENT_HARD_CONCURRENCY_LIMIT
             )
         )));
+}
+
+#[tokio::test]
+async fn simultaneous_spawns_reserve_capacity_before_launch_and_unwind_failure() {
+    let temp = TempDir::new().unwrap();
+    let controller = Arc::new(
+        SubagentController::new(test_controller_config(temp.path().to_path_buf(), VTCodeConfig::default()))
+            .await
+            .unwrap(),
+    );
+    let parent_id = controller.parent_session_id.write().await;
+    let barrier = Arc::new(tokio::sync::Barrier::new(13));
+    let mut launches = tokio::task::JoinSet::new();
+    for _ in 0..12 {
+        let controller = controller.clone();
+        let barrier = barrier.clone();
+        launches.spawn(async move {
+            barrier.wait().await;
+            controller
+                .spawn(SpawnAgentRequest {
+                    agent_type: Some("default".into()),
+                    message: Some("Inspect Cargo.toml and summarize package names.".into()),
+                    ..Default::default()
+                })
+                .await
+        });
+    }
+    barrier.wait().await;
+    for _ in 0..9 {
+        let error = tokio::time::timeout(Duration::from_secs(3), launches.join_next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert!(error.to_string().contains("concurrency limit"), "{error:#}");
+    }
+    assert_eq!(controller.admission.available_permits(), 0);
+    assert!(controller.state.read().await.children.is_empty());
+    launches.abort_all();
+    while launches.join_next().await.is_some() {}
+    assert_eq!(controller.admission.available_permits(), 3);
+    drop(parent_id);
+    let mut spec = vtcode_config::builtin_subagents()
+        .into_iter()
+        .find(|spec| spec.name == "explorer")
+        .unwrap();
+    spec.isolation = Some(IsolationMode::Worktree);
+    assert!(
+        controller
+            .spawn_custom(
+                spec,
+                SpawnAgentRequest {
+                    message: Some("Inspect Cargo.toml and summarize package names.".into()),
+                    ..Default::default()
+                }
+            )
+            .await
+            .is_err(),
+        "non-Git workspace must reject worktree creation"
+    );
+    assert_eq!(controller.admission.available_permits(), 3);
+    assert!(controller.state.read().await.children.is_empty());
+    controller.signal_shutdown().await;
 }
 
 #[tokio::test]

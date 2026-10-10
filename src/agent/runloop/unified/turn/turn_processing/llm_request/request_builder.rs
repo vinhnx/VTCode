@@ -1292,6 +1292,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn coordinator_selection_restricts_request_tools_and_restores_build_guidance() {
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        for name in [
+            "matrix",
+            "agent",
+            "request_user_input",
+            "code_search",
+            "apply_patch",
+            "exec_command",
+        ] {
+            backing.add_tool_definition(named_tool(name)).await;
+        }
+        let specs = [
+            vtcode_config::builtin_primary_coordinator_agent(),
+            vtcode_config::builtin_primary_build_agent(),
+        ];
+        backing.select_primary_agent_from_specs(&specs, "coordinator");
+        let coordinated = {
+            let mut ctx = backing.turn_processing_context();
+            ctx.context_manager
+                .set_base_system_prompt(vtcode_core::prompts::system::minimal_system_prompt().to_string());
+            ctx.working_history
+                .push(uni::Message::user("Inspect the asymmetric matrix".to_string()));
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("coordinator request")
+        };
+        let tool_names = request_tool_names(&coordinated.request);
+        assert!(tool_names.contains(&"matrix".to_string()));
+        for forbidden in ["code_search", "apply_patch", "exec_command"] {
+            assert!(!tool_names.contains(&forbidden.to_string()), "{forbidden}");
+        }
+        let coordinator_prompt = system_prompt_text(&coordinated.request);
+        assert!(coordinator_prompt.contains("## Coordinator Role"));
+        assert!(!coordinator_prompt.contains("keep small tasks and verification in the main thread"));
+
+        backing.select_primary_agent_from_specs(&specs, "build");
+        let built = {
+            let mut ctx = backing.turn_processing_context();
+            let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
+            build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
+                .await
+                .expect("Build request")
+        };
+        assert!(request_tool_names(&built.request).contains(&"exec_command".to_string()));
+        let build_prompt = system_prompt_text(&built.request);
+        assert!(!build_prompt.contains("## Coordinator Role"));
+        assert!(build_prompt.contains("keep small tasks and verification in the main thread"));
+    }
+
+    #[tokio::test]
     async fn active_primary_agent_deny_list_applies_after_allow_list() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing.add_tool_definition(named_tool("code_search")).await;

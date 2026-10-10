@@ -16,6 +16,7 @@
 - `query::search_memory` uses BM25 (`k1=1.2`, `b=0.75`) with deterministic chunk-id ties and only the documented mild timestamp recency multiplier; invalidate the manifest LRU when atomic manifests change.
 - `pack.rs` audit packs: SHA-256 manifests of the whole session dir; `audit-pack.json` excludes itself from walks, entry paths are traversal-validated (`SessionStoreError::InvalidPack`), and verification reports post-pack additions as informational `unaccounted`, not failures.
 - Cap eviction invokes its summary hook before replacing `events.jsonl`; a failed summary keeps the canonical events intact. Explanation actions distinguish cancelled tool outcomes from errors; cancelled verification still requires a completed exit-zero result.
+- `matrix.rs` projects complete canonical `matrix.updated` snapshots. Reserve slots, workspace leases, and named pools together; retain reservations until owned cleanup is confirmed. Persist launch intent before launch and fail closed on ambiguous resume. Cap rewrites preserve the latest matrix checkpoint and adjust retained turn offsets. Final success requires current-generation owned evidence plus a final runtime fingerprint comparison.
 
 ## Dependencies
 

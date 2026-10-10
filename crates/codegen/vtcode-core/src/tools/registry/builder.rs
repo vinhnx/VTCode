@@ -261,6 +261,8 @@ impl ToolRegistry {
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),
             subagent_controller: Arc::new(RwLock::new(None)),
+            matrix_worker: Arc::new(parking_lot::RwLock::new(None)),
+            matrix_coordinator: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             session_scheduler: Arc::new(tokio::sync::Mutex::new(crate::scheduler::SessionScheduler::new())),
             session_model_tools: Arc::new(RwLock::new(None)),
             self_ref: Arc::new(RwLock::new(None)),

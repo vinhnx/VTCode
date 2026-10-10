@@ -160,7 +160,7 @@ pub(super) fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) ->
         let mut entries: Vec<(String, serde_json::Value)> = Vec::with_capacity(obj.len());
 
         for (key, value) in obj {
-            if irrelevant_keys.contains(&key.as_str()) {
+            if irrelevant_keys.contains(&key.as_str()) && !(base_name == tools::MATRIX && key == "action") {
                 continue;
             }
 

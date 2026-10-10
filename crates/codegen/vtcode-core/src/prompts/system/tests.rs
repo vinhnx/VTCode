@@ -1310,6 +1310,48 @@ async fn test_system_prompt_duck_agent_identity() {
     assert!(result.starts_with("# VT Code (Duck mode)"), "Should start with duck agent identity");
 }
 
+#[tokio::test]
+async fn test_coordinator_role_presence_and_budget_in_default_and_minimal() {
+    let project_root = tempfile::tempdir().unwrap();
+    for mode in [SystemPromptMode::Default, SystemPromptMode::Minimal] {
+        let mut config = VTCodeConfig {
+            default_primary_agent: "coordinator".to_string(),
+            ..Default::default()
+        };
+        config.agent.system_prompt_mode = mode;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        let result = compose_system_instruction_text(project_root.path(), Some(&config), None).await;
+        assert!(result.starts_with("# VT Code (Coordinator mode)"));
+        assert!(result.contains("Delegate all shell execution, file changes, and verification"));
+        assert!(result.contains("while the matrix is idle"));
+        assert!(!result.contains("keep small tasks and verification in the main thread"));
+        assert_eq!(result.matches("## Coordinator Role").count(), 1);
+        let max_tokens = match mode {
+            SystemPromptMode::Minimal => 1100,
+            _ => 2000,
+        };
+        assert!(estimate_tokens(&result) <= max_tokens, "{mode:?}: {} tokens", estimate_tokens(&result));
+    }
+}
+
+#[test]
+fn test_coordinator_guidance_follows_active_selection_and_preserves_sections() {
+    let mut prompt = minimal_system_prompt().to_string();
+    apply_coordinator_role_guidance(&mut prompt, true);
+    prompt.push_str("\n## Environment\n- asymmetric sentinel\n");
+    let before_reapplying = prompt.clone();
+    apply_coordinator_role_guidance(&mut prompt, true);
+    assert_eq!(prompt, before_reapplying);
+    assert_eq!(prompt.matches("## Coordinator Role").count(), 1);
+    assert!(prompt.contains("- asymmetric sentinel"));
+    assert!(!prompt.contains("keep small tasks and verification in the main thread"));
+    apply_coordinator_role_guidance(&mut prompt, false);
+    assert!(!prompt.contains("## Coordinator Role"));
+    assert!(prompt.contains("keep small tasks and verification in the main thread"));
+    assert!(prompt.contains("- asymmetric sentinel"));
+}
+
 #[test]
 fn test_estimate_token_count() {
     assert_eq!(estimate_token_count(""), 0);

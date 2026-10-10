@@ -22,8 +22,8 @@ mod parse;
 mod permissions;
 
 pub use builtin::{
-    builtin_plan_agent, builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_duck_agent,
-    builtin_subagents,
+    builtin_plan_agent, builtin_primary_auto_agent, builtin_primary_build_agent, builtin_primary_coordinator_agent,
+    builtin_primary_duck_agent, builtin_subagents,
 };
 pub use discovery::{discover_subagents, load_subagent_from_file};
 
@@ -1382,6 +1382,33 @@ Legacy prompt."#,
                 "{name} prompt should still ask to read files before claiming or editing"
             );
         }
+    }
+
+    #[test]
+    fn builtin_coordinator_restricts_tools_without_denying_worker_permissions() {
+        let coordinator = super::builtin_primary_coordinator_agent();
+        assert_eq!(coordinator.mode, AgentMode::Primary);
+        assert_eq!(coordinator.permissions, builtin_primary_build_agent().permissions);
+        let tool_ids = coordinator.tools.as_ref().unwrap();
+        assert_eq!(
+            tool_ids,
+            &[
+                "matrix",
+                "request_user_input",
+                "agent",
+                "record_decision",
+                "task_tracker"
+            ]
+        );
+        assert!(coordinator.tool_policy_overrides.is_empty());
+        assert!(
+            coordinator
+                .prompt
+                .contains("Delegate all shell execution, file changes, and verification")
+        );
+        assert!(coordinator.prompt.contains("while the matrix is idle"));
+        assert!(builtin_subagents().iter().any(|spec| spec.name == "coordinator"));
+        assert_eq!(builtin_primary_build_agent().tools, None);
     }
 
     #[test]

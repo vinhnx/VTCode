@@ -8,6 +8,7 @@ mod background;
 mod config;
 mod constants;
 mod discovery;
+pub mod matrix;
 mod model;
 mod prompt;
 mod types;
@@ -205,6 +206,8 @@ pub struct SubagentControllerConfig {
 /// The background completion monitor is cancelled when the final controller
 /// owner is dropped; its task-held clone is intentionally non-owning.
 pub struct SubagentController {
+    admission: Arc<tokio::sync::Semaphore>,
+    matrix: Arc<matrix::MatrixRuntime>,
     config: Arc<SubagentControllerConfig>,
     parent_session_id: Arc<RwLock<String>>,
     lifecycle_hooks: Option<LifecycleHookEngine>,
@@ -231,6 +234,8 @@ impl Clone for SubagentController {
     fn clone(&self) -> Self {
         self.background_completion_owners.fetch_add(1, Ordering::Relaxed);
         Self {
+            admission: Arc::clone(&self.admission),
+            matrix: Arc::clone(&self.matrix),
             config: Arc::clone(&self.config),
             parent_session_id: Arc::clone(&self.parent_session_id),
             lifecycle_hooks: self.lifecycle_hooks.clone(),
@@ -301,6 +306,10 @@ impl SubagentController {
             .map(|record| (record.id.clone(), BackgroundRecord::from_persisted(record)))
             .collect();
         let controller = Self {
+            admission: Arc::new(tokio::sync::Semaphore::new(
+                config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT),
+            )),
+            matrix: Arc::new(matrix::MatrixRuntime::default()),
             parent_session_id: Arc::new(RwLock::new(config.parent_session_id.clone())),
             lifecycle_hooks,
             config: Arc::new(config),
@@ -394,7 +403,10 @@ impl SubagentController {
     /// Returns status entries for all tracked child subagents.
     pub async fn status_entries(&self) -> Vec<SubagentStatusEntry> {
         let state = self.state.read().await;
-        state.children.values().map(ChildRecord::build_status_entry).collect()
+        let mut entries = state.children.values().map(ChildRecord::build_status_entry).collect::<Vec<_>>();
+        drop(state);
+        entries.extend(self.matrix_projection_entries().await);
+        entries
     }
 }
 

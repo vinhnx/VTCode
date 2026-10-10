@@ -98,6 +98,8 @@ fn build_child_config_from_runtime(
     allow_nested_delegation: bool,
 ) -> VTCodeConfig {
     let mut child = parent.clone();
+    // A delegated role comes from its own spec, not the parent's primary role.
+    child.default_primary_agent = "build".to_owned();
     child.agent.default_model = model.to_string();
     child.runtime_agent_permissions = Some(runtime.permissions.clone());
     // Apply a lightweight default profile so a delegated child does not replay

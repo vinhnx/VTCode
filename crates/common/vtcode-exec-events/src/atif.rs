@@ -489,7 +489,8 @@ impl AtifTrajectoryBuilder {
                     self.push_step(step);
                 }
             }
-            ThreadEvent::ItemStarted(_)
+            ThreadEvent::MatrixUpdated(_)
+            | ThreadEvent::ItemStarted(_)
             | ThreadEvent::ItemUpdated(_)
             | ThreadEvent::PlanDelta(_)
             | ThreadEvent::PlanApprovalRequested(_)

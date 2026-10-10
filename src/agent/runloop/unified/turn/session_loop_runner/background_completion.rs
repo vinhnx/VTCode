@@ -67,7 +67,11 @@ impl PendingBackgroundCompletions {
     }
 
     pub(crate) fn mark_continuation_queued(&mut self) {
-        self.continuation_queued = true;
+        // A follow-up owned by another completion source cannot latch this queue.
+        self.continuation_queued = self
+            .events
+            .keys()
+            .any(|identity| !self.non_autonomous_identities.contains(identity));
     }
 
     pub(crate) fn take_transient_note(&mut self) -> Option<String> {
@@ -346,6 +350,20 @@ mod tests {
         let note = pending.take_transient_note().expect("completion note");
         assert!(note.find("task_id=a").expect("a") < note.find("task_id=b").expect("b"));
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn matrix_only_follow_up_does_not_latch_later_background_completion() {
+        let mut pending = PendingBackgroundCompletions::default();
+        pending.mark_continuation_queued();
+        assert!(pending.take_transient_note().is_none());
+        pending.push(completion("later", BackgroundSubprocessStatus::Stopped));
+        assert!(pending.should_schedule_continuation(false, false));
+        pending.mark_continuation_queued();
+        assert!(!pending.should_schedule_continuation(false, false));
+        assert!(pending.take_transient_note().is_some());
+        pending.push(completion("next", BackgroundSubprocessStatus::Stopped));
+        assert!(pending.should_schedule_continuation(false, false));
     }
 
     #[test]

@@ -42,6 +42,8 @@ const BACKGROUND_COMPLETION_IDENTITY_CAPACITY: usize = 256;
 impl SubagentController {
     fn clone_for_background_completion_monitor(&self) -> Self {
         Self {
+            admission: Arc::clone(&self.admission),
+            matrix: Arc::clone(&self.matrix),
             config: Arc::clone(&self.config),
             parent_session_id: Arc::clone(&self.parent_session_id),
             lifecycle_hooks: self.lifecycle_hooks.clone(),

@@ -42,8 +42,8 @@ pub use static_prompts::{
 };
 pub use system::SystemPromptReport;
 pub use system::{
-    apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,
-    generate_system_instruction_with_context_and_report, measure_system_prompt_size,
+    apply_coordinator_role_guidance, apply_output_style, generate_lightweight_instruction,
+    generate_specialized_instruction, generate_system_instruction_with_context_and_report, measure_system_prompt_size,
 };
 pub use system_prompt_cache::{PROMPT_CACHE, SystemPromptCache};
 pub use temporal::generate_temporal_date_context;

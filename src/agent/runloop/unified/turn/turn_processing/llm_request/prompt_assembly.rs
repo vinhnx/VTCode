@@ -118,6 +118,7 @@ async fn build_prompt_output(
     };
 
     let agent = &input.turn.active_primary_agent;
+    vtcode_core::prompts::apply_coordinator_role_guidance(&mut system_prompt, agent.name() == "coordinator");
     let agent_prompt_context = if agent.skills.is_empty() {
         None
     } else {

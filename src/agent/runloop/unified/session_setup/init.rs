@@ -357,6 +357,7 @@ pub(crate) async fn complete_session_registry(
         primary_agent_explicitly_configured,
         resumed_primary_agent.clone(),
     )?;
+    tool_registry.set_matrix_coordinator(active_primary_agent.active().name() == "coordinator");
 
     let tools = session_state.tools.clone();
     tool_registry.attach_session_model_tools(tools.clone());
@@ -629,6 +630,9 @@ pub(crate) async fn hydrate_session_runtime(
         )?;
     }
 
+    if let Some(registry) = session_state.tool_registry.as_ref() {
+        registry.set_matrix_coordinator(session_state.active_primary_agent.active().name() == "coordinator");
+    }
     if let (Some(manager), Some(cfg)) = (session_state.async_mcp_manager.as_ref(), vt_cfg) {
         let mcp_config =
             session_mcp_config(Some(cfg), Some(session_state.active_primary_agent.active()), &config.workspace);

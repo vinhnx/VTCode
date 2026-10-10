@@ -267,10 +267,7 @@ fn merge_typed_responses_parameters(openai_request: &mut Value, params: RigRespo
     request.extend(fields);
 }
 
-fn openai_responses_allowed_tools_choice(
-    tool_choice: &provider::ToolChoice,
-    stable_tools: &[provider::ToolDefinition],
-) -> Option<Value> {
+fn openai_responses_allowed_tools_choice(tool_choice: &provider::ToolChoice, stable_tools: &[Value]) -> Option<Value> {
     let provider::ToolChoice::AllowedTools(choice) = tool_choice else {
         return None;
     };
@@ -282,8 +279,18 @@ fn openai_responses_allowed_tools_choice(
     let tools = stable_tools
         .iter()
         .filter_map(|tool| {
-            let name = tool.function_name();
-            active_names.contains(name).then(|| json!(name))
+            let tool_type = tool.get("type")?.as_str()?;
+            let name = tool.get("name").and_then(Value::as_str).unwrap_or(tool_type);
+            if !active_names.contains(name) {
+                return None;
+            }
+            let mut reference = json!({"type": tool_type});
+            for field in ["name", "server_label"] {
+                if let Some(value) = tool.get(field) {
+                    reference[field] = value.clone();
+                }
+            }
+            Some(reference)
         })
         .collect::<Vec<_>>();
     if tools.is_empty() {
@@ -925,8 +932,11 @@ fn build_responses_request_from_history(
         // provider tool_choice values.
         if let Some(tool_choice) = &request.tool_choice {
             openai_request["tool_choice"] = if ctx.supports_allowed_tools {
-                openai_responses_allowed_tools_choice(tool_choice, tools)
-                    .unwrap_or_else(|| tool_choice.to_provider_format("openai"))
+                openai_responses_allowed_tools_choice(
+                    tool_choice,
+                    openai_request["tools"].as_array().map(Vec::as_slice).unwrap_or_default(),
+                )
+                .unwrap_or_else(|| tool_choice.to_provider_format("openai"))
             } else {
                 tool_choice.to_provider_format("openai")
             };

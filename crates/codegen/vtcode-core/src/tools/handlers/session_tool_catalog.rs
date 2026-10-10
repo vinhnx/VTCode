@@ -796,6 +796,9 @@ impl ToolCatalogEntry {
 }
 
 fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: bool) -> bool {
+    if tool_name == tools::MATRIX {
+        return true;
+    }
     match profile {
         // Planning keeps every read-only inspection surface plus the
         // interview tool. A `code_search`-only catalog (turn_912/913) forced
@@ -881,7 +884,12 @@ fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> 
     // search is worse for cost than the extra schema tokens — models shell
     // out via `rg`/`git` and feed huge outputs into the prompt.
     match entry.public_name.as_str() {
-        tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::SEARCH_TOOLS | tools::CODE_SEARCH | tools::GREP_FILE => true,
+        tools::EXEC_COMMAND
+        | tools::WRITE_STDIN
+        | tools::SEARCH_TOOLS
+        | tools::CODE_SEARCH
+        | tools::GREP_FILE
+        | tools::MATRIX => true,
         // Planning keeps its workflow surface on the wire even when MCP tools
         // force deferral. Structured search (code_search/grep_file) is
         // always-eager above; read_file/list_files stay planning-only.

@@ -33,6 +33,7 @@ pub mod event_log;
 pub mod explanation;
 /// Manifest and turn-index persistence helpers.
 pub mod manifest;
+pub mod matrix;
 pub mod migration;
 /// Digest-verified audit packs for sessions.
 pub mod pack;

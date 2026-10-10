@@ -88,6 +88,23 @@ enum AssessmentResolution {
     VerifyNotHandled,
 }
 
+/// An aborted headless parent cannot leave scheduler-owned commands running.
+struct MatrixExecutionCleanup(Option<Arc<crate::subagents::SubagentController>>);
+impl Drop for MatrixExecutionCleanup {
+    fn drop(&mut self) {
+        if let Some(controller) = self.0.take().filter(|controller| controller.matrix_is_driving()) {
+            controller.request_matrix_stop();
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    if let Err(error) = controller.cancel_matrix().await {
+                        tracing::warn!(%error, "failed to persist aborted matrix cancellation");
+                    }
+                });
+            }
+        }
+    }
+}
+
 impl AgentRunner {
     fn runtime_prompt_policy_hash(&self) -> u64 {
         let model = self.get_selected_model();
@@ -128,6 +145,7 @@ impl AgentRunner {
             self._workspace.as_path(),
             prompt_tools.iter().map(|tool| tool.function_name().to_string()),
         );
+        prompt_context.set_current_directory(self._workspace.clone());
         prompt_context.load_available_skills_async().await;
 
         let (prompt, report) =
@@ -217,6 +235,10 @@ impl AgentRunner {
         let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
             return;
         };
+        crate::prompts::apply_coordinator_role_guidance(
+            system_prompt,
+            active_primary_agent.identity.name == "coordinator",
+        );
 
         system_prompt.push_str("\n\n## Active Primary Agent Runtime State\n");
         system_prompt.push_str("- Active agent: ");
@@ -508,6 +530,7 @@ impl AgentRunner {
 
     /// Execute a task with this agent
     pub async fn execute_task(&mut self, task: &Task, contexts: &[ContextItem]) -> Result<TaskResults> {
+        let _matrix_cleanup = MatrixExecutionCleanup(self.tool_registry.subagent_controller());
         self.tool_registry.begin_tracker_request(false);
         self.tool_registry.begin_patch_recovery_turn();
         // Phase 1: Setup — harness alignment, conversation building, session init,
@@ -559,7 +582,6 @@ impl AgentRunner {
                 }
 
                 if runtime.state.is_completed {
-                    runtime.state.outcome = TaskOutcome::Success;
                     break;
                 }
 
@@ -1225,7 +1247,60 @@ impl AgentRunner {
                     }
                 }
 
-                if !runtime.state.is_completed
+                if self
+                    .active_primary_agent
+                    .as_ref()
+                    .is_some_and(|agent| agent.identity.name == "coordinator")
+                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
+                    && let Some(controller) = self.tool_registry.subagent_controller()
+                    && let Some(snapshot) = controller.matrix_snapshot().await
+                {
+                    use crate::exec::events::matrix::MatrixLifecycle;
+                    match snapshot.lifecycle {
+                        MatrixLifecycle::Running | MatrixLifecycle::Verifying => {
+                            let settled = controller
+                                .wait_matrix_idle()
+                                .await
+                                .context("matrix disappeared before completion")?;
+                            anyhow::ensure!(
+                                !matches!(settled.lifecycle, MatrixLifecycle::Running | MatrixLifecycle::Verifying),
+                                "matrix stopped without a durable result; reconcile owned cleanup before continuation"
+                            );
+                            runtime.state.is_completed = false;
+                            runtime.state.add_user_message(format!(
+                                "Durable matrix results: {}. Report outcomes from this snapshot; matrix success requires Succeeded. Other states require a coordinator decision.",
+                                serde_json::to_string(&settled)?
+                            ));
+                            forced_continuation = true;
+                        }
+                        MatrixLifecycle::Succeeded => {
+                            runtime.state.is_completed = true;
+                            runtime.state.outcome = TaskOutcome::Success;
+                            break;
+                        }
+                        MatrixLifecycle::Cancelled => {
+                            runtime.state.outcome = TaskOutcome::Cancelled;
+                            break;
+                        }
+                        MatrixLifecycle::Blocked => {
+                            runtime.state.outcome = TaskOutcome::Failed {
+                                reason: "matrix requires a coordinator decision or confirmed owned cleanup".into(),
+                                accomplished: vec![],
+                                recovery_suggestion: Some(format!(
+                                    "Resume session and inspect matrix {} status",
+                                    snapshot.spec.id
+                                )),
+                                checkpoint_path: None,
+                            };
+                            should_write_blocked_handoff = true;
+                            break;
+                        }
+                        MatrixLifecycle::Created | MatrixLifecycle::Paused => {}
+                    }
+                }
+
+                if !forced_continuation
+                    && !runtime.state.is_completed
                     && effective_tool_calls.as_ref().is_none_or(|tool_calls| tool_calls.is_empty())
                     && !response.content_text().is_empty()
                 {
@@ -1384,6 +1459,58 @@ impl AgentRunner {
                     )
                     .await?;
                     super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
+
+                    if let Some(outcome) = self.tool_registry.matrix_worker_outcome() {
+                        runtime.state.outcome = if outcome == crate::exec::events::matrix::MatrixOutcome::Success {
+                            TaskOutcome::Success
+                        } else {
+                            TaskOutcome::failed(format!("Matrix worker reported {outcome:?}"), vec![], None, None)
+                        };
+                        runtime.state.is_completed = true;
+                        break;
+                    }
+
+                    if self
+                        .active_primary_agent
+                        .as_ref()
+                        .is_some_and(|agent| agent.identity.name == "coordinator")
+                        && let Some(controller) = self.tool_registry.subagent_controller()
+                        && let Some(snapshot) = controller.matrix_snapshot().await
+                        && (matches!(
+                            snapshot.lifecycle,
+                            crate::exec::events::matrix::MatrixLifecycle::Running
+                                | crate::exec::events::matrix::MatrixLifecycle::Verifying
+                        ) || controller.matrix_is_driving())
+                    {
+                        // Headless sessions await owned work before another model turn;
+                        // status polling must not exhaust the coordinator's loop budget.
+                        let settled = loop {
+                            tokio::select! {
+                                settled = controller.wait_matrix_idle() => break settled.context("matrix disappeared before completion")?,
+                                () = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                                    if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
+                                        controller.cancel_matrix().await?;
+                                        runtime.state.outcome = TaskOutcome::Cancelled;
+                                    }
+                                }
+                            }
+                        };
+                        anyhow::ensure!(
+                            !matches!(
+                                settled.lifecycle,
+                                crate::exec::events::matrix::MatrixLifecycle::Running
+                                    | crate::exec::events::matrix::MatrixLifecycle::Verifying
+                            ),
+                            "matrix stopped without a durable result; reconcile owned cleanup before continuation"
+                        );
+                        if matches!(runtime.state.outcome, TaskOutcome::Cancelled) {
+                            break;
+                        }
+                        runtime.state.add_user_message(format!(
+                            "Durable matrix results: {}. Report success only for Succeeded; other states require a coordinator decision.",
+                            serde_json::to_string(&settled)?
+                        ));
+                    }
                 }
 
                 // Refresh tool definitions if the catalog was mutated during tool

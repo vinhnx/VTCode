@@ -12,9 +12,10 @@ mod tokens;
 mod types;
 
 pub use compose::{
-    apply_output_style, compose_system_instruction_text, compose_system_instruction_with_report,
-    generate_system_instruction_with_config, generate_system_instruction_with_config_and_report,
-    generate_system_instruction_with_context_and_report, measure_system_prompt_size,
+    apply_coordinator_role_guidance, apply_output_style, compose_system_instruction_text,
+    compose_system_instruction_with_report, generate_system_instruction_with_config,
+    generate_system_instruction_with_config_and_report, generate_system_instruction_with_context_and_report,
+    measure_system_prompt_size,
 };
 pub use constants::*;
 pub use tokens::{

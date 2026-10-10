@@ -61,6 +61,33 @@ impl ToolRegistry {
     )]
     pub(crate) fn agent_executor(&self, mut args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
+            if self.matrix_coordinator.load(std::sync::atomic::Ordering::Acquire) {
+                let controller = self.require_subagent_controller()?;
+                anyhow::ensure!(
+                    !controller.matrix_is_executing(),
+                    "discovery delegation is available only while matrix is idle"
+                );
+                let action = args.get("action").and_then(Value::as_str).unwrap_or("spawn");
+                anyhow::ensure!(
+                    ["spawn", "wait", "close"].contains(&action),
+                    "coordinator discovery supports spawn, wait and close only"
+                );
+                if action == "spawn" {
+                    let agent_type = args.get("agent_type").and_then(Value::as_str).unwrap_or("explore").to_owned();
+                    let spec = controller
+                        .effective_specs()
+                        .await
+                        .into_iter()
+                        .find(|spec| spec.matches_name(&agent_type));
+                    anyhow::ensure!(
+                        spec.is_some_and(|spec| spec.is_subagent() && spec.is_read_only()),
+                        "coordinator discovery must be read-only"
+                    );
+                    if let Some(obj) = args.as_object_mut() {
+                        obj.insert("agent_type".into(), json!(agent_type));
+                    }
+                }
+            }
             let action = args
                 .get("action")
                 .and_then(Value::as_str)

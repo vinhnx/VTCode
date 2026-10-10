@@ -10,6 +10,9 @@ pub(crate) struct CanonicalEventSink {
 }
 
 impl CanonicalEventSink {
+    pub(crate) fn matrix_persistence(&self) -> vtcode_core::subagents::matrix::MatrixPersistence {
+        self.inner.matrix_persistence()
+    }
     pub(crate) fn decision_validator(&self) -> vtcode_core::core::agent::events::DecisionEvidenceValidator {
         self.inner.decision_validator()
     }

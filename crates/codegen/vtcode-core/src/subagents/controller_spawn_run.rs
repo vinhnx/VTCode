@@ -37,9 +37,37 @@ use vtcode_config::subagents::SUBAGENT_HARD_CONCURRENCY_LIMIT;
 )]
 use super::*;
 
+/// A dropped blocking launch must not leave its newly created worktree behind.
+struct LaunchWorktree {
+    root: PathBuf,
+    name: String,
+    path: PathBuf,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    armed: bool,
+}
+
+impl Drop for LaunchWorktree {
+    fn drop(&mut self) {
+        if self.armed
+            && let Err(error) = crate::git::WorktreeManager::new(&self.root).remove(&self.name)
+        {
+            tracing::warn!(%error, worktree = %self.path.display(), "failed to roll back cancelled subagent launch");
+        }
+    }
+}
+
+async fn wait_for_child_stop(handle: JoinHandle<()>, child_id: &str) -> Result<()> {
+    match handle.await {
+        Ok(()) => Ok(()),
+        Err(error) if error.is_cancelled() => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("subagent {child_id} launch failed to stop cleanly")),
+    }
+}
+
 impl SubagentController {
     /// Spawns a new subagent child process from a [`SpawnAgentRequest`].
     pub async fn spawn(&self, request: SpawnAgentRequest) -> Result<SubagentStatusEntry> {
+        self.ensure_ordinary_delegation_allowed()?;
         let mut request = request;
         let delegation = self
             .prepare_delegation_context(
@@ -195,6 +223,7 @@ impl SubagentController {
 
     /// Sends additional input to a running or queued subagent.
     pub async fn send_input(&self, request: SendInputRequest) -> Result<SubagentStatusEntry> {
+        self.ensure_ordinary_delegation_allowed()?;
         let prompt = request_prompt(&request.message, &request.items)
             .ok_or_else(|| anyhow!("send_input requires a message or items"))?;
 
@@ -213,14 +242,14 @@ impl SubagentController {
             record.last_prompt = Some(prompt.clone());
 
             if request.interrupt {
-                if let Some(handle) = record.handle.take() {
+                if let Some(handle) = record.handle.as_ref() {
                     handle.abort();
                 }
                 record.status = SubagentStatus::Queued;
                 record.queued_prompts.clear();
                 record.queued_prompts.push_back(prompt.clone());
                 true
-            } else if matches!(record.status, SubagentStatus::Running | SubagentStatus::Queued) {
+            } else if !record.status.is_terminal() {
                 record.status = SubagentStatus::Waiting;
                 record.queued_prompts.push_back(prompt.clone());
                 false
@@ -243,6 +272,7 @@ impl SubagentController {
     /// grandchildren closed by `close_tree` are resumed too, not merely
     /// un-gated.
     pub async fn resume(&self, target: &str) -> Result<SubagentStatusEntry> {
+        self.ensure_ordinary_delegation_allowed()?;
         self.resume_tree(target).await
     }
 
@@ -482,7 +512,7 @@ impl SubagentController {
                 .children
                 .get_mut(target)
                 .ok_or_else(|| anyhow!("Unknown subagent id {target}"))?;
-            if matches!(record.status, SubagentStatus::Running | SubagentStatus::Queued) {
+            if !record.status.is_terminal() {
                 return Ok(false);
             }
             let prompt = record
@@ -494,7 +524,9 @@ impl SubagentController {
             record.completed_at = None;
             record.error = None;
             record.summary = None;
-            record.queued_prompts.push_back(prompt);
+            if record.queued_prompts.is_empty() {
+                record.queued_prompts.push_back(prompt);
+            }
             record.child_controller.clone()
         };
         // Reopening a subtree reverses the transient `begin_close` on any
@@ -515,14 +547,20 @@ impl SubagentController {
         if record.status == SubagentStatus::Closed {
             return Ok(record.build_status_entry());
         }
-        if let Some(handle) = record.handle.take() {
+        let handle = record.handle.take();
+        if let Some(handle) = handle.as_ref() {
             handle.abort();
         }
         record.status = SubagentStatus::Closed;
         record.updated_at = Utc::now();
         record.completed_at = Some(Utc::now());
         record.notify.notify_waiters();
-        Ok(record.build_status_entry())
+        let entry = record.build_status_entry();
+        drop(state);
+        if let Some(handle) = handle {
+            wait_for_child_stop(handle, target).await?;
+        }
+        Ok(entry)
     }
 
     pub(super) async fn background_status_for(&self, target: &str) -> Result<BackgroundSubprocessEntry> {
@@ -748,6 +786,10 @@ impl SubagentController {
     /// `save_background_state` will be skipped. All running child handles
     /// are aborted so subagent tasks do not outlive the parent session.
     pub async fn signal_shutdown(&self) {
+        if let Err(error) = self.cancel_matrix().await {
+            self.matrix.cancellation.read().cancel();
+            tracing::warn!(%error, "failed to persist matrix shutdown cancellation");
+        }
         self.shutdown_requested.store(true, Ordering::Relaxed);
         self.stop_background_completion_monitor().await;
         let nested = {
@@ -953,39 +995,6 @@ impl SubagentController {
                 spec.name
             );
         }
-        // Create a worktree for isolation if requested.
-        let worktree_path = if spec.isolation == Some(vtcode_config::IsolationMode::Worktree) {
-            let workspace_root = self.config.workspace_root.clone();
-            let worktree_name =
-                format!("{}-{}", sanitize_component(spec.name.as_str()), Utc::now().format("%Y%m%dT%H%M%S"));
-            let worktree_name_for_error = worktree_name.clone();
-            let worktree_result = tokio::task::spawn_blocking(move || {
-                crate::git::WorktreeManager::new(workspace_root).create(&worktree_name)
-            })
-            .await
-            .context("Worktree creation task panicked")?;
-            Some(
-                worktree_result
-                    .with_context(|| format!("Failed to create worktree for subagent '{}'", worktree_name_for_error))?,
-            )
-        } else {
-            None
-        };
-
-        let active_count = {
-            let state = self.state.read().await;
-            state
-                .children
-                .values()
-                .filter(|record| {
-                    matches!(record.status, SubagentStatus::Queued | SubagentStatus::Running | SubagentStatus::Waiting)
-                })
-                .count()
-        };
-        let effective_max_concurrent = self.config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
-        if active_count >= effective_max_concurrent {
-            bail!("Subagent concurrency limit reached (max_concurrent={effective_max_concurrent})");
-        }
         let is_background_child = background;
         let child_max_turns = normalize_background_child_max_turns(max_turns.or(spec.max_turns), is_background_child);
         let (_, _, effective_config) = prepare_child_runtime_config(
@@ -1001,7 +1010,48 @@ impl SubagentController {
             resolve_effective_subagent_model,
         )?;
 
-        let id = format!("agent-{}-{}", sanitize_component(spec.name.as_str()), Utc::now().format("%Y%m%dT%H%M%S%3fZ"));
+        // Reserve admission before any side effect. The permit is owned by the
+        // launched task and is released on every launch-error/cancellation path.
+        let permit = Arc::clone(&self.admission)
+            .try_acquire_owned()
+            .context("Subagent concurrency limit reached")?;
+        let launch_id = uuid::Uuid::new_v4();
+        {
+            let state = self.state.read().await;
+            let active = state.children.values().filter(|record| !record.status.is_terminal()).count();
+            let cap = self.config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
+            if active >= cap {
+                bail!("Subagent concurrency limit reached (max_concurrent={cap})");
+            }
+        }
+        self.ensure_ordinary_delegation_allowed()?;
+        // Create a worktree for isolation if requested.
+        let (mut worktree_guard, permit) = if spec.isolation == Some(vtcode_config::IsolationMode::Worktree) {
+            let workspace_root = self.config.workspace_root.clone();
+            let worktree_name = format!("{}-{launch_id}", sanitize_component(spec.name.as_str()));
+            let worktree_name_for_error = worktree_name.clone();
+            let worktree_result = tokio::task::spawn_blocking(move || {
+                let path = crate::git::WorktreeManager::new(&workspace_root).create(&worktree_name)?;
+                Ok::<_, anyhow::Error>(LaunchWorktree {
+                    root: workspace_root,
+                    name: worktree_name,
+                    path,
+                    permit: Some(permit),
+                    armed: true,
+                })
+            })
+            .await
+            .context("Worktree creation task panicked")?;
+            let mut guard = worktree_result
+                .with_context(|| format!("Failed to create worktree for subagent '{}'", worktree_name_for_error))?;
+            let permit = guard.permit.take().context("worktree launch reservation missing")?;
+            (Some(guard), permit)
+        } else {
+            (None, permit)
+        };
+        let worktree_path = worktree_guard.as_ref().map(|guard| guard.path.clone());
+
+        let id = format!("agent-{}-{launch_id}", sanitize_component(spec.name.as_str()));
         let parent_session_id = self.parent_session_id.read().await.clone();
         let session_id =
             format!("{}-{}", sanitize_component(parent_session_id.as_str()), sanitize_component(id.as_str()));
@@ -1013,6 +1063,11 @@ impl SubagentController {
         // closes the subtree between this spawn's admission and its record
         // insertion; checking after acquisition closes that window.
         if self.shutdown_requested.load(Ordering::Relaxed) || self.closing.load(Ordering::Relaxed) {
+            drop(state);
+            self.remove_failed_launch_worktree(worktree_path.as_ref()).await?;
+            if let Some(guard) = worktree_guard.as_mut() {
+                guard.armed = false;
+            }
             bail!("Subagent controller is shutting down; cannot spawn new subagents");
         }
         let initial_messages = if fork_context {
@@ -1053,12 +1108,45 @@ impl SubagentController {
         state.children.insert(id.clone(), entry);
         drop(state);
 
-        self.launch_child(id.as_str()).await?;
+        if let Err(error) = self.launch_child_reserved(id.as_str(), permit).await {
+            let worktree = self
+                .state
+                .write()
+                .await
+                .children
+                .remove(&id)
+                .and_then(|record| record.worktree_path);
+            self.remove_failed_launch_worktree(worktree.as_ref())
+                .await
+                .with_context(|| format!("launch failed: {error:#}; worktree rollback failed"))?;
+            if let Some(guard) = worktree_guard.as_mut() {
+                guard.armed = false;
+            }
+            return Err(error);
+        }
+        if let Some(guard) = worktree_guard.as_mut() {
+            guard.armed = false;
+        }
         self.status_for(&id).await
     }
 
+    async fn remove_failed_launch_worktree(&self, path: Option<&std::path::PathBuf>) -> Result<()> {
+        if let Some(path) = path {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("invalid owned worktree name")?
+                .to_owned();
+            let root = self.config.workspace_root.clone();
+            tokio::task::spawn_blocking(move || crate::git::WorktreeManager::new(root).remove(&name))
+                .await
+                .context("failed launch worktree cleanup panicked")??;
+        }
+        Ok(())
+    }
+
     async fn restart_child(&self, target: &str) -> Result<()> {
-        let has_queued_input = {
+        let finishing_handle = {
             let mut state = self.state.write().await;
             let record = state
                 .children
@@ -1069,12 +1157,35 @@ impl SubagentController {
             {
                 record.queued_prompts.push_back(prompt);
             }
-            !record.queued_prompts.is_empty()
+            if record.queued_prompts.is_empty() {
+                bail!("Subagent {target} has no queued input");
+            }
+            record.handle.take()
         };
-        if !has_queued_input {
-            bail!("Subagent {target} has no queued input");
+        let launch_result = async {
+            // Abort schedules cancellation; await the owned launch before
+            // reserving its replacement's concurrency slot.
+            if let Some(handle) = finishing_handle {
+                wait_for_child_stop(handle, target).await?;
+            }
+            self.launch_child(target).await
         }
-        self.launch_child(target).await
+        .await;
+        if let Err(error) = &launch_result {
+            let mut state = self.state.write().await;
+            if let Some(record) = state.children.get_mut(target)
+                && record.status == SubagentStatus::Queued
+                && record.handle.as_ref().is_none_or(|handle| handle.is_finished())
+            {
+                record.status = SubagentStatus::Failed;
+                record.error = Some(format!("{error:#}"));
+                record.summary = None;
+                record.updated_at = Utc::now();
+                record.completed_at = Some(record.updated_at);
+                record.notify.notify_waiters();
+            }
+        }
+        launch_result
     }
 }
 
