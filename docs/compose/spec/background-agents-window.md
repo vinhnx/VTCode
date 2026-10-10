@@ -1,12 +1,21 @@
 ---
 feature: background-agents-window
-status: delivered
-updated: 2026-09-25
+status: delivered + follow-up
+updated: 2026-10-10
 branch: feat/background-agents-window
 commits: 4f90643b0..e988dd537
 ---
 
 # Background Agents Expanded Window
+
+## Follow-up 2026-10-10 — inline bottom-dock replaces the centered window
+
+The centered floating window covered the transcript, so `LocalAgents` moved back to `BottomDocked`: a compact
+inline panel above the composer (transcript stays visible), with `Ctrl+E` or a header click expanding it to ~75% of
+the available panel height (`Ctrl+E` again collapses). List+detail 38/62 split, header counts, and all management keys
+are unchanged; the info line now advertises `Ctrl+E expand/collapse`. The transcript progress row is no longer occluded
+while the panel is open. Commits `efe7a47ea` (dock + expand) and `6737eec48` (header-click mouse coverage).
+Verification: `cargo nextest run --locked -p vtcode-ui` — PASS (1571); `./scripts/check-dev.sh` — PASS.
 
 ## Report
 
