@@ -28,12 +28,13 @@ pub(crate) enum TransientSurface {
 impl TransientSurface {
     fn placement(self) -> TransientPlacement {
         match self {
-            Self::FloatingOverlay | Self::DiffPreview | Self::ToolOutputViewer | Self::LocalAgents => {
-                TransientPlacement::FloatingModal
-            }
-            Self::SlashPalette | Self::HistoryPicker | Self::AgentPalette | Self::FilePalette | Self::TaskPanel => {
-                TransientPlacement::BottomDocked
-            }
+            Self::FloatingOverlay | Self::DiffPreview | Self::ToolOutputViewer => TransientPlacement::FloatingModal,
+            Self::SlashPalette
+            | Self::HistoryPicker
+            | Self::AgentPalette
+            | Self::FilePalette
+            | Self::TaskPanel
+            | Self::LocalAgents => TransientPlacement::BottomDocked,
         }
     }
 

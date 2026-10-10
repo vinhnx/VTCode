@@ -10,10 +10,11 @@ pub(super) struct LocalAgentsState {
     entries: Vec<LocalAgentEntry>,
     navigator: ListNavigator,
     active_ids: HashSet<String>,
-    /// List body rect from the last floating-window paint (mouse hit-testing).
+    /// List body rect from the last inline bottom-dock paint (mouse hit-testing).
     list_area: Option<ratatui::layout::Rect>,
-    /// Outer floating-window rect from the last paint (mouse hit-testing).
+    /// Outer inline panel rect from the last paint (mouse hit-testing).
     window_area: Option<ratatui::layout::Rect>,
+    expanded: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -85,6 +86,15 @@ impl LocalAgentsState {
         self.window_area
     }
 
+    pub(super) fn is_expanded(&self) -> bool {
+        self.expanded
+    }
+
+    pub(super) fn toggle_expanded(&mut self) -> bool {
+        self.expanded = !self.expanded;
+        self.expanded
+    }
+
     fn has_entries(&self) -> bool {
         !self.entries.is_empty()
     }
@@ -135,6 +145,14 @@ impl LocalAgentsState {
 }
 
 impl AppSession {
+    pub(crate) fn local_agents_is_expanded(&self) -> bool {
+        self.local_agents_state.is_expanded()
+    }
+
+    pub(crate) fn local_agents_entry_count(&self) -> usize {
+        self.local_agents_state.entries().len()
+    }
+
     pub(super) fn should_open_local_agents_with_down(
         &self,
         key: &KeyEvent,
@@ -207,6 +225,11 @@ impl AppSession {
             KeyCode::Char('x') | KeyCode::Char('X') if key.modifiers.contains(KeyModifiers::CONTROL) => self
                 .selected_local_agent_force_cancel_event()
                 .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),
+            KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.local_agents_state.toggle_expanded();
+                self.mark_dirty();
+                LocalAgentsKeyResult::Handled
+            }
             KeyCode::Enter => self
                 .selected_local_agent_inspect_event()
                 .map_or(LocalAgentsKeyResult::Handled, LocalAgentsKeyResult::Emit),

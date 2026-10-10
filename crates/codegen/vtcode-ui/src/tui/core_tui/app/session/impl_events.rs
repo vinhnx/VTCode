@@ -351,6 +351,12 @@ impl Session {
             if !window.contains(pos) {
                 return false;
             }
+            // Header/title click toggles compact <-> 75% expanded.
+            if row <= window.y.saturating_add(1) {
+                self.local_agents_state.toggle_expanded();
+                self.mark_dirty();
+                return true;
+            }
             if let Some(list_area) = self.local_agents_state.list_area()
                 && list_area.contains(pos)
             {

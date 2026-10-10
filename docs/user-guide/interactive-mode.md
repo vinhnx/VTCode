@@ -347,11 +347,11 @@ When a task is already running, VT Code keeps the active turn alive and lets you
   the retained background-session manager without killing it. The command keeps its stable `session_id` and can later be
   waited, polled, written to, inspected, terminated, or closed. If no foreground command is active, `Ctrl+B` keeps its
   background-subagent behavior and opens the Local Agents setup when that feature is not configured.
-- `Alt+S` opens or focuses the Local Agents window.
-- `/config jobs` opens the same window (`/jobs` still works as a hidden alias). It combines delegated agents, managed
+- `Alt+S` opens or focuses the Local Agents inline bottom view.
+- `/config jobs` opens the same view (`/jobs` still works as a hidden alias). It combines delegated agents, managed
   background subagents, and promoted or explicitly background raw exec sessions; foreground sessions stay hidden until
   Ctrl+B promotes them.
-- When the composer is empty and local agents exist, `Down` opens the Local Agents window. `Up` and `Down` keep normal
+- When the composer is empty and local agents exist, `Down` opens the Local Agents view. `Up` and `Down` keep normal
   history navigation once history traversal is active, as long as the recalled entry fits on a single row; multi-row
   entries keep the arrow keys inside the draft (use `Ctrl+P`/`Ctrl+N` to keep traversing).
 - For `exec-session` rows, `Enter` inspects the command and bounded output, `Ctrl+R` toggles stdin focus, `Ctrl+P`
@@ -425,12 +425,13 @@ terminate, or close a session. Sessions live until they exit, are explicitly clo
 
 While any background task (managed subagent, background subprocess, or retained exec session) is running, the input
 status line shows a shimmering `Running N background task(s)...` indicator, so live background work stays visible even
-with the Local Agents window closed. The indicator — and the `… background` hint beside it — is clickable and toggles
-the Local Agents window. Background work still never locks mode switches, blocks slash commands, or converts your
+with the Local Agents view closed. The indicator — and the `… background` hint beside it — is clickable and toggles
+the Local Agents inline bottom view. The view stays compact by default; `Ctrl+E` or a header click expands it to ~75%
+of the available height. Background work still never locks mode switches, blocks slash commands, or converts your
 submissions into queued/steered input.
 
 Managed background subprocesses and user-launched background exec sessions report `Stopped` or `Error` automatically
-after confirmed process exit. The Local Agents window and transcript update without requiring `/subprocesses refresh` or
+after confirmed process exit. The Local Agents view and transcript update without requiring `/subprocesses refresh` or
 an explicit `write_stdin` poll. If the main loop is idle, VT Code delivers a bounded completion note and performs one
 follow-up reasoning turn; completions that arrive during an active turn wait for its next boundary, and queued or new
 user input takes precedence. Direct commands remain non-autonomous. Use the explicit `wait` action when a caller needs

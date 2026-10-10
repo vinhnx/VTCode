@@ -62,12 +62,14 @@ fn progress_feedback_metric_observes_footer_once_after_visible_paint() {
 }
 
 #[test]
-fn progress_feedback_waits_until_fullscreen_viewer_is_closed() {
+fn progress_feedback_stays_visible_with_docked_local_agents() {
     use crate::tui::core_tui::app::{
         session::AppSession,
         types::{InlineCommand as AppCommand, LocalAgentsTransientRequest, TransientRequest},
     };
 
+    // Local agents is now an inline bottom-dock, not a fullscreen cover:
+    // the transcript progress row stays visible above the panel.
     for width in [120, 48] {
         let mut session = AppSession::new(InlineTheme::default(), None, 24);
         session.core.set_fullscreen_active(true);
@@ -78,8 +80,8 @@ fn progress_feedback_waits_until_fullscreen_viewer_is_closed() {
         session.show_transient(TransientRequest::LocalAgents(LocalAgentsTransientRequest { visible: Some(true) }));
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         terminal.draw(|frame| session.render(frame)).unwrap();
-        assert!(!rendered_text(terminal.backend().buffer()).contains("Waiting for model"));
-        assert!(!session.core.progress.active.unwrap().feedback_observed);
+        assert!(rendered_text(terminal.backend().buffer()).contains("Waiting for model"));
+        assert!(session.core.progress.active.unwrap().feedback_observed);
         session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         terminal.draw(|frame| session.render(frame)).unwrap();
         assert_eq!(rendered_text(terminal.backend().buffer()).matches("Waiting for model").count(), 1);

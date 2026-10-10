@@ -635,17 +635,19 @@ child threads and is now explicitly opt-in:
 - `Ctrl+B` first hands an active foreground PTY or pipe command to the unified background-session manager; when no
   foreground command is active, it starts or stops a background subagent only after you enable background mode and set
   `default_agent`
-- if background mode is disabled or unconfigured, `Ctrl+B` opens the Local Agents window and shows the setup guidance
+- if background mode is disabled or unconfigured, `Ctrl+B` opens the Local Agents inline bottom view and shows the setup guidance
   instead of launching anything
-- `/subprocesses` opens the Local Agents window
-- `/config jobs` opens that same unified window (`/jobs` still works as a hidden alias), including raw background
+- `/subprocesses` opens the Local Agents inline bottom view
+- `/config jobs` opens that same unified view (`/jobs` still works as a hidden alias), including raw background
   `exec`/PTY sessions.
-- `Alt+S` focuses the same Local Agents window quickly from the main session
+- `Alt+S` focuses the same Local Agents view quickly from the main session
 - when local agents exist, the footer shows a compact badge such as `1 local agent | ↓ explore`
 - in wide layouts, the sidebar shows a single `Local Agents` section instead of separate live-agent and subprocess
   sections
-- with an empty composer, `Down` opens the Local Agents window; otherwise `Down` keeps its normal history behavior
-- inside the window, `Enter` inspects the selected item, `Alt+O` opens its transcript or archive, `Ctrl+K` requests a
+- with an empty composer, `Down` opens the Local Agents view; otherwise `Down` keeps its normal history behavior
+- the view is compact by default and keeps the transcript visible above; `Ctrl+E` or a header click expands it to ~75%
+  of the available height, `Ctrl+E` again collapses it
+- inside the view, `Enter` inspects the selected item, `Alt+O` opens its transcript or archive, `Ctrl+K` requests a
   stop, and `Ctrl+X` force-cancels a background subprocess
 - raw `exec-session` rows additionally use `Ctrl+R` to toggle stdin focus and `Ctrl+P` to preview bounded output; exited
   raw sessions remain visible until explicitly closed

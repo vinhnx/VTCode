@@ -82,17 +82,21 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
     }
 }
 
-/// Centered floating window for multi-agent / background-process management.
-/// Roughly 82% x 78% of the viewport so live activity stays readable.
-pub(crate) fn local_agents_window_area(viewport: Rect) -> Rect {
-    if viewport.width == 0 || viewport.height == 0 {
-        return viewport;
+/// Inline bottom-dock panel for multi-agent / background-process management.
+/// Compact by default; `Ctrl+E` (or header click) expands to ~75% of the
+/// available panel space so live activity stays readable without covering
+/// the transcript.
+pub(crate) fn local_agents_fixed_rows() -> u16 {
+    // Top+bottom border (2) + header (1) + info (1).
+    4
+}
+
+pub(crate) fn local_agents_expanded_panel_height(available_height: u16) -> u16 {
+    if available_height == 0 {
+        return 0;
     }
-    let width = ((viewport.width as u32 * 82) / 100).clamp(20, u32::from(viewport.width)) as u16;
-    let height = ((viewport.height as u32 * 78) / 100).clamp(8, u32::from(viewport.height)) as u16;
-    let x = viewport.x + (viewport.width.saturating_sub(width) / 2);
-    let y = viewport.y + (viewport.height.saturating_sub(height) / 2);
-    Rect::new(x, y, width, height)
+    let expanded = ((u32::from(available_height) * 75) / 100) as u16;
+    expanded.max(local_agents_fixed_rows().saturating_add(1)).min(available_height)
 }
 
 fn local_agents_header_summary(live: usize, finished: usize) -> String {
@@ -107,8 +111,11 @@ fn local_agents_header_summary(live: usize, finished: usize) -> String {
     }
 }
 
-pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
-    if viewport.height == 0 || viewport.width == 0 || !session.inline_lists_visible() || !session.local_agents_visible()
+pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_area: Rect) {
+    if panel_area.height == 0
+        || panel_area.width == 0
+        || !session.inline_lists_visible()
+        || !session.local_agents_visible()
     {
         session.local_agents_state.set_visible_rows(0);
         session.local_agents_state.set_list_area(None);
@@ -116,7 +123,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, viewpor
         return;
     }
 
-    let window = local_agents_window_area(viewport);
+    let window = panel_area;
     session.local_agents_state.set_window_area(Some(window));
     frame.render_widget(Clear, window);
 
@@ -140,19 +147,29 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, viewpor
         .and_then(|index| entries.get(index))
         .is_some_and(|entry| entry.kind == LocalAgentKind::ExecSession);
 
+    let expanded = session.local_agents_state.is_expanded();
+    let expand_hint = if expanded { "Ctrl+E collapse" } else { "Ctrl+E expand" };
     let info_line = if entries.is_empty() {
         "Background subagents are opt-in. Configure one, then use Ctrl+B or /subprocesses.".to_string()
     } else if selected_exec_session {
-        "↑↓ Navigate · Enter inspect · Ctrl+K stop · Ctrl+X close · Ctrl+R focus · Ctrl+P preview · Esc close"
-            .to_string()
+        format!(
+            "↑↓ Navigate · Enter inspect · Ctrl+K stop · Ctrl+X close · Ctrl+R focus · Ctrl+P preview · {expand_hint} · Esc close"
+        )
     } else {
-        "↑↓ Navigate · Enter inspect · Alt+O transcript · Ctrl+K stop · Ctrl+X close · Esc close".to_string()
+        format!(
+            "↑↓ Navigate · Enter inspect · Alt+O transcript · Ctrl+K stop · Ctrl+X close · {expand_hint} · Esc close"
+        )
     };
 
+    let title = if expanded {
+        "Background ─ expanded"
+    } else {
+        "Background"
+    };
     let block = Block::bordered()
         .border_type(BorderType::Plain)
         .border_style(local_agents_divider_style(session, selected_index, &entries))
-        .title(Span::styled("Background", highlight_style));
+        .title(Span::styled(title, highlight_style));
     let inner = block.inner(window);
     frame.render_widget(block, window);
 
@@ -316,10 +333,9 @@ fn local_agents_divider_style(session: &Session, selected_index: Option<usize>, 
 mod tests {
     use super::{
         Session, format_local_agent_preview, local_agent_status_line, local_agent_title_line,
-        local_agents_header_summary, local_agents_window_area,
+        local_agents_expanded_panel_height, local_agents_fixed_rows, local_agents_header_summary,
     };
     use crate::tui::core_tui::types::{InlineTheme, LocalAgentEntry, LocalAgentKind};
-    use ratatui::layout::Rect;
     use std::time::Duration;
 
     fn sample_entry(status: &str) -> LocalAgentEntry {
@@ -386,11 +402,21 @@ mod tests {
     }
 
     #[test]
-    fn window_area_is_centered_large_panel() {
-        let area = local_agents_window_area(Rect::new(0, 0, 100, 40));
-        assert!(area.width < 100 && area.width >= 80);
-        assert!(area.height < 40 && area.height >= 30);
-        assert_eq!(area.x, (100 - area.width) / 2);
-        assert_eq!(area.y, (40 - area.height) / 2);
+    fn fixed_rows_cover_chrome_header_and_info() {
+        assert_eq!(local_agents_fixed_rows(), 4);
+    }
+
+    #[test]
+    fn expanded_height_is_three_quarters_with_bounds() {
+        assert_eq!(local_agents_expanded_panel_height(0), 0);
+        // 40 rows -> 30 rows (75%), above the 5-row minimum.
+        assert_eq!(local_agents_expanded_panel_height(40), 30);
+        // 13 rows -> 9 rows (75% floor), still above minimum.
+        assert_eq!(local_agents_expanded_panel_height(13), 9);
+        // Tiny space clamps to available, never zero-height panel.
+        assert_eq!(local_agents_expanded_panel_height(4), 4);
+        // Asymmetric: 39 vs 40 differ by truncation, 100 scales linearly.
+        assert_eq!(local_agents_expanded_panel_height(39), 29);
+        assert_eq!(local_agents_expanded_panel_height(100), 75);
     }
 }

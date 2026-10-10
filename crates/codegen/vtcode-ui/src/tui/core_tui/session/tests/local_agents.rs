@@ -43,14 +43,11 @@ fn local_agents_window_captures_keys_but_keeps_status_line() {
     assert!(!session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 
     let lines = rendered_app_session_lines(&mut session, 20);
-    // Floating window no longer docks over the composer: the input/status
-    // region stays painted so the background indicator remains clickable.
+    // Inline bottom-dock: the input/status region stays painted above the
+    // panel so the background indicator remains clickable.
     assert!(session.core.input_area().is_some());
-    assert!(session.core.bottom_panel_area().is_none());
-    assert!(
-        lines.iter().any(|line| line.contains("Background")),
-        "expanded window should render, got: {lines:?}"
-    );
+    assert!(session.core.bottom_panel_area().is_some());
+    assert!(lines.iter().any(|line| line.contains("Background")), "inline panel should render, got: {lines:?}");
 }
 
 #[test]
@@ -938,6 +935,69 @@ fn finished_summary_applies_when_no_live_work_remains() {
 
     assert!(!session.core.has_background_activity());
     assert_eq!(session.core.background_activity_status_text().as_deref(), Some("2 agents finished"));
+}
+
+#[test]
+fn ctrl_e_toggles_compact_and_expanded_panel() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![
+            sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated),
+            sample_local_agent_entry_with_id("a2", "done-agent", app_types::LocalAgentKind::Delegated),
+        ],
+    });
+    assert!(session.local_agents_visible());
+
+    let compact_lines = rendered_app_session_lines(&mut session, 30);
+    let compact_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+    assert!(compact_height > 0, "compact dock must claim panel height");
+    assert!(
+        compact_lines.iter().any(|line| line.contains("Ctrl+E expand")),
+        "compact hint must offer expand, got: {compact_lines:?}"
+    );
+
+    let toggle = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+    assert!(toggle.is_none());
+    assert!(session.local_agents_visible());
+
+    let expanded_lines = rendered_app_session_lines(&mut session, 30);
+    let expanded_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+    assert!(expanded_height > compact_height, "expanded {expanded_height} must exceed compact {compact_height}");
+    assert!(
+        expanded_lines.iter().any(|line| line.contains("expanded")),
+        "expanded title must show, got: {expanded_lines:?}"
+    );
+    assert!(
+        expanded_lines.iter().any(|line| line.contains("Ctrl+E collapse")),
+        "expanded hint must offer collapse, got: {expanded_lines:?}"
+    );
+    // Input stays above the panel in both modes; transcript is not covered.
+    assert!(session.core.input_area().is_some());
+
+    let collapse = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+    assert!(collapse.is_none());
+    let _ = rendered_app_session_lines(&mut session, 30);
+    let collapsed_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+    assert_eq!(collapsed_height, compact_height, "second Ctrl+E must restore compact height");
+}
+
+#[test]
+fn expanded_panel_stays_within_three_quarters_and_keeps_transcript() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
+    });
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+
+    let rows: u16 = 30;
+    let lines = rendered_app_session_lines(&mut session, rows);
+    let panel_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+    // 75% of the 30-row viewport is 22 rows; docked panel must not exceed it
+    // (it is clamped to the smaller input-aware max).
+    assert!(panel_height <= 22, "expanded panel {panel_height} must stay within 75% of {rows}");
+    assert!(panel_height > 6, "expanded panel must grow beyond compact height");
+    assert!(session.core.input_area().is_some());
+    assert!(lines.iter().any(|line| line.contains("Background")), "expanded dock must render, got: {lines:?}");
 }
 
 #[test]

@@ -73,6 +73,9 @@ impl Session {
                 BottomPanelKind::TaskPanel => {
                     render_task_panel(self, frame, panel_area);
                 }
+                BottomPanelKind::LocalAgents => {
+                    render::render_local_agents(self, frame, panel_area);
+                }
                 BottomPanelKind::None => {
                     frame.render_widget(Clear, panel_area);
                 }
@@ -83,9 +86,6 @@ impl Session {
             core_render::render_modal(self, frame, modal_area);
         }
 
-        if self.local_agents_visible() {
-            render::render_local_agents(self, frame, layout.viewport);
-        }
         if self.diff_preview_state().is_some() {
             diff_preview::render_diff_preview(self, frame, layout.viewport);
         }
@@ -96,10 +96,7 @@ impl Session {
             tool_output_viewer::render_tool_output_viewer(self, frame, layout.viewport, &mut state);
             self.tool_output_viewer_state = Some(state);
         }
-        if self.local_agents_visible()
-            || self.diff_preview_state().is_some()
-            || self.tool_output_viewer_state().is_some()
-        {
+        if self.diff_preview_state().is_some() || self.tool_output_viewer_state().is_some() {
             self.core.clear_sticky_prompt_target();
             self.core.occlude_progress_feedback(layout.viewport);
         }
