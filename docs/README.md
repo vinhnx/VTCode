@@ -128,6 +128,8 @@ New to VT Code? Start with installation and basic usage:
   under a `plugin.json` manifest
 - **[Memcode MCP](./guides/memcode-mcp.md)** - Connect a remote memory provider with PKCE OAuth and explicit write
   consent
+- **[Baizhi Agent Toolkit MCP](./guides/baizhi-mcp.md)** - Configure optional web search, page reading, and extraction
+  with an environment-supplied API key
 - **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Terminal workflows (shortcuts:
   [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md))
 - **[WebMCP Browser Bridge User Guide](./user-guide/webmcp.md)** - Connect a browser editor to an active VT Code session
