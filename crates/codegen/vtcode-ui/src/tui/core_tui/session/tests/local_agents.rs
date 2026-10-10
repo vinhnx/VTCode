@@ -1001,6 +1001,63 @@ fn expanded_panel_stays_within_three_quarters_and_keeps_transcript() {
 }
 
 #[test]
+fn header_click_toggles_expanded_without_closing_panel() {
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    use tokio::sync::mpsc::unbounded_channel;
+
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![
+            sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated),
+            sample_local_agent_entry_with_id("a2", "done-agent", app_types::LocalAgentKind::Delegated),
+        ],
+    });
+    let _ = rendered_app_session_lines(&mut session, 30);
+    assert!(!session.local_agents_is_expanded());
+    let compact_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+
+    let panel = session.core.bottom_panel_area().expect("docked panel must render");
+    let (tx, _rx) = unbounded_channel();
+    let header_click = CrosstermEvent::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: panel.x.saturating_add(2),
+        row: panel.y,
+        modifiers: KeyModifiers::NONE,
+    });
+
+    session.handle_event(header_click, &tx, None);
+    assert!(session.local_agents_visible(), "header click must not close the panel");
+    assert!(session.local_agents_is_expanded(), "header click must expand");
+    let _ = rendered_app_session_lines(&mut session, 30);
+    let expanded_height = session.core.bottom_panel_area().map(|area| area.height).unwrap_or(0);
+    assert!(expanded_height > compact_height);
+
+    // Second header click collapses; the panel stays open.
+    let panel = session.core.bottom_panel_area().expect("expanded panel must render");
+    let collapse_click = CrosstermEvent::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: panel.x.saturating_add(2),
+        row: panel.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    session.handle_event(collapse_click, &tx, None);
+    assert!(session.local_agents_visible());
+    assert!(!session.local_agents_is_expanded(), "second header click must collapse");
+
+    // Clicks outside the panel must neither toggle nor close it.
+    let _ = rendered_app_session_lines(&mut session, 30);
+    let outside_click = CrosstermEvent::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    });
+    session.handle_event(outside_click, &tx, None);
+    assert!(session.local_agents_visible(), "outside click must not close the panel");
+    assert!(!session.local_agents_is_expanded(), "outside click must not toggle expand");
+}
+
+#[test]
 fn background_indicator_hit_targets_status_text() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
     running.status = "running".to_string();
