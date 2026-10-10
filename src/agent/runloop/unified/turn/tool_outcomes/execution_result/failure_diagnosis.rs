@@ -599,7 +599,10 @@ mod tests {
 
         let diagnosis = deterministic_error_diagnosis(&error, "execution");
 
-        assert_eq!(diagnosis.next_action, "Inspect the bounded error evidence and retry with corrected arguments.");
+        assert_eq!(
+            diagnosis.next_action,
+            "Inspect the bounded error evidence and retry with corrected arguments. Revise the hypothesis from the bounded evidence before retrying."
+        );
         assert!(!diagnosis.next_action.contains("reveal"));
     }
 

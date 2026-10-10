@@ -148,6 +148,10 @@ The UI renders an `Info` block and emits an existing `ReasoningItem` with stage 
 `ToolOutput`; this remains visible when native reasoning is hidden. Provider-native reasoning continues to follow its
 existing capability and display settings, and raw chain-of-thought is never exposed.
 
+Deterministic execution-failure `next_action` values append hypothesis-revision framing from
+`core::agent::hypothesis` (`classify_mismatch` → `revision_guidance`): each mismatch kind names its
+inspect-and-revise step, so retries revise the hypothesis instead of repeating unchanged.
+
 `ToolInvocationItem.outcome` remains the authoritative invocation result. Each runloop additionally emits exactly one
 terminal `ToolLatencyRecorded` harness observation per executed invocation, carrying total duration, attempt count, and
 the canonical error category when the invocation failed or recovered. Legacy retry/recovered event variants remain

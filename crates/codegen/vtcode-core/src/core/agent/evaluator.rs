@@ -207,6 +207,61 @@ pub fn default_code_rubric() -> EvaluationRubric {
     ])
 }
 
+/// Scoring dimension for the hypothesis loop (additive; [`default_code_rubric`]
+/// is unchanged).
+///
+/// - hypothesis_revision (weight 0.2, hard 0.7): on mismatch the agent
+///   inspects evidence and revises its hypothesis instead of retrying
+///   unchanged.
+pub fn hypothesis_revision_dimension() -> ScoringDimension {
+    ScoringDimension {
+        name: "hypothesis_revision".to_string(),
+        weight: 0.2,
+        hard_threshold: 0.7,
+        description: "On mismatch the agent inspects evidence and revises its \
+            hypothesis instead of retrying unchanged. Stubborn identical retries \
+            score low; targeted re-reads and revised approaches score high."
+            .to_string(),
+    }
+}
+
+/// Default code rubric plus the hypothesis-revision dimension.
+///
+/// Existing [`default_code_rubric`] scores are preserved; the extra dimension
+/// only adds signal for loop behavior.
+pub fn default_code_rubric_with_hypothesis_revision() -> EvaluationRubric {
+    let mut rubric = default_code_rubric();
+    rubric.dimensions.push(hypothesis_revision_dimension());
+    rubric
+}
+
+/// Score hypothesis-revision behavior from harness-observed counts.
+///
+/// - `stubborn_retries`: retries with unchanged arguments and no new evidence.
+/// - `evidence_rereads`: targeted re-reads or spool pages after a mismatch.
+/// - `hypothesis_updates`: explicit hypothesis revisions before retrying.
+///
+/// Returns `(score 0.0..=1.0, notes)`. A run with no mismatches scores `1.0`
+/// (vacuous pass): clean runs are not punished for having nothing to revise.
+pub fn score_hypothesis_revision(
+    stubborn_retries: u32,
+    evidence_rereads: u32,
+    hypothesis_updates: u32,
+) -> (f32, &'static str) {
+    let productive = evidence_rereads.saturating_add(hypothesis_updates);
+    let total = productive.saturating_add(stubborn_retries);
+    if total == 0 {
+        return (1.0, "no mismatches observed");
+    }
+    let score = productive as f32 / total as f32;
+    let notes = if score >= 0.7 {
+        "revises the hypothesis from evidence on mismatch"
+    } else {
+        "retries without revising the hypothesis"
+    };
+    (score.clamp(0.0, 1.0), notes)
+}
+
 /// Render an EvaluationResult as a markdown report suitable for harness artifacts.
 pub fn evaluation_to_markdown(result: &EvaluationResult) -> String {
     let mut out = String::new();
@@ -325,5 +380,51 @@ mod tests {
         assert!(md.contains("# Evaluation Report"));
         assert!(md.contains("BELOW"));
         assert!(md.contains("Issues (must fix)"));
+    }
+
+    #[test]
+    fn no_mismatches_scores_vacuous_pass() {
+        let (score, notes) = score_hypothesis_revision(0, 0, 0);
+        assert!((score - 1.0).abs() < f32::EPSILON);
+        assert!(notes.contains("no mismatches"));
+    }
+
+    #[test]
+    fn stubborn_only_scores_zero() {
+        let (score, notes) = score_hypothesis_revision(3, 0, 0);
+        assert!((score - 0.0).abs() < f32::EPSILON);
+        assert!(notes.contains("without revising"));
+    }
+
+    #[test]
+    fn revision_only_scores_one() {
+        let (score, _) = score_hypothesis_revision(0, 2, 1);
+        assert!((score - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn mixed_counts_score_proportionally() {
+        let (half, _) = score_hypothesis_revision(1, 1, 0);
+        assert!((half - 0.5).abs() < f32::EPSILON);
+        let (three_quarters, notes) = score_hypothesis_revision(1, 2, 1);
+        assert!((three_quarters - 0.75).abs() < f32::EPSILON);
+        assert!(notes.contains("revises the hypothesis"));
+    }
+
+    #[test]
+    fn extended_rubric_keeps_default_scores_and_adds_revision() {
+        let base = default_code_rubric();
+        let extended = default_code_rubric_with_hypothesis_revision();
+        assert_eq!(extended.dimensions.len(), base.dimensions.len() + 1);
+        let revision = extended.dimensions.iter().find(|dim| dim.name == "hypothesis_revision");
+        assert!(revision.is_some());
+        let result = extended.evaluate(&[
+            ("correctness", 0.95, "good"),
+            ("functionality", 1.0, "all pass"),
+            ("code_quality", 0.85, "clean"),
+            ("test_coverage", 0.7, "covered"),
+            ("hypothesis_revision", 1.0, "revised on mismatch"),
+        ]);
+        assert!(result.overall_pass);
     }
 }

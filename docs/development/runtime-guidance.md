@@ -44,6 +44,10 @@ Empty searches are evidence of absence within the queried scope, so retries shou
 For optional tooling, inspect the declared project/CI commands and check availability once; report an unavailable check
 as skipped and continue. A failure from an available checker still needs to be resolved.
 
+Frame work as hypothesis, compare observation, on mismatch inspect evidence and revise hypothesis before retrying;
+never retry an unchanged approach. A mismatch (non-zero exit, empty search, patch context-mismatch, verifier fail,
+repeated evidence) requires a targeted re-read or spool page before the next mutation.
+
 Verify edits in place. When a checker fails and a baseline comparison is useful, read the baseline files separately
 instead of stashing and restoring workspace edits. Report the failing check and baseline comparison separately; an
 ordinary filtering pipeline's exit status does not establish verifier success. VT Code enables fail-closed `pipefail`

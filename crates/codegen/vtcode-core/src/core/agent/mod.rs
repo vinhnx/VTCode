@@ -20,6 +20,7 @@ pub mod events;
 pub mod features;
 pub mod handoff;
 pub mod hash_utils;
+pub mod hypothesis;
 pub mod orient;
 pub mod progress_monitor;
 pub mod refusal;
@@ -47,9 +48,13 @@ pub use blocked_handoff::{
 };
 pub use bootstrap::{AgentComponentBuilder, AgentComponentSet};
 pub use context_reset::{ContextResetDecision, ContextResetManifest};
-pub use evaluator::{DimensionScore, EvaluationResult, EvaluationRubric, ScoringDimension};
+pub use evaluator::{
+    DimensionScore, EvaluationResult, EvaluationRubric, ScoringDimension, default_code_rubric_with_hypothesis_revision,
+    hypothesis_revision_dimension, score_hypothesis_revision,
+};
 pub use features::{FeatureGate, FeatureSet, FeatureStage, OpenResponsesFeature};
 pub use handoff::{BoundaryItem, BoundaryStatus, HandoffReceipt, HandoffRequest};
+pub use hypothesis::{MismatchEvidence, MismatchKind, append_revision_guidance, classify_mismatch, revision_guidance};
 pub use orient::OrientationContext;
 pub use session_config::ResolvedSessionConfig;
 
