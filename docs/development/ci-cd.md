@@ -119,8 +119,10 @@ first-launch latency.
 despite losing intra-crate parallelism (see [uv#22303](https://github.com/astral-sh/uv/pull/22303): -17%
 size, -48-60% PGO build time, neutral runtime; savings dominated by the PGO-instrumented stage).
 `release-fast`/`release-fast-windows` intentionally keep higher codegen units because thin/no LTO has
-far lower merge cost, so parallelism still wins there. Any future PGO pipeline must use
-`codegen-units = 1` for both instrumented and final builds.
+far lower merge cost, so parallelism still wins there. The opt-in
+[local PGO experiment](../../scripts/perf/README.md#pgo-experiments) uses `codegen-units = 1` for both instrumented
+and final builds. It does not alter CI or release packaging; adoption requires representative training and measured
+baseline/candidate comparisons.
 
 `release.sh` also runs a cold-start spot check (fresh `/tmp` copy → `--version` timing) after the macOS aarch64 build to
 catch sub-1s regressions before shipping. All build commands use `--locked` to ensure the Cargo.lock matches Cargo.toml

@@ -614,10 +614,51 @@ Compare repeated local medians rather than adding a noisy hard gate:
 ./scripts/perf/compare.sh
 ```
 
-Rustc-specific AST shrinking, compiler incremental-cache changes, and PGO are outside this runtime-focused wave. Revisit
-them only with a confirmed VT Code profile hotspot and a separate build-performance budget. If PGO is adopted,
-use `codegen-units = 1` for both instrumented and final builds (uv#22303: instrumented stage held 87-92% of
-savings; profiling keeps function bodies alive, so 1 CGU enables earlier cleanup before fat LTO).
+Rustc-specific AST shrinking and compiler incremental-cache changes remain outside this runtime-focused wave. Build
+optimization experiments need a confirmed workload and a separate build-performance budget.
+
+### Local PGO experiments
+
+The opt-in [PGO workflow](../../scripts/perf/README.md#pgo-experiments) follows the
+[rustc PGO procedure](https://doc.rust-lang.org/rustc/profile-guided-optimization.html): instrument, train, merge with
+matching LLVM tools, and rebuild with the profile. It also builds an uninstrumented baseline for comparison, retaining
+release's size optimization, abort-on-panic behavior, and invariant checks. Both instrumented and final builds use one
+codegen unit. The script preserves the workspace's host linker flags, separates target directories, and refuses stale
+output directories or empty training profiles.
+
+| Task | Command | Scope |
+| ---- | ------- | ----- |
+| Install matching merge tools | `rustup component add llvm-tools-preview` | Active Rust toolchain |
+| Smoke-test PGO | `python3 scripts/perf/pgo.py -- python3 "$PWD/scripts/perf/pgo_train_startup.py"` | Offline startup routes only |
+| Train a chosen workload | `python3 scripts/perf/pgo.py -- /absolute/path/to/trainer` | Trainer receives the instrumented binary |
+
+Python 3.11+ is required. Artifacts and logs live under a new `.vtcode/perf/pgo-<timestamp>/` directory; `summary.json`
+records compiler/source provenance, binary sizes/hashes, and separate build and training times. Custom trainers run
+inside a credential-free isolated workspace and must use absolute fixture paths. Startup smoke profiles do not cover
+the interactive agent loop and cannot justify release-wide adoption.
+
+Before shipping PGO, compare the baseline and optimized binaries in three paired runs of identical representative
+fixtures, including cold/warm startup, interactive latency, binary size, and the affected CPU workload. Exclude the
+instrumented executable from runtime comparisons and assess compile time separately. Keep only repeatable gains
+without material regressions. CI and release packaging continue to use their existing profiles.
+
+#### Startup smoke pilot (2026-10-10)
+
+On local `aarch64-apple-darwin` with Rust 1.98.1 / LLVM 22.1.8, the startup trainer produced four profiles and all three
+release builds completed. Three paired Hyperfine batches used five warmups and 30 measured runs per binary/command,
+alternating binary order between batches. Stdout matched on version, help, schema export, and policy status.
+
+| Warm startup route | Baseline mean range | PGO mean range | Change across three batches |
+| ------------------ | ------------------- | -------------- | --------------------------- |
+| `schema tools --format ndjson --name code_search` | 30.46–30.65 ms | 16.67–16.93 ms | 44.7–45.3% faster |
+| `tool-policy status` | 31.45–32.34 ms | 20.64–20.85 ms | 34.0–35.7% faster |
+
+Binary size increased from 38,899,760 to 39,712,560 bytes (+2.1%). Version/help differences were only tenths of a
+millisecond; a preliminary version-only probe also regressed within noisy samples, so these are not established wins.
+Observed build times were about seven minutes for baseline, eleven for instrumentation, and six for profile use;
+these are local command timings, not controlled compiler benchmarks. The profile-use log retained missing-function
+diagnostics. Cold-start and interactive agent-loop behavior were not measured, so this pilot justifies local workload
+experiments rather than distribution-wide PGO adoption.
 
 ## Optimization Rules
 

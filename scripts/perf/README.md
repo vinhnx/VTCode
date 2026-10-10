@@ -20,6 +20,10 @@ These scripts provide a repeatable local performance workflow for VT Code.
 # Local-only host-tuned build/run
 ./scripts/perf/native-build.sh
 ./scripts/perf/native-run.sh -- --version
+
+# Experimental local PGO build (Python 3.11+ and matching LLVM tools)
+rustup component add llvm-tools-preview
+python3 scripts/perf/pgo.py -- python3 "$PWD/scripts/perf/pgo_train_startup.py"
 ```
 
 The baseline builds and measures `target/release/vtcode`. It captures release binary size, cold launch from fresh `/tmp`
@@ -60,3 +64,34 @@ All artifacts are written to `.vtcode/perf/`:
 - Startup routes share a credential-free environment with temporary workspace, `HOME`, XDG, Codex, and config paths.
   Provider credentials are excluded and the Ollama endpoint is a closed loopback port. The comparison warns when the
   environment differs from an older capture.
+
+## PGO experiments
+
+`pgo.py` builds a release baseline, instruments the same target, runs an explicit trainer, merges its profiles with the
+active Rust toolchain's `llvm-profdata`, and builds a candidate. All builds use `--locked`, an explicit host target, the
+same base flags, and one codegen unit. Explicit targeting keeps PGO flags out of build scripts and proc macros. Each
+stage has a separate target directory and log; failures stop the experiment without a success summary. Existing output
+directories are refused, so old profiles and normal release artifacts are preserved.
+
+The trainer receives the instrumented binary as its final argument. It runs in an isolated workspace with the same
+credential-free environment as startup measurements, plus `LLVM_PROFILE_FILE`. Use absolute paths for trainer script
+arguments and fixtures. `pgo_train_startup.py` covers `--version`, `--help`, tool schema export, and policy status only;
+it is a pipeline smoke test, not representative agent-loop training. Supply a deterministic trainer for the workload
+you intend to optimize:
+
+```bash
+python3 scripts/perf/pgo.py --output .vtcode/perf/pgo-custom -- /absolute/path/to/trainer
+```
+
+`summary.json` records the Rust version, revision and dirty status, base flags, binary sizes and hashes, and separate
+build/training times. `CARGO_ENCODED_RUSTFLAGS` takes precedence over `RUSTFLAGS`; otherwise the script retains the
+repository's host-target flags (including its linker settings). Export custom flags from external Cargo configurations
+explicitly through either variable. Existing PGO or codegen-unit flags are rejected. No `target-cpu=native` is added.
+Keep source files and build configuration unchanged throughout an experiment.
+Review missing-function diagnostics in `use.log`; startup smoke profiles do not establish complete profile coverage.
+
+Compare the **baseline** and **use** binaries from the summary in three paired runs with identical fixtures. Measure
+cold/warm launch, interactive latency, binary size, and the relevant CPU workload; assess build cost separately. The
+instrumented binary and training duration are not runtime benchmarks. PGO remains local and opt-in until gains exceed
+noise without regressions; CI and distribution builds do not consume these profiles. See the
+[PGO guide](../../docs/development/performance.md#local-pgo-experiments).
