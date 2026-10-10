@@ -220,6 +220,17 @@ fn process_key_with_clipboard_readers(
             }
             return None;
         }
+        Some(Action::BackgroundOperation)
+            if session.local_agents_visible() && !session.core.has_active_foreground_pty() =>
+        {
+            // Toggle-close: the same shortcut that opens the panel hides it again.
+            // Entries, selection, and expanded state are retained, so reopening
+            // is instant. A live foreground command keeps priority: fall through
+            // and emit so the runloop can background it.
+            session.close_local_agents_drawer(true);
+            session.mark_dirty();
+            return None;
+        }
         Some(Action::ToggleTranscriptRenderMode) => {
             if let Some(viewer) = session.tool_output_viewer_state_mut() {
                 viewer.toggle_render_mode();

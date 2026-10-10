@@ -647,6 +647,9 @@ child threads and is now explicitly opt-in:
 - with an empty composer, `Down` opens the Local Agents view; otherwise `Down` keeps its normal history behavior
 - the view is compact by default and keeps the transcript visible above; `Ctrl+E` or a header click expands it to ~75%
   of the available height, `Ctrl+E` again collapses it
+- pressing the open shortcut again (`Ctrl+B` by default, honoring rebinding) temporarily closes the view without
+  discarding entries, selection, or expanded state; a live foreground command keeps priority and is backgrounded
+  instead
 - inside the view, `Enter` inspects the selected item, `Alt+O` opens its transcript or archive, `Ctrl+K` requests a
   stop, and `Ctrl+X` force-cancels a background subprocess
 - raw `exec-session` rows additionally use `Ctrl+R` to toggle stdin focus and `Ctrl+P` to preview bounded output; exited

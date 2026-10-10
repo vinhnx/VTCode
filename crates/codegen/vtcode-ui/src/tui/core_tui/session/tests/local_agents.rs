@@ -1058,6 +1058,91 @@ fn header_click_toggles_expanded_without_closing_panel() {
 }
 
 #[test]
+fn background_shortcut_toggle_closes_panel_but_keeps_state() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![
+            sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated),
+            sample_local_agent_entry_with_id("a2", "done-agent", app_types::LocalAgentKind::Delegated),
+        ],
+    });
+    // Select the second row and expand so state retention is observable.
+    assert!(session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)).is_none());
+    assert!(
+        session
+            .process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL))
+            .is_none()
+    );
+    let _ = rendered_app_session_lines(&mut session, 30);
+    assert!(session.local_agents_is_expanded());
+
+    let toggle = session.process_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    assert!(toggle.is_none(), "toggle-close must not emit a runloop event");
+    assert!(!session.local_agents_visible());
+
+    // Reopening restores the same selection and expanded state: the close was
+    // temporary, nothing was discarded.
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::LocalAgents(app_types::LocalAgentsTransientRequest {
+            visible: Some(true),
+        })),
+    });
+    assert!(session.local_agents_visible());
+    assert!(session.local_agents_is_expanded(), "expanded state must survive a toggle-close");
+    let inspect = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        inspect,
+        Some(app_types::InlineEvent::Submit(value)) if value == "/agent inspect a2"
+    ));
+}
+
+#[test]
+fn background_shortcut_keeps_foreground_priority_while_panel_open() {
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
+    });
+    assert!(session.local_agents_visible());
+    session.core.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
+    let _ = rendered_app_session_lines(&mut session, 30);
+
+    let toggle = session.process_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    assert!(
+        matches!(toggle, Some(app_types::InlineEvent::BackgroundOperation)),
+        "live foreground command must still reach the runloop, got: {toggle:?}"
+    );
+    assert!(session.local_agents_visible(), "panel must stay open when foreground keeps priority");
+}
+
+#[test]
+fn background_shortcut_rebound_still_toggles_panel() {
+    let mut overlay = hashbrown::HashMap::new();
+    overlay.insert("background_operation".to_owned(), vec!["ctrl+x".to_owned()]);
+    let mut session = app_session_with_input("", 0);
+    session.handle_command(app_types::InlineCommand::SetKeyBindings { bindings: overlay });
+    session.handle_command(app_types::InlineCommand::SetLocalAgents {
+        entries: vec![sample_local_agent_entry(app_types::LocalAgentKind::Delegated)],
+    });
+    assert!(session.local_agents_visible());
+
+    // Rebound key toggles the panel closed with no runloop event.
+    let toggle = session.process_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+    assert!(toggle.is_none());
+    assert!(!session.local_agents_visible());
+
+    // The stale default no longer resolves, so it must not toggle anything.
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::LocalAgents(app_types::LocalAgentsTransientRequest {
+            visible: Some(true),
+        })),
+    });
+    assert!(session.local_agents_visible());
+    let stale = session.process_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    assert!(stale.is_none());
+    assert!(session.local_agents_visible(), "unbound Ctrl+B must leave the panel alone");
+}
+
+#[test]
 fn background_indicator_hit_targets_status_text() {
     let mut running = sample_local_agent_entry_with_id("a1", "running-agent", app_types::LocalAgentKind::Delegated);
     running.status = "running".to_string();
