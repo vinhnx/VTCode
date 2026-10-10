@@ -107,7 +107,6 @@ Cost Optimization:
 USAGE
 }
 
-
 # Changelog generation using git-cliff
 update_changelog_from_commits() {
 	local version=$1
@@ -1081,44 +1080,44 @@ main() {
 
 			# Download Linux x86_64 artifact
 			print_info "Downloading Linux x86_64 artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-unknown-linux-gnu" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux x86_64 gnu"
 			else
-				print_warning "Could not download: Linux x86_64 gnu"
+				print_warning "Could not download: Linux x86_64 gnu (run $run_id)"
 			fi
 
 			# Download Linux x86_64 musl artifact
 			print_info "Downloading Linux x86_64 musl artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-musl" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-unknown-linux-musl" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux x86_64 musl"
 			else
-				print_warning "Could not download: Linux x86_64 musl"
+				print_warning "Could not download: Linux x86_64 musl (run $run_id)"
 			fi
 
 			# Download Linux aarch64 artifact
 			print_info "Downloading Linux aarch64 artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-aarch64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-aarch64-unknown-linux-gnu" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux aarch64"
 			else
-				print_warning "Could not download: Linux aarch64"
+				print_warning "Could not download: Linux aarch64 (run $run_id)"
 			fi
 
 			# Download Windows x86_64 artifact. Required for the bridge; the
 			# required-target coverage check below fails the release if missing.
 			if [[ "$require_windows" == "true" ]]; then
 				print_info "Downloading Windows x86_64 artifact..."
-				if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
+				if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-pc-windows-msvc" "$ci_artifacts_dir"; then
 					mv "$ci_artifacts_dir"/*.zip "$binaries_dir/" 2>/dev/null || true
 					mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 					print_success "Downloaded: Windows x86_64"
 				else
-					print_warning "Could not download: Windows x86_64"
+					print_warning "Could not download: Windows x86_64 (run $run_id)"
 				fi
 			else
 				print_info "Skipping Windows artifact download (RELEASE_REQUIRE_WINDOWS=false)"
@@ -1155,7 +1154,9 @@ main() {
 		done
 		if [[ "$missing_required" -ne 0 ]]; then
 			print_error "Release aborted: not all required target archives are present."
-			print_info "Ensure the build-linux-windows workflow succeeded and macOS builds completed."
+			print_info "CI run used: $run_id — verify with: gh run view $run_id --json jobs --jq '.jobs[] | \"\\(.name): \\(.conclusion)\"'"
+			print_info "If the workflow succeeded, re-run with --skip-release to retry the download (transient gh failures are retried 5x)."
+			print_info "Otherwise ensure the build-linux-windows workflow succeeded and macOS builds completed."
 			exit 1
 		fi
 

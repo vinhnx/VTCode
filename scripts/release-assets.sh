@@ -205,6 +205,41 @@ upload_release_asset_with_retry() {
     done
 }
 
+# Download a single CI artifact with retry on transient failures.
+#
+#   download_ci_artifact_with_retry <run-id> <artifact-name> <dest-dir> [max-attempts]
+#
+# `gh run download` intermittently fails (network flake, API 500) which
+# previously aborted the whole release at the required-target coverage check
+# with a misleading "ensure the workflow succeeded" hint. Retry with
+# exponential backoff and keep stderr visible so the real error is diagnosable.
+# Returns nonzero after exhausting attempts.
+download_ci_artifact_with_retry() {
+    if [[ $# -lt 3 || $# -gt 4 ]]; then
+        echo "usage: download_ci_artifact_with_retry <run-id> <artifact-name> <dest-dir> [max-attempts]" >&2
+        return 2
+    fi
+    local run_id=$1
+    local artifact_name=$2
+    local dest_dir=$3
+    local max_attempts=${4:-5}
+    local attempt=1
+    while [[ "$attempt" -le "$max_attempts" ]]; do
+        if gh run download "$run_id" --name "$artifact_name" --dir "$dest_dir"; then
+            return 0
+        fi
+        if [[ "$attempt" -eq "$max_attempts" ]]; then
+            echo "failed to download CI artifact $artifact_name (run $run_id) after $max_attempts attempts" >&2
+            return 1
+        fi
+        local backoff=$((5 * (1 << (attempt - 1))))
+        [[ "$backoff" -gt 60 ]] && backoff=60
+        echo "download of $artifact_name failed (attempt $attempt/$max_attempts); retrying in ${backoff}s..." >&2
+        sleep "$backoff"
+        attempt=$((attempt + 1))
+    done
+}
+
 # Ensure `gh` authenticates with push access to the release repo.
 #
 #   ensure_release_push_access <owner/repo>
