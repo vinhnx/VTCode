@@ -2,6 +2,14 @@
 
 All notable changes to vtcode will be documented in this file.
 
+## 0.175.3 - 2026-10-10
+
+### Highlights
+#### Features
+
+- Add local PGO build scripts and tests for performance optimization (94af6859) 
+- Add experimental Decisions probes for TUI sessions (b2ea8d44) 
+### Other Changes
 ## 0.175.2 - 2026-10-10
 
 ### Highlights
