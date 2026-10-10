@@ -345,14 +345,14 @@ impl Session {
         let row = mouse_event.row;
         if self.local_agents_visible() {
             let pos = Position { x: column, y: row };
-            let Some(window) = self.local_agents_state.window_area() else {
+            let Some(panel) = self.local_agents_state.panel_area() else {
                 return false;
             };
-            if !window.contains(pos) {
+            if !panel.contains(pos) {
                 return false;
             }
             // Header/title click toggles compact <-> 75% expanded.
-            if row <= window.y.saturating_add(1) {
+            if row <= panel.y.saturating_add(1) {
                 self.local_agents_state.toggle_expanded();
                 self.mark_dirty();
                 return true;

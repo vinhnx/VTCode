@@ -119,13 +119,13 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_a
     {
         session.local_agents_state.set_visible_rows(0);
         session.local_agents_state.set_list_area(None);
-        session.local_agents_state.set_window_area(None);
+        session.local_agents_state.set_panel_area(None);
         return;
     }
 
-    let window = panel_area;
-    session.local_agents_state.set_window_area(Some(window));
-    frame.render_widget(Clear, window);
+    let panel = panel_area;
+    session.local_agents_state.set_panel_area(Some(panel));
+    frame.render_widget(Clear, panel);
 
     let default_style = default_style(session);
     // Muted by explicit color (theme secondary), never `Modifier::DIM`: DIM
@@ -170,8 +170,8 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_a
         .border_type(BorderType::Plain)
         .border_style(local_agents_divider_style(session, selected_index, &entries))
         .title(Span::styled(title, highlight_style));
-    let inner = block.inner(window);
-    frame.render_widget(block, window);
+    let inner = block.inner(panel);
+    frame.render_widget(block, panel);
 
     let [header_area, info_area, body] = match inner.try_layout(&Layout::vertical([
         Constraint::Length(1),
@@ -180,7 +180,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_a
     ])) {
         Ok(areas) => areas,
         Err(_) => {
-            warn!(target: "vtcode::tui", height = inner.height, "local agents window layout failed, skipping render");
+            warn!(target: "vtcode::tui", height = inner.height, "local agents panel layout failed, skipping render");
             session.local_agents_state.set_list_area(None);
             return;
         }
@@ -241,7 +241,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, panel_a
                 Line::from("No local agents yet."),
                 Line::default(),
                 Line::from(
-                    "Configure a background agent and press Ctrl+B, or use /subprocesses to open this window later.",
+                    "Configure a background agent and press Ctrl+B, or use /subprocesses to open this panel later.",
                 ),
             ]
         });

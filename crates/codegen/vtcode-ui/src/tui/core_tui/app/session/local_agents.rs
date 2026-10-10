@@ -13,7 +13,7 @@ pub(super) struct LocalAgentsState {
     /// List body rect from the last inline bottom-dock paint (mouse hit-testing).
     list_area: Option<ratatui::layout::Rect>,
     /// Outer inline panel rect from the last paint (mouse hit-testing).
-    window_area: Option<ratatui::layout::Rect>,
+    panel_area: Option<ratatui::layout::Rect>,
     expanded: bool,
 }
 
@@ -78,12 +78,12 @@ impl LocalAgentsState {
         self.list_area
     }
 
-    pub(super) fn set_window_area(&mut self, area: Option<ratatui::layout::Rect>) {
-        self.window_area = area;
+    pub(super) fn set_panel_area(&mut self, area: Option<ratatui::layout::Rect>) {
+        self.panel_area = area;
     }
 
-    pub(super) fn window_area(&self) -> Option<ratatui::layout::Rect> {
-        self.window_area
+    pub(super) fn panel_area(&self) -> Option<ratatui::layout::Rect> {
+        self.panel_area
     }
 
     pub(super) fn is_expanded(&self) -> bool {

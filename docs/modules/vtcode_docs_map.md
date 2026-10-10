@@ -1098,9 +1098,10 @@ below based on the topic area.
 
 - **File**: `docs/compose/spec/background-agents-window.md`
   - **Content**: Background Agents Expanded Window
-  - **Topics**: Report, [S1] Problem, [S2] Design, [S3] Out of Scope, Tasks
-  - **User Questions**: "What can you tell me about Background Agents Expanded Window?", "How does Report work?", "How
-    does [S1] Problem work?"
+  - **Topics**: Follow-up 2026-10-10 — inline bottom-dock replaces the centered window, Report, [S1] Problem, [S2]
+    Design, [S3] Out of Scope
+  - **User Questions**: "What can you tell me about Background Agents Expanded Window?", "How does Follow-up 2026-10-10
+    — inline bottom-dock replaces the centered window work?", "How does Report work?"
 
 - **File**: `docs/examples/background-subagent-demo.md`
   - **Content**: Background Subagent Demo
