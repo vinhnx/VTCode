@@ -183,6 +183,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Execution explanations?", "How does Canonical contract work?", "How
     does Queries and reports work?"
 
+- **File**: `docs/development/decisions-probe.md`
+  - **Content**: Experimental Decisions Probe
+  - **Topics**: Implementation Boundaries, Validation, Labeled Comparison
+  - **User Questions**: "What can you tell me about Experimental Decisions Probe?", "How does Implementation Boundaries
+    work?", "How does Validation work?"
+
 - **File**: `docs/development/EXTENSION_BOUNDARIES.md`
   - **Content**: Extension Boundaries in VT Code
   - **Topics**: Why This Exists, Default Extension Order, What Counts As Internal, What Counts As External, Review
@@ -559,8 +565,8 @@ below based on the topic area.
 
 - **File**: `docs/guides/full-automation.md`
   - **Content**: Full Automation
-  - **Topics**: Activation Checklist, Runtime Behaviour, Customising The Allow-List, Propose/Verify Sub-agent,
-    Orchestrated Harness
+  - **Topics**: Activation Checklist, Runtime Behaviour, Experimental Decisions Probe, Customising The Allow-List,
+    Propose/Verify Sub-agent
   - **User Questions**: "What can you tell me about Full Automation?", "How does Activation Checklist work?", "How does
     Runtime Behaviour work?"
 

@@ -52,6 +52,7 @@
 //! ```
 
 mod call;
+mod decisions;
 mod message;
 mod provider_trait;
 mod request;
@@ -62,6 +63,10 @@ mod tests;
 mod tool;
 
 pub use call::{FunctionCall, ToolCall};
+pub use decisions::{
+    ChoiceDecisionAnswer, ChoiceDecisionRequest, ChoiceDecisionResponse, DECISIONS_MODEL, DecisionChoiceOption,
+    DecisionProbability,
+};
 pub use message::{AssistantPhase, ContentPart, ImageDetail, Message, MessageClearAt, MessageContent, MessageRole};
 pub use provider_trait::{
     ContextWindowProvider, LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,

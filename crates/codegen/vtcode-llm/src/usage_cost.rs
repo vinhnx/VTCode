@@ -50,6 +50,14 @@ pub struct SessionCostEstimate {
     pub effective_usd: f64,
 }
 
+/// Base price for the bounded, standard-endpoint Decisions probe, not generation.
+/// OpenAI charges $0.10 per million input tokens and no output/cache surcharge.
+/// Regional and long-context premiums are outside this bounded probe route.
+pub fn estimate_decisions_cost(usage: &ProviderUsage) -> SessionCostEstimate {
+    let cost = f64::from(usage.prompt_tokens) * 0.10 / 1_000_000.0;
+    SessionCostEstimate { raw_usd: cost, effective_usd: cost }
+}
+
 /// Accumulates independently priced turns without repricing earlier model routes.
 /// Once a turn cannot be priced, a complete session total remains unknown.
 #[derive(Debug, Clone)]

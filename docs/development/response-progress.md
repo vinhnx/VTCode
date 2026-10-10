@@ -32,6 +32,9 @@ guard; `transfer` and `resume_progress` retain the acceptance clock when the int
 Guard drop clears progress on completion, preparation failure, provider failure, cancellation, and session handoff.
 The UI deduplicates phase updates against the displayed operation. Copilot runtime requests can temporarily show
 tool execution or approval waits; when they settle, the request caller restores model progress before more text.
+Experimental tool-output probes use the `Checking tool output...` phase, including their generation fallback.
+`InlineHandle::replace_progress_phase` retains the prior phase for scoped work without starting another operation.
+Probe completion restores only the matching operation; cancellation clears it, and a replacement owner keeps its phase.
 Keyboard and paste handlers only emit input events. They do not create provisional operations: a submission can
 be consumed by a local command, overlay, or focused process before the runtime accepts a request.
 

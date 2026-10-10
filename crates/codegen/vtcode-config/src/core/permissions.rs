@@ -226,6 +226,13 @@ pub struct AutoPermissionConfig {
     #[serde(default)]
     pub probe_model: String,
 
+    /// Experimental OpenAI Decisions tool-output probe. Direct OpenAI API-key
+    /// TUI or full-auto sessions at the standard endpoint only; billed to your OpenAI API account.
+    /// Inconclusive requests fall back to the generation probe within its deadline.
+    /// Manual approvals and tool permissions remain unchanged; no full-auto acknowledgement is needed in TUI.
+    #[serde(default)]
+    pub use_decisions_probe: bool,
+
     /// Maximum consecutive denials before auto permission review falls back.
     #[serde(default = "default_auto_permission_max_consecutive_denials")]
     pub max_consecutive_denials: u32,
@@ -300,6 +307,7 @@ impl Default for AutoPermissionConfig {
         Self {
             model: String::new(),
             probe_model: String::new(),
+            use_decisions_probe: false,
             max_consecutive_denials: default_auto_permission_max_consecutive_denials(),
             max_total_denials: default_auto_permission_max_total_denials(),
             drop_broad_allow_rules: default_auto_permission_drop_broad_allow_rules(),
@@ -485,6 +493,7 @@ mod tests {
             r#"
             [auto]
             model = "gpt-5-mini"
+            use_decisions_probe = true
             max_consecutive_denials = 2
             drop_broad_allow_rules = false
 
@@ -496,6 +505,12 @@ mod tests {
         .expect("permissions config");
 
         assert_eq!(config.auto_permission.model, "gpt-5-mini");
+        assert!(config.auto_permission.use_decisions_probe);
+        let serialized = toml::to_string(&config).expect("serialize permissions");
+        assert!(serialized.contains("[auto]"));
+        assert!(serialized.contains("use_decisions_probe = true"));
+        let roundtrip: PermissionsConfig = toml::from_str(&serialized).expect("roundtrip permissions");
+        assert!(roundtrip.auto_permission.use_decisions_probe);
         assert_eq!(config.auto_permission.max_consecutive_denials, 2);
         assert!(!config.auto_permission.drop_broad_allow_rules);
         assert_eq!(config.auto_permission.environment.trusted_paths, vec!["/work/project".to_string()]);
@@ -505,6 +520,7 @@ mod tests {
     #[test]
     fn auto_permission_defaults_are_conservative() {
         let config = PermissionsConfig::default();
+        assert!(!config.auto_permission.use_decisions_probe);
 
         assert_eq!(config.auto_permission.max_consecutive_denials, 3);
         assert_eq!(config.auto_permission.max_total_denials, 20);
@@ -512,6 +528,15 @@ mod tests {
         assert!(!config.auto_permission.block_rules.is_empty());
         assert!(!config.auto_permission.allow_exceptions.is_empty());
         assert!(config.auto_permission.environment.trusted_paths.is_empty());
+    }
+
+    #[cfg(feature = "schema")]
+    #[test]
+    fn decisions_probe_schema_exposes_default_off_toggle() {
+        let schema = serde_json::to_value(schemars::schema_for!(super::AutoPermissionConfig)).expect("schema");
+        let field = &schema["properties"]["use_decisions_probe"];
+        assert_eq!(field["type"], "boolean");
+        assert_eq!(field["default"], false);
     }
 
     #[test]

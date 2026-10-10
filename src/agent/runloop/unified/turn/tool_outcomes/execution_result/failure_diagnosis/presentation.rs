@@ -24,6 +24,7 @@ pub(crate) async fn push_tool_response_with_diagnosis(
     tool_name: &str,
     content_for_model: String,
     diagnosis: &ToolFailureDiagnosis,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) -> anyhow::Result<()> {
     let diagnosed_content = attach_to_serialized_tool_response(content_for_model, diagnosis);
     super::super::auto_permission_probe::push_tool_response_with_auto_permission_probe(
@@ -31,6 +32,7 @@ pub(crate) async fn push_tool_response_with_diagnosis(
         tool_call_id,
         tool_name,
         diagnosed_content,
+        batch_spinner,
     )
     .await
 }

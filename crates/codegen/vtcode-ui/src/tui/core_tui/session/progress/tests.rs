@@ -7,6 +7,53 @@ fn rendered_text(buf: &Buffer) -> String {
     buf.content.iter().map(|cell| cell.symbol()).collect()
 }
 
+#[test]
+fn tool_output_probe_progress_is_visible_and_preserves_configured_footer() {
+    for height in [6, 24] {
+        let mut session = Session::new(InlineTheme::default(), None, height);
+        session.handle_command(InlineCommand::SetConfiguredInputStatus {
+            left: Some("branch: main".into()),
+            right: Some("model: fixture".into()),
+        });
+        let operation = ProgressOperation::start();
+        session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+            operation,
+            phase: ProgressPhase::RunningTools,
+        }));
+        let mut terminal = Terminal::new(TestBackend::new(100, height)).unwrap();
+        for phase in [ProgressPhase::CheckingToolOutput, ProgressPhase::RunningTools] {
+            session.handle_command(InlineCommand::SetInputStatus {
+                left: Some("Checking tool output...".into()),
+                right: None,
+            });
+            session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Phase { operation, phase }));
+            terminal
+                .draw(|frame| {
+                    let layout = session.prepare_frame_layout(frame, 0).unwrap();
+                    session.render_base_frame(frame, &layout, Rect::ZERO);
+                    session.render_input(frame, layout.input_area);
+                })
+                .unwrap();
+            let text = rendered_text(terminal.backend().buffer());
+            assert_eq!(text.matches(phase.label()).count(), 1, "{text}");
+            assert!(text.contains("branch: main"), "{text}");
+            assert!(text.contains("model: fixture"), "{text}");
+            if phase == ProgressPhase::RunningTools {
+                assert!(!text.contains("Checking tool output..."));
+            }
+        }
+        session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation }));
+        terminal
+            .draw(|frame| {
+                let layout = session.prepare_frame_layout(frame, 0).unwrap();
+                session.render_base_frame(frame, &layout, Rect::ZERO);
+                session.render_input(frame, layout.input_area);
+            })
+            .unwrap();
+        assert!(!rendered_text(terminal.backend().buffer()).contains("Checking tool output..."));
+    }
+}
+
 #[derive(Clone)]
 struct DiagnosticWriter(Arc<std::sync::Mutex<Vec<u8>>>);
 

@@ -40,6 +40,7 @@ pub enum ProgressPhase {
     CheckingPermissions,
     WaitingForApproval,
     RunningTools,
+    CheckingToolOutput,
 }
 
 impl ProgressPhase {
@@ -55,6 +56,7 @@ impl ProgressPhase {
             Self::CheckingPermissions => "Checking permissions",
             Self::WaitingForApproval => "Waiting for approval",
             Self::RunningTools => "Running tools",
+            Self::CheckingToolOutput => "Checking tool output...",
         }
     }
 

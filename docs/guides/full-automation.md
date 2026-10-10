@@ -58,6 +58,50 @@ recovery limits remain unchanged.
 - Non allow-listed tools are rejected before execution, and their attempts are logged.
 - If the acknowledgement profile is missing while required, the CLI aborts before launching.
 
+## Experimental Decisions Probe
+
+```toml
+[permissions.auto]
+use_decisions_probe = false
+```
+
+Enable this default-off experiment in `/settings` → **Approvals & Security** to classify tool output with OpenAI
+Decisions. It applies only to the built-in OpenAI provider using an API key and the standard
+`https://api.openai.com/v1` endpoint. Ordinary interactive TUI sessions can use it with either Build or Auto selected,
+without full-auto or its acknowledgement profile. ChatGPT subscription access, custom providers, gateways, other
+providers, and custom endpoints send no additional probes in normal TUI sessions. Full-auto retains its existing
+generation probe when Decisions is disabled or unsupported. The setting persists when you change providers and
+eligibility is reevaluated using the current provider and loaded settings for each dispatch.
+
+The probe remains advisory: `SUSPECT` queues the existing prompt-injection warning; `SAFE` queues none. Permission
+approval, failure diagnosis, summaries, and completion judges are unchanged. Inactive planning, nonempty tool output,
+cancellation checks, and the three-dispatch per-turn budget still gate probing. Noninteractive sessions require
+full-auto. Evidence remains limited to the last
+two user messages (240 characters each) and 2,400 characters of tool output, so attacks outside that window can be missed.
+
+Eligible sessions send one text-only `tool_output_injection` choice question (`SAFE`/`SUSPECT`) to
+`POST /v1/decisions` with `gpt-6-luna`. Decisions has four seconds; an inconclusive answer, refusal, HTTP error, or timeout
+allows one generation fallback using `permissions.auto.probe_model` and the existing lightweight route. Both attempts
+share the original eight-second deadline. After Decisions, there is no further main-model retry. Cancellation stops
+the dispatch and prevents fallback. V1 uses a validated choice without a confidence threshold; two inconclusive
+attempts retain the existing probe-failure behavior and execution continues.
+
+Both attempts contribute to session usage and cost, separately from prompt-cache health. Missing usage makes the
+complete cost unknown. The bounded standard-endpoint Decisions estimate uses $0.10 per million input tokens and no
+output charge. Regional and long-context premiums may apply to other usage. For example, 10,000 requests of 1,000 billed
+input tokens cost $1 before premiums; generation fallback adds its own cost.
+See [OpenAI Decisions documentation and pricing](https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability).
+
+An eligible interactive session shows one local suggestion at an idle boundary while the option is disabled.
+It sends no API request and does not enable the option. Headless sessions, planning, and active turns suppress the
+suggestion. Admitted TUI probes show transient **Checking tool output...** feedback through both attempts; completion
+restores the preceding status, while cancellation or exit clears activity. Parallel tool batches retain their spinner
+ownership. Probe logs record session/turn identifiers, endpoint, outcome, elapsed time, and usage availability without
+evidence, credentials, or response bodies.
+
+This support is experimental. No live classification or cost comparison has been established; use the
+[evaluation guide](../development/decisions-probe.md) before considering wider adoption.
+
 ## Customising The Allow-List
 
 ```toml
@@ -164,7 +208,7 @@ verifies outcomes with environment probes (command exit codes), computes combina
 metrics per task, and outputs a deterministically ordered markdown report. Known per-attempt cost is aggregated; unknown
 pricing is reported separately rather than treated as free.
 
-See [vtcode-eval](../../vtcode-eval/) for the framework and metric definitions.
+See [vtcode-eval](../../crates/codegen/vtcode-eval/) for the framework and metric definitions.
 
 ## Profile File Recommendations
 

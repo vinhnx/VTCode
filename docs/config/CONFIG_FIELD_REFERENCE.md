@@ -579,6 +579,7 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.auto.max_total_denials` | `integer` | no | `20` | Maximum total denials before auto permission review falls back. |
 | `permissions.auto.model` | `string` | no | `""` | Optional model override for the transcript reviewer. |
 | `permissions.auto.probe_model` | `string` | no | `""` | Optional model override for the prompt-injection probe. |
+| `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe in ordinary interactive TUI and full-auto sessions. Direct OpenAI API-key sessions at the standard endpoint only; billed to your OpenAI API account. One generation fallback shares the eight-second deadline. TUI use requires no full-auto acknowledgement and preserves manual approvals and tool permissions. |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls. |

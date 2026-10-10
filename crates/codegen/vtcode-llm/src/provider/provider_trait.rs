@@ -173,6 +173,23 @@ pub trait LLMProvider: Send + Sync {
     /// Provider name (e.g., "gemini", "openai", "anthropic")
     fn name(&self) -> &str;
 
+    /// Whether this instance can use the direct API-key Decisions endpoint.
+    /// Capability checks must not discover credentials or dispatch requests.
+    fn supports_decisions(&self) -> bool {
+        false
+    }
+
+    /// Evaluate one text-only choice question. Unsupported providers do no I/O.
+    async fn decide_choice(
+        &self,
+        _request: super::ChoiceDecisionRequest,
+    ) -> Result<super::ChoiceDecisionResponse, LLMError> {
+        Err(LLMError::Provider {
+            message: "Decisions is unsupported for this provider".to_owned(),
+            metadata: None,
+        })
+    }
+
     /// The canonical backend kind for this provider.
     ///
     /// Defaults to matching on [`name()`](LLMProvider::name) against the
@@ -446,6 +463,17 @@ impl ContextWindowProvider {
 impl LLMProvider for ContextWindowProvider {
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    fn supports_decisions(&self) -> bool {
+        self.inner.supports_decisions()
+    }
+
+    async fn decide_choice(
+        &self,
+        request: super::ChoiceDecisionRequest,
+    ) -> Result<super::ChoiceDecisionResponse, LLMError> {
+        self.inner.decide_choice(request).await
     }
 
     fn backend_kind(&self) -> BackendKind {

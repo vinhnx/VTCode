@@ -49,6 +49,7 @@ The classifier used by `permissions.auto` can be tuned from the permission revie
 [permissions.auto]
 model = ""
 probe_model = ""
+use_decisions_probe = false # Experimental; direct OpenAI API-key tool-output probe only
 max_consecutive_denials = 3
 max_total_denials = 20
 drop_broad_allow_rules = true
@@ -64,6 +65,18 @@ trusted_services = []
 ```
 
 After repeated classifier denials, VT Code falls back to manual prompts where an interactive prompt is possible.
+
+The experimental, default-off `use_decisions_probe` option is also available in `/settings` → **Approvals & Security**
+for ordinary TUI sessions with either Build or Auto selected. It requires the built-in direct OpenAI API-key provider
+at the standard endpoint, but no full-auto flag or acknowledgement profile. It classifies tool output after execution
+and queues an advisory warning for `SUSPECT`; manual approvals and explicit deny rules continue to apply before execution.
+Subscription access, gateways, custom endpoints, other providers, planning, and headless sessions outside full-auto
+make no additional probe requests. The toggle persists across provider changes and settings reloads.
+
+This uses your OpenAI API billing. Decisions gets four seconds and may use one configured generation fallback within
+the shared eight-second deadline; absent usage leaves cost unknown. The TUI shows **Checking tool output...** during
+both attempts and clears it on cancellation. See the [probe guide](../development/decisions-probe.md) for evidence
+bounds, accounting, and experimental limitations.
 
 ## Rule Grammar
 

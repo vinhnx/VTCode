@@ -68,6 +68,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         paths: &[
             "permissions.enabled",
             "permissions.audit_enabled",
+            "permissions.auto.use_decisions_probe",
             "permissions.allow",
             "permissions.ask",
             "permissions.deny",

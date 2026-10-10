@@ -7,6 +7,16 @@ use vtcode_config::constants::models;
 
 #[async_trait]
 impl provider::LLMProvider for OpenAIProvider {
+    fn supports_decisions(&self) -> bool {
+        self.decisions_eligible()
+    }
+
+    async fn decide_choice(
+        &self,
+        request: provider::ChoiceDecisionRequest,
+    ) -> Result<provider::ChoiceDecisionResponse, provider::LLMError> {
+        self.decide_choice_request(request).await
+    }
     fn name(&self) -> &str {
         self.provider_key_override.as_deref().unwrap_or("openai")
     }

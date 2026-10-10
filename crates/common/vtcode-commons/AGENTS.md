@@ -10,7 +10,7 @@
 
 ## Rules
 
-- Re-export key types from `lib.rs`: `WorkspacePaths`, `TelemetrySink`, `ErrorFormatter`, `BackendKind`, etc. `reference.rs` provides in-memory test adapters: `StaticWorkspacePaths`, `MemoryTelemetry`, `MemoryErrorReporter`. `ui_protocol/` is a submodule, not a flat module. `diff_theme` is the shared diff palette and capability boundary: color-capable consumers layer row and intraline backgrounds, while `NO_COLOR` resolves to `Ansi16` so fallbacks stay foreground-only.
+- Re-export key types from `lib.rs`: `WorkspacePaths`, `TelemetrySink`, `ErrorFormatter`, `BackendKind`, etc. `reference.rs` provides in-memory test adapters: `StaticWorkspacePaths`, `MemoryTelemetry`, `MemoryErrorReporter`. `ui_protocol/` is a submodule, not a flat module. Origin-bound HTTP consumers use fallible `http::create_client_without_redirects`; do not replace construction failures with a redirect-following fallback. `diff_theme` is the shared diff palette and capability boundary: color-capable consumers layer row and intraline backgrounds, while `NO_COLOR` resolves to `Ansi16` so fallbacks stay foreground-only.
 
 ## Gotchas
 

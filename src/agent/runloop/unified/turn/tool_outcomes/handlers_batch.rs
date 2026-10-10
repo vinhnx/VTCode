@@ -15,7 +15,9 @@ use crate::agent::runloop::unified::tool_pipeline::{
 use crate::agent::runloop::unified::turn::context::{
     PreparedAssistantToolCall, TurnHandlerOutcome, TurnProcessingContext,
 };
-use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result;
+use crate::agent::runloop::unified::turn::tool_outcomes::execution_result::{
+    handle_tool_execution_result, handle_tool_execution_result_with_spinner,
+};
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     PIPED_VERIFICATION_DIRECTIVE, PIPED_VERIFICATION_WARNING, VERIFICATION_RESULT_LOST_DIRECTIVE,
     VERIFICATION_RESULT_LOST_WARNING, resolve_max_tool_retries, update_repetition_tracker,
@@ -192,7 +194,7 @@ async fn execute_parallel_group<'a, 'b>(
     t_ctx.ctx.harness_state.reset_assistant_text_response_streak();
 
     let progress_reporter = ProgressReporter::new();
-    let _spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
+    let spinner = crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
         t_ctx.ctx.handle,
         t_ctx.ctx.input_status_state.left.clone(),
         t_ctx.ctx.input_status_state.right.clone(),
@@ -276,11 +278,35 @@ async fn execute_parallel_group<'a, 'b>(
     }
 
     while !execution_futures.is_empty() {
+        // A probe can observe the interrupt before this batch waiter does.
+        // Recheck the authoritative state before awaiting another tool result.
+        if t_ctx.ctx.ctrl_c_state.is_exit_requested()
+            || t_ctx.ctx.ctrl_c_state.is_cancel_requested()
+            || t_ctx.ctx.ctrl_c_state.is_cancel_handled()
+        {
+            spinner.finish_with_restore(false);
+            let turn_result = if t_ctx.ctx.ctrl_c_state.is_exit_requested() {
+                crate::agent::runloop::unified::turn::context::TurnLoopResult::Exit
+            } else {
+                crate::agent::runloop::unified::turn::context::TurnLoopResult::Cancelled
+            };
+            return Ok(Some(
+                interrupt_parallel_group(
+                    &registry,
+                    &mut execution_futures,
+                    group_has_exec_sessions,
+                    turn_result,
+                    "Failed to terminate exec sessions after grouped tool interruption",
+                )
+                .await,
+            ));
+        }
         let next_result = tokio::select! {
             _ = t_ctx.ctx.ctrl_c_notify.notified() => {
                 if t_ctx.ctx.ctrl_c_state.is_exit_requested()
                     || t_ctx.ctx.ctrl_c_state.is_cancel_requested()
                 {
+                    spinner.finish_with_restore(false);
                     let turn_result = if t_ctx.ctx.ctrl_c_state.is_exit_requested() {
                         crate::agent::runloop::unified::turn::context::TurnLoopResult::Exit
                     } else {
@@ -318,20 +344,29 @@ async fn execute_parallel_group<'a, 'b>(
             .session_stats
             .set_verification_snapshot(t_ctx.repeated_tool_attempts.verification_snapshot());
 
-        let handler_outcome =
-            match handle_tool_execution_result(t_ctx, call_id, &name, &args, &outcome, start_time).await {
-                Ok(outcome) => outcome,
-                Err(error) => {
-                    drain_parallel_group(
-                        &registry,
-                        &mut execution_futures,
-                        group_has_exec_sessions,
-                        "Failed to terminate exec sessions after grouped tool post-processing failure",
-                    )
-                    .await;
-                    return Err(error);
-                }
-            };
+        let handler_outcome = match handle_tool_execution_result_with_spinner(
+            t_ctx,
+            call_id,
+            &name,
+            &args,
+            &outcome,
+            start_time,
+            Some(&spinner),
+        )
+        .await
+        {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                drain_parallel_group(
+                    &registry,
+                    &mut execution_futures,
+                    group_has_exec_sessions,
+                    "Failed to terminate exec sessions after grouped tool post-processing failure",
+                )
+                .await;
+                return Err(error);
+            }
+        };
         flush_loop_notices(t_ctx.ctx, t_ctx.repeated_tool_attempts);
         if let Some(outcome) = handler_outcome {
             if let TurnHandlerOutcome::Break(
@@ -339,6 +374,7 @@ async fn execute_parallel_group<'a, 'b>(
                 | crate::agent::runloop::unified::turn::context::TurnLoopResult::Cancelled),
             ) = outcome
             {
+                spinner.finish_with_restore(false);
                 return Ok(Some(
                     interrupt_parallel_group(
                         &registry,

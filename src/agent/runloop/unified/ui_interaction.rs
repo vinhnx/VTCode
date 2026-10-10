@@ -614,6 +614,20 @@ impl PlaceholderSpinner {
         }
     }
 
+    pub(crate) fn replace_message(&self, message: &str) -> Option<String> {
+        self.message_sender
+            .as_ref()
+            .map(|sender| sender.send_replace(with_stop_hint(message)))
+    }
+
+    pub(crate) fn restore_message(&self, message: String) {
+        if self.active.load(Ordering::SeqCst)
+            && let Some(sender) = &self.message_sender
+        {
+            sender.send_replace(message);
+        }
+    }
+
     pub(crate) fn finish(&self) {
         self.finish_with_restore(!self.defer_restore.load(Ordering::SeqCst));
     }

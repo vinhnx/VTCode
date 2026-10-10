@@ -134,6 +134,27 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     pipeline_outcome: &ToolPipelineOutcome,
     tool_start_time: std::time::Instant,
 ) -> Result<Option<TurnHandlerOutcome>> {
+    handle_tool_execution_result_with_spinner(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        args_val,
+        pipeline_outcome,
+        tool_start_time,
+        None,
+    )
+    .await
+}
+
+pub(super) async fn handle_tool_execution_result_with_spinner<'a>(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
+    tool_call_id: String,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+    pipeline_outcome: &ToolPipelineOutcome,
+    tool_start_time: std::time::Instant,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
+) -> Result<Option<TurnHandlerOutcome>> {
     // 1. Record metrics and outcome
     let is_success = matches!(&pipeline_outcome.status, ToolExecutionStatus::Success { command_success: true, .. });
     let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status {
@@ -150,16 +171,27 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success { output, command_success, .. } => {
-            handle_success(t_ctx, tool_call_id, tool_name, args_val, pipeline_outcome, output, *command_success)
-                .await?;
+            handle_success(
+                t_ctx,
+                tool_call_id,
+                tool_name,
+                args_val,
+                pipeline_outcome,
+                output,
+                *command_success,
+                batch_spinner,
+            )
+            .await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            if let Some(outcome) = handle_failure(t_ctx, tool_call_id, tool_name, args_val, error).await? {
+            if let Some(outcome) =
+                handle_failure(t_ctx, tool_call_id, tool_name, args_val, error, batch_spinner).await?
+            {
                 return Ok(Some(outcome));
             }
         }
         ToolExecutionStatus::Timeout { error } => {
-            handle_timeout(t_ctx, tool_call_id, tool_name, args_val, error).await?;
+            handle_timeout(t_ctx, tool_call_id, tool_name, args_val, error, batch_spinner).await?;
         }
         ToolExecutionStatus::Cancelled => {
             handle_cancelled(t_ctx, tool_call_id, tool_name, args_val).await?;
@@ -207,6 +239,7 @@ async fn handle_success<'a>(
     pipeline_outcome: &ToolPipelineOutcome,
     output: &serde_json::Value,
     command_success: bool,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) -> Result<()> {
     if command_success {
         if let Err(err) = notify_tool_success(tool_name, None).await {
@@ -236,10 +269,18 @@ async fn handle_success<'a>(
             tool_name,
             content_for_model,
             diagnosis,
+            batch_spinner,
         )
         .await
     } else {
-        push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id.clone(), tool_name, content_for_model).await
+        push_tool_response_with_auto_permission_probe(
+            t_ctx,
+            tool_call_id.clone(),
+            tool_name,
+            content_for_model,
+            batch_spinner,
+        )
+        .await
     };
     // The execution pipeline has already emitted the canonical ToolOutput
     // event before this handler runs. Emit the diagnosis immediately after
@@ -303,6 +344,7 @@ async fn handle_failure<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
     error: &ToolExecutionError,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.message.as_str();
     let (user_msg, hint) = format_structured_tool_error_for_user(tool_name, error);
@@ -359,7 +401,17 @@ async fn handle_failure<'a>(
     }
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "execution").await;
-    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "execution", &diagnosis).await;
+    finalize_failed_tool_response(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        args_val,
+        error,
+        "execution",
+        &diagnosis,
+        batch_spinner,
+    )
+    .await;
     render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
 
     if blocked_or_denied_failure {
@@ -418,6 +470,7 @@ async fn handle_timeout(
     tool_name: &str,
     args_val: &serde_json::Value,
     error: &ToolExecutionError,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) -> Result<()> {
     let (user_msg, _) = format_structured_tool_error_for_user(tool_name, error);
     notify_structured_failure(tool_name, &user_msg, Some("timeout")).await;
@@ -426,7 +479,17 @@ async fn handle_timeout(
     record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::Timeout).await;
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "timeout").await;
-    finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "timeout", &diagnosis).await;
+    finalize_failed_tool_response(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        args_val,
+        error,
+        "timeout",
+        &diagnosis,
+        batch_spinner,
+    )
+    .await;
     render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
 
     Ok(())
@@ -443,7 +506,8 @@ async fn handle_cancelled(
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
-    push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, error_content.to_string()).await?;
+    push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, error_content.to_string(), None)
+        .await?;
 
     record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 

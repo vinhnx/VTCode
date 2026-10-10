@@ -163,6 +163,7 @@ pub(crate) struct SessionStats {
     last_tool_catalog_observability: Option<ToolCatalogObservabilityIdentity>,
     recent_touched_files: VecDeque<String>,
     total_usage: HarnessUsage,
+    decisions_probe_suggestion_shown: bool,
     /// Rolling prompt-cache health fed by every recorded turn. Shared
     /// `vtcode-core` monitor so thresholds and wording match the headless
     /// runloop; fires at most two session-scoped hit-rate alerts.
@@ -435,6 +436,26 @@ impl SessionStats {
             return;
         };
         self.total_usage.add(&usage_cost::normalized_turn_usage(provider, usage));
+    }
+
+    pub(crate) fn record_probe_attempt(
+        &mut self,
+        provider: &str,
+        usage: &Option<vtcode_core::llm::provider::Usage>,
+        cost: Option<usage_cost::SessionCostEstimate>,
+    ) {
+        // Auxiliary usage contributes to session totals, never cache health.
+        self.record_usage(provider, usage);
+        self.record_cost(cost);
+    }
+
+    /// Called only at idle boundaries; eligibility may change during a session.
+    pub(crate) fn take_decisions_probe_suggestion(&mut self, applicable: bool) -> bool {
+        if self.decisions_probe_suggestion_shown || !applicable {
+            return false;
+        }
+        self.decisions_probe_suggestion_shown = true;
+        true
     }
 
     /// Record one turn's usage for prompt-cache health and return a
@@ -1446,6 +1467,40 @@ mod tests {
 
     fn function_tool(name: &str) -> ToolDefinition {
         ToolDefinition::function(name.to_string(), name.to_string(), serde_json::json!({"type": "object"}))
+    }
+
+    #[test]
+    fn decisions_probe_accounting_preserves_unknown_cost_and_does_not_feed_cache_health() {
+        let mut stats = SessionStats::default();
+        let usage = Some(vtcode_core::llm::provider::Usage {
+            prompt_tokens: 2048,
+            completion_tokens: 0,
+            total_tokens: 2048,
+            cached_prompt_tokens: Some(1),
+            cache_read_tokens: Some(1),
+            cache_creation_tokens: None,
+            iterations: None,
+        });
+        for _ in 0..3 {
+            stats.record_probe_attempt(
+                "openai",
+                &usage,
+                usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
+            );
+        }
+        assert_eq!(stats.total_usage().input_tokens, 6144);
+        assert!((stats.total_cost_usd().unwrap() - 0.0006144).abs() < 1e-12);
+        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", &usage).is_some());
+        stats.record_probe_attempt("openai", &None, None);
+        assert!(stats.total_cost_usd().is_none());
+        stats.record_probe_attempt(
+            "openai",
+            &usage,
+            usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
+        );
+        assert!(stats.total_cost_usd().is_none());
     }
 
     #[test]

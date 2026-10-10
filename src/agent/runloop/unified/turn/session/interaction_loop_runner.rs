@@ -186,6 +186,20 @@ pub(super) async fn run_interaction_loop_impl(
             return Ok(InteractionOutcome::Exit { reason: SessionEndReason::Exit });
         }
 
+        // This loop runs only at the idle input boundary. Reevaluate the live
+        // provider and mode after settings/auth changes, with a session latch.
+        let applicable = crate::agent::runloop::unified::auto_permission::decisions_suggestion_applicable(
+            ctx.renderer.supports_inline_ui(),
+            true,
+            ctx.tool_registry.is_planning_active(),
+            ctx.provider_client.as_ref(),
+            ctx.vt_cfg.as_ref(),
+        );
+        if ctx.session_stats.take_decisions_probe_suggestion(applicable) {
+            ctx.renderer
+                .line(MessageStyle::Info, crate::agent::runloop::unified::auto_permission::DECISIONS_SUGGESTION)?;
+        }
+
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
         let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let idle_wake_delay = STATUS_REFRESH_INTERVAL.saturating_sub(last_status_refresh.elapsed());

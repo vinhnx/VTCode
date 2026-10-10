@@ -8,9 +8,10 @@
 pub use vtcode_llm::provider::{
     AnthropicOptionalStringOverride, AnthropicOptionalU32Override, AnthropicRequestOverrides, AnthropicThinkingConfig,
     AnthropicThinkingDisplayOverride, AnthropicThinkingModeOverride, AssistantPhase, BorrowedLLMStream,
-    CodingAgentSettings, ContentPart, ContextWindowProvider, FallbackModel, FinishReason, FunctionCall,
-    FunctionDefinition, GrammarDefinition, LLMError, LLMErrorMetadata, LLMNormalizedStream, LLMProvider, LLMRequest,
-    LLMResponse, LLMStream, LLMStreamEvent, Message, MessageClearAt, MessageContent, MessageRole,
+    ChoiceDecisionAnswer, ChoiceDecisionRequest, ChoiceDecisionResponse, CodingAgentSettings, ContentPart,
+    ContextWindowProvider, DECISIONS_MODEL, DecisionChoiceOption, DecisionProbability, FallbackModel, FinishReason,
+    FunctionCall, FunctionDefinition, GrammarDefinition, LLMError, LLMErrorMetadata, LLMNormalizedStream, LLMProvider,
+    LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, MessageClearAt, MessageContent, MessageRole,
     NormalizedStreamEvent, ParallelToolConfig, PreparedResponsesRequest, PromptCacheProfile, ProviderCapabilities,
     ReasoningSource, ResponsesCompactionOptions, ResponsesContinuationState, ShellToolDefinition,
     SpecificFunctionChoice, SpecificToolChoice, ToolCall, ToolChoice, ToolDefinition, ToolNamespace,

@@ -786,7 +786,8 @@ fn build_responses_request_from_history(
     if ctx.include_max_output_tokens
         && let Some(max_tokens) = request.max_tokens
     {
-        openai_request["max_output_tokens"] = json!(max_tokens);
+        // Responses requires at least 16, including one-word auxiliary probes.
+        openai_request["max_output_tokens"] = json!(max_tokens.max(16));
     }
 
     if ctx.include_output_types {
@@ -1143,6 +1144,33 @@ mod tests {
 
         assert!(payload.get("previous_response_id").is_none());
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    }
+
+    #[test]
+    fn responses_output_token_limit_normalizes_probe_and_boundary_allowances() {
+        let mut request = request();
+        request.model = models::openai::GPT_6_LUNA.to_string();
+        let mut ctx = base_context(None);
+        for (requested, expected) in [(1, 16), (8, 16), (15, 16), (16, 16), (17, 17), (512, 512)] {
+            request.max_tokens = Some(requested);
+            let payload = build_responses_request(&request, &ctx).expect("responses request");
+            assert_eq!(payload["max_output_tokens"], expected, "requested {requested}");
+        }
+        request.max_tokens = None;
+        assert!(
+            build_responses_request(&request, &ctx)
+                .unwrap()
+                .get("max_output_tokens")
+                .is_none()
+        );
+        request.max_tokens = Some(8);
+        ctx.include_max_output_tokens = false;
+        assert!(
+            build_responses_request(&request, &ctx)
+                .unwrap()
+                .get("max_output_tokens")
+                .is_none()
+        );
     }
 
     #[test]

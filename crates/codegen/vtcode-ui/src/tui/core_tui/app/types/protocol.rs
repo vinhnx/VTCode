@@ -313,6 +313,12 @@ struct InlineLayoutState {
 }
 
 #[derive(Clone)]
+struct HandleProgress {
+    operation: vtcode_commons::ui_protocol::ProgressOperation,
+    phase: vtcode_commons::ui_protocol::ProgressPhase,
+}
+
+#[derive(Clone)]
 pub struct InlineHandle {
     pub(crate) sender: UnboundedSender<InlineCommand>,
     message_layout: Arc<InlineLayoutState>,
@@ -324,7 +330,7 @@ pub struct InlineHandle {
     /// the next visible surface before releasing input ownership.
     ui_owned_transient_activity: bool,
     next_tool_output_id: Arc<AtomicU64>,
-    progress_operation: Arc<Mutex<Option<vtcode_commons::ui_protocol::ProgressOperation>>>,
+    progress_operation: Arc<Mutex<Option<HandleProgress>>>,
 }
 
 impl InlineHandle {
@@ -402,7 +408,7 @@ impl InlineHandle {
     pub fn begin_progress(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) -> ProgressGuard {
         let operation = vtcode_commons::ui_protocol::ProgressOperation::start();
         if let Ok(mut current) = self.progress_operation.lock() {
-            *current = Some(operation);
+            *current = Some(HandleProgress { operation, phase });
         }
         self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Begin { operation, phase });
         ProgressGuard {
@@ -415,7 +421,7 @@ impl InlineHandle {
     /// Resume ownership after the interaction loop transfers a submitted turn.
     pub fn resume_progress(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) -> ProgressGuard {
         if let Some(operation) = self.current_progress_operation() {
-            self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation, phase });
+            self.set_progress_phase(phase);
             ProgressGuard {
                 handle: self.clone(),
                 operation,
@@ -427,13 +433,31 @@ impl InlineHandle {
     }
 
     pub fn current_progress_operation(&self) -> Option<vtcode_commons::ui_protocol::ProgressOperation> {
-        self.progress_operation.lock().ok().and_then(|current| *current)
+        self.progress_operation
+            .lock()
+            .ok()
+            .and_then(|current| current.as_ref().map(|current| current.operation))
     }
 
     pub fn set_progress_phase(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) {
-        if let Some(operation) = self.current_progress_operation() {
-            self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation, phase });
-        }
+        let _ = self.replace_progress_phase(phase);
+    }
+
+    /// Update the current owner in place and retain its previous phase for scoped work.
+    pub fn replace_progress_phase(
+        &self,
+        phase: vtcode_commons::ui_protocol::ProgressPhase,
+    ) -> Option<vtcode_commons::ui_protocol::ProgressUpdate> {
+        let mut current = self.progress_operation.lock().ok()?;
+        let current = current.as_mut()?;
+        let previous =
+            vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation: current.operation, phase: current.phase };
+        current.phase = phase;
+        self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase {
+            operation: current.operation,
+            phase,
+        });
+        Some(previous)
     }
 
     pub fn record_tool_output(&self, lines: Vec<String>) -> ToolOutputId {
@@ -719,7 +743,7 @@ impl Drop for ProgressGuard {
         self.handle
             .update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Finish { operation: self.operation });
         if let Ok(mut current) = self.handle.progress_operation.lock()
-            && *current == Some(self.operation)
+            && current.as_ref().is_some_and(|current| current.operation == self.operation)
         {
             *current = None;
         }

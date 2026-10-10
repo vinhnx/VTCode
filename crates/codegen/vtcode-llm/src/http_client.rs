@@ -17,13 +17,21 @@ impl HttpClientFactory {
     /// Uses the `default_ceiling_seconds` from TimeoutsConfig for the request timeout.
     /// Includes a 30-second connect timeout.
     pub fn for_llm(config: &TimeoutsConfig) -> Client {
+        vtcode_commons::http::create_client_with_timeouts(Duration::from_secs(30), Self::llm_timeout(config))
+    }
+
+    pub(crate) fn for_llm_without_redirects(config: &TimeoutsConfig) -> Result<Client, reqwest::Error> {
+        vtcode_commons::http::create_client_without_redirects(Duration::from_secs(30), Self::llm_timeout(config))
+    }
+
+    fn llm_timeout(config: &TimeoutsConfig) -> Duration {
         let timeout_secs = if config.default_ceiling_seconds > 0 {
             config.default_ceiling_seconds
         } else {
             180 // Fallback if disabled
         };
 
-        vtcode_commons::http::create_client_with_timeouts(Duration::from_secs(30), Duration::from_secs(timeout_secs))
+        Duration::from_secs(timeout_secs)
     }
 
     /// Create an HTTP client optimized for streaming requests.

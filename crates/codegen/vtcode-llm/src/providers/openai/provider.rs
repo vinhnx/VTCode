@@ -42,6 +42,7 @@ use super::response_parser;
 use super::responses_api::parse_responses_payload;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, ResponsesApiState};
 
+mod decisions;
 mod generation;
 mod streaming;
 mod websocket;
@@ -68,6 +69,7 @@ pub struct OpenAIProvider {
     api_format_override: Option<CustomProviderApiFormat>,
     openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
+    decisions_client: Result<HttpClient, reqwest::Error>,
     base_url: Arc<str>,
     responses_url: Arc<str>,
     responses_compact_url: Arc<str>,
@@ -177,6 +179,7 @@ impl OpenAIProvider {
             api_format_override: None,
             openai_chatgpt_auth,
             http_client,
+            decisions_client: crate::http_client::HttpClientFactory::for_llm_without_redirects(&timeouts),
             base_url: Arc::from(base_url.as_str()),
             responses_url: Arc::from(format!("{base_url}/responses")),
             responses_compact_url: Arc::from(format!("{base_url}/responses/compact")),
@@ -339,6 +342,7 @@ impl OpenAIProvider {
 
         use crate::http_client::HttpClientFactory;
         let http_client = HttpClientFactory::for_llm(&timeouts);
+        let decisions_client = HttpClientFactory::for_llm_without_redirects(&timeouts);
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -349,6 +353,7 @@ impl OpenAIProvider {
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
+            decisions_client,
             responses_url: Arc::from(format!("{resolved_base_url}/responses")),
             responses_compact_url: Arc::from(format!("{resolved_base_url}/responses/compact")),
             chat_completions_url: Arc::from(format!("{resolved_base_url}/chat/completions")),

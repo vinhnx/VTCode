@@ -2,6 +2,53 @@ use super::*;
 use crate::provider::tool::sanitize_tool_description;
 use serde_json::json;
 
+#[tokio::test]
+async fn decisions_context_window_wrapper_forwards_capability_and_request() {
+    struct DecisionsProvider;
+    #[async_trait::async_trait]
+    impl LLMProvider for DecisionsProvider {
+        fn name(&self) -> &str {
+            "openai"
+        }
+        fn supports_decisions(&self) -> bool {
+            true
+        }
+        async fn decide_choice(&self, request: ChoiceDecisionRequest) -> Result<ChoiceDecisionResponse, LLMError> {
+            assert_eq!(request.input, "wrapped evidence");
+            Ok(ChoiceDecisionResponse {
+                answer: Some(ChoiceDecisionAnswer {
+                    name: request.name,
+                    choice: "SAFE".into(),
+                    confidence: 0.6,
+                    probabilities: vec![],
+                }),
+                usage: None,
+            })
+        }
+        async fn generate(&self, _: LLMRequest) -> Result<LLMResponse, LLMError> {
+            panic!("generation should not run")
+        }
+        fn supported_models(&self) -> Vec<String> {
+            vec![]
+        }
+        fn validate_request(&self, _: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+    let wrapped = ContextWindowProvider::wrap(Box::new(DecisionsProvider), "gpt-6-astra", Some(50_000));
+    assert!(wrapped.supports_decisions());
+    let result = wrapped
+        .decide_choice(ChoiceDecisionRequest {
+            input: "wrapped evidence".into(),
+            name: "test".into(),
+            instructions: "test".into(),
+            choices: vec![],
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.answer.unwrap().choice, "SAFE");
+}
+
 #[test]
 fn sanitize_tool_description_trims_padding() {
     let input = "\n\nLine 1\nLine 2 \n";
